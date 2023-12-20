@@ -5,14 +5,8 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
-try:
-    adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
-    con = adbc_driver_duckdb.connect()
-except:
-    pytest.skip(
-        "'duckdb_adbc_init' was not exported in this install, try running 'python3 setup.py install'.",
-        allow_module_level=True,
-    )
+adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
+con = adbc_driver_duckdb.connect()
 
 
 class TestADBCConnectionGetInfo(object):
@@ -34,7 +28,7 @@ class TestADBCConnectionGetInfo(object):
         expected_result = pa.array(
             [
                 "duckdb",
-                duckdb.__version__,  # don't hardcode this, as it will change every version
+                "v" + duckdb.__version__,  # don't hardcode this, as it will change every version
                 "ADBC DuckDB Driver",
                 "(unknown)",
                 "(unknown)",

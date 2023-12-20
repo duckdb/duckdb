@@ -7,34 +7,34 @@
 
 namespace duckdb {
 
-bool IteratorKey::operator>(const ARTKey &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), k.len); i++) {
-		if (key_bytes[i] > k.data[i]) {
+bool IteratorKey::operator>(const ARTKey &key) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
+		if (key_bytes[i] > key.data[i]) {
 			return true;
-		} else if (key_bytes[i] < k.data[i]) {
+		} else if (key_bytes[i] < key.data[i]) {
 			return false;
 		}
 	}
-	return key_bytes.size() > k.len;
+	return key_bytes.size() > key.len;
 }
 
-bool IteratorKey::operator>=(const ARTKey &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), k.len); i++) {
-		if (key_bytes[i] > k.data[i]) {
+bool IteratorKey::operator>=(const ARTKey &key) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
+		if (key_bytes[i] > key.data[i]) {
 			return true;
-		} else if (key_bytes[i] < k.data[i]) {
+		} else if (key_bytes[i] < key.data[i]) {
 			return false;
 		}
 	}
-	return key_bytes.size() >= k.len;
+	return key_bytes.size() >= key.len;
 }
 
-bool IteratorKey::operator==(const ARTKey &k) const {
+bool IteratorKey::operator==(const ARTKey &key) const {
 	// NOTE: we only use this for finding the LowerBound, in which case the length
 	// has to be equal
-	D_ASSERT(key_bytes.size() == k.len);
+	D_ASSERT(key_bytes.size() == key.len);
 	for (idx_t i = 0; i < key_bytes.size(); i++) {
-		if (key_bytes[i] != k.data[i]) {
+		if (key_bytes[i] != key.data[i]) {
 			return false;
 		}
 	}
@@ -71,12 +71,9 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 	return true;
 }
 
-void Iterator::FindMinimum(Node &node) {
+void Iterator::FindMinimum(const Node &node) {
 
-	D_ASSERT(node.IsSet());
-	if (node.IsSerialized()) {
-		node.Deserialize(*art);
-	}
+	D_ASSERT(node.HasMetadata());
 
 	// found the minimum
 	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
@@ -86,7 +83,7 @@ void Iterator::FindMinimum(Node &node) {
 
 	// traverse the prefix
 	if (node.GetType() == NType::PREFIX) {
-		auto &prefix = Prefix::Get(*art, node);
+		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
@@ -103,14 +100,10 @@ void Iterator::FindMinimum(Node &node) {
 	FindMinimum(*next);
 }
 
-bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth) {
+bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth) {
 
-	if (!node.IsSet()) {
+	if (!node.HasMetadata()) {
 		return false;
-	}
-
-	if (node.IsSerialized()) {
-		node.Deserialize(*art);
 	}
 
 	// we found the lower bound
@@ -145,7 +138,7 @@ bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t
 	}
 
 	// resolve the prefix
-	auto &prefix = Prefix::Get(*art, node);
+	auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
@@ -206,7 +199,8 @@ bool Iterator::Next() {
 
 void Iterator::PopNode() {
 	if (nodes.top().node.GetType() == NType::PREFIX) {
-		auto prefix_byte_count = Prefix::Get(*art, nodes.top().node).data[Node::PREFIX_SIZE];
+		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX);
+		auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
 		current_key.Pop(prefix_byte_count);
 	} else {
 		current_key.Pop(1);

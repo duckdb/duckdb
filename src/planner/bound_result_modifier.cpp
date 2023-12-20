@@ -1,5 +1,4 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -15,20 +14,6 @@ BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, u
 BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression,
                                    unique_ptr<BaseStatistics> stats)
     : type(type), null_order(null_order), expression(std::move(expression)), stats(std::move(stats)) {
-}
-void BoundOrderModifier::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteRegularSerializableList(orders);
-	writer.Finalize();
-}
-unique_ptr<BoundOrderModifier> BoundOrderModifier::Deserialize(Deserializer &source, PlanDeserializationState &state) {
-	auto x = make_uniq<BoundOrderModifier>();
-
-	FieldReader reader(source);
-	x->orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state);
-	reader.Finalize();
-
-	return x;
 }
 
 BoundOrderByNode BoundOrderByNode::Copy() const {
@@ -74,24 +59,6 @@ string BoundOrderByNode::ToString() const {
 		break;
 	}
 	return str;
-}
-
-void BoundOrderByNode::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField(type);
-	writer.WriteField(null_order);
-	writer.WriteSerializable(*expression);
-	// TODO statistics
-	writer.Finalize();
-}
-
-BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, PlanDeserializationState &state) {
-	FieldReader reader(source);
-	auto type = reader.ReadRequired<OrderType>();
-	auto null_order = reader.ReadRequired<OrderByNullType>();
-	auto expression = reader.ReadRequiredSerializable<Expression>(state);
-	reader.Finalize();
-	return BoundOrderByNode(type, null_order, std::move(expression));
 }
 
 unique_ptr<BoundOrderModifier> BoundOrderModifier::Copy() const {

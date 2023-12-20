@@ -1,9 +1,9 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/chrono.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "httpfs.hpp"
@@ -44,11 +44,12 @@ struct S3AuthParams {
 	bool use_ssl;
 	bool s3_url_compatibility_mode;
 
-	static S3AuthParams ReadFrom(FileOpener *opener);
+	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
 };
 
 struct ParsedS3Url {
 	const string http_proto;
+	const string prefix;
 	const string host;
 	const string bucket;
 	const string path;
@@ -103,14 +104,16 @@ public:
 	S3FileHandle(FileSystem &fs, string path_p, uint8_t flags, const HTTPParams &http_params,
 	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
-	      config_params(config_params_p) {
-
+	      config_params(config_params_p), uploads_in_progress(0), parts_uploaded(0), upload_finalized(false),
+	      uploader_has_error(false), upload_exception(nullptr) {
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
 		} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}
 	}
+	~S3FileHandle() override;
+
 	S3AuthParams auth_params;
 	const S3ConfigParams config_params;
 

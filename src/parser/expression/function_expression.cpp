@@ -3,11 +3,10 @@
 #include <utility>
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -36,7 +35,7 @@ FunctionExpression::FunctionExpression(const string &function_name, vector<uniqu
 }
 
 string FunctionExpression::ToString() const {
-	return ToString<FunctionExpression, ParsedExpression>(*this, schema, function_name, is_operator, distinct,
+	return ToString<FunctionExpression, ParsedExpression>(*this, catalog, schema, function_name, is_operator, distinct,
 	                                                      filter.get(), order_bys.get(), export_state, true);
 }
 
@@ -90,35 +89,6 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	                                  std::move(order_copy), distinct, is_operator, export_state);
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void FunctionExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteString(function_name);
-	writer.WriteString(schema);
-	writer.WriteSerializableList(children);
-	writer.WriteOptional(filter);
-	writer.WriteSerializable((ResultModifier &)*order_bys);
-	writer.WriteField<bool>(distinct);
-	writer.WriteField<bool>(is_operator);
-	writer.WriteField<bool>(export_state);
-	writer.WriteString(catalog);
-}
-
-unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto function_name = reader.ReadRequired<string>();
-	auto schema = reader.ReadRequired<string>();
-	auto children = reader.ReadRequiredSerializableList<ParsedExpression>();
-	auto filter = reader.ReadOptional<ParsedExpression>(nullptr);
-	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(reader.ReadRequiredSerializable<ResultModifier>());
-	auto distinct = reader.ReadRequired<bool>();
-	auto is_operator = reader.ReadRequired<bool>();
-	auto export_state = reader.ReadField<bool>(false);
-	auto catalog = reader.ReadField<string>(INVALID_CATALOG);
-
-	unique_ptr<FunctionExpression> function;
-	function = make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
-	                                         std::move(order_bys), distinct, is_operator, export_state);
-	return std::move(function);
 }
 
 void FunctionExpression::Verify() const {

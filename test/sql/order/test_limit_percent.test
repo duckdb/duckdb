@@ -68,20 +68,25 @@ SELECT a FROM test LIMIT (30-10) %
 # LIMIT with non-scalar should fail
 statement error
 SELECT a FROM test LIMIT a %
+----
 
 # LIMIT with non-scalar operation should also fail
 statement error
 SELECT a FROM test LIMIT (a+1) %
+----
 
 statement error
 SELECT a FROM test LIMIT (a+b*c) %
+----
 
 statement error
 SELECT a FROM test LIMIT (a+b*c) %
+----
 
 # aggregate in limit percent
 statement error
 SELECT a FROM test LIMIT SUM(42) %
+----
 
 # non-foldable expression in limit percent
 statement ok
@@ -149,17 +154,21 @@ SELECT b FROM test LIMIT 0%
 #Subqueries that return negative values
 statement error
 SELECT * FROM range(100) LIMIT -10 %;
+----
 
 #Subqueries that return strings that can't be converted to integers
 statement error
 SELECT * FROM test LIMIT (SELECT 'ab') %
+----
 
 # can only limit % by integers
 statement error
 select 1 limit date '2021-11-25' %;
+----
 
 statement error
 select * from test limit "Hello World" %;
+----
 
 #LIMIT % with strings
 statement ok

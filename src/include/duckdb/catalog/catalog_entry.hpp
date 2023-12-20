@@ -21,8 +21,8 @@ class Catalog;
 class CatalogSet;
 class ClientContext;
 class SchemaCatalogEntry;
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 struct CreateInfo;
 
@@ -49,6 +49,8 @@ public:
 	bool internal;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
+
+private:
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that dependents_map this node)
@@ -74,13 +76,16 @@ public:
 
 	virtual void Verify(Catalog &catalog);
 
-	//! Serialize the meta information of the CatalogEntry a serializer
 	void Serialize(Serializer &serializer) const;
-	//! Deserializes to a CreateInfo
-	static unique_ptr<CreateInfo> Deserialize(Deserializer &source);
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
+public:
+	void SetChild(unique_ptr<CatalogEntry> child);
+	unique_ptr<CatalogEntry> TakeChild();
+	bool HasChild() const;
+	bool HasParent() const;
+	CatalogEntry &Child();
+	CatalogEntry &Parent();
 
 public:
 	template <class TARGET>

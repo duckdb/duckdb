@@ -3,6 +3,9 @@
 # group: [list]
 
 statement ok
+PRAGMA enable_verification;
+
+statement ok
 PRAGMA default_order='ASC';
 
 statement ok
@@ -39,23 +42,29 @@ foreach func_name list_sort list_reverse_sort
 
 statement error
 SELECT ${func_name}()
+----
 
 statement error
 SELECT ${func_name}(*)
+----
 
 statement error
 SELECT ${func_name}([1, 2], 2)
+----
 
 statement error
 SELECT ${func_name}([1, 2], 'DESC', 2)
+----
 
 statement error 
 SELECT ${func_name}([1, 2], 2, 2)
+----
 
 endloop
 
 statement error
 SELECT list_sort([1, 2], 'NULLS FIRST')
+----
 
 # test incorrect parameter type
 
@@ -65,6 +74,7 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 
 statement error
 SELECT ${func_name}(NULL::${type})
+----
 
 endloop
 
@@ -126,18 +136,23 @@ NULL
 
 statement error
 SELECT list_sort(l, l, l)
+----
 
 statement error
 SELECT list_sort(l, 'ASC', l)
+----
 
 statement error
 SELECT list_reverse_sort(l, l)
+----
 
 statement error
 SELECT list_reverse_sort(l, 'DESC')
+----
 
 statement error
 SELECT list_reverse_sort(l, 'DESC', 'NULLS FIRST')
+----
 
 # test aliases
 
@@ -427,7 +442,7 @@ order by id;
 2	[10]
 
 query II
-select id, list(distinct foo) from (
+select id, list(distinct foo order by foo) from (
   values (1, '10'), (1, '10'), (1, '15'), (2, '10')
 ) v (id, foo)
 group by id

@@ -1,9 +1,8 @@
 add_library_unity(
-  duckdb_art_index_execution
+  duckdb_execution_index_art
   OBJECT
   art_key.cpp
   node.cpp
-  fixed_size_allocator.cpp
   iterator.cpp
   leaf.cpp
   node4.cpp
@@ -14,5 +13,5 @@ add_library_unity(
   art.cpp)
 
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_art_index_execution>
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution_index_art>
     PARENT_SCOPE)

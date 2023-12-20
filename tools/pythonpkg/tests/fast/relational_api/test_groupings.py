@@ -31,19 +31,19 @@ class TestGroupings(object):
         assert res == res2
 
     def test_cubed(self, con):
-        rel = con.table('tbl').sum("a", "CUBE (b)")
+        rel = con.table('tbl').sum("a", "CUBE (b)").order("ALL")
         res = rel.fetchall()
-        assert res == [(14,), (7,), (2,), (5,)]
+        assert res == [(2,), (5,), (7,), (14,)]
 
-        rel = con.sql("select sum(a) from tbl GROUP BY CUBE (b)")
+        rel = con.sql("select sum(a) from tbl GROUP BY CUBE (b) ORDER BY ALL")
         res2 = rel.fetchall()
         assert res == res2
 
     def test_rollup(self, con):
-        rel = con.table('tbl').sum("a", "ROLLUP (b, c)")
+        rel = con.table('tbl').sum("a", "ROLLUP (b, c)").order("ALL")
         res = rel.fetchall()
-        assert res == [(14,), (7,), (2,), (5,), (1,), (1,), (2,), (2,), (3,), (5,)]
+        assert res == [(1,), (1,), (2,), (2,), (2,), (3,), (5,), (5,), (7,), (14,)]
 
-        rel = con.sql("select sum(a) from tbl GROUP BY ROLLUP (b, c)")
+        rel = con.sql("select sum(a) from tbl GROUP BY ROLLUP (b, c) ORDER BY ALL")
         res2 = rel.fetchall()
         assert res == res2

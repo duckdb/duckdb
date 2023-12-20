@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
@@ -26,8 +27,8 @@ enum class TupleDataPinProperties : uint8_t {
 };
 
 struct TupleDataPinState {
-	unordered_map<uint32_t, BufferHandle> row_handles;
-	unordered_map<uint32_t, BufferHandle> heap_handles;
+	perfect_map_t<BufferHandle> row_handles;
+	perfect_map_t<BufferHandle> heap_handles;
 	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 };
 
@@ -41,9 +42,13 @@ struct TupleDataVectorFormat {
 	const SelectionVector *original_sel;
 	SelectionVector original_owned_sel;
 
-	UnifiedVectorFormat data;
-	vector<TupleDataVectorFormat> child_formats;
+	UnifiedVectorFormat unified;
+	vector<TupleDataVectorFormat> children;
 	unique_ptr<CombinedListData> combined_list_data;
+
+	// Optional: only used for ArrayVector to fake being a list vector
+	unique_array<list_entry_t> array_list_entries;
+	idx_t parent_array_size;
 };
 
 struct TupleDataChunkState {

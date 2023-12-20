@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
@@ -40,9 +39,8 @@ unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
 }
 
 string SchemaCatalogEntry::ToSQL() const {
-	std::stringstream ss;
-	ss << "CREATE SCHEMA " << name << ";";
-	return ss.str();
+	auto create_schema_info = GetInfo();
+	return create_schema_info->ToString();
 }
 
 } // namespace duckdb

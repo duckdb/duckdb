@@ -28,6 +28,7 @@ source_files = [
         'extension/json/json_functions/read_json_objects.cpp',
         'extension/json/json_functions/read_json.cpp',
         'extension/json/yyjson/yyjson.cpp',
+        'extension/json/json_functions/json_serialize_plan.cpp',
         'extension/json/json_functions/json_serialize_sql.cpp',
         'extension/json/json_serializer.cpp',
         'extension/json/json_deserializer.cpp',

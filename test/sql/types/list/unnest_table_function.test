@@ -110,14 +110,17 @@ EXECUTE v1([1,2,3,4,5]);
 # FIXME: NULL without cast (should this work?)
 statement error
 SELECT i FROM UNNEST(NULL) AS tbl(i);
+----
 
 # not a list
 statement error
 SELECT i FROM UNNEST(1) AS tbl(i);
+----
 
 # multiple parameters
 statement error
 SELECT i FROM UNNEST([1, 2], [3, 4]) AS tbl(i);
+----
 
 # issue 7927
 
@@ -130,10 +133,10 @@ SELECT * FROM (VALUES
 ) t(k, a,b);
 
 query I
-SELECT array(
+SELECT list_sort(array(
 	SELECT list_contains(b, ax)
 	FROM UNNEST(a) ta(ax)
-) ab_intersect
+)) ab_intersect
 FROM tbl;
 ----
 [false, true, true]
@@ -142,11 +145,12 @@ FROM tbl;
 
 query IIII
 SELECT k, a, b,
-	ARRAY(
+	list_sort(ARRAY(
 		SELECT DISTINCT ax
 			FROM UNNEST(a) ta(ax)
 			WHERE ax = any(b)
-	) ab_intersect
+			ORDER BY ALL
+	)) ab_intersect
 	FROM tbl;
 ----
 a	[4, 5, 5]	[5, 7]	[5]

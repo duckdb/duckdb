@@ -4,6 +4,8 @@ import subprocess
 import re
 import os
 
+DEFAULT_UNITTEST_PATH = 'build/release/test/unittest'
+
 parser = argparse.ArgumentParser(description='Print a list of tests to run.')
 parser.add_argument(
     '--file-contains',
@@ -17,16 +19,19 @@ parser.add_argument(
     dest='unittest',
     action='store',
     help='The path to the unittest program',
-    default='build/release/test/unittest',
+    default=DEFAULT_UNITTEST_PATH,
 )
 parser.add_argument('--list', dest='filter', action='store', help='The unittest filter to apply', default='')
-
 
 args = parser.parse_args()
 
 file_contains = args.file_contains
 extra_args = [args.filter]
 unittest_program = args.unittest
+
+# Override default for windows
+if os.name == 'nt' and unittest_program == DEFAULT_UNITTEST_PATH:
+    unittest_program = 'build/release/test/Release/unittest.exe'
 
 proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout = proc.stdout.read().decode('utf8')

@@ -11,6 +11,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/function/table/arrow.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,7 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::
 
 void VerifyArrowDatasetLoaded() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (!import_cache.arrow_dataset().IsLoaded()) {
+	if (!import_cache.pyarrow.dataset() || !ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
 		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
 	}
 }
@@ -31,16 +32,16 @@ void VerifyArrowDatasetLoaded() {
 PyArrowObjectType GetArrowType(const py::handle &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	// First Verify Lib Types
-	auto table_class = import_cache.arrow_lib().Table();
-	auto record_batch_reader_class = import_cache.arrow_lib().RecordBatchReader();
+	auto table_class = import_cache.pyarrow.Table();
+	auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
 	if (py::isinstance(obj, table_class)) {
 		return PyArrowObjectType::Table;
 	} else if (py::isinstance(obj, record_batch_reader_class)) {
 		return PyArrowObjectType::RecordBatchReader;
 	}
 	// Then Verify dataset types
-	auto dataset_class = import_cache.arrow_dataset().Dataset();
-	auto scanner_class = import_cache.arrow_dataset().Scanner();
+	auto dataset_class = import_cache.pyarrow.dataset.Dataset();
+	auto scanner_class = import_cache.pyarrow.dataset.Scanner();
 
 	if (py::isinstance(obj, scanner_class)) {
 		return PyArrowObjectType::Scanner;
@@ -53,12 +54,21 @@ PyArrowObjectType GetArrowType(const py::handle &obj) {
 py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
                                                               ArrowStreamParameters &parameters,
                                                               const ClientProperties &client_properties) {
+	ArrowSchemaWrapper schema;
+	PythonTableArrowArrayStreamFactory::GetSchemaInternal(arrow_obj_handle, schema);
+	vector<string> unused_names;
+	vector<LogicalType> unused_types;
+	ArrowTableType arrow_table;
+	ArrowTableFunction::PopulateArrowTableType(arrow_table, schema, unused_names, unused_types);
+
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;
+	auto &filter_to_col = parameters.projected_columns.filter_to_col;
 	bool has_filter = filters && !filters->filters.empty();
 	py::list projection_list = py::cast(column_list);
 	if (has_filter) {
-		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, client_properties);
+		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
+		                              client_properties, arrow_table);
 		if (column_list.empty()) {
 			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
 		} else {
@@ -80,11 +90,12 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	py::handle arrow_obj_handle(factory->arrow_object);
 	auto arrow_object_type = GetArrowType(arrow_obj_handle);
 
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	py::object scanner;
-	py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
+	py::object arrow_batch_scanner = import_cache.pyarrow.dataset.Scanner().attr("from_batches");
 	switch (arrow_object_type) {
 	case PyArrowObjectType::Table: {
-		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
+		auto arrow_dataset = import_cache.pyarrow.dataset().attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
 		py::object arrow_scanner = dataset.attr("__class__").attr("scanner");
 		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->client_properties);
@@ -119,12 +130,8 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	return res;
 }
 
-void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
-	py::gil_scoped_acquire acquire;
-	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr));
-	D_ASSERT(factory->arrow_object);
+void PythonTableArrowArrayStreamFactory::GetSchemaInternal(py::handle arrow_obj_handle, ArrowSchemaWrapper &schema) {
 	auto table_class = py::module::import("pyarrow").attr("Table");
-	py::handle arrow_obj_handle(factory->arrow_object);
 	if (py::isinstance(arrow_obj_handle, table_class)) {
 		auto obj_schema = arrow_obj_handle.attr("schema");
 		auto export_to_c = obj_schema.attr("_export_to_c");
@@ -134,7 +141,8 @@ void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowS
 
 	VerifyArrowDatasetLoaded();
 
-	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto scanner_class = import_cache.pyarrow.dataset.Scanner();
 
 	if (py::isinstance(arrow_obj_handle, scanner_class)) {
 		auto obj_schema = arrow_obj_handle.attr("projected_schema");
@@ -147,9 +155,48 @@ void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowS
 	}
 }
 
-py::object GetScalar(Value &constant, const string &timezone_config) {
+void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
+	py::gil_scoped_acquire acquire;
+	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr));
+	D_ASSERT(factory->arrow_object);
+	py::handle arrow_obj_handle(factory->arrow_object);
+	GetSchemaInternal(arrow_obj_handle, schema);
+}
+
+string ConvertTimestampUnit(ArrowDateTimeType unit) {
+	switch (unit) {
+	case ArrowDateTimeType::MICROSECONDS:
+		return "us";
+	case ArrowDateTimeType::MILLISECONDS:
+		return "ms";
+	case ArrowDateTimeType::NANOSECONDS:
+		return "ns";
+	case ArrowDateTimeType::SECONDS:
+		return "s";
+	default:
+		throw NotImplementedException("DatetimeType not recognized in ConvertTimestampUnit: %d", (int)unit);
+	}
+}
+
+int64_t ConvertTimestampTZValue(int64_t base_value, ArrowDateTimeType datetime_type) {
+	switch (datetime_type) {
+	case ArrowDateTimeType::MICROSECONDS:
+		return Timestamp::GetEpochMicroSeconds(timestamp_t(base_value));
+	case ArrowDateTimeType::MILLISECONDS:
+		return Timestamp::GetEpochMs(timestamp_t(base_value));
+	case ArrowDateTimeType::NANOSECONDS:
+		return Timestamp::GetEpochNanoSeconds(timestamp_t(base_value));
+	case ArrowDateTimeType::SECONDS:
+		return Timestamp::GetEpochSeconds(timestamp_t(base_value));
+	default:
+		throw NotImplementedException("DatetimeType not recognized in ConvertTimestampTZValue");
+	}
+}
+
+py::object GetScalar(Value &constant, const string &timezone_config, const ArrowType &type) {
 	py::object scalar = py::module_::import("pyarrow").attr("scalar");
-	py::object dataset_scalar = py::module_::import("pyarrow.dataset").attr("scalar");
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	py::object dataset_scalar = import_cache.pyarrow.dataset().attr("scalar");
 	py::object scalar_value;
 	switch (constant.type().id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -187,17 +234,29 @@ py::object GetScalar(Value &constant, const string &timezone_config) {
 		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("s")));
 	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
+		auto base_value = constant.GetValue<int64_t>();
+		auto arrow_datetime_type = type.GetDateTimeType();
+		auto time_unit_string = ConvertTimestampUnit(arrow_datetime_type);
+		auto converted_value = ConvertTimestampTZValue(base_value, arrow_datetime_type);
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
-		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us", py::arg("tz") = timezone_config)));
+		return dataset_scalar(scalar(converted_value, date_type(time_unit_string, py::arg("tz") = timezone_config)));
 	}
-	case LogicalTypeId::UTINYINT:
-		return dataset_scalar(constant.GetValue<uint8_t>());
-	case LogicalTypeId::USMALLINT:
-		return dataset_scalar(constant.GetValue<uint16_t>());
-	case LogicalTypeId::UINTEGER:
-		return dataset_scalar(constant.GetValue<uint32_t>());
-	case LogicalTypeId::UBIGINT:
-		return dataset_scalar(constant.GetValue<uint64_t>());
+	case LogicalTypeId::UTINYINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint8");
+		return dataset_scalar(scalar(constant.GetValue<uint8_t>(), integer_type()));
+	}
+	case LogicalTypeId::USMALLINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint16");
+		return dataset_scalar(scalar(constant.GetValue<uint16_t>(), integer_type()));
+	}
+	case LogicalTypeId::UINTEGER: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint32");
+		return dataset_scalar(scalar(constant.GetValue<uint32_t>(), integer_type()));
+	}
+	case LogicalTypeId::UBIGINT: {
+		py::object integer_type = py::module_::import("pyarrow").attr("uint64");
+		return dataset_scalar(scalar(constant.GetValue<uint64_t>(), integer_type()));
+	}
 	case LogicalTypeId::FLOAT:
 		return dataset_scalar(constant.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
@@ -233,13 +292,15 @@ py::object GetScalar(Value &constant, const string &timezone_config) {
 	}
 }
 
-py::object TransformFilterRecursive(TableFilter *filter, const string &column_name, const string &timezone_config) {
-	py::object field = py::module_::import("pyarrow.dataset").attr("field");
+py::object TransformFilterRecursive(TableFilter *filter, const string &column_name, const string &timezone_config,
+                                    const ArrowType &type) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	py::object field = import_cache.pyarrow.dataset().attr("field");
 	switch (filter->filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter->Cast<ConstantFilter>();
 		auto constant_field = field(column_name);
-		auto constant_value = GetScalar(constant_filter.constant, timezone_config);
+		auto constant_value = GetScalar(constant_filter.constant, timezone_config, type);
 		switch (constant_filter.comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
 			return constant_field.attr("__eq__")(constant_value);
@@ -275,10 +336,10 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 		auto &or_filter = filter->Cast<ConjunctionOrFilter>();
 		//! Get first non null filter type
 		auto child_filter = or_filter.child_filters[i++].get();
-		py::object expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
+		py::object expression = TransformFilterRecursive(child_filter, column_name, timezone_config, type);
 		while (i < or_filter.child_filters.size()) {
 			child_filter = or_filter.child_filters[i++].get();
-			py::object child_expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
+			py::object child_expression = TransformFilterRecursive(child_filter, column_name, timezone_config, type);
 			expression = expression.attr("__or__")(child_expression);
 		}
 		return expression;
@@ -287,10 +348,10 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 		idx_t i = 0;
 		auto &and_filter = filter->Cast<ConjunctionAndFilter>();
 		auto child_filter = and_filter.child_filters[i++].get();
-		py::object expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
+		py::object expression = TransformFilterRecursive(child_filter, column_name, timezone_config, type);
 		while (i < and_filter.child_filters.size()) {
 			child_filter = and_filter.child_filters[i++].get();
-			py::object child_expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
+			py::object child_expression = TransformFilterRecursive(child_filter, column_name, timezone_config, type);
 			expression = expression.attr("__and__")(child_expression);
 		}
 		return expression;
@@ -302,13 +363,18 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 
 py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &filter_collection,
                                                                std::unordered_map<idx_t, string> &columns,
-                                                               const ClientProperties &config) {
+                                                               unordered_map<idx_t, idx_t> filter_to_col,
+                                                               const ClientProperties &config,
+                                                               const ArrowTableType &arrow_table) {
 	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	py::object expression = TransformFilterRecursive(it->second.get(), columns[it->first], config.time_zone);
+	auto &arrow_type = *arrow_table.GetColumns().at(filter_to_col.at(it->first));
+	py::object expression =
+	    TransformFilterRecursive(it->second.get(), columns[it->first], config.time_zone, arrow_type);
 	while (it != filters_map->end()) {
-		py::object child_expression = TransformFilterRecursive(it->second.get(), columns[it->first], config.time_zone);
+		py::object child_expression =
+		    TransformFilterRecursive(it->second.get(), columns[it->first], config.time_zone, arrow_type);
 		expression = expression.attr("__and__")(child_expression);
 		it++;
 	}

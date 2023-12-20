@@ -2,6 +2,9 @@
 # description: ART coverage tests for leaf code coverage
 # group: [nodes]
 
+statement ok
+PRAGMA enable_verification;
+
 # test deserialization of leaf segments
 
 load __TEST_DIR__/art_vacuum.db

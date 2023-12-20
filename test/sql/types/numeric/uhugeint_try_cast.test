@@ -12,15 +12,23 @@ CREATE TABLE uhugeints AS SELECT i::UHUGEINT i FROM (VALUES (0::UHUGEINT), (1::U
 # -> signed
 statement error
 SELECT i::TINYINT FROM uhugeints
+----
+Conversion Error
 
 statement error
 SELECT i::SMALLINT FROM uhugeints
+----
+Conversion Error
 
 statement error
 SELECT i::INTEGER FROM uhugeints
+----
+Conversion Error
 
 statement error
 SELECT i::BIGINT FROM uhugeints
+----
+Conversion Error
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM uhugeints ORDER BY i
@@ -53,6 +61,8 @@ NULL
 # -> unsigned
 statement error
 SELECT i::UTINYINT FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 query I
 SELECT TRY_CAST(i AS UTINYINT) FROM uhugeints ORDER BY i
@@ -63,6 +73,8 @@ NULL
 
 statement error
 SELECT i::USMALLINT FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 query I
 SELECT TRY_CAST(i AS USMALLINT) FROM uhugeints ORDER BY i
@@ -73,6 +85,8 @@ NULL
 
 statement error
 SELECT i::UINTEGER FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 query I
 SELECT TRY_CAST(i AS UINTEGER) FROM uhugeints ORDER BY i
@@ -83,6 +97,8 @@ NULL
 
 statement error
 SELECT i::UBIGINT FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 query I
 SELECT TRY_CAST(i AS UBIGINT) FROM uhugeints ORDER BY i
@@ -128,6 +144,8 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000
 
 statement error
 SELECT s::UHUGEINT FROM strings
+----
+Conversion Error
 
 query I
 SELECT TRY_CAST(s AS UHUGEINT) FROM strings
@@ -143,15 +161,23 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 statement error
 SELECT i::DECIMAL(9,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 statement error
 SELECT i::DECIMAL(18,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 statement error
 SELECT i::DECIMAL(38,0)::UHUGEINT FROM uhugeints ORDER BY i
+----
+Conversion Error
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::UHUGEINT FROM uhugeints ORDER BY i

@@ -1,0 +1,42 @@
+# name: test/sql/function/list/list_cosine_similarity.test
+# group: [list]
+
+foreach type FLOAT DOUBLE
+
+query I
+SELECT list_cosine_similarity([1, 2, 3]::${type}[], [1, 2, 3]::${type}[]);
+----
+1.0
+
+statement ok
+CREATE OR REPLACE TABLE lists (l ${type}[]);
+
+statement ok
+INSERT INTO lists VALUES ([1, 2, 3]), ([4, 5, 6]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
+
+query I
+SELECT list_cosine_similarity(l, [1, 2, 3]) FROM lists;
+----
+0.99999994
+0.9746318
+0.95941186
+-0.99999994
+NULL
+
+statement error
+SELECT list_cosine_similarity([1, NULL, 3]::${type}[], [1, 2, 3]::${type}[]);
+----
+left argument can not contain NULL values
+
+statement error
+SELECT list_cosine_similarity([1, 2, 3]::${type}[], [1, NULL, 3]::${type}[]);
+----
+right argument can not contain NULL values
+
+statement error
+SELECT list_cosine_similarity([1, 2, 3]::${type}[], [1, 2, 3, 4]::${type}[]);
+----
+list dimensions must be equal, got left length 3 and right length 4
+
+
+endloop

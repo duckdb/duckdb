@@ -6,7 +6,7 @@ require vector_size 512
 
 # CSV file with very sparse column
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE=1024);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE=1);
 
 query IIII
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
@@ -20,6 +20,7 @@ DROP TABLE test
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE=-1);
 
+
 query IIII
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
 ----
@@ -30,7 +31,7 @@ DROP TABLE test
 
 # CSV file with very sparse column and sample size 500
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_CHUNK_SIZE = 500);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE = -1);
 
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
@@ -47,7 +48,7 @@ drop table test;
 
 # CSV file with very sparse column and number of samples 50
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_CHUNKS = 50);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv');
 
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
@@ -64,7 +65,7 @@ drop table test;
 
 # CSV file with very sparse column with sample size 200 and number of samples 20
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_CHUNK_SIZE = 200, SAMPLE_CHUNKS = 20);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE = -1);
 
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
@@ -85,7 +86,7 @@ CREATE TABLE test (TestInteger integer, TestDouble double, TestDate varchar, Tes
 
 # CSV file with very sparse column, automatically aligns column types, small sample size
 statement ok
-COPY test FROM 'test/sql/copy/csv/data/auto/issue_811.csv' (SAMPLE_CHUNK_SIZE 4, AUTO_DETECT TRUE);
+COPY test FROM 'test/sql/copy/csv/data/auto/issue_811.csv' (AUTO_DETECT TRUE);
 
 statement ok
 drop table test;

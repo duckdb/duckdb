@@ -33,9 +33,13 @@ SELECT '100000000000000000000'::UHUGEINT + '100000000000000000000'::UHUGEINT;
 # overflow in addition
 statement error
 SELECT '340282366920938463463374607431768211455'::UHUGEINT + '340282366920938463463374607431768211455'::UHUGEINT;
+----
+Out of Range Error
 
 statement error
 SELECT '340282366920938463463374607431768211455'::UHUGEINT + '10'::UHUGEINT;
+----
+Out of Range Error
 
 # almost overflowing but not quite
 query I
@@ -46,6 +50,8 @@ SELECT '340282366920938463463374607431768211455'::UHUGEINT - 10::UHUGEINT + 10::
 # overflowing
 statement error
 SELECT '340282366920938463463374607431768211455'::UHUGEINT - 10::UHUGEINT + 11::UHUGEINT
+----
+Out of Range Error
 
 # subtraction
 query II
@@ -56,6 +62,8 @@ SELECT 100::UHUGEINT - 42::UHUGEINT, 3::UHUGEINT - 2::UHUGEINT;
 # underflow in subtraction
 statement error
 SELECT '0'::UHUGEINT - '1'::UHUGEINT;
+----
+Out of Range Error
 
 # multiplication
 query I
@@ -77,9 +85,13 @@ SELECT '340282366920938463463374607431768211455'::UHUGEINT * 1::UHUGEINT
 # overflow in multiplication
 statement error
 SELECT '340282366920938463463374607431768211455'::UHUGEINT * 2::UHUGEINT
+----
+Out of Range Error
 
 statement error
 SELECT '34028236692093846346'::UHUGEINT * '33746074317682114556'::UHUGEINT
+----
+Out of Range Error
 
 # division
 query II
@@ -142,6 +154,8 @@ SELECT 1 + '340282366920938463463374607431768211454'::UHUGEINT;
 
 statement error
 SELECT 1::UHUGEINT + '340282366920938463463374607431768211455'::UHUGEINT;
+----
+Out of Range Error
 
 # subtraction
 query I
@@ -151,6 +165,8 @@ SELECT 1 - 1::UHUGEINT;
 
 statement error
 SELECT 0::UHUGEINT - 1::UHUGEINT;
+----
+Out of Range Error
 
 # the other way around (i.e. move away from the overflow direction)
 query I

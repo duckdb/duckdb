@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "parquet_bss_decoder.hpp"
 #include "parquet_dbp_decoder.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_statistics.hpp"
@@ -161,6 +162,7 @@ private:
 	unique_ptr<RleBpDecoder> repeated_decoder;
 	unique_ptr<DbpDecoder> dbp_decoder;
 	unique_ptr<RleBpDecoder> rle_decoder;
+	unique_ptr<BssDecoder> bss_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;

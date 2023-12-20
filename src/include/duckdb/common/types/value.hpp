@@ -21,8 +21,6 @@
 namespace duckdb {
 
 class CastFunctionSet;
-class Deserializer;
-class Serializer;
 struct GetCastFunctionInput;
 struct ExtraValueInfo;
 
@@ -33,6 +31,7 @@ class Value {
 	friend struct StructValue;
 	friend struct ListValue;
 	friend struct UnionValue;
+	friend struct ArrayValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -86,6 +85,7 @@ public:
 	//! Create a Numeric value of the specified type with the specified value
 	DUCKDB_API static Value Numeric(const LogicalType &type, int64_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, hugeint_t value);
+	DUCKDB_API static Value Numeric(const LogicalType &type, uhugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	DUCKDB_API static Value BOOLEAN(int8_t value);
@@ -123,7 +123,7 @@ public:
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
-	DUCKDB_API static Value TIMETZ(dtime_t time);
+	DUCKDB_API static Value TIMETZ(dtime_tz_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
@@ -154,6 +154,7 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
+	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
 	//! Create a list value with the given entries, list type is inferred from children
 	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
@@ -161,8 +162,18 @@ public:
 	DUCKDB_API static Value LIST(const LogicalType &child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(const LogicalType &child_type);
+	//! Create an array value with the given entries. Array type is inferred from children
+	//! Cannot be called with an empty list, use either EMPTYARRAY or ARRAY with a type instead
+	DUCKDB_API static Value ARRAY(vector<Value> values);
+	// Create an array value with the given entries
+	DUCKDB_API static Value ARRAY(const LogicalType &type, vector<Value> values);
+	//! Create an empty array of the given type and size
+	DUCKDB_API static Value EMPTYARRAY(const LogicalType &type, uint32_t size);
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
+	//! Create a map value with the given entries
+	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
+	                            vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
@@ -228,10 +239,8 @@ public:
 
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static Value FormatDeserialize(FormatDeserializer &deserializer);
 	//! Deserializes a Value from a blob
-	DUCKDB_API static Value Deserialize(Deserializer &source);
+	DUCKDB_API static Value Deserialize(Deserializer &deserializer);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators
@@ -306,6 +315,7 @@ private:
 		uint64_t hash;
 		date_t date;
 		dtime_t time;
+		dtime_tz_t timetz;
 		timestamp_t timestamp;
 		interval_t interval;
 	} value_; // NOLINT
@@ -399,6 +409,10 @@ struct StructValue {
 };
 
 struct ListValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
+struct ArrayValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
 

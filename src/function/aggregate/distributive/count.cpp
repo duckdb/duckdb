@@ -34,23 +34,26 @@ struct CountStarFunction : public BaseCountFunction {
 	}
 
 	template <typename RESULT_TYPE>
-	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, idx_t bias) {
-		D_ASSERT(input_count == 0);
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition, const_data_ptr_t,
+	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
+		D_ASSERT(partition.input_count == 0);
+
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
-		const auto begin = frame.start;
-		const auto end = frame.end;
-		// Slice to any filtered rows
-		if (!filter_mask.AllValid()) {
-			RESULT_TYPE filtered = 0;
-			for (auto i = begin; i < end; ++i) {
-				filtered += filter_mask.RowIsValid(i);
+		RESULT_TYPE total = 0;
+		for (const auto &frame : frames) {
+			const auto begin = frame.start;
+			const auto end = frame.end;
+
+			// Slice to any filtered rows
+			if (partition.filter_mask.AllValid()) {
+				total += end - begin;
+				continue;
 			}
-			data[rid] = filtered;
-		} else {
-			data[rid] = end - begin;
+			for (auto i = begin; i < end; ++i) {
+				total += partition.filter_mask.RowIsValid(i);
+			}
 		}
+		data[rid] = total;
 	}
 };
 

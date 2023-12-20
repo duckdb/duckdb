@@ -36,33 +36,6 @@ bool OdbcUtils::IsCharType(SQLSMALLINT type) {
 	}
 }
 
-SQLRETURN OdbcUtils::SetStringAndLength(vector<string> &error_messages, const string &val_str,
-                                        SQLPOINTER target_value_ptr, SQLSMALLINT buffer_length,
-                                        SQLSMALLINT *str_len_or_ind_ptr) {
-	if (!target_value_ptr) {
-		return OdbcUtils::SetStringValueLength(val_str, reinterpret_cast<SQLLEN *>(str_len_or_ind_ptr));
-	}
-
-	SQLRETURN ret = SQL_SUCCESS;
-
-	auto out_len = duckdb::MinValue(val_str.size(), (size_t)buffer_length);
-	memcpy((char *)target_value_ptr, val_str.c_str(), out_len);
-
-	if (out_len == (size_t)buffer_length) {
-		ret = SQL_SUCCESS_WITH_INFO;
-		out_len = buffer_length - 1;
-		error_messages.emplace_back("SQLGetData returned with info.");
-	}
-
-	// null terminator char
-	((char *)target_value_ptr)[out_len] = '\0';
-	if (str_len_or_ind_ptr) {
-		*str_len_or_ind_ptr = out_len;
-	}
-
-	return ret;
-}
-
 string OdbcUtils::GetStringAsIdentifier(const string &str) {
 	string str_ret;
 

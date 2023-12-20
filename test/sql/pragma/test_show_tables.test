@@ -39,6 +39,7 @@ i	INTEGER	YES	UNI	NULL	NULL
 # We test that the index can't be described
 statement error
 DESCRIBE my_index;
+----
 
 # We test that right table is described (from main schema)
 # column_name | column_type | null | key | default | extra

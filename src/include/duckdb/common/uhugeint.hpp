@@ -6,6 +6,7 @@
 
 namespace duckdb {
 
+// Forward declaration to allow conversion between hugeint and uhugeint
 struct hugeint_t;
 
 struct uhugeint_t {

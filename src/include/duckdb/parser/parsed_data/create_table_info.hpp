@@ -30,19 +30,16 @@ struct CreateTableInfo : public CreateInfo {
 	ColumnList columns;
 	//! List of constraints on the table
 	vector<unique_ptr<Constraint>> constraints;
-	//! CREATE TABLE from QUERY
+	//! CREATE TABLE as QUERY
 	unique_ptr<SelectStatement> query;
 
-protected:
-	void SerializeInternal(Serializer &serializer) const override;
-
 public:
-	DUCKDB_API static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer);
-
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const override;
-	DUCKDB_API static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
+	string ToString() const override;
 };
 
 } // namespace duckdb

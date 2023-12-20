@@ -12,12 +12,8 @@ statement ok
 CREATE INDEX i_index ON integers(i)
 
 # insert 4 elements
-loop i 0 4
-
 statement ok
-INSERT INTO integers VALUES (1);
-
-endloop
+INSERT INTO integers SELECT 1 FROM range(4)
 
 # verify counts
 
@@ -51,12 +47,8 @@ SELECT COUNT(*) FROM integers
 0
 
 # insert 1024 elements
-loop i 0 1024
-
 statement ok
-INSERT INTO integers VALUES (1);
-
-endloop
+INSERT INTO integers SELECT 1 FROM range(1024);
 
 # verify counts
 
@@ -90,20 +82,12 @@ SELECT COUNT(*) FROM integers
 0
 
 # insert 3000 elements: 1
-loop i 0 3000
-
 statement ok
-INSERT INTO integers VALUES (1);
-
-endloop
+INSERT INTO integers SELECT 1 FROM range(3000);
 
 # insert 1024 elements: 2
-loop i 0 1024
-
 statement ok
-INSERT INTO integers VALUES (2);
-
-endloop
+INSERT INTO integers SELECT 2 FROM range(1024);
 
 # verify counts
 

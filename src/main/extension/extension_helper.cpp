@@ -12,6 +12,10 @@
 #define DUCKDB_EXTENSION_ICU_LINKED false
 #endif
 
+#ifndef DUCKDB_EXTENSION_EXCEL_LINKED
+#define DUCKDB_EXTENSION_EXCEL_LINKED false
+#endif
+
 #ifndef DUCKDB_EXTENSION_PARQUET_LINKED
 #define DUCKDB_EXTENSION_PARQUET_LINKED false
 #endif
@@ -54,6 +58,10 @@
 #include "icu_extension.hpp"
 #endif
 
+#if DUCKDB_EXTENSION_EXCEL_LINKED
+#include "excel_extension.hpp"
+#endif
+
 #if DUCKDB_EXTENSION_PARQUET_LINKED
 #include "parquet_extension.hpp"
 #endif
@@ -94,6 +102,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 static DefaultExtension internal_extensions[] = {
     {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
+    {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
     {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED},
     {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
@@ -101,12 +110,19 @@ static DefaultExtension internal_extensions[] = {
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
     {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
-    {"autocomplete", "Add supports for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
+    {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
-    {"sqlite_scanner", "Adds support for reading SQLite database files", false},
-    {"postgres_scanner", "Adds support for reading from a Postgres database", false},
+    {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
+    {"sqlite_scanner", "Adds support for reading and writing SQLite database files", false},
+    {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
+    {"substrait", "Adds support for the Substrait integration", false},
+    {"aws", "Provides features that depend on the AWS SDK", false},
+    {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
+    {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
+    {"iceberg", "Adds support for Apache Iceberg", false},
+    {"visualizer", "Creates an HTML-based visualization of the query plan", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -124,8 +140,9 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
-static const char *auto_install[] = {"motherduck", "postgres_scanner", "sqlite_scanner", nullptr};
+static const char *auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", nullptr};
 
+// TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 	auto lcase = StringUtil::Lower(extension);
 	for (idx_t i = 0; auto_install[i]; i++) {
@@ -134,6 +151,86 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 		}
 	}
 	return false;
+}
+
+bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	return false;
+#endif
+
+	if (ext_name.empty()) {
+		return false;
+	}
+	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
+		if (ext_name == ext) {
+			return true;
+		}
+	}
+	return false;
+}
+
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
+                                                          const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
+	string install_hint;
+
+	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
+		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
+	} else if (!dbconfig.options.autoload_known_extensions) {
+		install_hint =
+		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
+		    extension_name + ";\nLOAD " + extension_name +
+		    ";\n\nAlternatively, consider enabling auto-install "
+		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
+	} else if (!dbconfig.options.autoinstall_known_extensions) {
+		install_hint =
+		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
+		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
+	}
+
+	if (!install_hint.empty()) {
+		return base_error + "\n\n" + install_hint;
+	}
+
+	return base_error;
+}
+
+bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+	auto &dbconfig = DBConfig::GetConfig(context);
+	try {
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
+		}
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+		return true;
+	} catch (...) {
+		return false;
+	}
+	return false;
+}
+
+void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		// Avoid downloading again
+		return;
+	}
+	auto &dbconfig = DBConfig::GetConfig(context);
+	try {
+#ifndef DUCKDB_WASM
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
+		}
+#endif
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+	} catch (Exception &e) {
+		throw AutoloadException(extension_name, e);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -150,7 +247,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	}
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-	for (auto &ext : linked_extensions) {
+	for (const auto &ext : LinkedExtensions()) {
 		LoadExtensionInternal(db, ext, true);
 	}
 #endif

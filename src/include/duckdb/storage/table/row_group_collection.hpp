@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
+
 struct ParallelTableScanState;
 struct ParallelCollectionScanState;
 class CreateIndexScanState;
@@ -28,6 +29,7 @@ class BoundConstraint;
 class RowGroupSegmentTree;
 struct ColumnSegmentInfo;
 class MetadataManager;
+struct VacuumState;
 
 class RowGroupCollection {
 public:
@@ -73,7 +75,7 @@ public:
 	//! FinalizeAppend flushes an append with a variable number of rows.
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
-	void RevertAppendInternal(idx_t start_row, idx_t count);
+	void RevertAppendInternal(idx_t start_row);
 
 	void MergeStorage(RowGroupCollection &data);
 
@@ -85,6 +87,9 @@ public:
 	                  DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
+
+	void InitializeVacuumState(VacuumState &state, vector<SegmentNode<RowGroup>> &segments);
+	void VacuumDeletes(VacuumState &state, vector<SegmentNode<RowGroup>> &segments, idx_t segment_idx);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();

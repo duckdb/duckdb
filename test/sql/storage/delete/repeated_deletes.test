@@ -1,0 +1,130 @@
+# name: test/sql/storage/delete/repeated_deletes.test
+# description: Test deletes with storage
+# group: [delete]
+
+# load the DB from disk
+load __TEST_DIR__/test_repeated_deletes.db
+
+statement ok
+CREATE TABLE test (i INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM generate_series(0, 999);
+
+query I
+DELETE FROM test WHERE i%2=0;
+----
+500
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+500	250000	1	999
+
+statement ok
+INSERT INTO test SELECT * FROM generate_series(1000, 1099);
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+600	354950	1	1099
+
+query I
+DELETE FROM test WHERE i%3=0;
+----
+200
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+400	236633	1	1099
+
+statement ok
+INSERT INTO test SELECT * FROM generate_series(1000, 1999);
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+1400	1736133	1	1999
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+1400	1736133	1	1999
+
+query I
+SELECT COUNT(*) FROM test WHERE i%7=0
+----
+200
+
+query I
+DELETE FROM test WHERE i%7=0;
+----
+200
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+1200	1488228	1	1999
+
+query I
+DELETE FROM test WHERE i%3=0;
+----
+285
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+915	1060800	1	1999
+
+statement ok
+INSERT INTO test SELECT 1 FROM generate_series(0, 4000);
+
+statement ok
+INSERT INTO test SELECT 2 FROM generate_series(0, 4000);
+
+query I
+DELETE FROM test WHERE i=1;
+----
+4002
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+4915	1068801	2	1999
+
+query I
+DELETE FROM test WHERE i=2;
+----
+4001
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+914	1060799	5	1999
+
+query I
+DELETE FROM test;
+----
+914
+
+restart
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM test;
+----
+0	NULL	NULL	NULL

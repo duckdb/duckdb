@@ -8,11 +8,16 @@
 
 namespace duckdb {
 
-struct RegisteredArray;
 class ClientContext;
 
+struct RegisteredArray {
+	explicit RegisteredArray(py::array numpy_array) : numpy_array(std::move(numpy_array)) {
+	}
+	py::array numpy_array;
+};
+
 struct PandasColumnBindData {
-	NumpyNullableType numpy_type;
+	NumpyType numpy_type;
 	unique_ptr<PandasColumn> pandas_col;
 	unique_ptr<RegisteredArray> mask;
 	//! Only for categorical types

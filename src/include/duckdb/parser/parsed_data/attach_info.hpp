@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
 
 namespace duckdb {
 
@@ -29,15 +30,14 @@ public:
 	string path;
 	//! Set of (key, value) options
 	unordered_map<string, Value> options;
+	//! What to do on create conflict
+	OnCreateConflict on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 
 public:
 	unique_ptr<AttachInfo> Copy() const;
 
-	void Serialize(Serializer &serializer) const;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

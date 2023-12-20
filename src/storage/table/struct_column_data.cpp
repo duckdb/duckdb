@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -14,6 +15,9 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
+	if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type)) {
+		throw InvalidInputException("A table cannot be created from an unnamed struct");
+	}
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
@@ -127,6 +131,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], *child_entries[i],
 		                       count);
 	}
+	this->count += count;
 }
 
 void StructColumnData::RevertAppend(row_t start_row) {
@@ -134,6 +139,7 @@ void StructColumnData::RevertAppend(row_t start_row) {
 	for (auto &sub_column : sub_columns) {
 		sub_column->RevertAppend(start_row);
 	}
+	this->count = start_row - this->start;
 }
 
 idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -233,18 +239,20 @@ struct StructColumnCheckpointState : public ColumnCheckpointState {
 
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
-		auto stats = StructStats::CreateEmpty(column_data.type);
+		D_ASSERT(global_stats);
 		for (idx_t i = 0; i < child_states.size(); i++) {
-			StructStats::SetChildStats(stats, i, child_states[i]->GetStatistics());
+			StructStats::SetChildStats(*global_stats, i, child_states[i]->GetStatistics());
 		}
-		return stats.ToUnique();
+		return std::move(global_stats);
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer) override {
-		validity_state->WriteDataPointers(writer);
-		for (auto &state : child_states) {
-			state->WriteDataPointers(writer);
-		}
+	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
+		serializer.WriteObject(101, "validity",
+		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
+		serializer.WriteList(102, "sub_columns", child_states.size(), [&](Serializer::List &list, idx_t i) {
+			auto &state = child_states[i];
+			list.WriteObject([&](Serializer &serializer) { state->WriteDataPointers(writer, serializer); });
+		});
 	}
 };
 
@@ -265,11 +273,14 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return std::move(checkpoint_state);
 }
 
-void StructColumnData::DeserializeColumn(Deserializer &source) {
-	validity.DeserializeColumn(source);
-	for (auto &sub_column : sub_columns) {
-		sub_column->DeserializeColumn(source);
-	}
+void StructColumnData::DeserializeColumn(Deserializer &deserializer) {
+	deserializer.ReadObject(101, "validity",
+	                        [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+
+	deserializer.ReadList(102, "sub_columns", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &item) { sub_columns[i]->DeserializeColumn(item); });
+	});
+
 	this->count = validity.count;
 }
 

@@ -28,10 +28,21 @@ select (0.00000000000000000000002e+44)::UHUGEINT;
 # overflow
 statement error
 select '340282366920938463463374607431768211456e0'::UHUGEINT
+----
+Conversion Error
 
 statement error
-select '1.7e39'::UHUGEINT
+select '3.4e39'::UHUGEINT
+----
+Conversion Error
+
+query I
+select '3.4e38'::UHUGEINT
+----
+340000000000000000000000000000000000000
 
 statement error
-select '4e38'::UHUGEINT
+select '3.5e38'::UHUGEINT
+----
+Conversion Error
 

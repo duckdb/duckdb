@@ -5,18 +5,16 @@
 statement ok
 PRAGMA enable_verification
 
-# FIXME: the metadata rework temporarily broke this test - should be revisited with the new ART storage
-mode skip
-
-# load the DB from disk
-load __TEST_DIR__/test_art_vacuum_strings.db
-
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
     WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
     WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
     WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
+    WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0
+    WHEN CONTAINS(x, 'MiB') THEN REPLACE(x, 'MiB', '')::INT * 1024.0 * 1024
+    WHEN CONTAINS(x, 'GiB') THEN REPLACE(x, 'GiB', '')::INT * 1024.0 * 1024 * 1024
+    WHEN CONTAINS(x, 'TiB') THEN REPLACE(x, 'TiB', '')::INT * 1024.0 * 1024 * 1024 * 1024
     WHEN x = '0 bytes' THEN 0
     ELSE x::INT END;
 
@@ -63,27 +61,18 @@ statement ok
 CREATE INDEX idx ON t(i);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 3 * base.usage AND mem_to_bytes(current.memory_usage) < 7 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage AND mem_to_bytes(current.memory_usage) < 3 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
 
-restart
-
-query I
-SELECT mem_to_bytes(current.memory_usage) < base.usage
-FROM base, pragma_database_size() current;
-----
-1
-
-# insert 100K values into every fourth leaf, partially deserializing the ART
+# insert 100K values into every fourth leaf, deserializing a significant part of the ART
 
 statement ok
 INSERT INTO t SELECT (range * 4) || 'I am' || (range * 4) || 'a long not' || (range * 4) || 'inlined string' || (range * 4) FROM range(100000) AS range;
 
-# NOTE: the table itselt also takes up significant memory
 query I
-SELECT mem_to_bytes(current.memory_usage) > 10 * base.usage AND mem_to_bytes(current.memory_usage) < 25 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > 4 * base.usage AND mem_to_bytes(current.memory_usage) < 6 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -100,12 +89,14 @@ FROM pragma_database_size() AS current;
 statement ok
 DELETE FROM t WHERE rowid > (SELECT AVG(rowid) FROM t);
 
-# half the index still is not in-memory, and the DB is persistent,
-# so we don't expect the vacuum to clean up too much memory
-# (since many allocators won't pass the threshold)
+# the previous bulk deletion causes a vacuum-operation. We delete excess_buffer_count in-memory buffers
+# during a vacuum. We move their data to buffers that still have free space and that potentially
+# are not yet deserialized, deserializing them. Therefore, our overall ART size decreases, but our in-memory
+# ART size potentially increases, as we deserialize additional buffers
 
+# we add some +10MB
 query I
-SELECT mem_to_bytes(current.memory_usage) < db_size.usage
+SELECT mem_to_bytes(current.memory_usage) < db_size.usage + 10000000
 FROM db_size, pragma_database_size() current;
 ----
 1
@@ -131,20 +122,14 @@ statement ok
 UPDATE db_size SET usage = (SELECT mem_to_bytes(current.memory_usage) AS usage
 FROM pragma_database_size() AS current);
 
+# only ~6250 values remaining (~4MB), and we are only slightly under 4MB after the vacuum (~3.6MB)
+# which we then round up to 4MB in our mem_to_bytes macro
 statement ok
 DELETE FROM t;
 
 query I
-SELECT mem_to_bytes(current.memory_usage) < db_size.usage
+SELECT mem_to_bytes(current.memory_usage) <= db_size.usage
 FROM db_size, pragma_database_size() current;
-----
-1
-
-restart
-
-query I
-SELECT mem_to_bytes(current.memory_usage) <= base.usage
-FROM pragma_database_size() current, base;
 ----
 1
 

@@ -92,11 +92,8 @@ public:
 	void InitializeFormats(bool auto_detect);
 	void SetCompression(const string &compression);
 
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(ClientContext &context, FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<JSONScanData> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<JSONScanData> Deserialize(Deserializer &deserializer);
 
 public:
 	//! Scan type
@@ -125,6 +122,10 @@ public:
 	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! We divide the number of appearances of each JSON field by the auto-detection sample size
+	//! If the average over the fields of an object is less than this threshold,
+	//! we default to the JSON type for this object rather than the shredded type
+	double field_appearance_threshold = 0.1;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -182,11 +183,13 @@ public:
 	//! One JSON reader per file
 	vector<optional_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	atomic<idx_t> batch_index;
 
 	//! Current number of threads active
 	idx_t system_threads;
+	//! Whether we enable parallel scans (only if less files than threads)
+	bool enable_parallel_scans;
 };
 
 struct JSONScanLocalState {
@@ -219,19 +222,20 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBufferInternal(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
 	void SkipOverArrayStart();
 
-	bool ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index, const bool already_incremented_file_idx);
-	void ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReconstructFirstObject();
 	void ParseNextChunk();
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
 	void ThrowInvalidAtEndError();
 
+	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
 private:
@@ -291,13 +295,9 @@ public:
 	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                  vector<unique_ptr<Expression>> &filters);
 
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function);
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                            TableFunction &function);
-
-	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                            const TableFunction &function);
-	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, TableFunction &function);
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                      const TableFunction &function);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, TableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);
 };

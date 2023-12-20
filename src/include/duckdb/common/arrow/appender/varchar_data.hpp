@@ -32,7 +32,7 @@ struct ArrowUUIDConverter {
 	}
 };
 
-template <class SRC = string_t, class OP = ArrowVarcharConverter, class BUFTYPE = uint64_t>
+template <class SRC = string_t, class OP = ArrowVarcharConverter, class BUFTYPE = int64_t>
 struct ArrowVarcharData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.main_buffer.reserve((capacity + 1) * sizeof(BUFTYPE));
@@ -40,7 +40,8 @@ struct ArrowVarcharData {
 		result.aux_buffer.reserve(capacity);
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	template <bool LARGE_STRING>
+	static void AppendTemplated(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		idx_t size = to - from;
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(input_size, format);
@@ -60,13 +61,6 @@ struct ArrowVarcharData {
 		// now append the string data to the auxiliary buffer
 		// the auxiliary buffer's length depends on the string lengths, so we resize as required
 		auto last_offset = offset_data[append_data.row_count];
-		idx_t max_offset = append_data.row_count + to - from;
-		if (max_offset > NumericLimits<uint32_t>::Maximum() &&
-		    append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR) {
-			throw InvalidInputException("Arrow Appender: The maximum total string size for regular string buffers is "
-			                            "%u but the offset of %lu exceeds this.",
-			                            NumericLimits<uint32_t>::Maximum(), max_offset);
-		}
 		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
 			auto offset_idx = append_data.row_count + i + 1 - from;
@@ -84,6 +78,13 @@ struct ArrowVarcharData {
 
 			// append the offset data
 			auto current_offset = last_offset + string_length;
+			if (!LARGE_STRING && (int64_t)last_offset + string_length > NumericLimits<int32_t>::Maximum()) {
+				D_ASSERT(append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR);
+				throw InvalidInputException(
+				    "Arrow Appender: The maximum total string size for regular string buffers is "
+				    "%u but the offset of %lu exceeds this.",
+				    NumericLimits<int32_t>::Maximum(), current_offset);
+			}
 			offset_data[offset_idx] = current_offset;
 
 			// resize the string buffer if required, and write the string data
@@ -93,6 +94,15 @@ struct ArrowVarcharData {
 			last_offset = current_offset;
 		}
 		append_data.row_count += size;
+	}
+
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR) {
+			// Check if the offset exceeds the max supported value
+			AppendTemplated<false>(append_data, input, from, to, input_size);
+		} else {
+			AppendTemplated<true>(append_data, input, from, to, input_size);
+		}
 	}
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {

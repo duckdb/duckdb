@@ -214,15 +214,19 @@ SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page
 # Unsupported formats
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_BROTLI.parquet') limit 50
+----
 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_BROTLI.parquet') limit 50
+----
 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_LZ4.parquet') limit 50
+----
 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_LZ4.parquet') limit 50
+----
 
 query IIII
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_ZSTD.parquet', hive_partitioning=0) limit 50

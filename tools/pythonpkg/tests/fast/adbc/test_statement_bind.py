@@ -5,14 +5,8 @@ import pytest
 pa = pytest.importorskip("pyarrow")
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
 
-try:
-    adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
-    con = adbc_driver_duckdb.connect()
-except:
-    pytest.skip(
-        "'duckdb_adbc_init' was not exported in this install, try running 'python3 setup.py install'.",
-        allow_module_level=True,
-    )
+adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
+con = adbc_driver_duckdb.connect()
 
 
 def _import(handle):
@@ -162,9 +156,14 @@ class TestADBCStatementBind(object):
 
             array = adbc_driver_manager.ArrowArrayHandle()
             schema = adbc_driver_manager.ArrowSchemaHandle()
+
             data._export_to_c(array.address, schema.address)
             statement.bind(array, schema)
-            with pytest.raises(adbc_driver_manager.ProgrammingError, match="ADBC_STATUS_INVALID_ARGUMENT"):
+
+            with pytest.raises(
+                adbc_driver_manager.ProgrammingError,
+                match="Input data has more column than prepared statement has parameters",
+            ):
                 res, _ = statement.execute_query()
 
     def test_not_enough_parameters(self):

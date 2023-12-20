@@ -106,3 +106,4 @@ NULL	20:08:10.998	NULL
 # Overflow
 statement error
 SELECT '294247-01-10'::DATE + '04:00:54.775808'::TIME;
+----

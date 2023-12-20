@@ -31,10 +31,8 @@ public:
 	bool update_is_del_and_insert;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
 	string GetName() const override;
@@ -44,6 +42,6 @@ protected:
 	void ResolveTypes() override;
 
 private:
-	LogicalUpdate(ClientContext &context, const string &catalog, const string &schema, const string &table);
+	LogicalUpdate(ClientContext &context, const unique_ptr<CreateInfo> &table_info);
 };
 } // namespace duckdb

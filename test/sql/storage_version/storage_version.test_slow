@@ -3,8 +3,8 @@
 # group: [storage_version]
 
 # If this test fails, re-generate the database file by following the steps listed below:
-# 1) Increment the version number in src/storage/storage_info.cpp and recompile (make debug)
-# 2) Run the script in scripts/generate_storage_version.py,
+# 1) Increment the version number in src/storage/storage_info.cpp and recompile (make release)
+# 2) Run the script in scripts/generate_storage_version.py
 # 3) Commit the newly generated database file in test/sql/storage_version/storage_version.db
 
 statement ok

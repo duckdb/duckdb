@@ -73,3 +73,36 @@ TEST_CASE("Test SQL_ATTR_ACCESS_MODE and SQL_ATTR_METADATA_ID attribute in SQLSe
 
 	DISCONNECT_FROM_DATABASE(env, dbc);
 }
+
+TEST_CASE("Test SQLSetEnvAttr and SQLGetEnvAttr") {
+	SQLHANDLE env;
+
+	EXECUTE_AND_CHECK("SQLAllocHandle (ENV)", SQLAllocHandle, SQL_HANDLE_ENV, nullptr, &env);
+
+	// Set the env attribute SQL_ATTR_ODBC_VERSION to SQL_OV_ODBC3
+	EXECUTE_AND_CHECK("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
+	                  ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
+	SQLINTEGER odbc_version;
+	EXECUTE_AND_CHECK("SQLGetEnvAttr (SQL_ATTR_ODBC_VERSION)", SQLGetEnvAttr, env, SQL_ATTR_ODBC_VERSION, &odbc_version,
+	                  sizeof(odbc_version), nullptr);
+	REQUIRE(odbc_version == SQL_OV_ODBC3);
+
+	// Set the env attribute SQL_ATTR_OUTPUT_NTS to SQL_TRUE
+	EXECUTE_AND_CHECK("SQLSetEnvAttr (SQL_ATTR_OUTPUT_NTS)", SQLSetEnvAttr, env, SQL_ATTR_OUTPUT_NTS,
+	                  ConvertToSQLPOINTER(SQL_TRUE), 0);
+	SQLINTEGER output_nts;
+	EXECUTE_AND_CHECK("SQLGetEnvAttr (SQL_ATTR_OUTPUT_NTS)", SQLGetEnvAttr, env, SQL_ATTR_OUTPUT_NTS, &output_nts,
+	                  sizeof(output_nts), nullptr);
+	REQUIRE(output_nts == SQL_TRUE);
+
+	// Set the env attribute SQL_ATTR_CONNECTION_POOLING to SQL_CP_ONE_PER_DRIVER
+	EXECUTE_AND_CHECK("SQLSetEnvAttr (SQL_ATTR_CONNECTION_POOLING)", SQLSetEnvAttr, env, SQL_ATTR_CONNECTION_POOLING,
+	                  ConvertToSQLPOINTER(SQL_CP_ONE_PER_DRIVER), 0);
+	SQLUINTEGER connection_pooling;
+	EXECUTE_AND_CHECK("SQLGetEnvAttr (SQL_ATTR_CONNECTION_POOLING)", SQLGetEnvAttr, env, SQL_ATTR_CONNECTION_POOLING,
+	                  &connection_pooling, sizeof(connection_pooling), nullptr);
+	REQUIRE(connection_pooling == SQL_CP_ONE_PER_DRIVER);
+
+	// Free the env handle
+	EXECUTE_AND_CHECK("SQLFreeHandle (ENV)", SQLFreeHandle, SQL_HANDLE_ENV, env);
+}

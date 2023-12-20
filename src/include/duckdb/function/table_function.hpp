@@ -24,6 +24,7 @@ class BaseStatistics;
 class DependencyList;
 class LogicalGet;
 class TableFilterSet;
+class TableCatalogEntry;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -138,8 +139,12 @@ enum ScanType { TABLE, PARQUET };
 struct BindInfo {
 public:
 	explicit BindInfo(ScanType type_p) : type(type_p) {};
+	explicit BindInfo(TableCatalogEntry &table) : type(ScanType::TABLE), table(&table) {};
+
 	unordered_map<string, Value> options;
 	ScanType type;
+	optional_ptr<TableCatalogEntry> table;
+
 	void InsertOption(const string &name, Value value) {
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
@@ -190,7 +195,7 @@ typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const 
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state);
 
-typedef BindInfo (*table_function_get_bind_info)(const FunctionData *bind_data);
+typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionData> bind_data);
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
@@ -202,16 +207,9 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
-typedef void (*table_function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
+typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
-typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
-                                                                 TableFunction &function);
-
-typedef void (*table_function_format_serialize_t)(FormatSerializer &serializer,
-                                                  const optional_ptr<FunctionData> bind_data,
-                                                  const TableFunction &function);
-typedef unique_ptr<FunctionData> (*table_function_format_deserialize_t)(FormatDeserializer &deserializer,
-                                                                        TableFunction &function);
+typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
 class TableFunction : public SimpleNamedParameterFunction {
 public:
@@ -266,13 +264,11 @@ public:
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the current batch index of the current scan operator
 	table_function_get_batch_index_t get_batch_index;
-	//! (Optional) returns the extra batch info, currently only used for the substrait extension
-	table_function_get_bind_info get_batch_info;
+	//! (Optional) returns extra bind info
+	table_function_get_bind_info_t get_bind_info;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
-	table_function_format_serialize_t format_serialize;
-	table_function_format_deserialize_t format_deserialize;
 	bool verify_serialization = true;
 
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added

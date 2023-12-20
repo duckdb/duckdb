@@ -1,7 +1,8 @@
 #include "duckdb/planner/planner.hpp"
 
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -11,8 +12,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -77,12 +76,12 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
-	properties.bound_all_parameters = parameters_resolved;
+	properties.bound_all_parameters = !bound_parameters.rebind && parameters_resolved;
 
-	Planner::VerifyPlan(context, plan, &bound_parameters.parameters);
+	Planner::VerifyPlan(context, plan, bound_parameters.GetParametersPtr());
 
 	// set up a map of parameter number -> value entries
-	for (auto &kv : bound_parameters.parameters) {
+	for (auto &kv : bound_parameters.GetParameters()) {
 		auto &identifier = kv.first;
 		auto &param = kv.second;
 		// check if the type of the parameter could be resolved
@@ -137,6 +136,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::LOGICAL_PLAN_STATEMENT:
 	case StatementType::ATTACH_STATEMENT:
 	case StatementType::DETACH_STATEMENT:
+	case StatementType::COPY_DATABASE_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -169,29 +169,21 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	// format (de)serialization of this operator
 	try {
-		auto blob = BinarySerializer::Serialize(*op);
+		MemoryStream stream;
+		BinarySerializer::Serialize(*op, stream, true);
+		stream.Rewind();
 		bound_parameter_map_t parameters;
-		auto result = BinaryDeserializer::Deserialize<LogicalOperator>(context, parameters, blob.data(), blob.size());
+		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+
+		if (map) {
+			*map = std::move(parameters);
+		}
+		op = std::move(new_plan);
 	} catch (SerializationException &ex) {
 		// pass
-	}
-
-	BufferedSerializer serializer;
-	try {
-		op->Serialize(serializer);
 	} catch (NotImplementedException &ex) {
-		// ignore for now (FIXME)
-		return;
+		// pass
 	}
-	auto data = serializer.GetData();
-	auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-
-	PlanDeserializationState state(context);
-	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
-	if (map) {
-		*map = std::move(state.parameter_data);
-	}
-	op = std::move(new_plan);
 }
 
 } // namespace duckdb

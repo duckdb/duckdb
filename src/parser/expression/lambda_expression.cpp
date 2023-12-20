@@ -1,10 +1,9 @@
 #include "duckdb/parser/expression/lambda_expression.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -34,17 +33,6 @@ unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	auto copy = make_uniq<LambdaExpression>(lhs->Copy(), expr->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void LambdaExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*lhs);
-	writer.WriteSerializable(*expr);
-}
-
-unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto lhs = reader.ReadRequiredSerializable<ParsedExpression>();
-	auto expr = reader.ReadRequiredSerializable<ParsedExpression>();
-	return make_uniq<LambdaExpression>(std::move(lhs), std::move(expr));
 }
 
 } // namespace duckdb

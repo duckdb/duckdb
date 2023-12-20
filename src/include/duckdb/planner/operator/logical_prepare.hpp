@@ -33,8 +33,6 @@ public:
 	shared_ptr<PreparedStatementData> prepared;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	idx_t EstimateCardinality(ClientContext &context) override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {

@@ -27,6 +27,7 @@ TupleDataCollection::~TupleDataCollection() {
 void TupleDataCollection::Initialize() {
 	D_ASSERT(!layout.GetTypes().empty());
 	this->count = 0;
+	this->data_size = 0;
 	scatter_functions.reserve(layout.ColumnCount());
 	gather_functions.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -36,11 +37,15 @@ void TupleDataCollection::Initialize() {
 	}
 }
 
-void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
-	column_ids.reserve(layout.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+void GetAllColumnIDsInternal(vector<column_t> &column_ids, const idx_t column_count) {
+	column_ids.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		column_ids.emplace_back(col_idx);
 	}
+}
+
+void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
+	GetAllColumnIDsInternal(column_ids, layout.ColumnCount());
 }
 
 const TupleDataLayout &TupleDataCollection::GetLayout() const {
@@ -67,23 +72,13 @@ idx_t TupleDataCollection::SizeInBytes() const {
 	return total_size;
 }
 
-void TupleDataCollection::GetBlockPointers(vector<data_ptr_t> &block_pointers) const {
-	D_ASSERT(segments.size() == 1);
-	const auto &segment = segments[0];
-	const auto block_count = segment.allocator->RowBlockCount();
-	D_ASSERT(segment.pinned_row_handles.size() == block_count);
-	block_pointers.resize(block_count);
-	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-		block_pointers[block_idx] = segment.pinned_row_handles[block_idx].Ptr();
-	}
-}
-
 void TupleDataCollection::Unpin() {
 	for (auto &segment : segments) {
 		segment.Unpin();
 	}
 }
 
+// LCOV_EXCL_START
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
 #ifdef DEBUG
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -92,7 +87,8 @@ void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &
 		}
 		// This column will not be appended in the first go - verify that it is fixed-size - we cannot resize heap after
 		const auto physical_type = layout.GetTypes()[col_idx].InternalType();
-		D_ASSERT(physical_type != PhysicalType::VARCHAR && physical_type != PhysicalType::LIST);
+		D_ASSERT(physical_type != PhysicalType::VARCHAR && physical_type != PhysicalType::LIST &&
+		         physical_type != PhysicalType::ARRAY);
 		if (physical_type == PhysicalType::STRUCT) {
 			const auto &struct_layout = layout.GetStructLayout(col_idx);
 			vector<column_t> struct_column_ids;
@@ -105,6 +101,7 @@ void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &
 	}
 #endif
 }
+// LCOV_EXCL_STOP
 
 void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, TupleDataPinProperties properties) {
 	vector<column_t> column_ids;
@@ -116,7 +113,7 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
                                            TupleDataPinProperties properties) {
 	VerifyAppendColumns(layout, column_ids);
 	InitializeAppend(append_state.pin_state, properties);
-	InitializeAppend(append_state.chunk_state, std::move(column_ids));
+	InitializeChunkState(append_state.chunk_state, std::move(column_ids));
 }
 
 void TupleDataCollection::InitializeAppend(TupleDataPinState &pin_state, TupleDataPinProperties properties) {
@@ -138,11 +135,14 @@ static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, c
 			for (const auto &child_entry : child_list) {
 				child_types.emplace_back(child_entry.second);
 			}
-			InitializeVectorFormat(vector_data[col_idx].child_formats, child_types);
+			InitializeVectorFormat(vector_data[col_idx].children, child_types);
 			break;
 		}
 		case PhysicalType::LIST:
-			InitializeVectorFormat(vector_data[col_idx].child_formats, {ListType::GetChildType(type)});
+			InitializeVectorFormat(vector_data[col_idx].children, {ListType::GetChildType(type)});
+			break;
+		case PhysicalType::ARRAY:
+			InitializeVectorFormat(vector_data[col_idx].children, {ArrayType::GetChildType(type)});
 			break;
 		default:
 			break;
@@ -150,11 +150,16 @@ static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, c
 	}
 }
 
-void TupleDataCollection::InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids) {
+void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state, vector<column_t> column_ids) {
+	TupleDataCollection::InitializeChunkState(chunk_state, layout.GetTypes(), std::move(column_ids));
+}
+
+void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state, const vector<LogicalType> &types,
+                                               vector<column_t> column_ids) {
 	if (column_ids.empty()) {
-		GetAllColumnIDs(column_ids);
+		GetAllColumnIDsInternal(column_ids, types.size());
 	}
-	InitializeVectorFormat(chunk_state.vector_data, layout.GetTypes());
+	InitializeVectorFormat(chunk_state.vector_data, types);
 	chunk_state.column_ids = std::move(column_ids);
 }
 
@@ -219,22 +224,47 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 }
 
 static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector &vector, const idx_t count) {
-	vector.ToUnifiedFormat(count, format.data);
-	format.original_sel = format.data.sel;
-	format.original_owned_sel.Initialize(format.data.owned_sel);
+	vector.ToUnifiedFormat(count, format.unified);
+	format.original_sel = format.unified.sel;
+	format.original_owned_sel.Initialize(format.unified.owned_sel);
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);
-		D_ASSERT(format.child_formats.size() == entries.size());
+		D_ASSERT(format.children.size() == entries.size());
 		for (idx_t struct_col_idx = 0; struct_col_idx < entries.size(); struct_col_idx++) {
-			ToUnifiedFormatInternal(format.child_formats[struct_col_idx], *entries[struct_col_idx], count);
+			ToUnifiedFormatInternal(reinterpret_cast<TupleDataVectorFormat &>(format.children[struct_col_idx]),
+			                        *entries[struct_col_idx], count);
 		}
 		break;
 	}
 	case PhysicalType::LIST:
-		D_ASSERT(format.child_formats.size() == 1);
-		ToUnifiedFormatInternal(format.child_formats[0], ListVector::GetEntry(vector), ListVector::GetListSize(vector));
+		D_ASSERT(format.children.size() == 1);
+		ToUnifiedFormatInternal(reinterpret_cast<TupleDataVectorFormat &>(format.children[0]),
+		                        ListVector::GetEntry(vector), ListVector::GetListSize(vector));
 		break;
+	case PhysicalType::ARRAY: {
+		D_ASSERT(format.children.size() == 1);
+
+		// For arrays, we cheat a bit and pretend that they are lists by creating and assigning list_entry_t's to the
+		// vector This allows us to reuse all the list serialization functions for array types too.
+
+		// This is kind of hacky, but we need to create a list_entry_t for each array entry
+		idx_t array_count = ArrayVector::GetTotalSize(vector) / ArrayType::GetSize(vector.GetType());
+		format.array_list_entries = make_uniq_array<list_entry_t>(array_count);
+
+		auto array_size = ArrayType::GetSize(vector.GetType());
+		// create list entries
+		for (idx_t i = 0; i < array_count; i++) {
+			format.array_list_entries[i].length = array_size;
+			format.array_list_entries[i].offset = i * array_size;
+		}
+		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
+
+		// Set the array size in the child format
+		format.children[0].parent_array_size = array_size;
+
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), ArrayVector::GetTotalSize(vector));
+	} break;
 	default:
 		break;
 	}
@@ -250,7 +280,7 @@ void TupleDataCollection::ToUnifiedFormat(TupleDataChunkState &chunk_state, Data
 void TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]) {
 	const auto &vector_data = chunk_state.vector_data;
 	for (idx_t i = 0; i < vector_data.size(); i++) {
-		const auto &source = vector_data[i].data;
+		const auto &source = vector_data[i].unified;
 		auto &target = result[i];
 		target.sel = source.sel;
 		target.data = source.data;
@@ -260,11 +290,15 @@ void TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state, 
 
 void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
                                 const idx_t append_offset, const idx_t append_count) {
-	segments.back().allocator->Build(segments.back(), pin_state, chunk_state, append_offset, append_count);
+	auto &segment = segments.back();
+	const auto size_before = segment.SizeInBytes();
+	segment.allocator->Build(segment, pin_state, chunk_state, append_offset, append_count);
+	data_size += segment.SizeInBytes() - size_before;
 	count += append_count;
 	Verify();
 }
 
+// LCOV_EXCL_START
 void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes[], const SelectionVector &append_sel,
                      const idx_t append_count, const idx_t heap_size_offset) {
 #ifdef DEBUG
@@ -275,6 +309,7 @@ void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes
 	}
 #endif
 }
+// LCOV_EXCL_STOP
 
 void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input,
                                    const SelectionVector &append_sel, const idx_t append_count) const {
@@ -324,12 +359,17 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	if (this->layout.GetTypes() != other.GetLayout().GetTypes()) {
 		throw InternalException("Attempting to combine TupleDataCollection with mismatching types");
 	}
-	this->count += other.count;
 	this->segments.reserve(this->segments.size() + other.segments.size());
 	for (auto &other_seg : other.segments) {
-		this->segments.emplace_back(std::move(other_seg));
+		AddSegment(std::move(other_seg));
 	}
 	other.Reset();
+}
+
+void TupleDataCollection::AddSegment(TupleDataSegment &&segment) {
+	count += segment.count;
+	data_size += segment.data_size;
+	segments.emplace_back(std::move(segment));
 	Verify();
 }
 
@@ -339,6 +379,7 @@ void TupleDataCollection::Combine(unique_ptr<TupleDataCollection> other) {
 
 void TupleDataCollection::Reset() {
 	count = 0;
+	data_size = 0;
 	segments.clear();
 
 	// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
@@ -395,6 +436,10 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 	idx_t segment_index;
 	idx_t chunk_index;
 	if (!NextScanIndex(state, segment_index, chunk_index)) {
+		if (!segments.empty()) {
+			FinalizePinState(state.pin_state, segments[segment_index_before]);
+		}
+		result.SetCardinality(0);
 		return false;
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
@@ -408,21 +453,29 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	lstate.pin_state.properties = gstate.scan_state.pin_state.properties;
 
 	const auto segment_index_before = lstate.segment_index;
-	idx_t segment_index;
-	idx_t chunk_index;
 	{
 		lock_guard<mutex> guard(gstate.lock);
-		if (!NextScanIndex(gstate.scan_state, segment_index, chunk_index)) {
+		if (!NextScanIndex(gstate.scan_state, lstate.segment_index, lstate.chunk_index)) {
+			if (!segments.empty()) {
+				FinalizePinState(lstate.pin_state, segments[segment_index_before]);
+			}
+			result.SetCardinality(0);
 			return false;
 		}
 	}
-	if (segment_index_before != DConstants::INVALID_INDEX && segment_index_before != segment_index) {
+	if (segment_index_before != DConstants::INVALID_INDEX && segment_index_before != lstate.segment_index) {
 		FinalizePinState(lstate.pin_state, segments[lstate.segment_index]);
-		lstate.segment_index = segment_index;
 	}
-	ScanAtIndex(lstate.pin_state, lstate.chunk_state, gstate.scan_state.chunk_state.column_ids, segment_index,
-	            chunk_index, result);
+	ScanAtIndex(lstate.pin_state, lstate.chunk_state, gstate.scan_state.chunk_state.column_ids, lstate.segment_index,
+	            lstate.chunk_index, result);
 	return true;
+}
+
+bool TupleDataCollection::ScanComplete(const TupleDataScanState &state) const {
+	if (Count() == 0) {
+		return true;
+	}
+	return state.segment_index == segments.size() - 1 && state.chunk_index == segments.back().ChunkCount();
 }
 
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment) {
@@ -430,8 +483,8 @@ void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDa
 }
 
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state) {
-	D_ASSERT(segments.size() == 1);
-	allocator->ReleaseOrStoreHandles(pin_state, segments.back());
+	D_ASSERT(!segments.empty());
+	FinalizePinState(pin_state, segments.back());
 }
 
 bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segment_index, idx_t &chunk_index) {
@@ -466,6 +519,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	result.SetCardinality(chunk.count);
 }
 
+// LCOV_EXCL_START
 string TupleDataCollection::ToString() {
 	DataChunk chunk;
 	InitializeChunk(chunk);
@@ -493,12 +547,15 @@ void TupleDataCollection::Print() {
 
 void TupleDataCollection::Verify() const {
 #ifdef DEBUG
-	idx_t total_segment_count = 0;
+	idx_t total_count = 0;
+	idx_t total_size = 0;
 	for (const auto &segment : segments) {
 		segment.Verify();
-		total_segment_count += segment.count;
+		total_count += segment.count;
+		total_size += segment.data_size;
 	}
-	D_ASSERT(total_segment_count == this->count);
+	D_ASSERT(total_count == this->count);
+	D_ASSERT(total_size == this->data_size);
 #endif
 }
 
@@ -509,5 +566,6 @@ void TupleDataCollection::VerifyEverythingPinned() const {
 	}
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb

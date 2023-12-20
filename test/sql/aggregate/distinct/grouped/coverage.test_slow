@@ -21,7 +21,7 @@ statement ok
 CREATE TABLE tbl AS SELECT i, i%5 as j FROM range(1000000) tbl(i);
 
 statement ok
-PREPARE v1 AS SELECT SUM(DISTINCT i%5+?::INT) FROM tbl group by j;
+PREPARE v1 AS SELECT SUM(DISTINCT i%5+?::INT) FROM tbl group by j order by all;
 
 query I
 EXECUTE v1(1);

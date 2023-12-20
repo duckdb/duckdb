@@ -210,8 +210,8 @@ The `statistics` function is how the aggregate hooks into the planner.
 ### Serialization
 
 ```cpp
-serialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function);
-deserialize(ClientContext &context, FieldReader &reader, AggregateFunction &function);
+serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const AggregateFunction &function);
+deserialize(Deserializer &deserializer, AggregateFunction &function);
 ```
 
 Again like scalar functions, bound aggregates can be serialised as part of a query plan.

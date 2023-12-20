@@ -1,6 +1,7 @@
 #include "include/parameter_descriptor.hpp"
 #include "odbc_utils.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "handle_functions.hpp"
 
 using duckdb::Decimal;
 using duckdb::OdbcHandleDesc;
@@ -75,9 +76,9 @@ SQLRETURN ParameterDescriptor::GetParamValues(vector<Value> &values) {
 			return SQL_NEED_DATA;
 		}
 		if (ret != SQL_PARAM_SUCCESS) {
-			auto msg = duckdb::StringUtil::Format(
-			    "Error setting parameter value: ParameterSet '%ld', ParameterIndex '%ld'", cur_paramset_idx, rec_idx);
-			stmt->error_messages.emplace_back(msg);
+			duckdb::SetDiagnosticRecord(this->stmt, SQL_SUCCESS_WITH_INFO, "GetParamValues",
+			                            "Failed to set parameter value", SQLStateType::ST_01000,
+			                            this->stmt->dbc->GetDataSourceName());
 			if (!ipd->header.sql_desc_array_status_ptr) {
 				return SQL_ERROR;
 			}

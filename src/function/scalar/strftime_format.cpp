@@ -14,6 +14,7 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::ABBREVIATED_MONTH_NAME:
 		return 3;
 	case StrTimeSpecifier::WEEKDAY_DECIMAL:
+	case StrTimeSpecifier::WEEKDAY_ISO:
 		return 1;
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 	case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
@@ -25,13 +26,18 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::AM_PM:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+	case StrTimeSpecifier::WEEK_NUMBER_ISO:
 		return 2;
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		return 9;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		return 6;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
 		return 3;
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 		return 3;
+	case StrTimeSpecifier::YEAR_ISO:
+		return 4;
 	default:
 		return 0;
 	}
@@ -183,9 +189,15 @@ char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
 	}
 }
 
-// write a value in the range of 0..999999 padded to 6 digits
+// write a value in the range of 0..999999... padded to the given number of digits
 char *StrfTimeFormat::WritePadded(char *target, uint32_t value, size_t padding) {
-	D_ASSERT(padding % 2 == 0);
+	D_ASSERT(padding > 1);
+	if (padding % 2) {
+		int decimals = value % 1000;
+		WritePadded3(target + padding - 3, decimals);
+		value /= 1000;
+		padding -= 3;
+	}
 	for (size_t i = 0; i < padding / 2; i++) {
 		int decimals = value % 100;
 		WritePadded2(target + padding - 2 * (i + 1), decimals);
@@ -202,7 +214,10 @@ bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+	case StrTimeSpecifier::WEEK_NUMBER_ISO:
 	case StrTimeSpecifier::WEEKDAY_DECIMAL:
+	case StrTimeSpecifier::WEEKDAY_ISO:
+	case StrTimeSpecifier::YEAR_ISO:
 		return true;
 	default:
 		return false;
@@ -238,12 +253,22 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 		target = WritePadded2(target, Date::ExtractWeekNumberRegular(date, false));
 		break;
+	case StrTimeSpecifier::WEEK_NUMBER_ISO:
+		target = WritePadded2(target, Date::ExtractISOWeekNumber(date));
+		break;
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
 		uint32_t doy = Date::ExtractDayOfTheYear(date);
 		target += NumericHelper::UnsignedLength<uint32_t>(doy);
 		NumericHelper::FormatUnsigned(doy, target);
 		break;
 	}
+	case StrTimeSpecifier::YEAR_ISO:
+		target = WritePadded(target, Date::ExtractISOYearNumber(date), 4);
+		break;
+	case StrTimeSpecifier::WEEKDAY_ISO:
+		*target = char('0' + uint8_t(Date::ExtractISODayOfTheWeek(date)));
+		target++;
+		break;
 	default:
 		throw InternalException("Unimplemented date specifier for strftime");
 	}
@@ -309,11 +334,14 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	case StrTimeSpecifier::SECOND_PADDED:
 		target = WritePadded2(target, data[5]);
 		break;
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		target = WritePadded(target, data[6] * Interval::NANOS_PER_MICRO, 9);
+		break;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		target = WritePadded(target, data[6], 6);
 		break;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
-		target = WritePadded3(target, data[6] / 1000);
+		target = WritePadded3(target, data[6] / Interval::MICROS_PER_MSEC);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET: {
 		*target++ = (data[7] < 0) ? '-' : '+';
@@ -482,6 +510,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 				case 'w':
 					specifier = StrTimeSpecifier::WEEKDAY_DECIMAL;
 					break;
+				case 'u':
+					specifier = StrTimeSpecifier::WEEKDAY_ISO;
+					break;
 				case 'd':
 					specifier = StrTimeSpecifier::DAY_OF_MONTH_PADDED;
 					break;
@@ -501,6 +532,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 				case 'Y':
 					specifier = StrTimeSpecifier::YEAR_DECIMAL;
 					break;
+				case 'G':
+					specifier = StrTimeSpecifier::YEAR_ISO;
+					break;
 				case 'H':
 					specifier = StrTimeSpecifier::HOUR_24_PADDED;
 					break;
@@ -515,6 +549,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					break;
 				case 'S':
 					specifier = StrTimeSpecifier::SECOND_PADDED;
+					break;
+				case 'n':
+					specifier = StrTimeSpecifier::NANOSECOND_PADDED;
 					break;
 				case 'f':
 					specifier = StrTimeSpecifier::MICROSECOND_PADDED;
@@ -536,6 +573,9 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 					break;
 				case 'W':
 					specifier = StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST;
+					break;
+				case 'V':
+					specifier = StrTimeSpecifier::WEEK_NUMBER_ISO;
 					break;
 				case 'c':
 				case 'x':
@@ -589,20 +629,19 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::DATE);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
-	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(input, result, count,
-	                                                  [&](date_t input, ValidityMask &mask, idx_t idx) {
-		                                                  if (Date::IsFinite(input)) {
-			                                                  dtime_t time(0);
-			                                                  idx_t len = GetLength(input, time, 0, nullptr);
-			                                                  string_t target = StringVector::EmptyString(result, len);
-			                                                  FormatString(input, time, target.GetDataWriteable());
-			                                                  target.Finalize();
-			                                                  return target;
-		                                                  } else {
-			                                                  mask.SetInvalid(idx);
-			                                                  return string_t();
-		                                                  }
-	                                                  });
+	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(
+	    input, result, count, [&](date_t input, ValidityMask &mask, idx_t idx) {
+		    if (Date::IsFinite(input)) {
+			    dtime_t time(0);
+			    idx_t len = GetLength(input, time, 0, nullptr);
+			    string_t target = StringVector::EmptyString(result, len);
+			    FormatString(input, time, target.GetDataWriteable());
+			    target.Finalize();
+			    return target;
+		    } else {
+			    return StringVector::AddString(result, Date::ToString(input));
+		    }
+	    });
 }
 
 void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t count) {
@@ -620,8 +659,7 @@ void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t
 			    target.Finalize();
 			    return target;
 		    } else {
-			    mask.SetInvalid(idx);
-			    return string_t();
+			    return StringVector::AddString(result, Timestamp::ToString(input));
 		    }
 	    });
 }
@@ -634,6 +672,7 @@ void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::WEEKDAY_DECIMAL:
+	case StrTimeSpecifier::WEEKDAY_ISO:
 		return 1;
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 	case StrTimeSpecifier::DAY_OF_MONTH:
@@ -651,15 +690,19 @@ int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 	case StrTimeSpecifier::SECOND_DECIMAL:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+	case StrTimeSpecifier::WEEK_NUMBER_ISO:
 		return 2;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 		return 3;
 	case StrTimeSpecifier::YEAR_DECIMAL:
+	case StrTimeSpecifier::YEAR_ISO:
 		return 4;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
 		return 6;
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		return 9;
 	default:
 		return -1;
 	}
@@ -668,7 +711,7 @@ int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 enum class TimeSpecifierAMOrPM : uint8_t { TIME_SPECIFIER_NONE = 0, TIME_SPECIFIER_AM = 1, TIME_SPECIFIER_PM = 2 };
 
 int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
-                                           idx_t collection_count) {
+                                           idx_t collection_count) const {
 	for (idx_t c = 0; c < collection_count; c++) {
 		auto &entry = collection[c];
 		auto entry_data = entry.GetData();
@@ -695,7 +738,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
 }
 
 //! Parses a timestamp using the given specifier
-bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
+bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 	auto &result_data = result.data;
 	auto &error_message = result.error_message;
 	auto &error_position = result.error_position;
@@ -717,7 +760,38 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		data++;
 		size--;
 	}
+
+	//	Check for specials
+	//	Precheck for alphas for performance.
 	idx_t pos = 0;
+	result.is_special = false;
+	if (size > 4) {
+		if (StringUtil::CharacterIsAlpha(*data)) {
+			if (Date::TryConvertDateSpecial(data, size, pos, Date::PINF)) {
+				result.is_special = true;
+				result.special = date_t::infinity();
+			} else if (Date::TryConvertDateSpecial(data, size, pos, Date::EPOCH)) {
+				result.is_special = true;
+				result.special = date_t::epoch();
+			}
+		} else if (*data == '-' && Date::TryConvertDateSpecial(data, size, pos, Date::NINF)) {
+			result.is_special = true;
+			result.special = date_t::ninfinity();
+		}
+	}
+	if (result.is_special) {
+		// skip trailing spaces
+		while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
+			pos++;
+		}
+		if (pos != size) {
+			error_message = "Special timestamp did not match: trailing characters";
+			error_position = pos;
+			return false;
+		}
+		return true;
+	}
+
 	TimeSpecifierAMOrPM ampm = TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE;
 
 	// Year offset state (Year+W/j)
@@ -725,6 +799,13 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	uint64_t weekno = 0;
 	uint64_t weekday = 0;
 	uint64_t yearday = 0;
+	bool has_weekday = false;
+
+	// ISO state (%G/%V/%u)
+	// Out of range values to detect multiple specifications
+	uint64_t iso_year = 10000;
+	uint64_t iso_week = 54;
+	uint64_t iso_weekday = 8;
 
 	for (idx_t i = 0;; i++) {
 		D_ASSERT(i < literals.size());
@@ -797,6 +878,17 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				break;
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				switch (offset_specifier) {
+				case StrTimeSpecifier::YEAR_ISO:
+				case StrTimeSpecifier::WEEK_NUMBER_ISO:
+					// Override
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				default:
+					break;
+				}
 				// year without century..
 				// Python uses 69 as a crossover point (i.e. >= 69 is 19.., < 69 is 20..)
 				if (number >= 100) {
@@ -812,8 +904,58 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				}
 				break;
 			case StrTimeSpecifier::YEAR_DECIMAL:
+				switch (offset_specifier) {
+				case StrTimeSpecifier::YEAR_ISO:
+				case StrTimeSpecifier::WEEK_NUMBER_ISO:
+					// Override
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				default:
+					break;
+				}
 				// year as full number
 				result_data[0] = number;
+				break;
+			case StrTimeSpecifier::YEAR_ISO:
+				switch (offset_specifier) {
+				// y/m/d overrides G/V/u but does not conflict
+				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+				case StrTimeSpecifier::DAY_OF_MONTH:
+				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+				case StrTimeSpecifier::MONTH_DECIMAL:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				case StrTimeSpecifier::YEAR_DECIMAL:
+					// Just validate, don't use
+					break;
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				case StrTimeSpecifier::YEAR_ISO:
+				case StrTimeSpecifier::WEEK_NUMBER_ISO:
+					// Already parsing ISO
+					if (iso_year <= 9999) {
+						error_message = "Multiple ISO year offsets specified";
+						error_position = start_pos;
+						return false;
+					}
+					break;
+				default:
+					error_message = "Incompatible ISO year offset specified";
+					error_position = start_pos;
+					return false;
+					break;
+				}
+				if (number > 9999) {
+					// %G only supports numbers between [0..9999]
+					error_message = "ISO Year out of range, expected a value between 0000 and 9999";
+					error_position = start_pos;
+					return false;
+				}
+				iso_year = number;
 				break;
 			case StrTimeSpecifier::HOUR_24_PADDED:
 			case StrTimeSpecifier::HOUR_24_DECIMAL:
@@ -855,15 +997,20 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				// seconds
 				result_data[5] = number;
 				break;
+			case StrTimeSpecifier::NANOSECOND_PADDED:
+				D_ASSERT(number < Interval::NANOS_PER_SEC); // enforced by the length of the number
+				// microseconds (rounded)
+				result_data[6] = (number + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO;
+				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
-				D_ASSERT(number < 1000000ULL); // enforced by the length of the number
-				// milliseconds
+				D_ASSERT(number < Interval::MICROS_PER_SEC); // enforced by the length of the number
+				// microseconds
 				result_data[6] = number;
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
-				D_ASSERT(number < 1000ULL); // enforced by the length of the number
-				// milliseconds
-				result_data[6] = number * 1000;
+				D_ASSERT(number < Interval::MSECS_PER_SEC); // enforced by the length of the number
+				// microseconds
+				result_data[6] = number * Interval::MICROS_PER_MSEC;
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
@@ -875,12 +1022,16 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				case StrTimeSpecifier::MONTH_DECIMAL:
 					// Just validate, don't use
 					break;
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				case StrTimeSpecifier::YEAR_DECIMAL:
+					// Switch to offset parsing
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:
 					// First offset specifier
 					offset_specifier = specifiers[i];
 					break;
 				default:
-					error_message = "Multiple year offsets specified";
+					error_message = "Multiple week offsets specified";
 					error_position = start_pos;
 					return false;
 				}
@@ -897,7 +1048,59 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					error_position = start_pos;
 					return false;
 				}
+				has_weekday = true;
 				weekday = number;
+				break;
+			case StrTimeSpecifier::WEEK_NUMBER_ISO:
+				// y/m/d overrides G/V/u but does not conflict
+				switch (offset_specifier) {
+				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+				case StrTimeSpecifier::DAY_OF_MONTH:
+				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+				case StrTimeSpecifier::MONTH_DECIMAL:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				case StrTimeSpecifier::YEAR_DECIMAL:
+					// Just validate, don't use
+					break;
+					break;
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				case StrTimeSpecifier::WEEK_NUMBER_ISO:
+				case StrTimeSpecifier::YEAR_ISO:
+					// Already parsing ISO
+					if (iso_week <= 53) {
+						error_message = "Multiple ISO week offsets specified";
+						error_position = start_pos;
+						return false;
+					}
+					break;
+				default:
+					error_message = "Incompatible ISO week offset specified";
+					error_position = start_pos;
+					return false;
+				}
+				if (number < 1 || number > 53) {
+					error_message = "ISO week offset out of range, expected a value between 1 and 53";
+					error_position = start_pos;
+					return false;
+				}
+				iso_week = number;
+				break;
+			case StrTimeSpecifier::WEEKDAY_ISO:
+				if (iso_weekday <= 7) {
+					error_message = "Multiple ISO weekday offsets specified";
+					error_position = start_pos;
+					return false;
+				}
+				if (number < 1 || number > 7) {
+					error_message = "ISO weekday offset out of range, expected a value between 1 and 7";
+					error_position = start_pos;
+					return false;
+				}
+				iso_weekday = number;
 				break;
 			case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 			case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
@@ -908,6 +1111,11 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 				case StrTimeSpecifier::MONTH_DECIMAL:
 					// Just validate, don't use
+					break;
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+				case StrTimeSpecifier::YEAR_DECIMAL:
+					// Part of the offset
 					break;
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:
 					// First offset specifier
@@ -1057,10 +1265,27 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		}
 	}
 	switch (offset_specifier) {
+	case StrTimeSpecifier::YEAR_ISO:
+	case StrTimeSpecifier::WEEK_NUMBER_ISO: {
+		// Default to 1900-01-01
+		iso_year = (iso_year > 9999) ? 1900 : iso_year;
+		iso_week = (iso_week > 53) ? 1 : iso_week;
+		iso_weekday = (iso_weekday > 7) ? 1 : iso_weekday;
+		// Gregorian and ISO agree on the year of January 4
+		auto jan4 = Date::FromDate(iso_year, 1, 4);
+		// ISO Week 1 starts on the previous Monday
+		auto week1 = Date::GetMondayOfCurrentWeek(jan4);
+		// ISO Week N starts N-1 weeks later
+		auto iso_date = week1 + (iso_week - 1) * 7 + (iso_weekday - 1);
+		Date::Convert(iso_date, result_data[0], result_data[1], result_data[2]);
+		break;
+	}
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST: {
 		// Adjust weekday to be 0-based for the week type
-		weekday = (weekday + 7 - int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST)) % 7;
+		if (has_weekday) {
+			weekday = (weekday + 7 - int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST)) % 7;
+		}
 		// Get the start of week 1, move back 7 days and then weekno * 7 + weekday gives the date
 		const auto jan1 = Date::FromDate(result_data[0], 1, 1);
 		auto yeardate = Date::GetMondayOfCurrentWeek(jan1);
@@ -1082,7 +1307,10 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	case StrTimeSpecifier::DAY_OF_MONTH:
 	case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 	case StrTimeSpecifier::MONTH_DECIMAL:
-		// m/d overrides UWw/j
+	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
+	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
+	case StrTimeSpecifier::YEAR_DECIMAL:
+		// m/d overrides UWVwu/j
 		break;
 	default:
 		D_ASSERT(offset_specifier == StrTimeSpecifier::WEEKDAY_DECIMAL);
@@ -1106,6 +1334,10 @@ StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, c
 	return result;
 }
 
+bool StrTimeFormat::Empty() const {
+	return format_specifier.empty();
+}
+
 string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {
 	if (position == DConstants::INVALID_INDEX) {
 		return string();
@@ -1114,6 +1346,9 @@ string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) 
 }
 
 date_t StrpTimeFormat::ParseResult::ToDate() {
+	if (is_special) {
+		return special;
+	}
 	return Date::FromDate(data[0], data[1], data[2]);
 }
 
@@ -1122,6 +1357,15 @@ bool StrpTimeFormat::ParseResult::TryToDate(date_t &result) {
 }
 
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
+	if (is_special) {
+		if (special == date_t::infinity()) {
+			return timestamp_t::infinity();
+		} else if (special == date_t::ninfinity()) {
+			return timestamp_t::ninfinity();
+		}
+		return Timestamp::FromDatetime(special, dtime_t(0));
+	}
+
 	date_t date = Date::FromDate(data[0], data[1], data[2]);
 	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
 	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
@@ -1146,7 +1390,7 @@ string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &fo
 	                          FormatStrpTimeError(input.GetString(), error_position), error_message);
 }
 
-bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) {
+bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) const {
 	ParseResult parse_result;
 	if (!Parse(input, parse_result)) {
 		error_message = parse_result.FormatError(input, format_specifier);
@@ -1155,7 +1399,7 @@ bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_
 	return parse_result.TryToDate(result);
 }
 
-bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, string &error_message) {
+bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, string &error_message) const {
 	ParseResult parse_result;
 	if (!Parse(input, parse_result)) {
 		error_message = parse_result.FormatError(input, format_specifier);

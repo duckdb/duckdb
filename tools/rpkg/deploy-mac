@@ -1,3 +1,0 @@
-python3 ../upload-s3.py rstats/bin/macosx/contrib/4.0 duckdb_*.tgz PACKAGES*
-python3 ../upload-s3.py rstats duckdb_*.tgz
-python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz

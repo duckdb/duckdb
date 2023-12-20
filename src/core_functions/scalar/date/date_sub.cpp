@@ -322,6 +322,7 @@ static int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddat
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		return DateSub::DayOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::DECADE:
 		return DateSub::DecadeOperator::template Operation<TA, TB, TR>(startdate, enddate);
@@ -376,6 +377,7 @@ static void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		DateSub::BinaryExecute<TA, TB, TR, DateSub::DayOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::DECADE:

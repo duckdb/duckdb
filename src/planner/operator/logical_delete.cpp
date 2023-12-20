@@ -11,31 +11,10 @@ LogicalDelete::LogicalDelete(TableCatalogEntry &table, idx_t table_index)
       return_chunk(false) {
 }
 
-LogicalDelete::LogicalDelete(ClientContext &context, const string &catalog, const string &schema, const string &table)
+LogicalDelete::LogicalDelete(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
-}
-
-void LogicalDelete::Serialize(FieldWriter &writer) const {
-	table.Serialize(writer.GetSerializer());
-	writer.WriteField(table_index);
-	writer.WriteField(return_chunk);
-	writer.WriteSerializableList(this->expressions);
-}
-
-unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto &context = state.gstate.context;
-	auto info = TableCatalogEntry::Deserialize(reader.GetSource());
-	auto &table_info = info->Cast<CreateTableInfo>();
-
-	auto &table_catalog_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(context, info->catalog, info->schema, table_info.table);
-
-	auto table_index = reader.ReadRequired<idx_t>();
-	auto result = make_uniq<LogicalDelete>(table_catalog_entry, table_index);
-	result->return_chunk = reader.ReadRequired<bool>();
-	result->expressions = reader.ReadRequiredSerializableList<duckdb::Expression>(state.gstate);
-	return std::move(result);
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
+                                                 dynamic_cast<CreateTableInfo &>(*table_info).table)) {
 }
 
 idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {

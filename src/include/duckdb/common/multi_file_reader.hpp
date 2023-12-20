@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
-#include "duckdb/common/union_by_name.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/union_by_name.hpp"
 
 namespace duckdb {
 class TableFunction;
@@ -31,9 +31,7 @@ struct HivePartitioningIndex {
 	idx_t index;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &source);
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static HivePartitioningIndex FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
 };
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
@@ -42,11 +40,11 @@ struct MultiFileReaderBindData {
 	idx_t filename_idx = DConstants::INVALID_INDEX;
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
+	//! The index of the file_row_number column (if any)
+	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &source);
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static MultiFileReaderBindData FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
 };
 
 struct MultiFileFilterEntry {
@@ -114,6 +112,9 @@ struct MultiFileReader {
 	                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
 	                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
 	                                     const string &initial_file);
+	//! Populated the filter_map
+	DUCKDB_API static void CreateFilterMap(const vector<LogicalType> &global_types,
+	                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API static void FinalizeChunk(const MultiFileReaderBindData &bind_data,
 	                                     const MultiFileReaderData &reader_data, DataChunk &chunk);
@@ -186,6 +187,11 @@ struct MultiFileReader {
 			}
 		}
 		for (idx_t r = 0; r < data.union_readers.size(); r++) {
+			if (!data.union_readers[r]) {
+				data.union_readers.erase(data.union_readers.begin() + r);
+				r--;
+				continue;
+			}
 			// check if the union reader should still be read or not
 			auto entry = file_set.find(data.union_readers[r]->GetFileName());
 			if (entry == file_set.end()) {

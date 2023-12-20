@@ -2,12 +2,12 @@ import numpy as np
 import datetime
 import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+
+pandas = pytest.importorskip("pandas")
 
 
 class TestPandasNaN(object):
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_pandas_nan(self, duckdb_cursor, pandas):
+    def test_pandas_nan(self, duckdb_cursor):
         # create a DataFrame with some basic values
         df = pandas.DataFrame([{"col1": "val1", "col2": 1.05}, {"col1": "val3", "col2": np.NaN}])
         # create a new column (newcol1) that includes either NaN or values from col1
@@ -33,13 +33,16 @@ class TestPandasNaN(object):
         assert results[1][2] == 'val3'
         assert results[1][3] == current_time
 
-        # now fetch the results as a df:
+        # now fetch the results as numpy:
+        result_np = conn.execute('select * from testing_null_values').fetchnumpy()
+        assert result_np['col1'][0] == df['col1'][0]
+        assert result_np['col1'][1] == df['col1'][1]
+        assert result_np['col2'][0] == df['col2'][0]
+
+        assert result_np['col2'].mask[1]
+        assert result_np['newcol1'].mask[0]
+        assert result_np['newcol1'][1] == df['newcol1'][1]
+
         result_df = conn.execute('select * from testing_null_values').fetchdf()
-        assert result_df['col1'][0] == df['col1'][0]
-        assert result_df['col1'][1] == df['col1'][1]
-        assert result_df['col2'][0] == df['col2'][0]
-        assert np.isnan(result_df['col2'][1])
-        assert np.isnan(result_df['newcol1'][0])
-        assert result_df['newcol1'][1] == df['newcol1'][1]
         assert pandas.isnull(result_df['datetest'][0])
         assert result_df['datetest'][1] == df['datetest'][1]

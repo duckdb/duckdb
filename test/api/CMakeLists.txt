@@ -16,7 +16,6 @@ set(TEST_API_OBJECTS
     test_appender_api.cpp
     test_pending_query.cpp
     test_plan_serialization.cpp
-    test_plan_serialization_across_versions.cpp
     test_relation_api.cpp
     test_query_profiler.cpp
     test_dbdir.cpp
@@ -32,8 +31,10 @@ endif()
 
 if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
   include_directories(../../extension/tpch/include)
-  set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpch_with_relations.cpp
-                       serialized_plans/test_plan_serialization_bwc.cpp)
+  set(TEST_API_OBJECTS
+      ${TEST_API_OBJECTS} test_tpch_with_relations.cpp
+      test_tpch_with_streaming.cpp
+      serialized_plans/test_plan_serialization_bwc.cpp)
 endif()
 
 add_library_unity(test_api OBJECT ${TEST_API_OBJECTS})

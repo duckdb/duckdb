@@ -13,6 +13,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
+#include "duckdb/planner/joinside.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -45,6 +46,8 @@ public:
 	//! Whether or not we should preserve insertion order for executing the given sink
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
 
+	static bool HasEquality(vector<JoinCondition> &conds, idx_t &range_count);
+
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
 
@@ -52,6 +55,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAnyJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalColumnDataGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyDatabase &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateTable &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateIndex &op);

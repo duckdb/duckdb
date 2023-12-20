@@ -1,0 +1,77 @@
+name: DuckDB-Wasm extensions
+on:
+  workflow_dispatch:
+    inputs:
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: true
+        type: string
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  build_and_publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        duckdb_wasm_arch: [ 'mvp', 'eh', 'threads' ]
+    env:
+      GEN: Ninja
+      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      DUCKDB_PLATFORM: "wasm_${{ matrix.duckdb_wasm_arch }}"
+
+    steps:
+            - uses: actions/checkout@v3
+              with:
+                  fetch-depth: 0
+
+            - uses: mymindstorm/setup-emsdk@v12
+              with:
+                  version: 'latest'
+            - name: Setup vcpkg
+              uses: lukka/run-vcpkg@v11.1
+              with:
+                  vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
+
+            - name: Setup Ccache
+              uses: hendrikmuhs/ccache-action@main
+              with:
+                  key: ${{ github.job }}-${{ matrix.duckdb_wasm_arch }}
+
+            - name: Build Wasm module
+              run: |
+                  curl https://raw.githubusercontent.com/duckdb/duckdb-wasm/main/.github/config/extension_config_wasm.cmake -o extension/extension_config.cmake
+                  make ${{ env.DUCKDB_PLATFORM }}
+
+            - name: Sign and deploy Wasm extensions
+              if: ${{ github.event.inputs.release_s3 }}
+              env:
+                  AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+                  AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+                  AWS_DEFAULT_REGION: us-east-1
+                  DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+              run: |
+                  bash ./scripts/extension-upload-wasm.sh ${{ env.DUCKDB_PLATFORM }} ${{ github.event.inputs.duckdb-ref }}
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@v3
+              with:
+                  name: duckdb-wasm-${{ matrix.duckdb_wasm_arch }}
+                  path: build/${{ env.DUCKDB_PLATFORM }}/built_extensions
+                  retention-days: 1
+
+  trigger_github_pages_build:
+    name: Trigger follow-up work
+    runs-on: ubuntu-latest
+    needs: build_and_publish
+    steps:
+            - name: Move control to duckdb-wasm
+              run: |
+                  curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb-wasm/actions/workflows/main.yml/dispatches --data '{"ref":"${{ github.event.inputs.duckdb-wasm-ref}}"}'

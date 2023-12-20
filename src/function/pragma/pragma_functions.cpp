@@ -80,10 +80,6 @@ static void PragmaEnableForceParallelism(ClientContext &context, const FunctionP
 	ClientConfig::GetConfig(context).verify_parallelism = true;
 }
 
-static void PragmaEnableForceIndexJoin(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).force_index_join = true;
-}
-
 static void PragmaForceCheckpoint(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
@@ -140,7 +136,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", PragmaEnableForceIndexJoin));
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));

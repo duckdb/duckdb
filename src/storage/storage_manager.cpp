@@ -19,7 +19,7 @@ namespace duckdb {
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
 	if (path.empty()) {
-		path = ":memory:";
+		path = IN_MEMORY_PATH;
 	} else {
 		auto &fs = FileSystem::Get(db);
 		this->path = fs.ExpandPath(path);
@@ -54,7 +54,7 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 
 bool StorageManager::InMemory() {
 	D_ASSERT(!path.empty());
-	return path == ":memory:";
+	return path == IN_MEMORY_PATH;
 }
 
 void StorageManager::Initialize() {
@@ -235,8 +235,12 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 	auto &config = DBConfig::Get(db);
 	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
-		SingleFileCheckpointWriter checkpointer(db, *block_manager);
-		checkpointer.CreateCheckpoint();
+		try {
+			SingleFileCheckpointWriter checkpointer(db, *block_manager);
+			checkpointer.CreateCheckpoint();
+		} catch (std::exception &ex) {
+			throw FatalException("Failed to create checkpoint because of error: %s", ex.what());
+		}
 	}
 	if (delete_wal) {
 		wal->Delete();
@@ -258,6 +262,11 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 		}
 	}
 	return ds;
+}
+
+vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
+	auto &metadata_manager = block_manager->GetMetadataManager();
+	return metadata_manager.GetMetadataInfo();
 }
 
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {

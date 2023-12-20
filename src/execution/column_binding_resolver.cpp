@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -52,6 +53,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			auto right_bindings = op.children[1]->GetColumnBindings();
 			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
 		}
+		if (any_join.join_type == JoinType::RIGHT_SEMI || any_join.join_type == JoinType::RIGHT_ANTI) {
+			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
+		}
 		VisitOperatorExpressions(op);
 		return;
 	}
@@ -91,10 +95,17 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			bindings = op.GetColumnBindings();
 			return;
 		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
+		auto &ext_op = op.Cast<LogicalExtensionOperator>();
+		ext_op.ResolveColumnBindings(*this, bindings);
+		return;
 	}
 	default:
 		break;
 	}
+
 	// general case
 	// first visit the children of this operator
 	VisitOperatorChildren(op);

@@ -47,3 +47,37 @@ statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', parallel = '')
 ----
 Could not convert string '' to BOOL
+
+
+statement ok
+SET threads=1;
+
+query II
+explain  select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv')
+----
+physical_plan	<REGEX>:.*SINGLE.*
+
+query II
+explain  select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', parallel = 0)
+----
+physical_plan	<REGEX>:.*SINGLE.*
+
+query II
+explain  select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', parallel = 1)
+----
+physical_plan	<REGEX>:.*MULTI.*
+
+query II
+explain  select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), delim = '|')
+----
+physical_plan	<REGEX>:.*SINGLE.*
+
+query II
+explain  select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), delim = '|', parallel=0)
+----
+physical_plan	<REGEX>:.*SINGLE.*
+
+query II
+explain  select * from read_csv('test/sql/copy/csv/data/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), delim = '|', parallel = 1)
+----
+physical_plan	<REGEX>:.*MULTI-THREADED.*

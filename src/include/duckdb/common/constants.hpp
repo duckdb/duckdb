@@ -17,8 +17,10 @@
 namespace duckdb {
 class Serializer;
 class Deserializer;
-class FormatSerializer;
-class FormatDeserializer;
+class BinarySerializer;
+class BinaryDeserializer;
+class WriteStream;
+class ReadStream;
 
 //! inline std directives that we use frequently
 #ifndef DUCKDB_DEBUG_MOVE
@@ -31,6 +33,7 @@ using std::move;
 #define INVALID_CATALOG ""
 #define SYSTEM_CATALOG  "system"
 #define TEMP_CATALOG    "temp"
+#define IN_MEMORY_PATH  ":memory:"
 
 DUCKDB_API bool IsInvalidSchema(const string &str);
 DUCKDB_API bool IsInvalidCatalog(const string &str);
@@ -54,21 +57,6 @@ extern const double PI;
 struct DConstants {
 	//! The value used to signify an invalid index entry
 	static constexpr const idx_t INVALID_INDEX = idx_t(-1);
-};
-
-struct Storage {
-	//! The size of a hard disk sector, only really needed for Direct IO
-	constexpr static int SECTOR_SIZE = 4096;
-	//! Block header size for blocks written to the storage
-	constexpr static int BLOCK_HEADER_SIZE = sizeof(uint64_t);
-	// Size of a memory slot managed by the StorageManager. This is the quantum of allocation for Blocks on DuckDB. We
-	// default to 256KB. (1 << 18)
-	constexpr static int BLOCK_ALLOC_SIZE = 262144;
-	//! The actual memory space that is available within the blocks
-	constexpr static int BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
-	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
-	//! to the page size, which is 4KB. (1 << 12)
-	constexpr static int FILE_HEADER_SIZE = 4096;
 };
 
 struct LogicalIndex {

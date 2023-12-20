@@ -1,7 +1,6 @@
 #include "duckdb/planner/expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -94,79 +93,6 @@ hash_t Expression::Hash() const {
 	ExpressionIterator::EnumerateChildren(*this,
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
-}
-
-void Expression::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<ExpressionClass>(expression_class);
-	writer.WriteField<ExpressionType>(type);
-	writer.WriteString(alias);
-	Serialize(writer);
-	writer.Finalize();
-}
-
-unique_ptr<Expression> Expression::Deserialize(Deserializer &source, PlanDeserializationState &gstate) {
-	FieldReader reader(source);
-	auto expression_class = reader.ReadRequired<ExpressionClass>();
-	auto type = reader.ReadRequired<ExpressionType>();
-	auto alias = reader.ReadRequired<string>();
-
-	ExpressionDeserializationState state(gstate, type);
-
-	unique_ptr<Expression> result;
-	switch (expression_class) {
-	case ExpressionClass::BOUND_REF:
-		result = BoundReferenceExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_COLUMN_REF:
-		result = BoundColumnRefExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_AGGREGATE:
-		result = BoundAggregateExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_BETWEEN:
-		result = BoundBetweenExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_CONSTANT:
-		result = BoundConstantExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_DEFAULT:
-		result = BoundDefaultExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_FUNCTION:
-		result = BoundFunctionExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_CAST:
-		result = BoundCastExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_CASE:
-		result = BoundCaseExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_CONJUNCTION:
-		result = BoundConjunctionExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_COMPARISON:
-		result = BoundComparisonExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_OPERATOR:
-		result = BoundOperatorExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_WINDOW:
-		result = BoundWindowExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_UNNEST:
-		result = BoundUnnestExpression::Deserialize(state, reader);
-		break;
-	case ExpressionClass::BOUND_PARAMETER:
-		result = BoundParameterExpression::Deserialize(state, reader);
-		break;
-	default:
-		throw SerializationException("Unsupported type for expression deserialization %s",
-		                             ExpressionTypeToString(type));
-	}
-	result->alias = alias;
-	reader.Finalize();
-	return result;
 }
 
 bool Expression::Equals(const unique_ptr<Expression> &left, const unique_ptr<Expression> &right) {

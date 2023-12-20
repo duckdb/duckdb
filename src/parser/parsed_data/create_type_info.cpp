@@ -22,25 +22,22 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 	return std::move(result);
 }
 
-void CreateTypeInfo::SerializeInternal(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(name);
-	writer.WriteSerializable(type);
-	if (query) {
-		throw InternalException("Cannot serialize CreateTypeInfo with query");
+string CreateTypeInfo::ToString() const {
+	string result = "";
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto &values_insert_order = EnumType::GetValuesInsertOrder(type);
+	idx_t size = EnumType::GetSize(type);
+	result += "CREATE TYPE ";
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " AS ENUM ( ";
+
+	for (idx_t i = 0; i < size; i++) {
+		result += "'" + values_insert_order.GetValue(i).ToString() + "'";
+		if (i != size - 1) {
+			result += ", ";
+		}
 	}
-	writer.Finalize();
-}
-
-unique_ptr<CreateTypeInfo> CreateTypeInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<CreateTypeInfo>();
-	result->DeserializeBase(deserializer);
-
-	FieldReader reader(deserializer);
-	result->name = reader.ReadRequired<string>();
-	result->type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	reader.Finalize();
-
+	result += " );";
 	return result;
 }
 

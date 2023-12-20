@@ -1,0 +1,59 @@
+{
+  "linux": {
+    "include": [
+      {
+        "duckdb_arch": "linux_amd64",
+        "container": "ubuntu:18.04",
+        "vcpkg_triplet": "x64-linux"
+      },
+      {
+        "duckdb_arch": "linux_amd64_gcc4",
+        "container": "quay.io/pypa/manylinux2014_x86_64",
+        "vcpkg_triplet": "x64-linux"
+      },
+      {
+        "duckdb_arch": "linux_arm64",
+        "container": "ubuntu:18.04",
+        "vcpkg_triplet": "arm64-linux"
+      }
+    ]
+  },
+  "osx": {
+    "include": [
+      {
+        "duckdb_arch": "osx_amd64",
+        "osx_build_arch": "x86_64",
+        "vcpkg_triplet": "x64-osx"
+      },
+      {
+        "duckdb_arch": "osx_arm64",
+        "osx_build_arch": "arm64",
+        "vcpkg_triplet": "arm64-osx"
+      }
+    ]
+  },
+  "windows": {
+    "include": [
+      {
+        "duckdb_arch": "windows_amd64",
+        "vcpkg_triplet": "x64-windows-static-md"
+      }
+    ]
+  },
+  "wasm": {
+    "include": [
+      {
+        "duckdb_arch": "wasm_mvp",
+        "vcpkg_triplet": "wasm32-emscripten"
+      },
+      {
+        "duckdb_arch": "wasm_eh",
+        "vcpkg_triplet": "wasm32-emscripten"
+      },
+      {
+        "duckdb_arch": "wasm_threads",
+        "vcpkg_triplet": "wasm32-emscripten"
+      }
+    ]
+  }
+}

@@ -33,7 +33,7 @@ struct ExpressionState {
 
 public:
 	void AddChild(Expression *expr);
-	void Finalize();
+	void Finalize(bool empty = false);
 	Allocator &GetAllocator();
 	bool HasContext();
 	DUCKDB_API ClientContext &GetContext();

@@ -126,10 +126,16 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	}
 	LogicalType param_type;
 	auto identifier = std::to_string(param_idx);
-	if (!wrapper->statement->data->TryGetType(identifier, param_type)) {
-		return DUCKDB_TYPE_INVALID;
+	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
+		return ConvertCPPTypeToC(param_type);
 	}
-	return ConvertCPPTypeToC(param_type);
+	// The value_map is gone after executing the prepared statement
+	// See if this is the case and we still have a value registered for it
+	auto it = wrapper->values.find(identifier);
+	if (it != wrapper->values.end()) {
+		return ConvertCPPTypeToC(it->second.type());
+	}
+	return DUCKDB_TYPE_INVALID;
 }
 
 duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement) {
@@ -326,6 +332,26 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	return duckdb_translate_result(std::move(result), out_result);
+}
+
+duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                               duckdb_result *out_result) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return DuckDBError;
+	}
+
+	auto result = wrapper->statement->Execute(wrapper->values, true);
+	return duckdb_translate_result(std::move(result), out_result);
+}
+
+duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement) {
+	if (!statement) {
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+	auto stmt = reinterpret_cast<PreparedStatementWrapper *>(statement);
+
+	return StatementTypeToC(stmt->statement->GetStatementType());
 }
 
 template <class T>

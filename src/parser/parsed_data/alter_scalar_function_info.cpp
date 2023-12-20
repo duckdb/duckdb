@@ -1,6 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
@@ -18,23 +17,6 @@ AlterScalarFunctionInfo::~AlterScalarFunctionInfo() {
 
 CatalogType AlterScalarFunctionInfo::GetCatalogType() const {
 	return CatalogType::SCALAR_FUNCTION_ENTRY;
-}
-
-void AlterScalarFunctionInfo::Serialize(FieldWriter &writer) const {
-	writer.WriteField<AlterScalarFunctionType>(alter_scalar_function_type);
-	writer.WriteString(catalog);
-	writer.WriteString(schema);
-	writer.WriteString(name);
-	writer.WriteField(if_not_found);
-}
-
-unique_ptr<AlterInfo> AlterScalarFunctionInfo::Deserialize(FieldReader &reader) {
-	//	auto type = reader.ReadRequired<AlterScalarFunctionType>();
-	//	auto schema = reader.ReadRequired<string>();
-	//	auto table = reader.ReadRequired<string>();
-	//	auto if_exists = reader.ReadRequired<bool>();
-
-	throw NotImplementedException("AlterScalarFunctionInfo cannot be deserialized");
 }
 
 //===--------------------------------------------------------------------===//

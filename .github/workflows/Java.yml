@@ -18,7 +18,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Java.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -30,7 +30,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Java.yml'
-      - '.github/config/uncovered_files.csv'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
     github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha
@@ -47,6 +47,8 @@ jobs:
       image: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       BUILD_JDBC: 1
       BUILD_JEMALLOC: 1
       BUILD_JSON: 1
@@ -68,6 +70,7 @@ jobs:
 
       - name: Java Tests
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: >
           java -cp build/release/tools/jdbc/duckdb_jdbc.jar
           org.duckdb.test.TestDuckDBJDBC
@@ -75,7 +78,7 @@ jobs:
       - name: Deploy
         shell: bash
         run: >
-          python3.7 scripts/asset-upload-gha.py
+          python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
       - uses: actions/upload-artifact@v3
         with:
@@ -91,6 +94,8 @@ jobs:
     env:
       GEN: ninja
       BUILD_JDBC: 1
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       OVERRIDE_JDBC_OS_ARCH: arm64
       JAVA_HOME: ../../jdk8u345-b01
     steps:
@@ -115,7 +120,7 @@ jobs:
       - name: Deploy
         shell: bash
         run: >
-          python3.7 scripts/asset-upload-gha.py
+          python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
       - uses: actions/upload-artifact@v3
@@ -147,10 +152,11 @@ jobs:
         run: >
           python scripts/windows_ci.py
 
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1
 
           cmake --build . --config Release
       - name: Java Tests
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: |
           java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
@@ -174,6 +180,8 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       OSX_BUILD_UNIVERSAL: 1
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -190,6 +198,7 @@ jobs:
         shell: bash
         run: make
       - name: Java Tests
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: >
           java -cp build/release/tools/jdbc/duckdb_jdbc.jar
@@ -281,6 +290,7 @@ jobs:
   jdbc-compliance:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     needs: java-linux-amd64
     container: quay.io/pypa/manylinux2014_x86_64
     env:

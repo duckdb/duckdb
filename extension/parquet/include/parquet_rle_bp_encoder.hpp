@@ -26,9 +26,9 @@ public:
 	void PrepareValue(uint32_t value);
 	void FinishPrepare();
 
-	void BeginWrite(Serializer &writer, uint32_t first_value);
-	void WriteValue(Serializer &writer, uint32_t value);
-	void FinishWrite(Serializer &writer);
+	void BeginWrite(WriteStream &writer, uint32_t first_value);
+	void WriteValue(WriteStream &writer, uint32_t value);
+	void FinishWrite(WriteStream &writer);
 
 	idx_t GetByteCount();
 
@@ -43,7 +43,7 @@ private:
 
 private:
 	void FinishRun();
-	void WriteRun(Serializer &writer);
+	void WriteRun(WriteStream &writer);
 };
 
 } // namespace duckdb

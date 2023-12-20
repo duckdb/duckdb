@@ -1,0 +1,259 @@
+# name: test/sql/json/table/read_json_objects.test
+# description: Read ndjson files
+# group: [table]
+
+require no_extension_autoloading
+
+# this was the previous implementation, doesn't work without JSON extension (no JSON type in catalog)
+statement error
+SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
+----
+
+require json
+
+# we cannot check the error output for the specific byte, because on Windows the \n are replaced with \r\n
+# therefore, the byte count is different. So, we cut off the error message here
+statement error
+select * from read_json_objects('data/json/unterminated_quotes.ndjson')
+----
+Invalid Input Error: Expected top-level JSON array
+
+# now it should work!
+query I
+SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL, auto_detect = false)
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# example_n is with regular \n newlines
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# this one does not have the 'records' param
+statement error
+SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson', records='false')
+----
+Binder Error: Invalid named parameter
+
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# we can auto-detect that it's newline-delimited
+query I
+SELECT * FROM read_json_objects('data/json/example_n.ndjson', format='auto')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# example_r is with \r newlines - works with unstructured
+query I
+SELECT * FROM read_json_objects('data/json/example_r.ndjson', format='unstructured')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# we can detect that it's not newline-delimited
+query I
+SELECT * FROM read_json_objects('data/json/example_r.ndjson', format='auto')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# \r newlines are NOT valid according to ndjson spec - this does not work, all a single line
+statement error
+SELECT * FROM read_ndjson_objects('data/json/example_r.ndjson')
+----
+Invalid Input Error: Malformed JSON in file "data/json/example_r.ndjson"
+
+# example_rn is with \r\n newlines
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_rn.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_rn.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# same but gzipped
+query I
+SELECT * FROM read_ndjson_objects('data/json/example_rn.ndjson.gz')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query I
+SELECT * FROM read_json_objects('data/json/example_rn.ndjson.gz', format='nd')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# multi-file scan
+query I
+SELECT count(*) from read_json_objects(['data/json/example_n.ndjson', 'data/json/example_r.ndjson', 'data/json/example_rn.ndjson'], format='auto')
+----
+15
+
+query I
+SELECT count(*) from read_ndjson_objects(['data/json/example_n.ndjson', 'data/json/example_rn.ndjson'])
+----
+10
+
+# globbing
+query I
+SELECT count(*) from read_json_objects('data/json/example_*.ndjson', format='auto')
+----
+15
+
+query I
+SELECT count(*) from read_ndjson_objects('data/json/example_*n.ndjson')
+----
+10
+
+require httpfs
+
+# same file but hosted on github
+query I
+select * from read_json_objects('https://github.com/duckdb/duckdb-data/releases/download/v1.0/example_rn.ndjson', format='nd')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query I
+select * from read_ndjson_objects('https://github.com/duckdb/duckdb-data/releases/download/v1.0/example_rn.ndjson')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# empty file
+query I
+select * from read_json_objects('data/json/empty.ndjson')
+----
+
+query I
+select * from read_ndjson_objects('data/json/empty.ndjson')
+----
+
+# invalid json stuff
+statement error
+select * from read_json_objects('data/json/unterminated_quotes.ndjson', format='nd')
+----
+Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson"
+
+statement error
+select * from read_ndjson_objects('data/json/unterminated_quotes.ndjson')
+----
+Invalid Input Error: Malformed JSON in file "data/json/unterminated_quotes.ndjson"
+
+# we can auto-detect and ignore the error (becomes NULL)
+query I
+select * from read_json_objects('data/json/unterminated_quotes.ndjson', format='auto', ignore_errors=true)
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+NULL
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# multiple values per line (works for read_json_objects)
+query I
+select * from read_json_objects('data/json/multiple_objects_per_line.ndjson', format='unstructured')
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# does not work for read_ndjson_objects
+statement error
+select * from read_ndjson_objects('data/json/multiple_objects_per_line.ndjson')
+----
+Invalid Input Error: Malformed JSON in file "data/json/multiple_objects_per_line.ndjson"
+
+# what if we try to read a CSV?
+statement error
+select * from read_json_objects('data/csv/tpcds_14.csv')
+----
+Invalid Input Error: Expected top-level JSON array
+
+statement error
+select * from read_ndjson_objects('data/csv/tpcds_14.csv')
+----
+Invalid Input Error: Malformed JSON in file "data/csv/tpcds_14.csv"
+
+# how about parquet?
+statement error
+select * from read_json_objects('data/parquet-testing/blob.parquet')
+----
+Invalid Input Error: Expected top-level JSON array
+
+statement error
+select * from read_ndjson_objects('data/parquet-testing/blob.parquet')
+----
+Invalid Input Error: Malformed JSON in file "data/parquet-testing/blob.parquet"
+
+# we can also read the objects from a JSON array (not newline-delimited)
+query I
+select * from read_json_objects('data/json/top_level_array.json')
+----
+{"conclusion":"cancelled"}
+{"conclusion":"cancelled"}
+
+# and auto-detect it
+query I
+select * from read_json_objects('data/json/top_level_array.json', format='auto')
+----
+{"conclusion":"cancelled"}
+{"conclusion":"cancelled"}
+
+# the file only has one line, so if we read this as ndjson, we just get the array
+query I
+select * from read_json_objects('data/json/top_level_array.json', format='nd')
+----
+[{"conclusion":"cancelled"}, {"conclusion":"cancelled"}]

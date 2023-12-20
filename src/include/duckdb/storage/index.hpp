@@ -8,15 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/index_constraint_type.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/types/constraint_conflict_info.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 
@@ -31,16 +30,22 @@ struct IndexScanState;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
-	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type);
+	Index(const string &name, const string &index_type, IndexConstraintType index_constraint_type,
+	      const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+	      const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db);
 	virtual ~Index() = default;
 
-	//! The type of the index
-	IndexType type;
+	//! The name of the index
+	string name;
+	//! The index type (ART, B+-tree, Skip-List, ...)
+	string index_type;
+	//! The index constraint type
+	IndexConstraintType index_constraint_type;
+	//! The logical column ids of the indexed table
+	vector<column_t> column_ids;
+
 	//! Associated table io manager
 	TableIOManager &table_io_manager;
-	//! Column identifiers to extract key columns from the base table
-	vector<column_t> column_ids;
 	//! Unordered set of column_ids used by the index
 	unordered_set<column_t> column_id_set;
 	//! Unbound expressions used by the index during optimizations
@@ -49,13 +54,9 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
-	//! Index constraint type (primary key, foreign key, ...)
-	IndexConstraintType constraint_type;
 
 	//! Attached database instance
 	AttachedDatabase &db;
-	//! Buffer manager of the database instance
-	BufferManager &buffer_manager;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
@@ -73,7 +74,7 @@ public:
 	                  const idx_t max_count, vector<row_t> &result_ids) = 0;
 
 	//! Obtain a lock on the index
-	virtual void InitializeLock(IndexLock &state);
+	void InitializeLock(IndexLock &state);
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
 	virtual PreservedError Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	//! Obtains a lock and calls Append while holding that lock
@@ -85,6 +86,10 @@ public:
 	//! Performs constraint checking for a chunk of input data
 	virtual void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) = 0;
 
+	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+	virtual void CommitDrop(IndexLock &index_lock) = 0;
+	//! Deletes all data from the index
+	void CommitDrop();
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	//! Obtains a lock and calls Delete while holding that lock
@@ -104,6 +109,11 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock
 	void Vacuum();
 
+	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
+	virtual idx_t GetInMemorySize(IndexLock &state) = 0;
+	//! Returns the in-memory usage of the index
+	idx_t GetInMemorySize();
+
 	//! Returns the string representation of an index, or only traverses and verifies the index
 	virtual string VerifyAndToString(IndexLock &state, const bool only_verify) = 0;
 	//! Obtains a lock and calls VerifyAndToString while holding that lock
@@ -114,23 +124,20 @@ public:
 
 	//! Returns unique flag
 	bool IsUnique() {
-		return (constraint_type == IndexConstraintType::UNIQUE || constraint_type == IndexConstraintType::PRIMARY);
+		return (index_constraint_type == IndexConstraintType::UNIQUE ||
+		        index_constraint_type == IndexConstraintType::PRIMARY);
 	}
 	//! Returns primary key flag
 	bool IsPrimary() {
-		return (constraint_type == IndexConstraintType::PRIMARY);
+		return (index_constraint_type == IndexConstraintType::PRIMARY);
 	}
 	//! Returns foreign key flag
 	bool IsForeign() {
-		return (constraint_type == IndexConstraintType::FOREIGN);
+		return (index_constraint_type == IndexConstraintType::FOREIGN);
 	}
 
-	//! Serializes the index and returns the pair of block_id offset positions
-	virtual BlockPointer Serialize(MetadataWriter &writer);
-	//! Returns the serialized data pointer to the block and offset of the serialized index
-	BlockPointer GetSerializedDataPointer() const {
-		return serialized_data_pointer;
-	}
+	//! Returns all index storage information for serialization
+	virtual IndexStorageInfo GetStorageInfo(const bool get_buffers);
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
@@ -139,8 +146,6 @@ public:
 protected:
 	//! Lock used for any changes to the index
 	mutex lock;
-	//! Pointer to serialized index data
-	BlockPointer serialized_data_pointer;
 
 private:
 	//! Bound expressions used during expression execution

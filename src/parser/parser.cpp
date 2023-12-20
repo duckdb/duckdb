@@ -417,7 +417,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 }
 
 ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions options) {
-	string mock_query = "CREATE TABLE blabla (" + column_list + ")";
+	string mock_query = "CREATE TABLE tbl (" + column_list + ")";
 	Parser parser(options);
 	parser.ParseQuery(mock_query);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {

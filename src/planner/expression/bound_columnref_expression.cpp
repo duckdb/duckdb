@@ -1,6 +1,5 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -54,25 +53,6 @@ string BoundColumnRefExpression::ToString() const {
 		return alias;
 	}
 	return binding.ToString();
-}
-
-void BoundColumnRefExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteString(alias);
-	writer.WriteSerializable(return_type);
-	writer.WriteField(binding.table_index);
-	writer.WriteField(binding.column_index);
-	writer.WriteField(depth);
-}
-
-unique_ptr<Expression> BoundColumnRefExpression::Deserialize(ExpressionDeserializationState &state,
-                                                             FieldReader &reader) {
-	auto alias = reader.ReadRequired<string>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto table_index = reader.ReadRequired<idx_t>();
-	auto column_index = reader.ReadRequired<idx_t>();
-	auto depth = reader.ReadRequired<idx_t>();
-
-	return make_uniq<BoundColumnRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), depth);
 }
 
 } // namespace duckdb

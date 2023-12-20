@@ -33,6 +33,7 @@ CREATE TABLE t1(i DATE)
 # querying the view fails because the column types don't match the expected types
 statement error
 SELECT * FROM v1
+----
 
 # now drop the table and create one that has extra columns
 statement ok
@@ -44,6 +45,7 @@ CREATE TABLE t1(i INTEGER, j INTEGER)
 # again querying the view fails: there are extra columns present
 statement error
 SELECT * FROM v1
+----
 
 # now drop the table and create one that has differently named columns
 statement ok
@@ -68,3 +70,12 @@ query I
 SELECT * FROM v1
 ----
 
+# Changing the types of the table that the view references also makes the view unusable
+
+statement ok
+ALTER TABLE t1 ALTER i TYPE VARCHAR;
+
+statement error
+select * from v1;
+----
+Binder Error: Contents of view were altered: types don't match!

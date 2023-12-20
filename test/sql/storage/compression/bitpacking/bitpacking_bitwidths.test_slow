@@ -34,10 +34,10 @@ SELECT DISTINCT(c_i) FROM (SELECT count(i) AS c_i FROM test_unsigned GROUP BY i)
 query IIII
 select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i//delta) AS diff_to_next_row from (
     SELECT i, count(i) as c_i, lag(i, 1) OVER (ORDER BY i) delta FROM test_unsigned GROUP BY i
-) GROUP BY diff_to_next_row;
+) GROUP BY diff_to_next_row ORDER BY ALL;
 ----
-True	False	2048.000000	NULL
 False	True	2048.000000	2
+True	False	2048.000000	NULL
 
 statement ok
 CREATE TABLE test_signed_neg AS SELECT cast(-(2**(i//2048)) as INT${typesize}) i FROM range(${typesize}*2048) tbl(i);
@@ -58,10 +58,10 @@ SELECT DISTINCT(c_i) FROM (SELECT count(i) AS c_i FROM test_signed_neg GROUP BY 
 query IIII
 select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i//delta) AS diff_to_next_row from (
     SELECT i, count(i) as c_i, lag(i, 1) OVER (ORDER BY i) delta FROM test_unsigned GROUP BY i
-) GROUP BY diff_to_next_row;
+) GROUP BY diff_to_next_row ORDER BY ALL;
 ----
-True	False	2048.000000	NULL
 False	True	2048.000000	2
+True	False	2048.000000	NULL
 
 statement ok
 CREATE TABLE test_signed_pos AS SELECT cast(2**(i//2048) as INT${typesize}) i FROM range((${typesize}-1)*2048) tbl(i);
@@ -82,10 +82,10 @@ SELECT DISTINCT(c_i) FROM (SELECT count(i) AS c_i FROM test_signed_neg GROUP BY 
 query IIII
 select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i//delta) AS diff_to_next_row from (
     SELECT i, count(i) as c_i, lag(i, 1) OVER (ORDER BY i) delta FROM test_unsigned GROUP BY i
-) GROUP BY diff_to_next_row;
+) GROUP BY diff_to_next_row ORDER BY ALL;
 ----
-True	False	2048.000000	NULL
 False	True	2048.000000	2
+True	False	2048.000000	NULL
 
 statement ok
 DROP TABLE test_unsigned

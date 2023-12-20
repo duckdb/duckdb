@@ -51,7 +51,7 @@ private:
 	//! Debugging state: number of times blocked
 	int debug_blocked_count = 0;
 	//! Number of times the Finalize will block before actually returning data
-	int debug_blocked_target_count = 1;
+	int debug_blocked_target_count = 10;
 #endif
 };
 

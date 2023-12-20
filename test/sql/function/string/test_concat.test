@@ -54,6 +54,7 @@ NULL
 # concat requires at least one argument
 statement error
 SELECT CONCAT()
+----
 
 # concat with one argument works
 query T

@@ -1,12 +1,11 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -91,16 +90,6 @@ unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = make_uniq<ColumnRefExpression>(column_names);
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void ColumnRefExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteList<string>(column_names);
-}
-
-unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto column_names = reader.ReadRequiredList<string>();
-	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
-	return std::move(expression);
 }
 
 } // namespace duckdb

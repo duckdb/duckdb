@@ -28,17 +28,20 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("http_retry_backoff",
 	                          "Backoff factor for exponentially increasing retry wait time (default 4)",
 	                          LogicalType::FLOAT, Value(4));
+	config.AddExtensionOption(
+	    "http_keep_alive",
+	    "Keep alive connections. Setting this to false can help when running into connection failures",
+	    LogicalType::BOOLEAN, Value(true));
 	// Global S3 config
-	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_region", "S3 Region (default us-east-1)", LogicalType::VARCHAR, Value("us-east-1"));
 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
-	config.AddExtensionOption("s3_endpoint", "S3 Endpoint (default 's3.amazonaws.com')", LogicalType::VARCHAR,
-	                          Value("s3.amazonaws.com"));
-	config.AddExtensionOption("s3_url_style", "S3 url style ('vhost' (default) or 'path')", LogicalType::VARCHAR,
+	config.AddExtensionOption("s3_endpoint", "S3 Endpoint (empty for default endpoint)", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_url_style", "S3 URL style ('vhost' (default) or 'path')", LogicalType::VARCHAR,
 	                          Value("vhost"));
 	config.AddExtensionOption("s3_use_ssl", "S3 use SSL (default true)", LogicalType::BOOLEAN, Value(true));
-	config.AddExtensionOption("s3_url_compatibility_mode", "Disable Globs and Query Parameters on S3 urls",
+	config.AddExtensionOption("s3_url_compatibility_mode", "Disable Globs and Query Parameters on S3 URLs",
 	                          LogicalType::BOOLEAN, Value(false));
 
 	// S3 Uploader config

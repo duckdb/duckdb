@@ -10,8 +10,9 @@
 SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                              SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTResult(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMTResult(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	return duckdb::GetDataStmtResult(hstmt, col_or_param_num, target_type, target_value_ptr, buffer_length,
@@ -20,8 +21,9 @@ SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_para
 
 static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	// case there is a result set, just fetch from it
@@ -47,11 +49,12 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
  */
 SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
-	auto ret = hstmt->odbc_fetcher->DummyFetch();
+	ret = hstmt->odbc_fetcher->DummyFetch();
 	if (ret != SQL_NEED_DATA) {
 		return ret;
 	}
@@ -79,9 +82,11 @@ SQLRETURN SQL_API SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_or
 	case SQL_FETCH_NEXT: {
 		// passing "fetch_offset - 1", the DuckDB's internal row index starts in 0
 		duckdb::OdbcHandleStmt *hstmt = nullptr;
-		if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-			return SQL_ERROR;
+		SQLRETURN ret = ConvertHSTMTResult(statement_handle, hstmt);
+		if (ret != SQL_SUCCESS) {
+			return ret;
 		}
+
 		return duckdb::FetchStmtResult(hstmt, fetch_orientation, fetch_offset - 1);
 	}
 	default:
@@ -91,8 +96,9 @@ SQLRETURN SQL_API SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_or
 
 SQLRETURN SQL_API SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTResult(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMTResult(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (!row_count_ptr) {

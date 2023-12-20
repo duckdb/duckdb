@@ -40,7 +40,7 @@ install_deps() {
     (
       cd $VCPKG_TARGET_DIR ;
       git clone https://github.com/Microsoft/vcpkg.git ;
-      git checkout 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1 ;
+      git checkout a42af01b72c28a8e1d7b48107b33e4f286a55ef6 ;
       cd vcpkg ;
       ./bootstrap-vcpkg.sh
     )
@@ -66,6 +66,9 @@ install_deps() {
 
   elif [ "$1" = "gcc_4_8" ]; then
     yum install -y gcc-c++
+
+  elif [ "$1" = "nodejs" ]; then
+    yum install -y nodejs
 
   else
       >&2 echo "unknown input for setup_manylinux2014.sh: '$1'"

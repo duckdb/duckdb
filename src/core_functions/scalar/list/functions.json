@@ -10,7 +10,7 @@
     {
         "name": "list_aggregate",
         "parameters": "list,name",
-        "description": "Executes the aggregate function name on the elements of list.",
+        "description": "Executes the aggregate function name on the elements of list",
         "example": "list_aggregate([1, 2, NULL], 'min')",
         "type": "scalar_function",
         "aliases": ["array_aggregate", "list_aggr", "array_aggr", "aggregate"]
@@ -18,7 +18,7 @@
     {
         "name": "list_distinct",
         "parameters": "list",
-        "description": "Removes all duplicates and NULLs from a list. Does not preserve the original order.",
+        "description": "Removes all duplicates and NULLs from a list. Does not preserve the original order",
         "example": "list_distinct([1, 1, NULL, -3, 1, 5])",
         "type": "scalar_function",
         "aliases": ["array_distinct"]
@@ -26,7 +26,7 @@
     {
         "name": "list_unique",
         "parameters": "list",
-        "description": "Counts the unique elements of a list.",
+        "description": "Counts the unique elements of a list",
         "example": "list_unique([1, 1, NULL, -3, 1, 5])",
         "type": "scalar_function",
         "aliases": ["array_unique"]
@@ -34,7 +34,7 @@
     {
         "name": "list_value",
         "parameters": "any,...",
-        "description": "Create a LIST containing the argument values.",
+        "description": "Create a LIST containing the argument values",
         "example": "list_value(4, 5, 6)",
         "type": "scalar_function",
         "aliases": ["list_pack"]
@@ -42,7 +42,7 @@
     {
         "name": "list_slice",
         "parameters": "list,begin,end[,step]",
-        "description": "Extract a sublist using slice conventions. Negative values are accepted.",
+        "description": "Extract a sublist using slice conventions. Negative values are accepted",
         "example": "list_slice(l, 2, 4)",
         "type": "scalar_function_set",
         "aliases": ["array_slice"]
@@ -50,15 +50,23 @@
     {
         "name": "list_sort",
         "parameters": "list",
-        "description": "Sorts the elements of the list.",
+        "description": "Sorts the elements of the list",
         "example": "list_sort([3, 6, 1, 2])",
         "type": "scalar_function_set",
         "aliases": ["array_sort"]
     },
     {
+        "name": "list_grade_up",
+        "parameters": "list",
+        "description": "Returns the index of their sorted position.",
+        "example": "list_grade_up([3, 6, 1, 2])",
+        "type": "scalar_function_set",
+        "aliases": ["array_grade_up", "grade_up"]
+    },
+    {
         "name": "list_reverse_sort",
         "parameters": "list",
-        "description": "Sorts the elements of the list in reverse order.",
+        "description": "Sorts the elements of the list in reverse order",
         "example": "list_reverse_sort([3, 6, 1, 2])",
         "type": "scalar_function_set",
         "aliases": ["array_reverse_sort"]
@@ -66,7 +74,7 @@
     {
         "name": "list_transform",
         "parameters": "list,lambda",
-        "description": "Returns a list that is the result of applying the lambda function to each element of the input list. See the Lambda Functions section for more details.",
+        "description": "Returns a list that is the result of applying the lambda function to each element of the input list. See the Lambda Functions section for more details",
         "example": "list_transform([1, 2, 3], x -> x + 1)",
         "type": "scalar_function",
         "aliases": ["array_transform", "list_apply", "array_apply", "apply"]
@@ -74,7 +82,7 @@
     {
         "name": "list_filter",
         "parameters": "list,lambda",
-        "description": "Constructs a list from those elements of the input list for which the lambda function returns true.",
+        "description": "Constructs a list from those elements of the input list for which the lambda function returns true",
         "example": "list_filter([3, 4, 5], x -> x > 4)",
         "type": "scalar_function",
         "aliases": ["array_filter", "filter"]
@@ -93,5 +101,29 @@
         "example": "range(2, 5, 3)",
         "type": "scalar_function_set",
         "struct": "ListRangeFun"
+    },
+    {
+        "name": "list_cosine_similarity",
+        "parameters": "list1,list2",
+        "description": "Compute the cosine similarity between two lists",
+        "example": "list_cosine_similarity([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["<=>"]
+    },
+    {
+        "name": "list_distance",
+        "parameters": "list1,list2",
+        "description": "Compute the distance between two lists",
+        "example": "list_distance([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["<->"]
+    },
+    {
+        "name": "list_inner_product",
+        "parameters": "list1,list2",
+        "description": "Compute the inner product between two lists",
+        "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["list_dot_product", "<#>"]
     }
 ]

@@ -114,29 +114,34 @@ SELECT strftime('2019-01-23'::DATE, 42);
 
 foreach datatype DATE TIMESTAMP
 
-foreach special infinity -infinity
-
 # PG to_char returns NULL here
+# but we can do better.
 query I
-SELECT strftime('${special}'::${datatype}, '%Y-%m-%d');
+SELECT strftime('infinity'::${datatype}, '%Y-%m-%d');
 ----
-NULL
+infinity
 
-endloop
+query I
+SELECT strftime('-infinity'::${datatype}, '%Y-%m-%d');
+----
+-infinity
 
 endloop
 
 # non-constant format not supported
 statement error
 SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;
+----
 
 # unterminated escape
 statement error
 SELECT strftime(DATE '1992-01-01', '%');
+----
 
 # unrecognized code
 statement error
 SELECT strftime(DATE '1992-01-01', '%R');
+----
 
 # millisecond specifier %g
 query IIII
@@ -149,11 +154,14 @@ select strftime(strptime('023', '%g'), '%g'), strftime(strptime('0', '%g'), '%g'
 
 statement error
 SELECT strptime('-1', '%g');
+----
 
 statement error
 SELECT strptime('1000', '%g');
+----
 
 # this won't work without explicit casts
 statement error
 SELECT strftime('%Y', '1992-01-01');
+----
 

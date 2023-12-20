@@ -45,9 +45,8 @@ void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &
 
 OptionValueSet &GetValueForOption(const string &name) {
 	static unordered_map<string, OptionValueSet> value_map = {
-	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
-	    {"checkpoint_threshold", {"4.2GB"}},
+	    {"checkpoint_threshold", {"4.0 GiB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
 	    {"default_collation", {"nocase"}},
 	    {"default_order", {"desc"}},
@@ -59,6 +58,17 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"debug_force_external", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
+	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
+#else
+	    {"autoload_known_extensions", {true}},
+#endif
+#ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
+	    {"autoinstall_known_extensions", {!DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT}},
+#else
+	    {"autoinstall_known_extensions", {true}},
+#endif
 	    {"enable_fsst_vectors", {true}},
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
@@ -72,8 +82,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"extension_directory", {"test"}},
 	    {"immediate_transaction_mode", {true}},
 	    {"max_expression_depth", {50}},
-	    {"max_memory", {"4.2GB"}},
-	    {"memory_limit", {"4.2GB"}},
+	    {"max_memory", {"4.0 GiB"}},
+	    {"memory_limit", {"4.0 GiB"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
 	    {"perfect_ht_threshold", {0}},
@@ -86,11 +96,11 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_progress_bar_print", {false}},
 	    {"progress_bar_time", {0}},
 	    {"temp_directory", {"tmp"}},
-	    {"wal_autocheckpoint", {"4.2GB"}},
+	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"worker_threads", {42}},
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"allocator_flush_threshold", {"4.2GB"}},
+	    {"allocator_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_large_buffer_size", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
@@ -101,6 +111,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 
 bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
+	    "access_mode",
 	    "schema",
 	    "search_path",
 	    "debug_window_mode",
@@ -114,7 +125,9 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "username",
 	    "user",
 	    "profiling_output", // just an alias
-	    "profiler_history_size"};
+	    "profiler_history_size",
+	    "duckdb_api",
+	    "custom_user_agent"};
 	return excluded_options.count(name) == 1;
 }
 

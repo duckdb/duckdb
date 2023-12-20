@@ -107,7 +107,7 @@ loading when placed in the `extension_external` directory.
 
 ## Custom path
 When extensions are located in a  path or their project structure is different from that the
-[extension-template](https://github.customcom/duckdb/extension-template), the `SOURCE_DIR` and `INCLUDE_DIR` variables can
+[extension-template](https://github.com/duckdb/extension-template), the `SOURCE_DIR` and `INCLUDE_DIR` variables can
 be used to tell DuckDB how to load the extension:
 ```cmake
 duckdb_extension_load(<extension_name>
@@ -123,7 +123,7 @@ cmake build directory and build it from there:
 ```cmake
 duckdb_extension_load(postgres_scanner
     (DONT_LINK)
-    GIT_URL https://github.com/duckdblabs/postgres_scanner
+    GIT_URL https://github.com/duckdb/postgres_scanner
     GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
 )
 ```

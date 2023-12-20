@@ -1,14 +1,14 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/parameter_expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -25,7 +25,8 @@ OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, Selec
 	this->extra_list = &node.select_list;
 }
 
-unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, idx_t index) {
+unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, const idx_t index,
+                                                              const LogicalType &logical_type) {
 	string alias;
 	if (extra_list && index < extra_list->size()) {
 		alias = extra_list->at(index)->ToString();
@@ -34,15 +35,15 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.alias;
 		}
 	}
-	return make_uniq<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
-	                                           ColumnBinding(projection_index, index));
+	return make_uniq<BoundColumnRefExpression>(std::move(alias), logical_type, ColumnBinding(projection_index, index));
 }
 
 unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
 	if (!extra_list) {
 		throw InternalException("CreateExtraReference called without extra_list");
 	}
-	auto result = CreateProjectionReference(*expr, extra_list->size());
+	projection_map[*expr] = extra_list->size();
+	auto result = CreateProjectionReference(*expr, extra_list->size(), LogicalType::INVALID);
 	extra_list->push_back(std::move(expr));
 	return result;
 }
@@ -57,10 +58,7 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, const V
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
 	auto index = (idx_t)val.GetValue<int64_t>();
-	if (index < 1 || index > max_count) {
-		throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
-	}
-	return CreateProjectionReference(expr, index - 1);
+	return CreateProjectionReference(expr, index - 1, LogicalType::ANY);
 }
 
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
@@ -88,7 +86,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		auto entry = alias_map.find(colref.column_names[0]);
 		if (entry != alias_map.end()) {
 			// it does! point it to that entry
-			return CreateProjectionReference(*expr, entry->second);
+			return CreateProjectionReference(*expr, entry->second, LogicalType::INVALID);
 		}
 		break;
 	}
@@ -97,7 +95,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		if (posref.index < 1 || posref.index > max_count) {
 			throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
 		}
-		return CreateProjectionReference(*expr, posref.index - 1);
+		return CreateProjectionReference(*expr, posref.index - 1, LogicalType::ANY);
 	}
 	case ExpressionClass::PARAMETER: {
 		throw ParameterNotAllowedException("Parameter not supported in ORDER BY clause");
@@ -118,7 +116,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		}
 		// there is a matching entry in the projection list
 		// just point to that entry
-		return CreateProjectionReference(*expr, entry->second);
+		return CreateProjectionReference(*expr, entry->second, LogicalType::INVALID);
 	}
 	if (!extra_list) {
 		// no extra list specified: we cannot push an extra ORDER BY clause

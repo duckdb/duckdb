@@ -9,6 +9,7 @@ PRAGMA enable_verification
 
 statement error
 SELECT 'Test' LIMIT ?
+----
 
 statement ok
 PREPARE v1 AS SELECT 'Test' LIMIT ?
@@ -143,6 +144,7 @@ EXECUTE v7(9223372036854775807, NULL)
 
 statement error
 EXECUTE v7(NULL, 922337203685477580700)
+----
 
 query I
 EXECUTE v7(NULL, 4611686018427387904)

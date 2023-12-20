@@ -1,0 +1,54 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_large_strings_deletes.test_slow
+# description: Test writing large strings with deletes
+# group: [optimistic_write]
+
+require parquet
+
+# load the DB from disk
+load __TEST_DIR__/optimistic_write_large_strings_deletes.db
+
+statement ok
+CREATE TABLE test(val VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (NULL);
+
+statement ok
+COPY (SELECT 'hello' AS str FROM range(250000)) TO '__TEST_DIR__/small_strings.parquet';
+
+statement ok
+COPY (SELECT repeat('X', len) AS str FROM (VALUES (903), (4932)) t(len)) TO '__TEST_DIR__/large_strings.parquet';
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO test FROM read_parquet([
+	'__TEST_DIR__/small_strings.parquet',
+	'__TEST_DIR__/large_strings.parquet']
+);
+
+query I
+SELECT MAX(strlen(val)) FROM test
+----
+4932
+
+query I
+DELETE FROM test WHERE val='hello'
+----
+250000
+
+query I
+SELECT MAX(strlen(val)) FROM test
+----
+4932
+
+statement ok
+COMMIT
+
+query I
+SELECT strlen(val) FROM test
+----
+NULL
+903
+4932

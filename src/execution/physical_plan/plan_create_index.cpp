@@ -1,7 +1,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
-#include "duckdb/execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/operator/schema/physical_create_art_index.hpp"
 #include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
@@ -14,19 +15,26 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// generate a physical plan for the parallel index creation which consists of the following operators
-	// table scan - projection (for expression execution) - filter (NOT NULL) - order - create index
+	// table scan - projection (for expression execution) - filter (NOT NULL) - order (if applicable) - create index
+
 	D_ASSERT(op.children.size() == 1);
 	auto table_scan = CreatePlan(*op.children[0]);
 
 	// validate that all expressions contain valid scalar functions
-	// e.g. get_current_timestamp(), random(), and sequence values are not allowed as ART keys
+	// e.g. get_current_timestamp(), random(), and sequence values are not allowed as index keys
 	// because they make deletions and lookups unfeasible
 	for (idx_t i = 0; i < op.unbound_expressions.size(); i++) {
 		auto &expr = op.unbound_expressions[i];
 		if (expr->HasSideEffects()) {
-			throw BinderException("Index keys cannot contain expressions with side "
-			                      "effects.");
+			throw BinderException("Index keys cannot contain expressions with side effects.");
 		}
+	}
+
+	// if we get here and the index type is not ART, we throw an exception
+	// because we don't support any other index type yet. However, an operator extension could have
+	// replaced this part of the plan with a different index creation operator.
+	if (op.info->index_type != "ART") {
+		throw BinderException("Unknown index type: " + op.info->index_type);
 	}
 
 	// table scan operator for index key columns and row IDs
@@ -80,8 +88,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// actual physical create index operator
 
 	auto physical_create_index =
-	    make_uniq<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
-	                                   std::move(op.unbound_expressions), op.estimated_cardinality, perform_sorting);
+	    make_uniq<PhysicalCreateARTIndex>(op, op.table, op.info->column_ids, std::move(op.info),
+	                                      std::move(op.unbound_expressions), op.estimated_cardinality, perform_sorting);
 
 	if (perform_sorting) {
 

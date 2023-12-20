@@ -19,6 +19,7 @@ public:
 	idx_t rows_copied;
 	idx_t last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
+	idx_t created_directories = 0;
 
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
@@ -82,8 +83,8 @@ static void CreateDir(const string &dir_path, FileSystem &fs) {
 	}
 }
 
-static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-                                 string path, FileSystem &fs) {
+static void CreateDirectories(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+                              string path, FileSystem &fs) {
 	CreateDir(path, fs);
 
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -93,7 +94,16 @@ static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string>
 		path = fs.JoinPath(path, p_dir);
 		CreateDir(path, fs);
 	}
+}
 
+static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+                           string path, FileSystem &fs) {
+	for (idx_t i = 0; i < cols.size(); i++) {
+		const auto &partition_col_name = names[cols[i]];
+		const auto &partition_value = values[i];
+		string p_dir = partition_col_name + "=" + partition_value.ToString();
+		path = fs.JoinPath(path, p_dir);
+	}
 	return path;
 }
 
@@ -109,10 +119,21 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 
 		string trimmed_path = file_path;
 		StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
+		{
+			// create directories
+			lock_guard<mutex> global_lock(g.lock);
+			lock_guard<mutex> global_lock_on_partition_state(g.partition_state->lock);
+			const auto &global_partitions = g.partition_state->partitions;
+			// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
+
+			for (idx_t i = g.created_directories; i < global_partitions.size(); i++) {
+				CreateDirectories(partition_columns, names, global_partitions[i]->first.values, trimmed_path, fs);
+			}
+			g.created_directories = global_partitions.size();
+		}
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
-			string hive_path =
-			    CreateDirRecursive(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
+			string hive_path = GetDirectory(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
 			string full_path(filename_pattern.CreateFilename(fs, hive_path, function.extension, l.writer_offset));
 			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
 				throw IOException("failed to create " + full_path +

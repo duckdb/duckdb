@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb_python/numpy/array_wrapper.hpp"
+#include "duckdb_python/numpy/numpy_result_conversion.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/python_objects.hpp"
@@ -29,7 +29,8 @@ public:
 
 	py::dict FetchNumpy();
 
-	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
+	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1,
+	                            unique_ptr<NumpyResultConversion> conversion = nullptr);
 
 	PandasDataFrame FetchDF(bool date_as_object);
 
@@ -67,6 +68,7 @@ private:
 	void ChangeDateToDatetime(PandasDataFrame &df);
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
+	unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);
 
 private:
 	idx_t chunk_offset = 0;

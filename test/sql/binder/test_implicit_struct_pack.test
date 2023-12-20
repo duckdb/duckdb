@@ -31,9 +31,11 @@ select t from (SELECT * FROM test) AS t
 # shouldn't work
 statement error
 select main.test from main.test t
+----
 
 statement error
 select main.t from main.test t
+----
 
 # example query in feature request
 query T

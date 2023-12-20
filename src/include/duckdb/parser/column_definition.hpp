@@ -31,7 +31,8 @@ public:
 
 public:
 	//! default_value
-	const unique_ptr<ParsedExpression> &DefaultValue() const;
+	const ParsedExpression &DefaultValue() const;
+	bool HasDefaultValue() const;
 	void SetDefaultValue(unique_ptr<ParsedExpression> default_value);
 
 	//! type
@@ -65,10 +66,7 @@ public:
 	DUCKDB_API ColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &source);
-
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static ColumnDefinition FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &deserializer);
 
 	//===--------------------------------------------------------------------===//
 	// Generated Columns (VIRTUAL)

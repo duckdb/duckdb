@@ -351,9 +351,9 @@ struct SortedAggregateFunction {
 		target.Combine(order_bind, other);
 	}
 
-	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, idx_t bias) {
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes, Vector &result,
+	                   idx_t rid) {
 		throw InternalException("Sorted aggregates should not be generated for window clauses");
 	}
 

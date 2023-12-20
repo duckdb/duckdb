@@ -32,18 +32,14 @@ public:
 	unique_ptr<QueryNode> Copy() const override {
 		throw InternalException("Cannot copy bound subquery node");
 	}
-	void Serialize(FieldWriter &writer) const override {
-		throw InternalException("Cannot serialize bound subquery node");
-	}
 
-	void FormatSerialize(FormatSerializer &serializer) const override {
+	void Serialize(Serializer &serializer) const override {
 		throw InternalException("Cannot serialize bound subquery node");
 	}
 };
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
 	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
-		D_ASSERT(depth == 0);
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, &binder);
 		subquery_binder->can_contain_nulls = true;

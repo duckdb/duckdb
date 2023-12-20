@@ -35,7 +35,6 @@ struct ChangeOwnershipInfo : public AlterInfo {
 public:
 	CatalogType GetCatalogType() const override;
 	unique_ptr<AlterInfo> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
 };
 
 //===--------------------------------------------------------------------===//
@@ -62,12 +61,9 @@ struct AlterTableInfo : public AlterInfo {
 
 public:
 	CatalogType GetCatalogType() const override;
-	void Serialize(FieldWriter &writer) const override;
-	virtual void SerializeAlterTable(FieldWriter &writer) const = 0;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 
 protected:
 	AlterTableInfo(AlterTableType type);
@@ -87,11 +83,9 @@ struct RenameColumnInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	RenameColumnInfo();
@@ -109,11 +103,9 @@ struct RenameTableInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	RenameTableInfo();
@@ -133,11 +125,9 @@ struct AddColumnInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	explicit AddColumnInfo(ColumnDefinition new_column);
@@ -159,10 +149,8 @@ struct RemoveColumnInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 	string GetColumnName() const override {
 		return removed_column;
 	}
@@ -188,10 +176,8 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 	string GetColumnName() const override {
 		return column_name;
 	};
@@ -214,10 +200,8 @@ struct SetDefaultInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	SetDefaultInfo();
@@ -240,10 +224,8 @@ struct AlterForeignKeyInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	AlterForeignKeyInfo();
@@ -261,10 +243,8 @@ struct SetNotNullInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	SetNotNullInfo();
@@ -282,10 +262,8 @@ struct DropNotNullInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	DropNotNullInfo();
@@ -304,11 +282,8 @@ struct AlterViewInfo : public AlterInfo {
 
 public:
 	CatalogType GetCatalogType() const override;
-	void Serialize(FieldWriter &writer) const override;
-	virtual void SerializeAlterView(FieldWriter &writer) const = 0;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 
 protected:
 	AlterViewInfo(AlterViewType type);
@@ -326,10 +301,8 @@ struct RenameViewInfo : public AlterViewInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-	void SerializeAlterView(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<AlterViewInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterViewInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	RenameViewInfo();

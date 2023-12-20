@@ -19,6 +19,8 @@ class Allocator;
 class ClientContext;
 class ExecutionContext;
 class VectorCache;
+class Serializer;
+class Deserializer;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -131,14 +133,15 @@ public:
 	//! Turning all Vectors into Dictionary Vectors, using 'sel'
 	DUCKDB_API void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 
+	//! Slice a DataChunk from "offset" to "offset + count"
+	DUCKDB_API void Slice(idx_t offset, idx_t count);
+
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
 	//! function was called. This sets the count to 0, and resets each member
 	//! Vector to point back to the data owned by this DataChunk.
 	DUCKDB_API void Reset();
 
-	//! Serializes a DataChunk to a stand-alone binary blob
-	DUCKDB_API void Serialize(Serializer &serializer);
-	//! Deserializes a blob back into a DataChunk
+	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API void Deserialize(Deserializer &source);
 
 	//! Hashes the DataChunk to the target vector
