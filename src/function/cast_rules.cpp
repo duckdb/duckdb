@@ -216,8 +216,14 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return -1;
 	}
 	if (from.id() == LogicalTypeId::STRING_LITERAL) {
-		// string literals can be cast to ANY type for low cost
+		// string literals can be cast to ANY type for low cost as long as the type is well-defined
+		// i.e. we cannot cast to LIST(ANY) as we don't know what "ANY" should be
+		// we cannot cast to DECIMAL without precision/width specified
+		// etc...
 		// but we prefer casting to VARCHAR
+		if (to.id() != LogicalType::ANY && ExpressionBinder::ContainsType(to, LogicalTypeId::ANY)) {
+			return -1;
+		}
 		return to.id() == LogicalTypeId::VARCHAR ? 1 : 20;
 	}
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
