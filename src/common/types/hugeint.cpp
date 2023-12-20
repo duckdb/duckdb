@@ -444,7 +444,7 @@ hugeint_t Hugeint::Divide(hugeint_t lhs, hugeint_t rhs) {
 
 hugeint_t Hugeint::Modulo(hugeint_t lhs, hugeint_t rhs) {
 	hugeint_t remainder;
-	Hugeint::DivMod(lhs, rhs, remainder);
+	(void)Hugeint::DivMod(lhs, rhs, remainder);
 	return remainder;
 }
 
