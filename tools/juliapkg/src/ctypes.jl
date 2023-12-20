@@ -45,6 +45,7 @@ const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
     DUCKDB_TYPE_TIME
     DUCKDB_TYPE_INTERVAL
     DUCKDB_TYPE_HUGEINT
+    DUCKDB_TYPE_UHUGEINT
     DUCKDB_TYPE_VARCHAR
     DUCKDB_TYPE_BLOB
     DUCKDB_TYPE_DECIMAL
@@ -124,6 +125,11 @@ struct duckdb_hugeint
     upper::Int64
 end
 
+struct duckdb_uhugeint
+    lower::UInt64
+    upper::UInt64
+end
+
 struct duckdb_string_t
     length::UInt32
     data::NTuple{12, UInt8}
@@ -173,6 +179,7 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIME => Int64,
     DUCKDB_TYPE_INTERVAL => duckdb_interval,
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
+    DUCKDB_TYPE_UHUGEINT => duckdb_uhugeint,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_VARCHAR => duckdb_string_t,
     DUCKDB_TYPE_BLOB => duckdb_string_t,
@@ -192,6 +199,7 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_INTEGER => Int32,
     DUCKDB_TYPE_BIGINT => Int64,
     DUCKDB_TYPE_HUGEINT => Int128,
+    DUCKDB_TYPE_UHUGEINT => UInt128,
     DUCKDB_TYPE_UTINYINT => UInt8,
     DUCKDB_TYPE_USMALLINT => UInt16,
     DUCKDB_TYPE_UINTEGER => UInt32,

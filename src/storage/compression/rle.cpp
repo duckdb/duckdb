@@ -411,6 +411,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 		return GetRLEFunction<int64_t>(type);
 	case PhysicalType::INT128:
 		return GetRLEFunction<hugeint_t>(type);
+	case PhysicalType::UINT128:
+		return GetRLEFunction<uhugeint_t>(type);
 	case PhysicalType::UINT8:
 		return GetRLEFunction<uint8_t>(type);
 	case PhysicalType::UINT16:
@@ -442,6 +444,7 @@ bool RLEFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
+	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 	case PhysicalType::LIST:
