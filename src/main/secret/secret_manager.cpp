@@ -294,7 +294,7 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 	InitializeSecrets(transaction);
 
 	int64_t best_match_score = NumericLimits<int64_t>::Minimum();
-	SecretEntry *best_match = nullptr;
+	optional_ptr<SecretEntry> best_match = nullptr;
 
 	for (const auto &storage_ref : GetSecretStorages()) {
 		if (!storage_ref.get().IncludeInLookups()) {
@@ -351,7 +351,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
                                      OnEntryNotFound on_entry_not_found, const string &storage) {
 	InitializeSecrets(transaction);
 
-	vector<SecretStorage *> matches;
+	vector<reference<SecretStorage>> matches;
 
 	// storage to drop from was specified directly
 	if (!storage.empty()) {
@@ -359,21 +359,27 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 		if (!storage_lookup) {
 			throw InvalidInputException("Unknown storage type found for drop secret: '%s'", storage);
 		}
-		matches.push_back(storage_lookup.get());
+		matches.push_back(*storage_lookup.get());
 	} else {
 		for (const auto &storage_ref : GetSecretStorages()) {
 			auto lookup = storage_ref.get().GetSecretByName(transaction, name);
 			if (lookup) {
-				matches.push_back(&storage_ref.get());
+				matches.push_back(storage_ref.get());
 			}
 		}
 	}
 
 	if (matches.size() > 1) {
+		string list_of_matches;
+		for (const auto &match : matches) {
+			list_of_matches += match.get().GetName() + ",";
+		}
+		list_of_matches.pop_back(); // trailing comma
+
 		throw InvalidInputException(
-		    "Ambiguity found for secret name '%s', secret occurs in multiple storages. Please specify which "
-		    "secret to drop using: 'DROP <PERSISTENT|LOCAL> SECRET [FROM <storage>]'",
-		    name);
+		    "Ambiguity found for secret name '%s', secret occurs in multiple storages: [%s] Please specify which "
+		    "secret to drop using: 'DROP <PERSISTENT|LOCAL> SECRET [FROM <storage>]'.",
+		    name, list_of_matches);
 	}
 
 	if (matches.empty() && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
@@ -385,7 +391,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 		throw InvalidInputException("Failed to remove non-existent secret with name '%s'%s", name, storage_str);
 	}
 
-	matches[0]->DropSecretByName(transaction, name, on_entry_not_found);
+	matches[0].get().DropSecretByName(transaction, name, on_entry_not_found);
 }
 
 SecretType SecretManager::LookupType(CatalogTransaction transaction, const string &type) {
