@@ -10,29 +10,29 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op,
-                                                              unordered_set<idx_t> &left_bindings,
-                                                              unordered_set<idx_t> &right_bindings) {
+                                                                 unordered_set<idx_t> &left_bindings,
+                                                                 unordered_set<idx_t> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
 
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
-//	for (idx_t i = 0; i < filters.size(); i++) {
-//		// first create a copy of the filter
-//		auto right_filter = make_uniq<Filter>();
-//		right_filter->filter = filters[i]->filter->Copy();
-//
-//		// in the original filter, rewrite references to the result of the union into references to the left_index
-//		ReplaceSetOpBindings(left_bindings, *filters[i], *filters[i]->filter, setop);
-//		// in the copied filter, rewrite references to the result of the union into references to the right_index
-//		ReplaceSetOpBindings(right_bindings, *right_filter, *right_filter->filter, setop);
-//
-//		// extract bindings again
-//		filters[i]->ExtractBindings();
-//		right_filter->ExtractBindings();
-//
-//		// move the filters into the child pushdown nodes
-//		left_pushdown.filters.push_back(std::move(filters[i]));
-//		right_pushdown.filters.push_back(std::move(right_filter));
-//	}
+	//	for (idx_t i = 0; i < filters.size(); i++) {
+	//		// first create a copy of the filter
+	//		auto right_filter = make_uniq<Filter>();
+	//		right_filter->filter = filters[i]->filter->Copy();
+	//
+	//		// in the original filter, rewrite references to the result of the union into references to the left_index
+	//		ReplaceSetOpBindings(left_bindings, *filters[i], *filters[i]->filter, setop);
+	//		// in the copied filter, rewrite references to the result of the union into references to the right_index
+	//		ReplaceSetOpBindings(right_bindings, *right_filter, *right_filter->filter, setop);
+	//
+	//		// extract bindings again
+	//		filters[i]->ExtractBindings();
+	//		right_filter->ExtractBindings();
+	//
+	//		// move the filters into the child pushdown nodes
+	//		left_pushdown.filters.push_back(std::move(filters[i]));
+	//		right_pushdown.filters.push_back(std::move(right_filter));
+	//	}
 
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
