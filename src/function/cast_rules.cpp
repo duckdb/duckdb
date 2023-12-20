@@ -26,7 +26,7 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 		return 160;
 	case LogicalTypeId::ANY:
-		return 1;
+		return 5;
 	default:
 		return 110;
 	}
@@ -223,7 +223,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
 		// Lists can be cast if their child types can be cast
 		auto child_cost = ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
-		if (child_cost >= 100) {
+		if (child_cost >= 1) {
 			// subtract one from the cost because we prefer LIST[X] -> LIST[VARCHAR] over LIST[X] -> VARCHAR
 			child_cost--;
 		}

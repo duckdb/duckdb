@@ -104,7 +104,7 @@ SELECT strftime(DATE '1992-01-01', 'hello world');
 hello world
 
 query I
-SELECT strftime('2019-01-23'::DATE, 42);
+SELECT strftime('2019-01-23'::DATE, '42');
 ----
 42
 
