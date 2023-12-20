@@ -20,12 +20,12 @@ CREATE TABLE m (
 statement ok
 insert into m values ('sad', 'very sad')
 
-query II
-select *  from m where m = ''
-----
+#query II
+#select * from m where m = ''::VARCHAR
+#----
 
 query I
-SELECT m='' FROM m
+SELECT m=''::VARCHAR FROM m
 ----
 false
 

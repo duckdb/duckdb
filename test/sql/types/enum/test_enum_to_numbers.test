@@ -15,7 +15,7 @@ statement ok
 insert into t2 values ('1'), ('2'), ('3');
 
 query II
-select t1.a, count(*) as num_matches from t1, t2 where t1.a != t2.a group by t1.a order by t1.a;
+select t1.a, count(*) as num_matches from t1, t2 where t1.a::VARCHAR != t2.a group by t1.a order by t1.a;
 ----
 0	3
 1	2
@@ -32,7 +32,7 @@ statement ok
 insert into t2 values ('1'), ('2');
 
 query II
-select * from t1, t2 where t1.a = t2.a order by t1.a;
+select * from t1, t2 where t1.a::VARCHAR = t2.a order by t1.a;
 ----
 1	1
 1	1
@@ -123,7 +123,7 @@ insert into t2 values ('hello'), ('goodbye'), ('mr duck'),  ('mr duck'), ('hello
 # enums behave like strings so we first cast to varchar, then to int64 for 
 # integer comparison. This should error since 'hello' Cannot be converted to INT64
 statement error
-Select * from t1, t2 where t1.a = t2.a;
+Select * from t1, t2 where t1.a = t2.a::BIGINT;
 ----
 Conversion Error: Could not convert string 'hello' to INT64
 
@@ -150,7 +150,7 @@ statement ok
 create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(8);
 
 query I rowsort
-select a from t1, t2 where t1.a = t2.b;
+select a from t1, t2 where t1.a = t2.b::${type};
 ----
 1
 1
@@ -162,22 +162,22 @@ select a from t1, t2 where t1.a = t2.b;
 4
 
 query I
-select count(*) from t1, t2 where t1.a < t2.b;
+select count(*) from t1, t2 where t1.a < t2.b::${type};
 ----
 20
 
 query I
-select count(*) from t1, t2 where t1.a <= t2.b;
+select count(*) from t1, t2 where t1.a <= t2.b::${type};
 ----
 28
 
 query I
-select count(*) from t1, t2 where t1.a > t2.b;
+select count(*) from t1, t2 where t1.a > t2.b::${type};
 ----
 36
 
 query I
-select count(*) from t1, t2 where t1.a >= t2.b;
+select count(*) from t1, t2 where t1.a >= t2.b::${type};
 ----
 44
 
@@ -203,44 +203,42 @@ statement ok
 create table t2 as select * from VALUES ('294247-01-10 04:00:54.775806'::new_type), ('83 years 3 months 999 days 00:16:39.999999'::new_type), ('1677-09-21 00:12:43.145225'::new_type), ('other enum type'::new_type), ('another 1'::new_type), ('~~~'::new_type) t(b);
 
 statement ok
-select count(*) from t1, t2 where t1.date = t2.b;
+select count(*) from t1, t2 where t1.date::varchar = t2.b;
 
 statement ok
-select count(*) from t1, t2 where t1.time = t2.b;
+select count(*) from t1, t2 where t1.time::varchar = t2.b;
 
 statement ok
-select count(*) from t1, t2 where t1.timestamp = t2.b;
+select count(*) from t1, t2 where t1.timestamp::varchar = t2.b;
 
 statement ok
-select count(*) from t1, t2 where t1.timestamp_s = t2.b;
+select count(*) from t1, t2 where t1.timestamp_s::varchar = t2.b;
 
 statement ok
-select count(*) from t1, t2 where t1.timestamp_ms = t2.b;
+select count(*) from t1, t2 where t1.timestamp_ms::varchar = t2.b;
 
 statement ok
-select count(*) from t1, t2 where t1.timestamp_ns = t2.b;
+select count(*) from t1, t2 where t1.timestamp_ns::varchar = t2.b;
 
-# in types.hpp logical type of timestamp_tz, time_tz, interval, and blob are all higher 
-# than varchar, causing a direct cast from varchar to the type to happen. 
 
 statement error
 select count(*) from t1, t2 where t1.time_tz = t2.b;
 ----
-Conversion Error
+an explicit cast is required
 
 statement error
 select count(*) from t1, t2 where t1.timestamp_tz = t2.b;
 ----
-Conversion Error
+an explicit cast is required
 
 statement error
 select count(*) from t1, t2 where t1.interval = t2.b;
 ----
-Conversion Error
+an explicit cast is required
 
 # enums can be cast to blobs
 statement ok
-select count(*) from t1, t2 where t1.blob = t2.b;
+select count(*) from t1, t2 where t1.blob = t2.b::blob;
 
 statement ok
 drop table t1;
@@ -260,4 +258,4 @@ create table t2 as select * from values ('11001010110'::enum_bits), ('110'::enum
 statement error
 select count(*) from t1, t2 where t1.a = t2.b;
 ----
-Conversion Error
+an explicit cast is required
