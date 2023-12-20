@@ -854,6 +854,8 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformNumerical<uint64_t>(vals, result, count, options);
 	case LogicalTypeId::HUGEINT:
 		return TransformNumerical<hugeint_t>(vals, result, count, options);
+	case LogicalTypeId::UHUGEINT:
+		return TransformNumerical<uhugeint_t>(vals, result, count, options);
 	case LogicalTypeId::FLOAT:
 		return TransformNumerical<float>(vals, result, count, options);
 	case LogicalTypeId::DOUBLE:

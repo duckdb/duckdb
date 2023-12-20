@@ -264,6 +264,9 @@ void RowOperations::HeapGather(Vector &v, const idx_t &vcount, const SelectionVe
 	case PhysicalType::INT128:
 		TemplatedHeapGather<hugeint_t>(v, vcount, sel, key_locations);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedHeapGather<uhugeint_t>(v, vcount, sel, key_locations);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedHeapGather<float>(v, vcount, sel, key_locations);
 		break;

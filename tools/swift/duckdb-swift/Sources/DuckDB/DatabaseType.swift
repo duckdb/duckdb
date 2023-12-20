@@ -58,6 +58,8 @@ public extension DatabaseType {
   static let bigint = DatabaseType(rawValue: DUCKDB_TYPE_BIGINT.rawValue)
   /// Integer type castable to `HugeInt`
   static let hugeint = DatabaseType(rawValue: DUCKDB_TYPE_HUGEINT.rawValue)
+  /// Integer type castable to `UHugeInt`
+  static let uhugeint = DatabaseType(rawValue: DUCKDB_TYPE_UHUGEINT.rawValue)
   /// Unsigned integer type castable to `UInt8`
   static let utinyint = DatabaseType(rawValue: DUCKDB_TYPE_UTINYINT.rawValue)
   /// Unsigned integer type castable to `UInt16`
@@ -130,6 +132,7 @@ extension DatabaseType: CustomStringConvertible {
     case .time: return "\(Self.self).time"
     case .interval: return "\(Self.self).interval"
     case .hugeint: return "\(Self.self).hugeint"
+    case .uhugeint: return "\(Self.self).uhugeint"
     case .varchar: return "\(Self.self).varchar"
     case .blob: return "\(Self.self).blob"
     case .decimal: return "\(Self.self).decimal"

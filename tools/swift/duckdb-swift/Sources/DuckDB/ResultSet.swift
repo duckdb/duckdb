@@ -165,6 +165,12 @@ extension ResultSet {
   ) -> @Sendable (DBInt) -> IntHuge? {
     transformer(forColumn: columnIndex, to: type, fromType: .hugeint) { try? $0.unwrap(type) }
   }
+
+  func transformer(
+    forColumn columnIndex: DBInt, to type: UIntHuge.Type
+  ) -> @Sendable (DBInt) -> UIntHuge? {
+    transformer(forColumn: columnIndex, to: type, fromType: .uhugeint) { try? $0.unwrap(type) }
+  }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: String.Type
