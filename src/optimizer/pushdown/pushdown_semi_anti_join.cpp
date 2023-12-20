@@ -48,37 +48,27 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
 		}
 	}
-
+	auto left_bindings_actual = op->children[0]->GetColumnBindings();
+	auto right_bindings_actual = op->children[1]->GetColumnBindings();
 	for (idx_t i = 0; i < filters.size(); i++) {
-		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
-		if (side == JoinSide::LEFT) {
-			// bindings match left side
-			// we can push the filter into the left side
-			if (isComparison) {
-				// we MIGHT be able to push it down the RHS as well, but only if it is a comparison that matches the
-				// join predicates we use the FilterCombiner to figure this out add the expression to the FilterCombiner
-				filter_combiner.AddFilter(filters[i]->filter->Copy());
-			}
-			left_pushdown.filters.push_back(std::move(filters[i]));
-			// erase the filter from the list of filters
-			filters.erase(filters.begin() + i);
-			i--;
-		}
-		// TODO: These filters can be pushed into the right hand side as well.
+		// first create a copy of the filter
+		auto right_filter = make_uniq<Filter>();
+		right_filter->filter = filters[i]->filter->Copy();
+
+		// in the original filter, rewrite references to the result of the union into references to the left_index
+		ReplaceSemiAntiBindings(left_bindings_actual, *filters[i], *filters[i]->filter, join);
+		// in the copied filter, rewrite references to the result of the union into references to the right_index
+		ReplaceSemiAntiBindings(right_bindings_actual, *right_filter, *right_filter->filter, join);
+
+		// extract bindings again
+		filters[i]->ExtractBindings();
+		right_filter->ExtractBindings();
+
+		// move the filters into the child pushdown nodes
+		left_pushdown.filters.push_back(std::move(filters[i]));
+		right_pushdown.filters.push_back(std::move(right_filter));
 	}
 
-	// finally we check the FilterCombiner to see if there are any predicates we can push into the RHS
-	// we only added (1) predicates that have JoinSide::BOTH from the conditions, and
-	// (2) predicates that have JoinSide::LEFT from the filters
-	// we check now if this combination generated any new filters that are only on JoinSide::RIGHT
-	// this happens if, e.g. a join condition is (i=a) and there is a filter (i=500), we can then push the filter
-	// (a=500) into the RHS
-	filter_combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
-		if (JoinSide::GetJoinSide(*filter, left_bindings, right_bindings) == JoinSide::RIGHT) {
-			right_pushdown.AddFilter(std::move(filter));
-		}
-	});
-	right_pushdown.GenerateFilters();
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
 

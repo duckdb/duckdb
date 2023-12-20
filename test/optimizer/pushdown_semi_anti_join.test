@@ -71,7 +71,7 @@ explain select * from ((select 43) tbl(i) ANTI JOIN (select 42) tbl2(u) on (i=u)
 logical_opt	<!REGEX>:.*ANTI.*
 
 query I
-select * from (select 42) tbl(a) SEMI JOIN (select 42) tbl2(b) on (a=b);
+select * from (select 42) tbl(a) SEMI JOIN (select 43) tbl2(b) on (a=b) where a = 42;
 ----
 42
 
