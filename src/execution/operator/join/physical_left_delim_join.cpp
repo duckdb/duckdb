@@ -121,18 +121,17 @@ void PhysicalLeftDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 	child_meta_pipeline.Build(*children[0]);
 
-	if (type == PhysicalOperatorType::LEFT_DELIM_JOIN) {
-		// recurse into the actual join
-		// any pipelines in there depend on the main pipeline
-		// any scan of the duplicate eliminated data on the RHS depends on this pipeline
-		// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
-		auto &state = meta_pipeline.GetState();
-		for (auto &delim_scan : delim_scans) {
-			state.delim_join_dependencies.insert(
-			    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
-		}
-		join->BuildPipelines(current, meta_pipeline);
+	D_ASSERT(type == PhysicalOperatorType::LEFT_DELIM_JOIN);
+	// recurse into the actual join
+	// any pipelines in there depend on the main pipeline
+	// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+	// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
+	auto &state = meta_pipeline.GetState();
+	for (auto &delim_scan : delim_scans) {
+		state.delim_join_dependencies.insert(
+		    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
+	join->BuildPipelines(current, meta_pipeline);
 }
 
 } // namespace duckdb

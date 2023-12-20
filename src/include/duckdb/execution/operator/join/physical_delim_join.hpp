@@ -15,8 +15,8 @@ namespace duckdb {
 
 class PhysicalHashAggregate;
 
-//! PhysicalRightDelimJoin represents a join where the RHS will be duplicate eliminated and pushed into a
-//! PhysicalColumnDataScan in the LHS.
+//! PhysicalDelimJoin represents a join where either the LHS or RHS will be duplicate eliminated and pushed into a
+//! PhysicalColumnDataScan in the other side. Implementations are PhysicalLeftDelimJoin and PhysicalRightDelimJoin
 class PhysicalDelimJoin : public PhysicalOperator {
 public:
 	PhysicalDelimJoin(PhysicalOperatorType type, vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
