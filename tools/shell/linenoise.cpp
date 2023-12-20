@@ -175,6 +175,11 @@ struct searchMatch {
 	size_t match_end;
 };
 
+struct TerminalSize {
+	int ws_col = 0;
+	int ws_row = 0;
+};
+
 /* The linenoiseState structure represents the state during line editing.
  * We pass this state to functions implementing specific editing
  * functionalities. */
@@ -189,7 +194,7 @@ struct linenoiseState {
 	size_t old_cursor_rows;                  /* Previous refresh cursor position. */
 	size_t len;                              /* Current edited line length. */
 	size_t y_scroll;                         /* The y scroll position (multiline mode) */
-	struct winsize ws;                       /* Terminal size */
+	TerminalSize ws;                         /* Terminal size */
 	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
 	int history_index;                       /* The history index we are currently editing. */
 	bool clear_screen;                       /* Whether we are clearing the screen */
@@ -341,71 +346,114 @@ static int tryParseEnv(const char *env_var) {
 	return parseInt(s);
 }
 
-static int writeString(int ofd, const char *str) {
-	return write(ofd, str, strlen(str));
-}
+/* Use the ESC [6n escape sequence to query the cursor position
+ * and return it. On error -1 is returned, on success the position of the
+ * cursor. */
+static TerminalSize getCursorPosition(int ifd, int ofd) {
+	TerminalSize ws;
 
-static struct winsize tryMeasureTerminalSize(int ifd, int ofd) {
-	struct winsize ws;
-	char b[16];
-	memset(&ws, 0, sizeof(ws));
-	if (writeString(ofd, "\0337"           /* save position */
-	                     "\033[9979;9979H" /* move cursor to bottom right corner */
-	                     "\033[6n"         /* report position */
-	                     "\0338"           /* restore position */
-	                ) == -1) {
+	char buf[32];
+	unsigned int i = 0;
+
+	/* Report cursor location */
+	if (write(ofd, "\x1b[6n", 4) != 4) {
 		return ws;
 	}
-	int n = read(ifd, b, sizeof(b));
-	if (n < 0) {
-		return ws;
+
+	/* Read the response: ESC [ rows ; cols R */
+	while (i < sizeof(buf) - 1) {
+		if (read(ifd, buf + i, 1) != 1) {
+			break;
+		}
+		if (buf[i] == 'R') {
+			break;
+		}
+		i++;
 	}
-	if (b[0] != 033 || b[1] != '[' || b[n - 1] != 'R') {
+	buf[i] = '\0';
+
+	/* Parse it. */
+	if (buf[0] != ESC || buf[1] != '[') {
 		return ws;
 	}
 	int offset = 2;
 	int new_offset;
-	ws.ws_row = parseInt(b + offset, &new_offset);
+	ws.ws_row = parseInt(buf + offset, &new_offset);
 	offset += new_offset;
-	if (b[offset] != ';') {
+	if (buf[offset] != ';') {
 		return ws;
 	}
-	ws.ws_col = parseInt(b + offset);
+	offset++;
+	ws.ws_col = parseInt(buf + offset);
 	return ws;
+}
+
+static TerminalSize tryMeasureTerminalSize(int ifd, int ofd) {
+	/* ioctl() failed. Try to query the terminal itself. */
+	TerminalSize start, result;
+
+	/* Get the initial position so we can restore it later. */
+	start = getCursorPosition(ifd, ofd);
+	if (!start.ws_col) {
+		return result;
+	}
+
+	/* Go to bottom-right margin */
+	if (write(ofd, "\x1b[999;999f", 10) != 10) {
+		return result;
+	}
+	result = getCursorPosition(ifd, ofd);
+	if (!result.ws_col) {
+		return result;
+	}
+
+	/* Restore position. */
+	char seq[32];
+	snprintf(seq, 32, "\x1b[%d;%df", start.ws_row, start.ws_col);
+	if (write(ofd, seq, strlen(seq)) == -1) {
+		/* Can't recover... */
+	}
+	return result;
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80
  * if it fails. */
-static struct winsize getTerminalSize(int ifd, int ofd) {
-	struct winsize ws;
+static TerminalSize getTerminalSize(int ifd, int ofd) {
+	TerminalSize result;
 
 	// try ioctl first
-	ioctl(1, TIOCGWINSZ, &ws);
-	// try ROWS and COLUMNS env variables
-	if (!ws.ws_col) {
-		ws.ws_col = tryParseEnv("COLUMNS");
+	{
+		struct winsize ws;
+		ioctl(1, TIOCGWINSZ, &ws);
+		result.ws_col = ws.ws_col;
+		result.ws_row = ws.ws_row;
 	}
-	if (!ws.ws_row) {
-		ws.ws_row = tryParseEnv("ROWS");
+	// try ROWS and COLUMNS env variables
+	if (!result.ws_col) {
+		result.ws_col = tryParseEnv("COLUMNS");
+	}
+	if (!result.ws_row) {
+		result.ws_row = tryParseEnv("ROWS");
 	}
 	// if those fail measure the size by moving the cursor to the corner and fetching the position
-	if (!ws.ws_col || !ws.ws_row) {
-		struct winsize measured_size = tryMeasureTerminalSize(ifd, ofd);
+	if (!result.ws_col || !result.ws_row) {
+		TerminalSize measured_size = tryMeasureTerminalSize(ifd, ofd);
+		lndebug("measured size col %d,row %d -- ", measured_size.ws_row, measured_size.ws_col);
 		if (measured_size.ws_row) {
-			ws.ws_row = measured_size.ws_row;
+			result.ws_row = measured_size.ws_row;
 		}
 		if (measured_size.ws_col) {
-			ws.ws_col = measured_size.ws_col;
+			result.ws_col = measured_size.ws_col;
 		}
 	}
 	// if all else fails use defaults (80,24)
-	if (!ws.ws_col) {
-		ws.ws_col = 80;
+	if (!result.ws_col) {
+		result.ws_col = 80;
 	}
-	if (!ws.ws_row) {
-		ws.ws_row = 24;
+	if (!result.ws_row) {
+		result.ws_row = 24;
 	}
-	return ws;
+	return result;
 }
 
 /* Clear the screen. Used to handle ctrl+l */
@@ -571,7 +619,7 @@ static void abFree(struct abuf *ab) {
  * to the right of the prompt. */
 void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 	char seq[64];
-	if (hintsCallback && plen + l->len < l->ws.ws_col) {
+	if (hintsCallback && plen + l->len < size_t(l->ws.ws_col)) {
 		int color = -1, bold = 0;
 		char *hint = hintsCallback(l->buf, &color, &bold);
 		if (hint) {
@@ -1780,7 +1828,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		l.has_more_data = hasMoreData(l.ifd);
 		l.render = true;
 		if (mlmode && !l.has_more_data) {
-			struct winsize new_size = getTerminalSize(stdin_fd, stdout_fd);
+			TerminalSize new_size = getTerminalSize(stdin_fd, stdout_fd);
 			if (new_size.ws_col != l.ws.ws_col || new_size.ws_row != l.ws.ws_row) {
 				// terminal resize! re-compute max lines
 				l.ws = new_size;
