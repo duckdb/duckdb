@@ -137,16 +137,15 @@ private:
 	void DetectTypes();
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(CSVStateMachineSniffing &candidate, const Value &value, const LogicalType &sql_type);
-	void SetDateFormat(CSVStateMachineSniffing &candidate, const string &format_specifier,
-	                   const LogicalTypeId &sql_type);
+	bool TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type);
+	void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
 
 	//! Function that initialized the necessary variables used for date and timestamp detection
-	void InitializeDateAndTimeStampDetection(CSVStateMachineSniffing &candidate, const string &separator,
+	void InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
 	                                         const LogicalType &sql_type);
 	//! Functions that performs detection for date and timestamp formats
-	void DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate, const LogicalType &sql_type,
-	                                   const string &separator, Value &dummy_val);
+	void DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const LogicalType &sql_type, const string &separator,
+	                                   Value &dummy_val);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types

@@ -11,13 +11,13 @@
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/execution/operator/scan/csv/parser/scanner_boundary.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/string_value_scanner.hpp"
 
 namespace duckdb {
 
 class ColumnCountResult : public ScannerResult {
 public:
 	idx_t column_counts[STANDARD_VECTOR_SIZE];
-	idx_t cur_rows;
 
 	CSVStateMachine *state_machine;
 	//! Adds a Value to the result
@@ -26,10 +26,6 @@ public:
 	static inline bool AddRow(ColumnCountResult &result, const char current_char, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(ColumnCountResult &result);
-
-	bool Empty();
-
-	idx_t Size();
 
 	idx_t &operator[](size_t index);
 };
@@ -42,6 +38,8 @@ public:
 	ColumnCountResult *ParseChunk() override;
 
 	ColumnCountResult *GetResult() override;
+
+	StringValueScanner UpgradeToStringValueScanner();
 
 private:
 	void Process() override;

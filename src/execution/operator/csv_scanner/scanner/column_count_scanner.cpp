@@ -3,15 +3,7 @@
 namespace duckdb {
 
 void ColumnCountResult::AddValue(ColumnCountResult &result, const char current_char, const idx_t buffer_pos) {
-	result.column_counts[result.cur_rows]++;
-}
-
-bool ColumnCountResult::Empty() {
-	return cur_rows == 0;
-}
-
-idx_t ColumnCountResult::Size() {
-	return cur_rows + 1;
+	result.column_counts[result.result_position]++;
 }
 
 idx_t &ColumnCountResult::operator[](size_t index) {
@@ -19,32 +11,36 @@ idx_t &ColumnCountResult::operator[](size_t index) {
 }
 
 bool ColumnCountResult::AddRow(ColumnCountResult &result, const char current_char, const idx_t buffer_pos) {
-	result.column_counts[result.cur_rows++]++;
+	result.column_counts[result.result_position++]++;
 
 	// This is hacky, should be probably moved somewhere.
 	result.state_machine->carry_on_separator = current_char == '\r' || result.state_machine->carry_on_separator;
 	result.state_machine->single_record_separator =
 	    current_char == '\n' || result.state_machine->single_record_separator;
 
-	if (result.cur_rows >= STANDARD_VECTOR_SIZE) {
+	if (result.result_position >= STANDARD_VECTOR_SIZE) {
 		// We sniffed enough rows
 		return true;
 	}
 }
 
 void ColumnCountResult::Kaput(ColumnCountResult &result) {
-	result.cur_rows = 0;
+	result.result_position = 0;
 }
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        shared_ptr<CSVStateMachine> state_machine)
     : BaseScanner(buffer_manager, state_machine), column_count(1) {
-	result.cur_rows = 0;
+	result.result_position = 0;
 	result.state_machine = state_machine.get();
 };
 
+StringValueScanner ColumnCountScanner::UpgradeToStringValueScanner() {
+	return StringValueScanner(buffer_manager, state_machine);
+}
+
 ColumnCountResult *ColumnCountScanner::ParseChunk() {
-	result.cur_rows = 0;
+	result.result_position = 0;
 	column_count = 1;
 	ParseChunkInternal();
 	return &result;
@@ -64,12 +60,12 @@ void ColumnCountScanner::Process() {
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
-	if (result.cur_rows == STANDARD_VECTOR_SIZE) {
+	if (result.result_position == STANDARD_VECTOR_SIZE) {
 		// We are done
 		return;
 	}
 	// We run until we have a full chunk, or we are done scanning
-	while (!Finished() && result.cur_rows < STANDARD_VECTOR_SIZE) {
+	while (!Finished() && result.result_position < STANDARD_VECTOR_SIZE) {
 		if (pos.pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
 			pos.pos = 0;

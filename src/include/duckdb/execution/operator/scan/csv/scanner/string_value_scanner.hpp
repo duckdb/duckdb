@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/scan/csv/scanner/base_scanner.hpp
+// duckdb/execution/operator/scan/csv/scanner/string_value_scanner.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,8 +21,7 @@ public:
 	idx_t vector_size;
 
 	idx_t last_position;
-	idx_t cur_value_idx;
-
+	idx_t column_count;
 	char *buffer_ptr;
 
 	//! Adds a Value to the result
@@ -31,6 +30,8 @@ public:
 	static inline bool AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(StringValueResult &result);
+
+	idx_t NumberOfRows();
 
 	//! Returns a DataChunk
 };

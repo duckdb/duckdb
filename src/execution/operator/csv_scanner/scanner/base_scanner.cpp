@@ -2,6 +2,14 @@
 
 namespace duckdb {
 
+idx_t ScannerResult::Size() {
+	return result_position + 1;
+}
+
+bool ScannerResult::Empty() {
+	return result_position == 0;
+}
+
 bool ScannerPosition::InBoundary(const ScannerBoundary &boundary) {
 	return boundary.file_idx == file_id && boundary.buffer_idx == buffer_id && pos < boundary.buffer_pos;
 }

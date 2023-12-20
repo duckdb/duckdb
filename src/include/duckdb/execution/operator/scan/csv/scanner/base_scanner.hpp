@@ -25,7 +25,12 @@ struct ScannerPosition {
 	bool InBoundary(const ScannerBoundary &boundary);
 };
 
-class ScannerResult {};
+class ScannerResult {
+public:
+	idx_t result_position = 0;
+	idx_t Size();
+	bool Empty();
+};
 
 //! This is the base of our CSV scanners.
 //! Scanners differ on what they are used for, and consequently have different performance benefits.
