@@ -290,8 +290,26 @@ struct SortedAggregateState {
 		offset = 0;
 	}
 
+	void Swap(SortedAggregateState &other) {
+		std::swap(count, other.count);
+
+		std::swap(arguments, other.arguments);
+		std::swap(arguments_append, other.arguments_append);
+		std::swap(ordering, other.ordering);
+		std::swap(ordering_append, other.ordering_append);
+
+		std::swap(sort_chunk, other.sort_chunk);
+		std::swap(arg_chunk, other.arg_chunk);
+
+		std::swap(sort_linked, other.sort_linked);
+		std::swap(arg_linked, other.arg_linked);
+	}
+
 	void Absorb(const SortedAggregateBindData &order_bind, SortedAggregateState &other) {
 		if (!other.count) {
+			return;
+		} else if (!count) {
+			Swap(other);
 			return;
 		}
 
