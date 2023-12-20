@@ -289,6 +289,7 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
 else:
     setup_requires = []
 
+
 # data files need to be formatted as [(directory, [files...]), (directory2, [files...])]
 # no clue why the setup script can't do this automatically, but hey
 def setup_data_files(data_files):
