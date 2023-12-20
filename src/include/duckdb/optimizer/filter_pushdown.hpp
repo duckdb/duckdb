@@ -65,6 +65,9 @@ private:
 	// Pushdown a left join
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                             unordered_set<idx_t> &right_bindings);
+
+	unique_ptr<LogicalOperator> PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
+	                                              unordered_set<idx_t> &right_bindings);
 	// Pushdown a mark join
 	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                             unordered_set<idx_t> &right_bindings);
