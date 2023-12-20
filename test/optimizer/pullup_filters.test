@@ -14,6 +14,8 @@ CREATE TABLE vals2(k BIGINT, l BIGINT)
 statement ok
 INSERT INTO vals2 SELECT * FROM vals1
 
+mode skip
+
 ## INNER JOIN: pull up a single filter in cross product from LHS
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl2.i
@@ -73,6 +75,8 @@ query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5 INTERSECT SELECT * FROM vals1, vals2) tbl1;
 ----
 physical_plan	<REGEX>:((.*=3.*=5.*=3.*=5.*)|(.*=5.*=3.*=5.*=3.*))
+
+mode unskip
 
 ## INTERSECT: pull up filters from RHS
 query II

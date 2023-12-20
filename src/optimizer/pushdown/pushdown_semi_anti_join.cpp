@@ -9,17 +9,42 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static void ReplaceSemiAntiBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
+static void ReplaceSemiAntiBindings(vector<ColumnBinding> bindings, Filter &filter, Expression &expr,
                                     LogicalJoin &join) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto left_bindings = join.children[0]->GetColumnBindings();
+		auto right_bindings = join.children[1]->GetColumnBindings();
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		auto join_table_index = join.GetTableIndex();
-		D_ASSERT(std::count(join_table_index.begin(), join_table_index.end(), colref.binding.table_index) != 0);
+		vector<idx_t> table_indexes;
+
 		D_ASSERT(colref.depth == 0);
 
-		// rewrite the binding by looking into the bound_tables list of the subquery
-		colref.binding = bindings[colref.binding.column_index];
-		filter.bindings.insert(colref.binding.table_index);
+		if (std::find(bindings.begin(), bindings.end(), colref.binding) != bindings.end()) {
+			//
+			return;
+		}
+
+		// colref binding can't be found in the given bindings, which means it was created
+		// for other side of the join.
+		if (std::find(left_bindings.begin(), left_bindings.end(), colref.binding) != left_bindings.end()) {
+			// the original filter came from the left side, push it down on the right
+			for (idx_t i = 0; i < left_bindings.size(); i++) {
+				if (left_bindings[i] == colref.binding) {
+					colref.binding = right_bindings[i];
+					filter.bindings.insert(colref.binding.table_index);
+					break;
+				}
+			}
+		} else if (std::find(right_bindings.begin(), right_bindings.end(), colref.binding) != right_bindings.end()) {
+			// the original filter came from the right side, push it down the left
+			for (idx_t i = 0; i < right_bindings.size(); i++) {
+				if (right_bindings[i] == colref.binding) {
+					colref.binding = left_bindings[i];
+					filter.bindings.insert(colref.binding.table_index);
+					break;
+				}
+			}
+		}
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(
@@ -50,22 +75,27 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 	}
 	auto left_bindings_actual = op->children[0]->GetColumnBindings();
 	auto right_bindings_actual = op->children[1]->GetColumnBindings();
+	D_ASSERT(left_bindings_actual.size() == right_bindings_actual.size());
+
+	// take every filter, and attempt to push it down the left and the right side.
 	for (idx_t i = 0; i < filters.size(); i++) {
 		// first create a copy of the filter
 		auto right_filter = make_uniq<Filter>();
+		auto left_filter = make_uniq<Filter>();
 		right_filter->filter = filters[i]->filter->Copy();
+		left_filter->filter = filters[i]->filter->Copy();
 
 		// in the original filter, rewrite references to the result of the union into references to the left_index
-		ReplaceSemiAntiBindings(left_bindings_actual, *filters[i], *filters[i]->filter, join);
+		ReplaceSemiAntiBindings(op->children[0]->GetColumnBindings(), *left_filter, *left_filter->filter, join);
 		// in the copied filter, rewrite references to the result of the union into references to the right_index
-		ReplaceSemiAntiBindings(right_bindings_actual, *right_filter, *right_filter->filter, join);
+		ReplaceSemiAntiBindings(op->children[1]->GetColumnBindings(), *right_filter, *right_filter->filter, join);
 
 		// extract bindings again
-		filters[i]->ExtractBindings();
+		left_filter->ExtractBindings();
 		right_filter->ExtractBindings();
 
 		// move the filters into the child pushdown nodes
-		left_pushdown.filters.push_back(std::move(filters[i]));
+		left_pushdown.filters.push_back(std::move(left_filter));
 		right_pushdown.filters.push_back(std::move(right_filter));
 	}
 
@@ -101,7 +131,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 			break;
 		}
 	}
-	return PushFinalFilters(std::move(op));
+	return std::move(op);
 }
 
 } // namespace duckdb

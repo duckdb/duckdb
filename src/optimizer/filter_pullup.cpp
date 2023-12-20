@@ -39,10 +39,12 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	switch (join.join_type) {
 	case JoinType::INNER:
 		return PullupInnerJoin(std::move(op));
-	case JoinType::LEFT:
 	case JoinType::ANTI:
-	case JoinType::SEMI: {
+	case JoinType::LEFT: {
 		return PullupFromLeft(std::move(op));
+	}
+	case JoinType::SEMI: {
+		return PullupBothSide(std::move(op));
 	}
 	default:
 		// unsupported join type: call children pull up
