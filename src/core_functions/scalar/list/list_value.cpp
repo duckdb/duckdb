@@ -43,6 +43,9 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 			throw BinderException("Cannot create a list of types %s and %s - an explicit cast is required", child_type.ToString(), arg_type.ToString());
 		}
 	}
+	if (child_type.id() == LogicalTypeId::STRING_LITERAL) {
+		child_type = LogicalType::VARCHAR;
+	}
 
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;

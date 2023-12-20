@@ -682,6 +682,12 @@ static LogicalType ReturnType(const LogicalType &type) {
 
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// left and right are not equal
+	// for enums, match the varchar rules
+	if (left.id() == LogicalTypeId::ENUM) {
+		return LogicalType::TryGetMaxLogicalType(LogicalType::VARCHAR, right, result);
+	} else if (right.id() == LogicalTypeId::ENUM) {
+		return LogicalType::TryGetMaxLogicalType(left, LogicalType::VARCHAR, result);
+	}
 	// NULL/string literals/unknown (parameter) types always take the other type
 	LogicalTypeId other_types[] = {
 		LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL
@@ -694,12 +700,6 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 			result = ReturnType(left);
 			return true;
 		}
-	}
-	// for enums, match the varchar rules
-	if (left.id() == LogicalTypeId::ENUM) {
-		return LogicalType::TryGetMaxLogicalType(LogicalType::VARCHAR, right, result);
-	} else if (right.id() == LogicalTypeId::ENUM) {
-		return LogicalType::TryGetMaxLogicalType(left, LogicalType::VARCHAR, result);
 	}
 	// for other types - use implicit cast rules to check if we can combine the types
 	if (CastRules::ImplicitCast(left, right) >= 0) {

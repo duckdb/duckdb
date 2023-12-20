@@ -25,6 +25,8 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::ARRAY:
 		return 160;
+	case LogicalTypeId::ANY:
+		return 1;
 	default:
 		return 110;
 	}
@@ -201,17 +203,13 @@ static int64_t ImplicitCastEnum(const LogicalType &to) {
 }
 
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
-	if (from.id() == LogicalTypeId::SQLNULL) {
+	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY) {
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
 	}
 	if (from.id() == LogicalTypeId::UNKNOWN) {
 		// parameter expression can be cast to anything for no cost
 		return 0;
-	}
-	if (to.id() == LogicalTypeId::ANY) {
-		// anything can be cast to ANY type for (almost no) cost
-		return 1;
 	}
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible
