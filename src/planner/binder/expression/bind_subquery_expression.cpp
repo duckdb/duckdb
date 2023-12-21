@@ -93,7 +93,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		if (!LogicalType::TryGetMaxLogicalType(child_type, bound_node->types[0], compare_type)) {
 			throw BinderException(binder.FormatError(
 			    expr, StringUtil::Format(
-			              "Cannot mix values of type %s and %s in ANY/ALL clause - an explicit cast is required",
+			              "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
 			              child_type.ToString(), bound_node->types[0])));
 		}
 		child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);

@@ -133,7 +133,8 @@ LogicalType BoundComparisonExpression::BindComparison(const LogicalType &left_ty
 }
 
 LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
-	if (expr.return_type == LogicalTypeId::VARCHAR && expr.expression_class == ExpressionClass::BOUND_CONSTANT) {
+	if (expr.return_type == LogicalTypeId::VARCHAR && expr.expression_class == ExpressionClass::BOUND_CONSTANT &&
+	    StringType::GetCollation(expr.return_type).empty()) {
 		return LogicalTypeId::STRING_LITERAL;
 	}
 	return expr.return_type;
