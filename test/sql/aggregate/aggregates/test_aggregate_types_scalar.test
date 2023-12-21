@@ -145,7 +145,7 @@ statement ok
 INSERT INTO test_val VALUES(1), (2), (3), (3), (2)
 
 query T
-SELECT STRING_AGG(DISTINCT val ORDER BY val DESC) from test_val;
+SELECT STRING_AGG(DISTINCT val::VARCHAR ORDER BY val DESC) from test_val;
 ----
 3,2,1
 
