@@ -41,7 +41,7 @@ BufferPool &BufferManager::GetBufferPool() {
 	throw InternalException("This type of BufferManager does not have a buffer pool");
 }
 
-ConcurrentOperatorMemoryManager &BufferManager::GetConcurrentOperatorMemoryManager() {
+TemporaryMemoryManager &BufferManager::GetConcurrentOperatorMemoryManager() {
 	throw NotImplementedException("This type of BufferManager does not have a ConcurrentOperatorMemoryManager");
 }
 

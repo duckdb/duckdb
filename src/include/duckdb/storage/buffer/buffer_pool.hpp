@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class ConcurrentOperatorMemoryManager;
+class TemporaryMemoryManager;
 struct EvictionQueue;
 
 struct BufferEvictionNode {
@@ -55,7 +55,7 @@ public:
 
 	idx_t GetMaxMemory() const;
 
-	ConcurrentOperatorMemoryManager &GetConcurrentOperatorMemoryManager();
+	TemporaryMemoryManager &GetConcurrentOperatorMemoryManager();
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
@@ -86,8 +86,8 @@ protected:
 	unique_ptr<EvictionQueue> queue;
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
 	atomic<uint32_t> queue_insertions;
-	//! Memory manager for concurrent operators
-	unique_ptr<ConcurrentOperatorMemoryManager> concurrent_operator_memory_manager;
+	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
+	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
 };
 
 } // namespace duckdb

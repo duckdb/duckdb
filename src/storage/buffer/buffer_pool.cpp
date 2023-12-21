@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
-#include "duckdb/storage/concurrent_operator_memory_manager.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
 
@@ -35,8 +35,8 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 }
 
 BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0) {
-	concurrent_operator_memory_manager = make_uniq<ConcurrentOperatorMemoryManager>(*this);
+    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0),
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
 }
 BufferPool::~BufferPool() {
 }
@@ -65,8 +65,8 @@ idx_t BufferPool::GetMaxMemory() const {
 	return maximum_memory;
 }
 
-ConcurrentOperatorMemoryManager &BufferPool::GetConcurrentOperatorMemoryManager() {
-	return *concurrent_operator_memory_manager;
+TemporaryMemoryManager &BufferPool::GetConcurrentOperatorMemoryManager() {
+	return *temporary_memory_manager;
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
