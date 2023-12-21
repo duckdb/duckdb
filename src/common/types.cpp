@@ -700,7 +700,9 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		}
 	}
 	// for other types - use implicit cast rules to check if we can combine the types
-	if (CastRules::ImplicitCast(left, right) >= 0) {
+	auto left_to_right_cost = CastRules::ImplicitCast(left, right);
+	auto right_to_left_cost = CastRules::ImplicitCast(right, left);
+	if (left_to_right_cost >= 0 && (left_to_right_cost < right_to_left_cost || right_to_left_cost < 0)) {
 		// we can implicitly cast left to right, return right
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (right.id() == LogicalTypeId::DECIMAL) {
@@ -710,7 +712,7 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		}
 		return true;
 	}
-	if (CastRules::ImplicitCast(right, left) >= 0) {
+	if (right_to_left_cost >= 0) {
 		// we can implicitly cast right to left, return left
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
 		if (left.id() == LogicalTypeId::DECIMAL) {

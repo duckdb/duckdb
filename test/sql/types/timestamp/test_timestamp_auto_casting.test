@@ -30,3 +30,14 @@ SELECT
 FROM timestamps
 ----
 false	false	false	false	false	false	false	false	false	false	false	false
+
+# we always prefer the timestamp with the highest precision when auto-casting
+query I
+SELECT typeof([TIMESTAMP '2000-01-01 01:12:23.123456', TIMESTAMP_NS '2000-01-01 01:12:23.123456'])
+----
+TIMESTAMP_NS[]
+
+query I
+SELECT typeof([TIMESTAMP_NS '2000-01-01 01:12:23.123456', TIMESTAMP '2000-01-01 01:12:23.123456'])
+----
+TIMESTAMP_NS[]
