@@ -15,6 +15,12 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 120;
 	case LogicalTypeId::TIMESTAMP:
 		return 120;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return 123;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return 122;
+	case LogicalTypeId::TIMESTAMP_NS:
+		return 121;
 	case LogicalTypeId::VARCHAR:
 		return 149;
 	case LogicalTypeId::DECIMAL:
@@ -202,6 +208,45 @@ static int64_t ImplicitCastEnum(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastTimestampSec(const LogicalType &to) {
+	switch (to.id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+			return TargetTypeCost(to);
+		default:
+			return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestampMS(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestampNS(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestamp(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch(type.id()) {
 	case LogicalTypeId::STRUCT:
@@ -364,18 +409,6 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 	}
 
-	if ((from.id() == LogicalTypeId::TIMESTAMP_SEC || from.id() == LogicalTypeId::TIMESTAMP_MS ||
-	     from.id() == LogicalTypeId::TIMESTAMP_NS) &&
-	    to.id() == LogicalTypeId::TIMESTAMP) {
-		//! Any timestamp type can be converted to the default (us) type at low cost
-		return 101;
-	}
-	if ((to.id() == LogicalTypeId::TIMESTAMP_SEC || to.id() == LogicalTypeId::TIMESTAMP_MS ||
-	     to.id() == LogicalTypeId::TIMESTAMP_NS) &&
-	    from.id() == LogicalTypeId::TIMESTAMP) {
-		//! Any timestamp type can be converted to the default (us) type at low cost
-		return 100;
-	}
 	switch (from.id()) {
 	case LogicalTypeId::TINYINT:
 		return ImplicitCastTinyint(to);
@@ -405,6 +438,14 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastDecimal(to);
 	case LogicalTypeId::ENUM:
 		return ImplicitCastEnum(to);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return ImplicitCastTimestampSec(to);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return ImplicitCastTimestampMS(to);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return ImplicitCastTimestampNS(to);
+	case LogicalTypeId::TIMESTAMP:
+		return ImplicitCastTimestamp(to);
 	default:
 		return -1;
 	}
