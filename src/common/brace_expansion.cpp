@@ -15,7 +15,7 @@ bool BraceExpansion::has_brace_expansion(const string &pattern) {
 				break;
 			}
 			braceCount++;
-			// Detects non-matching closing brace
+		// Detects non-matching closing brace
 		} else if (ch == '}') {
 			if (braceCount <= 0) {
 				break;
