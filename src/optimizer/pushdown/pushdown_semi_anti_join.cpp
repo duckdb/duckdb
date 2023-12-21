@@ -70,7 +70,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 	// bindings are not guaranteed to be the same size.
 	// conditions can be specified like so select * from t1 semi join t2 on (t1.a + t1.b = t2.a);
 	// The left bindings are the whole table, while the right bindings are just for a
-//	D_ASSERT(left_bindings_actual.size() == right_bindings_actual.size());
+	//	D_ASSERT(left_bindings_actual.size() == right_bindings_actual.size());
 
 	// take every filter, and attempt to push it down the left and the right side.
 	for (idx_t i = 0; i < filters.size(); i++) {
@@ -96,9 +96,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 			right_filter->ExtractBindings();
 			right_pushdown.filters.push_back(std::move(right_filter));
 		}
-
-
-
 	}
 
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
