@@ -111,7 +111,7 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 }
 
 unique_ptr<FunctionData> ApproxCountDistinctAnyBind(ClientContext &context, AggregateFunction &function,
-															  vector<unique_ptr<Expression>> &arguments) {
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	function.arguments[0] = LogicalType::VARCHAR;
 	return nullptr;
 }
@@ -124,7 +124,7 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctSimpleUpdateFunction,
-		input_type.id() == LogicalTypeId::ANY ? ApproxCountDistinctAnyBind : nullptr,
+	    input_type.id() == LogicalTypeId::ANY ? ApproxCountDistinctAnyBind : nullptr,
 	    AggregateFunction::StateDestroy<ApproxDistinctCountState, ApproxCountDistinctFunction>);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;

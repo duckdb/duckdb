@@ -13,14 +13,14 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 102;
 	case LogicalTypeId::HUGEINT:
 		return 120;
+	case LogicalTypeId::TIMESTAMP_NS:
+		return 119;
 	case LogicalTypeId::TIMESTAMP:
 		return 120;
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return 123;
 	case LogicalTypeId::TIMESTAMP_MS:
-		return 122;
-	case LogicalTypeId::TIMESTAMP_NS:
 		return 121;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return 122;
 	case LogicalTypeId::VARCHAR:
 		return 149;
 	case LogicalTypeId::DECIMAL:
@@ -210,12 +210,12 @@ static int64_t ImplicitCastEnum(const LogicalType &to) {
 
 static int64_t ImplicitCastTimestampSec(const LogicalType &to) {
 	switch (to.id()) {
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_NS:
-			return TargetTypeCost(to);
-		default:
-			return -1;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	default:
+		return -1;
 	}
 }
 
@@ -232,6 +232,7 @@ static int64_t ImplicitCastTimestampMS(const LogicalType &to) {
 static int64_t ImplicitCastTimestampNS(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
+		// we allow casting ALL timestamps, including nanosecond ones, to TimestampNS
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -248,7 +249,7 @@ static int64_t ImplicitCastTimestamp(const LogicalType &to) {
 }
 
 bool LogicalTypeIsValid(const LogicalType &type) {
-	switch(type.id()) {
+	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::LIST:
@@ -294,7 +295,6 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 	default:
 		return true;
 	}
-
 }
 
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {

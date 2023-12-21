@@ -209,7 +209,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		                      "same number of result columns");
 	}
 
-
 	if (result->setop_type == SetOperationType::UNION_BY_NAME) {
 		BuildUnionByNameInfo(*result, can_contain_nulls);
 	} else {
@@ -217,7 +216,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		for (idx_t i = 0; i < result->left->types.size(); i++) {
 			LogicalType result_type;
 			if (!LogicalType::TryGetMaxLogicalType(result->left->types[i], result->right->types[i], result_type)) {
-				throw BinderException("Cannot apply set operation %s to types %s and %s - an explicit cast is required", EnumUtil::ToString(statement.setop_type), result->left->types[i], result->right->types[i]);
+				throw BinderException("Cannot apply set operation %s to types %s and %s - an explicit cast is required",
+				                      EnumUtil::ToString(statement.setop_type), result->left->types[i],
+				                      result->right->types[i]);
 			}
 			if (!can_contain_nulls) {
 				if (ExpressionBinder::ContainsNullType(result_type)) {

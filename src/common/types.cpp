@@ -689,10 +689,8 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		return LogicalType::TryGetMaxLogicalType(left, LogicalType::VARCHAR, result);
 	}
 	// NULL/string literals/unknown (parameter) types always take the other type
-	LogicalTypeId other_types[] = {
-		LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL
-	};
-	for(auto & other_type : other_types) {
+	LogicalTypeId other_types[] = {LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL};
+	for (auto &other_type : other_types) {
 		if (left.id() == other_type) {
 			result = ReturnType(right);
 			return true;

@@ -43,7 +43,9 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 		auto const &child_type = ListType::GetChildType(list);
 		LogicalType max_child_type;
 		if (!LogicalType::TryGetMaxLogicalType(child_type, value, max_child_type)) {
-			throw BinderException("Cannot get list_position of element of type %s in a list of type %s[] - an explicit cast is required", value.ToString(), child_type.ToString());
+			throw BinderException(
+			    "Cannot get list_position of element of type %s in a list of type %s[] - an explicit cast is required",
+			    value.ToString(), child_type.ToString());
 		}
 		auto list_type = LogicalType::LIST(max_child_type);
 
