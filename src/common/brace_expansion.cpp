@@ -81,7 +81,7 @@ vector<string> BraceExpansion::brace_expansion(const string &pattern) {
 		} else {
 			throw InvalidInputException("Not a vaild brace expansion file name");
 		}
-		// comma expansion
+	// comma expansion
 	} else {
 		string item;
 		while (std::getline(contentStream, item, ',')) {
