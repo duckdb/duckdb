@@ -210,40 +210,6 @@ void CSVSniffer::DetectTypes() {
 			true_line_start = 0;
 			true_pos = 0;
 			auto &tuples = *candidate.ParseChunk();
-			// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
-			// The true line where parsing starts in reference to the csv file
-
-			// The start point of the tuples
-			// FIXME: We can skip empty lines directly in the parsing
-			//			idx_t tuple_true_start = 0;
-			//			while (tuple_true_start < tuples.size()) {
-			//				if (tuples[tuple_true_start].values.empty() ||
-			//				    (tuples[tuple_true_start].values.size() == 1 && tuples[tuple_true_start].values[0].IsNull()))
-			//{ 					true_line_start = tuples[tuple_true_start].line_number; 					true_pos = tuples[tuple_true_start].position;
-			//					tuple_true_start++;
-			//				} else {
-			//					break;
-			//				}
-			//			}
-			// FIXME: We can skip dirty lines directly in the parsing
-			// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
-			//			while (tuple_true_start < tuples.size()) {
-			//				if (tuples[tuple_true_start].values.size() < max_columns_found && !options.null_padding) {
-			//					true_line_start = tuples[tuple_true_start].line_number;
-			//					true_pos = tuples[tuple_true_start].position;
-			//					tuple_true_start++;
-			//				} else {
-			//					break;
-			//				}
-			//			}
-			//			if (tuple_true_start < tuples.size()) {
-			//				true_pos = tuples[tuple_true_start].position;
-			//			}
-			//			if (tuple_true_start > 0) {
-			//				tuples.erase(tuples.begin(), tuples.begin() + tuple_true_start);
-			//			}
-			//		} while (tuples.empty() && !candidate->Finished());
-
 			idx_t row_idx = 0;
 			if (tuples.NumberOfRows() > 1 &&
 			    (!options.dialect_options.header.IsSetByUser() ||
@@ -251,13 +217,9 @@ void CSVSniffer::DetectTypes() {
 				// This means we have more than one row, hence we can use the first row to detect if we have a header
 				row_idx = 1;
 			}
-			if (!tuples.empty()) {
-				best_start_without_header = tuples[0].position - true_pos;
-			}
-
 			// First line where we start our type detection
 			const idx_t start_idx_detection = row_idx;
-			for (; row_idx < tuples.size(); row_idx++) {
+			for (; row_idx < tuples.Size(); row_idx++) {
 				for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
 					if (options.ignore_errors && col >= max_columns_found) {
 						// ignore this, since it's an error.

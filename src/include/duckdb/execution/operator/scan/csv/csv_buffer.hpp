@@ -22,11 +22,11 @@ public:
 	                const bool is_final_buffer_p, idx_t csv_global_state_p, idx_t start_position_p, idx_t file_idx_p,
 	                idx_t buffer_index_p)
 	    : handle(std::move(handle_p)), actual_size(actual_size_p), is_first_buffer(is_first_buffer_p),
-	      is_last_buffer(is_final_buffer_p), csv_global_start(csv_global_state_p), start_position(start_position_p),
-	      file_idx(file_idx_p), buffer_idx(buffer_index_p) {};
+	      is_last_buffer(is_final_buffer_p), csv_global_start(csv_global_state_p), file_idx(file_idx_p),
+	      buffer_idx(buffer_index_p) {};
 	CSVBufferHandle()
-	    : actual_size(0), is_first_buffer(false), is_last_buffer(false), csv_global_start(0), start_position(0),
-	      file_idx(0), buffer_idx(0) {};
+	    : actual_size(0), is_first_buffer(false), is_last_buffer(false), csv_global_start(0), file_idx(0),
+	      buffer_idx(0) {};
 	~CSVBufferHandle() {
 		// unpinning the buffer should be magically done, i dont want to deal with this outside here
 		//		if (cur_buffer_idx > 0) {
@@ -39,7 +39,7 @@ public:
 	const bool is_first_buffer;
 	const bool is_last_buffer;
 	const idx_t csv_global_start;
-	const idx_t start_position;
+	//	const idx_t start_position;
 	const idx_t file_idx;
 	const idx_t buffer_idx;
 	inline char *Ptr() {

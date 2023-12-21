@@ -2,6 +2,24 @@
 
 namespace duckdb {
 
+StringValueResult::StringValueResult(CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle)
+    : number_of_columns(state_machine.dialect_options.num_cols), null_padding(state_machine.options.null_padding),
+      ignore_errors(state_machine.options.ignore_errors) {
+	// Vector information
+	vector_size = number_of_columns * STANDARD_VECTOR_SIZE;
+	vector = make_uniq<Vector>(LogicalType::VARCHAR, vector_size);
+	vector_ptr = FlatVector::GetData<string_t>(*vector);
+	validity_mask = &FlatVector::Validity(*vector);
+
+	// Buffer Information
+	buffer_ptr = buffer_handle.Ptr();
+	last_position = 0;
+
+	// Current Result information
+	result_position = 0;
+
+}
+
 void StringValueResult::AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
 	result.vector_ptr[result.result_position++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
@@ -9,9 +27,28 @@ void StringValueResult::AddValue(StringValueResult &result, const char current_c
 }
 
 bool StringValueResult::AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
+	// We add the value
 	result.vector_ptr[result.result_position++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
+
+	// We need to check if we are getting the correct number of columns here.
+	// If columns are correct, we add it, and that's it.
 	result.last_position = buffer_pos;
+	if (result.result_position % result.number_of_columns != 0) {
+		// If the columns are incorrect:
+		// 1) if null_padding is on we null pad it
+		if (result.null_padding) {
+			while (result.result_position % result.number_of_columns == 0) {
+				result.validity_mask->SetInvalid(result.result_position++);
+			}
+		} else if (result.ignore_errors) {
+			// 2) if ignore_errors is on, we invalidate the whole line.
+			result.result_position -= result.result_position % result.number_of_columns;
+		} else {
+			// 3) otherwise we error.
+			throw InvalidInputException("I'm a baddie");
+		}
+	}
 
 	if (result.result_position >= result.vector_size) {
 		// We have a full chunk
@@ -25,20 +62,12 @@ void StringValueResult::Kaput(StringValueResult &result) {
 }
 
 idx_t StringValueResult::NumberOfRows() {
-	return result_position / column_count;
+	return result_position / number_of_columns;
 }
 
 StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        shared_ptr<CSVStateMachine> state_machine)
-    : BaseScanner(buffer_manager, state_machine) {
-	// Set up the result
-	result.vector_size = state_machine->dialect_options.num_cols * STANDARD_VECTOR_SIZE;
-	result.vector = make_uniq<Vector>(LogicalType::VARCHAR, result.vector_size);
-	result.vector_ptr = FlatVector::GetData<string_t>(*result.vector);
-	result.last_position = cur_buffer_handle->start_position;
-	result.result_position = 0;
-	result.buffer_ptr = cur_buffer_handle->Ptr();
-};
+    : BaseScanner(buffer_manager, state_machine), result(*state_machine, *cur_buffer_handle) {};
 
 StringValueResult *StringValueScanner::ParseChunk() {
 	result.result_position = 0;
@@ -52,6 +81,16 @@ void StringValueScanner::Process() {
 		to_pos = boundary.end_pos;
 	} else {
 		to_pos = cur_buffer_handle->actual_size;
+	}
+	if (cur_buffer_handle->is_first_buffer && pos.pos == 0) {
+		// This means we are in the first buffer, we must skip any empty lines, notes and the header
+		// SkipSetLines();
+		SkipEmptyLines();
+		SkipNotes();
+		//		if (state_machine->dialect_options.header.GetValue()){
+		//			// If the header is set we also skip it
+		//			SkipHeader();
+		//		}
 	}
 	for (; pos.pos < to_pos; pos.pos++) {
 		if (ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result)) {
@@ -98,6 +137,15 @@ void StringValueScanner::MoveToNextBuffer() {
 		// Handle overbuffer value
 		ProcessOverbufferValue();
 	}
+}
+
+void StringValueScanner::SkipEmptyLines() {
+}
+
+void StringValueScanner::SkipNotes() {
+}
+
+void StringValueScanner::SkipHeader() {
 }
 
 void StringValueScanner::FinalizeChunkProcess() {

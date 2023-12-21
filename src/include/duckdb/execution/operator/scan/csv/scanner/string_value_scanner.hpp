@@ -16,13 +16,21 @@ namespace duckdb {
 
 class StringValueResult : public ScannerResult {
 public:
+	StringValueResult(CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle);
+	//! Information on the vector
 	unique_ptr<Vector> vector;
 	string_t *vector_ptr;
+	ValidityMask *validity_mask;
 	idx_t vector_size;
 
+	//! Variables to iterate over the CSV buffers
 	idx_t last_position;
-	idx_t column_count;
 	char *buffer_ptr;
+
+	//! CSV Options that impact the parsing
+	const idx_t number_of_columns;
+	const bool null_padding;
+	const bool ignore_errors;
 
 	//! Adds a Value to the result
 	static inline void AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos);
@@ -53,6 +61,15 @@ private:
 
 	//! Function used to move from one buffer to the other, if necessary
 	void MoveToNextBuffer();
+
+	//! Skips a block of empty lines
+	void SkipEmptyLines();
+
+	//! Skips Notes, notes are dirty lines on top of the file, before the actual data
+	void SkipNotes();
+
+	//! Skips the header (i.e., the first line of the file)
+	void SkipHeader();
 
 	StringValueResult result;
 
