@@ -14,6 +14,7 @@
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/core_functions/scalar/operators_functions.hpp"
 #include "duckdb/core_functions/scalar/random_functions.hpp"
+#include "duckdb/core_functions/scalar/secret_functions.hpp"
 #include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/core_functions/scalar/union_functions.hpp"
@@ -371,6 +372,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekOfYearFun),
+	DUCKDB_SCALAR_FUNCTION(WhichSecretFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseXorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearWeekFun),

@@ -1092,7 +1092,7 @@ if(NOT CLANG_TIDY)
 endif()
 
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
   add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
@@ -1102,6 +1102,11 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
           COMMENT Create local extension repository)
   add_extension_dependencies(duckdb_local_extension_repo)
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    # jemalloc is odd duck
+    if ("${EXT_NAME}" STREQUAL "jemalloc")
+      continue()
+    endif()
+
     add_dependencies(duckdb_local_extension_repo ${EXT_NAME}_loadable_extension)
   endforeach()
   message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")

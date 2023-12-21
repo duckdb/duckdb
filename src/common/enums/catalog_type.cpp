@@ -39,6 +39,12 @@ string CatalogTypeToString(CatalogType type) {
 		return "Prepared Statement";
 	case CatalogType::SEQUENCE_ENTRY:
 		return "Sequence";
+	case CatalogType::SECRET_ENTRY:
+		return "Secret";
+	case CatalogType::SECRET_TYPE_ENTRY:
+		return "Secret Type";
+	case CatalogType::SECRET_FUNCTION_ENTRY:
+		return "Secret Function";
 	case CatalogType::INVALID:
 	case CatalogType::DELETED_ENTRY:
 	case CatalogType::RENAMED_ENTRY:

@@ -782,13 +782,13 @@ public:
 		}
 
 		auto &ht_state = op.sink_state->Cast<HashAggregateGlobalSinkState>();
-		idx_t partitions = 0;
+		idx_t threads = 0;
 		for (size_t sidx = 0; sidx < op.groupings.size(); ++sidx) {
 			auto &grouping = op.groupings[sidx];
 			auto &grouping_gstate = ht_state.grouping_states[sidx];
-			partitions += grouping.table_data.NumberOfPartitions(*grouping_gstate.table_state);
+			threads += grouping.table_data.MaxThreads(*grouping_gstate.table_state);
 		}
-		return MaxValue<idx_t>(1, partitions);
+		return MaxValue<idx_t>(1, threads);
 	}
 };
 
@@ -848,6 +848,17 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalSinkState>();
+	auto &gstate = gstate_p.Cast<HashAggregateGlobalSourceState>();
+	double total_progress = 0;
+	for (idx_t radix_idx = 0; radix_idx < groupings.size(); radix_idx++) {
+		total_progress += groupings[radix_idx].table_data.GetProgress(
+		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]);
+	}
+	return total_progress / double(groupings.size());
 }
 
 string PhysicalHashAggregate::ParamsToString() const {
