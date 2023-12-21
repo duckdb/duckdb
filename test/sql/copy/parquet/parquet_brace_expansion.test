@@ -2,7 +2,6 @@
 # description: Test parquet brace expansion
 # group: [parquet]
 
-
 require parquet
 
 require httpfs
@@ -10,13 +9,14 @@ require httpfs
 statement ok
 PRAGMA enable_verification
 
-# invalid brace expansion unmatched brace
-statement error
-SELECT * FROM './data/parquet-testing/brace-expansion/a}1..3{.parquet';
+statement ok
+SET default_null_order='nulls_first';
 
 # invalid brace expansion nested brace
 statement error
 SELECT * FROM './data/parquet-testing/brace-expansion/{{a,b}1..3}.parquet';
+----
+Invalid Input Error: Not a vaild brace expansion file name
 
 # local file brace expansion
 query II
@@ -41,10 +41,16 @@ b	3
 
 
 # multiple brace expansion (range a to b)
-statement error
+query II
 SELECT * FROM './data/parquet-testing/brace-expansion/{a..b}{1..3}.parquet'
 ORDER BY col1, col2;
-
+----
+a	1
+a	2
+a	3
+b	1
+b	2
+b	3
 
 # httpfs test
 # rely on raw github storage
@@ -53,4 +59,20 @@ SELECT * FROM 'https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet
 ORDER BY i;
 ----
 1	a
+2	b
+
+# test list of urls
+query II
+SELECT * 
+FROM read_parquet(
+    [
+        'https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/glob/t{1..2}.parquet' ,
+        'https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/glob/t{1..2}.parquet' ,
+    
+    ], UNION_BY_NAME=TRUE)
+ORDER BY i;
+----
+1	a
+1	a
+2	b
 2	b

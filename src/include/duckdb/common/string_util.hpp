@@ -245,6 +245,15 @@ public:
 		}
 		return strcmp(s1, s2) == 0;
 	}
+
+	static bool IsNaturalNumber(const string &str) {
+		for (auto &c : str) {
+			if (!CharacterIsDigit(c)) {
+				return false;
+			}
+		}
+		return true;
+	}
 };
 
 } // namespace duckdb

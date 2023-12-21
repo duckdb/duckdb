@@ -379,12 +379,11 @@ vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
-
-bool FileSystem::HasBraceExpansion(const string &pattern){
+bool FileSystem::HasBraceExpansion(const string &pattern) {
 	return BraceExpansion::has_brace_expansion(pattern);
 }
 
-vector<string> FileSystem::BraceExpansion(const string &pattern, FileOpener *opener){
+vector<string> FileSystem::BraceExpansion(const string &pattern, FileOpener *opener) {
 	return BraceExpansion::brace_expansion(pattern);
 }
 
