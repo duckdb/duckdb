@@ -20,30 +20,22 @@ static void ReplaceSemiAntiBindings(vector<ColumnBinding> bindings, Filter &filt
 		D_ASSERT(colref.depth == 0);
 
 		if (std::find(bindings.begin(), bindings.end(), colref.binding) != bindings.end()) {
-			//
+			// filter is already applied to the correct bindings.
 			return;
 		}
+
+		// if the condition is not distinct from or equality, then you can push on both sides
 
 		// colref binding can't be found in the given bindings, which means it was created
 		// for other side of the join.
 		if (std::find(left_bindings.begin(), left_bindings.end(), colref.binding) != left_bindings.end()) {
 			// the original filter came from the left side, push it down on the right
-			for (idx_t i = 0; i < left_bindings.size(); i++) {
-				if (left_bindings[i] == colref.binding) {
-					colref.binding = right_bindings[i];
-					filter.bindings.insert(colref.binding.table_index);
-					break;
-				}
-			}
+			colref.binding = right_bindings[colref.binding.column_index];
+			filter.bindings.insert(colref.binding.table_index);
 		} else if (std::find(right_bindings.begin(), right_bindings.end(), colref.binding) != right_bindings.end()) {
 			// the original filter came from the right side, push it down the left
-			for (idx_t i = 0; i < right_bindings.size(); i++) {
-				if (right_bindings[i] == colref.binding) {
-					colref.binding = left_bindings[i];
-					filter.bindings.insert(colref.binding.table_index);
-					break;
-				}
-			}
+			colref.binding = left_bindings[colref.binding.column_index];
+			filter.bindings.insert(colref.binding.table_index);
 		}
 		return;
 	}
@@ -55,7 +47,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
                                                                  unordered_set<idx_t> &left_bindings,
                                                                  unordered_set<idx_t> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
-	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		return FinishPushdown(std::move(op));
 	}
 
