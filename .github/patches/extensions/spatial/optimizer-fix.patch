@@ -1,0 +1,22 @@
+diff --git a/spatial/src/spatial/core/optimizer_rules.cpp b/spatial/src/spatial/core/optimizer_rules.cpp
+index 837ab0f..c19584f 100644
+--- a/spatial/src/spatial/core/optimizer_rules.cpp
++++ b/spatial/src/spatial/core/optimizer_rules.cpp
+@@ -240,7 +240,7 @@ public:
+ 		}
+ 	}
+ 
+-	static void Optimize(ClientContext &context, OptimizerExtensionInfo *info, unique_ptr<LogicalOperator> &plan) {
++	static bool Optimize(ClientContext &context, OptimizerExtensionInfo *info, unique_ptr<LogicalOperator> &plan) {
+ 
+ 		TryOptimize(context, info, plan);
+ 
+@@ -248,6 +248,8 @@ public:
+ 		for (auto &child : plan->children) {
+ 			Optimize(context, info, child);
+ 		}
++
++		return false;
+ 	}
+ };
+ 

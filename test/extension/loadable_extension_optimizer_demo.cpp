@@ -68,10 +68,11 @@ public:
 		}
 	}
 
-	static void WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
+	static bool WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
 	                                   duckdb::unique_ptr<LogicalOperator> &plan) {
+
 		if (!HasParquetScan(*plan)) {
-			return;
+			return false;
 		}
 		// rpc
 
@@ -142,6 +143,8 @@ public:
 		WriteChecked(sockfd, &len, sizeof(idx_t));
 		// close the socket
 		close(sockfd);
+
+		return false;
 	}
 };
 

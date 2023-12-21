@@ -19,13 +19,13 @@ struct OptimizerExtensionInfo {
 	}
 };
 
-typedef void (*optimize_function_t)(ClientContext &context, OptimizerExtensionInfo *info,
+// Returns true if the optimizer should run again after the extension optimization has been applied
+typedef bool (*optimize_function_t)(ClientContext &context, OptimizerExtensionInfo *info,
                                     unique_ptr<LogicalOperator> &plan);
 
 class OptimizerExtension {
 public:
-	//! The parse function of the parser extension.
-	//! Takes a query string as input and returns ParserExtensionParseData (on success) or an error
+	//! The optimize function of the parser extension.
 	optimize_function_t optimize_function;
 
 	//! Additional parser info passed to the parse function
