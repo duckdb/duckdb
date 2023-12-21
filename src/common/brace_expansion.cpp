@@ -15,7 +15,7 @@ bool BraceExpansion::has_brace_expansion(const string &pattern) {
 				break;
 			}
 			braceCount++;
-		// Detects non-matching closing brace
+			// Detects non-matching closing brace
 		} else if (ch == '}') {
 			if (braceCount <= 0) {
 				break;
@@ -62,7 +62,7 @@ vector<string> BraceExpansion::brace_expansion(const string &pattern) {
 		if (StringUtil::IsNaturalNumber(start) && StringUtil::IsNaturalNumber(end)) {
 			idx_t s = std::stoi(start);
 			idx_t e = std::stoi(end);
-			if (s >= e || s < 0 || e < 0) {
+			if (s >= e) {
 				throw InvalidInputException("Not a vaild brace expansion for dot dot expansion");
 			}
 			for (idx_t i = s; i <= e; ++i) {
@@ -81,7 +81,7 @@ vector<string> BraceExpansion::brace_expansion(const string &pattern) {
 		} else {
 			throw InvalidInputException("Not a vaild brace expansion file name");
 		}
-	// comma expansion
+		// comma expansion
 	} else {
 		string item;
 		while (std::getline(contentStream, item, ',')) {
