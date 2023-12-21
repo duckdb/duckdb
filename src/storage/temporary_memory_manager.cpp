@@ -5,9 +5,8 @@
 
 namespace duckdb {
 
-TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p, idx_t initial_memory_p)
-    : temporary_memory_manager(temporary_memory_manager_p), initial_memory(initial_memory_p), reservation(0),
-      remaining_size(0) {
+TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p)
+    : temporary_memory_manager(temporary_memory_manager_p), reservation(0), remaining_size(0) {
 }
 
 TemporaryMemoryState::~TemporaryMemoryState() {
@@ -28,21 +27,26 @@ TemporaryMemoryManager::TemporaryMemoryManager() : reservation(0), remaining_siz
 }
 
 void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
-	const auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto &task_scheduler = TaskScheduler::GetScheduler(context);
 
-	memory_limit = MEMORY_LIMIT_RATIO * double(buffer_manager.GetMaxMemory());
+	memory_limit = MAXIMUM_MEMORY_LIMIT_RATIO * double(buffer_manager.GetMaxMemory());
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
 	num_threads = task_scheduler.NumberOfThreads();
+}
+
+idx_t TemporaryMemoryManager::MinimumStateMemory() const {
+	// TODO this should be tweaked, maybe use the size of 'active_states', or the memory limit to lower this
+	return num_threads * MINIMUM_MEMORY_PER_THREAD;
 }
 
 unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext &context) {
 	lock_guard<mutex> guard(lock);
 	UpdateConfiguration(context);
 
-	auto result = make_uniq<TemporaryMemoryState>(*this, num_threads * INITIAL_MEMORY_PER_STATE_PER_THREAD);
-	SetReservation(*result, result->initial_memory);
-	SetRemainingSize(*result, result->initial_memory);
+	auto result = make_uniq<TemporaryMemoryState>(*this);
+	SetReservation(*result, MinimumStateMemory());
+	SetRemainingSize(*result, MinimumStateMemory());
 	active_states.insert(*result);
 
 	Verify();
@@ -52,16 +56,21 @@ unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext 
 void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state) {
 	UpdateConfiguration(context);
 
-	if (!has_temporary_directory) {
-		// We cannot offload, so we cannot limit memory usage. Set reservation equal to the remaining size
+	if (!has_temporary_directory || temporary_memory_state.remaining_size <= MinimumStateMemory()) {
+		// We cannot offload / less than initial_memory remaining. Set reservation equal to the remaining size
 		SetReservation(temporary_memory_state, temporary_memory_state.remaining_size);
-	} else if (temporary_memory_state.reservation >= temporary_memory_state.initial_memory &&
-	           temporary_memory_state.remaining_size <= temporary_memory_state.reservation) {
-		// This is always OK. Set reservation equal to the remaining size
-		SetReservation(temporary_memory_state, temporary_memory_state.remaining_size);
+	} else if (reservation - temporary_memory_state.reservation >= memory_limit) {
+		// We overshot. Set reservation equal to the minimum
+		SetReservation(temporary_memory_state, MinimumStateMemory());
 	} else {
-		// Non-trivial TODO
-		const auto memory_remaining = memory_limit - reservation;
+		// Non-trivial case, compute how much of the total remaining data belongs to this state
+		auto ratio_of_remaining = double(temporary_memory_state.remaining_size) / double(remaining_size);
+		// Limit the ratio by taking the minimum of this ratio and the maximum ratio
+		auto ratio_limited = MinValue(ratio_of_remaining, MAXIMUM_MEMORY_REMAINING_RATIO);
+		// Compute how much memory is left (excluding this state's current reservation)
+		auto memory_remaining = memory_limit - (reservation - temporary_memory_state.reservation);
+		// Set the reservation equal to the limited ratio of the remaining memory, or the minimum state memory
+		SetReservation(temporary_memory_state, MaxValue<idx_t>(ratio_limited * memory_remaining, MinimumStateMemory()));
 	}
 
 	Verify();

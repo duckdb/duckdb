@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/concurrent_operator_memory_manager.hpp
+// duckdb/storage/temporary_memory_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -23,7 +23,7 @@ class TemporaryMemoryState {
 	friend class TemporaryMemoryManager;
 
 public:
-	TemporaryMemoryState(TemporaryMemoryManager &concurrent_operator_memory_manager, idx_t initial_memory);
+	explicit TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager);
 	~TemporaryMemoryState();
 
 public:
@@ -36,11 +36,9 @@ private:
 	//! The TemporaryMemoryManager that owns this state
 	TemporaryMemoryManager &temporary_memory_manager;
 
-	//! The memory this state was initialized to
-	const idx_t initial_memory;
-	//! How much memory this operator has reserved (initialized to 'initial_memory')
+	//! How much memory this operator has reserved
 	idx_t reservation;
-	//! The remaining size needed if it could fit fully in memory (initialized to 'initial_memory')
+	//! The remaining size needed if it could fit fully in memory
 	idx_t remaining_size;
 };
 
@@ -53,10 +51,12 @@ public:
 	TemporaryMemoryManager();
 
 private:
-	//! Initialize to at least 512 blocks per operator per thread. This is ~128MB for Storage::BLOCK_SIZE = 262144
-	static constexpr const idx_t INITIAL_MEMORY_PER_STATE_PER_THREAD = 512 * Storage::BLOCK_ALLOC_SIZE;
+	//! Minimum of 512 blocks per state per thread. This is ~128MB for Storage::BLOCK_SIZE = 262144
+	static constexpr const idx_t MINIMUM_MEMORY_PER_THREAD = 512 * Storage::BLOCK_ALLOC_SIZE;
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
-	static constexpr const double MEMORY_LIMIT_RATIO = 0.9;
+	static constexpr const double MAXIMUM_MEMORY_LIMIT_RATIO = 0.9;
+	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
+	static constexpr const double MAXIMUM_MEMORY_REMAINING_RATIO = 0.6;
 
 public:
 	//! Register a TemporaryMemoryState
@@ -65,6 +65,8 @@ public:
 private:
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
 	void UpdateConfiguration(ClientContext &context);
+	//! Get the minimum memory per state
+	idx_t MinimumStateMemory() const;
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)
 	void UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state);
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
