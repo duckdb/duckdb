@@ -170,7 +170,7 @@ jobs:
     - name: Install
       shell: bash
       run: |
-        pip install cibuildwheel twine
+        pip install cibuildwheel twine build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
@@ -194,7 +194,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        python setup.py sdist
+        pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         ls duckdb_tarball
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
@@ -242,7 +242,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install cibuildwheel twine
+        run: pip install cibuildwheel twine build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -254,7 +254,7 @@ jobs:
         shell: bash
         run: |
           cd tools/pythonpkg
-          python setup.py sdist
+          pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
@@ -309,7 +309,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install cibuildwheel twine
+        run: pip install cibuildwheel twine build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -321,7 +321,7 @@ jobs:
         shell: bash
         run: |
           cd tools/pythonpkg
-          python setup.py sdist
+          pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
