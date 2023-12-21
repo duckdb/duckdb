@@ -69,7 +69,7 @@ FROM read_parquet(
         'https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/glob/t{1..2}.parquet' ,
         'https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/glob/t{1..2}.parquet' ,
     
-    ], UNION_BY_NAME=TRUE)
+    ])
 ORDER BY i;
 ----
 1	a
