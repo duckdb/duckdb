@@ -32,12 +32,15 @@ public:
 	const bool null_padding;
 	const bool ignore_errors;
 
+	//! If this line might have too many columns
+	bool maybe_too_many_columns = false;
 	//! Adds a Value to the result
 	static inline void AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos);
 	//! Adds a Row to the result
 	static inline bool AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(StringValueResult &result);
+	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	idx_t NumberOfRows();
 

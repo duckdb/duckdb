@@ -157,7 +157,7 @@ private:
 	};
 	unordered_map<idx_t, vector<LogicalType>> best_sql_types_candidates_per_column_idx;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
-	unique_ptr<CSVScanner> best_candidate;
+	unique_ptr<StringValueScanner> best_candidate;
 	vector<Value> best_header_row;
 	//! Variable used for sniffing date and timestamp
 	map<LogicalTypeId, DateTimestampSniffing> format_candidates;

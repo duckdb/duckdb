@@ -35,8 +35,8 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 	result.state_machine = state_machine.get();
 };
 
-StringValueScanner ColumnCountScanner::UpgradeToStringValueScanner() {
-	return StringValueScanner(buffer_manager, state_machine);
+unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
+	return make_uniq<StringValueScanner>(buffer_manager, state_machine);
 }
 
 ColumnCountResult *ColumnCountScanner::ParseChunk() {

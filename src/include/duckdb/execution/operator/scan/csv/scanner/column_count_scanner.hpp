@@ -39,7 +39,7 @@ public:
 
 	ColumnCountResult *GetResult() override;
 
-	StringValueScanner UpgradeToStringValueScanner();
+	unique_ptr<StringValueScanner> UpgradeToStringValueScanner();
 
 private:
 	void Process() override;

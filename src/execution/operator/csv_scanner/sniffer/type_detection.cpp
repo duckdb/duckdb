@@ -206,94 +206,87 @@ void CSVSniffer::DetectTypes() {
 
 		idx_t true_line_start = 0;
 		idx_t true_pos = 0;
-		do {
-			true_line_start = 0;
-			true_pos = 0;
-			auto &tuples = *candidate.ParseChunk();
-			idx_t row_idx = 0;
-			if (tuples.NumberOfRows() > 1 &&
-			    (!options.dialect_options.header.IsSetByUser() ||
-			     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
-				// This means we have more than one row, hence we can use the first row to detect if we have a header
-				row_idx = 1;
-			}
-			// First line where we start our type detection
-			const idx_t start_idx_detection = row_idx;
-			for (; row_idx < tuples.Size(); row_idx++) {
-				for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
-					if (options.ignore_errors && col >= max_columns_found) {
-						// ignore this, since it's an error.
-						continue;
+		true_line_start = 0;
+		true_pos = 0;
+		auto &tuples = *candidate->ParseChunk();
+		idx_t row_idx = 0;
+		if (tuples.NumberOfRows() > 1 &&
+		    (!options.dialect_options.header.IsSetByUser() ||
+		     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
+			// This means we have more than one row, hence we can use the first row to detect if we have a header
+			row_idx = 1;
+		}
+		// First line where we start our type detection
+		const idx_t start_idx_detection = row_idx;
+		for (; row_idx < tuples.NumberOfRows(); row_idx++) {
+			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
+				auto &col_type_candidates = info_sql_types_candidates[col_idx];
+				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
+				// and we validate utf-8 compatibility when creating the type
+				D_ASSERT(!col_type_candidates.empty());
+				auto cur_top_candidate = col_type_candidates.back();
+				auto dummy_val = tuples.GetValue(row_idx, col_idx);
+				// try cast from string to sql_type
+				while (col_type_candidates.size() > 1) {
+					const auto &sql_type = col_type_candidates.back();
+					// try formatting for date types if the user did not specify one and it starts with numeric
+					// values.
+					string separator;
+					// If Value is not Null, Has a numeric date format, and the current investigated candidate is
+					// either a timestamp or a date
+					if (!dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val)) &&
+					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
+					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
+						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator, dummy_val);
 					}
-					auto &col_type_candidates = info_sql_types_candidates[col];
-					// col_type_candidates can't be empty since anything in a CSV file should at least be a string
-					// and we validate utf-8 compatibility when creating the type
-					D_ASSERT(!col_type_candidates.empty());
-					auto cur_top_candidate = col_type_candidates.back();
-					auto dummy_val = tuples[row_idx].values[col];
 					// try cast from string to sql_type
-					while (col_type_candidates.size() > 1) {
-						const auto &sql_type = col_type_candidates.back();
-						// try formatting for date types if the user did not specify one and it starts with numeric
-						// values.
-						string separator;
-						// If Value is not Null, Has a numeric date format, and the current investigated candidate is
-						// either a timestamp or a date
-						if (!dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val)) &&
-						    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
-						     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
-							DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator, dummy_val);
-						}
-						// try cast from string to sql_type
-						if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {
-							break;
-						} else {
-							if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
-								// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
-								// immediately pop to varchar.
-								while (col_type_candidates.back() != LogicalType::VARCHAR) {
-									col_type_candidates.pop_back();
-								}
-								break;
+					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {
+						break;
+					} else {
+						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
+							// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
+							// immediately pop to varchar.
+							while (col_type_candidates.back() != LogicalType::VARCHAR) {
+								col_type_candidates.pop_back();
 							}
-							col_type_candidates.pop_back();
+							break;
 						}
+						col_type_candidates.pop_back();
 					}
 				}
-			}
-
-			idx_t varchar_cols = 0;
-
-			for (idx_t col = 0; col < info_sql_types_candidates.size(); col++) {
-				auto &col_type_candidates = info_sql_types_candidates[col];
-				// check number of varchar columns
-				const auto &col_type = col_type_candidates.back();
-				if (col_type == LogicalType::VARCHAR) {
-					varchar_cols++;
-				}
-			}
-
-			// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
-			// best_num_cols.
-			if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
-				// we have a new best_options candidate
-				if (true_line_start > 0) {
-					// Add empty rows to skip_rows
-					sniffing_state_machine.dialect_options.skip_rows.Set(
-					    sniffing_state_machine.dialect_options.skip_rows.GetValue() + true_line_start, false);
-				}
-				best_candidate = std::move(candidate);
-				min_varchar_cols = varchar_cols;
-				best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
-				for (auto &format_candidate : format_candidates) {
-					best_format_candidates[format_candidate.first] = format_candidate.second.format;
-				}
-				best_header_row = tuples[0].values;
-				best_start_with_header = tuples[0].position - true_pos;
 			}
 		}
-		// Assert that it's all good at this point.
-		D_ASSERT(best_candidate && !best_format_candidates.empty() && !best_header_row.empty());
+
+		idx_t varchar_cols = 0;
+
+		for (idx_t col = 0; col < info_sql_types_candidates.size(); col++) {
+			auto &col_type_candidates = info_sql_types_candidates[col];
+			// check number of varchar columns
+			const auto &col_type = col_type_candidates.back();
+			if (col_type == LogicalType::VARCHAR) {
+				varchar_cols++;
+			}
+		}
+
+		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
+		// best_num_cols.
+		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
+			// we have a new best_options candidate
+			if (true_line_start > 0) {
+				// Add empty rows to skip_rows
+				sniffing_state_machine.dialect_options.skip_rows.Set(
+				    sniffing_state_machine.dialect_options.skip_rows.GetValue() + true_line_start, false);
+			}
+			best_candidate = std::move(candidate);
+			min_varchar_cols = varchar_cols;
+			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
+			for (auto &format_candidate : format_candidates) {
+				best_format_candidates[format_candidate.first] = format_candidate.second.format;
+			}
+		}
 	}
+	// Assert that it's all good at this point.
+	D_ASSERT(best_candidate && !best_format_candidates.empty() && !best_header_row.empty());
+}
 
 } // namespace duckdb

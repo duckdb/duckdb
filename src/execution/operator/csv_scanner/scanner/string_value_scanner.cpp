@@ -17,25 +17,54 @@ StringValueResult::StringValueResult(CSVStateMachine &state_machine, CSVBufferHa
 
 	// Current Result information
 	result_position = 0;
+}
 
+Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
+	idx_t vector_idx = row_idx * number_of_columns + col_idx;
+	if (validity_mask->AllValid()) {
+		return Value(vector_ptr[vector_idx]);
+	} else {
+		if (validity_mask->RowIsValid(vector_idx)) {
+			return Value(vector_ptr[vector_idx]);
+		} else {
+			return Value();
+		}
+	}
 }
 
 void StringValueResult::AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
 	result.vector_ptr[result.result_position++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
 	result.last_position = buffer_pos;
+	if (result.result_position % result.number_of_columns == 0) {
+		// This means this value reached the number of columns in a line. This is fine, if this is the last buffer, and
+		// the last buffer position However, if that's not the case, this means we might be reading too many columns.
+		result.maybe_too_many_columns = true;
+	}
 }
 
 bool StringValueResult::AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
 	// We add the value
 	result.vector_ptr[result.result_position++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
+	result.last_position = buffer_pos;
 
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
-	result.last_position = buffer_pos;
 	if (result.result_position % result.number_of_columns != 0) {
 		// If the columns are incorrect:
+		// Maybe we have too many columns:
+		if (result.maybe_too_many_columns) {
+			if (result.ignore_errors) {
+				// 1) if ignore_errors is on, we invalidate the whole line.
+				result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
+			} else {
+				// 2) otherwise we error.
+				throw InvalidInputException("I'm a baddie");
+			}
+			result.maybe_too_many_columns = false;
+		}
+		// Maybe we have too few columns:
 		// 1) if null_padding is on we null pad it
 		if (result.null_padding) {
 			while (result.result_position % result.number_of_columns == 0) {
@@ -62,6 +91,7 @@ void StringValueResult::Kaput(StringValueResult &result) {
 }
 
 idx_t StringValueResult::NumberOfRows() {
+	D_ASSERT(result_position % number_of_columns == 0);
 	return result_position / number_of_columns;
 }
 
