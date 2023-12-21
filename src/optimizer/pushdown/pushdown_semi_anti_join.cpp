@@ -47,59 +47,30 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
                                                                  unordered_set<idx_t> &left_bindings,
                                                                  unordered_set<idx_t> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
-	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return FinishPushdown(std::move(op));
 	}
 
-	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
+	FilterPushdown left_pushdown(optimizer);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner(optimizer);
-	const auto isComparison = (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	                           op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
-	if (isComparison) {
-		// add all comparison conditions
-		auto &comparison_join = op->Cast<LogicalComparisonJoin>();
-		for (auto &cond : comparison_join.conditions) {
-			filter_combiner.AddFilter(
-			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
-		}
-	}
-	auto left_bindings_actual = op->children[0]->GetColumnBindings();
-	auto right_bindings_actual = op->children[1]->GetColumnBindings();
-	// bindings are not guaranteed to be the same size.
-	// conditions can be specified like so select * from t1 semi join t2 on (t1.a + t1.b = t2.a);
-	// The left bindings are the whole table, while the right bindings are just for a
-	//	D_ASSERT(left_bindings_actual.size() == right_bindings_actual.size());
 
-	// take every filter, and attempt to push it down the left and the right side.
+	// take every filter, and attempt to push it down just the left side.
 	for (idx_t i = 0; i < filters.size(); i++) {
 		// first create a copy of the filter
-		auto right_filter = make_uniq<Filter>();
 		auto left_filter = make_uniq<Filter>();
-		right_filter->filter = filters[i]->filter->Copy();
 		left_filter->filter = filters[i]->filter->Copy();
 
 		// in the original filter, rewrite references to the result of the union into references to the left_index
-		ReplaceSemiAntiBindings(op->children[0]->GetColumnBindings(), *left_filter, *left_filter->filter, join);
+		ReplaceSemiAntiBindings(op->children[0]->GetColumnBindings(), *filters[i], *filters[i]->filter, join);
 		// extract bindings again
 		left_filter->ExtractBindings();
 		// move the filters into the child pushdown nodes
 		left_pushdown.filters.push_back(std::move(left_filter));
-
-		// We cannot push down filters on the right side if it is an anti join.
-		// It's possible tuples are removed which then cause a match to happen that should
-		// not have happened before.
-		if (join.join_type != JoinType::ANTI) {
-			// in the copied filter, rewrite references to the result of the union into references to the right_index
-			ReplaceSemiAntiBindings(op->children[1]->GetColumnBindings(), *right_filter, *right_filter->filter, join);
-			right_filter->ExtractBindings();
-			right_pushdown.filters.push_back(std::move(right_filter));
-		}
 	}
 
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
 
 	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
