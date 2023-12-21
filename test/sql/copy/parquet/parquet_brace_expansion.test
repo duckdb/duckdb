@@ -1,0 +1,56 @@
+# name: test/sql/copy/parquet/parquet_brace_expansion.test
+# description: Test parquet brace expansion
+# group: [parquet]
+
+
+require parquet
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+# invalid brace expansion unmatched brace
+statement error
+SELECT * FROM './data/parquet-testing/brace-expansion/a}1..3{.parquet';
+
+# invalid brace expansion nested brace
+statement error
+SELECT * FROM './data/parquet-testing/brace-expansion/{{a,b}1..3}.parquet';
+
+# local file brace expansion
+query II
+SELECT * FROM './data/parquet-testing/brace-expansion/a{1..3}.parquet'
+ORDER BY col2;
+----
+a	1
+a	2
+a	3
+
+# multiple brace expansion
+query II
+SELECT * FROM './data/parquet-testing/brace-expansion/{a,b}{1..3}.parquet'
+ORDER BY col1, col2;
+----
+a	1
+a	2
+a	3
+b	1
+b	2
+b	3
+
+
+# multiple brace expansion (range a to b)
+statement error
+SELECT * FROM './data/parquet-testing/brace-expansion/{a..b}{1..3}.parquet'
+ORDER BY col1, col2;
+
+
+# httpfs test
+# rely on raw github storage
+query II
+SELECT * FROM 'https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/glob/t{1..2}.parquet'
+ORDER BY i;
+----
+1	a
+2	b
