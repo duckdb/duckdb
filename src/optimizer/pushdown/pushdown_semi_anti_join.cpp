@@ -67,7 +67,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 	}
 	auto left_bindings_actual = op->children[0]->GetColumnBindings();
 	auto right_bindings_actual = op->children[1]->GetColumnBindings();
-	D_ASSERT(left_bindings_actual.size() == right_bindings_actual.size());
+	// bindings are not guaranteed to be the same size.
+	// conditions can be specified like so select * from t1 semi join t2 on (t1.a + t1.b = t2.a);
+	// The left bindings are the whole table, while the right bindings are just for a
+//	D_ASSERT(left_bindings_actual.size() == right_bindings_actual.size());
 
 	// take every filter, and attempt to push it down the left and the right side.
 	for (idx_t i = 0; i < filters.size(); i++) {
@@ -79,16 +82,23 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 
 		// in the original filter, rewrite references to the result of the union into references to the left_index
 		ReplaceSemiAntiBindings(op->children[0]->GetColumnBindings(), *left_filter, *left_filter->filter, join);
-		// in the copied filter, rewrite references to the result of the union into references to the right_index
-		ReplaceSemiAntiBindings(op->children[1]->GetColumnBindings(), *right_filter, *right_filter->filter, join);
-
 		// extract bindings again
 		left_filter->ExtractBindings();
-		right_filter->ExtractBindings();
-
 		// move the filters into the child pushdown nodes
 		left_pushdown.filters.push_back(std::move(left_filter));
-		right_pushdown.filters.push_back(std::move(right_filter));
+
+		// We cannot push down filters on the right side if it is an anti join.
+		// It's possible tuples are removed which then cause a match to happen that should
+		// not have happened before.
+		if (join.join_type != JoinType::ANTI) {
+			// in the copied filter, rewrite references to the result of the union into references to the right_index
+			ReplaceSemiAntiBindings(op->children[1]->GetColumnBindings(), *right_filter, *right_filter->filter, join);
+			right_filter->ExtractBindings();
+			right_pushdown.filters.push_back(std::move(right_filter));
+		}
+
+
+
 	}
 
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
