@@ -26,4 +26,18 @@ CSVStateMachineSniffing::CSVStateMachineSniffing(CSVReaderOptions &options_p,
 	dialect_options.skip_rows = options.dialect_options.skip_rows;
 }
 
+const vector<SelectionVector> &CSVStateMachine::GetSelectionVector() {
+	if (selection_vector.empty()) {
+		selection_vector.resize(dialect_options.num_cols);
+		// precompute these selection vectors
+		for (idx_t i = 0; i < selection_vector.size(); i++) {
+			selection_vector[i].Initialize();
+			for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j++) {
+				selection_vector[i][j] = i + (dialect_options.num_cols * j);
+			}
+		}
+	}
+	return selection_vector;
+}
+
 } // namespace duckdb

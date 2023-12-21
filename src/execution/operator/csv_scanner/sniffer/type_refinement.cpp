@@ -6,7 +6,7 @@
 namespace duckdb {
 
 bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
-	auto &sniffing_state_machine = best_candidate->GetStateMachineSniff();
+	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type);
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::DATE].GetValue().Empty() &&
@@ -30,17 +30,16 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 }
 
 void CSVSniffer::RefineTypes() {
-	auto &sniffing_state_machine = best_candidate->GetStateMachineSniff();
-	best_candidate->SetTotalColumns(sniffing_state_machine.dialect_options.num_cols);
-
+	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	// if data types were provided, exit here if number of columns does not match
 	//	detected_types.assign(sniffing_state_machine.dialect_options.num_cols, LogicalType::VARCHAR);
 	if (sniffing_state_machine.options.all_varchar) {
 		// return all types varchar
 		return;
 	}
-	//	DataChunk parse_chunk;
-	//	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, STANDARD_VECTOR_SIZE);
+	DataChunk parse_chunk;
+	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, STANDARD_VECTOR_SIZE);
+
 	for (idx_t i = 1; i < sniffing_state_machine.options.sample_size_chunks; i++) {
 		bool finished_file = best_candidate->Finished();
 		if (finished_file) {
@@ -57,8 +56,8 @@ void CSVSniffer::RefineTypes() {
 			}
 			return;
 		}
-		best_candidate->Process();
-		auto &parse_chunk = best_candidate->parse_chunk;
+		best_candidate->ParseChunk()->ToChunk(parse_chunk, sniffing_state_machine.GetSelectionVector());
+
 		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			vector<LogicalType> &col_type_candidates = best_sql_types_candidates_per_column_idx[col];
 			bool is_bool_type = col_type_candidates.back() == LogicalType::BOOLEAN;
@@ -75,7 +74,7 @@ void CSVSniffer::RefineTypes() {
 						//	doesn't work - move to the next one
 						best_type_format_candidates.pop_back();
 						if (!best_type_format_candidates.empty()) {
-							SetDateFormat(best_candidate->GetStateMachineSniff(), best_type_format_candidates.back(),
+							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(),
 							              sql_type.id());
 						}
 					}
@@ -84,7 +83,7 @@ void CSVSniffer::RefineTypes() {
 						//	so restore the candidates that did work.
 						best_type_format_candidates.swap(save_format_candidates);
 						if (!best_type_format_candidates.empty()) {
-							SetDateFormat(best_candidate->GetStateMachineSniff(), best_type_format_candidates.back(),
+							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(),
 							              sql_type.id());
 						}
 					}
@@ -112,7 +111,7 @@ void CSVSniffer::RefineTypes() {
 	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
 		if (best_sql_types_candidates_per_column_idx[column_idx].size() ==
-		    best_candidate->GetStateMachineSniff().options.auto_type_candidates.size()) {
+		    best_candidate->GetStateMachine().options.auto_type_candidates.size()) {
 			d_type = LogicalType::VARCHAR;
 		}
 		detected_types.push_back(d_type);

@@ -42,6 +42,7 @@ public:
 	static inline void Kaput(StringValueResult &result);
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
+	void ToChunk(DataChunk &parse_chunk, const std::vector<SelectionVector> &selection_vectors);
 	idx_t NumberOfRows();
 
 	//! Returns a DataChunk

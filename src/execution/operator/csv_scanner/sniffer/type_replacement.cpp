@@ -2,7 +2,7 @@
 
 namespace duckdb {
 void CSVSniffer::ReplaceTypes() {
-	auto &sniffing_state_machine = best_candidate->GetStateMachineSniff();
+	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	if (sniffing_state_machine.options.sql_type_list.empty()) {
 		return;
 	}

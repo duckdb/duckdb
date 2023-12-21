@@ -153,8 +153,6 @@ class CSVScanner {
 	void Parse(DataChunk &output_chunk, VerificationPositions &verification_positions);
 
 	void Process();
-	//! Produces error messages for column name -> type mismatch.
-	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 
 	//! Gets the current buffer index of this scanner. Returns -1 if scanner has no buffer attached to it.
 	int64_t GetBufferIndex();
@@ -199,7 +197,6 @@ class CSVScanner {
 		duck_vector = make_uniq<Vector>(LogicalType::VARCHAR, values_size);
 
 		selection_vectors.resize(total_columns);
-
 		// precompute these selection vectors
 		for (idx_t i = 0; i < selection_vectors.size(); i++) {
 			selection_vectors[i].Initialize();
@@ -207,9 +204,12 @@ class CSVScanner {
 				selection_vectors[i][j] = i + (total_columns * j);
 			}
 		}
-
 		parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 	}
+
+public:
+	//! Produces error messages for column name -> type mismatch.
+	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 
 private:
 	//! Where this CSV Scanner starts

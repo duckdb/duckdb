@@ -60,13 +60,8 @@ void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sn
 }
 // Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
-	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachineSniff().dialect_options,
+	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
 	                               options.sniffer_user_mismatch_error);
-	if (options.dialect_options.header.GetValue()) {
-		options.dialect_options.true_start = best_start_with_header;
-	} else {
-		options.dialect_options.true_start = best_start_without_header;
-	}
 }
 
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {

@@ -32,6 +32,16 @@ Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
 	}
 }
 
+void StringValueResult::ToChunk(DataChunk &parse_chunk, const std::vector<SelectionVector> &selection_vectors) {
+	idx_t number_of_rows = NumberOfRows();
+	for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
+		// fixme: has to do some extra checks for null padding
+		auto &v = parse_chunk.data[col_idx];
+		v.Slice(*vector, selection_vectors[col_idx], number_of_rows);
+	}
+	parse_chunk.SetCardinality(number_of_rows);
+}
+
 void StringValueResult::AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
 	result.vector_ptr[result.result_position++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);

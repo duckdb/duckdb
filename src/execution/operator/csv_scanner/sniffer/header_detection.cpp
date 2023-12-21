@@ -97,7 +97,7 @@ void CSVSniffer::DetectHeader() {
 	bool first_row_consistent = true;
 	// check if header row is all null and/or consistent with detected column data types
 	bool first_row_nulls = true;
-	auto &sniffer_state_machine = best_candidate->GetStateMachineSniff();
+	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	// If null-padding is not allowed and there is a mismatch between our header candidate and the number of columns
 	// We can't detect the dialect/type options properly
 	if (!sniffer_state_machine.options.null_padding &&
