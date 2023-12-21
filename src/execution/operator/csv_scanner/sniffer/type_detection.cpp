@@ -205,9 +205,7 @@ void CSVSniffer::DetectTypes() {
 		// Parse chunk and read csv with info candidate
 
 		idx_t true_line_start = 0;
-		idx_t true_pos = 0;
 		true_line_start = 0;
-		true_pos = 0;
 		auto &tuples = *candidate->ParseChunk();
 		idx_t row_idx = 0;
 		if (tuples.NumberOfRows() > 1 &&

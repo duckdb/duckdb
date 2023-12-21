@@ -22,6 +22,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, const char current_cha
 		// We sniffed enough rows
 		return true;
 	}
+	return false;
 }
 
 void ColumnCountResult::Kaput(ColumnCountResult &result) {

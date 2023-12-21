@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/execution/operator/scan/csv/parser/scanner_boundary.hpp"
 #include "duckdb/execution/operator/scan/csv/scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/base_scanner.hpp"
 
 namespace duckdb {
 

@@ -18,6 +18,7 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/string_value_scanner.hpp"
 
 namespace duckdb {
 
@@ -85,10 +86,10 @@ struct ReadCSVData : public BaseCSVData {
 	//! The buffer manager (if any): this is used when automatic detection is used during binding.
 	//! In this case, some CSV buffers have already been read and can be reused.
 	shared_ptr<CSVBufferManager> buffer_manager;
-	unique_ptr<CSVScanner> initial_reader;
+	unique_ptr<StringValueScanner> initial_reader;
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<CSVScanner>> union_readers;
+	vector<unique_ptr<StringValueScanner>> union_readers;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
 	vector<ColumnInfo> column_info;
@@ -103,7 +104,7 @@ struct ReadCSVData : public BaseCSVData {
 	//! Or options used, we only parallelize per-file.
 	bool parallelize_single_file_scan = true;
 
-	void Initialize(unique_ptr<CSVScanner> &reader) {
+	void Initialize(unique_ptr<StringValueScanner> &reader) {
 		this->initial_reader = std::move(reader);
 	}
 	void FinalizeRead(ClientContext &context);

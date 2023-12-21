@@ -17,14 +17,14 @@ CSVStateMachine::CSVStateMachine(const StateMachine &transition_array_p, const C
       options(options_p) {
 }
 
-CSVStateMachineSniffing::CSVStateMachineSniffing(CSVReaderOptions &options_p,
-                                                 const CSVStateMachineOptions &state_machine_options,
-                                                 CSVStateMachineCache &csv_state_machine_cache_p)
-    : CSVStateMachine(options_p, state_machine_options, csv_state_machine_cache_p) {
-	dialect_options.state_machine_options = state_machine_options;
-	dialect_options.date_format = options.dialect_options.date_format;
-	dialect_options.skip_rows = options.dialect_options.skip_rows;
-}
+//CSVStateMachineSniffing::CSVStateMachineSniffing(CSVReaderOptions &options_p,
+//                                                 const CSVStateMachineOptions &state_machine_options,
+//                                                 CSVStateMachineCache &csv_state_machine_cache_p)
+//    : CSVStateMachine(options_p, state_machine_options, csv_state_machine_cache_p) {
+//	dialect_options.state_machine_options = state_machine_options;
+//	dialect_options.date_format = options.dialect_options.date_format;
+//	dialect_options.skip_rows = options.dialect_options.skip_rows;
+//}
 
 const vector<SelectionVector> &CSVStateMachine::GetSelectionVector() {
 	if (selection_vector.empty()) {
