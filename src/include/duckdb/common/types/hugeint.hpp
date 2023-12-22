@@ -45,24 +45,35 @@ public:
 		return result;
 	}
 
+	static bool TryNegate(hugeint_t input, hugeint_t& result);
+
+	template <bool CHECK_OVERFLOW = true>
 	static void NegateInPlace(hugeint_t &input) {
-		if (input.upper == NumericLimits<int64_t>::Minimum() && input.lower == 0) {
+		if (!TryNegate(input, input)) {
 			throw OutOfRangeException("HUGEINT is out of range");
 		}
-		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
-		input.upper = -1 - input.upper + (input.lower == 0);
 	}
+
+	template <bool CHECK_OVERFLOW = true>
 	static hugeint_t Negate(hugeint_t input) {
-		NegateInPlace(input);
+		NegateInPlace<CHECK_OVERFLOW>(input);
 		return input;
 	}
 
 	static bool TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
-	static void MultiplyNoOverflowCheck(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
 
 	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs);
-	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs);
+
+	template <bool CHECK_OVERFLOW = true>
+	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs) {
+		hugeint_t result;
+		if (!TryMultiply(lhs, rhs, result)) {
+			throw OutOfRangeException("Overflow in HUGEINT multiplication!");
+		}
+		return result;
+	}
+	
 	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs);
 
@@ -74,6 +85,9 @@ public:
 	static bool AddInPlace(hugeint_t &lhs, hugeint_t rhs);
 	static bool SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
 
+	static int Sign(hugeint_t n);
+	static hugeint_t Abs(hugeint_t n);
+
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops
 	// this is because they seem to be consistently much faster (benchmarked on a Macbook Pro)
@@ -82,35 +96,41 @@ public:
 		int upper_equals = lhs.upper == rhs.upper;
 		return lower_equals & upper_equals;
 	}
+
 	static bool NotEquals(hugeint_t lhs, hugeint_t rhs) {
 		int lower_not_equals = lhs.lower != rhs.lower;
 		int upper_not_equals = lhs.upper != rhs.upper;
 		return lower_not_equals | upper_not_equals;
 	}
+
 	static bool GreaterThan(hugeint_t lhs, hugeint_t rhs) {
 		int upper_bigger = lhs.upper > rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_bigger = lhs.lower > rhs.lower;
 		return upper_bigger | (upper_equal & lower_bigger);
 	}
+
 	static bool GreaterThanEquals(hugeint_t lhs, hugeint_t rhs) {
 		int upper_bigger = lhs.upper > rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_bigger_equals = lhs.lower >= rhs.lower;
 		return upper_bigger | (upper_equal & lower_bigger_equals);
 	}
+
 	static bool LessThan(hugeint_t lhs, hugeint_t rhs) {
 		int upper_smaller = lhs.upper < rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_smaller = lhs.lower < rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller);
 	}
+
 	static bool LessThanEquals(hugeint_t lhs, hugeint_t rhs) {
 		int upper_smaller = lhs.upper < rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_smaller_equals = lhs.lower <= rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller_equals);
 	}
+
 	static const hugeint_t POWERS_OF_TEN[40];
 };
 

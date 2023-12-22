@@ -44,24 +44,37 @@ public:
 		return result;
 	}
 
+	static bool TryNegate(uhugeint_t input, uhugeint_t &result);
+
 	// "The negative of an unsigned quantity is computed by subtracting its value from 2^n, where n is the number of
 	// bits in the promoted operand."
+	template <bool CHECK_OVERFLOW = true>
 	static void NegateInPlace(uhugeint_t &input) {
-		uhugeint_t result = 0;
-		SubtractInPlaceNoOverflowCheck(result, input);
-		input = result;
+		if (!TryNegate(input, input)) {
+			throw OutOfRangeException("UHUGEINT is out of range");
+		}
 	}
+
+	template <bool CHECK_OVERFLOW = true>
 	static uhugeint_t Negate(uhugeint_t input) {
-		NegateInPlace(input);
+		NegateInPlace<CHECK_OVERFLOW>(input);
 		return input;
 	}
 
 	static bool TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
-	static void MultiplyNoOverflowCheck(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
 
 	static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs);
 	static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs);
-	static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs);
+
+	template <bool CHECK_OVERFLOW = true>
+	static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs) {
+		uhugeint_t result;
+		if (!TryMultiply(lhs, rhs, result)) {
+			throw OutOfRangeException("Overflow in UHUGEINT multiplication!");
+		}
+		return result;
+	}
+
 	static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs);
 	static uhugeint_t Modulo(uhugeint_t lhs, uhugeint_t rhs);
 
@@ -71,7 +84,8 @@ public:
 	static bool AddInPlace(uhugeint_t &lhs, uhugeint_t rhs);
 	static bool SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs);
 
-	static void SubtractInPlaceNoOverflowCheck(uhugeint_t &lhs, uhugeint_t rhs);
+	static int Sign(hugeint_t n);
+	static hugeint_t Abs(hugeint_t n);
 
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops
@@ -81,35 +95,41 @@ public:
 		int upper_equals = lhs.upper == rhs.upper;
 		return lower_equals & upper_equals;
 	}
+
 	static bool NotEquals(uhugeint_t lhs, uhugeint_t rhs) {
 		int lower_not_equals = lhs.lower != rhs.lower;
 		int upper_not_equals = lhs.upper != rhs.upper;
 		return lower_not_equals | upper_not_equals;
 	}
+
 	static bool GreaterThan(uhugeint_t lhs, uhugeint_t rhs) {
 		int upper_bigger = lhs.upper > rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_bigger = lhs.lower > rhs.lower;
 		return upper_bigger | (upper_equal & lower_bigger);
 	}
+
 	static bool GreaterThanEquals(uhugeint_t lhs, uhugeint_t rhs) {
 		int upper_bigger = lhs.upper > rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_bigger_equals = lhs.lower >= rhs.lower;
 		return upper_bigger | (upper_equal & lower_bigger_equals);
 	}
+
 	static bool LessThan(uhugeint_t lhs, uhugeint_t rhs) {
 		int upper_smaller = lhs.upper < rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_smaller = lhs.lower < rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller);
 	}
+
 	static bool LessThanEquals(uhugeint_t lhs, uhugeint_t rhs) {
 		int upper_smaller = lhs.upper < rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_smaller_equals = lhs.lower <= rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller_equals);
 	}
+
 	static const uhugeint_t POWERS_OF_TEN[40];
 };
 

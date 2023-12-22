@@ -74,6 +74,24 @@ string Uhugeint::ToString(uhugeint_t input) {
 }
 
 //===--------------------------------------------------------------------===//
+// Negate
+//===--------------------------------------------------------------------===//
+
+template <>
+void Uhugeint::NegateInPlace<false>(uhugeint_t &input) {
+	uhugeint_t result = 0;
+	result -= input;
+	input = result;
+}
+
+bool Uhugeint::TryNegate(uhugeint_t input, uhugeint_t& result) {
+	if (!SubtractInPlace(result, input)) {
+		return false;
+	}
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
 // Multiply
 //===--------------------------------------------------------------------===//
 bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
@@ -148,7 +166,10 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	return true;
 }
 
-void Uhugeint::MultiplyNoOverflowCheck(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
+// No overflow check, will wrap
+template <>
+uhugeint_t Uhugeint::Multiply<false>(uhugeint_t lhs, uhugeint_t rhs) {
+	uhugeint_t result;
 #if ((__GNUC__ >= 5) || defined(__clang__)) && defined(__SIZEOF_INT128__)
 	__uint128_t left = __uint128_t(lhs.lower) + (__uint128_t(lhs.upper) << 64);
 	__uint128_t right = __uint128_t(rhs.lower) + (__uint128_t(rhs.upper) << 64);
@@ -203,19 +224,21 @@ void Uhugeint::MultiplyNoOverflowCheck(uhugeint_t lhs, uhugeint_t rhs, uhugeint_
 	result.lower = (third32 << 32) | fourth32;
 	result.upper = (first32 << 32) | second32;
 #endif
-}
-
-uhugeint_t Uhugeint::Multiply(uhugeint_t lhs, uhugeint_t rhs) {
-	uhugeint_t result;
-	if (!TryMultiply(lhs, rhs, result)) {
-		throw OutOfRangeException("Overflow in UHUGEINT multiplication!");
-	}
 	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//
+
+int Sign(uhugeint_t n) {
+	return (n > 0);
+}
+
+uhugeint_t Abs(uhugeint_t n) {
+	return (n);
+}
+
 static uint8_t Bits(uhugeint_t x) {
 	uint8_t out = 0;
 	if (x.upper) {
@@ -294,12 +317,6 @@ bool Uhugeint::SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
 	lhs.lower -= rhs.lower;
 	lhs.upper = new_upper;
 	return no_overflow;
-}
-
-void Uhugeint::SubtractInPlaceNoOverflowCheck(uhugeint_t &lhs, uhugeint_t rhs) {
-	uint64_t new_upper = lhs.upper - rhs.upper - ((lhs.lower - rhs.lower) > lhs.lower);
-	lhs.lower -= rhs.lower;
-	lhs.upper = new_upper;
 }
 
 uhugeint_t Uhugeint::Add(uhugeint_t lhs, uhugeint_t rhs) {
@@ -631,40 +648,49 @@ uhugeint_t &uhugeint_t::operator+=(const uhugeint_t &rhs) {
 	*this = *this + rhs;
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator-=(const uhugeint_t &rhs) {
 	*this = *this - rhs;
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator*=(const uhugeint_t &rhs) {
-	Uhugeint::MultiplyNoOverflowCheck(*this, rhs, *this);
+	*this = Uhugeint::Multiply<false>(*this, rhs);
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator/=(const uhugeint_t &rhs) {
 	*this = Uhugeint::Divide(*this, rhs);
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator%=(const uhugeint_t &rhs) {
 	*this = Uhugeint::Modulo(*this, rhs);
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator>>=(const uhugeint_t &rhs) {
 	*this = *this >> rhs;
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator<<=(const uhugeint_t &rhs) {
 	*this = *this << rhs;
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator&=(const uhugeint_t &rhs) {
 	lower &= rhs.lower;
 	upper &= rhs.upper;
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator|=(const uhugeint_t &rhs) {
 	lower |= rhs.lower;
 	upper |= rhs.upper;
 	return *this;
 }
+
 uhugeint_t &uhugeint_t::operator^=(const uhugeint_t &rhs) {
 	lower ^= rhs.lower;
 	upper ^= rhs.upper;
