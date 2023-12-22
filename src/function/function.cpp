@@ -121,7 +121,7 @@ hash_t BaseScalarFunction::Hash() const {
 string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &varargs) {
 	string result = name + "(";
 	vector<string> string_arguments;
-	for(auto &arg : arguments) {
+	for (auto &arg : arguments) {
 		string_arguments.push_back(arg.ToString());
 	}
 	if (varargs.IsValid()) {

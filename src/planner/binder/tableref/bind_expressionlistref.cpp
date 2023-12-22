@@ -49,7 +49,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 				result->types[val_idx] = LogicalType::MaxLogicalType(current_type, next_type);
 			}
 		}
-		for(auto &type : result->types) {
+		for (auto &type : result->types) {
 			if (type.id() == LogicalTypeId::STRING_LITERAL) {
 				type = LogicalType::VARCHAR;
 			}

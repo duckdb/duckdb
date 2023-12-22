@@ -29,7 +29,7 @@ static void ExtractStringManyFunction(DataChunk &args, ExpressionState &state, V
 
 static void GetExtractFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, JSONCommon::JSONType(), ExtractFunction,
-								   JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, JSONCommon::JSONType(), ExtractFunction,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
@@ -47,7 +47,7 @@ ScalarFunctionSet JSONFunctions::GetExtractFunction() {
 
 static void GetExtractStringFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::VARCHAR, ExtractStringFunction,
-								   JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, ExtractStringFunction,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},

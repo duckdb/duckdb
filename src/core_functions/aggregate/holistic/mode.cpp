@@ -299,7 +299,7 @@ struct ModeFunction {
 };
 
 static unique_ptr<FunctionData> ModeVarcharBind(ClientContext &context, AggregateFunction &function,
-												   vector<unique_ptr<Expression>> &arguments) {
+                                                vector<unique_ptr<Expression>> &arguments) {
 	function.arguments[0] = LogicalType::VARCHAR;
 	return nullptr;
 }
