@@ -346,7 +346,7 @@ struct CeilDecimalOperator {
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
-			if (input < 0) {
+			if (input <= 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
 				return input / power_of_ten;
 			} else {
@@ -484,6 +484,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
 			func = ScalarFunction::NopFunction;
 			break;
 		default:

@@ -10,6 +10,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -364,6 +365,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL: {

@@ -211,6 +211,19 @@ public extension Column {
   /// the given type and the column's underlying database type, returned
   /// elements will always be equal to `nil`.
   ///
+  /// - Parameter type: the native Swift type to cast to
+  /// - Returns: a typed DuckDB result set ``Column``
+  func cast(to type: UIntHuge.Type) -> Column<UIntHuge> {
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  /// Casts the column to the given type
+  ///
+  /// A column cast always succeeds but if there is a type-mismatch between
+  /// the given type and the column's underlying database type, returned
+  /// elements will always be equal to `nil`.
+  ///
   /// - Warning: Implicit conversion of a DuckDB integer column value greater
   ///   than `UInt.max` is a programmer error and will result in a runtime
   ///   precondition failure

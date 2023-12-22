@@ -216,7 +216,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// many types
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, "
 	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB, dt "
-	                             "DATE, tm TIME, ts TIMESTAMP, ival INTERVAL, h HUGEINT)"));
+	                             "DATE, tm TIME, ts TIMESTAMP, ival INTERVAL, h HUGEINT, uh UHUGEINT)"));
 	duckdb_appender tappender;
 
 	status = duckdb_appender_create(tester.connection, nullptr, "many_types", &tappender);
@@ -298,10 +298,16 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_hugeint(tappender, duckdb_double_to_hugeint(27));
 	REQUIRE(status == DuckDBSuccess);
 
+	status = duckdb_append_uhugeint(tappender, duckdb_double_to_uhugeint(27));
+	REQUIRE(status == DuckDBSuccess);
+
 	status = duckdb_appender_end_row(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_appender_begin_row(tappender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_null(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_append_null(tappender);
@@ -415,6 +421,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	auto hugeint = result->Fetch<duckdb_hugeint>(16, 0);
 	REQUIRE(duckdb_hugeint_to_double(hugeint) == 27);
 
+	auto uhugeint = result->Fetch<duckdb_uhugeint>(17, 0);
+	REQUIRE(duckdb_uhugeint_to_double(uhugeint) == 27);
+
 	REQUIRE(result->IsNull(0, 1));
 	REQUIRE(result->IsNull(1, 1));
 	REQUIRE(result->IsNull(2, 1));
@@ -464,6 +473,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	hugeint = result->Fetch<duckdb_hugeint>(16, 1);
 	REQUIRE(duckdb_hugeint_to_double(hugeint) == 0);
 
+	uhugeint = result->Fetch<duckdb_uhugeint>(17, 1);
+	REQUIRE(duckdb_uhugeint_to_double(uhugeint) == 0);
+
 	// double out of range for hugeint
 	hugeint = duckdb_double_to_hugeint(1e300);
 	REQUIRE(hugeint.lower == 0);
@@ -472,6 +484,15 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	hugeint = duckdb_double_to_hugeint(NAN);
 	REQUIRE(hugeint.lower == 0);
 	REQUIRE(hugeint.upper == 0);
+
+	// double out of range for uhugeint
+	uhugeint = duckdb_double_to_uhugeint(1e300);
+	REQUIRE(uhugeint.lower == 0);
+	REQUIRE(uhugeint.upper == 0);
+
+	uhugeint = duckdb_double_to_uhugeint(NAN);
+	REQUIRE(uhugeint.lower == 0);
+	REQUIRE(uhugeint.upper == 0);
 }
 
 TEST_CASE("Test append timestamp in C API", "[capi]") {

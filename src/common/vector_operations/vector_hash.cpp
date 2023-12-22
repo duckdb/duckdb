@@ -3,6 +3,7 @@
 // Description: This file contains the vectorized hash implementations
 //===--------------------------------------------------------------------===//
 
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/types/hash.hpp"
@@ -237,6 +238,9 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	case PhysicalType::INT128:
 		TemplatedLoopHash<HAS_RSEL, hugeint_t>(input, result, rsel, count);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedLoopHash<HAS_RSEL, uhugeint_t>(input, result, rsel, count);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedLoopHash<HAS_RSEL, float>(input, result, rsel, count);
 		break;
@@ -372,6 +376,9 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 		break;
 	case PhysicalType::INT128:
 		TemplatedLoopCombineHash<HAS_RSEL, hugeint_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedLoopCombineHash<HAS_RSEL, uhugeint_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedLoopCombineHash<HAS_RSEL, float>(input, hashes, rsel, count);

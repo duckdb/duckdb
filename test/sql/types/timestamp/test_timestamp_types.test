@@ -47,18 +47,27 @@ statement error
 select '90000-01-19 03:14:07.999999'::TIMESTAMP_US::TIMESTAMP_NS
 ----
 
-# TIME conversions are not directly supported yet
-statement error
+# TIME conversions are now supported
+query I
 select sec::TIME from timestamp;
 ----
+00:00:01
+00:00:51
+00:00:11
 
-statement error
+query I
 select milli::TIME from timestamp;
 ----
+00:00:01.594
+00:00:01.894
+00:00:01.794
 
-statement error
+query I
 select nano::TIME from timestamp;
 ----
+00:00:01.889268
+00:00:01.999268
+00:00:01.899268
 
 # Direct timestamp promotions
 foreach src sec milli micro nano
