@@ -110,8 +110,8 @@ private:
 struct PyTimeDelta {
 public:
 	PyTimeDelta(py::handle &obj);
-	int64_t days;
-	int64_t seconds;
+	int32_t days;
+	int32_t seconds;
 	int64_t microseconds;
 
 public:
@@ -163,8 +163,6 @@ public:
 	date_t ToDate();
 	dtime_t ToDuckTime();
 	Value ToDuckValue(const LogicalType &target_type);
-	bool IsPositiveInfinity() const;
-	bool IsNegativeInfinity() const;
 
 public:
 	static int32_t GetYears(py::handle &obj);
@@ -186,8 +184,6 @@ public:
 
 public:
 	Value ToDuckValue();
-	bool IsPositiveInfinity() const;
-	bool IsNegativeInfinity() const;
 };
 
 struct PyTimezone {

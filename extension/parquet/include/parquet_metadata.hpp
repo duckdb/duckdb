@@ -28,4 +28,9 @@ public:
 	ParquetKeyValueMetadataFunction();
 };
 
+class ParquetFileMetadataFunction : public TableFunction {
+public:
+	ParquetFileMetadataFunction();
+};
+
 } // namespace duckdb

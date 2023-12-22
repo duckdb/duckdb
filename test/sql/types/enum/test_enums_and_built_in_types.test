@@ -9,24 +9,29 @@ PRAGMA enable_verification
 
 statement error
 CREATE TYPE "integer" AS ENUM ('1', '2', '3');
+----
 
 restart
 
 # use a type that is almost a built-in type
 statement error
 SELECT 4::INTEGEE
+----
 
 restart
 
 # cannot drop built-in types
 statement error
 DROP TYPE "INTEGER"
+----
 
 statement error
 DROP TYPE "INTEGEE"
+----
 
 restart
 
 # cannot create built-in type
 statement error
 CREATE TYPE integer AS ENUM ('1', '2', '3');
+----

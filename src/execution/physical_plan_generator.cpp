@@ -153,6 +153,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
 		plan = CreatePlan(op.Cast<LogicalCreateIndex>());
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+		plan = CreatePlan(op.Cast<LogicalCreateSecret>());
+		break;
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		plan = CreatePlan(op.Cast<LogicalExplain>());
 		break;
@@ -207,6 +210,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		break;
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		plan = CreatePlan(op.Cast<LogicalPivot>());
+		break;
+	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+		plan = CreatePlan(op.Cast<LogicalCopyDatabase>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		plan = op.Cast<LogicalExtensionOperator>().CreatePlan(context, *this);

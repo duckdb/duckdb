@@ -59,6 +59,8 @@ template <>
 DUCKDB_API bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int64_t &result);
 template <>
 DUCKDB_API bool TryMultiplyOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+DUCKDB_API bool TryMultiplyOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
 
 struct MultiplyOperatorOverflowCheck {
 	template <class TA, class TB, class TR>

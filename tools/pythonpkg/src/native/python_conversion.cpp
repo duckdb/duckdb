@@ -295,6 +295,13 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 		res = Value::HUGEINT(value);
 		return true;
 	}
+	case LogicalTypeId::UHUGEINT: {
+		if (value < 0) {
+			return false;
+		}
+		res = Value::UHUGEINT(value);
+		return true;
+	}
 	case LogicalTypeId::BIGINT: {
 		res = Value::BIGINT(value);
 		return true;
@@ -363,7 +370,9 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 
 	if (ele.is_none()) {
 		return PythonObjectType::None;
-	} else if (py::isinstance(ele, import_cache.pandas._libs.missing.NAType())) {
+	} else if (ele.is(import_cache.pandas.NaT())) {
+		return PythonObjectType::None;
+	} else if (ele.is(import_cache.pandas.NA())) {
 		return PythonObjectType::None;
 	} else if (py::isinstance<py::bool_>(ele)) {
 		return PythonObjectType::Bool;

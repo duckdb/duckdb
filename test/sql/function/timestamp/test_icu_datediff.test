@@ -117,3 +117,23 @@ query I
 SELECT date_diff('week', '2015-10-06 04:22:11'::timestamptz, '2016-11-25 23:19:37'::timestamptz);
 ----
 59
+
+# DST diffs should not be negative
+statement ok
+set timezone='CET';
+
+statement ok
+CREATE TABLE issue9673(starttime TIMESTAMPTZ, recordtime TIMESTAMPTZ);
+
+statement ok
+INSERT INTO issue9673 VALUES ('2022-10-30 02:17:00+02', '2022-10-30 02:00:21+01');
+
+statement ok
+INSERT INTO issue9673 VALUES ('2021-10-31 02:39:00+02', '2021-10-31 02:38:20+01');
+
+query III
+SELECT starttime, recordtime, date_diff('minute', starttime, recordtime)
+FROM issue9673;
+----
+2022-10-30 02:17:00+02	2022-10-30 02:00:21+01	43
+2021-10-31 02:39:00+02	2021-10-31 02:38:20+01	59

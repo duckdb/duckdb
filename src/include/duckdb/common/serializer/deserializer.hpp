@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/format_serializer.hpp
+// duckdb/common/serializer/deserializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,6 +14,8 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 
 namespace duckdb {
 
@@ -38,6 +40,10 @@ public:
 		// Deserialize an element
 		template <class T>
 		T ReadElement();
+
+		//! Deserialize bytes
+		template <class T>
+		void ReadElement(data_ptr_t &ptr, idx_t size);
 
 		// Deserialize an object
 		template <class FUNC>
@@ -418,6 +424,12 @@ private:
 		return ReadHugeInt();
 	}
 
+	// Deserialize a uhugeint
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, uhugeint_t>::value, T>::type Read() {
+		return ReadUhugeInt();
+	}
+
 	// Deserialize a LogicalIndex
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, LogicalIndex>::value, T>::type Read() {
@@ -458,6 +470,7 @@ protected:
 	virtual int64_t ReadSignedInt64() = 0;
 	virtual uint64_t ReadUnsignedInt64() = 0;
 	virtual hugeint_t ReadHugeInt() = 0;
+	virtual uhugeint_t ReadUhugeInt() = 0;
 	virtual float ReadFloat() = 0;
 	virtual double ReadDouble() = 0;
 	virtual string ReadString() = 0;
@@ -474,6 +487,11 @@ void Deserializer::List::ReadObject(FUNC f) {
 template <class T>
 T Deserializer::List::ReadElement() {
 	return deserializer.Read<T>();
+}
+
+template <class T>
+void Deserializer::List::ReadElement(data_ptr_t &ptr, idx_t size) {
+	deserializer.ReadDataPtr(ptr, size);
 }
 
 } // namespace duckdb

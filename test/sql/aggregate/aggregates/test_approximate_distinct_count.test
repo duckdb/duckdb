@@ -10,6 +10,7 @@ PRAGMA verify_external
 
 statement error
 select approx_count_distinct(*)
+----
 
 query I
 select approx_count_distinct(1)

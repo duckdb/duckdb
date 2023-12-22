@@ -5,7 +5,7 @@
 statement ok
 CREATE TABLE t2 AS (SELECT 42);
 
-concurrentloop i 1 10
+concurrentloop i 1 100
 
 statement maybe
 CREATE OR REPLACE TABLE t2 AS (SELECT -54124033386577348004002656426531535114 FROM t2 LIMIT 70%);

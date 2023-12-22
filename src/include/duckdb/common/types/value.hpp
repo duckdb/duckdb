@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -84,6 +85,7 @@ public:
 	//! Create a Numeric value of the specified type with the specified value
 	DUCKDB_API static Value Numeric(const LogicalType &type, int64_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, hugeint_t value);
+	DUCKDB_API static Value Numeric(const LogicalType &type, uhugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	DUCKDB_API static Value BOOLEAN(int8_t value);
@@ -105,6 +107,8 @@ public:
 	DUCKDB_API static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	DUCKDB_API static Value HUGEINT(hugeint_t value);
+	//! Create a uhugeint Value from a specified value
+	DUCKDB_API static Value UHUGEINT(uhugeint_t value);
 	//! Create a uuid Value from a specified value
 	DUCKDB_API static Value UUID(const string &value);
 	//! Create a uuid Value from a specified value
@@ -150,6 +154,7 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
+	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
 	//! Create a list value with the given entries, list type is inferred from children
 	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
@@ -166,6 +171,9 @@ public:
 	DUCKDB_API static Value EMPTYARRAY(const LogicalType &type, uint32_t size);
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
+	//! Create a map value with the given entries
+	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
+	                            vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
@@ -300,6 +308,7 @@ private:
 		uint32_t uinteger;
 		uint64_t ubigint;
 		hugeint_t hugeint;
+		uhugeint_t uhugeint;
 		float float_;   // NOLINT
 		double double_; // NOLINT
 		uintptr_t pointer;
@@ -361,6 +370,10 @@ struct UIntegerValue {
 
 struct UBigIntValue {
 	DUCKDB_API static uint64_t Get(const Value &value);
+};
+
+struct UhugeIntValue {
+	DUCKDB_API static uhugeint_t Get(const Value &value);
 };
 
 struct FloatValue {
@@ -436,6 +449,8 @@ Value DUCKDB_API Value::CreateValue(int64_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(hugeint_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(uhugeint_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
@@ -487,6 +502,8 @@ DUCKDB_API uint64_t Value::GetValue() const;
 template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
+DUCKDB_API uhugeint_t Value::GetValue() const;
+template <>
 DUCKDB_API string Value::GetValue() const;
 template <>
 DUCKDB_API float Value::GetValue() const;
@@ -515,6 +532,8 @@ template <>
 DUCKDB_API int64_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API hugeint_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API uhugeint_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API uint8_t Value::GetValueUnsafe() const;
 template <>

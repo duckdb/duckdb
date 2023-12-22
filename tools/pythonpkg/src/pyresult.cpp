@@ -10,6 +10,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -177,7 +178,7 @@ unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool
 
 	auto conversion =
 	    make_uniq<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
-	return std::move(conversion);
+	return conversion;
 }
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk,
@@ -364,6 +365,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL: {

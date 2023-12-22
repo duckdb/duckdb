@@ -13,6 +13,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
@@ -23,6 +24,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
@@ -66,11 +68,18 @@ jobs:
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: pwsh
+      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
+
+    - name: Test DUCKDB_INSTALL_LIB variable
+      shell: bash
+      run: echo $DUCKDB_INSTALL_LIB
+
     - name: Test
       shell: bash
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
-        echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
         test/Release/unittest.exe
 
     - name: Tools Test
@@ -241,6 +250,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-         run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+         run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
+         run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe

@@ -6,10 +6,13 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE types(i INTEGER, j VARCHAR, k HUGEINT, d DOUBLE, e BLOB)
+CREATE TABLE types(i INTEGER, j VARCHAR, k HUGEINT, d DOUBLE, e BLOB);
 
 statement ok
-INSERT INTO types VALUES (1, 'hello', 12, 0.5, BLOB 'a\x00b\x00c'), (2, 'world', -12, -0.5, BLOB ''), (3, NULL, NULL, NULL, NULL);
+INSERT INTO types VALUES 
+	(1, 'hello', 12, 0.5, BLOB 'a\x00b\x00c'), 
+	(2, 'world', -12, -0.5, BLOB ''), 
+	(3, NULL, NULL, NULL, NULL);
 
 query IIII
 SELECT UNNEST(['i', 'j', 'k', 'd', 'e']) column_names,
@@ -27,20 +30,31 @@ e	BLOB	(empty)	a\x00b\x00c
 query IIIIIIIIIIII
 SUMMARIZE types;
 ----
-i	INTEGER	1	3	3	2.0	1.0	1	2	3	3	0.0%
-j	VARCHAR	hello	world	2	NULL	NULL	NULL	NULL	NULL	3	33.33%
-k	HUGEINT	-12	12	2	0.0	16.97056274847714	-12	0	12	3	33.33%
-d	DOUBLE	-0.5	0.5	2	0.0	0.7071067811865476	-0.5	0.0	0.5	3	33.33%
-e	BLOB	(empty)	a\x00b\x00c	2	NULL	NULL	NULL	NULL	NULL	3	33.33%
+i	INTEGER	1	3	3	2.0	1.0	1	2	3	3	0.0
+j	VARCHAR	hello	world	2	NULL	NULL	NULL	NULL	NULL	3	33.33
+k	HUGEINT	-12	12	2	0.0	16.97056274847714	-12	0	12	3	33.33
+d	DOUBLE	-0.5	0.5	2	0.0	0.7071067811865476	-0.5	0.0	0.5	3	33.33
+e	BLOB	(empty)	a\x00b\x00c	2	NULL	NULL	NULL	NULL	NULL	3	33.33
 
 query IIIIIIIIIIII
 SUMMARIZE SELECT * FROM types;
 ----
-i	INTEGER	1	3	3	2.0	1.0	1	2	3	3	0.0%
-j	VARCHAR	hello	world	2	NULL	NULL	NULL	NULL	NULL	3	33.33%
-k	HUGEINT	-12	12	2	0.0	16.97056274847714	-12	0	12	3	33.33%
-d	DOUBLE	-0.5	0.5	2	0.0	0.7071067811865476	-0.5	0.0	0.5	3	33.33%
-e	BLOB	(empty)	a\x00b\x00c	2	NULL	NULL	NULL	NULL	NULL	3	33.33%
+i	INTEGER	1	3	3	2.0	1.0	1	2	3	3	0.0
+j	VARCHAR	hello	world	2	NULL	NULL	NULL	NULL	NULL	3	33.33
+k	HUGEINT	-12	12	2	0.0	16.97056274847714	-12	0	12	3	33.33
+d	DOUBLE	-0.5	0.5	2	0.0	0.7071067811865476	-0.5	0.0	0.5	3	33.33
+e	BLOB	(empty)	a\x00b\x00c	2	NULL	NULL	NULL	NULL	NULL	3	33.33
 
 statement ok
 SUMMARIZE VALUES (1.0),(6754950520);
+
+# Various overflows
+statement ok
+SUMMARIZE SELECT 9223372036854775296;
+
+statement ok
+summarize select bigint from test_all_types();
+
+statement ok
+summarize select 9223372036854775295;
+

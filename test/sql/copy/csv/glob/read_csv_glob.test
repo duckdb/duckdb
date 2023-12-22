@@ -91,6 +91,7 @@ SELECT a, b LIKE '%a1.csv%' FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_
 # read-csv auto fails here because of a type mismatch: most files contain dates, but one file contains integers
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', auto_detect=1) ORDER BY 1
+----
 
 # forcing string parsing works
 query I
@@ -157,12 +158,15 @@ SELECT COUNT(*) FROM glob('test//sql////copy//csv/////data///glob///*//////*.csv
 # nothing matches the glob
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1) ORDER BY 1
+----
 
 statement error
 SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/*/a*a.csv'], auto_detect=1) ORDER BY 1
+----
 
 statement error
 SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/*/a*a.csv']) ORDER BY 1
+----
 
 query I
 SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/a*a.csv')

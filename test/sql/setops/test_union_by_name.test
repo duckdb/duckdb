@@ -54,11 +54,15 @@ NULL	5
 #Error: Binder Error: Ambiguous reference to column
 statement error
 SELECT x AS a FROM t1 UNION BY NAME SELECT x AS b FROM t1 ORDER BY t1.x;
+----
 
-# Error: Binder Error: Ambiguous name in ORDER BY!
-statement error
-(SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME (SELECT z FROM t2 UNION ALL SELECT y FROM t2) ORDER BY y;
-
+query II
+(SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME (SELECT z FROM t2 UNION ALL SELECT y FROM t2) ORDER BY y, z;
+----
+NULL	2
+NULL	4
+1	NULL
+3	NULL
 
 ########## test limit
 
@@ -92,6 +96,7 @@ NULL	4	4
 # Error: Binder Error: ORDER term out of range - should be between 1 and 3
 statement error
 SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2 ORDER BY 4;
+----
 
 ########## multi set operations
 

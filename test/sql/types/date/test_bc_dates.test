@@ -46,10 +46,12 @@ SELECT DATE '0000-01-01'
 # year 0 does not exist in the gregorian calendar
 statement error
 SELECT DATE '0000-01-01 (BC)'
+----
 
 # negative BC years do not exist either
 statement error
 SELECT DATE '-0030-01-01 (BC)'
+----
 
 query T
 SELECT DATE '1992-01-01 (BC)'

@@ -39,6 +39,7 @@ select * from tbl;
 # 'i' is violated in row1 and row2, 'k' is only violated in row1
 statement error
 insert into tbl(i,k) values (3,2), (5,5) on conflict (k) do update set j = 10;
+----
 
 query III
 select * from tbl;
@@ -51,6 +52,7 @@ select * from tbl;
 # Do we not throw on it, so this does cause an error, because the conflict of 'k' is not on the same insert tuple as the conflict of 'k'
 statement error
 insert into tbl(i,k) values (3,10), (6,2) on conflict(i) do update set j = 10;
+----
 
 query III
 select * from tbl;

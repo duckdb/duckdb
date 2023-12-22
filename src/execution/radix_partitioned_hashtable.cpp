@@ -69,9 +69,11 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 // Sink
 //===--------------------------------------------------------------------===//
 struct AggregatePartition {
-	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p) : data(std::move(data_p)), finalized(false) {
+	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p)
+	    : data(std::move(data_p)), progress(0), finalized(false) {
 	}
 	unique_ptr<TupleDataCollection> data;
+	atomic<double> progress;
 	atomic<bool> finalized;
 };
 
@@ -135,6 +137,8 @@ public:
 	void Destroy();
 
 public:
+	ClientContext &context;
+
 	//! The radix HT
 	const RadixPartitionedHashTable &radix_ht;
 	//! Config for partitioning
@@ -168,10 +172,10 @@ public:
 	idx_t count_before_combining;
 };
 
-RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht_p)
-    : radix_ht(radix_ht_p), config(context, *this), finalized(false), external(false), active_threads(0),
-      any_combined(false), finalize_idx(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
-      count_before_combining(0) {
+RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
+    : context(context_p), radix_ht(radix_ht_p), config(context, *this), finalized(false), external(false),
+      active_threads(0), any_combined(false), finalize_idx(0),
+      scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0) {
 }
 
 RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
@@ -479,9 +483,32 @@ void RadixPartitionedHashTable::Finalize(ClientContext &, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-idx_t RadixPartitionedHashTable::NumberOfPartitions(GlobalSinkState &sink_p) const {
+idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
-	return sink.partitions.size();
+	if (sink.partitions.empty()) {
+		return 0;
+	}
+
+	// We take the largest partition as an example
+	reference<TupleDataCollection> largest_partition = *sink.partitions[0]->data;
+	for (idx_t i = 1; i < sink.partitions.size(); i++) {
+		auto &partition = *sink.partitions[i]->data;
+		if (partition.Count() > largest_partition.get().Count()) {
+			largest_partition = partition;
+		}
+	}
+
+	// Worst-case size if every value is unique
+	const auto maximum_combined_partition_size =
+	    GroupedAggregateHashTable::GetCapacityForCount(largest_partition.get().Count()) * sizeof(aggr_ht_entry_t) +
+	    largest_partition.get().SizeInBytes();
+
+	// How many of these can we fit in 60% of memory
+	const idx_t memory_limit = 0.6 * BufferManager::GetBufferManager(sink.context).GetMaxMemory();
+	const auto partitions_that_fit = MaxValue<idx_t>(memory_limit / maximum_combined_partition_size, 1);
+
+	// Of course, limit it to the number of threads
+	return MinValue<idx_t>(sink.partitions.size(), partitions_that_fit);
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
@@ -647,9 +674,19 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	if (!ht) {
-		// Create a HT with sufficient capacity
+		// This capacity would always be sufficient for all data
 		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(partition.data->Count());
-		ht = sink.radix_ht.CreateHT(gstate.context, capacity, 0);
+
+		// However, we will limit the initial capacity so we don't do a huge over-allocation
+		const idx_t n_threads = TaskScheduler::GetScheduler(gstate.context).NumberOfThreads();
+		const idx_t memory_limit = BufferManager::GetBufferManager(gstate.context).GetMaxMemory();
+		const idx_t thread_limit = 0.6 * memory_limit / n_threads;
+
+		const idx_t size_per_entry = partition.data->SizeInBytes() / partition.data->Count() +
+		                             idx_t(GroupedAggregateHashTable::LOAD_FACTOR * sizeof(aggr_ht_entry_t));
+		const auto capacity_limit = NextPowerOfTwo(thread_limit / size_per_entry);
+
+		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);
 	} else {
 		// We may want to resize here to the size of this partition, but for now we just assume uniform partition sizes
 		ht->InitializePartitionedData();
@@ -658,7 +695,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	// Now combine the uncombined data using this thread's HT
-	ht->Combine(*partition.data);
+	ht->Combine(*partition.data, &partition.progress);
 	ht->UnpinData();
 
 	// Move the combined data back to the partition
@@ -810,6 +847,27 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	} else {
 		return SourceResultType::FINISHED;
 	}
+}
+
+double RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkState &sink_p,
+                                              GlobalSourceState &gstate_p) const {
+	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
+	auto &gstate = gstate_p.Cast<RadixHTGlobalSourceState>();
+
+	// Get partition combine progress, weigh it 2x
+	double total_progress = 0;
+	for (auto &partition : sink.partitions) {
+		total_progress += partition->progress * 2.0;
+	}
+
+	// Get scan progress, weigh it 1x
+	total_progress += gstate.scan_done;
+
+	// Divide by 3x for the weights, and the number of partitions to get a value between 0 and 1 again
+	total_progress /= 3.0 * sink.partitions.size();
+
+	// Multiply by 100 to get a percentage
+	return 100.0 * total_progress;
 }
 
 } // namespace duckdb

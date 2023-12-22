@@ -107,14 +107,8 @@ public:
 	virtual ~PartialBlockManager();
 
 public:
-	//! Flush any remaining partial blocks to disk
-	void FlushPartialBlocks();
-
 	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
 
-	virtual void AllocateBlock(PartialBlockState &state, uint32_t segment_size);
-
-	void Merge(PartialBlockManager &other);
 	//! Register a partially filled block that is filled with "segment_size" entries
 	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
 
@@ -124,9 +118,20 @@ public:
 	//! Rollback all data written by this partial block manager
 	void Rollback();
 
+	//! Merge this block manager into another one
+	void Merge(PartialBlockManager &other);
+
+	//! Flush any remaining partial blocks to disk
+	void FlushPartialBlocks();
+
+	unique_lock<mutex> GetLock() {
+		return unique_lock<mutex>(partial_block_lock);
+	}
+
 protected:
 	BlockManager &block_manager;
 	CheckpointType checkpoint_type;
+	mutex partial_block_lock;
 	//! A map of (available space -> PartialBlock) for partially filled blocks
 	//! This is a multimap because there might be outstanding partial blocks with
 	//! the same amount of left-over space
@@ -139,6 +144,7 @@ protected:
 	uint32_t max_use_count;
 
 protected:
+	virtual void AllocateBlock(PartialBlockState &state, uint32_t segment_size);
 	//! Try to obtain a partially filled block that can fit "segment_size" bytes
 	//! If successful, returns true and returns the block_id and offset_in_block to write to
 	//! Otherwise, returns false

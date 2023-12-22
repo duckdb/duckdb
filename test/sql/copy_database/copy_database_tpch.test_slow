@@ -1,0 +1,37 @@
+# name: test/sql/copy_database/copy_database_tpch.test_slow
+# description: Test COPY statement with TPC-H database
+# group: [copy_database]
+
+require noforcestorage
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+COPY FROM DATABASE memory TO db1
+
+statement ok
+USE db1
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

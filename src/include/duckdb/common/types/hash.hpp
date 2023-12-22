@@ -50,6 +50,8 @@ DUCKDB_API hash_t Hash(int64_t val);
 template <>
 DUCKDB_API hash_t Hash(hugeint_t val);
 template <>
+DUCKDB_API hash_t Hash(uhugeint_t val);
+template <>
 DUCKDB_API hash_t Hash(float val);
 template <>
 DUCKDB_API hash_t Hash(double val);

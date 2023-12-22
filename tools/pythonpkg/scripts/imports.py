@@ -9,7 +9,8 @@ pyarrow.RecordBatchReader
 import pandas
 
 pandas.DataFrame
-pandas._libs.missing.NAType
+pandas.NaT
+pandas.NA
 pandas.isnull
 pandas.ArrowDtype
 
@@ -41,6 +42,7 @@ ipywidgets.FloatProgress
 
 import numpy
 
+numpy.core.multiarray
 numpy.ndarray
 numpy.datetime64
 numpy.generic

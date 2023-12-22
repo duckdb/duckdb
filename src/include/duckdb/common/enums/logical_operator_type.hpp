@@ -30,6 +30,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_SAMPLE = 12,
 	LOGICAL_LIMIT_PERCENT = 13,
 	LOGICAL_PIVOT = 14,
+	LOGICAL_COPY_DATABASE = 15,
 
 	// -----------------------------
 	// Data sources
@@ -105,6 +106,11 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_SET = 179,
 	LOGICAL_LOAD = 180,
 	LOGICAL_RESET = 181,
+
+	// -----------------------------
+	// Secrets
+	// -----------------------------
+	LOGICAL_CREATE_SECRET = 190,
 
 	LOGICAL_EXTENSION_OPERATOR = 255
 };

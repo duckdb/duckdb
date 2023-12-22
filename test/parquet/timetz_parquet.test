@@ -10,3 +10,8 @@ select * from 'data/parquet-testing/timetz.parquet' ;
 14:30:00+00
 11:35:00+00
 01:59:00+00
+
+query I
+select COL_TIME from 'data/parquet-testing/date-with-timezone-int64.parquet' ;
+----
+12:00:00+00

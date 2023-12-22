@@ -9,7 +9,11 @@ PRAGMA enable_verification
 load __TEST_DIR__/enum_types.db
 
 statement ok
-CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+CREATE TYPE mood AS ENUM (
+	'sad',
+	'ok',
+	'happy'
+);
 
 statement ok
 CREATE TABLE person (
@@ -21,7 +25,10 @@ CREATE TABLE person (
 );
 
 statement ok
-INSERT INTO person VALUES (1, ROW('Mark', 'happy'));
+INSERT INTO person VALUES (
+	1,
+	ROW('Mark', 'happy')
+);
 
 query II
 FROM person

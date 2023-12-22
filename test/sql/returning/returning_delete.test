@@ -65,6 +65,7 @@ WHERE a>=10 AND a <=13  RETURNING c as aliasc, a as aliasa, b as aliasb;
 # returning expression with aggregate function at top level is not allowed
 statement error
 DELETE FROM table1 WHERE a >= 13 AND a <= 15 RETURNING SUM(a);
+----
 
 # update and return combination of values
 query I
@@ -105,8 +106,10 @@ INSERT INTO table2 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (100, 100, 100), (200
 statement ok
 INSERT INTO table3 VALUES (1, 4, 4), (2, 6, 7), (8, 8, 8);
 
+# cannot sort a returning statement so this can fail.
+# if it happens again just comment out the test
 # update using other table (automatic join should happen here)
-query III
+query III rowsort
 DELETE FROM table3
 WHERE a3 IN (
 	SELECT a2 from table2
@@ -152,6 +155,7 @@ RETURNING *;
 # subquery not allowed in returning statement
 statement error
 DELETE FROM table1 WHERE a = 14 RETURNING a IN (SELECT a FROM table1);
+----
 
 
 # using case statement
