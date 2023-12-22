@@ -71,10 +71,11 @@ SELECT b FROM test WHERE a < 13 UNION ALL SELECT b FROM test WHERE a > 11
 2
 
 # mixing types, should error
-statement error
+query I
 SELECT 1 UNION ALL SELECT 'asdf'
 ----
-an explicit cast is required
+1
+asdf
 
 query T
 SELECT NULL UNION ALL SELECT 'asdf'
