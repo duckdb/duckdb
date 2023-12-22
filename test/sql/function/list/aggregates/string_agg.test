@@ -52,11 +52,11 @@ query T
 SELECT list_string_agg(x) FROM strings WHERE g > [100]
 ----
 
-# numerics are not auto cast to strings
-statement error
+# numerics are auto cast to strings for string agg
+query I
 SELECT list_string_agg([1, 2])
 ----
-No matching aggregate function
+1,2
 
 query T
 SELECT list_string_agg([1, 2]::varchar[])
