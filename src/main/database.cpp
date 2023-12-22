@@ -9,17 +9,18 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
-#include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/planner/extension_callback.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -197,6 +198,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		config_ptr->options.database_path.clear();
 	}
+
 	Configure(*config_ptr);
 
 	if (user_config && !user_config->options.use_temporary_directory) {
@@ -212,6 +214,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// resolve the type of teh database we are opening
 	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
+
+	// initialize the secret manager
+	config.secret_manager->Initialize(*this);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -250,6 +255,10 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 }
 
 DuckDB::~DuckDB() {
+}
+
+SecretManager &DatabaseInstance::GetSecretManager() {
+	return *config.secret_manager;
 }
 
 BufferManager &DatabaseInstance::GetBufferManager() {
@@ -310,6 +319,11 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>();
+	}
+	if (new_config.secret_manager) {
+		config.secret_manager = std::move(new_config.secret_manager);
+	} else {
+		config.secret_manager = make_uniq<SecretManager>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();
