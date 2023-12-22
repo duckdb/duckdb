@@ -130,11 +130,9 @@ LIMIT 1;
 INTEGER[]	BIGINT[]	INTEGER[]
 
 
-# interger can not cast to list
-statement error
+statement ok
 SELECT *
 FROM parquet_scan('__TEST_DIR__/*.parquet', union_by_name=true);
-----
 
 statement ok
 PRAGMA threads=1
