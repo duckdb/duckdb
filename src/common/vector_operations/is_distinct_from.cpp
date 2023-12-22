@@ -1,3 +1,4 @@
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
@@ -879,6 +880,9 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 	case PhysicalType::INT128:
 		TemplatedDistinctExecute<hugeint_t, OP>(left, right, result, count);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedDistinctExecute<uhugeint_t, OP>(left, right, result, count);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedDistinctExecute<float, OP>(left, right, result, count);
 		break;
@@ -925,6 +929,8 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 		return DistinctSelect<uint64_t, uint64_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::INT128:
 		return DistinctSelect<hugeint_t, hugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT128:
+		return DistinctSelect<uhugeint_t, uhugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::FLOAT:
 		return DistinctSelect<float, float, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:

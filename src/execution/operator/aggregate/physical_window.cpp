@@ -11,6 +11,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/row/row_data_collection_scanner.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"

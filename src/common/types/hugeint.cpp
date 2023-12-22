@@ -1,4 +1,5 @@
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/hugeint.hpp"
@@ -507,6 +508,17 @@ bool Hugeint::TryCast(hugeint_t input, hugeint_t &result) {
 }
 
 template <>
+bool Hugeint::TryCast(hugeint_t input, uhugeint_t &result) {
+	if (input < 0) {
+		return false;
+	}
+
+	result.lower = input.lower;
+	result.upper = input.upper;
+	return true;
+}
+
+template <>
 bool Hugeint::TryCast(hugeint_t input, float &result) {
 	double dbl_result;
 	Hugeint::TryCast(input, dbl_result);
@@ -852,6 +864,9 @@ hugeint_t::operator int32_t() const {
 }
 hugeint_t::operator int64_t() const {
 	return NarrowCast<int64_t>(*this);
+}
+hugeint_t::operator uhugeint_t() const {
+	return {static_cast<uint64_t>(this->upper), this->lower};
 }
 
 string hugeint_t::ToString() const {
