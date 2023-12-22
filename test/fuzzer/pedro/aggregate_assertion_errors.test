@@ -29,6 +29,6 @@ SELECT count(c0 ORDER BY 0) FROM (SELECT 2 EXCEPT SELECT 2) c0;
 0
 
 query I
-SELECT mode((c0, 0)::varchar) FROM (SELECT 1 c0), (SELECT 2);
+SELECT mode((c0, 0)) FROM (SELECT 1 c0), (SELECT 2);
 ----
 {'': 1, '': 0}
