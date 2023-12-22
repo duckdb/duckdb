@@ -48,7 +48,7 @@ static void AddCodepoint(int32_t codepoint, LikeString &ret, bool contains) {
 		ret.exists = false;
 		return;
 	}
-	for(idx_t i = 0; i < idx_t(sz); i++) {
+	for (idx_t i = 0; i < idx_t(sz); i++) {
 		AddCharacter(utf8_str[i], ret, contains);
 	}
 }
