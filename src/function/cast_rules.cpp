@@ -306,10 +306,6 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// parameter expression can be cast to anything for no cost
 		return 0;
 	}
-	if (from.GetAlias() != to.GetAlias()) {
-		// if aliases are different, an implicit cast is not possible
-		return -1;
-	}
 	if (from.id() == LogicalTypeId::STRING_LITERAL) {
 		// string literals can be cast to any type for low cost as long as the type is valid
 		// i.e. we cannot cast to LIST(ANY) as we don't know what "ANY" should be
@@ -323,6 +319,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			}
 		}
 		return to.id() == LogicalTypeId::VARCHAR ? 1 : 20;
+	}
+	if (from.GetAlias() != to.GetAlias()) {
+		// if aliases are different, an implicit cast is not possible
+		return -1;
 	}
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
 		// Lists can be cast if their child types can be cast
