@@ -18,17 +18,19 @@ namespace duckdb {
 
 class ColumnCountResult : public ScannerResult {
 public:
-	idx_t column_counts[STANDARD_VECTOR_SIZE];
+	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine);
+	idx_t &operator[](size_t index);
 
-	CSVStateMachine *state_machine;
+	idx_t column_counts[STANDARD_VECTOR_SIZE];
+	idx_t current_column_count = 0;
+
 	//! Adds a Value to the result
-	static inline void AddValue(ColumnCountResult &result, const char current_char, const idx_t buffer_pos);
+	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);
 	//! Adds a Row to the result
-	static inline bool AddRow(ColumnCountResult &result, const char current_char, const idx_t buffer_pos);
+	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(ColumnCountResult &result);
-
-	idx_t &operator[](size_t index);
+	inline void InternalAddRow();
 };
 
 //! Scanner that goes over the CSV and figures out how many columns each row has. Used for dialect sniffing

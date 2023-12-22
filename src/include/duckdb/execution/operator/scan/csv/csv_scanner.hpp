@@ -18,19 +18,20 @@
 //#include "duckdb/common/fast_mem.hpp"
 //#include "duckdb/execution/operator/scan/csv/scanner/base_scanner.hpp"
 //
-//namespace duckdb {
+// namespace duckdb {
 //
 ////! The different scanner types
-//enum ScannerType : uint8_t { DIALECT_DETECTION = 0, TYPE_DETECTION = 1, TYPE_REFINEMENT = 2, PARSING = 3 };
+// enum ScannerType : uint8_t { DIALECT_DETECTION = 0, TYPE_DETECTION = 1, TYPE_REFINEMENT = 2, PARSING = 3 };
 //
 ////! A CSV Scanner is what iterates over CSV Buffers.
 ////! They are capable of autonomously getting their buffers, and by using a CSV State Machine, they can parse it to
-////! different structures In certain sniffing phases the can simply consist of counting the number of columns. While when
+////! different structures In certain sniffing phases the can simply consist of counting the number of columns. While
+/// when
 ////! reading the file It can be creating the data in DuckDB Chunks.
 //
 ////! Due to a CSV File being broken into multiple buffers, the CSV Scanner also needs to ensure that overbuffer values
 ////! are Properly read
-//class CSVScanner {
+// class CSVScanner {
 //	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
 //	                    ScannerBoundary boundaries, idx_t scanner_id);
 //
@@ -207,11 +208,11 @@
 //		parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), varchar_types);
 //	}
 //
-//public:
+// public:
 //	//! Produces error messages for column name -> type mismatch.
 //	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 //
-//private:
+// private:
 //	//! Where this CSV Scanner starts
 //	CSVIterator csv_iterator;
 //	//! Shared pointer to the buffer_manager, this is shared across multiple scanners

@@ -8,9 +8,9 @@
 //#include "utf8proc_wrapper.hpp"
 //#include "duckdb/execution/operator/scan/csv/csv_casting.hpp"
 //
-//namespace duckdb {
+// namespace duckdb {
 //
-//CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
+// CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
 //                       ScannerBoundary boundary_p, idx_t scanner_id_p)
 //    : scanner_id(scanner_id_p), boundary(boundary_p), buffer_manager(std::move(buffer_manager_p)),
 //      state_machine(state_machine_p) {
@@ -21,7 +21,7 @@
 //}
 //
 ////! Skips all empty lines, until a non-empty line shows up
-//struct ProcessSkipEmptyLines {
+// struct ProcessSkipEmptyLines {
 //	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {
 //		scanner.states.Initialize(CSVState::STANDARD);
 //	}
@@ -43,7 +43,7 @@
 //	}
 //};
 //
-//void CSVScanner::SkipEmptyLines() {
+// void CSVScanner::SkipEmptyLines() {
 //	if (state_machine->options.dialect_options.num_cols == 1) {
 //		// If we only have one column, empty lines are null data.
 //		return;
@@ -52,7 +52,7 @@
 //}
 //
 ////! Moves the buffer until the next new line
-//struct SkipUntilNewLine {
+// struct SkipUntilNewLine {
 //	inline static void Initialize(CSVScanner &scanner, idx_t cur_pos) {
 //		scanner.states.Initialize(CSVState::STANDARD);
 //	}
@@ -78,7 +78,7 @@
 //	}
 //};
 //
-//void CSVScanner::SkipHeader() {
+// void CSVScanner::SkipHeader() {
 //	if (!state_machine->options.dialect_options.header.GetValue()) {
 //		// No header to skip
 //		return;
@@ -86,7 +86,7 @@
 //	Process<SkipUntilNewLine>(*this, csv_iterator.buffer_pos);
 //}
 //
-//void CSVScanner::ProcessOverbufferValue() {
+// void CSVScanner::ProcessOverbufferValue() {
 //	auto cur_buf = cur_buffer_handle->Ptr();
 //	for (; csv_iterator.buffer_pos < cur_buffer_handle->actual_size; csv_iterator.buffer_pos++) {
 //		state_machine->Transition(states, cur_buf[csv_iterator.buffer_pos]);
@@ -118,7 +118,7 @@
 //	current_value_pos++;
 //}
 //
-//bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
+// bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
 //	if (start_set) {
 //		return true;
 //	}
@@ -183,7 +183,7 @@
 //	return success;
 //}
 //
-//bool CSVScanner::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
+// bool CSVScanner::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
 //	if (parse_chunk.size() == 0) {
 //		return true;
 //	}
@@ -389,11 +389,11 @@
 //	return true;
 //}
 //
-//void CSVScanner::Process() {
+// void CSVScanner::Process() {
 //	Process<ParseChunk>(*this, parse_chunk);
 //}
 //
-//void CSVScanner::Parse(DataChunk &output_chunk, VerificationPositions &verification_positions) {
+// void CSVScanner::Parse(DataChunk &output_chunk, VerificationPositions &verification_positions) {
 //	// If necessary we set the start of the buffer, basically where we need to start scanning from
 //	bool found_start = SetStart(verification_positions);
 //	if (!found_start) {
@@ -412,12 +412,9 @@
 //	total_rows_emmited += output_chunk.size();
 //}
 //
-//string CSVScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
-//	for (idx_t i = 0; i < names.size(); i++) {
-//		auto it = sql_types_per_column.find(names[i]);
-//		if (it != sql_types_per_column.end()) {
-//			sql_types_per_column.erase(names[i]);
-//			continue;
+// string CSVScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names)
+// { 	for (idx_t i = 0; i < names.size(); i++) { 		auto it = sql_types_per_column.find(names[i]); 		if (it !=
+// sql_types_per_column.end()) { 			sql_types_per_column.erase(names[i]); 			continue;
 //		}
 //	}
 //	if (sql_types_per_column.empty()) {
@@ -432,24 +429,24 @@
 //	return exception;
 //}
 //
-//int64_t CSVScanner::GetBufferIndex() {
+// int64_t CSVScanner::GetBufferIndex() {
 //	if (cur_buffer_handle) {
 //		return cur_buffer_handle->buffer_idx;
 //	}
 //	return -1;
 //}
 //
-//idx_t CSVScanner::GetTotalRowsEmmited() {
+// idx_t CSVScanner::GetTotalRowsEmmited() {
 //	return total_rows_emmited;
 //}
 //
-//bool CSVScanner::Finished() {
+// bool CSVScanner::Finished() {
 //	// We consider the scanner done, if there is no buffer handle for a given buffer_idx (i.e., we are done scanning
 //	// the file) OR if we exhausted the bytes we were supposed to read
 //	return csv_iterator.bytes_to_read == 0;
 //}
 //
-//void CSVScanner::Reset() {
+// void CSVScanner::Reset() {
 //	if (cur_buffer_handle) {
 //		cur_buffer_handle.reset();
 //	}
@@ -458,18 +455,18 @@
 //	buffer_manager->Initialize();
 //}
 //
-//CSVStateMachineSniffing &CSVScanner::GetStateMachineSniff() {
+// CSVStateMachineSniffing &CSVScanner::GetStateMachineSniff() {
 //	D_ASSERT(state_machine);
 //	CSVStateMachineSniffing *sniffing_state_machine = static_cast<CSVStateMachineSniffing *>(state_machine.get());
 //	return *sniffing_state_machine;
 //}
 //
-//CSVStateMachine &CSVScanner::GetStateMachine() {
+// CSVStateMachine &CSVScanner::GetStateMachine() {
 //	D_ASSERT(state_machine);
 //	return *state_machine;
 //}
 //
-//bool CSVScanner::Last() {
+// bool CSVScanner::Last() {
 //	D_ASSERT(cur_buffer_handle);
 //	return cur_buffer_handle->is_last_buffer && csv_iterator.buffer_pos + 1 == cur_buffer_handle->actual_size;
 //}

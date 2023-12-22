@@ -2,21 +2,31 @@
 
 namespace duckdb {
 
-void ColumnCountResult::AddValue(ColumnCountResult &result, const char current_char, const idx_t buffer_pos) {
-	result.column_counts[result.result_position]++;
+ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine)
+    : ScannerResult(states, state_machine) {
+}
+
+void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
+	result.current_column_count++;
+}
+
+inline void ColumnCountResult::InternalAddRow() {
+	column_counts[result_position++] = current_column_count + 1;
+	current_column_count = 0;
 }
 
 idx_t &ColumnCountResult::operator[](size_t index) {
 	return column_counts[index];
 }
 
-bool ColumnCountResult::AddRow(ColumnCountResult &result, const char current_char, const idx_t buffer_pos) {
-	result.column_counts[result.result_position++]++;
+bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
+	result.InternalAddRow();
 
 	// This is hacky, should be probably moved somewhere.
-	result.state_machine->carry_on_separator = current_char == '\r' || result.state_machine->carry_on_separator;
-	result.state_machine->single_record_separator =
-	    current_char == '\n' || result.state_machine->single_record_separator;
+	result.state_machine.carry_on_separator =
+	    result.states.current_state == CSVState::CARRIAGE_RETURN || result.state_machine.carry_on_separator;
+	result.state_machine.single_record_separator =
+	    result.states.current_state == CSVState::RECORD_SEPARATOR || result.state_machine.single_record_separator;
 
 	if (result.result_position >= STANDARD_VECTOR_SIZE) {
 		// We sniffed enough rows
@@ -31,10 +41,9 @@ void ColumnCountResult::Kaput(ColumnCountResult &result) {
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        shared_ptr<CSVStateMachine> state_machine)
-    : BaseScanner(buffer_manager, state_machine), column_count(1) {
-	result.result_position = 0;
-	result.state_machine = state_machine.get();
-};
+    : BaseScanner(buffer_manager, state_machine), result(states, *state_machine), column_count(1) {
+
+                                                                                  };
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
 	return make_uniq<StringValueScanner>(buffer_manager, state_machine);
@@ -71,6 +80,14 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			// Move to next buffer
 			pos.pos = 0;
 			cur_buffer_handle = buffer_manager->GetBuffer(pos.file_id, ++pos.buffer_id);
+			if (!cur_buffer_handle) {
+				buffer_handle_ptr = nullptr;
+				// This means we reached the end of the file, we must add a last line if there is any to be added
+				if (result.current_column_count > 0) {
+					result.InternalAddRow();
+				}
+				return;
+			}
 			buffer_handle_ptr = cur_buffer_handle->Ptr();
 		}
 		Process();

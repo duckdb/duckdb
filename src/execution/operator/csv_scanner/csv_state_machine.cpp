@@ -17,7 +17,7 @@ CSVStateMachine::CSVStateMachine(const StateMachine &transition_array_p, const C
       options(options_p) {
 }
 
-//CSVStateMachineSniffing::CSVStateMachineSniffing(CSVReaderOptions &options_p,
+// CSVStateMachineSniffing::CSVStateMachineSniffing(CSVReaderOptions &options_p,
 //                                                 const CSVStateMachineOptions &state_machine_options,
 //                                                 CSVStateMachineCache &csv_state_machine_cache_p)
 //    : CSVStateMachine(options_p, state_machine_options, csv_state_machine_cache_p) {

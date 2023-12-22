@@ -2,8 +2,12 @@
 
 namespace duckdb {
 
+ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine_p)
+    : states(states_p), state_machine(state_machine_p) {
+}
+
 idx_t ScannerResult::Size() {
-	return result_position + 1;
+	return result_position;
 }
 
 bool ScannerResult::Empty() {
@@ -29,6 +33,9 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 };
 
 bool BaseScanner::Finished() {
+	if (!cur_buffer_handle) {
+		return true;
+	}
 	if (buffer_manager->FileCount() > 1) {
 		//! Fixme: We might want to lift this if we want to run the sniffer over multiple files.
 		throw InternalException("We can't have a buffer manager that scans to infinity with more than one file");
@@ -38,7 +45,7 @@ bool BaseScanner::Finished() {
 		return false;
 	}
 	// If yes, are we in the last buffer?
-	if (pos.buffer_id + 1 != buffer_manager->CachedBufferPerFile(pos.file_id)) {
+	if (pos.buffer_id != buffer_manager->CachedBufferPerFile(pos.file_id)) {
 		return false;
 	}
 	// If yes, are we in the last position?
@@ -68,6 +75,26 @@ void BaseScanner::Process() {
 
 void BaseScanner::FinalizeChunkProcess() {
 	throw InternalException("FinalizeChunkProcess() from CSV Base Scanner is mot implemented");
+}
+
+string BaseScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto it = sql_types_per_column.find(names[i]);
+		if (it != sql_types_per_column.end()) {
+			sql_types_per_column.erase(names[i]);
+			continue;
+		}
+	}
+	if (sql_types_per_column.empty()) {
+		return string();
+	}
+	string exception = "COLUMN_TYPES error: Columns with names: ";
+	for (auto &col : sql_types_per_column) {
+		exception += "\"" + col.first + "\",";
+	}
+	exception.pop_back();
+	exception += " do not exist in the CSV File";
+	return exception;
 }
 
 void BaseScanner::ParseChunkInternal() {

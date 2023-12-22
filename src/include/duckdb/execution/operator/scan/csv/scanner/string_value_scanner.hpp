@@ -17,7 +17,7 @@ namespace duckdb {
 
 class StringValueResult : public ScannerResult {
 public:
-	StringValueResult(CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle);
+	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle);
 	//! Information on the vector
 	unique_ptr<Vector> vector;
 	string_t *vector_ptr;
@@ -36,15 +36,20 @@ public:
 	//! If this line might have too many columns
 	bool maybe_too_many_columns = false;
 	//! Adds a Value to the result
-	static inline void AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos);
+	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Row to the result
-	static inline bool AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos);
+	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(StringValueResult &result);
+
+	inline void AddRowInternal(idx_t buffer_pos);
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
-	void ToChunk(DataChunk &parse_chunk, const std::vector<SelectionVector> &selection_vectors);
+	void ToChunk(DataChunk &parse_chunk);
+
 	idx_t NumberOfRows();
+
+	void Print();
 
 	//! Returns a DataChunk
 };
@@ -52,9 +57,13 @@ public:
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
 class StringValueScanner : public BaseScanner {
 public:
-	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine);
+	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
+	                   ScannerBoundary boundary = {});
 
 	StringValueResult *ParseChunk() override;
+
+	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
+	static StringValueScanner GetCSVScanner(ClientContext &context, CSVReaderOptions &options);
 
 private:
 	void Process() override;

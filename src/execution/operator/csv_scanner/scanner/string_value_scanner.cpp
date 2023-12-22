@@ -2,9 +2,9 @@
 
 namespace duckdb {
 
-StringValueResult::StringValueResult(CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle)
-    : number_of_columns(state_machine.dialect_options.num_cols), null_padding(state_machine.options.null_padding),
-      ignore_errors(state_machine.options.ignore_errors) {
+StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle)
+    : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
+      null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors) {
 	// Vector information
 	vector_size = number_of_columns * STANDARD_VECTOR_SIZE;
 	vector = make_uniq<Vector>(LogicalType::VARCHAR, vector_size);
@@ -32,8 +32,9 @@ Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
 	}
 }
 
-void StringValueResult::ToChunk(DataChunk &parse_chunk, const std::vector<SelectionVector> &selection_vectors) {
+void StringValueResult::ToChunk(DataChunk &parse_chunk) {
 	idx_t number_of_rows = NumberOfRows();
+	const auto &selection_vectors = state_machine.GetSelectionVector();
 	for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
 		// fixme: has to do some extra checks for null padding
 		auto &v = parse_chunk.data[col_idx];
@@ -42,9 +43,9 @@ void StringValueResult::ToChunk(DataChunk &parse_chunk, const std::vector<Select
 	parse_chunk.SetCardinality(number_of_rows);
 }
 
-void StringValueResult::AddValue(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
+void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	result.vector_ptr[result.result_position++] =
-	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
+	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
 	result.last_position = buffer_pos;
 	if (result.result_position % result.number_of_columns == 0) {
 		// This means this value reached the number of columns in a line. This is fine, if this is the last buffer, and
@@ -53,11 +54,26 @@ void StringValueResult::AddValue(StringValueResult &result, const char current_c
 	}
 }
 
-bool StringValueResult::AddRow(StringValueResult &result, const char current_char, const idx_t buffer_pos) {
+inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	// We add the value
-	result.vector_ptr[result.result_position++] =
-	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
-	result.last_position = buffer_pos;
+	vector_ptr[result_position++] = string_t(buffer_ptr + last_position, buffer_pos - last_position);
+	last_position = buffer_pos;
+}
+
+void StringValueResult::Print() {
+	for (idx_t i = 0; i < result_position; i++) {
+		std::cout << vector_ptr[i].GetString();
+		if (i + 1 % number_of_columns == 0) {
+			std::cout << std::endl;
+		} else {
+			std::cout << ",";
+		}
+	}
+}
+
+bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
+	// We add the value
+	result.AddRowInternal(buffer_pos);
 
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
@@ -89,10 +105,11 @@ bool StringValueResult::AddRow(StringValueResult &result, const char current_cha
 		}
 	}
 
-	if (result.result_position >= result.vector_size) {
+	if (result.result_position % result.number_of_columns >= result.vector_size) {
 		// We have a full chunk
 		return true;
 	}
+	return false;
 }
 
 void StringValueResult::Kaput(StringValueResult &result) {
@@ -106,8 +123,16 @@ idx_t StringValueResult::NumberOfRows() {
 }
 
 StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager,
-                                       shared_ptr<CSVStateMachine> state_machine)
-    : BaseScanner(buffer_manager, state_machine), result(*state_machine, *cur_buffer_handle) {};
+                                       shared_ptr<CSVStateMachine> state_machine, ScannerBoundary boundary)
+    : BaseScanner(buffer_manager, state_machine, boundary), result(states, *state_machine, *cur_buffer_handle) {};
+
+StringValueScanner StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
+	CSVStateMachineCache cache;
+	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, cache);
+	vector<string> file_paths = {options.file_path};
+	auto buffer_manager = make_shared<CSVBufferManager>(context, options, file_paths);
+	return StringValueScanner(buffer_manager, state_machine);
+}
 
 StringValueResult *StringValueScanner::ParseChunk() {
 	result.result_position = 0;
@@ -170,9 +195,17 @@ void StringValueScanner::ProcessOverbufferValue() {
 
 void StringValueScanner::MoveToNextBuffer() {
 	if (pos.pos == cur_buffer_handle->actual_size) {
-		pos.pos = 0;
 		previous_buffer_handle = std::move(cur_buffer_handle);
 		cur_buffer_handle = buffer_manager->GetBuffer(pos.file_id, ++pos.buffer_id);
+		if (!cur_buffer_handle) {
+			buffer_handle_ptr = nullptr;
+			// This means we reached the end of the file, we must add a last line if there is any to be added
+			if (result.last_position < previous_buffer_handle->actual_size) {
+				result.AddRowInternal(previous_buffer_handle->actual_size);
+			}
+			return;
+		}
+		pos.pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
 		ProcessOverbufferValue();
@@ -207,7 +240,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 		// We read until the chunk is complete, or we have nothing else to read.
 		while (!Finished() && result.result_position < result.vector_size) {
 			MoveToNextBuffer();
-			Process();
+			if (cur_buffer_handle) {
+				Process();
+			}
 		}
 	}
 }

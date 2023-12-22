@@ -27,9 +27,15 @@ struct ScannerPosition {
 
 class ScannerResult {
 public:
-	idx_t result_position = 0;
+	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
+
 	idx_t Size();
 	bool Empty();
+	idx_t result_position = 0;
+
+protected:
+	CSVStates &states;
+	CSVStateMachine &state_machine;
 };
 
 //! This is the base of our CSV scanners.
@@ -62,11 +68,11 @@ public:
 		scanner.state_machine->Transition(scanner.states, current_char);
 		if (scanner.states.NewValue()) {
 			//! Add new value to result
-			T::AddValue(result, current_char, buffer_pos);
+			T::AddValue(result, buffer_pos);
 		} else if (scanner.states.NewRow()) {
 			//! Add new row to result
 			//! Check if the result reached a vector size
-			if (T::AddRow(result, current_char, buffer_pos)) {
+			if (T::AddRow(result, buffer_pos)) {
 				return true;
 			}
 		}
@@ -75,6 +81,9 @@ public:
 	}
 
 	CSVStateMachine &GetStateMachine();
+
+	//! Produces error messages for column name -> type mismatch.
+	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 
 protected:
 	//! Boundaries of this scanner

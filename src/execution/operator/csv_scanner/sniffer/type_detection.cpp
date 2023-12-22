@@ -2,7 +2,6 @@
 #include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/string.hpp"
-#include "duckdb/execution/operator/scan/csv/parse_values.hpp"
 
 namespace duckdb {
 struct TryCastFloatingOperator {
@@ -280,6 +279,9 @@ void CSVSniffer::DetectTypes() {
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
 			for (auto &format_candidate : format_candidates) {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
+			}
+			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
+				best_header_row.emplace_back(tuples.GetValue(0, col_idx));
 			}
 		}
 	}
