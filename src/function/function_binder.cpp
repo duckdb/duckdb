@@ -101,7 +101,7 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 	if (best_function == DConstants::INVALID_INDEX) {
 		// no matching function was found, throw an error
 		string call_str = Function::CallToString(name, arguments);
-		string candidate_str = "";
+		string candidate_str;
 		for (auto &f : functions.functions) {
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
@@ -122,7 +122,7 @@ idx_t FunctionBinder::MultipleCandidateException(const string &name, FunctionSet
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
 	string call_str = Function::CallToString(name, arguments);
-	string candidate_str = "";
+	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		T f = functions.GetFunctionByOffset(conf);
 		candidate_str += "\t" + f.ToString() + "\n";
