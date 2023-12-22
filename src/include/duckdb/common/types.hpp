@@ -169,6 +169,7 @@ enum class PhysicalType : uint8_t {
 
 	/// DuckDB Extensions
 	VARCHAR = 200, // our own string representation, different from STRING and LARGE_STRING above
+	UINT128 = 203, // 128-bit unsigned integers
 	INT128 = 204, // 128-bit integers
 	UNKNOWN = 205, // Unknown physical type of user defined types
 	/// Boolean as 1 bit, LSB bit-packed ordering
@@ -213,6 +214,7 @@ enum class LogicalTypeId : uint8_t {
 	BIT = 36,
 	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
 
+	UHUGEINT = 49,
 	HUGEINT = 50,
 	POINTER = 51,
 	VALIDITY = 53,
@@ -351,6 +353,7 @@ public:
     static constexpr const LogicalTypeId BIT = LogicalTypeId::BIT;
     static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
 	static constexpr const LogicalTypeId HUGEINT = LogicalTypeId::HUGEINT;
+	static constexpr const LogicalTypeId UHUGEINT = LogicalTypeId::UHUGEINT;
 	static constexpr const LogicalTypeId UUID = LogicalTypeId::UUID;
 	static constexpr const LogicalTypeId HASH = LogicalTypeId::UBIGINT;
 	static constexpr const LogicalTypeId POINTER = LogicalTypeId::POINTER;

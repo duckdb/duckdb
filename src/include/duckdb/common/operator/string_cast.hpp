@@ -46,6 +46,8 @@ DUCKDB_API duckdb::string_t StringCast::Operation(uint64_t input, Vector &result
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(hugeint_t input, Vector &result);
 template <>
+DUCKDB_API duckdb::string_t StringCast::Operation(uhugeint_t input, Vector &result);
+template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(float input, Vector &result);
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(double input, Vector &result);

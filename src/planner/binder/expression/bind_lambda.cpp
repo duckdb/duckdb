@@ -85,6 +85,26 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		params_strings.push_back(expr.params[i]->ToString());
 	}
 
+	// ensure that we do not have ambiguous lambda parameters
+	if (lambda_bindings) {
+		for (const auto &binding : *lambda_bindings) {
+			for (const auto &outer_lambda_parameter : binding.names) {
+				for (const auto &this_lambda_parameter : column_names) {
+					if (outer_lambda_parameter == this_lambda_parameter) {
+						throw BinderException("Ambiguous lambda parameter name: '%s'. Try changing your lambda "
+						                      "parameter name. \n Some list functions use lambda functions "
+						                      "under the hood, so *the same* function cannot be nested, like "
+						                      "list_intersect(list_intersect(...),...), list_has_any, list_has_all, "
+						                      "and their aliases. \n "
+						                      "Try writing them out manually with lambda functions to define explicit "
+						                      "lambda parameter names.",
+						                      outer_lambda_parameter);
+					}
+				}
+			}
+		}
+	}
+
 	// base table alias
 	auto params_alias = StringUtil::Join(params_strings, ", ");
 	if (params_strings.size() > 1) {

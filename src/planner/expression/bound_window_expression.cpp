@@ -12,7 +12,7 @@ BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType re
                                              unique_ptr<AggregateFunction> aggregate,
                                              unique_ptr<FunctionData> bind_info)
     : Expression(type, ExpressionClass::BOUND_WINDOW, std::move(return_type)), aggregate(std::move(aggregate)),
-      bind_info(std::move(bind_info)), ignore_nulls(false) {
+      bind_info(std::move(bind_info)), ignore_nulls(false), distinct(false) {
 }
 
 string BoundWindowExpression::ToString() const {
@@ -28,6 +28,9 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	auto &other = other_p.Cast<BoundWindowExpression>();
 
 	if (ignore_nulls != other.ignore_nulls) {
+		return false;
+	}
+	if (distinct != other.distinct) {
 		return false;
 	}
 	if (start != other.start || end != other.end) {
@@ -145,6 +148,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
+	new_window->distinct = distinct;
 
 	for (auto &es : expr_stats) {
 		if (es) {
@@ -175,6 +179,7 @@ void BoundWindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(210, "offset_expr", offset_expr, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(211, "default_expr", default_expr, unique_ptr<Expression>());
 	serializer.WriteProperty(212, "exclude_clause", exclude_clause);
+	serializer.WriteProperty(213, "distinct", distinct);
 }
 
 unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserializer) {
@@ -203,6 +208,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault(210, "offset_expr", result->offset_expr, unique_ptr<Expression>());
 	deserializer.ReadPropertyWithDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
 	deserializer.ReadProperty(212, "exclude_clause", result->exclude_clause);
+	deserializer.ReadProperty(213, "distinct", result->distinct);
 	return std::move(result);
 }
 

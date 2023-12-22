@@ -90,7 +90,7 @@ public:
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
 
 	// Bind table names to ColumnRefExpressions
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool within_function_expression = false);
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
 	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
