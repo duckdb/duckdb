@@ -318,7 +318,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 				return -1;
 			}
 		}
-		return to.id() == LogicalTypeId::VARCHAR ? 1 : 20;
+		if (to.id() == LogicalTypeId::VARCHAR && to.GetAlias().empty()) {
+			return 1;
+		}
+		return 20;
 	}
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible

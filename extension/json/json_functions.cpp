@@ -54,7 +54,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
                                                     vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
-	string path = "";
+	string path;
 	size_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
@@ -62,6 +62,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		path_type = CheckPath(path_val, path, len);
 	}
+	bound_function.arguments[1] = LogicalType::VARCHAR;
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
 		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
 	}
