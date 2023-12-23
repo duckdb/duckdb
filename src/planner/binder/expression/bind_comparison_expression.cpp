@@ -104,11 +104,9 @@ bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, 
 	case LogicalTypeId::VARCHAR:
 		// for comparison with strings, we prefer to bind to the numeric types
 		if (left_type.IsNumeric() || left_type.id() == LogicalTypeId::BOOLEAN) {
-			result_type = left_type;
-			return true;
+			throw InternalException("This shouldn't occur anymore");
 		} else if (right_type.IsNumeric() || right_type.id() == LogicalTypeId::BOOLEAN) {
-			result_type = right_type;
-			return true;
+			throw InternalException("This shouldn't occur anymore");
 		} else {
 			// else: check if collations are compatible
 			auto left_collation = StringType::GetCollation(left_type);
