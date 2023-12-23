@@ -6,6 +6,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
