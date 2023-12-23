@@ -113,6 +113,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
 		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
+		    child_entry.GetType().InternalType() != PhysicalType::ARRAY &&
 		    state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
 			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
 		}
@@ -339,8 +340,8 @@ unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group,
                                                              PartialBlockManager &partial_block_manager,
                                                              ColumnCheckpointInfo &checkpoint_info) {
-	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
 
 	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();

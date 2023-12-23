@@ -141,6 +141,10 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 		// validity + list child
 		child_states.resize(2);
 		child_states[1].Initialize(ListType::GetChildType(type));
+	} else if (type.InternalType() == PhysicalType::ARRAY) {
+		// validity + array child
+		child_states.resize(2);
+		child_states[1].Initialize(ArrayType::GetChildType(type));
 	} else {
 		// validity
 		child_states.resize(1);
@@ -664,6 +668,7 @@ void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
 	// append to the current row_group
+	D_ASSERT(chunk.ColumnCount() == GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		col_data.Append(state.states[i], chunk.data[i], append_count);
@@ -755,16 +760,12 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	return result;
 }
 
-bool RowGroup::AllDeleted() {
-	if (HasUnloadedDeletes()) {
-		// deletes aren't loaded yet - we know not everything is deleted
-		return false;
-	}
+idx_t RowGroup::GetCommittedRowCount() {
 	auto &vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return false;
+		return count;
 	}
-	return vinfo->GetCommittedDeletedCount(count) == count;
+	return count - vinfo->GetCommittedDeletedCount(count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
@@ -776,9 +777,7 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
-	RowGroupPointer row_group_pointer;
-
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	vector<CompressionType> compression_types;
 	compression_types.reserve(columns.size());
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
@@ -790,16 +789,23 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 		}
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}
-	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+
+	return WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+}
+
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer,
+                                     TableStatistics &global_stats) {
+	RowGroupPointer row_group_pointer;
+
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		global_stats.GetStats(column_idx).Statistics().Merge(result.statistics[column_idx]);
+		global_stats.GetStats(column_idx).Statistics().Merge(write_data.statistics[column_idx]);
 	}
 
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(result.states.size() == columns.size());
+	D_ASSERT(write_data.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
-	for (auto &state : result.states) {
+	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
 		auto pointer = data_writer.GetMetaBlockPointer();

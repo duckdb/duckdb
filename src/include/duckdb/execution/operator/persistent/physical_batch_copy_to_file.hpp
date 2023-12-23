@@ -46,7 +46,7 @@ public:
 	                          OperatorSinkFinalizeInput &input) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-	void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const override;
+	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 
 	bool RequiresBatchIndex() const override {
 		return true;

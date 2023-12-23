@@ -21,7 +21,8 @@ from read_csv('data/csv/hebere.csv.gz',
         header=0,
         columns={field1: varchar, field2: varchar, datum: varchar},
         compression='gzip',
-        ignore_errors=0)
+        ignore_errors=0,
+        auto_detect = false)
 group by field1, field2
 order by all
 limit 10;

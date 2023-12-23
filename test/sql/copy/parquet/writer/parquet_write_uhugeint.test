@@ -1,0 +1,31 @@
+# name: test/sql/copy/parquet/writer/parquet_write_uhugeint.test
+# description: Parquet uhugeint round trip
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE hugeints(h UHUGEINT)
+
+statement ok
+INSERT INTO hugeints VALUES (0), (1), (NULL), (1180591620717411303424)
+
+statement ok
+COPY hugeints TO '__TEST_DIR__/hugeints.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM '__TEST_DIR__/hugeints.parquet'
+----
+0
+1
+NULL
+1180591620717411303424
+
+query I
+SELECT typeof(h) FROM '__TEST_DIR__/hugeints.parquet' LIMIT 1
+----
+DOUBLE
+

@@ -2,6 +2,7 @@ package org.duckdb;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -10,6 +11,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.util.Properties;
+import java.math.BigDecimal;
 
 public class DuckDBNative {
     static {
@@ -50,7 +52,9 @@ public class DuckDBNative {
                 System.load(
                     Paths.get("../../build/debug/tools/jdbc", lib_res_name).normalize().toAbsolutePath().toString());
             } else {
-                Files.copy(lib_res.openStream(), lib_file, StandardCopyOption.REPLACE_EXISTING);
+                try (final InputStream lib_res_input_stream = lib_res.openStream()) {
+                    Files.copy(lib_res_input_stream, lib_file, StandardCopyOption.REPLACE_EXISTING);
+                }
                 new File(lib_file.toString()).deleteOnExit();
                 System.load(lib_file.toAbsolutePath().toString());
             }
@@ -149,6 +153,12 @@ public class DuckDBNative {
         throws SQLException;
 
     protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value)
+        throws SQLException;
+
+    protected static native void duckdb_jdbc_appender_append_timestamp(ByteBuffer appender_ref, long value)
+        throws SQLException;
+
+    protected static native void duckdb_jdbc_appender_append_decimal(ByteBuffer appender_ref, BigDecimal value)
         throws SQLException;
 
     protected static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;

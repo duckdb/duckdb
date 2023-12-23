@@ -54,7 +54,7 @@ void BufferPool::IncreaseUsedMemory(idx_t size) {
 	current_memory += size;
 }
 
-idx_t BufferPool::GetUsedMemory() {
+idx_t BufferPool::GetUsedMemory() const {
 	return current_memory;
 }
 idx_t BufferPool::GetMaxMemory() const {

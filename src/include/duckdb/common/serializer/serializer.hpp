@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
@@ -38,6 +39,9 @@ public:
 		// Serialize an element
 		template <class T>
 		void WriteElement(const T &value);
+
+		//! Serialize bytes
+		void WriteElement(data_ptr_t ptr, idx_t size);
 
 		// Serialize an object
 		template <class FUNC>
@@ -273,6 +277,7 @@ protected:
 	virtual void WriteValue(uint64_t value) = 0;
 	virtual void WriteValue(int64_t value) = 0;
 	virtual void WriteValue(hugeint_t value) = 0;
+	virtual void WriteValue(uhugeint_t value) = 0;
 	virtual void WriteValue(float value) = 0;
 	virtual void WriteValue(double value) = 0;
 	virtual void WriteValue(const string_t value) = 0;

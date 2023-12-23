@@ -12,6 +12,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -82,6 +83,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
+	case LogicalTypeId::UHUGEINT:
+		return PhysicalType::UINT128;
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UUID:
 		return PhysicalType::INT128;
@@ -120,6 +123,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 		return PhysicalType::LIST;
+	case LogicalTypeId::ARRAY:
+		return PhysicalType::ARRAY;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
@@ -170,6 +175,7 @@ constexpr const LogicalTypeId LogicalType::UINTEGER;
 constexpr const LogicalTypeId LogicalType::BIGINT;
 constexpr const LogicalTypeId LogicalType::UBIGINT;
 constexpr const LogicalTypeId LogicalType::HUGEINT;
+constexpr const LogicalTypeId LogicalType::UHUGEINT;
 constexpr const LogicalTypeId LogicalType::UUID;
 constexpr const LogicalTypeId LogicalType::FLOAT;
 constexpr const LogicalTypeId LogicalType::DOUBLE;
@@ -205,26 +211,34 @@ const vector<LogicalType> LogicalType::Numeric() {
 	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
 	                             LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
 	                             LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT,
+	                             LogicalType::UHUGEINT};
 	return types;
 }
 
 const vector<LogicalType> LogicalType::Integral() {
 	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
 	                             LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
-	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,
+	                             LogicalType::UHUGEINT};
+	return types;
+}
+
+const vector<LogicalType> LogicalType::Real() {
+	vector<LogicalType> types = {LogicalType::FLOAT, LogicalType::DOUBLE};
 	return types;
 }
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,   LogicalType::TINYINT,  LogicalType::SMALLINT,  LogicalType::INTEGER,
-	    LogicalType::BIGINT,    LogicalType::DATE,     LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-	    LogicalType::FLOAT,     LogicalType::VARCHAR,  LogicalType::BLOB,      LogicalType::BIT,
-	    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-	    LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,
-	    LogicalTypeId::LIST,    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
-	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID};
+	    LogicalType::BOOLEAN,      LogicalType::TINYINT,  LogicalType::SMALLINT,  LogicalType::INTEGER,
+	    LogicalType::BIGINT,       LogicalType::DATE,     LogicalType::TIMESTAMP, LogicalType::DOUBLE,
+	    LogicalType::FLOAT,        LogicalType::VARCHAR,  LogicalType::BLOB,      LogicalType::BIT,
+	    LogicalType::INTERVAL,     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
+	    LogicalType::USMALLINT,    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::UHUGEINT,
+	    LogicalType::TIME,         LogicalTypeId::LIST,   LogicalTypeId::STRUCT,  LogicalType::TIME_TZ,
+	    LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,    LogicalTypeId::UNION,   LogicalType::UUID,
+	    LogicalTypeId::ARRAY};
 	return types;
 }
 
@@ -253,6 +267,8 @@ string TypeIdToString(PhysicalType type) {
 		return "UINT64";
 	case PhysicalType::INT128:
 		return "INT128";
+	case PhysicalType::UINT128:
+		return "UINT128";
 	case PhysicalType::FLOAT:
 		return "FLOAT";
 	case PhysicalType::DOUBLE:
@@ -265,6 +281,8 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT";
 	case PhysicalType::LIST:
 		return "LIST";
+	case PhysicalType::ARRAY:
+		return "ARRAY";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -299,6 +317,8 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(uint64_t);
 	case PhysicalType::INT128:
 		return sizeof(hugeint_t);
+	case PhysicalType::UINT128:
+		return sizeof(uhugeint_t);
 	case PhysicalType::FLOAT:
 		return sizeof(float);
 	case PhysicalType::DOUBLE:
@@ -309,6 +329,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(interval_t);
 	case PhysicalType::STRUCT:
 	case PhysicalType::UNKNOWN:
+	case PhysicalType::ARRAY:
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
@@ -319,22 +340,27 @@ idx_t GetTypeIdSize(PhysicalType type) {
 
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) || type == PhysicalType::INTERVAL ||
-	       type == PhysicalType::INT128;
+	       type == PhysicalType::INT128 || type == PhysicalType::UINT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 ||
+	       type == PhysicalType::UINT128;
 }
 bool TypeIsNumeric(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128 ||
+	       type == PhysicalType::UINT128;
 }
 bool TypeIsInteger(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 ||
+	       type == PhysicalType::UINT128;
 }
 
 string LogicalType::ToString() const {
-	auto alias = GetAlias();
-	if (!alias.empty()) {
-		return alias;
+	if (id_ != LogicalTypeId::USER) {
+		auto alias = GetAlias();
+		if (!alias.empty()) {
+			return alias;
+		}
 	}
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
@@ -373,13 +399,26 @@ string LogicalType::ToString() const {
 		string ret = "UNION(";
 		size_t count = UnionType::GetMemberCount(*this);
 		for (size_t i = 0; i < count; i++) {
-			ret += UnionType::GetMemberName(*this, i) + " " + UnionType::GetMemberType(*this, i).ToString();
+			auto member_name = UnionType::GetMemberName(*this, i);
+			auto member_type = UnionType::GetMemberType(*this, i).ToString();
+			ret += StringUtil::Format("%s %s", SQLIdentifier(member_name), member_type);
 			if (i < count - 1) {
 				ret += ", ";
 			}
 		}
 		ret += ")";
 		return ret;
+	}
+	case LogicalTypeId::ARRAY: {
+		if (!type_info_) {
+			return "ARRAY";
+		}
+		auto size = ArrayType::GetSize(*this);
+		if (size == 0) {
+			return ArrayType::GetChildType(*this).ToString() + "[ANY]";
+		} else {
+			return ArrayType::GetChildType(*this).ToString() + "[" + to_string(size) + "]";
+		}
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -404,7 +443,25 @@ string LogicalType::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::USER: {
-		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
+		string result;
+		auto &catalog = UserType::GetCatalog(*this);
+		auto &schema = UserType::GetSchema(*this);
+		auto &type = UserType::GetTypeName(*this);
+
+		if (!catalog.empty()) {
+			result = KeywordHelper::WriteOptionallyQuoted(catalog);
+		}
+		if (!schema.empty()) {
+			if (!result.empty()) {
+				result += ".";
+			}
+			result += KeywordHelper::WriteOptionallyQuoted(schema);
+		}
+		if (!result.empty()) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(type);
+		return result;
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -471,6 +528,7 @@ bool LogicalType::IsIntegral() const {
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 		return true;
 	default:
 		return false;
@@ -491,6 +549,7 @@ bool LogicalType::IsNumeric() const {
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 		return true;
 	default:
 		return false;
@@ -554,6 +613,12 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	case LogicalTypeId::HUGEINT:
 		// hugeint: max size decimal (38, 0)
 		// note that a hugeint is not guaranteed to fit in this
+		width = 38;
+		scale = 0;
+		break;
+	case LogicalTypeId::UHUGEINT:
+		// hugeint: max size decimal (38, 0)
+		// note that a uhugeint is not guaranteed to fit in this
 		width = 38;
 		scale = 0;
 		break;
@@ -642,7 +707,13 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 	if (left.id() == LogicalTypeId::TINYINT || right.id() == LogicalTypeId::UTINYINT) {
 		return LogicalType::SMALLINT;
 	}
-	throw InternalException("Cannot combine these numeric types!?");
+
+	// No type is larger than (u)hugeint, so casting to double is required
+	// UHUGEINT is on the left because the enum is lower
+	if (left.id() == LogicalTypeId::UHUGEINT || right.id() == LogicalTypeId::HUGEINT) {
+		return LogicalType::DOUBLE;
+	}
+	throw InternalException("Cannot combine these numeric types (%s & %s)", left.ToString(), right.ToString());
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
@@ -703,6 +774,11 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::LIST(new_child);
+	}
+	if (type_id == LogicalTypeId::ARRAY) {
+		auto new_child = MaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right));
+		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
+		return LogicalType::ARRAY(new_child, new_size);
 	}
 	if (type_id == LogicalTypeId::MAP) {
 		// list: perform max recursively on child type
@@ -1012,6 +1088,20 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 //===--------------------------------------------------------------------===//
 // User Type
 //===--------------------------------------------------------------------===//
+const string &UserType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::USER);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<UserTypeInfo>().catalog;
+}
+
+const string &UserType::GetSchema(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::USER);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<UserTypeInfo>().schema;
+}
+
 const string &UserType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
@@ -1021,6 +1111,11 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 
 LogicalType LogicalType::USER(const string &user_type_name) {
 	auto info = make_shared<UserTypeInfo>(user_type_name);
+	return LogicalType(LogicalTypeId::USER, std::move(info));
+}
+
+LogicalType LogicalType::USER(string catalog, string schema, string name) {
+	auto info = make_shared<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name));
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 
@@ -1062,6 +1157,43 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
+}
+
+//===--------------------------------------------------------------------===//
+// Array Type
+//===--------------------------------------------------------------------===//
+
+const LogicalType &ArrayType::GetChildType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().child_type;
+}
+
+idx_t ArrayType::GetSize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().size;
+}
+
+bool ArrayType::IsAnySize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().size == 0;
+}
+
+LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {
+	D_ASSERT(size > 0);
+	D_ASSERT(size < ArrayType::MAX_ARRAY_SIZE);
+	auto info = make_shared<ArrayTypeInfo>(child, size);
+	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+}
+
+LogicalType LogicalType::ARRAY(const LogicalType &child) {
+	auto info = make_shared<ArrayTypeInfo>(child, 0);
+	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//

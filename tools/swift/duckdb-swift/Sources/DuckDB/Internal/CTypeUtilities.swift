@@ -113,6 +113,17 @@ extension duckdb_hugeint {
   }
 }
 
+// MARK: - Unsigned Huge Int
+
+extension duckdb_uhugeint {
+  
+  init(_ source: UIntHuge) {
+    self = duckdb_uhugeint(lower: source.low, upper: source.high)
+  }
+  
+  var asUIntHuge: UIntHuge { .init(high: upper, low: lower) }
+}
+
 // MARK: - Time
 
 extension duckdb_time {

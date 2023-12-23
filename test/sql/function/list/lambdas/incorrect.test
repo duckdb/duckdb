@@ -3,7 +3,7 @@
 # group: [lambdas]
 
 statement ok
-PRAGMA enable_verification
+PRAGMA enable_verification;
 
 statement ok
 CREATE TABLE incorrect_test (i integer);
@@ -11,104 +11,157 @@ CREATE TABLE incorrect_test (i integer);
 foreach func_name list_transform list_filter
 
 statement error
-SELECT ${func_name}()
+SELECT ${func_name}();
+----
 
 statement error
-SELECT ${func_name}([])
+SELECT ${func_name}([]);
+----
 
 statement error
-SELECT ${func_name}([1], x -> x, 3)
+SELECT ${func_name}(1, 2, 3);
+----
 
 statement error
-SELECT ${func_name}(1, 2, 3)
+SELECT ${func_name}(NULL, NULL);
+----
+Binder Error: Invalid lambda expression!
 
 statement error
-SELECT ${func_name}(NULL, NULL)
+SELECT ${func_name}(NULL, x);
+----
+Binder Error: Referenced column "x" not found in FROM clause!
 
 statement error
-SELECT ${func_name}(NULL, x)
+SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1);
+----
+Binder Error: Invalid parameter list! Parameters must be comma-separated column names, e.g. x or (x, y).
 
 statement error
-SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)
+SELECT ${func_name}(NULL, i) FROM incorrect_test;
+----
 
 statement error
-SELECT ${func_name}(NULL, i) FROM incorrect_test
+SELECT ${func_name}(NULL, x -> y);
+----
+Binder Error: Referenced column "y" not found in FROM clause!
 
 statement error
-SELECT ${func_name}(NULL, x -> y)
+SELECT ${func_name}([1]);
+----
 
 statement error
-SELECT ${func_name}([1])
+SELECT ${func_name}([1], NULL);
+----
+Binder Error: Invalid lambda expression!
 
 statement error
-SELECT ${func_name}([1], NULL)
+SELECT ${func_name}([[1]], x -> x + 1);
+----
 
 statement error
-SELECT ${func_name}(1, x -> x + 1)
+SELECT ${func_name}(1, 1);
+----
 
 statement error
-SELECT ${func_name}([[1]], x -> x + 1)
+SELECT ${func_name}([1], x -> x, 3);
+----
+Binder Error: failed to bind function, either: Invalid number of function arguments!
+ or: Referenced column "x" not found in FROM clause!
 
 statement error
-SELECT ${func_name}(1, 1)
+SELECT ${func_name}([True], x -> x, x -> x);
+----
+Binder Error: failed to bind function, either: Invalid number of function arguments!
+ or: Referenced column "x" not found in FROM clause!
 
 statement error
-SELECT ${func_name}([True], x -> x, x -> x)
+SELECT ${func_name}(1, x -> x + 1);
+----
+Invalid LIST argument during lambda function binding!
 
 endloop
 
-# lambda parameter has the same name as a column
-statement ok
-CREATE TABLE l_test (l integer[])
+# list_transform specific test
 
 statement error
-SELECT l, list_transform(l, l -> l + 1) FROM l_test
+SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
+----
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
+
+# lambda parameter has the same name as a column
+
+statement ok
+CREATE TABLE l_test (l integer[]);
+
+statement error
+SELECT l, list_transform(l, l -> l + 1) FROM l_test;
+----
+Binder Error: Invalid lambda parameter name 'l_test.l': must be unqualified
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Referenced column "zz" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 # lambda cannot be the root of a plan
-statement error
-select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 
 statement error
-select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
+select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Referenced column "x" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Lambda parameter must be a column name.
 
 statement error
 select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Invalid lambda parameter name 'a.x': must be unqualified
 
 statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+Binder Error: Referenced column "y" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 statement ok
-CREATE TABLE l_filter_test (l integer[])
+CREATE TABLE l_filter_test (l integer[]);
 
 statement error
-SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
+SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test;
+----
+Binder Error: Invalid lambda parameter name 'l_filter_test.l': must be unqualified
 
 statement error
-SELECT list_transform([1, 2], (x, y) -> x + y)
+SELECT list_transform([1, 2], (x, y, z) -> x + y + z);
+----
+Binder Error: This lambda function only supports up to two lambda parameters!
 
 statement error
-SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
-
-statement error
-SELECT list_filter([1, 2], (x, y) -> x >= y)
-
-statement error
-SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
+SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z);
+----
+Binder Error: This lambda function only supports up to two lambda parameters!
 
 # using lambdas in functions that do not support them
-statement error
-SELECT cos(x -> x + 1)
 
 statement error
-SELECT cos([1], x -> x + 1)
+SELECT cos(x -> x + 1);
+----
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
 
-# don't allow lambdas in check constraints
+statement error
+SELECT cos([1], x -> x + 1);
+----
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
+
 # FIXME: support lambdas in CHECK constraints
 
 statement error
@@ -137,7 +190,6 @@ create table lambda_check (
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
-# don't allow lambdas in check constraints
 # FIXME: allow lambdas in generated columns
 
 statement error
@@ -147,3 +199,94 @@ CREATE TABLE unit2(
 );
 ----
 Not implemented Error: Lambda functions are currently not supported in generated columns.
+
+# issue 9732
+
+statement ok
+CREATE TABLE tbl AS SELECT {'a': 10} AS s;
+
+statement error
+SELECT list_transform(UNNEST(s), x -> UNNEST(x)) FROM tbl;
+----
+failed to bind function
+
+# issue #9970
+
+# ambiguous parameter names
+
+statement error
+SELECT list_transform([1,2], x -> list_transform([3,4], x -> x));
+----
+Ambiguous lambda parameter name
+
+statement error
+SELECT list_has_all([variable_has_all FOR variable_has_all IN ['a']], ['b']) AS list_comp_result;
+----
+Ambiguous lambda parameter name
+
+statement error
+SELECT list_has_all(list_transform(['a'], variable_has_all -> variable_has_all), ['b']) AS list_transform_result;
+----
+Ambiguous lambda parameter name
+
+statement error
+SELECT list_has_any(['b'], list_transform(['a'], variable_has_any -> variable_has_any)) AS list_transform_result;
+----
+Ambiguous lambda parameter name
+
+# implicit nesting creates ambiguous parameter names
+
+# first input parameter can be nested
+query I
+SELECT list_intersect(list_intersect([1], [1]), [1])
+----
+[1]
+
+# second input parameter CANNOT be nested
+statement error
+SELECT list_intersect([1], list_intersect([1], [1]))
+----
+function cannot be nested
+
+# first input parameter can be nested
+query I
+SELECT list_has_any(LIST_VALUE(list_has_any([1], [1])), [1])
+----
+true
+
+# second input parameter CANNOT be nested
+statement error
+SELECT list_has_any([1], LIST_VALUE(list_has_any([1], [1])))
+----
+function cannot be nested
+
+# first input parameter CANNOT be nested
+
+statement error
+SELECT list_has_all(LIST_VALUE(list_has_all([1], [1])), [1])
+----
+function cannot be nested
+
+# second input parameter can be nested
+
+query I
+SELECT list_has_all([1], LIST_VALUE(list_has_all([1], [1])))
+----
+true
+
+# nest different helper functions/rewrites
+
+query I
+SELECT list_has_any(LIST_VALUE(list_has_all(list_intersect([1], [1]), [1])), [1]);
+----
+true
+
+query I
+SELECT list_has_all(LIST_VALUE(list_has_any(list_intersect([1], [1]), [1])), [1]);
+----
+true
+
+query I
+SELECT list_intersect(LIST_VALUE(list_has_all(LIST_VALUE(list_has_any([1], [1])), [1])), [1])
+----
+[true]

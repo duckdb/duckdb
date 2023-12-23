@@ -2,6 +2,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
@@ -18,6 +19,7 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
 using duckdb::StringUtil;
 using duckdb::timestamp_t;
+using duckdb::uhugeint_t;
 using duckdb::Value;
 
 idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
@@ -213,8 +215,20 @@ static hugeint_t duckdb_internal_hugeint(duckdb_hugeint val) {
 	return internal;
 }
 
+static uhugeint_t duckdb_internal_uhugeint(duckdb_uhugeint val) {
+	uhugeint_t internal;
+	internal.lower = val.lower;
+	internal.upper = val.upper;
+	return internal;
+}
+
 duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_hugeint val) {
 	auto value = Value::HUGEINT(duckdb_internal_hugeint(val));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
+}
+
+duckdb_state duckdb_bind_uhugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_uhugeint val) {
+	auto value = Value::UHUGEINT(duckdb_internal_uhugeint(val));
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
@@ -318,6 +332,26 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	return duckdb_translate_result(std::move(result), out_result);
+}
+
+duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                               duckdb_result *out_result) {
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return DuckDBError;
+	}
+
+	auto result = wrapper->statement->Execute(wrapper->values, true);
+	return duckdb_translate_result(std::move(result), out_result);
+}
+
+duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement) {
+	if (!statement) {
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+	auto stmt = reinterpret_cast<PreparedStatementWrapper *>(statement);
+
+	return StatementTypeToC(stmt->statement->GetStatementType());
 }
 
 template <class T>

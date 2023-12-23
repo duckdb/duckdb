@@ -43,6 +43,27 @@ select strptime('2022-03-05 17:59:17.123456789 CST', '%Y-%m-%d %H:%M:%S.%n %Z');
 ----
 2022-03-05 15:59:17.123457-08
 
+# Parse specials
+
+foreach func strptime try_strptime
+
+query I
+select ${func}('infinity', '%Y-%m-%d %H:%M:%S.%g %Z');
+----
+infinity
+
+query I
+select ${func}('-infinity', '%Y-%m-%d %H:%M:%S.%g %Z');
+----
+-infinity
+
+query I
+select ${func}('epoch', '%Y-%m-%d %H:%M:%S.%g %Z');
+----
+1969-12-31 16:00:00-08
+
+endloop
+
 #
 # Parsing pre-Gregorian timestamps
 #
@@ -74,43 +95,141 @@ SELECT '1582-10-10'::TIMESTAMPTZ AS ts;
 # Same date, multiple TZ names
 #
 
+# We can't use the offsets in pg_timezone_names() 
+# because they change with the date
+# So hard code the original values
+# The important point is that these cover all the GMT offsets.
 statement ok
 CREATE TABLE zones AS (
-	SELECT median(name) as tz_name
-	FROM pg_timezone_names()
-	GROUP BY utc_offset
-	ORDER BY utc_offset
+	FROM (VALUES
+		('Etc/GMT-14'),
+		('NZ-CHAT'),
+		('Pacific/Auckland'),
+		('Pacific/Enderbury'),
+		('Australia/LHI'),
+		('Australia/Melbourne'),
+		('Pacific/Efate'),
+		('Australia/Darwin'),
+		('Asia/Tokyo'),
+		('Australia/Eucla'),
+		('Asia/Shanghai'),
+		('Asia/Novosibirsk'),
+		('Asia/Yangon'),
+		('Asia/Omsk'),
+		('Asia/Kathmandu'),
+		('Asia/Colombo'),
+		('Asia/Oral'),
+		('Asia/Kabul'),
+		('Europe/Astrakhan'),
+		('Asia/Tehran'),
+		('Asia/Kuwait'),
+		('Asia/Nicosia'),
+		('Europe/Budapest'),
+		('Etc/GMT-0'),
+		('Atlantic/Azores'),
+		('America/Cayenne'),
+		('America/Nuuk'),
+		('CNT'),
+		('America/Martinique'),
+		('America/Louisville'),
+		('America/Rainy_River'),
+		('America/Shiprock'),
+		('Mexico/BajaNorte'),
+		('America/Sitka'),
+		('Pacific/Marquesas'),
+		('Pacific/Johnston'),
+		('Pacific/Niue'),
+		('Etc/GMT+12'),
+	) tbl(tz_name)
 );
 
 statement ok
 CREATE TABLE abbrevs AS (
-	SELECT median(abbrev) as tz_name
-	FROM pg_timezone_names()
-	GROUP BY utc_offset
-	ORDER BY utc_offset
+	FROM (VALUES
+		('Etc/GMT-14'),
+		('NZ-CHAT'),
+		('NZ'),
+		('Pacific/Enderbury'),
+		('Australia/Hobart'),
+		('Australia/LHI'),
+		('Pacific/Efate'),
+		('Australia/Adelaide'),
+		('Etc/GMT-9'),
+		('Australia/Eucla'),
+		('CTT'),
+		('Asia/Phnom_Penh'),
+		('Asia/Yangon'),
+		('Asia/Thimbu'),
+		('Asia/Kathmandu'),
+		('IST'),
+		('Asia/Qyzylorda'),
+		('Asia/Kabul'),
+		('Europe/Samara'),
+		('Iran'),
+		('EAT'),
+		('CAT'),
+		('Europe/Bratislava'),
+		('GMT'),
+		('Atlantic/Azores'),
+		('America/Cayenne'),
+		('America/Nuuk'),
+		('CNT'),
+		('PRT'),
+		('America/Panama'),
+		('America/Rankin_Inlet'),
+		('Canada/Yukon'),
+		('PST'),
+		('America/Nome'),
+		('Pacific/Marquesas'),
+		('Pacific/Johnston'),
+		('Pacific/Niue'),
+		('Etc/GMT+12'),
+	) tbl(tz_name)
 );
 
 statement ok
-CREATE TABLE offsets AS (
-	SELECT
-		CASE WHEN EXTRACT(MINUTE FROM utc_offset) <> 0
-		THEN
-			CASE WHEN utc_offset < INTERVAL 0 SECOND
-				THEN LEFT(utc_offset, 6)
-				ELSE '+' || LEFT(utc_offset, 5)
-			END
-		ELSE
-			CASE WHEN utc_offset < INTERVAL 0 SECOND
-				THEN LEFT(utc_offset, 3)
-				ELSE '+' || LEFT(utc_offset, 2)
-			END
-		END AS utc_offset
-	FROM (
-		SELECT DISTINCT utc_offset
-		FROM pg_timezone_names()
-		ORDER BY ALL
-	) z
-);
+CREATE TABLE offsets AS 
+	FROM (VALUES
+		('+14'),
+		('+13'),
+		('+12:45'),
+		('+12'),
+		('+11'),
+		('+10:30'),
+		('+10'),
+		('+09:30'),
+		('+09'),
+		('+08:45'),
+		('+08'),
+		('+07'),
+		('+06:30'),
+		('+06'),
+		('+05:45'),
+		('+05:30'),
+		('+05'),
+		('+04:30'),
+		('+04'),
+		('+03:30'),
+		('+03'),
+		('+02'),
+		('+01'),
+		('+00'),
+		('-01'),
+		('-02'),
+		('-03'),
+		('-03:30'),
+		('-04'),
+		('-05'),
+		('-06'),
+		('-07'),
+		('-08'),
+		('-09'),
+		('-09:30'),
+		('-10'),
+		('-11'),
+		('-12'),
+	) tbl(utc_offset)
+;
 
 foreach func strptime try_strptime
 
@@ -145,8 +264,8 @@ ORDER BY ALL
 2022-03-05 08:59:17.877-08	Europe/Budapest
 2022-03-05 09:59:17.877-08	Etc/GMT-0
 2022-03-05 10:59:17.877-08	Atlantic/Azores
-2022-03-05 11:59:17.877-08	Atlantic/South_Georgia
-2022-03-05 12:59:17.877-08	America/Cordoba
+2022-03-05 12:59:17.877-08	America/Cayenne
+2022-03-05 12:59:17.877-08	America/Nuuk
 2022-03-05 13:29:17.877-08	CNT
 2022-03-05 13:59:17.877-08	America/Martinique
 2022-03-05 14:59:17.877-08	America/Louisville
@@ -190,8 +309,8 @@ ORDER BY ALL
 2022-03-05 08:59:17.877-08	Europe/Bratislava
 2022-03-05 09:59:17.877-08	GMT
 2022-03-05 10:59:17.877-08	Atlantic/Azores
-2022-03-05 11:59:17.877-08	Atlantic/South_Georgia
-2022-03-05 12:59:17.877-08	America/Cordoba
+2022-03-05 12:59:17.877-08	America/Cayenne
+2022-03-05 12:59:17.877-08	America/Nuuk
 2022-03-05 13:29:17.877-08	CNT
 2022-03-05 13:59:17.877-08	PRT
 2022-03-05 14:59:17.877-08	America/Panama
@@ -288,8 +407,8 @@ ORDER BY ALL
 2022-03-05 08:59:17.877-08	Europe/Budapest
 2022-03-05 09:59:17.877-08	Etc/GMT-0
 2022-03-05 10:59:17.877-08	Atlantic/Azores
-2022-03-05 11:59:17.877-08	Atlantic/South_Georgia
-2022-03-05 12:59:17.877-08	America/Cordoba
+2022-03-05 12:59:17.877-08	America/Cayenne
+2022-03-05 12:59:17.877-08	America/Nuuk
 2022-03-05 13:29:17.877-08	CNT
 2022-03-05 13:59:17.877-08	America/Martinique
 2022-03-05 14:59:17.877-08	America/Louisville
@@ -331,20 +450,24 @@ INSERT INTO multiples VALUES
 
 statement error
 SELECT strptime(s, f) FROM multiples;
+----
 
 # Invalid format
 statement error
 select strptime('2022-03-05 17:59:17.877 CST', '%C');
+----
 
 # Parse error
 statement error
 select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g');
+----
 
 #
 # Cast VARCHAR => TIMESTAMPTZ
 #
 statement error
 select 'fnord'::timestamptz;
+----
 
 query I
 select TRY_CAST('fnord' AS timestamptz);

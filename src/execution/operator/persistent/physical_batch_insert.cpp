@@ -112,7 +112,8 @@ public:
 	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 3;
 
 public:
-	explicit BatchInsertGlobalState(DuckTableEntry &table) : table(table), insert_count(0) {
+	explicit BatchInsertGlobalState(DuckTableEntry &table)
+	    : table(table), insert_count(0), optimistically_written(false) {
 	}
 
 	mutex lock;
@@ -120,7 +121,7 @@ public:
 	idx_t insert_count;
 	vector<RowGroupBatchEntry> collections;
 	idx_t next_start = 0;
-	bool optimistically_written = false;
+	atomic<bool> optimistically_written;
 
 	void FindMergeCollections(idx_t min_batch_index, optional_idx &merged_batch_index,
 	                          vector<unique_ptr<RowGroupCollection>> &result) {
@@ -298,9 +299,9 @@ unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionConte
 	return make_uniq<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
-void PhysicalBatchInsert::NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
-	auto &gstate = state.Cast<BatchInsertGlobalState>();
-	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
+SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
+	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 
 	auto &table = gstate.table;
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
@@ -316,6 +317,7 @@ void PhysicalBatchInsert::NextBatch(ExecutionContext &context, GlobalSinkState &
 		lstate.CreateNewCollection(table, insert_types);
 	}
 	lstate.current_index = batch_index;
+	return SinkNextBatchType::READY;
 }
 
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {

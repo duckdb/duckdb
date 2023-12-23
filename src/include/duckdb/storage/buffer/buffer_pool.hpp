@@ -42,7 +42,7 @@ public:
 
 	void IncreaseUsedMemory(idx_t size);
 
-	idx_t GetUsedMemory();
+	idx_t GetUsedMemory() const;
 
 	idx_t GetMaxMemory() const;
 
@@ -66,7 +66,7 @@ protected:
 	void PurgeQueue();
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
-private:
+protected:
 	//! The lock for changing the memory limit
 	mutex limit_lock;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)

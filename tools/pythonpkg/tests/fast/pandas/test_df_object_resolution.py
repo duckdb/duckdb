@@ -15,6 +15,19 @@ def create_generic_dataframe(data, pandas):
     return pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
 
 
+def create_repeated_nulls(size):
+    data = [None, "a"]
+    n = size
+    data = data * n
+    return data
+
+
+def create_trailing_non_null(size):
+    data = [None for _ in range(size - 1)]
+    data.append('this is a long string')
+    return data
+
+
 class IntString:
     def __init__(self, value: int):
         self.value = value
@@ -205,6 +218,18 @@ class TestResolveObjectColumns(object):
         print(duckdb_col.columns)
         print(converted_col.columns)
         pandas.testing.assert_frame_equal(converted_col, duckdb_col)
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize('sample_size', [1, 10])
+    @pytest.mark.parametrize('fill', [1000, 10000])
+    @pytest.mark.parametrize('get_data', [create_repeated_nulls, create_trailing_non_null])
+    def test_analyzing_nulls(self, pandas, duckdb_cursor, fill, sample_size, get_data):
+        data = get_data(fill)
+        df1 = pandas.DataFrame(data={"col1": data})
+        duckdb_cursor.execute(f"SET GLOBAL pandas_analyze_sample={sample_size}")
+        df = duckdb_cursor.execute("select * from df1").df()
+
+        pandas.testing.assert_frame_equal(df1, df)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_map_value_upgrade(self, pandas):
@@ -548,42 +573,67 @@ class TestResolveObjectColumns(object):
         assert len(res['dates'].__array__()) == 4
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_multiple_chunks_aggregate(self, pandas):
-        conn = duckdb.connect()
-        conn.execute(
-            "create table dates as select '2022-09-14'::DATE + INTERVAL (i::INTEGER) DAY as i from range(0, 4096) tbl(i);"
+    def test_multiple_chunks_aggregate(self, pandas, duckdb_cursor):
+        duckdb_cursor.execute(f"SET GLOBAL pandas_analyze_sample=4096")
+        duckdb_cursor.execute(
+            "create table dates as select '2022-09-14'::DATE + INTERVAL (i::INTEGER) DAY as i from range(4096) tbl(i);"
         )
-        res = duckdb.query("select * from dates", connection=conn).df()
+        rel = duckdb_cursor.query("select * from dates")
+        res = rel.df()
         date_df = res.copy()
-        # Convert the values to `datetime.date` values, and the dtype of the column to 'object'
+
+        # Convert the dataframe to datetime
         date_df['i'] = pandas.to_datetime(res['i']).dt.date
         assert str(date_df['i'].dtype) == 'object'
-        expected_res = duckdb.query(
-            'select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from dates;', connection=conn
-        ).fetchall()
-        actual_res = duckdb.query_df(
-            date_df, 'x', 'select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from x'
-        ).fetchall()
+
+        expected_res = [
+            (
+                1840017600.0,  # Saturday, April 22, 2028 12:00:00 PM (avg)
+                1663113600.0,  # Wednesday, September 14, 2022 12:00:00 AM (min)
+                2016921600.0,  # Wednesday, November 30, 2033 12:00:00 AM (max)
+            )
+        ]
+
+        rel = duckdb_cursor.query(
+            """
+            select
+                avg(epoch(i)),
+                min(epoch(i)),
+                max(epoch(i))
+            from date_df
+        """
+        )
+        actual_res = rel.fetchall()
         assert expected_res == actual_res
 
-        conn.execute('drop table dates')
-        # Now with nulls interleaved
+        # Now interleave nulls into the dataframe
+        duckdb_cursor.execute('drop table dates')
         for i in range(0, len(res['i']), 2):
             res['i'][i] = None
+        duckdb_cursor.execute('create table dates as select * from res')
 
-        date_view = conn.register("date_view", res)
-        date_view.execute('create table dates as select * from date_view')
-        expected_res = duckdb.query(
-            "select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from dates", connection=conn
-        ).fetchall()
-
+        expected_res = [
+            (
+                1840060800.0,  # Sunday, April 23, 2028 12:00:00 AM
+                1663200000.0,  # Thursday, September 15, 2022 12:00:00 AM
+                2016921600.0,  # Wednesday, November 30, 2033 12:00:00 AM
+            )
+        ]
+        # Convert the dataframe to datetime
         date_df = res.copy()
-        # Convert the values to `datetime.date` values, and the dtype of the column to 'object'
         date_df['i'] = pandas.to_datetime(res['i']).dt.date
         assert str(date_df['i'].dtype) == 'object'
-        actual_res = duckdb.query_df(
-            date_df, 'x', 'select avg(epoch(i)), min(epoch(i)), max(epoch(i)) from x'
+
+        actual_res = duckdb_cursor.query(
+            """
+            select
+                avg(epoch(i)),
+                min(epoch(i)),
+                max(epoch(i))
+            from date_df
+        """
         ).fetchall()
+
         assert expected_res == actual_res
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])

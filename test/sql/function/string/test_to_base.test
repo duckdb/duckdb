@@ -13,6 +13,7 @@ number must be greater than or equal to 0
 statement error
 SELECT to_base(-10, 2, 64)
 number must be greater than or equal to 0
+----
 
 statement error
 SELECT to_base(10, 1)

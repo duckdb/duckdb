@@ -78,6 +78,10 @@ static jmethodID J_Iterator_next;
 static jmethodID J_Entry_getKey;
 static jmethodID J_Entry_getValue;
 
+static jclass J_UUID;
+static jmethodID J_UUID_getMostSignificantBits;
+static jmethodID J_UUID_getLeastSignificantBits;
+
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);
@@ -156,6 +160,12 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("java/util/Iterator");
 	J_Iterator_hasNext = env->GetMethodID(tmpLocalRef, "hasNext", "()Z");
 	J_Iterator_next = env->GetMethodID(tmpLocalRef, "next", "()Ljava/lang/Object;");
+	env->DeleteLocalRef(tmpLocalRef);
+
+	tmpLocalRef = env->FindClass("java/util/UUID");
+	J_UUID = (jclass)env->NewGlobalRef(tmpLocalRef);
+	J_UUID_getMostSignificantBits = env->GetMethodID(J_UUID, "getMostSignificantBits", "()J");
+	J_UUID_getLeastSignificantBits = env->GetMethodID(J_UUID, "getLeastSignificantBits", "()J");
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBArray");
@@ -270,6 +280,38 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
 	return j_str;
 }
 
+static Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
+	jint precision = env->CallIntMethod(decimal, J_Decimal_precision);
+	jint scale = env->CallIntMethod(decimal, J_Decimal_scale);
+
+	// Java BigDecimal type can have scale that exceeds the precision
+	// Which our DECIMAL type does not support (assert(width >= scale))
+	if (scale > precision) {
+		precision = scale;
+	}
+
+	// DECIMAL scale is unsigned, so negative values are not supported
+	if (scale < 0) {
+		throw InvalidInputException("Converting from a BigDecimal with negative scale is not supported");
+	}
+
+	Value val;
+
+	if (precision <= 18) { // normal sizes -> avoid string processing
+		jobject no_point_dec = env->CallObjectMethod(decimal, J_Decimal_scaleByPowTen, scale);
+		jlong result = env->CallLongMethod(no_point_dec, J_Decimal_longValue);
+		val = Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale);
+	} else if (precision <= 38) { // larger than int64 -> get string and cast
+		jobject str_val = env->CallObjectMethod(decimal, J_Decimal_toPlainString);
+		auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
+		val = Value(str_char);
+		val = val.DefaultCastAs(LogicalType::DECIMAL(precision, scale));
+		env->ReleaseStringUTFChars((jstring)str_val, str_char);
+	}
+
+	return val;
+}
+
 /**
  * Associates a duckdb::Connection with a duckdb::DuckDB. The DB may be shared amongst many ConnectionHolders, but the
  * Connection is unique to this holder. Every Java DuckDBConnection has exactly 1 of these holders, and they are never
@@ -310,6 +352,7 @@ static const char *const JDBC_STREAM_RESULTS = "jdbc_stream_results";
 jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolean read_only, jobject props) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
+	config.SetOptionByName("duckdb_api", "java");
 	config.AddExtensionOption(
 	    JDBC_STREAM_RESULTS,
 	    "Whether to stream results. Only one ResultSet on a connection can be open at once when true",
@@ -523,37 +566,16 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 				duckdb_params.push_back(Value::DOUBLE(env->CallDoubleMethod(param, J_Double_doubleValue)));
 				continue;
 			} else if (env->IsInstanceOf(param, J_Decimal)) {
-				jint precision = env->CallIntMethod(param, J_Decimal_precision);
-				jint scale = env->CallIntMethod(param, J_Decimal_scale);
-
-				// Java BigDecimal type can have scale that exceeds the precision
-				// Which our DECIMAL type does not support (assert(width >= scale))
-				if (scale > precision) {
-					precision = scale;
-				}
-
-				// DECIMAL scale is unsigned, so negative values are not supported
-				if (scale < 0) {
-					throw InvalidInputException("Converting from a BigDecimal with negative scale is not supported");
-				}
-
-				if (precision <= 18) { // normal sizes -> avoid string processing
-					jobject no_point_dec = env->CallObjectMethod(param, J_Decimal_scaleByPowTen, scale);
-					jlong result = env->CallLongMethod(no_point_dec, J_Decimal_longValue);
-					duckdb_params.push_back(Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale));
-				} else if (precision <= 38) { // larger than int64 -> get string and cast
-					jobject str_val = env->CallObjectMethod(param, J_Decimal_toPlainString);
-					auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
-					Value val = Value(str_char);
-					val = val.DefaultCastAs(LogicalType::DECIMAL(precision, scale));
-
-					duckdb_params.push_back(val);
-					env->ReleaseStringUTFChars((jstring)str_val, str_char);
-				}
+				Value val = create_value_from_bigdecimal(env, param);
+				duckdb_params.push_back(val);
 				continue;
 			} else if (env->IsInstanceOf(param, J_String)) {
 				auto param_string = jstring_to_string(env, (jstring)param);
 				duckdb_params.push_back(Value(param_string));
+			} else if (env->IsInstanceOf(param, J_UUID)) {
+				auto most_significant = (jlong)env->CallObjectMethod(param, J_UUID_getMostSignificantBits);
+				auto least_significant = (jlong)env->CallObjectMethod(param, J_UUID_getLeastSignificantBits);
+				duckdb_params.push_back(Value::UUID(hugeint_t(most_significant, least_significant)));
 			} else {
 				throw InvalidInputException("Unsupported parameter type");
 			}
@@ -755,6 +777,9 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		break;
 	case LogicalTypeId::HUGEINT:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+		break;
+	case LogicalTypeId::UHUGEINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uhugeint_t));
 		break;
 	case LogicalTypeId::FLOAT:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
@@ -959,6 +984,16 @@ void _duckdb_jdbc_appender_append_double(JNIEnv *env, jclass, jobject appender_r
 	get_appender(env, appender_ref_buf)->Append((double)value);
 }
 
+void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
+	timestamp_t timestamp = timestamp_t((int64_t)value);
+	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
+}
+
+void _duckdb_jdbc_appender_append_decimal(JNIEnv *env, jclass, jobject appender_ref_buf, jobject value) {
+	Value val = create_value_from_bigdecimal(env, value);
+	get_appender(env, appender_ref_buf)->Append(val);
+}
+
 void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {
 	if (env->IsSameObject(value, NULL)) {
 		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
@@ -974,6 +1009,9 @@ void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref
 }
 
 jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jlong batch_size) {
+	if (!res_ref_buf) {
+		throw InvalidInputException("Invalid result set");
+	}
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		throw InvalidInputException("Invalid result set");

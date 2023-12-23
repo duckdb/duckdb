@@ -39,12 +39,12 @@ DROP INDEX idx_i;
 statement error
 CREATE INDEX idx_u_list ON tbl (u_list);
 ----
-Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+Invalid type Error: Invalid Type [UNION("int" INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
 
 statement error
 CREATE INDEX idx_u_list ON tbl (i, u_list);
 ----
-Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+Invalid type Error: Invalid Type [UNION("int" INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
 
 query IIII
 SELECT * FROM tbl ORDER BY ALL;
@@ -108,7 +108,7 @@ restart
 statement error
 INSERT INTO tbl VALUES ('helloo', 'nop', 7, true);
 ----
-Constraint Error: Duplicate key "union_extract(u_2, 'string'): helloo" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "union_extract(u_2, 'string'): helloo" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
 
 restart
 
@@ -139,7 +139,7 @@ CREATE UNIQUE INDEX idx_c_1 ON tbl ((u_2.string), (u_1.string));
 statement error
 CREATE INDEX idx_c_fail ON tbl ((u_2.string), u_list);
 ----
-Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+Invalid type Error: Invalid Type [UNION("int" INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
 
 statement ok
 CREATE UNIQUE INDEX idx_c_2 ON tbl ((u_list.int), (u_1.string), (u_2.bool));
@@ -190,4 +190,4 @@ restart
 statement error
 INSERT INTO tbl VALUES ('sunshine', 'love', 85, true);
 ----
-Constraint Error: Duplicate key "union_extract(u_2, 'string'): sunshine, union_extract(u_1, 'string'): love" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
+Constraint Error: Duplicate key "union_extract(u_2, 'string'): sunshine, union_extract(u_1, 'string'): love" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).

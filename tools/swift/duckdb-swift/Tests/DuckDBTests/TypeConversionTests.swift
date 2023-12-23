@@ -75,8 +75,13 @@ final class TypeConversionTests: XCTestCase {
   }
   
   func test_extract_from_hugeint() throws {
-    let expected = [IntHuge.min + 1, IntHuge.max, nil]
+    let expected = [IntHuge.min, IntHuge.max, nil]
     try extractTest(testColumnName: "hugeint", expected: expected) { $0.cast(to: IntHuge.self) }
+  }
+  
+  func test_extract_from_uhugeint() throws {
+    let expected = [UIntHuge.min, UIntHuge.max, nil]
+    try extractTest(testColumnName: "uhugeint", expected: expected) { $0.cast(to: UIntHuge.self) }
   }
   
   func test_extract_from_float() throws {
@@ -96,7 +101,7 @@ final class TypeConversionTests: XCTestCase {
   
   func test_extract_from_uuid() throws {
     let expected = [
-      UUID(uuidString: "00000000-0000-0000-0000-000000000001"),
+      UUID(uuidString: "00000000-0000-0000-0000-000000000000"),
       UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"),
       nil
     ]
@@ -106,7 +111,7 @@ final class TypeConversionTests: XCTestCase {
   func test_extract_from_time() throws {
     let expected = [
       Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)),
-      Time(components: .init(hour: 23, minute: 59, second: 59, microsecond: 999_999)),
+      Time(components: .init(hour: 24, minute: 0, second: 0, microsecond: 0)),
       nil
     ]
     try extractTest(testColumnName: "time", expected: expected) { $0.cast(to: Time.self) }

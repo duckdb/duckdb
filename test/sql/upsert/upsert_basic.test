@@ -22,6 +22,7 @@ insert into tbl VALUES
 # The column referenced in the SET expression is indexed on, can't be updated
 statement error
 insert into tbl VALUES (3,5,1) ON CONFLICT (i) DO UPDATE SET i = i;
+----
 
 query III
 select * from tbl;
@@ -79,7 +80,7 @@ insert into tbl VALUES
 ON CONFLICT (i) DO UPDATE SET
 	k = excluded.k;
 ----
-Invalid Input Error: ON CONFLICT DO UPDATE can not update the same row twice in the same command, Ensure that no rows proposed for insertion within the same command have duplicate constrained values
+Invalid Input Error: ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows proposed for insertion within the same command have duplicate constrained values
 
 # Since the query errored, no operation is performed
 query III

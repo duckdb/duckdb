@@ -23,6 +23,7 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::ARRAY:
 		return 160;
 	default:
 		return 110;
@@ -92,6 +93,7 @@ static int64_t ImplicitCastUTinyint(const LogicalType &to) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
@@ -108,6 +110,7 @@ static int64_t ImplicitCastUSmallint(const LogicalType &to) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
@@ -122,6 +125,7 @@ static int64_t ImplicitCastUInteger(const LogicalType &to) {
 
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -136,6 +140,7 @@ static int64_t ImplicitCastUBigint(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
 		return TargetTypeCost(to);
@@ -181,6 +186,17 @@ static int64_t ImplicitCastHugeint(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastUhugeint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
 static int64_t ImplicitCastDate(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
@@ -215,6 +231,33 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 			child_cost--;
 		}
 		return child_cost;
+	}
+	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::ARRAY) {
+		// Arrays can be cast if their child types can be cast and the source and target has the same size
+		// or the target type has a unknown (any) size.
+		auto from_size = ArrayType::GetSize(from);
+		auto to_size = ArrayType::GetSize(to);
+		auto to_is_any_size = ArrayType::IsAnySize(to);
+		if (from_size == to_size || to_is_any_size) {
+			auto child_cost = ImplicitCast(ArrayType::GetChildType(from), ArrayType::GetChildType(to));
+			if (child_cost >= 100) {
+				// subtract one from the cost because we prefer ARRAY[X] -> ARRAY[VARCHAR] over ARRAY[X] -> VARCHAR
+				child_cost--;
+			}
+			return child_cost;
+		}
+		return -1; // Not possible if the sizes are different
+	}
+	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::LIST) {
+		// Arrays can be cast to lists for the cost of casting the child type
+		// add 1 because we prefer ARRAY->ARRAY casts over ARRAY->LIST casts
+		return ImplicitCast(ArrayType::GetChildType(from), ListType::GetChildType(to)) + 1;
+	}
+	if (from.id() == LogicalTypeId::LIST && (to.id() == LogicalTypeId::ARRAY && !ArrayType::IsAnySize(to))) {
+		// Lists can be cast to arrays for the cost of casting the child type, if the target size is known
+		// there is no way for us to resolve the size at bind-time without inspecting the list values.
+		// TODO: if we can access the expression we could resolve the size if the list is constant.
+		return ImplicitCast(ListType::GetChildType(from), ArrayType::GetChildType(to));
 	}
 	if (from.id() == to.id()) {
 		// arguments match: do nothing
@@ -304,6 +347,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastUBigint(to);
 	case LogicalTypeId::HUGEINT:
 		return ImplicitCastHugeint(to);
+	case LogicalTypeId::UHUGEINT:
+		return ImplicitCastUhugeint(to);
 	case LogicalTypeId::FLOAT:
 		return ImplicitCastFloat(to);
 	case LogicalTypeId::DOUBLE:

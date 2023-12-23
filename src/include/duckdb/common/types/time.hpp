@@ -27,6 +27,9 @@ public:
 	DUCKDB_API static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false);
 	DUCKDB_API static bool TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result,
 	                                        bool strict = false);
+	// No hour limit
+	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
+	                                          bool strict = false);
 	//!	Format is ±[HH]HH[:MM[:SS]]
 	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int32_t &offset);
 

@@ -3,23 +3,29 @@ cmake_minimum_required(VERSION 3.5)
 project(ParquetExtension)
 
 include_directories(
-  include ../../third_party/parquet ../../third_party/snappy
-  ../../third_party/miniz ../../third_party/thrift
-  ../../third_party/zstd/include)
+  include
+  ../../third_party/parquet
+  ../../third_party/thrift
+  ../../third_party/snappy
+  ../../third_party/zstd/include
+  ../../third_party/mbedtls
+  ../../third_party/mbedtls/include)
 
 set(PARQUET_EXTENSION_FILES
+    column_reader.cpp
     column_writer.cpp
+    parquet_crypto.cpp
     parquet_extension.cpp
     parquet_metadata.cpp
     parquet_reader.cpp
+    parquet_statistics.cpp
     parquet_timestamp.cpp
     parquet_writer.cpp
-    parquet_statistics.cpp
     serialize_parquet.cpp
-    zstd_file_system.cpp
-    column_reader.cpp)
+    zstd_file_system.cpp)
 
 if(NOT CLANG_TIDY)
+  # parquet/thrift/snappy
   set(PARQUET_EXTENSION_FILES
       ${PARQUET_EXTENSION_FILES}
       ../../third_party/parquet/parquet_constants.cpp
@@ -28,7 +34,10 @@ if(NOT CLANG_TIDY)
       ../../third_party/thrift/thrift/transport/TTransportException.cpp
       ../../third_party/thrift/thrift/transport/TBufferTransports.cpp
       ../../third_party/snappy/snappy.cc
-      ../../third_party/snappy/snappy-sinksource.cc
+      ../../third_party/snappy/snappy-sinksource.cc)
+  # zstd
+  set(PARQUET_EXTENSION_FILES
+      ${PARQUET_EXTENSION_FILES}
       ../../third_party/zstd/decompress/zstd_ddict.cpp
       ../../third_party/zstd/decompress/huf_decompress.cpp
       ../../third_party/zstd/decompress/zstd_decompress.cpp
@@ -53,7 +62,6 @@ if(NOT CLANG_TIDY)
 endif()
 
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
-
 set(PARAMETERS "-warnings")
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
 

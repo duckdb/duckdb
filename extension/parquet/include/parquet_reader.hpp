@@ -10,16 +10,16 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #endif
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -40,6 +40,7 @@ class Allocator;
 class ClientContext;
 class BaseStatistics;
 class TableFilterSet;
+class ParquetEncryptionConfig;
 
 struct ParquetReaderPrefetchConfig {
 	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
@@ -64,6 +65,21 @@ struct ParquetReaderScanState {
 	bool current_group_prefetched = false;
 };
 
+struct ParquetColumnDefinition {
+public:
+	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
+
+public:
+	int32_t field_id;
+	string name;
+	LogicalType type;
+	Value default_value;
+
+public:
+	void Serialize(Serializer &serializer) const;
+	static ParquetColumnDefinition Deserialize(Deserializer &deserializer);
+};
+
 struct ParquetOptions {
 	explicit ParquetOptions() {
 	}
@@ -71,7 +87,10 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool file_row_number = false;
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
+
 	MultiFileReaderOptions file_options;
+	vector<ParquetColumnDefinition> schema;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -95,6 +114,11 @@ public:
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
 
+	//! Index of the file_row_number column
+	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
+	//! Parquet schema for the generated columns
+	vector<duckdb_parquet::format::SchemaElement> generated_column_schema;
+
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
@@ -103,6 +127,10 @@ public:
 	idx_t NumRowGroups();
 
 	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
+
+	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
+	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+	                  const uint32_t buffer_size);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);

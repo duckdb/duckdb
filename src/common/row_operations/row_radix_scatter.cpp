@@ -2,6 +2,7 @@
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -173,6 +174,49 @@ void RadixScatterListVector(Vector &v, UnifiedVectorFormat &vdata, const Selecti
 	}
 }
 
+void RadixScatterArrayVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount, const SelectionVector &sel,
+                             idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
+                             const bool nulls_first, const idx_t prefix_len, idx_t width, const idx_t offset) {
+	// serialize null values
+	if (has_null) {
+		auto &validity = vdata.validity;
+		const data_t valid = nulls_first ? 1 : 0;
+		const data_t invalid = 1 - valid;
+
+		for (idx_t i = 0; i < add_count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx) + offset;
+			// write validity and according value
+			if (validity.RowIsValid(source_idx)) {
+				key_locations[i][0] = valid;
+			} else {
+				key_locations[i][0] = invalid;
+			}
+			key_locations[i]++;
+		}
+		width--;
+	}
+
+	// serialize the inner child
+	auto &child_vector = ArrayVector::GetEntry(v);
+	auto array_size = ArrayType::GetSize(v.GetType());
+	for (idx_t i = 0; i < add_count; i++) {
+		auto idx = sel.get_index(i);
+		auto source_idx = vdata.sel->get_index(idx) + offset;
+		auto array_offset = source_idx * array_size;
+		data_ptr_t key_location = key_locations[i];
+
+		RowOperations::RadixScatter(child_vector, array_size, *FlatVector::IncrementalSelectionVector(), 1,
+		                            key_locations + i, false, true, false, prefix_len, width - 1, array_offset);
+		// invert bits if desc
+		if (desc) {
+			for (idx_t s = 0; s < width; s++) {
+				*(key_location + s) = ~*(key_location + s);
+			}
+		}
+	}
+}
+
 void RadixScatterStructVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount, const SelectionVector &sel,
                               idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
                               const bool nulls_first, const idx_t prefix_len, idx_t width, const idx_t offset) {
@@ -243,6 +287,9 @@ void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector 
 	case PhysicalType::INT128:
 		TemplatedRadixScatter<hugeint_t>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, offset);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedRadixScatter<uhugeint_t>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, offset);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedRadixScatter<float>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, offset);
 		break;
@@ -262,6 +309,10 @@ void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector 
 	case PhysicalType::STRUCT:
 		RadixScatterStructVector(v, vdata, vcount, sel, ser_count, key_locations, desc, has_null, nulls_first,
 		                         prefix_len, width, offset);
+		break;
+	case PhysicalType::ARRAY:
+		RadixScatterArrayVector(v, vdata, vcount, sel, ser_count, key_locations, desc, has_null, nulls_first,
+		                        prefix_len, width, offset);
 		break;
 	default:
 		throw NotImplementedException("Cannot ORDER BY column with type %s", v.GetType().ToString());

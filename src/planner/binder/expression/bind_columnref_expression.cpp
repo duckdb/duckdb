@@ -10,7 +10,6 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_lambdaref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -97,7 +96,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 				}
 
 				D_ASSERT(!(*lambda_bindings)[i].alias.empty());
-				return make_uniq<ColumnRefExpression>(column_name, (*lambda_bindings)[i].alias);
+				return make_uniq<LambdaRefExpression>(i, column_name);
 			}
 		}
 	}
@@ -123,7 +122,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	return binder.bind_context.CreateColumnReference(table_name, column_name);
 }
 
-void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
+void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool within_function_expression) {
+	bool next_within_function_expression = false;
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
@@ -131,7 +131,12 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 		auto new_expr = QualifyColumnName(colref, error_message);
 		if (new_expr) {
 			if (!expr->alias.empty()) {
+				// Pre-existing aliases are added to the qualified colref
 				new_expr->alias = expr->alias;
+			} else if (within_function_expression) {
+				// Qualifying the colref may add an alias, but this needs to be removed within function expressions,
+				// because the alias here means a named parameter instead of a positional parameter
+				new_expr->alias = "";
 			}
 			new_expr->query_location = colref.query_location;
 			expr = std::move(new_expr);
@@ -149,11 +154,15 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 		}
 		break;
 	}
+	case ExpressionType::FUNCTION:
+		next_within_function_expression = true;
+		break;
 	default:
 		break;
 	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnNames(child); });
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		QualifyColumnNames(child, next_within_function_expression);
+	});
 }
 
 void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr) {
@@ -163,20 +172,6 @@ void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpre
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
                                                                    string field_name) {
-
-	// we need to transform the struct extract if it is inside a lambda expression
-	// because we cannot bind to an existing table, so we remove the dummy table also
-	if (lambda_bindings && base->type == ExpressionType::COLUMN_REF) {
-		auto &lambda_column_ref = base->Cast<ColumnRefExpression>();
-		D_ASSERT(!lambda_column_ref.column_names.empty());
-
-		if (lambda_column_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos) {
-			D_ASSERT(lambda_column_ref.column_names.size() == 2);
-			auto lambda_param_name = lambda_column_ref.column_names.back();
-			lambda_column_ref.column_names.clear();
-			lambda_column_ref.column_names.push_back(lambda_param_name);
-		}
-	}
 
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(base));
@@ -253,7 +248,6 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
 		} else {
 			// otherwise check if we can turn this into a struct extract
-			auto new_colref = make_uniq<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
 			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
 			if (qualified_colref) {
@@ -326,6 +320,11 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 	}
 }
 
+BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambdaref, idx_t depth) {
+	D_ASSERT(lambda_bindings && lambdaref.lambda_idx < lambda_bindings->size());
+	return (*lambda_bindings)[lambdaref.lambda_idx].Bind(lambdaref, depth);
+}
+
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -354,27 +353,13 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	// if it was a macro parameter, let macro_binding bind it to the argument
-	// if it was a lambda parameter, let lambda_bindings bind it to the argument
 
 	BindResult result;
 
-	auto found_lambda_binding = false;
-	if (lambda_bindings) {
-		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
-			if (table_name == (*lambda_bindings)[i].alias) {
-				result = (*lambda_bindings)[i].Bind(colref, i, depth);
-				found_lambda_binding = true;
-				break;
-			}
-		}
-	}
-
-	if (!found_lambda_binding) {
-		if (binder.macro_binding && table_name == binder.macro_binding->alias) {
-			result = binder.macro_binding->Bind(colref, depth);
-		} else {
-			result = binder.bind_context.BindColumn(colref, depth);
-		}
+	if (binder.macro_binding && table_name == binder.macro_binding->alias) {
+		result = binder.macro_binding->Bind(colref, depth);
+	} else {
+		result = binder.bind_context.BindColumn(colref, depth);
 	}
 
 	if (!result.HasError()) {

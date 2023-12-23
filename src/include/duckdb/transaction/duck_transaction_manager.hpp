@@ -20,17 +20,17 @@ class DuckTransactionManager : public TransactionManager {
 
 public:
 	explicit DuckTransactionManager(AttachedDatabase &db);
-	~DuckTransactionManager();
+	~DuckTransactionManager() override;
 
 public:
 	static DuckTransactionManager &Get(AttachedDatabase &db);
 
 	//! Start a new transaction
-	Transaction *StartTransaction(ClientContext &context) override;
+	Transaction &StartTransaction(ClientContext &context) override;
 	//! Commit the given transaction
-	string CommitTransaction(ClientContext &context, Transaction *transaction) override;
+	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
 	//! Rollback the given transaction
-	void RollbackTransaction(Transaction *transaction) override;
+	void RollbackTransaction(Transaction &transaction) override;
 
 	void Checkpoint(ClientContext &context, bool force = false) override;
 
@@ -49,7 +49,6 @@ private:
 	bool CanCheckpoint(optional_ptr<DuckTransaction> current = nullptr);
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(DuckTransaction &transaction) noexcept;
-	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
 
 private:
 	//! The current start timestamp used by transactions

@@ -15,15 +15,9 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_option.hpp"
 
 namespace duckdb {
-
-enum class NewLineIdentifier : uint8_t {
-	SINGLE = 1,   // Either \r or \n
-	CARRY_ON = 2, // \r\n
-	MIX = 3,      // Hippie-Land, can't run it multithreaded
-	NOT_SET = 4
-};
 
 enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
 
@@ -35,11 +29,11 @@ struct CSVStateMachineOptions {
 	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p) {};
 
 	//! Delimiter to separate columns within each line
-	char delimiter = ',';
+	CSVOption<char> delimiter = ',';
 	//! Quote used for columns that contain reserved characters, e.g '
-	char quote = '\"';
+	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
-	char escape = '\0';
+	CSVOption<char> escape = '\0';
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
@@ -49,17 +43,16 @@ struct CSVStateMachineOptions {
 struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
 	//! New Line separator
-	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
+	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Whether or not the file has a header line
-	bool header = false;
+	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
-	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
-	//! Whether or not a type format is specified
-	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
+	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! How many leading rows to skip
-	idx_t skip_rows = 0;
+	CSVOption<idx_t> skip_rows = 0;
 	//! True start of the first CSV Buffer (After skipping empty lines, headers, notes and so on)
 	idx_t true_start = 0;
 };
@@ -70,16 +63,6 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! See struct above.
 	DialectOptions dialect_options;
-	//! Whether or not a delimiter was defined by the user
-	bool has_delimiter = false;
-	//! Whether or not a new_line was defined by the user
-	bool has_newline = false;
-	//! Whether or not a quote was defined by the user
-	bool has_quote = false;
-	//! Whether or not an escape character was defined by the user
-	bool has_escape = false;
-	//! Whether or not a header information was given by the user
-	bool has_header = false;
 	//! Whether or not we should ignore InvalidInput errors
 	bool ignore_errors = false;
 	//! Rejects table name
@@ -91,7 +74,7 @@ struct CSVReaderOptions {
 	//! Index of the recovery columns
 	vector<idx_t> rejects_recovery_column_ids;
 	//! Number of samples to buffer
-	idx_t buffer_sample_size = STANDARD_VECTOR_SIZE * 50;
+	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
 	//! Specifies the string that represents a null value
 	string null_str;
 	//! Whether file is compressed or not, and if so which compression type
@@ -113,12 +96,12 @@ struct CSVReaderOptions {
 	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
 	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
 	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	//! In case the sniffer found a mismatch error from user define types or dialect
+	string sniffer_user_mismatch_error;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
-	//! Whether or not the skip_rows is set by the user
-	bool skip_rows_set = false;
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
@@ -131,7 +114,7 @@ struct CSVReaderOptions {
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
 	//! Whether or not to automatically detect dialect and datatypes
-	bool auto_detect = false;
+	bool auto_detect = true;
 	//! The file path of the CSV file to read
 	string file_path;
 	//! Multi-file reader options
@@ -147,6 +130,9 @@ struct CSVReaderOptions {
 	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
 	//! setting up this manually might be important
 	ParallelMode parallel_mode;
+
+	//! User defined parameters for the csv function concatenated on a string
+	string user_defined_parameters;
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -200,11 +186,5 @@ struct CSVReaderOptions {
 	                         vector<string> &names);
 
 	string ToString() const;
-
-	named_parameter_map_t OutputReadSettings();
-
-public:
-	//! Whether columns were explicitly provided through named parameters
-	bool explicitly_set_columns = false;
 };
 } // namespace duckdb
