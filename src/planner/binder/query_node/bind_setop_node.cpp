@@ -215,14 +215,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	} else {
 		// figure out the types of the setop result by picking the max of both
 		for (idx_t i = 0; i < result->left->types.size(); i++) {
-			LogicalType result_type;
-			if (!LogicalType::TryGetMaxLogicalTypeAllowVarchar(result->left->types[i], result->right->types[i],
-			                                                   result_type)) {
-				throw BinderException("Cannot apply set operation %s to columns %s (%s) and %s (%s) at position %d "
-				                      "- an explicit cast is required",
-				                      EnumUtil::ToString(statement.setop_type), result->left->names[i],
-				                      result->left->types[i], result->right->names[i], result->right->types[i], i);
-			}
+			auto result_type = LogicalType::ForceMaxLogicalType(result->left->types[i], result->right->types[i]);
 			if (!can_contain_nulls) {
 				if (ExpressionBinder::ContainsNullType(result_type)) {
 					result_type = ExpressionBinder::ExchangeNullType(result_type);

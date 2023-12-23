@@ -890,20 +890,16 @@ bool LogicalType::TryGetMaxLogicalType(const LogicalType &left, const LogicalTyp
 	}
 }
 
-bool LogicalType::TryGetMaxLogicalTypeAllowVarchar(const LogicalType &left, const LogicalType &right,
-                                                   LogicalType &result) {
+LogicalType LogicalType::ForceMaxLogicalType(const LogicalType &left, const LogicalType &right) {
+	LogicalType result;
 	if (LogicalType::TryGetMaxLogicalType(left, right, result)) {
-		return true;
+		return result;
 	}
-	if (left.id() == LogicalTypeId::VARCHAR) {
-		result = left;
-		return true;
+	if (left.id() < right.id()) {
+		return right;
+	} else {
+		return left;
 	}
-	if (right.id() == LogicalTypeId::VARCHAR) {
-		result = right;
-		return true;
-	}
-	return false;
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {

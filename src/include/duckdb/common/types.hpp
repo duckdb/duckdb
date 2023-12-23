@@ -306,11 +306,14 @@ struct LogicalType {
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
 
+	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 	DUCKDB_API static bool TryGetMaxLogicalType(const LogicalType &left, const LogicalType &right, LogicalType &result);
-	DUCKDB_API static bool TryGetMaxLogicalTypeAllowVarchar(const LogicalType &left, const LogicalType &right, LogicalType &result);
+	//! Forcibly returns a maximum logical type - similar to MaxLogicalType but never throws. As a fallback either left or right are returned.
+	DUCKDB_API static LogicalType ForceMaxLogicalType(const LogicalType &left, const LogicalType &right);
 
-	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
+
+		//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
 
 	DUCKDB_API void Verify() const;
