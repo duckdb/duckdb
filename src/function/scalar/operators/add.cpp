@@ -70,8 +70,27 @@ timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 }
 
 template <>
+timestamp_t AddOperator::Operation(date_t left, dtime_tz_t right) {
+	if (left == date_t::infinity()) {
+		return timestamp_t::infinity();
+	} else if (left == date_t::ninfinity()) {
+		return timestamp_t::ninfinity();
+	}
+	timestamp_t result;
+	if (!Timestamp::TryFromDatetime(left, right, result)) {
+		throw OutOfRangeException("Timestamp with time zone out of range");
+	}
+	return result;
+}
+
+template <>
 timestamp_t AddOperator::Operation(dtime_t left, date_t right) {
 	return AddOperator::Operation<date_t, dtime_t, timestamp_t>(right, left);
+}
+
+template <>
+timestamp_t AddOperator::Operation(dtime_tz_t left, date_t right) {
+	return AddOperator::Operation<date_t, dtime_tz_t, timestamp_t>(right, left);
 }
 
 template <>

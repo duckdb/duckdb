@@ -324,6 +324,9 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<date_t, dtime_t, timestamp_t, AddOperator>);
+		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
+			                      ScalarFunction::BinaryFunction<date_t, dtime_tz_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::INTEGER:
@@ -354,6 +357,12 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		} else if (right_type.id() == LogicalTypeId::DATE) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<dtime_t, date_t, timestamp_t, AddOperator>);
+		}
+		break;
+	case LogicalTypeId::TIME_TZ:
+		if (right_type.id() == LogicalTypeId::DATE) {
+			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
+			                      ScalarFunction::BinaryFunction<dtime_tz_t, date_t, timestamp_t, AddOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -397,6 +406,10 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	// we can add times to dates
 	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::DATE));
 	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME));
+
+	// we can add times with time zones (offsets) to dates
+	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::DATE));
+	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME_TZ));
 
 	// we can add lists together
 	functions.AddFunction(ListConcatFun::GetFunction());

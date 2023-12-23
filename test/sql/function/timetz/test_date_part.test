@@ -133,70 +133,109 @@ endloop
 
 # time gives errors for date-only parts
 statement error
-SELECT era(i) FROM timetzs
+SELECT era(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT year(i) FROM timetzs
+SELECT year(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT month(i) FROM timetzs
+SELECT month(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT day(i) FROM timetzs
+SELECT day(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT decade(i) FROM timetzs
+SELECT decade(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT century(i) FROM timetzs
+SELECT century(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT millennium(i) FROM timetzs
+SELECT millennium(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT quarter(i) FROM timetzs
+SELECT quarter(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT dayofweek(i) FROM timetzs
+SELECT dayofweek(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT isodow(i) FROM timetzs
+SELECT isodow(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT dayofyear(i) FROM timetzs
+SELECT dayofyear(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT week(i) FROM timetzs
+SELECT week(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
-SELECT yearweek(i) FROM timetzs
+SELECT yearweek(d) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
 select extract(dow from time '10:00:00');
+----
+No function matches the given name and argument types
 
 statement error
 select extract(doy from time '10:00:00');
+----
+No function matches the given name and argument types
 
 statement error
 select extract(yearweek from time '10:00:00');
+----
+No function matches the given name and argument types
 
 statement error
 select extract(century from time '10:00:00');
-
-statement error
-SELECT era(i) FROM timetzs
+----
+No function matches the given name and argument types
 
 statement error
 select extract(era from time '10:00:00');
+----
+Not implemented Error: "time" units "era" not recognized
 
 statement error
 select date_part('era', time '10:00:00');
+----
+Not implemented Error: "time" units "era" not recognized
 
 statement error
 select extract(julian from time '10:00:00');
+----
+julian can only take DATE or TIMESTAMP arguments
 
 statement error
 select date_part('julian', time '10:00:00');
+----
+julian can only take DATE or TIMESTAMP arguments
 
 # Correctness: Compare date_part against function value
 foreach partcode hour minute second millisecond microsecond epoch
