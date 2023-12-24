@@ -233,7 +233,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
-		//	00:00:00+1559 from the PG docs.
+		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
 		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(Timestamp::FromDatetime(
@@ -306,7 +306,7 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
-		//	24:00:00-1559 from the PG docs.
+		//	"24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59"
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return MaximumValue(LogicalType::TIMESTAMP);

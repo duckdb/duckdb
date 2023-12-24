@@ -110,8 +110,8 @@ query I
 SELECT date_part(s, d) FROM timetzs;
 ----
 NULL
-5612400
-1558
+57540
+15
 2
 4
 30
@@ -119,8 +119,8 @@ NULL
 3123456
 30
 0
--1558
--5612400
+-15
+-57540
 
 foreach datepart timezone timezone_hour timezone_minute
 
@@ -271,17 +271,17 @@ SELECT d, DATE_PART(['hour', 'minute', 'microsecond'], d) AS parts
 FROM timetzs
 ORDER BY 1;
 ----
-00:00:00+1559	{'hour': 0, 'minute': 0, 'microsecond': 0}
-00:00:00+1558	{'hour': 0, 'minute': 0, 'microsecond': 0}
-02:30:00+1200	{'hour': 2, 'minute': 30, 'microsecond': 0}
+00:00:00+15:59	{'hour': 0, 'minute': 0, 'microsecond': 0}
+00:00:00+15:58	{'hour': 0, 'minute': 0, 'microsecond': 0}
+02:30:00+12	{'hour': 2, 'minute': 30, 'microsecond': 0}
 02:30:00+04:30:45	{'hour': 2, 'minute': 30, 'microsecond': 0}
 02:30:00+04:30	{'hour': 2, 'minute': 30, 'microsecond': 0}
 02:30:00+04	{'hour': 2, 'minute': 30, 'microsecond': 0}
 02:30:00+00	{'hour': 2, 'minute': 30, 'microsecond': 0}
-02:30:00-1200	{'hour': 2, 'minute': 30, 'microsecond': 0}
+02:30:00-12	{'hour': 2, 'minute': 30, 'microsecond': 0}
 16:15:03.123456+00	{'hour': 16, 'minute': 15, 'microsecond': 3123456}
-24:00:00-1558	{'hour': 24, 'minute': 0, 'microsecond': 0}
-24:00:00-1559	{'hour': 24, 'minute': 0, 'microsecond': 0}
+24:00:00-15:58	{'hour': 24, 'minute': 0, 'microsecond': 0}
+24:00:00-15:59	{'hour': 24, 'minute': 0, 'microsecond': 0}
 NULL	NULL
 
 # Miscellaneous parts
@@ -290,66 +290,66 @@ SELECT d, DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_m
 FROM timetzs
 ORDER BY 1;
 ----
-00:00:00+1559	{'epoch': 0.0, 'second': 0, 'timezone': 5612400, 'timezone_hour': 1559, 'timezone_minute': 0}
-00:00:00+1558	{'epoch': 0.0, 'second': 0, 'timezone': 5608800, 'timezone_hour': 1558, 'timezone_minute': 0}
-02:30:00+1200	{'epoch': 9000.0, 'second': 0, 'timezone': 4320000, 'timezone_hour': 1200, 'timezone_minute': 0}
+00:00:00+15:59	{'epoch': 0.0, 'second': 0, 'timezone': 57540, 'timezone_hour': 15, 'timezone_minute': 59}
+00:00:00+15:58	{'epoch': 0.0, 'second': 0, 'timezone': 57480, 'timezone_hour': 15, 'timezone_minute': 58}
+02:30:00+12	{'epoch': 9000.0, 'second': 0, 'timezone': 43200, 'timezone_hour': 12, 'timezone_minute': 0}
 02:30:00+04:30:45	{'epoch': 9000.0, 'second': 0, 'timezone': 16245, 'timezone_hour': 4, 'timezone_minute': 30}
 02:30:00+04:30	{'epoch': 9000.0, 'second': 0, 'timezone': 16200, 'timezone_hour': 4, 'timezone_minute': 30}
 02:30:00+04	{'epoch': 9000.0, 'second': 0, 'timezone': 14400, 'timezone_hour': 4, 'timezone_minute': 0}
 02:30:00+00	{'epoch': 9000.0, 'second': 0, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-02:30:00-1200	{'epoch': 9000.0, 'second': 0, 'timezone': -4320000, 'timezone_hour': -1200, 'timezone_minute': 0}
+02:30:00-12	{'epoch': 9000.0, 'second': 0, 'timezone': -43200, 'timezone_hour': -12, 'timezone_minute': 0}
 16:15:03.123456+00	{'epoch': 58503.123456, 'second': 3, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-24:00:00-1558	{'epoch': 86400.0, 'second': 0, 'timezone': -5608800, 'timezone_hour': -1558, 'timezone_minute': 0}
-24:00:00-1559	{'epoch': 86400.0, 'second': 0, 'timezone': -5612400, 'timezone_hour': -1559, 'timezone_minute': 0}
+24:00:00-15:58	{'epoch': 86400.0, 'second': 0, 'timezone': -57480, 'timezone_hour': -15, 'timezone_minute': -58}
+24:00:00-15:59	{'epoch': 86400.0, 'second': 0, 'timezone': -57540, 'timezone_hour': -15, 'timezone_minute': -59}
 NULL	NULL
 
 # Function-only parts
 query II
 SELECT d, epoch_ns(d) FROM timetzs ORDER BY ALL;
 ----
-00:00:00+1559	0
-00:00:00+1558	0
-02:30:00+1200	9000000000000
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	9000000000000
 02:30:00+04:30:45	9000000000000
 02:30:00+04:30	9000000000000
 02:30:00+04	9000000000000
 02:30:00+00	9000000000000
-02:30:00-1200	9000000000000
+02:30:00-12	9000000000000
 16:15:03.123456+00	58503123456000
-24:00:00-1558	86400000000000
-24:00:00-1559	86400000000000
+24:00:00-15:58	86400000000000
+24:00:00-15:59	86400000000000
 NULL	NULL
 
 query II
 SELECT d, epoch_us(d) FROM timetzs ORDER BY ALL;
 ----
-00:00:00+1559	0
-00:00:00+1558	0
-02:30:00+1200	9000000000
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	9000000000
 02:30:00+04:30:45	9000000000
 02:30:00+04:30	9000000000
 02:30:00+04	9000000000
 02:30:00+00	9000000000
-02:30:00-1200	9000000000
+02:30:00-12	9000000000
 16:15:03.123456+00	58503123456
-24:00:00-1558	86400000000
-24:00:00-1559	86400000000
+24:00:00-15:58	86400000000
+24:00:00-15:59	86400000000
 NULL	NULL
 
 query II
 SELECT d, epoch_ms(d) FROM timetzs ORDER BY ALL;
 ----
-00:00:00+1559	0
-00:00:00+1558	0
-02:30:00+1200	9000000
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	9000000
 02:30:00+04:30:45	9000000
 02:30:00+04:30	9000000
 02:30:00+04	9000000
 02:30:00+00	9000000
-02:30:00-1200	9000000
+02:30:00-12	9000000
 16:15:03.123456+00	58503123
-24:00:00-1558	86400000
-24:00:00-1559	86400000
+24:00:00-15:58	86400000
+24:00:00-15:59	86400000
 NULL	NULL
 
 # Invalid parts

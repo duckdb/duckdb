@@ -30,8 +30,6 @@ public:
 	// No hour limit
 	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
 	                                          bool strict = false);
-	//!	Format is ±[HH]HH[:MM[:SS]]
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int32_t &offset);
 
 	//! Convert a time object to a string in the format "hh:mm:ss"
 	DUCKDB_API static string ToString(dtime_t time);

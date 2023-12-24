@@ -90,7 +90,7 @@ struct dtime_tz_t { // NOLINT
 	static constexpr const int TIME_BITS = 40;
 	static constexpr const int OFFSET_BITS = 24;
 	static constexpr const uint64_t OFFSET_MASK = ~uint64_t(0) >> TIME_BITS;
-	static constexpr const int32_t MAX_OFFSET = 1559 * 60 * 60;
+	static constexpr const int32_t MAX_OFFSET = 16 * 60 * 60 - 1; // ±15:59:59
 	static constexpr const int32_t MIN_OFFSET = -MAX_OFFSET;
 
 	uint64_t bits;
