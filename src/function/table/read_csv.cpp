@@ -290,41 +290,41 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	auto &csv_global_state = data_p.global_state->Cast<CSVGlobalState>();
 	auto &csv_local_state = data_p.local_state->Cast<CSVLocalState>();
 
-	//	if (!csv_local_state.csv_reader) {
-	// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
-	//		return;
-	//	}
-	//	do {
-	//		if (output.size() != 0) {
-	//
-	//			//			MultiFileReader::FinalizeChunk(bind_data.reader_bind,
-	// csv_local_state.csv_reader->reader_data,
-	//			//		 output);
-	//			break;
-	//		}
-	//		if (csv_local_state.csv_reader->Finished()) {
-	//			//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-	//			//			csv_global_state.UpdateVerification(verification_updates,
-	// csv_local_state.csv_reader->file_idx,
-	//			//			                                    csv_local_state.csv_reader->scanner->scanner_id);
-	//			//			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
-	//			//			                                 csv_local_state.csv_reader->file_idx);
-	//			csv_local_state.csv_reader = csv_global_state.Next(context, bind_data);
-	//			//			if (csv_local_state.csv_reader) {
-	//			//				csv_local_state.csv_reader->linenr = 0;
-	//			//			}
-	//			if (!csv_local_state.csv_reader) {
-	//				csv_global_state.DecrementThread();
-	//				break;
-	//			}
-	//		}
-	//		VerificationPositions positions;
-	//		csv_local_state.csv_reader->Parse(output, positions);
-	//
-	//	} while (true);
-	//	if (csv_global_state.Finished()) {
-	//		csv_global_state.Verify();
-	//	}
+	if (!csv_local_state.csv_reader) {
+		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
+		return;
+	}
+	do {
+		if (output.size() != 0) {
+			//			MultiFileReader::FinalizeChunk(bind_data.reader_bind,
+			//			                               csv_local_state.csv_reader->reader_data,
+			//			                               output);
+			break;
+		}
+		if (csv_local_state.csv_reader->Finished()) {
+			//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
+			//			csv_global_state.UpdateVerification(verification_updates,
+			//			 csv_local_state.csv_reader->file_idx,
+			//									                                    csv_local_state.csv_reader->scanner->scanner_id);
+			//			                        csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
+			//			                                 csv_local_state.csv_reader->file_idx);
+			csv_local_state.csv_reader = csv_global_state.Next(context, bind_data);
+			//			if (csv_local_state.csv_reader) {
+			//				csv_local_state.csv_reader->linenr = 0;
+			//			}
+			if (!csv_local_state.csv_reader) {
+				csv_global_state.DecrementThread();
+				break;
+			}
+		}
+		//		VerificationPositions positions;
+		csv_local_state.csv_reader->Parse(output);
+
+	} while (true);
+	if (csv_global_state.Finished()) {
+		csv_global_state.Verify();
+	}
+}
 }
 
 static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,

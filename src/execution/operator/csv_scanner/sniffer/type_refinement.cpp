@@ -36,8 +36,6 @@ void CSVSniffer::RefineTypes() {
 		// return all types varchar
 		return;
 	}
-	DataChunk parse_chunk;
-	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, STANDARD_VECTOR_SIZE);
 	for (idx_t i = 1; i < sniffing_state_machine.options.sample_size_chunks; i++) {
 		bool finished_file = best_candidate->Finished();
 		if (finished_file) {
@@ -54,7 +52,7 @@ void CSVSniffer::RefineTypes() {
 			}
 			return;
 		}
-		best_candidate->ParseChunk()->ToChunk(parse_chunk);
+		auto &parse_chunk = best_candidate->ParseChunk()->ToChunk();
 
 		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			vector<LogicalType> &col_type_candidates = best_sql_types_candidates_per_column_idx[col];

@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle)
+StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
+                                     Allocator &buffer_allocator)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors) {
 	// Vector information
@@ -17,6 +18,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 
 	// Current Result information
 	result_position = 0;
+
+	// Initialize Parse Chunk
+	parse_chunk.Initialize(buffer_allocator, {number_of_columns, LogicalType::VARCHAR}, STANDARD_VECTOR_SIZE);
 }
 
 Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
@@ -32,7 +36,7 @@ Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
 	}
 }
 
-void StringValueResult::ToChunk(DataChunk &parse_chunk) {
+DataChunk &StringValueResult::ToChunk() {
 	idx_t number_of_rows = NumberOfRows();
 	const auto &selection_vectors = state_machine.GetSelectionVector();
 	for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
@@ -41,6 +45,17 @@ void StringValueResult::ToChunk(DataChunk &parse_chunk) {
 		v.Slice(*vector, selection_vectors[col_idx], number_of_rows);
 	}
 	parse_chunk.SetCardinality(number_of_rows);
+}
+
+bool StringValueResult::Flush(DataChunk &insert_chunk) {
+	idx_t number_of_rows = NumberOfRows();
+	const auto &selection_vectors = state_machine.GetSelectionVector();
+	for (idx_t col_idx = 0; col_idx < insert_chunk.ColumnCount(); col_idx++) {
+		// fixme: has to do some extra checks for null padding
+		auto &v = insert_chunk.data[col_idx];
+		v.Slice(*vector, selection_vectors[col_idx], number_of_rows);
+	}
+	insert_chunk.SetCardinality(number_of_rows);
 }
 
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -124,7 +139,8 @@ idx_t StringValueResult::NumberOfRows() {
 
 StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        shared_ptr<CSVStateMachine> state_machine, ScannerBoundary boundary)
-    : BaseScanner(buffer_manager, state_machine, boundary), result(states, *state_machine, *cur_buffer_handle) {};
+    : BaseScanner(buffer_manager, state_machine, boundary),
+      result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context)) {};
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	CSVStateMachineCache cache;

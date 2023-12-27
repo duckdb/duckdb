@@ -10,14 +10,16 @@
 
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
-#include "duckdb/execution/operator/scan/csv/parser/scanner_boundary.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/scan/csv/scanner/base_scanner.hpp"
 
 namespace duckdb {
 
 class StringValueResult : public ScannerResult {
 public:
-	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle);
+	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
+	                  Allocator &buffer_allocator);
+
 	//! Information on the vector
 	unique_ptr<Vector> vector;
 	string_t *vector_ptr;
@@ -33,6 +35,9 @@ public:
 	const bool null_padding;
 	const bool ignore_errors;
 
+	//! Internal Data Chunk used for flushing
+	DataChunk parse_chunk;
+
 	//! If this line might have too many columns
 	bool maybe_too_many_columns = false;
 	//! Adds a Value to the result
@@ -45,13 +50,13 @@ public:
 	inline void AddRowInternal(idx_t buffer_pos);
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
-	void ToChunk(DataChunk &parse_chunk);
+	DataChunk &ToChunk();
+
+	bool Flush(DataChunk &insert_chunk);
 
 	idx_t NumberOfRows();
 
 	void Print();
-
-	//! Returns a DataChunk
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
