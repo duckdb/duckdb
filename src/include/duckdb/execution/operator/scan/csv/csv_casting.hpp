@@ -10,6 +10,8 @@
 
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 
 namespace duckdb {
 class CSVCast {

@@ -3,8 +3,8 @@
 namespace duckdb {
 
 ScannerBoundary::ScannerBoundary(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t boundary_idx_p)
-    : file_idx(file_idx_p), buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p), is_set(true),
-      boundary_idx(boundary_idx_p) {
+    : file_idx(file_idx_p), buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p), boundary_idx(boundary_idx_p),
+      is_set(true) {
 	end_pos = buffer_pos + BYTES_PER_THREAD;
 };
 

@@ -66,6 +66,10 @@ public:
 		return types;
 	}
 
+	idx_t GetBoundaryIndex() {
+		return boundary.GetBoundaryIdx();
+	}
+
 	MultiFileReaderData reader_data;
 	string file_path;
 	vector<string> names;

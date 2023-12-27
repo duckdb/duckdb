@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/scan/csv/scanner/string_value_scanner.hpp"
 
+#include "duckdb/execution/operator/scan/csv/csv_casting.hpp"
+
 namespace duckdb {
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
@@ -45,20 +47,11 @@ DataChunk &StringValueResult::ToChunk() {
 		v.Slice(*vector, selection_vectors[col_idx], number_of_rows);
 	}
 	parse_chunk.SetCardinality(number_of_rows);
-}
-
-bool StringValueResult::Flush(DataChunk &insert_chunk) {
-	idx_t number_of_rows = NumberOfRows();
-	const auto &selection_vectors = state_machine.GetSelectionVector();
-	for (idx_t col_idx = 0; col_idx < insert_chunk.ColumnCount(); col_idx++) {
-		// fixme: has to do some extra checks for null padding
-		auto &v = insert_chunk.data[col_idx];
-		v.Slice(*vector, selection_vectors[col_idx], number_of_rows);
-	}
-	insert_chunk.SetCardinality(number_of_rows);
+	return parse_chunk;
 }
 
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
+	D_ASSERT(result.result_position < result.vector_size);
 	result.vector_ptr[result.result_position++] =
 	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
 	result.last_position = buffer_pos;
@@ -71,7 +64,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 
 inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	// We add the value
-	vector_ptr[result_position++] = string_t(buffer_ptr + last_position, buffer_pos - last_position);
+	vector_ptr[result_position++] = string_t(buffer_ptr + last_position, buffer_pos - last_position - 1);
 	last_position = buffer_pos;
 }
 
@@ -120,7 +113,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		}
 	}
 
-	if (result.result_position % result.number_of_columns >= result.vector_size) {
+	if (result.result_position / result.number_of_columns >= STANDARD_VECTOR_SIZE) {
 		// We have a full chunk
 		return true;
 	}
@@ -154,6 +147,70 @@ StringValueResult *StringValueScanner::ParseChunk() {
 	result.result_position = 0;
 	ParseChunkInternal();
 	return &result;
+}
+
+void StringValueScanner::Flush(DataChunk &insert_chunk) {
+
+	auto process_result = ParseChunk();
+	// First Get Parsed Chunk
+	auto &parse_chunk = process_result->ToChunk();
+
+	if (parse_chunk.size() == 0) {
+		return;
+	}
+
+	//	bool conversion_error_ignored = false;
+
+	// convert the columns in the parsed chunk to the types of the table
+	insert_chunk.SetCardinality(parse_chunk);
+
+	// Now Do the cast-aroo
+	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+		auto col_idx = reader_data.column_ids[c];
+		auto result_idx = reader_data.column_mapping[c];
+		auto &parse_vector = parse_chunk.data[col_idx];
+		auto &result_vector = insert_chunk.data[result_idx];
+		auto &type = result_vector.GetType();
+		if (type.id() == LogicalTypeId::VARCHAR) {
+			// target type is varchar: no need to convert
+			// reinterpret rather than reference, so we can deal with user-defined types
+			result_vector.Reinterpret(parse_vector);
+		} else {
+			string error_message;
+			bool success;
+			idx_t line_error = 0;
+			if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue().Empty() &&
+			    type.id() == LogicalTypeId::DATE) {
+				// use the date format to cast the chunk
+				success = CSVCast::TryCastDateVector(state_machine->options.dialect_options.date_format, parse_vector,
+				                                     result_vector, parse_chunk.size(), error_message, line_error);
+			} else if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP)
+			                .GetValue()
+			                .Empty() &&
+			           type.id() == LogicalTypeId::TIMESTAMP) {
+				// use the date format to cast the chunk
+				success =
+				    CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format, parse_vector,
+				                                    result_vector, parse_chunk.size(), error_message);
+			} else if (state_machine->options.decimal_separator != "." &&
+			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
+				success =
+				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
+				                                                 parse_chunk.size(), error_message, type, line_error);
+			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
+				success = CSVCast::TryCastDecimalVectorCommaSeparated(
+				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), error_message, type);
+			} else {
+				// target type is not varchar: perform a cast
+				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
+				                                    parse_chunk.size(), &error_message);
+			}
+			if (success) {
+				continue;
+			}
+			throw InvalidInputException("error");
+		}
+	}
 }
 
 void StringValueScanner::Process() {

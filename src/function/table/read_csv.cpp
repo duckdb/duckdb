@@ -318,19 +318,18 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			}
 		}
 		//		VerificationPositions positions;
-		csv_local_state.csv_reader->Parse(output);
+		csv_local_state.csv_reader->Flush(output);
 
 	} while (true);
 	if (csv_global_state.Finished()) {
 		csv_global_state.Verify();
 	}
 }
-}
 
 static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                                     LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &data = local_state->Cast<CSVLocalState>();
-	//	return data.csv_reader->scanner_id;
+	return data.csv_reader->GetBoundaryIndex();
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {

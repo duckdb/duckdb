@@ -52,8 +52,6 @@ public:
 
 	DataChunk &ToChunk();
 
-	bool Flush(DataChunk &insert_chunk);
-
 	idx_t NumberOfRows();
 
 	void Print();
@@ -69,6 +67,9 @@ public:
 	}
 
 	StringValueResult *ParseChunk() override;
+
+	//! Flushes the result to the insert_chunk
+	void Flush(DataChunk &insert_chunk);
 
 	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
 	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options);
