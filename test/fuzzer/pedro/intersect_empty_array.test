@@ -8,4 +8,4 @@ pragma enable_verification
 statement error
 SELECT 2 INTERSECT VALUES([]);
 ----
-Cannot apply set operation INTERSECT
+Unimplemented
