@@ -38,7 +38,8 @@ class ColumnCountScanner : public BaseScanner {
 public:
 	ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine);
 
-	~ColumnCountScanner(){}
+	~ColumnCountScanner() {
+	}
 
 	ColumnCountResult *ParseChunk() override;
 

@@ -15,7 +15,7 @@ bool ScannerResult::Empty() {
 }
 
 bool ScannerPosition::InBoundary(const ScannerBoundary &boundary) {
-	return boundary.file_idx == file_id && boundary.buffer_idx == buffer_id && pos < boundary.buffer_pos;
+	return boundary.InBoundary(file_id, buffer_id, pos);
 }
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
@@ -24,12 +24,12 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
 	// Initialize current buffer handle
-	cur_buffer_handle = buffer_manager->GetBuffer(boundary.file_idx, boundary.buffer_idx);
+	cur_buffer_handle = buffer_manager->GetBuffer(boundary.GetFileIdx(), boundary.GetBufferIdx());
 	buffer_handle_ptr = cur_buffer_handle->Ptr();
 	D_ASSERT(cur_buffer_handle);
 	// Ensure that the boundary end is within the realms of reality.
-	boundary_p.end_pos =
-	    boundary_p.end_pos > cur_buffer_handle->actual_size ? cur_buffer_handle->actual_size : boundary_p.end_pos;
+	boundary_p.SetEndPos(boundary_p.GetEndPos() > cur_buffer_handle->actual_size ? cur_buffer_handle->actual_size
+	                                                                             : boundary_p.GetEndPos());
 };
 
 bool BaseScanner::Finished() {
@@ -53,8 +53,8 @@ bool BaseScanner::Finished() {
 }
 
 void BaseScanner::Reset() {
-	pos.buffer_id = boundary.buffer_idx;
-	pos.pos = boundary.buffer_pos;
+	pos.buffer_id = boundary.GetBufferIdx();
+	pos.pos = boundary.GetBufferPos();
 }
 
 ScannerResult *BaseScanner::ParseChunk() {

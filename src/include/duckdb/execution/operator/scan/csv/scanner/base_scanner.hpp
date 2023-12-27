@@ -10,7 +10,7 @@
 
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
-#include "duckdb/execution/operator/scan/csv/parser/scanner_boundary.hpp"
+#include "duckdb/execution/operator/scan/csv/scanner/scanner_boundary.hpp"
 
 namespace duckdb {
 
@@ -55,6 +55,21 @@ public:
 
 	//! Returns the result from the last Parse call. Shouts at you if you call it wrong
 	virtual ScannerResult *GetResult();
+
+	const string &GetFileName() {
+		return file_path;
+	}
+	const vector<string> &GetNames() {
+		return names;
+	}
+	const vector<LogicalType> &GetTypes() {
+		return types;
+	}
+
+	MultiFileReaderData reader_data;
+	string file_path;
+	vector<string> names;
+	vector<LogicalType> types;
 
 	//! Templated function that process the parsing of a charecter
 	//! OP = Operation used to alter the result of the parser

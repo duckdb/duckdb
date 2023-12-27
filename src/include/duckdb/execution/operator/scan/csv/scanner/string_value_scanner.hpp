@@ -60,7 +60,8 @@ public:
 	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
 	                   ScannerBoundary boundary = {});
 
-	~StringValueScanner(){}
+	~StringValueScanner() {
+	}
 
 	StringValueResult *ParseChunk() override;
 

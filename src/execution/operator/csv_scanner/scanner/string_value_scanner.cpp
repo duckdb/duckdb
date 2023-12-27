@@ -142,8 +142,8 @@ StringValueResult *StringValueScanner::ParseChunk() {
 
 void StringValueScanner::Process() {
 	idx_t to_pos;
-	if (boundary.is_set) {
-		to_pos = boundary.end_pos;
+	if (boundary.IsSet()) {
+		to_pos = boundary.GetEndPos();
 	} else {
 		to_pos = cur_buffer_handle->actual_size;
 	}
@@ -228,7 +228,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 	}
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
-	if (boundary.is_set) {
+	if (boundary.IsSet()) {
 		// We read until the next line or until we have nothing else to read.
 		do {
 			// Move to next buffer

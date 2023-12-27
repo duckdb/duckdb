@@ -1,5 +1,6 @@
 add_subdirectory(sniffer)
 add_subdirectory(scanner)
+add_subdirectory(table_function)
 
 add_library_unity(
   duckdb_operator_csv_scanner
