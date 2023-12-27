@@ -274,7 +274,7 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	// setops require the same types on both sides
 	REQUIRE_NOTHROW(v1 = con.Values("(DATE '1992-01-01', 2)"));
 	REQUIRE_NOTHROW(v2 = con.Values("(3.0, 'hello')"));
-	REQUIRE_THROWS(v1->Union(v2));
+	REQUIRE_FAIL(v1->Union(v2)->Execute());
 }
 
 TEST_CASE("Test combinations of joins", "[relation_api]") {

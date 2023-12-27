@@ -543,7 +543,7 @@ SELECT excel_text(0.0, '_ $* #,##0.00_ ;_ $* -#,##0.00_ ;_ $*  - ??_ ;_ @_ ')
  $ -    
 
 query T
-SELECT text(1.0, 3.5)
+SELECT text(1.0, '3.5')
 ----
 3.5
 
