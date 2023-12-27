@@ -242,6 +242,22 @@ void CSVSniffer::RefineCandidates() {
 	return;
 }
 
+void SetNewLine(CSVStateMachine &machine) {
+	NewLineIdentifier suggested_newline;
+	if (machine.carry_on_separator) {
+		if (machine.single_record_separator) {
+			suggested_newline = NewLineIdentifier::MIX;
+		} else {
+			suggested_newline = NewLineIdentifier::CARRY_ON;
+		}
+	} else {
+		suggested_newline = NewLineIdentifier::SINGLE;
+	}
+	if (machine.options.dialect_options.new_line == NewLineIdentifier::NOT_SET) {
+		machine.dialect_options.new_line = suggested_newline;
+	}
+}
+
 // Dialect Detection consists of five steps:
 // 1. Generate a search space of all possible dialects
 // 2. Generate a state machine for each dialect
@@ -282,11 +298,13 @@ void CSVSniffer::DetectDialect() {
 	}
 	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks
 	RefineCandidates();
+
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
 		throw InvalidInputException(
 		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
 		    options.file_path);
 	}
+	SetNewLine(candidates[0]->GetStateMachine());
 }
 } // namespace duckdb
