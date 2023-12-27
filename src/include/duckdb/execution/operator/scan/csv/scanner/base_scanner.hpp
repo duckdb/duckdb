@@ -45,6 +45,7 @@ public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
 	                     ScannerBoundary boundary = {});
 
+	virtual ~BaseScanner() = default;
 	//! Returns true if the scanner is finished
 	bool Finished();
 	//! Resets the scanner

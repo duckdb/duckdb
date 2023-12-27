@@ -126,12 +126,12 @@ StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        shared_ptr<CSVStateMachine> state_machine, ScannerBoundary boundary)
     : BaseScanner(buffer_manager, state_machine, boundary), result(states, *state_machine, *cur_buffer_handle) {};
 
-StringValueScanner StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
+unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	CSVStateMachineCache cache;
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, cache);
 	vector<string> file_paths = {options.file_path};
 	auto buffer_manager = make_shared<CSVBufferManager>(context, options, file_paths);
-	return StringValueScanner(buffer_manager, state_machine);
+	return make_uniq<StringValueScanner>(buffer_manager, state_machine);
 }
 
 StringValueResult *StringValueScanner::ParseChunk() {

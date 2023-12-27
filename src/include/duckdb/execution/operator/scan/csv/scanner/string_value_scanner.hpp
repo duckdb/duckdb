@@ -60,10 +60,12 @@ public:
 	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
 	                   ScannerBoundary boundary = {});
 
+	~StringValueScanner(){}
+
 	StringValueResult *ParseChunk() override;
 
 	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
-	static StringValueScanner GetCSVScanner(ClientContext &context, CSVReaderOptions &options);
+	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options);
 
 private:
 	void Process() override;
