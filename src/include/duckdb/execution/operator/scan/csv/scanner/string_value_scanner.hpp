@@ -63,7 +63,7 @@ public:
 class StringValueScanner : public BaseScanner {
 public:
 	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	                   ScannerBoundary boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	~StringValueScanner() {
 	}

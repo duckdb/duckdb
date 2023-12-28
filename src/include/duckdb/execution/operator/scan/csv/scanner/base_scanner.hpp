@@ -14,21 +14,6 @@
 
 namespace duckdb {
 
-struct ScannerPosition {
-	//! Current  position of the buffer we are scanning
-	idx_t pos = 0;
-	//! Id of the buffer we are currently scanning
-	idx_t buffer_id = 0;
-	//! Id of the file we are currently scanning
-	idx_t file_id = 0;
-	//! If we are done with this scanner
-	bool done = false;
-	//! If the position is within the scanner boundary
-	bool InBoundary(const ScannerBoundary &boundary);
-
-	void Print();
-};
-
 class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
@@ -47,7 +32,7 @@ protected:
 class BaseScanner {
 public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	                     ScannerBoundary boundary = {});
+	                     CSVIterator iterator = {});
 
 	virtual ~BaseScanner() = default;
 	//! Returns true if the scanner is finished
@@ -71,7 +56,7 @@ public:
 	}
 
 	idx_t GetBoundaryIndex() {
-		return boundary.GetBoundaryIdx();
+		return iterator.GetBoundaryIdx();
 	}
 
 	MultiFileReaderData reader_data;
@@ -111,7 +96,7 @@ public:
 
 protected:
 	//! Boundaries of this scanner
-	ScannerBoundary boundary;
+	CSVIterator iterator;
 
 	//! Unique pointer to the buffer_handle, this is unique per scanner, since it also contains the necessary counters
 	//! To offload buffers to disk if necessary
@@ -127,9 +112,6 @@ protected:
 	shared_ptr<CSVStateMachine> state_machine;
 	//! If this scanner has been initialized
 	bool initialized = false;
-
-	//! Holds information regarding the position we are in the csv scanner
-	ScannerPosition pos;
 
 	//! States
 	CSVStates states;

@@ -62,8 +62,8 @@ ColumnCountResult *ColumnCountScanner::GetResult() {
 
 void ColumnCountScanner::Process() {
 	// Run on this buffer
-	for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result)) {
+	for (; iterator.cur_buffer_pos < cur_buffer_handle->actual_size; iterator.cur_buffer_pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result)) {
 			return;
 		}
 	}
@@ -76,10 +76,10 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 	}
 	// We run until we have a full chunk, or we are done scanning
 	while (!Finished() && result.result_position < STANDARD_VECTOR_SIZE) {
-		if (pos.pos == cur_buffer_handle->actual_size) {
+		if (iterator.cur_buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
-			pos.pos = 0;
-			cur_buffer_handle = buffer_manager->GetBuffer(pos.file_id, ++pos.buffer_id);
+			iterator.cur_buffer_pos = 0;
+			cur_buffer_handle = buffer_manager->GetBuffer(iterator.cur_file_idx, ++iterator.cur_buffer_idx);
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
 				// This means we reached the end of the file, we must add a last line if there is any to be added

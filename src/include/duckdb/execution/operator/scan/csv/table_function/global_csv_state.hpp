@@ -60,7 +60,7 @@ private:
 	//! Buffer Manager for the CSV Files in this Scan
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! We hold information on the current scanner boundary
-	ScannerBoundary current_boundary;
+	CSVIterator current_boundary;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;

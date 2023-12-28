@@ -131,11 +131,11 @@ idx_t StringValueResult::NumberOfRows() {
 }
 
 StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager,
-                                       shared_ptr<CSVStateMachine> state_machine, ScannerBoundary boundary,
+                                       shared_ptr<CSVStateMachine> state_machine, CSVIterator boundary,
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, boundary),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             boundary.GetBufferPos()) {};
+             iterator.cur_buffer_pos) {};
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	CSVStateMachineCache cache;
@@ -210,8 +210,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			if (success) {
 				continue;
 			}
-			boundary.Print();
-			pos.Print();
+			//			boundary.Print();
+			//			pos.Print();
 			throw InvalidInputException("error");
 		}
 	}
@@ -220,23 +220,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 void StringValueScanner::Process() {
 	SetStart();
 	idx_t to_pos;
-	if (boundary.IsSet()) {
-		to_pos = boundary.GetEndPos();
+	if (iterator.IsSet()) {
+		to_pos = iterator.GetEndPos();
 	} else {
 		to_pos = cur_buffer_handle->actual_size;
 	}
-	if (cur_buffer_handle->is_first_buffer && pos.pos == 0) {
-		// This means we are in the first buffer, we must skip any empty lines, notes and the header
-		// SkipSetLines();
-		SkipEmptyLines();
-		SkipNotes();
-		//		if (state_machine->dialect_options.header.GetValue()){
-		//			// If the header is set we also skip it
-		//			SkipHeader();
-		//		}
-	}
-	for (; pos.pos < to_pos; pos.pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result)) {
+	for (; iterator.cur_buffer_pos < to_pos; iterator.cur_buffer_pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result)) {
 			return;
 		}
 	}
@@ -245,8 +235,8 @@ void StringValueScanner::Process() {
 void StringValueScanner::ProcessExtraRow() {
 	idx_t to_pos = cur_buffer_handle->actual_size;
 	idx_t cur_result_pos = result.result_position + 1;
-	for (; pos.pos < to_pos; pos.pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result) ||
+	for (; iterator.cur_buffer_pos < to_pos; iterator.cur_buffer_pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result) ||
 		    (result.result_position >= cur_result_pos &&
 		     result.result_position % state_machine->dialect_options.num_cols == 0)) {
 			return;
@@ -260,19 +250,17 @@ void StringValueScanner::ProcessOverbufferValue() {
 	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos;
 	idx_t cur_value_idx = result.result_position;
 	while (cur_value_idx == result.result_position) {
-		ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result);
-		pos.pos++;
+		ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result);
+		iterator.cur_buffer_pos++;
 	}
-	if (pos.pos == 0) {
+	if (iterator.cur_buffer_pos == 0) {
 		result.vector_ptr[result.result_position - 1] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
-		std::cout << result.vector_ptr[result.result_position - 1].GetString() << std::endl;
-	} else if (pos.pos == 1) {
+	} else if (iterator.cur_buffer_pos == 1) {
 		result.vector_ptr[result.result_position - 1] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
-		std::cout << result.vector_ptr[result.result_position - 1].GetString() << std::endl;
 	} else {
-		auto string_length = first_buffer_length + pos.pos - 2;
+		auto string_length = first_buffer_length + iterator.cur_buffer_pos - 2;
 		auto &result_str = result.vector_ptr[result.result_position - 1];
 		result_str = StringVector::EmptyString(*result.vector, string_length);
 		// Copy the first buffer
@@ -282,14 +270,13 @@ void StringValueScanner::ProcessOverbufferValue() {
 		FastMemcpy(result_str.GetDataWriteable() + first_buffer_length, cur_buffer_handle->Ptr(),
 		           string_length - first_buffer_length);
 		result_str.Finalize();
-		std::cout << result_str.GetString() << std::endl;
 	}
 }
 
 void StringValueScanner::MoveToNextBuffer() {
-	if (pos.pos == cur_buffer_handle->actual_size) {
+	if (iterator.cur_buffer_pos == cur_buffer_handle->actual_size) {
 		previous_buffer_handle = std::move(cur_buffer_handle);
-		cur_buffer_handle = buffer_manager->GetBuffer(pos.file_id, ++pos.buffer_id);
+		cur_buffer_handle = buffer_manager->GetBuffer(iterator.cur_file_idx, ++iterator.cur_buffer_idx);
 		if (!cur_buffer_handle) {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
@@ -298,7 +285,7 @@ void StringValueScanner::MoveToNextBuffer() {
 			}
 			return;
 		}
-		pos.pos = 0;
+		iterator.cur_buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
 		ProcessOverbufferValue();
@@ -314,22 +301,22 @@ void StringValueScanner::SkipNotes() {
 
 void StringValueScanner::SkipHeader() {
 	SkipUntilNewLine();
-	boundary.SetBufferPos(pos.pos);
-	result.last_position = pos.pos;
+	result.last_position = iterator.cur_buffer_pos;
 }
 
 void StringValueScanner::SkipUntilNewLine() {
 	if (state_machine->options.dialect_options.new_line.GetValue() == NewLineIdentifier::CARRY_ON) {
-		for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
-			if (buffer_handle_ptr[pos.pos] == '\n') {
-				pos.pos++;
+		for (; iterator.cur_buffer_pos < cur_buffer_handle->actual_size; iterator.cur_buffer_pos++) {
+			if (buffer_handle_ptr[iterator.cur_buffer_pos] == '\n') {
+				iterator.cur_buffer_pos++;
 				return;
 			}
 		}
 	} else {
-		for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
-			if (buffer_handle_ptr[pos.pos] == '\n' || buffer_handle_ptr[pos.pos] == '\r') {
-				pos.pos++;
+		for (; iterator.cur_buffer_pos < cur_buffer_handle->actual_size; iterator.cur_buffer_pos++) {
+			if (buffer_handle_ptr[iterator.cur_buffer_pos] == '\n' ||
+			    buffer_handle_ptr[iterator.cur_buffer_pos] == '\r') {
+				iterator.cur_buffer_pos++;
 				return;
 			}
 		}
@@ -341,7 +328,7 @@ bool StringValueScanner::SetStart() {
 		return true;
 	}
 	start_set = true;
-	if (pos.buffer_id == 0 && pos.pos <= buffer_manager->GetStartPos()) {
+	if (iterator.cur_buffer_idx == 0 && iterator.cur_buffer_pos <= buffer_manager->GetStartPos()) {
 		// This means this is the very first buffer
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
@@ -356,20 +343,18 @@ bool StringValueScanner::SetStart() {
 	while (!Finished()) {
 		// 1. We walk until the next new line
 		SkipUntilNewLine();
-		idx_t position_being_checked = pos.pos;
-		boundary.SetBufferPos(pos.pos);
-		StringValueScanner scan_finder(buffer_manager, state_machine, boundary, 1);
-		scan_finder.pos = pos;
+		idx_t position_being_checked = iterator.cur_buffer_pos;
+		StringValueScanner scan_finder(buffer_manager, state_machine, iterator, 1);
 		scan_finder.start_set = true;
 		auto &tuples = *scan_finder.ParseChunk();
 		if (tuples.Empty()) {
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
-			pos.pos = position_being_checked;
+			iterator.cur_buffer_pos = position_being_checked;
 			continue;
 		}
 		if (tuples.Size() != state_machine->options.dialect_options.num_cols) {
 			// If columns don't match, this is not the correct start, we need to skip until the next new line
-			pos.pos = position_being_checked;
+			iterator.cur_buffer_pos = position_being_checked;
 			continue;
 		}
 		// 2. We try to cast all columns to the correct types
@@ -381,26 +366,26 @@ bool StringValueScanner::SetStart() {
 				break;
 			};
 		}
-		pos.pos = position_being_checked;
+		iterator.cur_buffer_pos = position_being_checked;
 		if (all_cast) {
 			// We found the start of the line, yay
 			success = true;
 			break;
 		}
 	}
-	result.last_position = pos.pos;
+	result.last_position = iterator.cur_buffer_pos;
 	return success;
 }
 
 void StringValueScanner::FinalizeChunkProcess() {
-	if (result.result_position >= result.vector_size || pos.done) {
+	if (result.result_position >= result.vector_size || iterator.done) {
 		// We are done
 		return;
 	}
+	iterator.done = true;
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
-	if (boundary.IsSet()) {
-		pos.done = true;
+	if (iterator.IsSet()) {
 		// We read until the next line or until we have nothing else to read.
 		do {
 			// Move to next buffer

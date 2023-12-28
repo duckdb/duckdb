@@ -26,7 +26,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
 	if (!single_threaded) {
 		running_threads = MaxThreads();
 	}
-	current_boundary = ScannerBoundary(0, 0, 0, 0);
+	current_boundary = CSVIterator(0, 0, 0, 0);
 	//! Initialize all the book-keeping variables used in verification
 	InitializeVerificationVariables(options, files.size());
 
@@ -153,7 +153,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 
 idx_t CSVGlobalState::MaxThreads() const {
 	// We initialize max one thread per our set bytes per thread limit
-	idx_t total_threads = file_size / ScannerBoundary::BYTES_PER_THREAD + 1;
+	idx_t total_threads = file_size / CSVIterator::BYTES_PER_THREAD + 1;
 	if (total_threads < system_threads) {
 		return total_threads;
 	}
