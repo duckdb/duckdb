@@ -26,7 +26,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
 	if (!single_threaded) {
 		running_threads = MaxThreads();
 	}
-
+	current_boundary = ScannerBoundary(0, 0, 0, 0);
 	//! Initialize all the book-keeping variables used in verification
 	InitializeVerificationVariables(options, files.size());
 

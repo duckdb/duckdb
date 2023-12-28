@@ -5,24 +5,25 @@
 namespace duckdb {
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
-                                     Allocator &buffer_allocator)
+                                     Allocator &buffer_allocator, idx_t result_size_p, idx_t buffer_position)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
-      null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors) {
+      null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
+      result_size(result_size_p) {
 	// Vector information
-	vector_size = number_of_columns * STANDARD_VECTOR_SIZE;
+	vector_size = number_of_columns * result_size;
 	vector = make_uniq<Vector>(LogicalType::VARCHAR, vector_size);
 	vector_ptr = FlatVector::GetData<string_t>(*vector);
 	validity_mask = &FlatVector::Validity(*vector);
 
 	// Buffer Information
 	buffer_ptr = buffer_handle.Ptr();
-	last_position = 0;
+	last_position = buffer_position;
 
 	// Current Result information
 	result_position = 0;
 
 	// Initialize Parse Chunk
-	parse_chunk.Initialize(buffer_allocator, {number_of_columns, LogicalType::VARCHAR}, STANDARD_VECTOR_SIZE);
+	parse_chunk.Initialize(buffer_allocator, {number_of_columns, LogicalType::VARCHAR}, result_size);
 }
 
 Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
@@ -37,14 +38,13 @@ Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
 		}
 	}
 }
-
 DataChunk &StringValueResult::ToChunk() {
 	idx_t number_of_rows = NumberOfRows();
+	parse_chunk.Reset();
 	const auto &selection_vectors = state_machine.GetSelectionVector();
 	for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
 		// fixme: has to do some extra checks for null padding
-		auto &v = parse_chunk.data[col_idx];
-		v.Slice(*vector, selection_vectors[col_idx], number_of_rows);
+		parse_chunk.data[col_idx].Slice(*vector, selection_vectors[col_idx], number_of_rows);
 	}
 	parse_chunk.SetCardinality(number_of_rows);
 	return parse_chunk;
@@ -113,7 +113,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		}
 	}
 
-	if (result.result_position / result.number_of_columns >= STANDARD_VECTOR_SIZE) {
+	if (result.result_position / result.number_of_columns >= result.result_size) {
 		// We have a full chunk
 		return true;
 	}
@@ -131,9 +131,11 @@ idx_t StringValueResult::NumberOfRows() {
 }
 
 StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager,
-                                       shared_ptr<CSVStateMachine> state_machine, ScannerBoundary boundary)
+                                       shared_ptr<CSVStateMachine> state_machine, ScannerBoundary boundary,
+                                       idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, boundary),
-      result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context)) {};
+      result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
+             boundary.GetBufferPos()) {};
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	CSVStateMachineCache cache;
@@ -208,12 +210,15 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			if (success) {
 				continue;
 			}
+			boundary.Print();
+			pos.Print();
 			throw InvalidInputException("error");
 		}
 	}
 }
 
 void StringValueScanner::Process() {
+	SetStart();
 	idx_t to_pos;
 	if (boundary.IsSet()) {
 		to_pos = boundary.GetEndPos();
@@ -237,6 +242,18 @@ void StringValueScanner::Process() {
 	}
 }
 
+void StringValueScanner::ProcessExtraRow() {
+	idx_t to_pos = cur_buffer_handle->actual_size;
+	idx_t cur_result_pos = result.result_position + 1;
+	for (; pos.pos < to_pos; pos.pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[pos.pos], pos.pos, result) ||
+		    (result.result_position >= cur_result_pos &&
+		     result.result_position % state_machine->dialect_options.num_cols == 0)) {
+			return;
+		}
+	}
+}
+
 void StringValueScanner::ProcessOverbufferValue() {
 	// Get next value
 	idx_t first_buffer_pos = result.last_position;
@@ -249,11 +266,13 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (pos.pos == 0) {
 		result.vector_ptr[result.result_position - 1] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
+		std::cout << result.vector_ptr[result.result_position - 1].GetString() << std::endl;
 	} else if (pos.pos == 1) {
 		result.vector_ptr[result.result_position - 1] =
-		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length);
+		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
+		std::cout << result.vector_ptr[result.result_position - 1].GetString() << std::endl;
 	} else {
-		auto string_length = first_buffer_length + pos.pos - 1;
+		auto string_length = first_buffer_length + pos.pos - 2;
 		auto &result_str = result.vector_ptr[result.result_position - 1];
 		result_str = StringVector::EmptyString(*result.vector, string_length);
 		// Copy the first buffer
@@ -263,6 +282,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		FastMemcpy(result_str.GetDataWriteable() + first_buffer_length, cur_buffer_handle->Ptr(),
 		           string_length - first_buffer_length);
 		result_str.Finalize();
+		std::cout << result_str.GetString() << std::endl;
 	}
 }
 
@@ -282,6 +302,7 @@ void StringValueScanner::MoveToNextBuffer() {
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
 		ProcessOverbufferValue();
+		result.buffer_ptr = buffer_handle_ptr;
 	}
 }
 
@@ -292,21 +313,99 @@ void StringValueScanner::SkipNotes() {
 }
 
 void StringValueScanner::SkipHeader() {
+	SkipUntilNewLine();
+	boundary.SetBufferPos(pos.pos);
+	result.last_position = pos.pos;
+}
+
+void StringValueScanner::SkipUntilNewLine() {
+	if (state_machine->options.dialect_options.new_line.GetValue() == NewLineIdentifier::CARRY_ON) {
+		for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
+			if (buffer_handle_ptr[pos.pos] == '\n') {
+				pos.pos++;
+				return;
+			}
+		}
+	} else {
+		for (; pos.pos < cur_buffer_handle->actual_size; pos.pos++) {
+			if (buffer_handle_ptr[pos.pos] == '\n' || buffer_handle_ptr[pos.pos] == '\r') {
+				pos.pos++;
+				return;
+			}
+		}
+	}
+}
+
+bool StringValueScanner::SetStart() {
+	if (start_set) {
+		return true;
+	}
+	start_set = true;
+	if (pos.buffer_id == 0 && pos.pos <= buffer_manager->GetStartPos()) {
+		// This means this is the very first buffer
+		// This CSV is not from auto-detect, so we don't know where exactly it starts
+		// Hence we potentially have to skip empty lines and headers.
+		SkipEmptyLines();
+		SkipHeader();
+		SkipEmptyLines();
+		return true;
+	}
+
+	// We have to look for a new line that fits our schema
+	bool success = false;
+	while (!Finished()) {
+		// 1. We walk until the next new line
+		SkipUntilNewLine();
+		idx_t position_being_checked = pos.pos;
+		boundary.SetBufferPos(pos.pos);
+		StringValueScanner scan_finder(buffer_manager, state_machine, boundary, 1);
+		scan_finder.pos = pos;
+		scan_finder.start_set = true;
+		auto &tuples = *scan_finder.ParseChunk();
+		if (tuples.Empty()) {
+			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
+			pos.pos = position_being_checked;
+			continue;
+		}
+		if (tuples.Size() != state_machine->options.dialect_options.num_cols) {
+			// If columns don't match, this is not the correct start, we need to skip until the next new line
+			pos.pos = position_being_checked;
+			continue;
+		}
+		// 2. We try to cast all columns to the correct types
+		bool all_cast = true;
+		for (idx_t col_idx = 0; col_idx < tuples.Size(); col_idx++) {
+			if (!tuples.GetValue(0, col_idx).TryCastAs(buffer_manager->context, types[col_idx])) {
+				// We could not cast it to the right type, this is probably not the correct line start.
+				all_cast = false;
+				break;
+			};
+		}
+		pos.pos = position_being_checked;
+		if (all_cast) {
+			// We found the start of the line, yay
+			success = true;
+			break;
+		}
+	}
+	result.last_position = pos.pos;
+	return success;
 }
 
 void StringValueScanner::FinalizeChunkProcess() {
-	if (result.result_position >= result.vector_size) {
+	if (result.result_position >= result.vector_size || pos.done) {
 		// We are done
 		return;
 	}
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
 	if (boundary.IsSet()) {
+		pos.done = true;
 		// We read until the next line or until we have nothing else to read.
 		do {
 			// Move to next buffer
 			MoveToNextBuffer();
-			Process();
+			ProcessExtraRow();
 		} while (!Finished() && result.result_position % state_machine->dialect_options.num_cols != 0);
 	} else {
 		// 2) If a boundary is not set

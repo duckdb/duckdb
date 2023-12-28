@@ -18,7 +18,7 @@ namespace duckdb {
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
-	                  Allocator &buffer_allocator);
+	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position);
 
 	//! Information on the vector
 	unique_ptr<Vector> vector;
@@ -37,6 +37,8 @@ public:
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
+
+	idx_t result_size;
 
 	//! If this line might have too many columns
 	bool maybe_too_many_columns = false;
@@ -61,7 +63,7 @@ public:
 class StringValueScanner : public BaseScanner {
 public:
 	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	                   ScannerBoundary boundary = {});
+	                   ScannerBoundary boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	~StringValueScanner() {
 	}
@@ -82,6 +84,7 @@ private:
 	//! Function used to process values that go over the first buffer, extra allocation might be necessary
 	void ProcessOverbufferValue();
 
+	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
 	void MoveToNextBuffer();
 
@@ -94,10 +97,17 @@ private:
 	//! Skips the header (i.e., the first line of the file)
 	void SkipHeader();
 
+	void SkipUntilNewLine();
+
+	bool SetStart();
+
 	StringValueResult result;
 
 	//! Pointer to the previous buffer handle, necessary for overbuffer values
 	unique_ptr<CSVBufferHandle> previous_buffer_handle;
+
+	//! If we verified where this csv reader starts
+	bool start_set = false;
 };
 
 } // namespace duckdb

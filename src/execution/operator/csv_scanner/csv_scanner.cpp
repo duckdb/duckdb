@@ -118,70 +118,7 @@
 //	current_value_pos++;
 //}
 //
-// bool CSVScanner::SetStart(VerificationPositions &verification_positions) {
-//	if (start_set) {
-//		return true;
-//	}
-//	start_set = true;
-//	if (csv_iterator.buffer_idx == 0 && csv_iterator.buffer_pos <= buffer_manager->GetStartPos()) {
-//		// This means this is the very first buffer
-//		// This CSV is not from auto-detect, so we don't know where exactly it starts
-//		// Hence we potentially have to skip empty lines and headers.
-//		SkipEmptyLines();
-//		SkipHeader();
-//		SkipEmptyLines();
-//		if (verification_positions.beginning_of_first_line == 0) {
-//			verification_positions.beginning_of_first_line = csv_iterator.buffer_pos;
-//		}
-//		verification_positions.end_of_last_line = csv_iterator.buffer_pos;
-//		return true;
-//	}
-//
-//	// We have to look for a new line that fits our schema
-//	bool success = false;
-//	while (!Finished()) {
-//		// 1. We walk until the next new line
-//		Process<SkipUntilNewLine>(*this, csv_iterator.buffer_pos);
-//		idx_t position_being_checked = csv_iterator.buffer_pos;
-//		idx_t bytes_to_check = csv_iterator.bytes_to_read;
-//		vector<TupleOfValues> tuples(1);
-//		Process<ParseValues>(*this, tuples);
-//		if (tuples.empty()) {
-//			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
-//			csv_iterator.buffer_pos = position_being_checked;
-//			continue;
-//		}
-//		vector<Value> &values = tuples[0].values;
-//		tuples[0].Print();
-//		if (values.size() != state_machine->options.dialect_options.num_cols) {
-//			// If columns don't match, this is not the correct start, we need to skip until the next new line
-//			csv_iterator.buffer_pos = position_being_checked;
-//			continue;
-//		}
-//		// 2. We try to cast all columns to the correct types
-//		bool all_cast = true;
-//		for (idx_t i = 0; i < values.size(); i++) {
-//			if (!values[i].TryCastAs(buffer_manager->context, types[i])) {
-//				// We could not cast it to the right type, this is probably not the correct line start.
-//				all_cast = false;
-//				break;
-//			};
-//		}
-//		csv_iterator.buffer_pos = position_being_checked;
-//		csv_iterator.bytes_to_read = bytes_to_check;
-//		if (all_cast) {
-//			// We found the start of the line, yay
-//			success = true;
-//			break;
-//		}
-//	}
-//	// We have to move position up to next new line
-//	if (verification_positions.beginning_of_first_line == 0) {
-//		verification_positions.beginning_of_first_line = csv_iterator.buffer_pos;
-//	}
-//	verification_positions.end_of_last_line = csv_iterator.buffer_pos;
-//	return success;
-//}
+
 //
 // bool CSVScanner::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
 //	if (parse_chunk.size() == 0) {

@@ -18,6 +18,14 @@ bool ScannerPosition::InBoundary(const ScannerBoundary &boundary) {
 	return boundary.InBoundary(file_id, buffer_id, pos);
 }
 
+void ScannerPosition::Print() {
+	std::cout << "---Position---" << std::endl;
+	std::cout << "File Index:: " << file_id << std::endl;
+	std::cout << "Buffer Index: " << buffer_id << std::endl;
+	std::cout << "Buffer Pos: " << pos << std::endl;
+	std::cout << "--------------" << std::endl;
+}
+
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                          ScannerBoundary boundary_p)
     : boundary(boundary_p), buffer_manager(buffer_manager_p), state_machine(state_machine_p) {
@@ -30,9 +38,15 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	// Ensure that the boundary end is within the realms of reality.
 	boundary_p.SetEndPos(boundary_p.GetEndPos() > cur_buffer_handle->actual_size ? cur_buffer_handle->actual_size
 	                                                                             : boundary_p.GetEndPos());
+	pos.pos = boundary_p.GetBufferPos();
+	pos.buffer_id = boundary_p.GetBufferIdx();
+	pos.file_id = boundary_p.GetFileIdx();
 };
 
 bool BaseScanner::Finished() {
+	if (pos.done) {
+		return true;
+	}
 	if (!cur_buffer_handle) {
 		return true;
 	}

@@ -28,6 +28,7 @@ public:
 
 	ScannerBoundary();
 
+	void Print();
 	//! Moves this boundary to the next one to be scanned
 	bool Next(CSVBufferManager &buffer_manager);
 
@@ -43,6 +44,7 @@ public:
 
 	//! Setters
 	void SetEndPos(idx_t end_pos);
+	void SetBufferPos(idx_t buffer_position);
 
 	//! If position is within the boundary
 	bool InBoundary(idx_t file_idx, idx_t buffer_id, idx_t buffer_pos) const;

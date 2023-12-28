@@ -21,8 +21,12 @@ struct ScannerPosition {
 	idx_t buffer_id = 0;
 	//! Id of the file we are currently scanning
 	idx_t file_id = 0;
+	//! If we are done with this scanner
+	bool done = false;
 	//! If the position is within the scanner boundary
 	bool InBoundary(const ScannerBoundary &boundary);
+
+	void Print();
 };
 
 class ScannerResult {

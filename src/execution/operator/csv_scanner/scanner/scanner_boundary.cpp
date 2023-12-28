@@ -10,10 +10,19 @@ ScannerBoundary::ScannerBoundary(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buf
 
 ScannerBoundary::ScannerBoundary() : file_idx(0), buffer_idx(0), buffer_pos(0), is_set(false) {};
 
+void ScannerBoundary::Print() {
+	std::cout << "---Boundary: " << boundary_idx << " ---" << std::endl;
+	std::cout << "File Index:: " << file_idx << std::endl;
+	std::cout << "Buffer Index: " << buffer_idx << std::endl;
+	std::cout << "Buffer Pos: " << buffer_pos << std::endl;
+	std::cout << "End Pos: " << end_pos << std::endl;
+	std::cout << "Is set: " << is_set << std::endl;
+}
+
 bool ScannerBoundary::Next(CSVBufferManager &buffer_manager) {
 	if (file_idx >= buffer_manager.FileCount()) {
 		// We are done
-		return false;
+		return true;
 	}
 	boundary_idx++;
 	// This is our start buffer
@@ -24,11 +33,11 @@ bool ScannerBoundary::Next(CSVBufferManager &buffer_manager) {
 		file_idx++;
 		if (file_idx >= buffer_manager.FileCount()) {
 			// We are done
-			return false;
+			return true;
 		}
 		buffer_idx = 0;
 		buffer_pos = buffer_manager.GetStartPos();
-	} else if (buffer_pos + BYTES_PER_THREAD > buffer->actual_size) {
+	} else if (buffer_pos + BYTES_PER_THREAD >= buffer->actual_size) {
 		// 2) We still have data to scan in this file, we set the iterator accordingly.
 		// We must move the buffer
 		buffer_idx++;
@@ -38,7 +47,8 @@ bool ScannerBoundary::Next(CSVBufferManager &buffer_manager) {
 		// 3) We are not done with the current buffer, hence we just move where we start within the buffer
 		buffer_pos += BYTES_PER_THREAD;
 	}
-	return true;
+	end_pos = buffer_pos + BYTES_PER_THREAD;
+	return false;
 }
 
 bool ScannerBoundary::IsSet() const {
@@ -64,6 +74,10 @@ idx_t ScannerBoundary::GetBoundaryIdx() const {
 
 void ScannerBoundary::SetEndPos(idx_t end_pos_p) {
 	end_pos = end_pos_p;
+}
+
+void ScannerBoundary::SetBufferPos(idx_t buffer_position_p) {
+	buffer_pos = buffer_position_p;
 }
 
 bool ScannerBoundary::InBoundary(idx_t file_idx_p, idx_t buffer_id_p, idx_t buffer_pos_p) const {
