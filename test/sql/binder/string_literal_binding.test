@@ -65,17 +65,23 @@ SELECT COALESCE(1, '1');
 ----
 1
 
-# we cannot do the same comparison with string columns
-statement error
+# we can do equality comparison with string columns
+query I
 select i=1 from (values ('01')) t(i);
 ----
-Cannot compare values of type
+true
 
-# not with IN clause either
-statement error
+# or with an IN clause
+query I
 select i IN (1) from (values ('01')) t(i);
 ----
-Cannot mix values of type
+true
+
+# but not >
+statement error
+select i>1 from (values ('01')) t(i);
+----
+an explicit cast is required
 
 # we cannot do the same comparison with string columns
 statement error

@@ -103,7 +103,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		Value left_copy = left;
 		Value right_copy = right;
 
-		LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
+		LogicalType comparison_type =
+		    BoundComparisonExpression::BindComparison(left_type, right_type, ExpressionType::COMPARE_GREATERTHAN);
 		if (!left_copy.DefaultTryCastAs(comparison_type) || !right_copy.DefaultTryCastAs(comparison_type)) {
 			return false;
 		}

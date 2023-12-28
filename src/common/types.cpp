@@ -708,13 +708,14 @@ static LogicalType ReturnType(const LogicalType &type) {
 	return type;
 }
 
+template <class OP>
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// left and right are not equal
 	// for enums, match the varchar rules
 	if (left.id() == LogicalTypeId::ENUM) {
-		return LogicalType::TryGetMaxLogicalType(LogicalType::VARCHAR, right, result);
+		return OP::Operation(LogicalType::VARCHAR, right, result);
 	} else if (right.id() == LogicalTypeId::ENUM) {
-		return LogicalType::TryGetMaxLogicalType(left, LogicalType::VARCHAR, result);
+		return OP::Operation(left, LogicalType::VARCHAR, result);
 	}
 	// NULL/string literals/unknown (parameter) types always take the other type
 	LogicalTypeId other_types[] = {LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL};
@@ -766,6 +767,7 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 	return false;
 }
 
+template <class OP>
 static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
@@ -807,8 +809,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	case LogicalTypeId::LIST: {
 		// list: perform max recursively on child type
 		LogicalType new_child;
-		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right),
-		                                       new_child)) {
+		if (!OP::Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
 			return false;
 		}
 		result = LogicalType::LIST(new_child);
@@ -816,8 +817,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	}
 	case LogicalTypeId::ARRAY: {
 		LogicalType new_child;
-		if (!LogicalType::TryGetMaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right),
-		                                       new_child)) {
+		if (!OP::Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
 			return false;
 		}
 		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
@@ -827,8 +827,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	case LogicalTypeId::MAP: {
 		// map: perform max recursively on child type
 		LogicalType new_child;
-		if (!LogicalType::TryGetMaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right),
-		                                       new_child)) {
+		if (!OP::Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
 			return false;
 		}
 		result = LogicalType::MAP(new_child);
@@ -846,8 +845,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		child_list_t<LogicalType> child_types;
 		for (idx_t i = 0; i < left_child_types.size(); i++) {
 			LogicalType child_type;
-			if (!LogicalType::TryGetMaxLogicalType(left_child_types[i].second, right_child_types[i].second,
-			                                       child_type)) {
+			if (!OP::Operation(left_child_types[i].second, right_child_types[i].second, child_type)) {
 				return false;
 			}
 			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
@@ -873,7 +871,21 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	}
 }
 
-bool LogicalType::TryGetMaxLogicalType(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+struct TryGetTypeOperation {
+	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+		return LogicalType::TryGetMaxLogicalType(left, right, result);
+	}
+};
+
+struct ForceGetTypeOperation {
+	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+		result = LogicalType::ForceMaxLogicalType(left, right);
+		return true;
+	}
+};
+
+template <class OP>
+bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;
@@ -884,18 +896,116 @@ bool LogicalType::TryGetMaxLogicalType(const LogicalType &left, const LogicalTyp
 		return true;
 	}
 	if (left.id() != right.id()) {
-		return CombineUnequalTypes(left, right, result);
+		return CombineUnequalTypes<OP>(left, right, result);
 	} else {
-		return CombineEqualTypes(left, right, result);
+		return CombineEqualTypes<OP>(left, right, result);
 	}
+}
+
+bool LogicalType::TryGetMaxLogicalType(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
+}
+
+static idx_t GetLogicalTypeScore(const LogicalType &type) {
+	return idx_t(type.id());
+	switch (type.id()) {
+	case LogicalTypeId::INVALID:
+	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::ANY:
+	case LogicalTypeId::STRING_LITERAL:
+		return 0;
+	// numerics
+	case LogicalTypeId::BOOLEAN:
+		return 10;
+	case LogicalTypeId::UTINYINT:
+		return 11;
+	case LogicalTypeId::TINYINT:
+		return 12;
+	case LogicalTypeId::USMALLINT:
+		return 13;
+	case LogicalTypeId::SMALLINT:
+		return 14;
+	case LogicalTypeId::UINTEGER:
+		return 15;
+	case LogicalTypeId::INTEGER:
+		return 16;
+	case LogicalTypeId::UBIGINT:
+		return 17;
+	case LogicalTypeId::BIGINT:
+		return 18;
+	case LogicalTypeId::UHUGEINT:
+		return 19;
+	case LogicalTypeId::HUGEINT:
+		return 20;
+	case LogicalTypeId::DECIMAL:
+		return 21;
+	case LogicalTypeId::FLOAT:
+		return 22;
+	case LogicalTypeId::DOUBLE:
+		return 23;
+	// date/time/timestamp
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+		return 50;
+	case LogicalTypeId::DATE:
+		return 51;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return 52;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return 53;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return 54;
+	case LogicalTypeId::TIMESTAMP_NS:
+		return 55;
+	case LogicalTypeId::INTERVAL:
+		return 56;
+	// text/character strings
+	case LogicalTypeId::CHAR:
+		return 75;
+	case LogicalTypeId::VARCHAR:
+		return 77;
+	case LogicalTypeId::ENUM:
+		return 78;
+	// blob/complex types
+	case LogicalTypeId::BIT:
+		return 100;
+	case LogicalTypeId::BLOB:
+		return 101;
+	case LogicalTypeId::UUID:
+		return 102;
+	// nested types
+	case LogicalTypeId::STRUCT:
+		return 125;
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+		return 126;
+	case LogicalTypeId::MAP:
+		return 127;
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::TABLE:
+		return 150;
+	// weirdo types
+	case LogicalTypeId::LAMBDA:
+	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::POINTER:
+	case LogicalTypeId::VALIDITY:
+	case LogicalTypeId::USER:
+		break;
+	}
+	return 1000;
 }
 
 LogicalType LogicalType::ForceMaxLogicalType(const LogicalType &left, const LogicalType &right) {
 	LogicalType result;
-	if (LogicalType::TryGetMaxLogicalType(left, right, result)) {
+	if (TryGetMaxLogicalTypeInternal<ForceGetTypeOperation>(left, right, result)) {
 		return result;
 	}
-	if (left.id() < right.id()) {
+	// we prefer the type with the highest score
+	auto left_score = GetLogicalTypeScore(left);
+	auto right_score = GetLogicalTypeScore(right);
+	if (left_score < right_score) {
 		return right;
 	} else {
 		return left;

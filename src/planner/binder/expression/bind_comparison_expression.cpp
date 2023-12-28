@@ -73,10 +73,58 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 	PushCollation(context, expr, LogicalType::VARCHAR_COLLATION(collation));
 }
 
-bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, const LogicalType &right_type,
-                                                  LogicalType &result_type) {
-	if (!LogicalType::TryGetMaxLogicalType(left_type, right_type, result_type)) {
+static bool SwitchVarcharComparison(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
+		return true;
+	default:
 		return false;
+	}
+}
+
+bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, const LogicalType &right_type,
+                                                  LogicalType &result_type, ExpressionType comparison_type) {
+	bool is_equality;
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_IN:
+	case ExpressionType::COMPARE_NOT_IN:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		is_equality = true;
+		break;
+	default:
+		is_equality = false;
+		break;
+	}
+	if (is_equality) {
+		result_type = LogicalType::ForceMaxLogicalType(left_type, right_type);
+	} else {
+		if (!LogicalType::TryGetMaxLogicalType(left_type, right_type, result_type)) {
+			return false;
+		}
 	}
 	switch (result_type.id()) {
 	case LogicalTypeId::DECIMAL: {
@@ -103,10 +151,10 @@ bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, 
 	}
 	case LogicalTypeId::VARCHAR:
 		// for comparison with strings, we prefer to bind to the numeric types
-		if (left_type.IsNumeric() || left_type.id() == LogicalTypeId::BOOLEAN) {
-			throw InternalException("This shouldn't occur anymore");
-		} else if (right_type.IsNumeric() || right_type.id() == LogicalTypeId::BOOLEAN) {
-			throw InternalException("This shouldn't occur anymore");
+		if (left_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(left_type)) {
+			result_type = left_type;
+		} else if (right_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(right_type)) {
+			result_type = right_type;
 		} else {
 			// else: check if collations are compatible
 			auto left_collation = StringType::GetCollation(left_type);
@@ -121,9 +169,10 @@ bool BoundComparisonExpression::TryBindComparison(const LogicalType &left_type, 
 	}
 }
 
-LogicalType BoundComparisonExpression::BindComparison(const LogicalType &left_type, const LogicalType &right_type) {
+LogicalType BoundComparisonExpression::BindComparison(const LogicalType &left_type, const LogicalType &right_type,
+                                                      ExpressionType comparison_type) {
 	LogicalType result_type;
-	if (!BoundComparisonExpression::TryBindComparison(left_type, right_type, result_type)) {
+	if (!BoundComparisonExpression::TryBindComparison(left_type, right_type, result_type, comparison_type)) {
 		throw BinderException("Cannot mix values of type %s and %s - an explicit cast is required",
 		                      left_type.ToString(), right_type.ToString());
 	}
@@ -155,7 +204,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	LogicalType input_type;
-	if (!BoundComparisonExpression::TryBindComparison(left_sql_type, right_sql_type, input_type)) {
+	if (!BoundComparisonExpression::TryBindComparison(left_sql_type, right_sql_type, input_type, expr.type)) {
 		return BindResult(binder.FormatError(
 		    expr.query_location, "Cannot compare values of type %s and type %s - an explicit cast is required",
 		    left_sql_type.ToString(), right_sql_type.ToString()));
