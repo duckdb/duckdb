@@ -48,6 +48,8 @@ public:
 	unique_ptr<StringValueScanner> UpgradeToStringValueScanner();
 
 private:
+	void Initialize() override;
+
 	void Process() override;
 
 	void FinalizeChunkProcess() override;

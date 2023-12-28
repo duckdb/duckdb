@@ -2,6 +2,12 @@
 
 namespace duckdb {
 
+CSVPosition::CSVPosition(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_p)
+    : file_idx(file_idx_p), buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p) {
+}
+CSVPosition::CSVPosition() {
+}
+
 CSVBoundary::CSVBoundary(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t boundary_idx_p,
                          idx_t end_pos_p)
     : file_idx(file_idx_p), buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p), boundary_idx(boundary_idx_p),
@@ -10,8 +16,8 @@ CSVBoundary::CSVBoundary(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_
 CSVBoundary::CSVBoundary() : file_idx(0), buffer_idx(0), buffer_pos(0), boundary_idx(0), end_pos(0) {
 }
 CSVIterator::CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx)
-    : boundary(file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_pos + BYTES_PER_THREAD), cur_file_idx(file_idx),
-      cur_buffer_idx(buffer_idx), cur_buffer_pos(buffer_pos), is_set(true) {};
+    : pos(file_idx, buffer_idx, buffer_pos),
+      boundary(file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_pos + BYTES_PER_THREAD), is_set(true) {};
 
 CSVIterator::CSVIterator() : is_set(false) {};
 
@@ -70,7 +76,7 @@ idx_t CSVIterator::GetEndPos() const {
 }
 
 idx_t CSVIterator::GetFileIdx() const {
-	return cur_file_idx;
+	return pos.file_idx;
 }
 
 idx_t CSVIterator::GetBufferIdx() const {
@@ -82,13 +88,9 @@ idx_t CSVIterator::GetBoundaryIdx() const {
 }
 
 void CSVIterator::SetCurrentPositionToBoundary() {
-	cur_file_idx = boundary.file_idx;
-	cur_buffer_idx = boundary.buffer_idx;
-	cur_buffer_pos = boundary.buffer_pos;
+	pos.file_idx = boundary.file_idx;
+	pos.buffer_idx = boundary.buffer_idx;
+	pos.buffer_pos = boundary.buffer_pos;
 }
-
-// void CSVIterator::SetEndPos(idx_t end_pos_p) {
-//	end_pos = end_pos_p;
-//}
 
 } // namespace duckdb

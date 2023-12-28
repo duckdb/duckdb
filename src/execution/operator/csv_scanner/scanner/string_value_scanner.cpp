@@ -135,7 +135,7 @@ StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, boundary),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             iterator.cur_buffer_pos) {};
+             iterator.pos.buffer_pos) {};
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	CSVStateMachineCache cache;
@@ -162,7 +162,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	}
 
 	//	bool conversion_error_ignored = false;
-
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 
@@ -217,16 +216,23 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	}
 }
 
+void StringValueScanner::Initialize() {
+	states.Initialize(CSVState::EMPTY_LINE);
+	if (result.result_size != 1 && iterator.IsSet()) {
+		SetStart();
+	}
+	result.last_position = iterator.pos.buffer_pos;
+}
+
 void StringValueScanner::Process() {
-	SetStart();
 	idx_t to_pos;
 	if (iterator.IsSet()) {
 		to_pos = iterator.GetEndPos();
 	} else {
 		to_pos = cur_buffer_handle->actual_size;
 	}
-	for (; iterator.cur_buffer_pos < to_pos; iterator.cur_buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result)) {
+	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
 			return;
 		}
 	}
@@ -235,8 +241,8 @@ void StringValueScanner::Process() {
 void StringValueScanner::ProcessExtraRow() {
 	idx_t to_pos = cur_buffer_handle->actual_size;
 	idx_t cur_result_pos = result.result_position + 1;
-	for (; iterator.cur_buffer_pos < to_pos; iterator.cur_buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result) ||
+	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result) ||
 		    (result.result_position >= cur_result_pos &&
 		     result.result_position % state_machine->dialect_options.num_cols == 0)) {
 			return;
@@ -250,17 +256,17 @@ void StringValueScanner::ProcessOverbufferValue() {
 	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos;
 	idx_t cur_value_idx = result.result_position;
 	while (cur_value_idx == result.result_position) {
-		ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result);
-		iterator.cur_buffer_pos++;
+		ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result);
+		iterator.pos.buffer_pos++;
 	}
-	if (iterator.cur_buffer_pos == 0) {
+	if (iterator.pos.buffer_pos == 0) {
 		result.vector_ptr[result.result_position - 1] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
-	} else if (iterator.cur_buffer_pos == 1) {
+	} else if (iterator.pos.buffer_pos == 1) {
 		result.vector_ptr[result.result_position - 1] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
 	} else {
-		auto string_length = first_buffer_length + iterator.cur_buffer_pos - 2;
+		auto string_length = first_buffer_length + iterator.pos.buffer_pos - 2;
 		auto &result_str = result.vector_ptr[result.result_position - 1];
 		result_str = StringVector::EmptyString(*result.vector, string_length);
 		// Copy the first buffer
@@ -274,9 +280,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 }
 
 void StringValueScanner::MoveToNextBuffer() {
-	if (iterator.cur_buffer_pos == cur_buffer_handle->actual_size) {
+	if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 		previous_buffer_handle = std::move(cur_buffer_handle);
-		cur_buffer_handle = buffer_manager->GetBuffer(iterator.cur_file_idx, ++iterator.cur_buffer_idx);
+		cur_buffer_handle = buffer_manager->GetBuffer(iterator.pos.file_idx, ++iterator.pos.buffer_idx);
 		if (!cur_buffer_handle) {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
@@ -285,7 +291,7 @@ void StringValueScanner::MoveToNextBuffer() {
 			}
 			return;
 		}
-		iterator.cur_buffer_pos = 0;
+		iterator.pos.buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
 		ProcessOverbufferValue();
@@ -300,63 +306,53 @@ void StringValueScanner::SkipNotes() {
 }
 
 void StringValueScanner::SkipHeader() {
-	SkipUntilNewLine();
-	result.last_position = iterator.cur_buffer_pos;
+	StringValueScanner scan_finder(buffer_manager, state_machine, iterator, 1);
+	scan_finder.ParseChunk();
+	iterator.pos.buffer_pos = scan_finder.iterator.pos.buffer_pos;
 }
 
 void StringValueScanner::SkipUntilNewLine() {
 	if (state_machine->options.dialect_options.new_line.GetValue() == NewLineIdentifier::CARRY_ON) {
-		for (; iterator.cur_buffer_pos < cur_buffer_handle->actual_size; iterator.cur_buffer_pos++) {
-			if (buffer_handle_ptr[iterator.cur_buffer_pos] == '\n') {
-				iterator.cur_buffer_pos++;
+		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+				iterator.pos.buffer_pos++;
 				return;
 			}
 		}
 	} else {
-		for (; iterator.cur_buffer_pos < cur_buffer_handle->actual_size; iterator.cur_buffer_pos++) {
-			if (buffer_handle_ptr[iterator.cur_buffer_pos] == '\n' ||
-			    buffer_handle_ptr[iterator.cur_buffer_pos] == '\r') {
-				iterator.cur_buffer_pos++;
+		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
+			    buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
+				iterator.pos.buffer_pos++;
 				return;
 			}
 		}
 	}
 }
 
-bool StringValueScanner::SetStart() {
-	if (start_set) {
-		return true;
-	}
-	start_set = true;
-	if (iterator.cur_buffer_idx == 0 && iterator.cur_buffer_pos <= buffer_manager->GetStartPos()) {
+void StringValueScanner::SetStart() {
+	if (iterator.pos.buffer_idx == 0 && iterator.pos.buffer_pos <= buffer_manager->GetStartPos()) {
 		// This means this is the very first buffer
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
 		SkipEmptyLines();
 		SkipHeader();
 		SkipEmptyLines();
-		return true;
+		return;
 	}
 
 	// We have to look for a new line that fits our schema
-	bool success = false;
 	while (!Finished()) {
 		// 1. We walk until the next new line
 		SkipUntilNewLine();
-		idx_t position_being_checked = iterator.cur_buffer_pos;
 		StringValueScanner scan_finder(buffer_manager, state_machine, iterator, 1);
-		scan_finder.start_set = true;
 		auto &tuples = *scan_finder.ParseChunk();
-		if (tuples.Empty()) {
+		if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
-			iterator.cur_buffer_pos = position_being_checked;
+			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
 			continue;
 		}
-		if (tuples.Size() != state_machine->options.dialect_options.num_cols) {
-			// If columns don't match, this is not the correct start, we need to skip until the next new line
-			iterator.cur_buffer_pos = position_being_checked;
-			continue;
-		}
+
 		// 2. We try to cast all columns to the correct types
 		bool all_cast = true;
 		for (idx_t col_idx = 0; col_idx < tuples.Size(); col_idx++) {
@@ -366,15 +362,10 @@ bool StringValueScanner::SetStart() {
 				break;
 			};
 		}
-		iterator.cur_buffer_pos = position_being_checked;
 		if (all_cast) {
-			// We found the start of the line, yay
-			success = true;
 			break;
 		}
 	}
-	result.last_position = iterator.cur_buffer_pos;
-	return success;
 }
 
 void StringValueScanner::FinalizeChunkProcess() {

@@ -77,6 +77,8 @@ public:
 	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options);
 
 private:
+	void Initialize() override;
+
 	void Process() override;
 
 	void FinalizeChunkProcess() override;
@@ -99,15 +101,12 @@ private:
 
 	void SkipUntilNewLine();
 
-	bool SetStart();
+	void SetStart();
 
 	StringValueResult result;
 
 	//! Pointer to the previous buffer handle, necessary for overbuffer values
 	unique_ptr<CSVBufferHandle> previous_buffer_handle;
-
-	//! If we verified where this csv reader starts
-	bool start_set = false;
 };
 
 } // namespace duckdb

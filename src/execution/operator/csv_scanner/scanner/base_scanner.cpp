@@ -59,7 +59,7 @@ ScannerResult *BaseScanner::GetResult() {
 }
 
 void BaseScanner::Initialize() {
-	states.Initialize(CSVState::EMPTY_LINE);
+	throw InternalException("Initialize() from CSV Base Scanner is mot implemented");
 }
 
 void BaseScanner::Process() {
@@ -93,6 +93,7 @@ string BaseScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per
 void BaseScanner::ParseChunkInternal() {
 	if (!initialized) {
 		Initialize();
+		initialized = true;
 	}
 	Process();
 	FinalizeChunkProcess();

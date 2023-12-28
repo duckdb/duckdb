@@ -41,6 +41,19 @@ struct CSVBoundary {
 	//! Last position this iterator should read.
 	idx_t end_pos;
 };
+
+struct CSVPosition {
+	CSVPosition(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos);
+	CSVPosition();
+	//! File index where we start scanning [0-idx], a scanner can never go over one file.
+	idx_t file_idx = 0;
+	//! Start Buffer index of the file where we start scanning
+	idx_t buffer_idx = 0;
+
+	//! Start Buffer position of the buffer of the file where we start scanning
+	//! This position moves as we move through the buffer
+	idx_t buffer_pos = 0;
+};
 struct CSVIterator {
 public:
 	CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx);
@@ -61,18 +74,10 @@ public:
 
 	void SetCurrentPositionToBoundary();
 
-	//! Setters
-	//	void SetEndPos(idx_t end_pos);
-
 	//! 8 MB TODO: Should benchmarks other values
 	static constexpr idx_t BYTES_PER_THREAD = 8000000;
-	//! Start Buffer position of the buffer of the file where we start scanning
-	//! This position moves as we move through the buffer
-	idx_t cur_buffer_pos = 0;
-	//! File index where we start scanning [0-idx], a scanner can never go over one file.
-	idx_t cur_file_idx = 0;
-	//! Start Buffer index of the file where we start scanning
-	idx_t cur_buffer_idx = 0;
+
+	CSVPosition pos;
 
 	bool done = false;
 

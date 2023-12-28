@@ -60,10 +60,14 @@ ColumnCountResult *ColumnCountScanner::GetResult() {
 	return &result;
 }
 
+void ColumnCountScanner::Initialize() {
+	states.Initialize(CSVState::EMPTY_LINE);
+}
+
 void ColumnCountScanner::Process() {
 	// Run on this buffer
-	for (; iterator.cur_buffer_pos < cur_buffer_handle->actual_size; iterator.cur_buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.cur_buffer_pos], iterator.cur_buffer_pos, result)) {
+	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
 			return;
 		}
 	}
@@ -76,10 +80,10 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 	}
 	// We run until we have a full chunk, or we are done scanning
 	while (!Finished() && result.result_position < STANDARD_VECTOR_SIZE) {
-		if (iterator.cur_buffer_pos == cur_buffer_handle->actual_size) {
+		if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
-			iterator.cur_buffer_pos = 0;
-			cur_buffer_handle = buffer_manager->GetBuffer(iterator.cur_file_idx, ++iterator.cur_buffer_idx);
+			iterator.pos.buffer_pos = 0;
+			cur_buffer_handle = buffer_manager->GetBuffer(iterator.pos.file_idx, ++iterator.pos.buffer_idx);
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
 				// This means we reached the end of the file, we must add a last line if there is any to be added
