@@ -324,29 +324,23 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	options.dialect_options.state_machine_options.escape = '\"';
 	options.file_path = csv_path;
 
-	// set up the intermediate result chunk
-	DataChunk parsed_result;
-	parsed_result.Initialize(Allocator::DefaultAllocator(), sql_types);
-
 	DuckDB db;
 	Connection con(db);
-	CSVScanner scanner(*con.context, options);
-	VerificationPositions ver;
-
+	auto scanner_ptr = StringValueScanner::GetCSVScanner(*con.context, options);
+	auto &scanner = *scanner_ptr;
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);
 	while (true) {
 		// parse a chunk from the CSV file
 		try {
-			parsed_result.Reset();
-			scanner.Parse(parsed_result, ver);
+			auto &parsed_result = scanner.ParseChunk()->ToChunk();
+			if (parsed_result.size() == 0) {
+				break;
+			}
+			csv_data_collection.Append(parsed_result);
 		} catch (std::exception &ex) {
 			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;
 		}
-		if (parsed_result.size() == 0) {
-			break;
-		}
-		csv_data_collection.Append(parsed_result);
 	}
 	string error;
 	if (!ColumnDataCollection::ResultEquals(collection, csv_data_collection, error_message)) {
