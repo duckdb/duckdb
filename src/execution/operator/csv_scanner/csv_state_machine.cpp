@@ -20,6 +20,8 @@ CSVStateMachine::CSVStateMachine(const StateMachine &transition_array_p, const C
 }
 
 const vector<SelectionVector> &CSVStateMachine::GetSelectionVector() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+
 	if (selection_vector.empty()) {
 		selection_vector.resize(dialect_options.num_cols);
 		// precompute these selection vectors

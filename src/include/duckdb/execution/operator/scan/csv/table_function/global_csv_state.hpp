@@ -38,10 +38,8 @@ public:
 
 	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
 	//! In case it returns a nullptr it means we are done reading these files.
-	unique_ptr<StringValueScanner> Next(ClientContext &context, const ReadCSVData &bind_data);
-	//! Verify if the CSV File was read correctly
-	void Verify();
-
+	unique_ptr<StringValueScanner> Next(ClientContext &context, const ReadCSVData &bind_data,
+	                                    CSVIterator &csv_position);
 	//	void UpdateVerification(VerificationPositions positions, idx_t file_number, idx_t batch_idx);
 
 	//	void UpdateLinesRead(CSVScanner &buffer_read, idx_t file_idx);
@@ -55,12 +53,12 @@ public:
 
 	//! Calculates the Max Threads that will be used by this CSV Reader
 	idx_t MaxThreads() const override;
+	//! We hold information on the current scanner boundary
+	CSVIterator current_boundary;
 
 private:
 	//! Buffer Manager for the CSV Files in this Scan
 	shared_ptr<CSVBufferManager> buffer_manager;
-	//! We hold information on the current scanner boundary
-	CSVIterator current_boundary;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
@@ -72,12 +70,6 @@ private:
 	idx_t system_threads;
 
 	//! Current File Number
-	idx_t max_tuple_end = 0;
-
-	//! The vector stores positions where threads ended the last line they read in the CSV File, and the set stores
-	//! Positions where they started reading the first line.
-	vector<vector<idx_t>> tuple_end;
-	vector<set<idx_t>> tuple_start;
 	//! Tuple end to batch
 	vector<unordered_map<idx_t, idx_t>> tuple_end_to_batch;
 	//! Batch to Tuple End

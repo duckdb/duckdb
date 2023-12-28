@@ -51,6 +51,9 @@ struct CSVStates {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
+	//! Mutex to lock when getting next batch of bytes (Parallel Only)
+	mutex main_mutex;
+
 	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 

@@ -220,6 +220,7 @@ void StringValueScanner::Initialize() {
 	states.Initialize(CSVState::EMPTY_LINE);
 	if (result.result_size != 1 && iterator.IsSet()) {
 		SetStart();
+		D_ASSERT(iterator.pos.buffer_pos % iterator.BYTES_PER_THREAD != 0);
 	}
 	result.last_position = iterator.pos.buffer_pos;
 }
@@ -240,7 +241,13 @@ void StringValueScanner::Process() {
 
 void StringValueScanner::ProcessExtraRow() {
 	idx_t to_pos = cur_buffer_handle->actual_size;
-	idx_t cur_result_pos = result.result_position + 1;
+	idx_t cur_result_pos = result.result_position;
+	if (result.last_position != iterator.pos.buffer_pos - 1) {
+		cur_result_pos++;
+	}
+	if (states.IsCurrentNew()) {
+		cur_result_pos++;
+	}
 	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
 		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result) ||
 		    (result.result_position >= cur_result_pos &&
@@ -312,6 +319,11 @@ void StringValueScanner::SkipHeader() {
 }
 
 void StringValueScanner::SkipUntilNewLine() {
+	// If we are already in a new line, we skip to the next one
+	//	while (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' || buffer_handle_ptr[iterator.pos.buffer_pos] ==
+	//'\r'){ 		iterator.pos.buffer_pos++;
+	//	}
+	// Now skip until next newline
 	if (state_machine->options.dialect_options.new_line.GetValue() == NewLineIdentifier::CARRY_ON) {
 		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
@@ -378,11 +390,11 @@ void StringValueScanner::FinalizeChunkProcess() {
 	// 1) If a boundary is set.
 	if (iterator.IsSet()) {
 		// We read until the next line or until we have nothing else to read.
-		do {
-			// Move to next buffer
-			MoveToNextBuffer();
-			ProcessExtraRow();
-		} while (!Finished() && result.result_position % state_machine->dialect_options.num_cols != 0);
+		//		do {
+		// Move to next buffer
+		MoveToNextBuffer();
+		ProcessExtraRow();
+		//		} while (!Finished() && result.result_position % state_machine->dialect_options.num_cols != 0);
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.

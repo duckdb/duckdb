@@ -93,4 +93,8 @@ void CSVIterator::SetCurrentPositionToBoundary() {
 	pos.buffer_pos = boundary.buffer_pos;
 }
 
+void CSVIterator::SetStart(idx_t start) {
+	boundary.buffer_pos = start;
+}
+
 } // namespace duckdb

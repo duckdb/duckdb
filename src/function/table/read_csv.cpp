@@ -146,37 +146,37 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 }
 
 void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
-	auto &tuple_start_set = tuple_start[file_idx];
-	auto &processed_batches = batch_to_tuple_end[file_idx];
-	auto &tuple_end_vec = tuple_end[file_idx];
-	bool has_error = false;
-	idx_t problematic_line;
-	if (batch_idx == 0 || tuple_start_set.empty()) {
-		return;
-	}
-	for (idx_t cur_batch = 0; cur_batch < batch_idx - 1; cur_batch++) {
-		auto cur_end = tuple_end_vec[processed_batches[cur_batch]];
-		auto first_pos = tuple_start_set.find(cur_end);
-		if (first_pos == tuple_start_set.end()) {
-			has_error = true;
-			problematic_line = GetLine(cur_batch);
-			break;
-		}
-	}
-	if (!has_error) {
-		auto cur_end = tuple_end_vec[processed_batches[batch_idx - 1]];
-		if (cur_end != cur_first_pos) {
-			has_error = true;
-			problematic_line = GetLine(batch_idx);
-		}
-	}
-	if (has_error) {
-		throw InvalidInputException(
-		    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
-		    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.\n %s",
-		    problematic_line, sniffer_mismatch_error);
-	}
+	//	auto &tuple_start_set = tuple_start[file_idx];
+	//	auto &processed_batches = batch_to_tuple_end[file_idx];
+	//	auto &tuple_end_vec = tuple_end[file_idx];
+	//	bool has_error = false;
+	//	idx_t problematic_line;
+	//	if (batch_idx == 0 || tuple_start_set.empty()) {
+	//		return;
+	//	}
+	//	for (idx_t cur_batch = 0; cur_batch < batch_idx - 1; cur_batch++) {
+	//		auto cur_end = tuple_end_vec[processed_batches[cur_batch]];
+	//		auto first_pos = tuple_start_set.find(cur_end);
+	//		if (first_pos == tuple_start_set.end()) {
+	//			has_error = true;
+	//			problematic_line = GetLine(cur_batch);
+	//			break;
+	//		}
+	//	}
+	//	if (!has_error) {
+	//		auto cur_end = tuple_end_vec[processed_batches[batch_idx - 1]];
+	//		if (cur_end != cur_first_pos) {
+	//			has_error = true;
+	//			problematic_line = GetLine(batch_idx);
+	//		}
+	//	}
+	//	if (has_error) {
+	//		throw InvalidInputException(
+	//		    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
+	//		    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
+	//		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.\n %s",
+	//		    problematic_line, sniffer_mismatch_error);
+	//	}
 }
 
 bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
@@ -278,7 +278,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
                                                      GlobalTableFunctionState *global_state_p) {
 	auto &csv_data = input.bind_data->Cast<ReadCSVData>();
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
-	auto csv_scanner = global_state.Next(context.client, csv_data);
+	auto csv_scanner = global_state.Next(context.client, csv_data, global_state.current_boundary);
 	if (!csv_scanner) {
 		global_state.DecrementThread();
 	}
@@ -302,13 +302,15 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			break;
 		}
 		if (csv_local_state.csv_reader->Finished()) {
+
 			//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
 			//			csv_global_state.UpdateVerification(verification_updates,
 			//			 csv_local_state.csv_reader->file_idx,
 			//									                                    csv_local_state.csv_reader->scanner->scanner_id);
 			//			                        csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
 			//			                                 csv_local_state.csv_reader->file_idx);
-			csv_local_state.csv_reader = csv_global_state.Next(context, bind_data);
+			csv_local_state.csv_reader =
+			    csv_global_state.Next(context, bind_data, csv_local_state.csv_reader->GetIterator());
 			//			if (csv_local_state.csv_reader) {
 			//				csv_local_state.csv_reader->linenr = 0;
 			//			}
@@ -321,9 +323,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		csv_local_state.csv_reader->Flush(output);
 
 	} while (true);
-	if (csv_global_state.Finished()) {
-		csv_global_state.Verify();
-	}
 }
 
 static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,

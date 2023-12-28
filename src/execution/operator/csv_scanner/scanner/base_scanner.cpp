@@ -50,6 +50,10 @@ void BaseScanner::Reset() {
 	iterator.SetCurrentPositionToBoundary();
 }
 
+CSVIterator &BaseScanner::GetIterator() {
+	return iterator;
+}
+
 ScannerResult *BaseScanner::ParseChunk() {
 	throw InternalException("ParseChunk() from CSV Base Scanner is mot implemented");
 }

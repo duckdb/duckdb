@@ -8,7 +8,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
                                vector<column_t> column_ids_p, const StateMachine &state_machine_p)
     : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
       column_ids(std::move(column_ids_p)),
-      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end, options.sniffer_user_mismatch_error),
+      line_info(main_mutex, batch_to_tuple_end, options.sniffer_user_mismatch_error),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 
 	state_machine = make_shared<CSVStateMachine>(cache.Get(options.dialect_options.state_machine_options), options);
@@ -41,8 +41,6 @@ void CSVGlobalState::InitializeVerificationVariables(const CSVReaderOptions &opt
 	line_info.current_batches.resize(file_count);
 	line_info.lines_read.resize(file_count);
 	line_info.lines_errored.resize(file_count);
-	tuple_start.resize(file_count);
-	tuple_end.resize(file_count);
 	tuple_end_to_batch.resize(file_count);
 	batch_to_tuple_end.resize(file_count);
 
@@ -69,7 +67,8 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {
 	return percentage * 100;
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data) {
+unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
+                                                    CSVIterator &csv_position) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (finished) {
 		return nullptr;
@@ -169,40 +168,6 @@ void CSVGlobalState::DecrementThread() {
 bool CSVGlobalState::Finished() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return running_threads == 0;
-}
-
-void CSVGlobalState::Verify() {
-	// All threads are done, we run some magic sweet verification code
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (running_threads == 0) {
-		D_ASSERT(tuple_end.size() == tuple_start.size());
-		for (idx_t i = 0; i < tuple_start.size(); i++) {
-			auto &current_tuple_end = tuple_end[i];
-			auto &current_tuple_start = tuple_start[i];
-			// figure out max value of last_pos
-			if (current_tuple_end.empty()) {
-				return;
-			}
-			auto max_value = *max_element(std::begin(current_tuple_end), std::end(current_tuple_end));
-			for (idx_t tpl_idx = 0; tpl_idx < current_tuple_end.size(); tpl_idx++) {
-				auto last_pos = current_tuple_end[tpl_idx];
-				auto first_pos = current_tuple_start.find(last_pos);
-				if (first_pos == current_tuple_start.end()) {
-					// this might be necessary due to carriage returns outside buffer scopes.
-					first_pos = current_tuple_start.find(last_pos + 1);
-				}
-				if (first_pos == current_tuple_start.end() && last_pos != max_value) {
-					auto batch_idx = tuple_end_to_batch[i][last_pos];
-					auto problematic_line = line_info.GetLine(batch_idx);
-					throw InvalidInputException(
-					    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
-					    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call. %s",
-					    problematic_line, sniffer_mismatch_error);
-				}
-			}
-		}
-	}
 }
 
 } // namespace duckdb

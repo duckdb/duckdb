@@ -55,6 +55,8 @@ public:
 		return types;
 	}
 
+	CSVIterator &GetIterator();
+
 	idx_t GetBoundaryIndex() {
 		return iterator.GetBoundaryIdx();
 	}
