@@ -71,7 +71,7 @@ bool Hugeint::TryNegate(hugeint_t input, hugeint_t &result) {
 	if (input.upper == NumericLimits<int64_t>::Minimum() && input.lower == 0) {
 		return false;
 	}
-	NegateInPlace<false>(result);
+	NegateInPlace<false>(input);
 	result = input;
 	return true;
 }

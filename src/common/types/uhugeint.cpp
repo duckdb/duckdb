@@ -85,9 +85,9 @@ void Uhugeint::NegateInPlace<false>(uhugeint_t &input) {
 }
 
 bool Uhugeint::TryNegate(uhugeint_t input, uhugeint_t& result) {
-	if (!SubtractInPlace(result, input)) {
-		return false;
-	}
+	// unsigned integers can always be negated
+	Uhugeint::NegateInPlace<false>(input);
+	result = input;
 	return true;
 }
 
