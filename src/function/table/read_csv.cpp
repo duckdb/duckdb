@@ -6,10 +6,10 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/union_by_name.hpp"
-#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_line_info.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -143,102 +143,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->FinalizeRead(context);
 	result->options.dialect_options.num_cols = names.size();
 	return std::move(result);
-}
-
-void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
-	//	auto &tuple_start_set = tuple_start[file_idx];
-	//	auto &processed_batches = batch_to_tuple_end[file_idx];
-	//	auto &tuple_end_vec = tuple_end[file_idx];
-	//	bool has_error = false;
-	//	idx_t problematic_line;
-	//	if (batch_idx == 0 || tuple_start_set.empty()) {
-	//		return;
-	//	}
-	//	for (idx_t cur_batch = 0; cur_batch < batch_idx - 1; cur_batch++) {
-	//		auto cur_end = tuple_end_vec[processed_batches[cur_batch]];
-	//		auto first_pos = tuple_start_set.find(cur_end);
-	//		if (first_pos == tuple_start_set.end()) {
-	//			has_error = true;
-	//			problematic_line = GetLine(cur_batch);
-	//			break;
-	//		}
-	//	}
-	//	if (!has_error) {
-	//		auto cur_end = tuple_end_vec[processed_batches[batch_idx - 1]];
-	//		if (cur_end != cur_first_pos) {
-	//			has_error = true;
-	//			problematic_line = GetLine(batch_idx);
-	//		}
-	//	}
-	//	if (has_error) {
-	//		throw InvalidInputException(
-	//		    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
-	//		    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
-	//		    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.\n %s",
-	//		    problematic_line, sniffer_mismatch_error);
-	//	}
-}
-
-bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (current_batches.empty() || done) {
-		return true;
-	}
-	if (file_idx >= current_batches.size() || current_batches[file_idx].empty()) {
-		return true;
-	}
-	auto min_value = *current_batches[file_idx].begin();
-	if (min_value >= batch_idx) {
-		return true;
-	}
-	return false;
-}
-
-void LineInfo::Increment(idx_t file_idx, idx_t batch_idx) {
-	auto parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(main_mutex);
-	lines_errored[file_idx][batch_idx]++;
-}
-
-// Returns the 1-indexed line number
-idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t cur_start, bool verify,
-                        bool stop_at_first) {
-	unique_ptr<lock_guard<mutex>> parallel_lock;
-	if (!verify) {
-		parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(main_mutex);
-	}
-	idx_t line_count = 0;
-
-	if (!stop_at_first) {
-		// Figure out the amount of lines read in the current file
-		for (idx_t cur_batch_idx = 0; cur_batch_idx <= batch_idx; cur_batch_idx++) {
-			if (cur_batch_idx < batch_idx) {
-				line_count += lines_errored[file_idx][cur_batch_idx];
-			}
-			line_count += lines_read[file_idx][cur_batch_idx];
-		}
-		return line_count + line_error + 1;
-	}
-
-	// Otherwise, check if we already have an error on another thread
-	if (done) {
-		// line count is 0-indexed, but we want to return 1-indexed
-		return first_line + 1;
-	}
-	for (idx_t i = 0; i <= batch_idx; i++) {
-		if (lines_read[file_idx].find(i) == lines_read[file_idx].end() && i != batch_idx) {
-			throw InternalException("Missing batch index on Parallel CSV Reader GetLine");
-		}
-		line_count += lines_read[file_idx][i];
-	}
-
-	// before we are done, if this is not a call in Verify() we must check Verify up to this batch
-	if (!verify) {
-		Verify(file_idx, batch_idx, cur_start);
-	}
-	done = true;
-	first_line = line_count + line_error;
-	// line count is 0-indexed, but we want to return 1-indexed
-	return first_line + 1;
 }
 
 //===--------------------------------------------------------------------===//

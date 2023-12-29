@@ -7,9 +7,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
                                vector<column_t> column_ids_p, const StateMachine &state_machine_p)
     : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
-      column_ids(std::move(column_ids_p)),
-      line_info(main_mutex, batch_to_tuple_end, options.sniffer_user_mismatch_error),
-      sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
+      column_ids(std::move(column_ids_p)), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 
 	state_machine = make_shared<CSVStateMachine>(cache.Get(options.dialect_options.state_machine_options), options);
 	//! If the buffer manager has not yet being initialized, we do it now.
@@ -27,28 +25,6 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
 		running_threads = MaxThreads();
 	}
 	current_boundary = CSVIterator(0, 0, 0, 0);
-	//! Initialize all the book-keeping variables used in verification
-	InitializeVerificationVariables(options, files.size());
-
-	//! Initialize the lines read
-	line_info.lines_read[0][0] = options.dialect_options.skip_rows.GetValue();
-	if (options.dialect_options.header.GetValue()) {
-		line_info.lines_read[0][0]++;
-	}
-}
-
-void CSVGlobalState::InitializeVerificationVariables(const CSVReaderOptions &options, idx_t file_count) {
-	line_info.current_batches.resize(file_count);
-	line_info.lines_read.resize(file_count);
-	line_info.lines_errored.resize(file_count);
-	tuple_end_to_batch.resize(file_count);
-	batch_to_tuple_end.resize(file_count);
-
-	// Initialize the lines read
-	line_info.lines_read[0][0] = options.dialect_options.skip_rows.GetValue();
-	if (options.dialect_options.header.GetValue()) {
-		line_info.lines_read[0][0]++;
-	}
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {

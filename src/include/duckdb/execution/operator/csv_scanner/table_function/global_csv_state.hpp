@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_line_info.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
+#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
@@ -40,9 +40,6 @@ public:
 	//! In case it returns a nullptr it means we are done reading these files.
 	unique_ptr<StringValueScanner> Next(ClientContext &context, const ReadCSVData &bind_data,
 	                                    CSVIterator &csv_position);
-	//	void UpdateVerification(VerificationPositions positions, idx_t file_number, idx_t batch_idx);
-
-	//	void UpdateLinesRead(CSVScanner &buffer_read, idx_t file_idx);
 
 	void DecrementThread();
 
@@ -69,25 +66,17 @@ private:
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
 
-	//! Current File Number
-	//! Tuple end to batch
-	vector<unordered_map<idx_t, idx_t>> tuple_end_to_batch;
-	//! Batch to Tuple End
-	vector<unordered_map<idx_t, idx_t>> batch_to_tuple_end;
 	//! Number of threads being used in this scanner
 	idx_t running_threads = 1;
 	//! The column ids to read
 	vector<column_t> column_ids;
 	//! Line Info used in error messages
-	LineInfo line_info;
+	CSVErrorHandler error_handler;
 
 	CSVStateMachineCache cache;
 	string sniffer_mismatch_error;
 
 	bool finished = false;
-
-	//! Initilizes verification variables
-	void InitializeVerificationVariables(const CSVReaderOptions &options, idx_t file_count);
 };
 
 } // namespace duckdb

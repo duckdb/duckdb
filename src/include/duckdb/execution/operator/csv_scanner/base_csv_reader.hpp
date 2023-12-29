@@ -17,7 +17,7 @@
 //#include "duckdb/common/queue.hpp"
 //#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
 //#include "duckdb/common/multi_file_reader.hpp"
-//#include "duckdb/execution/operator/csv_scanner/util/csv_line_info.hpp"
+//#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
 //
 //#include <sstream>
 //
