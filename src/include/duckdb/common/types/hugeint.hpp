@@ -50,7 +50,7 @@ public:
 	template <bool CHECK_OVERFLOW = true>
 	static void NegateInPlace(hugeint_t &input) {
 		if (!TryNegate(input, input)) {
-			throw OutOfRangeException("HUGEINT is out of range");
+			throw OutOfRangeException("Negation of HUGEINT is out of range!");
 		}
 	}
 
@@ -62,28 +62,70 @@ public:
 
 	static bool TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
 
-	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs);
-	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs);
-
 	template <bool CHECK_OVERFLOW = true>
 	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs) {
 		hugeint_t result;
 		if (!TryMultiply(lhs, rhs, result)) {
-			throw OutOfRangeException("Overflow in HUGEINT multiplication!");
+			throw OutOfRangeException("Overflow in HUGEINT multiplication: %s + %s", lhs.ToString(), rhs.ToString());
 		}
 		return result;
 	}
 	
-	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs);
-	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs);
+	static bool TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint_t &remainder);
+
+	template <bool CHECK_OVERFLOW = true>
+	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs) {
+		// No division by zero
+		if (rhs == 0) {
+			throw OutOfRangeException("Division of HUGEINT by zero!");
+		}
+
+		// division only has one reason to overflow: MINIMUM / -1
+		if (lhs == NumericLimits<hugeint_t>::Minimum() && rhs == -1) {
+			throw OutOfRangeException("Overflow in HUGEINT division: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return Divide<false>(lhs, rhs);
+	}
+
+	template <bool CHECK_OVERFLOW = true>
+	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs) {
+		// No division by zero
+		if (rhs == 0) {
+			throw OutOfRangeException("Modulo of HUGEINT by zero: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+
+		// division only has one reason to overflow: MINIMUM / -1
+		if (lhs == NumericLimits<hugeint_t>::Minimum() && rhs == -1) {
+			throw OutOfRangeException("Overflow in HUGEINT modulo: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return Modulo<false>(lhs, rhs);
+	}
+
+	static bool TryAddInPlace(hugeint_t &lhs, hugeint_t rhs);
+	
+	template <bool CHECK_OVERFLOW = true>
+	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs) {
+		if (!TryAddInPlace(lhs, rhs)) {
+			throw OutOfRangeException("Overflow in HUGEINT addition: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return lhs;
+	}
+
+	static bool TrySubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
+
+	template <bool CHECK_OVERFLOW = true>
+	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs) {
+		if (!TrySubtractInPlace(lhs, rhs)) {
+			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
+		}
+		return lhs;
+	}
 
 	// DivMod -> returns the result of the division (lhs / rhs), and fills up the remainder
 	static hugeint_t DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder);
 	// DivMod but lhs MUST be positive, and rhs is a uint64_t
 	static hugeint_t DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder);
 
-	static bool AddInPlace(hugeint_t &lhs, hugeint_t rhs);
-	static bool SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
 
 	static int Sign(hugeint_t n);
 	static hugeint_t Abs(hugeint_t n);

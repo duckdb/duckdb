@@ -63,26 +63,56 @@ public:
 
 	static bool TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
 
-	static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs);
-	static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs);
-
 	template <bool CHECK_OVERFLOW = true>
 	static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs) {
 		uhugeint_t result;
 		if (!TryMultiply(lhs, rhs, result)) {
-			throw OutOfRangeException("Overflow in UHUGEINT multiplication!");
+			throw OutOfRangeException("Overflow in UHUGEINT multiplication!: %s + %s", lhs.ToString(), rhs.ToString());
 		}
 		return result;
 	}
 
-	static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs);
-	static uhugeint_t Modulo(uhugeint_t lhs, uhugeint_t rhs);
+	static bool TryDivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result, uhugeint_t &remainder);
+
+	template <bool CHECK_OVERFLOW = true>
+	static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs) {
+		// division between two same-size unsigned intergers can only go wrong with division by zero
+		if (rhs == 0) {
+			throw OutOfRangeException("Division of UHUGEINT by zero!");
+		}
+		return Divide<false>(lhs, rhs);
+	}
+
+	template <bool CHECK_OVERFLOW = true>
+	static uhugeint_t Modulo(uhugeint_t lhs, uhugeint_t rhs) {
+		if (rhs == 0) {
+			throw OutOfRangeException("Modulo of UHUGEINT by zero!");
+		}
+		return Modulo<false>(lhs, rhs);
+	}
+
+	static bool TryAddInPlace(uhugeint_t &lhs, uhugeint_t rhs);
+
+	template <bool CHECK_OVERFLOW = true>
+	static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs) {
+		if (!TryAddInPlace(lhs, rhs)) {
+			throw OutOfRangeException("Overflow in UHUGEINT addition: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return lhs;
+	}
+
+	static bool TrySubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs);
+
+	template <bool CHECK_OVERFLOW = true>
+	static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs) {
+		if (!TrySubtractInPlace(lhs, rhs)) {
+			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
+		}
+		return lhs;
+	}
 
 	// DivMod -> returns the result of the division (lhs / rhs), and fills up the remainder
 	static uhugeint_t DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder);
-
-	static bool AddInPlace(uhugeint_t &lhs, uhugeint_t rhs);
-	static bool SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs);
 
 	static int Sign(hugeint_t n);
 	static hugeint_t Abs(hugeint_t n);
