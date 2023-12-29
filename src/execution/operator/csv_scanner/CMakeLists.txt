@@ -1,19 +1,10 @@
-add_subdirectory(sniffer)
+add_subdirectory(buffer_manager)
 add_subdirectory(scanner)
+add_subdirectory(sniffer)
+add_subdirectory(state_machine)
 add_subdirectory(table_function)
-
-add_library_unity(
-  duckdb_operator_csv_scanner
-  OBJECT
-  base_csv_reader.cpp
-  csv_buffer.cpp
-  csv_buffer_manager.cpp
-  csv_file_handle.cpp
-  csv_reader_options.cpp
-  csv_scanner.cpp
-  csv_state_machine.cpp
-  csv_state_machine_cache.cpp)
+add_subdirectory(util)
 
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_operator_csv_scanner>
+    ${ALL_OBJECT_FILES}
     PARENT_SCOPE)
