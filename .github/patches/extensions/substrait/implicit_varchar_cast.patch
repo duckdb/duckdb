@@ -1,0 +1,17 @@
+diff --git a/test/sql/test_substrait_function_name.test b/test/sql/test_substrait_function_name.test
+index 50c37ae..159e01a 100644
+--- a/test/sql/test_substrait_function_name.test
++++ b/test/sql/test_substrait_function_name.test
+@@ -35,10 +35,10 @@ statement ok
+ CALL get_substrait('SELECT abs(i) FROM ints');
+ 
+ statement ok
+-CALL get_substrait('SELECT prefix(i, ''1'') FROM ints');
++CALL get_substrait('SELECT prefix(v, ''1'') FROM varchars');
+ 
+ statement ok
+-CALL get_substrait('SELECT suffix(i, ''3'') FROM ints');
++CALL get_substrait('SELECT suffix(v, ''3'') FROM varchars');
+ 
+ statement ok
+ CALL get_substrait('SELECT substr(v, 1, 1) FROM varchars');
