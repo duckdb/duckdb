@@ -53,7 +53,7 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWriteAheadLog() {
-	if (InMemory() || read_only || !replayed_wal) {
+	if (InMemory() || read_only || !load_complete) {
 		return nullptr;
 	}
 
@@ -61,6 +61,7 @@ optional_ptr<WriteAheadLog> StorageManager::GetWriteAheadLog() {
 		return wal.get();
 	}
 
+	// lazy WAL creation
 	wal = make_uniq<WriteAheadLog>(db, GetWALPath());
 	return wal.get();
 }
@@ -124,7 +125,6 @@ void SingleFileStorageManager::LoadDatabase() {
 		return;
 	}
 
-	// get the WAL path from the filepath
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
 	if (!config.options.enable_external_access) {
@@ -178,7 +178,8 @@ void SingleFileStorageManager::LoadDatabase() {
 			}
 		}
 	}
-	replayed_wal = true;
+
+	load_complete = true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
