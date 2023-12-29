@@ -101,6 +101,7 @@ private:
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! Information regarding columns that were set by user/query
 	SetColumns set_columns;
+	shared_ptr<CSVErrorHandler> error_handler;
 	//! Sets the result options
 	void SetResultOptions();
 

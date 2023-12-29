@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
+#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,7 @@ protected:
 class BaseScanner {
 public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	                     CSVIterator iterator = {});
+	                     shared_ptr<CSVErrorHandler> error_handler, CSVIterator iterator = {});
 
 	virtual ~BaseScanner() = default;
 	//! Returns true if the scanner is finished
@@ -61,6 +62,10 @@ public:
 		return iterator.GetBoundaryIdx();
 	}
 
+	idx_t GetLinesRead() {
+		return lines_read;
+	}
+
 	MultiFileReaderData reader_data;
 	string file_path;
 	vector<string> names;
@@ -81,20 +86,22 @@ public:
 			//! Add new value to result
 			T::AddValue(result, buffer_pos);
 		} else if (scanner.states.NewRow()) {
+			//! Increment Lines Read
+			scanner.lines_read++;
 			//! Add new row to result
 			//! Check if the result reached a vector size
 			if (T::AddRow(result, buffer_pos)) {
 				return true;
 			}
+		} else if (scanner.states.EmptyLine()) {
+			//! Increment Lines Read
+			scanner.lines_read++;
 		}
 		//! Still have more to read
 		return false;
 	}
 
 	CSVStateMachine &GetStateMachine();
-
-	//! Produces error messages for column name -> type mismatch.
-	static string ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 
 protected:
 	//! Boundaries of this scanner
@@ -114,9 +121,12 @@ protected:
 	shared_ptr<CSVStateMachine> state_machine;
 	//! If this scanner has been initialized
 	bool initialized = false;
-
+	//! How many lines were read by this scanner
+	idx_t lines_read = 0;
 	//! States
 	CSVStates states;
+	//! The guy that handles errors
+	shared_ptr<CSVErrorHandler> error_handler;
 
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner

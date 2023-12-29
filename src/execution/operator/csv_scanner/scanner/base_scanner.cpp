@@ -15,8 +15,9 @@ bool ScannerResult::Empty() {
 }
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-                         CSVIterator iterator_p)
-    : iterator(iterator_p), buffer_manager(buffer_manager_p), state_machine(state_machine_p) {
+                         shared_ptr<CSVErrorHandler> error_handler_p, CSVIterator iterator_p)
+    : iterator(iterator_p), buffer_manager(buffer_manager_p), state_machine(state_machine_p),
+      error_handler(error_handler_p) {
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
 	// Initialize current buffer handle
@@ -47,6 +48,7 @@ bool BaseScanner::FinishedFile() {
 
 void BaseScanner::Reset() {
 	iterator.SetCurrentPositionToBoundary();
+	lines_read = 0;
 }
 
 CSVIterator &BaseScanner::GetIterator() {
@@ -71,26 +73,6 @@ void BaseScanner::Process() {
 
 void BaseScanner::FinalizeChunkProcess() {
 	throw InternalException("FinalizeChunkProcess() from CSV Base Scanner is mot implemented");
-}
-
-string BaseScanner::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
-	for (idx_t i = 0; i < names.size(); i++) {
-		auto it = sql_types_per_column.find(names[i]);
-		if (it != sql_types_per_column.end()) {
-			sql_types_per_column.erase(names[i]);
-			continue;
-		}
-	}
-	if (sql_types_per_column.empty()) {
-		return string();
-	}
-	string exception = "COLUMN_TYPES error: Columns with names: ";
-	for (auto &col : sql_types_per_column) {
-		exception += "\"" + col.first + "\",";
-	}
-	exception.pop_back();
-	exception += " do not exist in the CSV File";
-	return exception;
 }
 
 void BaseScanner::ParseChunkInternal() {

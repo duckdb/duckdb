@@ -59,6 +59,7 @@ private:
 	//! Starting position of first buffer
 	idx_t start_pos = 0;
 	bool done = false;
+	mutex main_mutex;
 };
 
 } // namespace duckdb

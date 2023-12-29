@@ -131,9 +131,10 @@ idx_t StringValueResult::NumberOfRows() {
 }
 
 StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager,
-                                       shared_ptr<CSVStateMachine> state_machine, CSVIterator boundary,
+                                       shared_ptr<CSVStateMachine> state_machine,
+                                       shared_ptr<CSVErrorHandler> error_handler, CSVIterator boundary,
                                        idx_t result_size)
-    : BaseScanner(buffer_manager, state_machine, boundary),
+    : BaseScanner(buffer_manager, state_machine, error_handler, boundary),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos) {};
 
@@ -142,7 +143,7 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, cache);
 	vector<string> file_paths = {options.file_path};
 	auto buffer_manager = make_shared<CSVBufferManager>(context, options, file_paths);
-	return make_uniq<StringValueScanner>(buffer_manager, state_machine);
+	return make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared<CSVErrorHandler>());
 }
 
 bool StringValueScanner::FinishedIterator() {
@@ -213,9 +214,21 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			if (success) {
 				continue;
 			}
-			//			boundary.Print();
-			//			pos.Print();
-			throw InvalidInputException("error");
+			// An error happened, to propagate it we need to figure out the exact line where the casting failed.
+			UnifiedVectorFormat inserted_column_data;
+			result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
+			UnifiedVectorFormat parse_column_data;
+			parse_vector.ToUnifiedFormat(parse_chunk.size(), parse_column_data);
+			for (; line_error < parse_chunk.size(); line_error++) {
+				if (!inserted_column_data.validity.RowIsValid(line_error) &&
+				    parse_column_data.validity.RowIsValid(line_error)) {
+					break;
+				}
+			}
+			auto csv_error = CSVError::CastError(names[col_idx], error_message);
+			LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
+			                              lines_read - parse_chunk.size() + line_error);
+			error_handler->Error(lines_per_batch, csv_error);
 		}
 	}
 }
@@ -224,7 +237,6 @@ void StringValueScanner::Initialize() {
 	states.Initialize(CSVState::EMPTY_LINE);
 	if (result.result_size != 1 && iterator.IsSet()) {
 		SetStart();
-		D_ASSERT(iterator.pos.buffer_pos % iterator.BYTES_PER_THREAD != 0);
 	}
 	result.last_position = iterator.pos.buffer_pos;
 }
@@ -317,16 +329,13 @@ void StringValueScanner::SkipNotes() {
 }
 
 void StringValueScanner::SkipHeader() {
-	StringValueScanner scan_finder(buffer_manager, state_machine, iterator, 1);
-	scan_finder.ParseChunk();
-	iterator.pos.buffer_pos = scan_finder.iterator.pos.buffer_pos;
+	StringValueScanner head_skipper(buffer_manager, state_machine, error_handler, iterator, 1);
+	head_skipper.ParseChunk();
+	iterator.pos.buffer_pos = head_skipper.iterator.pos.buffer_pos;
+	lines_read += head_skipper.GetLinesRead();
 }
 
 void StringValueScanner::SkipUntilNewLine() {
-	// If we are already in a new line, we skip to the next one
-	//	while (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' || buffer_handle_ptr[iterator.pos.buffer_pos] ==
-	//'\r'){ 		iterator.pos.buffer_pos++;
-	//	}
 	// Now skip until next newline
 	if (state_machine->options.dialect_options.new_line.GetValue() == NewLineIdentifier::CARRY_ON) {
 		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
@@ -352,7 +361,9 @@ void StringValueScanner::SetStart() {
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
 		SkipEmptyLines();
-		SkipHeader();
+		if (state_machine->options.GetHeader()) {
+			SkipHeader();
+		}
 		SkipEmptyLines();
 		return;
 	}
@@ -361,7 +372,7 @@ void StringValueScanner::SetStart() {
 	while (!FinishedFile()) {
 		// 1. We walk until the next new line
 		SkipUntilNewLine();
-		StringValueScanner scan_finder(buffer_manager, state_machine, iterator, 1);
+		StringValueScanner scan_finder(buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), iterator, 1);
 		auto &tuples = *scan_finder.ParseChunk();
 		if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
@@ -394,11 +405,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 	// 1) If a boundary is set.
 	if (iterator.IsSet()) {
 		// We read until the next line or until we have nothing else to read.
-		//		do {
 		// Move to next buffer
 		MoveToNextBuffer();
 		ProcessExtraRow();
-		//		} while (!Finished() && result.result_position % state_machine->dialect_options.num_cols != 0);
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.

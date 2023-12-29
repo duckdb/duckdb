@@ -36,7 +36,8 @@ public:
 //! Scanner that goes over the CSV and figures out how many columns each row has. Used for dialect sniffing
 class ColumnCountScanner : public BaseScanner {
 public:
-	ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine);
+	ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
+	                   shared_ptr<CSVErrorHandler> error_handler);
 
 	~ColumnCountScanner() {
 	}

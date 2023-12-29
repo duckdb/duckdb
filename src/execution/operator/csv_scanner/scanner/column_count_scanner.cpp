@@ -40,13 +40,14 @@ void ColumnCountResult::Kaput(ColumnCountResult &result) {
 }
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
-                                       shared_ptr<CSVStateMachine> state_machine)
-    : BaseScanner(buffer_manager, state_machine), result(states, *state_machine), column_count(1) {
+                                       shared_ptr<CSVStateMachine> state_machine,
+                                       shared_ptr<CSVErrorHandler> error_handler)
+    : BaseScanner(buffer_manager, state_machine, error_handler), result(states, *state_machine), column_count(1) {
 
-                                                                                  };
+                                                                                                 };
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	return make_uniq<StringValueScanner>(buffer_manager, state_machine);
+	return make_uniq<StringValueScanner>(buffer_manager, state_machine, error_handler);
 }
 
 ColumnCountResult *ColumnCountScanner::ParseChunk() {

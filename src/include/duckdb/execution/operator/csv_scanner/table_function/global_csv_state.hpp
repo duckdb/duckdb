@@ -71,7 +71,7 @@ private:
 	//! The column ids to read
 	vector<column_t> column_ids;
 	//! Line Info used in error messages
-	CSVErrorHandler error_handler;
+	shared_ptr<CSVErrorHandler> error_handler;
 
 	CSVStateMachineCache cache;
 	string sniffer_mismatch_error;

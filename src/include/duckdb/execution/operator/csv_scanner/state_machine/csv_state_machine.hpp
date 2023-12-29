@@ -35,6 +35,10 @@ struct CSVStates {
 		return current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN;
 	}
 
+	inline bool EmptyLine() {
+		return current_state == CSVState::EMPTY_LINE;
+	}
+
 	inline bool IsInvalid() {
 		return current_state == CSVState::INVALID;
 	}

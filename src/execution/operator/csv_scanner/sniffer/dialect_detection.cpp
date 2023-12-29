@@ -71,8 +71,8 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 					CSVStateMachineOptions state_machine_options(delimiter, quote, escape);
 					auto sniffing_state_machine =
 					    make_uniq<CSVStateMachine>(options, state_machine_options, state_machine_cache);
-					column_count_scanners.emplace_back(
-					    make_uniq<ColumnCountScanner>(buffer_manager, std::move(sniffing_state_machine)));
+					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
+					    buffer_manager, std::move(sniffing_state_machine), error_handler));
 				}
 			}
 		}

@@ -25,6 +25,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
 		running_threads = MaxThreads();
 	}
 	current_boundary = CSVIterator(0, 0, 0, 0);
+	error_handler = make_shared<CSVErrorHandler>();
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {
@@ -49,7 +50,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 	if (finished) {
 		return nullptr;
 	}
-	auto csv_scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, current_boundary);
+	auto csv_scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, error_handler, current_boundary);
 	finished = current_boundary.Next(*buffer_manager);
 
 	csv_scanner->file_path = bind_data.files.front();
