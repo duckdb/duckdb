@@ -94,6 +94,17 @@ final class LogicalTypeTests: XCTestCase {
     )
   }
 
+  func test_uhugeint() throws {
+    try logicalTypeTest(
+      dataType: "UHUGEINT",
+      cast: { $0.cast(to: UIntHuge.self) },
+      validate: {
+        XCTAssertEqual($0.dataType, .uhugeint)
+        XCTAssertEqual($0.underlyingDataType, .uhugeint)
+      }
+    )
+  }
+
   func test_utinyint() throws {
     try logicalTypeTest(
       dataType: "UTINYINT",
