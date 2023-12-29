@@ -36,7 +36,7 @@ public:
 
 	virtual ~BaseScanner() = default;
 	//! Returns true if the scanner is finished
-	bool Finished();
+	bool FinishedFile();
 	//! Resets the scanner
 	void Reset();
 	//! Parses data into a output_chunk

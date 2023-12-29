@@ -218,13 +218,13 @@ void CSVSniffer::RefineCandidates() {
 		// No candidates to refine
 		return;
 	}
-	if (candidates.size() == 1 || candidates[0]->Finished()) {
+	if (candidates.size() == 1 || candidates[0]->FinishedFile()) {
 		// Only one candidate nothing to refine or all candidates already checked
 		return;
 	}
 	for (auto &cur_candidate : candidates) {
 		for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
-			bool finished_file = cur_candidate->Finished();
+			bool finished_file = cur_candidate->FinishedFile();
 			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully: stop
 				auto successful_candidate = std::move(cur_candidate);

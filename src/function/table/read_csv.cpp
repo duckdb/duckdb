@@ -301,7 +301,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			//			                               output);
 			break;
 		}
-		if (csv_local_state.csv_reader->Finished()) {
+		if (csv_local_state.csv_reader->FinishedIterator()) {
 
 			//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
 			//			csv_global_state.UpdateVerification(verification_updates,

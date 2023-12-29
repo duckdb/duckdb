@@ -37,7 +37,7 @@ void CSVSniffer::RefineTypes() {
 		return;
 	}
 	for (idx_t i = 1; i < sniffing_state_machine.options.sample_size_chunks; i++) {
-		bool finished_file = best_candidate->Finished();
+		bool finished_file = best_candidate->FinishedFile();
 		if (finished_file) {
 			// we finished the file: stop
 			// set sql types

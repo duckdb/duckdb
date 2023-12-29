@@ -79,7 +79,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 		return;
 	}
 	// We run until we have a full chunk, or we are done scanning
-	while (!Finished() && result.result_position < STANDARD_VECTOR_SIZE) {
+	while (!FinishedFile() && result.result_position < STANDARD_VECTOR_SIZE) {
 		if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
 			iterator.pos.buffer_pos = 0;

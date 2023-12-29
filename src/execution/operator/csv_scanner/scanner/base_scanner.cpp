@@ -25,25 +25,24 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	D_ASSERT(cur_buffer_handle);
 };
 
-bool BaseScanner::Finished() {
-	return iterator.done;
-	//	if (!cur_buffer_handle) {
-	//		return true;
-	//	}
-	//	if (buffer_manager->FileCount() > 1) {
-	//		//! Fixme: We might want to lift this if we want to run the sniffer over multiple files.
-	//		throw InternalException("We can't have a buffer manager that scans to infinity with more than one file");
-	//	}
-	//	// we have to scan to infinity, so we must check if we are done checking the whole file
-	//	if (!buffer_manager->Done()) {
-	//		return false;
-	//	}
-	//	// If yes, are we in the last buffer?
-	//	if (iterator.cur_buffer_idx != buffer_manager->CachedBufferPerFile(iterator.cur_file_idx)) {
-	//		return false;
-	//	}
-	//	// If yes, are we in the last position?
-	//	return iterator.cur_buffer_pos + 1 == cur_buffer_handle->actual_size;
+bool BaseScanner::FinishedFile() {
+		if (!cur_buffer_handle) {
+			return true;
+		}
+		if (buffer_manager->FileCount() > 1) {
+			//! Fixme: We might want to lift this if we want to run the sniffer over multiple files.
+			throw InternalException("We can't have a buffer manager that scans to infinity with more than one file");
+		}
+		// we have to scan to infinity, so we must check if we are done checking the whole file
+		if (!buffer_manager->Done()) {
+			return false;
+		}
+		// If yes, are we in the last buffer?
+		if (iterator.pos.buffer_idx != buffer_manager->CachedBufferPerFile(iterator.pos.buffer_idx)) {
+			return false;
+		}
+		// If yes, are we in the last position?
+		return iterator.pos.buffer_pos + 1 == cur_buffer_handle->actual_size;
 }
 
 void BaseScanner::Reset() {

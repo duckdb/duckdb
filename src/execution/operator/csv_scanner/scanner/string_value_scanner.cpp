@@ -145,6 +145,10 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	return make_uniq<StringValueScanner>(buffer_manager, state_machine);
 }
 
+bool StringValueScanner::FinishedIterator() {
+	return iterator.done;
+}
+
 StringValueResult *StringValueScanner::ParseChunk() {
 	result.result_position = 0;
 	ParseChunkInternal();
@@ -354,7 +358,7 @@ void StringValueScanner::SetStart() {
 	}
 
 	// We have to look for a new line that fits our schema
-	while (!Finished()) {
+	while (!FinishedFile()) {
 		// 1. We walk until the next new line
 		SkipUntilNewLine();
 		StringValueScanner scan_finder(buffer_manager, state_machine, iterator, 1);
@@ -398,7 +402,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.
-		while (!Finished() && result.result_position < result.vector_size) {
+		while (!FinishedFile() && result.result_position < result.vector_size) {
 			MoveToNextBuffer();
 			if (cur_buffer_handle) {
 				Process();
