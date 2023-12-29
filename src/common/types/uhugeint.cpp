@@ -254,10 +254,8 @@ static uint8_t Bits(uhugeint_t x) {
 	return out;
 }
 
+// No division by zero check
 uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder) {
-	// division by zero not allowed
-	D_ASSERT(!(rhs.upper == 0 && rhs.lower == 0));
-
 	remainder = uhugeint_t(0);
 	if (rhs == uhugeint_t(1)) {
 		return lhs;
@@ -285,21 +283,23 @@ uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainde
 	return result;
 }
 
-uhugeint_t Uhugeint::Divide(uhugeint_t lhs, uhugeint_t rhs) {
+template <>
+uhugeint_t Uhugeint::Divide<false>(uhugeint_t lhs, uhugeint_t rhs) {
 	uhugeint_t remainder;
 	return Uhugeint::DivMod(lhs, rhs, remainder);
 }
 
-uhugeint_t Uhugeint::Modulo(uhugeint_t lhs, uhugeint_t rhs) {
+template <>
+uhugeint_t Uhugeint::Modulo<false>(uhugeint_t lhs, uhugeint_t rhs) {
 	uhugeint_t remainder;
-	Uhugeint::DivMod(lhs, rhs, remainder);
+	(void)Uhugeint::DivMod(lhs, rhs, remainder);
 	return remainder;
 }
 
 //===--------------------------------------------------------------------===//
 // Add/Subtract
 //===--------------------------------------------------------------------===//
-bool Uhugeint::AddInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
+bool Uhugeint::TryAddInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
 	uint64_t new_upper = lhs.upper + rhs.upper;
 	bool no_overflow = !(new_upper < lhs.upper || new_upper < rhs.upper);
 	new_upper += (lhs.lower + rhs.lower) < lhs.lower;
@@ -311,7 +311,7 @@ bool Uhugeint::AddInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
 	return no_overflow;
 }
 
-bool Uhugeint::SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
+bool Uhugeint::TrySubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
 	uint64_t new_upper = lhs.upper - rhs.upper - ((lhs.lower - rhs.lower) > lhs.lower);
 	bool no_overflow = !(new_upper > lhs.upper);
 	lhs.lower -= rhs.lower;
@@ -319,18 +319,14 @@ bool Uhugeint::SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
 	return no_overflow;
 }
 
-uhugeint_t Uhugeint::Add(uhugeint_t lhs, uhugeint_t rhs) {
-	if (!AddInPlace(lhs, rhs)) {
-		throw OutOfRangeException("Overflow in UHUGEINT addition");
-	}
-	return lhs;
+template <>
+uhugeint_t Uhugeint::Add<false>(uhugeint_t lhs, uhugeint_t rhs) {
+	return lhs + rhs;
 }
 
-uhugeint_t Uhugeint::Subtract(uhugeint_t lhs, uhugeint_t rhs) {
-	if (!SubtractInPlace(lhs, rhs)) {
-		throw OutOfRangeException("Underflow in UHUGEINT subtraction");
-	}
-	return lhs;
+template <>
+uhugeint_t Uhugeint::Subtract<false>(uhugeint_t lhs, uhugeint_t rhs) {
+	return lhs - rhs;
 }
 
 //===--------------------------------------------------------------------===//
@@ -573,15 +569,15 @@ uhugeint_t uhugeint_t::operator*(const uhugeint_t &rhs) const {
 }
 
 uhugeint_t uhugeint_t::operator/(const uhugeint_t &rhs) const {
-	return Uhugeint::Divide(*this, rhs);
+	return Uhugeint::Divide<false>(*this, rhs);
 }
 
 uhugeint_t uhugeint_t::operator%(const uhugeint_t &rhs) const {
-	return Uhugeint::Modulo(*this, rhs);
+	return Uhugeint::Modulo<false>(*this, rhs);
 }
 
 uhugeint_t uhugeint_t::operator-() const {
-	return Uhugeint::Negate(*this);
+	return Uhugeint::Negate<false>(*this);
 }
 
 uhugeint_t uhugeint_t::operator>>(const uhugeint_t &rhs) const {
