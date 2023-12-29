@@ -45,7 +45,7 @@ public:
 		return result;
 	}
 
-	static bool TryNegate(hugeint_t input, hugeint_t& result);
+	static bool TryNegate(hugeint_t input, hugeint_t &result);
 
 	template <bool CHECK_OVERFLOW = true>
 	static void NegateInPlace(hugeint_t &input) {
@@ -70,7 +70,7 @@ public:
 		}
 		return result;
 	}
-	
+
 	static bool TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint_t &remainder);
 
 	template <bool CHECK_OVERFLOW = true>
@@ -102,7 +102,7 @@ public:
 	}
 
 	static bool TryAddInPlace(hugeint_t &lhs, hugeint_t rhs);
-	
+
 	template <bool CHECK_OVERFLOW = true>
 	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs) {
 		if (!TryAddInPlace(lhs, rhs)) {
@@ -125,7 +125,6 @@ public:
 	static hugeint_t DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder);
 	// DivMod but lhs MUST be positive, and rhs is a uint64_t
 	static hugeint_t DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder);
-
 
 	static int Sign(hugeint_t n);
 	static hugeint_t Abs(hugeint_t n);
