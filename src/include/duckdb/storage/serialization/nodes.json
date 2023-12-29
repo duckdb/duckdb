@@ -479,7 +479,7 @@
     {
     "class": "CSVOption<T>",
     "includes": [
-      "duckdb/execution/operator/scan/csv/csv_option.hpp"
+      "duckdb/execution/operator/csv_scanner/util/csv_option.hpp"
     ],
     "members": [
       {
@@ -498,7 +498,7 @@
   {
     "class": "CSVReaderOptions",
     "includes": [
-      "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+      "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
     ],
     "members": [
       {"id": 100,

@@ -1,21 +1,21 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/scan/csv/csv_reader_options.hpp
+// duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/scan/csv/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/util/csv_option.hpp"
 
 namespace duckdb {
 

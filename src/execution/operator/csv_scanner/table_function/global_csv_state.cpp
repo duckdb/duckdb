@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/scan/csv/table_function/global_csv_state.hpp"
-#include "duckdb/execution/operator/scan/csv/scanner/scanner_boundary.hpp"
+#include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
 
 namespace duckdb {
 

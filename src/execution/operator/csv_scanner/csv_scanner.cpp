@@ -6,7 +6,7 @@
 //#include "duckdb/execution/operator/scan/csv/parse_values.hpp"
 //#include "duckdb/main/error_manager.hpp"
 //#include "utf8proc_wrapper.hpp"
-//#include "duckdb/execution/operator/scan/csv/csv_casting.hpp"
+//#include "duckdb/execution/operator/csv_scanner/util/csv_casting.hpp"
 //
 // namespace duckdb {
 //

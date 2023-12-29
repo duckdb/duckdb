@@ -8,15 +8,15 @@
 //
 //#pragma once
 //
-//#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
-//#include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
-//#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
-//#include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
+//#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
+//#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
+//#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
+//#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
 //#include "duckdb/execution/operator/scan/csv/parsing/scanner_boundary.hpp"
 //#include "duckdb/main/client_context.hpp"
 //#include "duckdb/common/multi_file_reader.hpp"
 //#include "duckdb/common/fast_mem.hpp"
-//#include "duckdb/execution/operator/scan/csv/scanner/base_scanner.hpp"
+//#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
 //
 // namespace duckdb {
 //

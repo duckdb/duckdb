@@ -1,6 +1,6 @@
-#include "duckdb/execution/operator/scan/csv/scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
 
-#include "duckdb/execution/operator/scan/csv/csv_casting.hpp"
+#include "duckdb/execution/operator/csv_scanner/util/csv_casting.hpp"
 
 namespace duckdb {
 

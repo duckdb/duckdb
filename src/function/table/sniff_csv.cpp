@@ -1,13 +1,12 @@
 #include "duckdb/function/built_in_functions.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
-#include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
