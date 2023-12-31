@@ -221,6 +221,35 @@ TEST_CASE("Test enum types creation C API", "[capi]") {
 	REQUIRE(duckdb_create_enum_type(nullptr, 0) == nullptr);
 }
 
+TEST_CASE("Union type construction") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	duckdb::vector<duckdb_logical_type> member_types = {duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR),
+	                                                    duckdb_create_logical_type(DUCKDB_TYPE_INTEGER)};
+	duckdb::vector<const char *> member_names = {"hello", "world"};
+
+	auto res = duckdb_create_union_type(member_types.data(), member_names.data(), member_names.size());
+
+	REQUIRE(duckdb_struct_type_child_count(res) == 3);
+
+	auto get_id = [&](idx_t index) {
+		auto typ = duckdb_struct_type_child_type(res, index);
+		auto id = duckdb_get_type_id(typ);
+		duckdb_destroy_logical_type(&typ);
+		return id;
+	};
+
+	REQUIRE(get_id(0) == DUCKDB_TYPE_UTINYINT);
+	REQUIRE(get_id(1) == DUCKDB_TYPE_VARCHAR);
+	REQUIRE(get_id(2) == DUCKDB_TYPE_INTEGER);
+
+	for (auto typ : member_types) {
+		duckdb_destroy_logical_type(&typ);
+	}
+	duckdb_destroy_logical_type(&res);
+}
+
 TEST_CASE("Logical types with aliases", "[capi]") {
 	CAPITester tester;
 
