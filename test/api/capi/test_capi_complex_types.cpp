@@ -234,15 +234,17 @@ TEST_CASE("Union type construction") {
 	REQUIRE(duckdb_struct_type_child_count(res) == 3);
 
 	auto get_id = [&](idx_t index) {
-		auto typ = duckdb_struct_type_child_type(res, index);
+		auto typ = duckdb_union_type_member_type(res, index);
 		auto id = duckdb_get_type_id(typ);
 		duckdb_destroy_logical_type(&typ);
 		return id;
 	};
 
-	REQUIRE(get_id(0) == DUCKDB_TYPE_UTINYINT);
-	REQUIRE(get_id(1) == DUCKDB_TYPE_VARCHAR);
-	REQUIRE(get_id(2) == DUCKDB_TYPE_INTEGER);
+	REQUIRE(get_id(0) == DUCKDB_TYPE_VARCHAR);
+	REQUIRE(get_id(1) == DUCKDB_TYPE_INTEGER);
+
+	REQUIRE(string(duckdb_union_type_member_name(res, 0)) == "hello");
+	REQUIRE(string(duckdb_union_type_member_name(res, 1)) == "world");
 
 	for (auto typ : member_types) {
 		duckdb_destroy_logical_type(&typ);
