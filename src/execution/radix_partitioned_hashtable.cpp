@@ -10,6 +10,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -331,7 +332,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	// Check if we're approaching the memory limit
 	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	const idx_t limit = BufferManager::GetBufferManager(context).GetMaxMemory();
+	const idx_t limit = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
 	const idx_t thread_limit = 0.6 * limit / n_threads;
 	if (ht.GetPartitionedData()->SizeInBytes() > thread_limit || context.config.force_external) {
 		if (gstate.config.SetRadixBitsToExternal()) {
