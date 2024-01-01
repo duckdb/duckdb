@@ -263,4 +263,15 @@ dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right) {
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(right, left);
 }
 
+template <>
+dtime_tz_t AddTimeOperator::Operation(dtime_tz_t left, interval_t right) {
+	date_t date(0);
+	return Interval::Add(left, right, date);
+}
+
+template <>
+dtime_tz_t AddTimeOperator::Operation(interval_t left, dtime_tz_t right) {
+	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(right, left);
+}
+
 } // namespace duckdb

@@ -228,6 +228,64 @@ SELECT TIME '00:00:00' + INTERVAL '-1' HOUR
 ----
 23:00:00
 
+#
+# TIMETZ and INTERVAL arithmetic
+#
+
+# TIMETZ + INTERVAL
+query I
+select '12:15:37.123456-08'::TIMETZ + INTERVAL '2 HOUR';
+----
+14:15:37.123456-08
+
+query I
+select '12:15:37.123456-08'::TIMETZ + INTERVAL '22 HOUR';
+----
+10:15:37.123456-08
+
+query I
+select '12:15:37.123456-08'::TIMETZ + INTERVAL '2 DAY';
+----
+12:15:37.123456-08
+
+# INTERVAL + TIMETZ
+query I
+select INTERVAL '2 HOUR' + '12:15:37.123456-08'::TIMETZ;
+----
+14:15:37.123456-08
+
+query I
+select INTERVAL '22 HOUR' + '12:15:37.123456-08'::TIMETZ;
+----
+10:15:37.123456-08
+
+query I
+select INTERVAL '2 DAY' + '12:15:37.123456-08'::TIMETZ;
+----
+12:15:37.123456-08
+
+# TIMETZ - INTERVAL
+query I
+select '12:15:37.123456-08'::TIMETZ - INTERVAL '2 HOUR';
+----
+10:15:37.123456-08
+
+query I
+select '12:15:37.123456-08'::TIMETZ - INTERVAL '22 HOUR';
+----
+14:15:37.123456-08
+
+query I
+select '12:15:37.123456-08'::TIMETZ - INTERVAL '2 DAY';
+----
+12:15:37.123456-08
+
+#  INTERVAL - TIMETZ
+statement error
+select INTERVAL '2 HOUR' - '12:15:37.123456-08'::TIMETZ;
+----
+No function matches the given name and argument types
+
 # we can add/subtract them to/from timestamps
 query T
 SELECT TIMESTAMP '1992-01-01 10:00:00' + INTERVAL '1' DAY
