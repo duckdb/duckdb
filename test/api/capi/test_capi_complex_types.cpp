@@ -239,12 +239,18 @@ TEST_CASE("Union type construction") {
 		duckdb_destroy_logical_type(&typ);
 		return id;
 	};
+	auto get_name = [&](idx_t index) {
+		auto name = duckdb_union_type_member_name(res, index);
+		string name_s(name);
+		duckdb_free(name);
+		return name_s;
+	};
 
 	REQUIRE(get_id(0) == DUCKDB_TYPE_VARCHAR);
 	REQUIRE(get_id(1) == DUCKDB_TYPE_INTEGER);
 
-	REQUIRE(string(duckdb_union_type_member_name(res, 0)) == "hello");
-	REQUIRE(string(duckdb_union_type_member_name(res, 1)) == "world");
+	REQUIRE(get_name(0) == "hello");
+	REQUIRE(get_name(1) == "world");
 
 	for (auto typ : member_types) {
 		duckdb_destroy_logical_type(&typ);
