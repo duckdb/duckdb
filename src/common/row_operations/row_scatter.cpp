@@ -12,6 +12,7 @@
 #include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -203,6 +204,9 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 			break;
 		case PhysicalType::INT128:
 			TemplatedScatter<hugeint_t>(col, rows, sel, count, col_offset, col_no);
+			break;
+		case PhysicalType::UINT128:
+			TemplatedScatter<uhugeint_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::FLOAT:
 			TemplatedScatter<float>(col, rows, sel, count, col_offset, col_no);

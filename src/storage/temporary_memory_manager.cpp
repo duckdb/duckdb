@@ -81,7 +81,7 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 		    MinValue<idx_t>(temporary_memory_state.remaining_size, MAXIMUM_FREE_MEMORY_RATIO * free_memory);
 
 		if (remaining_size > memory_limit) {
-			// We're processing more data than fits in memory, so we must limit memory usage further.
+			// We're processing more data than fits in memory, so we must further limit memory usage.
 			// The upper bound for the reservation of this state is now also the minimum of:
 			// 3. The ratio of the remaining size of this state and the total remaining size * memory limit
 			auto ratio_of_remaining = double(temporary_memory_state.remaining_size) / double(remaining_size);

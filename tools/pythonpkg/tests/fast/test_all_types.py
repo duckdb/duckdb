@@ -439,6 +439,7 @@ class TestAllTypes(object):
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():
+        # - 'uhugeint'
         # - 'hugeint'
         # - 'dec_4_1'
         # - 'dec_9_4'
@@ -484,6 +485,12 @@ class TestAllTypes(object):
         replacement_values = {'interval': "INTERVAL '2 years'"}
         # We do not round trip enum types
         enum_types = {'small_enum', 'medium_enum', 'large_enum', 'double_array'}
+
+        # uhugeint currently not supported by arrow
+        skip_types = {'uhugeint'}
+        if cur_type in skip_types:
+            return
+
         conn = duckdb.connect()
         if cur_type in replacement_values:
             arrow_table = conn.execute("select " + replacement_values[cur_type]).arrow()

@@ -65,6 +65,10 @@ idx_t BufferPool::GetMaxMemory() const {
 	return maximum_memory;
 }
 
+idx_t BufferPool::GetQueryMaxMemory() const {
+	return GetMaxMemory();
+}
+
 TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 	return *temporary_memory_manager;
 }

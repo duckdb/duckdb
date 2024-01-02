@@ -28,6 +28,7 @@
         df.hugeint,
         [-170141183460469231731687303715884105728, 170141183460469231731687303715884105727, missing]
     )
+    @test isequal(df.uhugeint, [0, 340282366920938463463374607431768211455, missing])
     @test isequal(df.utinyint, [0, 255, missing])
     @test isequal(df.usmallint, [0, 65535, missing])
     @test isequal(df.uint, [0, 4294967295, missing])

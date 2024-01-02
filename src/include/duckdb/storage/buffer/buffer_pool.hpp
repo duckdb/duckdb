@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
@@ -54,6 +54,8 @@ public:
 	idx_t GetUsedMemory() const;
 
 	idx_t GetMaxMemory() const;
+
+	virtual idx_t GetQueryMaxMemory() const;
 
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
 

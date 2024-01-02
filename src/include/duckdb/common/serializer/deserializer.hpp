@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 
 namespace duckdb {
@@ -423,6 +424,12 @@ private:
 		return ReadHugeInt();
 	}
 
+	// Deserialize a uhugeint
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, uhugeint_t>::value, T>::type Read() {
+		return ReadUhugeInt();
+	}
+
 	// Deserialize a LogicalIndex
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, LogicalIndex>::value, T>::type Read() {
@@ -463,6 +470,7 @@ protected:
 	virtual int64_t ReadSignedInt64() = 0;
 	virtual uint64_t ReadUnsignedInt64() = 0;
 	virtual hugeint_t ReadHugeInt() = 0;
+	virtual uhugeint_t ReadUhugeInt() = 0;
 	virtual float ReadFloat() = 0;
 	virtual double ReadDouble() = 0;
 	virtual string ReadString() = 0;

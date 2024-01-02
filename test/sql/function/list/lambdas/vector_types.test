@@ -1,5 +1,5 @@
-# name: test/sql/function/list/lambdas/filter_vector_types.test
-# description: Test list_filter function with 'test_vector_types'
+# name: test/sql/function/list/lambdas/vector_types.test
+# description: Test list_filter and list_reduce function with 'test_vector_types'
 # group: [lambdas]
 
 require vector_size 2048
@@ -36,3 +36,16 @@ select [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
 []
 []
 []
+
+
+query I
+select list_reduce(c, (x, y) -> x + y) FROM test_vector_types(NULL::INT[]) t(c) WHERE len(c) > 0;
+----
+-1
+NULL
+-1
+-1
+-1
+NULL
+8
+7

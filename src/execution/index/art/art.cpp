@@ -81,6 +81,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		case PhysicalType::UINT16:
 		case PhysicalType::UINT32:
 		case PhysicalType::UINT64:
+		case PhysicalType::UINT128:
 		case PhysicalType::FLOAT:
 		case PhysicalType::DOUBLE:
 		case PhysicalType::VARCHAR:
@@ -194,6 +195,9 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKe
 	case PhysicalType::UINT64:
 		TemplatedGenerateKeys<uint64_t>(allocator, input.data[0], input.size(), keys);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedGenerateKeys<uhugeint_t>(allocator, input.data[0], input.size(), keys);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedGenerateKeys<float>(allocator, input.data[0], input.size(), keys);
 		break;
@@ -239,6 +243,9 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKe
 			break;
 		case PhysicalType::UINT64:
 			ConcatenateKeys<uint64_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::UINT128:
+			ConcatenateKeys<uhugeint_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::FLOAT:
 			ConcatenateKeys<float>(allocator, input.data[i], input.size(), keys);
@@ -661,6 +668,8 @@ static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &val
 		return ARTKey::CreateARTKey<uint64_t>(allocator, value.type(), value);
 	case PhysicalType::INT128:
 		return ARTKey::CreateARTKey<hugeint_t>(allocator, value.type(), value);
+	case PhysicalType::UINT128:
+		return ARTKey::CreateARTKey<uhugeint_t>(allocator, value.type(), value);
 	case PhysicalType::FLOAT:
 		return ARTKey::CreateARTKey<float>(allocator, value.type(), value);
 	case PhysicalType::DOUBLE:

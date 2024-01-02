@@ -82,6 +82,16 @@ struct CHugeintConverter : public CBaseConverter {
 	}
 };
 
+struct CUhugeintConverter : public CBaseConverter {
+	template <class SRC, class DST>
+	static DST Convert(SRC input) {
+		duckdb_uhugeint result;
+		result.lower = input.lower;
+		result.upper = input.upper;
+		return result;
+	}
+};
+
 struct CIntervalConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
@@ -213,6 +223,10 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	}
 	case LogicalTypeId::HUGEINT: {
 		WriteData<hugeint_t, duckdb_hugeint, CHugeintConverter>(column, collection, column_ids);
+		break;
+	}
+	case LogicalTypeId::UHUGEINT: {
+		WriteData<uhugeint_t, duckdb_uhugeint, CUhugeintConverter>(column, collection, column_ids);
 		break;
 	}
 	case LogicalTypeId::INTERVAL: {

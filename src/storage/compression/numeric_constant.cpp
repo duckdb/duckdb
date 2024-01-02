@@ -128,6 +128,8 @@ CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
 		return ConstantGetFunction<uint64_t>(data_type);
 	case PhysicalType::INT128:
 		return ConstantGetFunction<hugeint_t>(data_type);
+	case PhysicalType::UINT128:
+		return ConstantGetFunction<uhugeint_t>(data_type);
 	case PhysicalType::FLOAT:
 		return ConstantGetFunction<float>(data_type);
 	case PhysicalType::DOUBLE:
@@ -150,6 +152,7 @@ bool ConstantFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return true;

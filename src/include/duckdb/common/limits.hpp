@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types.hpp"
 
 #include <type_traits>
@@ -44,6 +45,23 @@ struct NumericLimits<hugeint_t> {
 	};
 	static constexpr bool IsSigned() {
 		return true;
+	}
+
+	static constexpr idx_t Digits() {
+		return 39;
+	}
+};
+
+template <>
+struct NumericLimits<uhugeint_t> {
+	static constexpr uhugeint_t Minimum() {
+		return {0, 0};
+	};
+	static constexpr uhugeint_t Maximum() {
+		return {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
+	};
+	static constexpr bool IsSigned() {
+		return false;
 	}
 
 	static constexpr idx_t Digits() {
