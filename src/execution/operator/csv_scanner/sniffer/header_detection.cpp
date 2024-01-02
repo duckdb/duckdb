@@ -102,9 +102,8 @@ void CSVSniffer::DetectHeader() {
 	// We can't detect the dialect/type options properly
 	if (!sniffer_state_machine.options.null_padding &&
 	    best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
-		throw InvalidInputException(
-		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
-		    options.file_path);
+		auto error = CSVError::SniffingError(options.file_path);
+		error_handler->Error(error);
 	}
 	for (idx_t col = 0; col < best_header_row.size(); col++) {
 		auto dummy_val = best_header_row[col];

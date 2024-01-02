@@ -301,9 +301,8 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		throw InvalidInputException(
-		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
-		    options.file_path);
+		auto error = CSVError::SniffingError(options.file_path);
+		error_handler->Error(error);
 	}
 	SetNewLine(candidates[0]->GetStateMachine());
 }

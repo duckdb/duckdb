@@ -51,7 +51,8 @@ enum CSVErrorType : uint8_t {
 	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
 	MISSING_COLUMNS = 2,           // If the CSV is missing a column
 	TOO_MANY_COLUMNS = 3,          // If the CSV file has too many columns
-	UNTERMINATED_QUOTES = 4        // If a quote is not terminated
+	UNTERMINATED_QUOTES = 4,        // If a quote is not terminated
+	SNIFFING = 5
 };
 
 class CSVError {
@@ -61,6 +62,8 @@ public:
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(string &column_name, string &cast_error);
+	//! Produces error for when the sniffer couldn't find viable options
+	static CSVError SniffingError(string& file_path);
 
 	string error_message;
 	CSVErrorType type;
@@ -70,13 +73,17 @@ class CSVErrorHandler {
 public:
 	CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(LinesPerBatch &error_info, CSVError &error_message);
+	void Error(LinesPerBatch &error_info, CSVError &csv_error);
+	//! Throws the error
+	void Error(CSVError &csv_error);
 	//! Inserts a finished error info
 	void Insert(LinesPerBatch &error_info);
 
 private:
 	//! Return the 1-indexed line number
 	idx_t GetLine(LinesPerBatch &error_info);
+	//! If we should print the line of an error
+	bool PrintLine(CSVError& error);
 	//! CSV Error Handler Mutex
 	mutex main_mutex;
 	//! Map of <file,batch> -> lines

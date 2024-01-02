@@ -12,13 +12,18 @@ LinesPerBatch::LinesPerBatch(idx_t file_idx_p, idx_t batch_idx_p, idx_t lines_in
 
 CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {};
 
+void CSVErrorHandler::Error(CSVError &csv_error){
+	LinesPerBatch mock;
+	Error(mock,csv_error);
+}
 void CSVErrorHandler::Error(LinesPerBatch &error_info, CSVError &csv_error) {
 	if (ignore_errors) {
 		return;
 	}
 	std::ostringstream error;
-	idx_t error_line = GetLine(error_info);
-	error << "CSV Error on Line: " << error_line << std::endl;
+	if (PrintLine(csv_error)){
+		error << "CSV Error on Line: " << GetLine(error_info) << std::endl;
+	}
 	error << csv_error.error_message;
 	switch (csv_error.type) {
 	case CSVErrorType::CAST_ERROR:
@@ -65,6 +70,23 @@ CSVError CSVError::CastError(string &column_name, string &cast_error) {
 	error << cast_error << std::endl;
 
 	return CSVError(error.str(), CSVErrorType::CAST_ERROR);
+}
+
+CSVError CSVError::SniffingError(string& file_path){
+	std::ostringstream error;
+	// Which column
+	error << "Error when sniffing file \"" << file_path << "\"." << std::endl;
+	error << "CSV options could not be auto-detected. Consider setting parser options manually."  << std::endl;
+	return CSVError(error.str(), CSVErrorType::SNIFFING);
+}
+
+bool CSVErrorHandler::PrintLine(CSVError& error){
+	switch (error.type) {
+	case CSVErrorType::CAST_ERROR:
+		return true;
+	default:
+		 return false;
+	}
 }
 
 idx_t CSVErrorHandler::GetLine(LinesPerBatch &error_info) {
