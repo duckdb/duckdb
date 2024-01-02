@@ -21,6 +21,10 @@ before-test = 'pip install --prefer-binary pandas pytest-timeout mypy "psutil>=5
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'
 
+# For aarch64 we use the manylinux_2_28 image to more easily be able to cross-compile extensions for linux
+manylinux-aarch64-image = "manylinux_2_28"
+manylinux-pypy_aarch64-image = "manylinux_2_28"
+
 # For musllinux we currently don't build extensions yet
 [[tool.cibuildwheel.overrides]]
 select = "*-musllinux*"

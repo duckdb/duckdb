@@ -84,8 +84,7 @@ jobs:
         cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
 
    manylinux-extensions-x64:
-    # Builds extensions for linux_md64_gcc4
-    name: Linux Extensions (gcc4)
+    name: Linux Extensions (linux_amd64_gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     needs: linux-python3-9
