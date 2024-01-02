@@ -104,7 +104,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		}
 		result_data[i] = StringVector::EmptyString(result, list_length);
 		auto dataptr = result_data[i].GetDataWriteable();
-		auto offset = 0;
+		idx_t offset = 0;
 		dataptr[offset++] = '[';
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			auto idx = list.offset + list_idx;

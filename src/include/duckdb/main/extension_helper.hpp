@@ -30,7 +30,7 @@ struct ExtensionAlias {
 
 struct ExtensionInitResult {
 	string filename;
-	string basename;
+	string filebase;
 
 	void *lib_hdl;
 };
@@ -76,7 +76,7 @@ public:
 	static bool IsFullPath(const string &extension);
 
 	//! Lookup a name in an ExtensionEntry list
-	template <size_t N>
+	template <idx_t N>
 	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
 		auto lcase = StringUtil::Lower(name);
 
@@ -89,6 +89,20 @@ public:
 		return "";
 	}
 
+	//! Lookup a name in an extension entry and try to autoload it
+	template <idx_t N>
+	static void TryAutoloadFromEntry(ClientContext &context, const string &entry, const ExtensionEntry (&entries)[N]) {
+		auto &dbconfig = DBConfig::GetConfig(context);
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+		if (dbconfig.options.autoload_known_extensions) {
+			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
+			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+				ExtensionHelper::AutoLoadExtension(context, extension_name);
+			}
+		}
+#endif
+	}
+
 	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
 	//! extension_entries.hpp)
 	static bool CanAutoloadExtension(const string &ext_name);
@@ -98,6 +112,9 @@ public:
 	                                            const string &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
 	                                                const string &extension_name);
+
+	//! For tagged releases we use the tag, else we use the git commit hash
+	static const string GetVersionDirectoryName();
 
 private:
 	static void InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
@@ -109,8 +126,6 @@ private:
 	                                       optional_ptr<const ClientConfig> client_config);
 	static bool TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension, ExtensionInitResult &result,
 	                           string &error, optional_ptr<const ClientConfig> client_config);
-	//! For tagged releases we use the tag, else we use the git commit hash
-	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static bool IsRelease(const string &version_tag);

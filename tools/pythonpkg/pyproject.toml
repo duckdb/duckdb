@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 root = "../.."
-local_scheme = {env = "SETUPTOOLS_SCM_LOCAL_SCHEME", default = "no-local-version"}
+local_scheme = "no-local-version"
 
 ### CI Builwheel configurations ###
 

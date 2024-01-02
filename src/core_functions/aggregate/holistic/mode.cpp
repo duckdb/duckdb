@@ -3,6 +3,7 @@
 // NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
@@ -16,7 +17,9 @@ namespace std {
 template <>
 struct hash<duckdb::interval_t> {
 	inline size_t operator()(const duckdb::interval_t &val) const {
-		return hash<int32_t> {}(val.days) ^ hash<int32_t> {}(val.months) ^ hash<int64_t> {}(val.micros);
+		int64_t months, days, micros;
+		val.Normalize(months, days, micros);
+		return hash<int32_t> {}(days) ^ hash<int32_t> {}(months) ^ hash<int64_t> {}(micros);
 	}
 };
 
@@ -24,6 +27,13 @@ template <>
 struct hash<duckdb::hugeint_t> {
 	inline size_t operator()(const duckdb::hugeint_t &val) const {
 		return hash<int64_t> {}(val.upper) ^ hash<int64_t> {}(val.lower);
+	}
+};
+
+template <>
+struct hash<duckdb::uhugeint_t> {
+	inline size_t operator()(const duckdb::uhugeint_t &val) const {
+		return hash<uint64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
 	}
 };
 
@@ -327,6 +337,8 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<uint64_t, uint64_t>(type);
 	case PhysicalType::INT128:
 		return GetTypedModeFunction<hugeint_t, hugeint_t>(type);
+	case PhysicalType::UINT128:
+		return GetTypedModeFunction<uhugeint_t, uhugeint_t>(type);
 
 	case PhysicalType::FLOAT:
 		return GetTypedModeFunction<float, float>(type);

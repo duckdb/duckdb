@@ -136,6 +136,11 @@ void BinarySerializer::WriteValue(hugeint_t value) {
 	VarIntEncode(value.lower);
 }
 
+void BinarySerializer::WriteValue(uhugeint_t value) {
+	VarIntEncode(value.upper);
+	VarIntEncode(value.lower);
+}
+
 void BinarySerializer::WriteValue(float value) {
 	Write(value);
 }

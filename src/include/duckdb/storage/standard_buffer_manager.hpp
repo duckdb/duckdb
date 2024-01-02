@@ -109,7 +109,7 @@ protected:
 	//! Garbage collect eviction queue
 	void PurgeQueue() final override;
 
-	BufferPool &GetBufferPool() final override;
+	BufferPool &GetBufferPool() const final override;
 
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;
