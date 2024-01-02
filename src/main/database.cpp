@@ -30,7 +30,7 @@ namespace duckdb {
 
 DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
-	cast_functions = make_uniq<CastFunctionSet>();
+	cast_functions = make_uniq<CastFunctionSet>(*this);
 	error_manager = make_uniq<ErrorManager>();
 	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }

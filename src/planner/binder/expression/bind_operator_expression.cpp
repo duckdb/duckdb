@@ -28,7 +28,7 @@ LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<uniqu
 		auto child_return = ExpressionBinder::GetExpressionReturnType(*children[i]);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
-			if (!BoundComparisonExpression::TryBindComparison(max_type, child_return, max_type, op.type)) {
+			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type, op.type)) {
 				throw BinderException(binder.FormatError(
 				    op.query_location,
 				    "Cannot mix values of type %s and %s in %s clause - an explicit cast is required",
@@ -37,7 +37,7 @@ LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<uniqu
 			}
 		} else {
 			// If it's COALESCE operator, don't do extra adjustment.
-			if (!LogicalType::TryGetMaxLogicalType(max_type, child_return, max_type)) {
+			if (!LogicalType::TryGetMaxLogicalType(context, max_type, child_return, max_type)) {
 				throw BinderException(binder.FormatError(
 				    op.query_location,
 				    "Cannot mix values of type %s and %s in COALESCE operator - an explicit cast is required",

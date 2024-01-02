@@ -27,6 +27,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/main/config.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -871,19 +872,6 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	}
 }
 
-struct TryGetTypeOperation {
-	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
-		return LogicalType::TryGetMaxLogicalType(left, right, result);
-	}
-};
-
-struct ForceGetTypeOperation {
-	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
-		result = LogicalType::ForceMaxLogicalType(left, right);
-		return true;
-	}
-};
-
 template <class OP>
 bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// we always prefer aliased types
@@ -902,7 +890,25 @@ bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &ri
 	}
 }
 
-bool LogicalType::TryGetMaxLogicalType(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+struct TryGetTypeOperation {
+	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+		return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
+	}
+};
+
+struct ForceGetTypeOperation {
+	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+		result = LogicalType::ForceMaxLogicalType(left, right);
+		return true;
+	}
+};
+
+bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
+                                       LogicalType &result) {
+	if (DBConfig::GetConfig(context).options.old_implicit_casting) {
+		result = LogicalType::ForceMaxLogicalType(left, right);
+		return true;
+	}
 	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
 }
 
@@ -1012,9 +1018,9 @@ LogicalType LogicalType::ForceMaxLogicalType(const LogicalType &left, const Logi
 	}
 }
 
-LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
+LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right) {
 	LogicalType result;
-	if (!TryGetMaxLogicalType(left, right, result)) {
+	if (!TryGetMaxLogicalType(context, left, right, result)) {
 		throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required", left.ToString(),
 		                              right.ToString());
 	}

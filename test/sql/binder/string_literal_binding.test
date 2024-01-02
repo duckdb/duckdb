@@ -77,6 +77,19 @@ select i IN (1) from (values ('01')) t(i);
 ----
 true
 
+# consistency between IN and equality
+query I
+WITH cte AS (SELECT '01' AS s)
+SELECT 1=s AS in_res FROM cte;
+----
+true
+
+query I
+WITH cte AS (SELECT '01' AS s)
+SELECT 1 IN (s) AS in_res FROM cte;
+----
+true
+
 # but not >
 statement error
 select i>1 from (values ('01')) t(i);

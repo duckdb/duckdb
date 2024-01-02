@@ -912,6 +912,22 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Old Implicit Casting
+//===--------------------------------------------------------------------===//
+void OldImplicitCasting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.old_implicit_casting = input.GetValue<bool>();
+}
+
+void OldImplicitCasting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.old_implicit_casting = DBConfig().options.old_implicit_casting;
+}
+
+Value OldImplicitCasting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.old_implicit_casting);
+}
+
+//===--------------------------------------------------------------------===//
 // Password Setting
 //===--------------------------------------------------------------------===//
 void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

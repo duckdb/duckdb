@@ -46,7 +46,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 			for (idx_t val_idx = 0; val_idx < list.size(); val_idx++) {
 				auto &current_type = result->types[val_idx];
 				auto next_type = ExpressionBinder::GetExpressionReturnType(*list[val_idx]);
-				result->types[val_idx] = LogicalType::MaxLogicalType(current_type, next_type);
+				result->types[val_idx] = LogicalType::MaxLogicalType(context, current_type, next_type);
 			}
 		}
 		for (auto &type : result->types) {

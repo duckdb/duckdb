@@ -100,7 +100,7 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 		LogicalType child_type = LogicalType::SQLNULL;
 		for (const auto &argument : arguments) {
 			auto &next_type = ListType::GetChildType(argument->return_type);
-			if (!LogicalType::TryGetMaxLogicalType(child_type, next_type, child_type)) {
+			if (!LogicalType::TryGetMaxLogicalType(context, child_type, next_type, child_type)) {
 				throw BinderException("Cannot concatenate lists of types %s[] and %s[] - an explicit cast is required",
 				                      child_type.ToString(), next_type.ToString());
 			}

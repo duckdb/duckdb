@@ -100,16 +100,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	const auto &left_type = left.type();
 	const auto &right_type = right.type();
 	if (left_type != right_type) {
-		Value left_copy = left;
-		Value right_copy = right;
-
-		LogicalType comparison_type =
-		    BoundComparisonExpression::BindComparison(left_type, right_type, ExpressionType::COMPARE_GREATERTHAN);
-		if (!left_copy.DefaultTryCastAs(comparison_type) || !right_copy.DefaultTryCastAs(comparison_type)) {
-			return false;
-		}
-		D_ASSERT(left_copy.type() == right_copy.type());
-		return TemplatedBooleanOperation<OP>(left_copy, right_copy);
+		throw InternalException("Cannot perform value comparison of type %s with type %s", left.type().ToString(),
+		                        right.type().ToString());
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:

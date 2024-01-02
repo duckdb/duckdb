@@ -24,7 +24,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	for (auto &check : expr.case_checks) {
 		auto &then_expr = BoundExpression::GetExpression(*check.then_expr);
 		auto then_type = ExpressionBinder::GetExpressionReturnType(*then_expr);
-		if (!LogicalType::TryGetMaxLogicalType(return_type, then_type, return_type)) {
+		if (!LogicalType::TryGetMaxLogicalType(context, return_type, then_type, return_type)) {
 			throw BinderException(binder.FormatError(
 			    expr, StringUtil::Format(
 			              "Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",

@@ -90,7 +90,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		auto &child = BoundExpression::GetExpression(*expr.child);
 		auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
 		LogicalType compare_type;
-		if (!LogicalType::TryGetMaxLogicalType(child_type, bound_node->types[0], compare_type)) {
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, bound_node->types[0], compare_type)) {
 			throw BinderException(binder.FormatError(
 			    expr, StringUtil::Format(
 			              "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",

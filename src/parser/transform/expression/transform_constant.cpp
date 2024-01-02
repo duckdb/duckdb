@@ -114,7 +114,7 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 			// figure out child type
 			LogicalType child_type(LogicalTypeId::SQLNULL);
 			for (auto &child_value : values) {
-				child_type = LogicalType::MaxLogicalType(child_type, child_value.type());
+				child_type = LogicalType::ForceMaxLogicalType(child_type, child_value.type());
 			}
 
 			// finally create the list
