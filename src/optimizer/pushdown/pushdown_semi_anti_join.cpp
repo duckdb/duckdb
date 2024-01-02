@@ -26,8 +26,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 		// both empty: return empty result
 		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
-
-	// filter pushdown happens before join order optimization, so left_anti and left_semi are not possible yet here
+	// TODO: if semi/anti join is created from a intersect/except statement, then we can
+	//  push filters down into both children.
+	// filter pushdown happens before join order optimization, so right_anti and right_semi are not possible yet here
 	if (left_empty) {
 		// left child is empty result
 		switch (join.join_type) {

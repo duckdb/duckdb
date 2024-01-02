@@ -5,7 +5,6 @@
 statement ok
 PRAGMA explain_output = 'OPTIMIZED_ONLY'
 
-mode skip
 
 query II
 explain select 42 intersect select 42;
@@ -41,14 +40,10 @@ explain select * from (select 42 intersect select 42) tbl(i) where i=42;
 ----
 logical_opt	<REGEX>:.*INTERSECT.*
 
-mode unskip
-
 query II
 explain select * from (select 42 intersect select 43) tbl(i) where i=42;
 ----
 logical_opt	<!REGEX>:.*INTERSECT.*
-
-mode skip
 
 query II
 explain select * from (select 43 intersect select 42) tbl(i) where i=42;
