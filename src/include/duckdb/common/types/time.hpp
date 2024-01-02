@@ -38,6 +38,9 @@ public:
 
 	DUCKDB_API static dtime_t FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds = 0);
 
+	//! Normalize a TIME_TZ by adding the offset to the time part and returning the TIME
+	DUCKDB_API static dtime_t NormalizeTimeTZ(dtime_tz_t timetz);
+
 	//! Extract the time from a given timestamp object
 	DUCKDB_API static void Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec,
 	                               int32_t &out_micros);

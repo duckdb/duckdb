@@ -5,6 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -497,12 +498,11 @@ struct DatePart {
 
 		template <typename TA, typename TB, typename TR>
 		static TR Operation(TA interval, TB timetz) {
+			auto time = Time::NormalizeTimeTZ(timetz);
 			date_t date(0);
-			auto offset = timetz.offset() * Interval::MICROS_PER_SEC;
-			timetz = Interval::Add(timetz, {0, 0, -offset}, date);
-			timetz = Interval::Add(timetz, interval, date);
-			offset = interval.micros / Interval::MICROS_PER_SEC;
-			return TR(timetz.time(), offset);
+			time = Interval::Add(time, interval, date);
+			auto offset = interval.micros / Interval::MICROS_PER_SEC;
+			return TR(time, offset);
 		}
 
 		template <typename TA, typename TB, typename TR>

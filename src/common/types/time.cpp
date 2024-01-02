@@ -196,6 +196,11 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 	return true;
 }
 
+dtime_t Time::NormalizeTimeTZ(dtime_tz_t timetz) {
+	date_t date(0);
+	return Interval::Add(timetz.time(), {0, 0, -timetz.offset() * Interval::MICROS_PER_SEC}, date);
+}
+
 string Time::ConversionError(const string &str) {
 	return StringUtil::Format("time field value out of range: \"%s\", "
 	                          "expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])",
