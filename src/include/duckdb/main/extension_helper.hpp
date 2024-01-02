@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include <string>
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
+
+#include <string>
 
 namespace duckdb {
 class DuckDB;
@@ -43,9 +44,9 @@ public:
 
 	//! Install an extension
 	static void InstallExtension(ClientContext &context, const string &extension, bool force_install,
-	                             const string &respository = "");
+	                             const string &repository = "", const string &version = "");
 	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
-	                             const string &respository = "");
+	                             const string &respository = "", const string &version = "");
 	//! Load an extension
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
@@ -62,7 +63,8 @@ public:
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
-	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository);
+	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository,
+	                                   const string &version);
 	//! Return the extension url template with the variables replaced
 	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
 
@@ -146,7 +148,8 @@ public:
 
 private:
 	static void InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-	                                     const string &extension, bool force_install, const string &repository);
+	                                     const string &extension, bool force_install, const string &repository,
+	                                     const string &version);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);

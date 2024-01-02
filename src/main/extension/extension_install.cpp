@@ -1,4 +1,5 @@
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
@@ -129,17 +130,17 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 }
 
 void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
-                                       const string &repository) {
+                                       const string &repository, const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
 #endif
 	string local_path = ExtensionDirectory(config, fs);
-	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository);
+	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository, version);
 }
 
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
-                                       const string &repository) {
+                                       const string &repository, const string &version) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -147,7 +148,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	auto &config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository);
+	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository, version);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -167,8 +168,14 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
-string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_config, const string &repository) {
-	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
+string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_config, const string &repository,
+                                             const string &version) {
+	string versioned_path;
+	if (!version.empty()) {
+		versioned_path = "/${NAME}/" + version + "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
+	} else {
+		versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
+	}
 #ifdef WASM_LOADABLE_EXTENSIONS
 	string default_endpoint = "https://extensions.duckdb.org";
 	versioned_path = versioned_path + ".wasm";
@@ -197,7 +204,8 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 }
 
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
-                                               const string &extension, bool force_install, const string &repository) {
+                                               const string &extension, bool force_install, const string &repository,
+                                               const string &version) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -237,7 +245,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	throw BinderException("Remote extension installation is disabled through configuration");
 #else
 
-	string url_template = ExtensionUrlTemplate(&config, repository);
+	string url_template = ExtensionUrlTemplate(&config, repository, version);
 
 	if (is_http_url) {
 		url_template = extension;
