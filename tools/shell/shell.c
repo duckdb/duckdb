@@ -19953,6 +19953,7 @@ static const char zOptions[] =
 #endif
   "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
+  "   -unredacted          allow printing unredacted secrets\n"
   "   -unsigned            allow loading of unsigned extensions\n"
   "   -version             show DuckDB version\n"
 #ifdef SQLITE_HAVE_ZLIB
@@ -20268,6 +20269,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
       data.openFlags = SQLITE_OPEN_NOFOLLOW;
+    }else if( strcmp(z,"-unredacted")==0 ){
+      data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
     }else if( strcmp(z,"-unsigned")==0 ){
       data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_HAVE_ZLIB)
@@ -20418,6 +20421,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.scanstatsOn = 1;
     }else if( strcmp(z,"-unsigned")==0 ){
       data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
+    }else if( strcmp(z,"-unredacted")==0 ){
+      data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
     }else if( strcmp(z,"-backslash")==0 ){
       /* Undocumented command-line option: -backslash
       ** Causes C-style backslash escapes to be evaluated in SQL statements

@@ -3,6 +3,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 
 #include <functional>
 #include <cmath>
@@ -21,6 +22,11 @@ hash_t Hash(int64_t val) {
 
 template <>
 hash_t Hash(hugeint_t val) {
+	return murmurhash64(val.lower) ^ murmurhash64(val.upper);
+}
+
+template <>
+hash_t Hash(uhugeint_t val) {
 	return murmurhash64(val.lower) ^ murmurhash64(val.upper);
 }
 

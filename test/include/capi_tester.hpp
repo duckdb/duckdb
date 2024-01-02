@@ -195,6 +195,8 @@ template <>
 duckdb_timestamp_struct CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_hugeint CAPIResult::Fetch(idx_t col, idx_t row);
+template <>
+duckdb_uhugeint CAPIResult::Fetch(idx_t col, idx_t row);
 
 class CAPITester {
 public:

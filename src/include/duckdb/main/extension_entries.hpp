@@ -276,8 +276,8 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
     {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},
-    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"r2://", "httpfs"} // , {"azure://", "azure"}
-};                                                                     // END_OF_EXTENSION_FILE_PREFIXES
+    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"gs://", "httpfs"}, {"r2://", "httpfs"} // , {"azure://", "azure"}
+}; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -291,6 +291,18 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
                                                              {".json?", "json"},
                                                              {".ndjson?", ".jsonl?"},
                                                              {".jsonl?", ".ndjson?"}}; // EXTENSION_FILE_CONTAINS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
+    {"s3", "httpfs"}, {"r2", "httpfs"}, {"gcs", "httpfs"}, {"azure", "azure"}}; // EXTENSION_SECRET_TYPES
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
+    {"s3/config", "httpfs"},        {"gcs/config", "httpfs"},           {"r2/config", "httpfs"},
+    {"s3/credential_chain", "aws"}, {"gcs/credential_chain", "aws"},    {"r2/credential_chain", "aws"},
+    {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     //    "azure",

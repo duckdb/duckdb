@@ -484,6 +484,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
 			func = ScalarFunction::NopFunction;
 			break;
 		default:

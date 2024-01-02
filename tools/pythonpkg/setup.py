@@ -293,10 +293,6 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
 else:
     setup_requires = []
 
-setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
-if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
-    setuptools_scm_conf['local_scheme'] = 'no-local-version'
-
 
 # data files need to be formatted as [(directory, [files...]), (directory2, [files...])]
 # no clue why the setup script can't do this automatically, but hey

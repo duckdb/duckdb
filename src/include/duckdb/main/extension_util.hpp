@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/main/secret/secret.hpp"
 
 namespace duckdb {
 struct CreateMacroInfo;
@@ -36,6 +37,10 @@ public:
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunction function);
 	//! Register a new pragma function set - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunctionSet function);
+
+	//! Register a CreateSecretFunction
+	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateSecretFunction function);
+
 	//! Register a new copy function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CopyFunction function);
 	//! Register a new macro function - throw an exception if the function already exists
@@ -51,11 +56,13 @@ public:
 	//! Add a function overload
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, ScalarFunction function);
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, ScalarFunctionSet function);
-
 	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, TableFunctionSet function);
 
 	//! Registers a new type
 	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type);
+
+	//! Registers a new secret type
+	DUCKDB_API static void RegisterSecretType(DatabaseInstance &db, SecretType secret_type);
 
 	//! Registers a cast between two types
 	DUCKDB_API static void RegisterCastFunction(DatabaseInstance &db, const LogicalType &source,

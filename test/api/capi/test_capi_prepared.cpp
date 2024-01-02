@@ -59,6 +59,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_hugeint_to_double(duckdb_value_hugeint(&res, 0, 0)) == 64.0);
 	duckdb_destroy_result(&res);
 
+	duckdb_bind_uhugeint(stmt, 1, duckdb_double_to_uhugeint(64));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_uhugeint_to_double(duckdb_value_uhugeint(&res, 0, 0)) == 64.0);
+	duckdb_destroy_result(&res);
+
 	// Fetching a DECIMAL from a non-DECIMAL result returns 0
 	duckdb_decimal decimal = duckdb_double_to_decimal(634.3453, 7, 4);
 	duckdb_bind_decimal(stmt, 1, decimal);
