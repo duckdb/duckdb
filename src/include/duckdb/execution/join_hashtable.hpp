@@ -240,6 +240,8 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
+	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
+
 	struct ProbeSpillLocalAppendState {
 		//! Local partition and append state (if partitioned)
 		PartitionedColumnData *local_partition;
@@ -253,7 +255,8 @@ public:
 	//! dealt with in just 1 more round of probing, otherwise it is radix partitioned in the same way as the HashTable
 	struct ProbeSpill {
 	public:
-		ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types);
+		ProbeSpill(JoinHashTable &ht, ClientContext &context, const idx_t max_ht_size,
+		           const vector<LogicalType> &probe_types);
 
 	public:
 		//! Create a state for a new thread
@@ -292,14 +295,9 @@ public:
 		vector<unique_ptr<ColumnDataAppendState>> local_spill_append_states;
 	};
 
-	//! Whether we are doing an external hash join
-	bool external;
-	//! The current number of radix bits used to partition
-	idx_t radix_bits;
-	//! The max size of the HT
-	idx_t max_ht_size;
-	//! Total count
-	idx_t total_count;
+	idx_t GetRadixBits() const {
+		return radix_bits;
+	}
 
 	//! Capacity of the pointer table given the ht count
 	//! (minimum of 1024 to prevent collision chance for small HT's)
@@ -311,23 +309,32 @@ public:
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 
-	//! Whether we need to do an external join
-	bool RequiresExternalJoin(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts);
-	//! Computes partition sizes and number of radix bits (called before scheduling partition tasks)
-	bool RequiresPartitioning(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts);
+	//! Get total size of HT if all partitions would be built
+	idx_t GetTotalSize(vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
+	                   idx_t &max_partition_count) const;
+	idx_t GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
+	                   idx_t &max_partition_size, idx_t &max_partition_count) const;
+	//! Get the remaining size of the unbuilt partitions
+	idx_t GetRemainingSize();
+	//! Sets number of radix bits according to the max ht size
+	void SetRepartitionRadixBits(vector<unique_ptr<JoinHashTable>> &local_hts, const idx_t max_ht_size,
+	                             const idx_t max_partition_size, const idx_t max_partition_count);
 	//! Partition this HT
-	void Partition(JoinHashTable &global_ht);
+	void Repartition(JoinHashTable &global_ht);
 
 	//! Delete blocks that belong to the current partitioned HT
 	void Reset();
 	//! Build HT for the next partitioned probe round
-	bool PrepareExternalFinalize();
+	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, TupleDataChunkState &key_state, DataChunk &payload,
 	                                        ProbeSpill &probe_spill, ProbeSpillLocalAppendState &spill_state,
 	                                        DataChunk &spill_chunk);
 
 private:
+	//! The current number of radix bits used to partition
+	idx_t radix_bits;
+
 	//! First and last partition of the current probe round
 	idx_t partition_start;
 	idx_t partition_end;

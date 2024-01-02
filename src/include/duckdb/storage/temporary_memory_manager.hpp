@@ -17,20 +17,16 @@ namespace duckdb {
 class ClientContext;
 class TemporaryMemoryManager;
 
-//! State of the temporary memory of to be managed concurrently with other states
+//! State of the temporary memory to be managed concurrently with other states
 //! As long as this is within scope, it is active
 class TemporaryMemoryState {
 	friend class TemporaryMemoryManager;
 
 private:
-	explicit TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager);
+	TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager, idx_t minimum_reservation);
 
 public:
 	~TemporaryMemoryState();
-
-private:
-	//! Initialize with room for 1024 blocks per state per state. This is 0.25GB for Storage::BLOCK_ALLOC_SIZE = 262144
-	static constexpr const idx_t INITIAL_MEMORY = 1024 * Storage::BLOCK_ALLOC_SIZE;
 
 public:
 	//! Set the remaining size needed for this state, and updates the reservation
@@ -61,6 +57,12 @@ public:
 	TemporaryMemoryManager();
 
 private:
+	//! TemporaryMemoryState is initialized with a minimum reservation guarantee, which is either
+	//! 512 blocks per state per thread, which is 0.125GB per thread for Storage::BLOCK_ALLOC_SIZE = 262144
+	static constexpr const idx_t MINIMUM_RESERVATION_PER_STATE_PER_THREAD = 512 * Storage::BLOCK_ALLOC_SIZE;
+	//! Or 1/16th% of main memory, if that is lower
+	static constexpr const idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16;
+
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
 	static constexpr const double MAXIMUM_MEMORY_LIMIT_RATIO = 0.9;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
@@ -77,10 +79,10 @@ private:
 	void UpdateConfiguration(ClientContext &context);
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)
 	void UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state);
-	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
-	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
 	//! Set the remaining size of a TemporaryMemoryState (must hold the lock)
 	void SetRemainingSize(TemporaryMemoryState &temporary_memory_state, idx_t new_remaining_size);
+	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
+	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
 	//! Unregister a TemporaryMemoryState (called by the destructor of TemporaryMemoryState)
 	void Unregister(TemporaryMemoryState &temporary_memory_state);
 	//! Verify internal counts (must hold the lock)

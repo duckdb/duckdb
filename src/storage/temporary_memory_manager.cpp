@@ -5,8 +5,10 @@
 
 namespace duckdb {
 
-TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p)
-    : temporary_memory_manager(temporary_memory_manager_p), minimum_reservation(INITIAL_MEMORY) {
+TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p,
+                                           idx_t minimum_reservation_p)
+    : temporary_memory_manager(temporary_memory_manager_p), remaining_size(0),
+      minimum_reservation(minimum_reservation_p), reservation(0) {
 }
 
 TemporaryMemoryState::~TemporaryMemoryState() {
@@ -20,10 +22,6 @@ void TemporaryMemoryState::SetRemainingSize(ClientContext &context, idx_t new_re
 }
 
 void TemporaryMemoryState::SetMinimumReservation(idx_t new_minimum_reservation) {
-	if (new_minimum_reservation > reservation) {
-		throw InternalException(
-		    "TemporaryMemoryState::SetMinimumReservation cannot be higher than current reservation");
-	}
 	minimum_reservation = new_minimum_reservation;
 }
 
@@ -51,7 +49,9 @@ unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext 
 	lock_guard<mutex> guard(lock);
 	UpdateConfiguration(context);
 
-	auto result = unique_ptr<TemporaryMemoryState>(new TemporaryMemoryState(*this));
+	auto minimum_reservation = MinValue(num_threads * MINIMUM_RESERVATION_PER_STATE_PER_THREAD,
+	                                    memory_limit / MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR);
+	auto result = unique_ptr<TemporaryMemoryState>(new TemporaryMemoryState(*this, minimum_reservation));
 	SetRemainingSize(*result, result->minimum_reservation);
 	SetReservation(*result, result->minimum_reservation);
 	active_states.insert(*result);
@@ -63,7 +63,10 @@ unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext 
 void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state) {
 	UpdateConfiguration(context);
 
-	if (!has_temporary_directory) {
+	if (context.config.force_external) {
+		// We're forcing external processing. Give it the minimum
+		SetReservation(temporary_memory_state, temporary_memory_state.minimum_reservation);
+	} else if (!has_temporary_directory) {
 		// We cannot offload, so we cannot limit memory usage. Set reservation equal to the remaining size
 		SetReservation(temporary_memory_state, temporary_memory_state.remaining_size);
 	} else if (reservation - temporary_memory_state.reservation >= memory_limit) {
@@ -94,16 +97,18 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 	Verify();
 }
 
-void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation) {
-	this->reservation -= temporary_memory_state.reservation;
-	temporary_memory_state.reservation = new_reservation;
-	this->reservation += temporary_memory_state.reservation;
-}
-
 void TemporaryMemoryManager::SetRemainingSize(TemporaryMemoryState &temporary_memory_state, idx_t new_remaining_size) {
+	D_ASSERT(this->remaining_size >= temporary_memory_state.remaining_size);
 	this->remaining_size -= temporary_memory_state.remaining_size;
 	temporary_memory_state.remaining_size = new_remaining_size;
 	this->remaining_size += temporary_memory_state.remaining_size;
+}
+
+void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation) {
+	D_ASSERT(this->reservation >= temporary_memory_state.reservation);
+	this->reservation -= temporary_memory_state.reservation;
+	temporary_memory_state.reservation = new_reservation;
+	this->reservation += temporary_memory_state.reservation;
 }
 
 void TemporaryMemoryManager::Unregister(TemporaryMemoryState &temporary_memory_state) {

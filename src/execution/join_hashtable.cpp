@@ -18,7 +18,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
                              vector<LogicalType> btypes, JoinType type_p)
     : buffer_manager(buffer_manager_p), conditions(conditions_p), build_types(std::move(btypes)), entry_size(0),
       tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      external(false), radix_bits(4), partition_start(0), partition_end(0) {
+      radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
 
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -872,96 +872,88 @@ idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses
 	return key_count;
 }
 
-bool JoinHashTable::RequiresExternalJoin(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts) {
-	total_count = 0;
-	idx_t data_size = 0;
-	for (auto &ht : local_hts) {
-		auto &local_sink_collection = ht->GetSinkCollection();
-		total_count += local_sink_collection.Count();
-		data_size += local_sink_collection.SizeInBytes();
+idx_t JoinHashTable::GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
+                                  idx_t &max_partition_size, idx_t &max_partition_count) const {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+
+	idx_t total_size = 0;
+	idx_t total_count = 0;
+	idx_t max_partition_ht_size = 0;
+	max_partition_size = 0;
+	max_partition_count = 0;
+	for (idx_t i = 0; i < num_partitions; i++) {
+		total_size += partition_sizes[i];
+		total_count += partition_counts[i];
+
+		auto partition_size = partition_sizes[i] + PointerTableSize(partition_counts[i]);
+		if (partition_size > max_partition_ht_size) {
+			max_partition_ht_size = partition_size;
+			max_partition_size = partition_sizes[i];
+			max_partition_count = partition_counts[i];
+		}
 	}
 
 	if (total_count == 0) {
-		return false;
+		return 0;
 	}
 
-	if (config.force_external) {
-		// Do 1 round per partition if forcing external join to test all code paths
-		const auto r = RadixPartitioning::NumberOfPartitions(radix_bits);
-		auto data_size_per_round = (data_size + r - 1) / r;
-		auto count_per_round = (total_count + r - 1) / r;
-		max_ht_size = data_size_per_round + PointerTableSize(count_per_round);
-		external = true;
-	} else {
-		auto ht_size = data_size + PointerTableSize(total_count);
-		external = ht_size > max_ht_size;
+	return total_size + PointerTableSize(total_count);
+}
+
+idx_t JoinHashTable::GetTotalSize(vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
+                                  idx_t &max_partition_count) const {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	vector<idx_t> partition_sizes(num_partitions, 0);
+	vector<idx_t> partition_counts(num_partitions, 0);
+	for (auto &ht : local_hts) {
+		ht->GetSinkCollection().GetSizesAndCounts(partition_sizes, partition_counts);
 	}
-	return external;
+
+	return GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
+}
+
+idx_t JoinHashTable::GetRemainingSize() {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	auto &partitions = sink_collection->GetPartitions();
+
+	idx_t count = 0;
+	idx_t data_size = 0;
+	for (idx_t partition_idx = partition_end; partition_idx < num_partitions; partition_idx++) {
+		count += partitions[partition_idx]->Count();
+		data_size += partitions[partition_idx]->SizeInBytes();
+	}
+
+	return data_size + PointerTableSize(count);
 }
 
 void JoinHashTable::Unpartition() {
-	for (auto &partition : sink_collection->GetPartitions()) {
-		data_collection->Combine(*partition);
-	}
+	data_collection = sink_collection->GetUnpartitioned();
 }
 
-bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts) {
-	D_ASSERT(total_count != 0);
-	D_ASSERT(external);
+void JoinHashTable::SetRepartitionRadixBits(vector<unique_ptr<JoinHashTable>> &local_hts, const idx_t max_ht_size,
+                                            const idx_t max_partition_size, const idx_t max_partition_count) {
+	D_ASSERT(max_partition_size + PointerTableSize(max_partition_count) > max_ht_size);
 
-	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	vector<idx_t> partition_counts(num_partitions, 0);
-	vector<idx_t> partition_sizes(num_partitions, 0);
-	for (auto &ht : local_hts) {
-		const auto &local_partitions = ht->GetSinkCollection().GetPartitions();
-		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-			auto &local_partition = local_partitions[partition_idx];
-			partition_counts[partition_idx] += local_partition->Count();
-			partition_sizes[partition_idx] += local_partition->SizeInBytes();
+	const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - radix_bits;
+	idx_t added_bits = 1;
+	for (; added_bits < max_added_bits; added_bits++) {
+		double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
+
+		auto new_estimated_size = double(max_partition_size) / partition_multiplier;
+		auto new_estimated_count = double(max_partition_count) / partition_multiplier;
+		auto new_estimated_ht_size = new_estimated_size + PointerTableSize(new_estimated_count);
+
+		if (new_estimated_ht_size <= double(max_ht_size) / 4) {
+			// Aim for an estimated partition size of max_ht_size / 4
+			break;
 		}
 	}
-
-	// Figure out if we can fit all single partitions in memory
-	idx_t max_partition_idx = 0;
-	idx_t max_partition_size = 0;
-	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-		const auto &partition_count = partition_counts[partition_idx];
-		const auto &partition_size = partition_sizes[partition_idx];
-		auto partition_ht_size = partition_size + PointerTableSize(partition_count);
-		if (partition_ht_size > max_partition_size) {
-			max_partition_size = partition_ht_size;
-			max_partition_idx = partition_idx;
-		}
-	}
-
-	if (config.force_external || max_partition_size > max_ht_size) {
-		const auto partition_count = partition_counts[max_partition_idx];
-		const auto partition_size = partition_sizes[max_partition_idx];
-
-		const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - radix_bits;
-		idx_t added_bits = config.force_external ? 2 : 1;
-		for (; added_bits < max_added_bits; added_bits++) {
-			double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
-
-			auto new_estimated_count = double(partition_count) / partition_multiplier;
-			auto new_estimated_size = double(partition_size) / partition_multiplier;
-			auto new_estimated_ht_size = new_estimated_size + PointerTableSize(new_estimated_count);
-
-			if (config.force_external || new_estimated_ht_size <= double(max_ht_size) / 4) {
-				// Aim for an estimated partition size of max_ht_size / 4
-				break;
-			}
-		}
-		radix_bits += added_bits;
-		sink_collection =
-		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
-		return true;
-	} else {
-		return false;
-	}
+	radix_bits += added_bits;
+	sink_collection =
+	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 }
 
-void JoinHashTable::Partition(JoinHashTable &global_ht) {
+void JoinHashTable::Repartition(JoinHashTable &global_ht) {
 	auto new_sink_collection =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, global_ht.radix_bits, layout.ColumnCount() - 1);
 	sink_collection->Repartition(*new_sink_collection);
@@ -974,7 +966,7 @@ void JoinHashTable::Reset() {
 	finalized = false;
 }
 
-bool JoinHashTable::PrepareExternalFinalize() {
+bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	if (finalized) {
 		Reset();
 	}
@@ -1071,12 +1063,13 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, TupleDat
 	return ss;
 }
 
-ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)
+ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const idx_t max_ht_size,
+                       const vector<LogicalType> &probe_types)
     : ht(ht), context(context), probe_types(probe_types) {
 	auto remaining_count = ht.GetSinkCollection().Count();
 	auto remaining_data_size = ht.GetSinkCollection().SizeInBytes();
 	auto remaining_ht_size = remaining_data_size + ht.PointerTableSize(remaining_count);
-	if (remaining_ht_size <= ht.max_ht_size) {
+	if (remaining_ht_size <= max_ht_size) {
 		// No need to partition as we will only have one more probe round
 		partitioned = false;
 	} else {
