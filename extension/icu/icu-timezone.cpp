@@ -16,7 +16,7 @@ static bool ICUIsFinite(const T &t) {
 }
 
 template <>
-static bool ICUIsFinite(const timestamp_t &t) {
+bool ICUIsFinite(const timestamp_t &t) {
 	return Timestamp::IsFinite(t);
 }
 
