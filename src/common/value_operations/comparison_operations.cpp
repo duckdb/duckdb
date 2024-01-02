@@ -100,8 +100,15 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	const auto &left_type = left.type();
 	const auto &right_type = right.type();
 	if (left_type != right_type) {
-		throw InternalException("Cannot perform value comparison of type %s with type %s", left.type().ToString(),
-		                        right.type().ToString());
+		Value left_copy = left;
+		Value right_copy = right;
+
+		auto comparison_type = LogicalType::ForceMaxLogicalType(left_type, right_type);
+		if (!left_copy.DefaultTryCastAs(comparison_type) || !right_copy.DefaultTryCastAs(comparison_type)) {
+			return false;
+		}
+		D_ASSERT(left_copy.type() == right_copy.type());
+		return TemplatedBooleanOperation<OP>(left_copy, right_copy);
 	}
 	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:
