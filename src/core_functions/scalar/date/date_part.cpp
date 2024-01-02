@@ -495,6 +495,26 @@ struct DatePart {
 			return 0;
 		}
 
+		template <typename TA, typename TB, typename TR>
+		static TR Operation(TA interval, TB timetz) {
+			date_t date(0);
+			auto offset = timetz.offset() * Interval::MICROS_PER_SEC;
+			timetz = Interval::Add(timetz, {0, 0, -offset}, date);
+			timetz = Interval::Add(timetz, interval, date);
+			offset = interval.micros / Interval::MICROS_PER_SEC;
+			return TR(timetz.time(), offset);
+		}
+
+		template <typename TA, typename TB, typename TR>
+		static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+			D_ASSERT(input.ColumnCount() == 2);
+			auto &offset = input.data[0];
+			auto &timetz = input.data[1];
+
+			auto func = DatePart::TimezoneOperator::Operation<TA, TB, TR>;
+			BinaryExecutor::Execute<TA, TB, TR>(offset, timetz, result, input.size(), func);
+		}
+
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 			return PropagateSimpleDatePartStatistics<0, 0>(input.child_stats);
@@ -1963,7 +1983,14 @@ ScalarFunctionSet EraFun::GetFunctions() {
 }
 
 ScalarFunctionSet TimezoneFun::GetFunctions() {
-	return GetDatePartFunction<DatePart::TimezoneOperator>();
+	auto operator_set = GetDatePartFunction<DatePart::TimezoneOperator>();
+
+	//	PG also defines timezone(INTERVAL, TIME_TZ) => TIME_TZ
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
+	                   DatePart::TimezoneOperator::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t>));
+
+	return operator_set;
 }
 
 ScalarFunctionSet TimezoneHourFun::GetFunctions() {
