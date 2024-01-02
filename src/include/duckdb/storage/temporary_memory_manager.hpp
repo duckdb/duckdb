@@ -22,13 +22,21 @@ class TemporaryMemoryManager;
 class TemporaryMemoryState {
 	friend class TemporaryMemoryManager;
 
-public:
+private:
 	explicit TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager);
+
+public:
 	~TemporaryMemoryState();
+
+private:
+	//! Initialize with room for 1024 blocks per state per state. This is 0.25GB for Storage::BLOCK_ALLOC_SIZE = 262144
+	static constexpr const idx_t INITIAL_MEMORY = 1024 * Storage::BLOCK_ALLOC_SIZE;
 
 public:
 	//! Set the remaining size needed for this state, and updates the reservation
 	void SetRemainingSize(ClientContext &context, idx_t new_remaining_size);
+	//! Set the minimum reservation for this state (must be lower than current reservation)
+	void SetMinimumReservation(idx_t new_minimum_reservation);
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
 
@@ -36,10 +44,12 @@ private:
 	//! The TemporaryMemoryManager that owns this state
 	TemporaryMemoryManager &temporary_memory_manager;
 
-	//! How much memory this operator has reserved
-	idx_t reservation;
 	//! The remaining size needed if it could fit fully in memory
 	idx_t remaining_size;
+	//! The minimum reservation for this state
+	idx_t minimum_reservation;
+	//! How much memory this operator has reserved
+	idx_t reservation;
 };
 
 //! TemporaryMemoryManager is a one-of class owned by the buffer pool that tries to dynamically assign memory
@@ -51,22 +61,20 @@ public:
 	TemporaryMemoryManager();
 
 private:
-	//! Minimum of 512 blocks per state per thread. This is ~128MB for Storage::BLOCK_SIZE = 262144
-	static constexpr const idx_t MINIMUM_MEMORY_PER_THREAD = 512 * Storage::BLOCK_ALLOC_SIZE;
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
 	static constexpr const double MAXIMUM_MEMORY_LIMIT_RATIO = 0.9;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
-	static constexpr const double MAXIMUM_MEMORY_REMAINING_RATIO = 0.6;
+	static constexpr const double MAXIMUM_FREE_MEMORY_RATIO = 0.6;
 
 public:
+	//! Get the TemporaryMemoryManager
+	static TemporaryMemoryManager &Get(ClientContext &context);
 	//! Register a TemporaryMemoryState
 	unique_ptr<TemporaryMemoryState> Register(ClientContext &context);
 
 private:
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
 	void UpdateConfiguration(ClientContext &context);
-	//! Get the minimum memory per state
-	idx_t MinimumStateMemory() const;
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)
 	void UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state);
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)

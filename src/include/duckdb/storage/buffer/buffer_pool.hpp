@@ -55,7 +55,7 @@ public:
 
 	idx_t GetMaxMemory() const;
 
-	TemporaryMemoryManager &GetConcurrentOperatorMemoryManager();
+	TemporaryMemoryManager &GetTemporaryMemoryManager();
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible

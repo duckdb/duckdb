@@ -112,7 +112,7 @@ protected:
 	void PurgeQueue() final override;
 
 	BufferPool &GetBufferPool() final override;
-	TemporaryMemoryManager &GetConcurrentOperatorMemoryManager() final override;
+	TemporaryMemoryManager &GetTemporaryMemoryManager() final override;
 
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;

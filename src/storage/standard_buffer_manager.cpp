@@ -71,8 +71,8 @@ BufferPool &StandardBufferManager::GetBufferPool() {
 	return buffer_pool;
 }
 
-TemporaryMemoryManager &StandardBufferManager::GetConcurrentOperatorMemoryManager() {
-	return buffer_pool.GetConcurrentOperatorMemoryManager();
+TemporaryMemoryManager &StandardBufferManager::GetTemporaryMemoryManager() {
+	return buffer_pool.GetTemporaryMemoryManager();
 }
 
 idx_t StandardBufferManager::GetUsedMemory() const {

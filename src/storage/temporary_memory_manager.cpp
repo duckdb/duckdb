@@ -6,7 +6,7 @@
 namespace duckdb {
 
 TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p)
-    : temporary_memory_manager(temporary_memory_manager_p), reservation(0), remaining_size(0) {
+    : temporary_memory_manager(temporary_memory_manager_p), minimum_reservation(INITIAL_MEMORY) {
 }
 
 TemporaryMemoryState::~TemporaryMemoryState() {
@@ -17,6 +17,14 @@ void TemporaryMemoryState::SetRemainingSize(ClientContext &context, idx_t new_re
 	lock_guard<mutex> guard(temporary_memory_manager.lock);
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
 	temporary_memory_manager.UpdateState(context, *this);
+}
+
+void TemporaryMemoryState::SetMinimumReservation(idx_t new_minimum_reservation) {
+	if (new_minimum_reservation > reservation) {
+		throw InternalException(
+		    "TemporaryMemoryState::SetMinimumReservation cannot be higher than current reservation");
+	}
+	minimum_reservation = new_minimum_reservation;
 }
 
 idx_t TemporaryMemoryState::GetReservation() const {
@@ -35,18 +43,17 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	num_threads = task_scheduler.NumberOfThreads();
 }
 
-idx_t TemporaryMemoryManager::MinimumStateMemory() const {
-	// TODO this should be tweaked, maybe use the size of 'active_states', or the memory limit to lower this
-	return num_threads * MINIMUM_MEMORY_PER_THREAD;
+TemporaryMemoryManager &TemporaryMemoryManager::Get(ClientContext &context) {
+	return BufferManager::GetBufferManager(context).GetTemporaryMemoryManager();
 }
 
 unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext &context) {
 	lock_guard<mutex> guard(lock);
 	UpdateConfiguration(context);
 
-	auto result = make_uniq<TemporaryMemoryState>(*this);
-	SetReservation(*result, MinimumStateMemory());
-	SetRemainingSize(*result, MinimumStateMemory());
+	auto result = unique_ptr<TemporaryMemoryState>(new TemporaryMemoryState(*this));
+	SetRemainingSize(*result, result->minimum_reservation);
+	SetReservation(*result, result->minimum_reservation);
 	active_states.insert(*result);
 
 	Verify();
@@ -56,21 +63,32 @@ unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext 
 void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state) {
 	UpdateConfiguration(context);
 
-	if (!has_temporary_directory || temporary_memory_state.remaining_size <= MinimumStateMemory()) {
-		// We cannot offload / less than initial_memory remaining. Set reservation equal to the remaining size
+	if (!has_temporary_directory) {
+		// We cannot offload, so we cannot limit memory usage. Set reservation equal to the remaining size
 		SetReservation(temporary_memory_state, temporary_memory_state.remaining_size);
 	} else if (reservation - temporary_memory_state.reservation >= memory_limit) {
 		// We overshot. Set reservation equal to the minimum
-		SetReservation(temporary_memory_state, MinimumStateMemory());
+		SetReservation(temporary_memory_state, temporary_memory_state.minimum_reservation);
 	} else {
-		// Non-trivial case, compute how much of the total remaining data belongs to this state
-		auto ratio_of_remaining = double(temporary_memory_state.remaining_size) / double(remaining_size);
-		// Limit the ratio by taking the minimum of this ratio and the maximum ratio
-		auto ratio_limited = MinValue(ratio_of_remaining, MAXIMUM_MEMORY_REMAINING_RATIO);
-		// Compute how much memory is left (excluding this state's current reservation)
-		auto memory_remaining = memory_limit - (reservation - temporary_memory_state.reservation);
-		// Set the reservation equal to the limited ratio of the remaining memory, or the minimum state memory
-		SetReservation(temporary_memory_state, MaxValue<idx_t>(ratio_limited * memory_remaining, MinimumStateMemory()));
+		// The lower bound for the reservation of this state is its minimum reservation
+		auto &lower_bound = temporary_memory_state.minimum_reservation;
+
+		// The upper bound for the reservation of this state is the minimum of:
+		// 1. Remaining size of the state
+		// 2. MAXIMUM_FREE_MEMORY_RATIO * free memory
+		auto free_memory = memory_limit - (reservation - temporary_memory_state.reservation);
+		auto upper_bound =
+		    MinValue<idx_t>(temporary_memory_state.remaining_size, MAXIMUM_FREE_MEMORY_RATIO * free_memory);
+
+		if (remaining_size > memory_limit) {
+			// We're processing more data than fits in memory, so we must limit memory usage further.
+			// The upper bound for the reservation of this state is now also the minimum of:
+			// 3. The ratio of the remaining size of this state and the total remaining size * memory limit
+			auto ratio_of_remaining = double(temporary_memory_state.remaining_size) / double(remaining_size);
+			upper_bound = MinValue<idx_t>(upper_bound, ratio_of_remaining * memory_limit);
+		}
+
+		SetReservation(temporary_memory_state, MaxValue<idx_t>(lower_bound, upper_bound));
 	}
 
 	Verify();
