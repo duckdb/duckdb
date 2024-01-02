@@ -8,9 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -43,11 +45,11 @@ private:
 	TemporaryMemoryManager &temporary_memory_manager;
 
 	//! The remaining size needed if it could fit fully in memory
-	idx_t remaining_size;
+	atomic<idx_t> remaining_size;
 	//! The minimum reservation for this state
-	idx_t minimum_reservation;
+	atomic<idx_t> minimum_reservation;
 	//! How much memory this operator has reserved
-	idx_t reservation;
+	atomic<idx_t> reservation;
 };
 
 //! TemporaryMemoryManager is a one-of class owned by the buffer pool that tries to dynamically assign memory
