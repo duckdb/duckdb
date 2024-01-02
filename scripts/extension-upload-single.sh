@@ -65,9 +65,9 @@ cat $ext.sign >> $ext.append
 
 # compress extension binary
 if [[ $4 == wasm_* ]]; then
-  gzip < $ext.append > "$ext.compressed"
-else
   brotli < $ext.append > "$ext.compressed"
+else
+  gzip < $ext.append > "$ext.compressed"
 fi
 
 set -e
