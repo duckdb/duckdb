@@ -667,7 +667,7 @@ static string GetPrefix(string url) {
 }
 
 ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
-	string http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url;
+	string http_proto, prefix, host, bucket, key, path, query_param, trimmed_s3_url;
 
 	prefix = GetPrefix(url);
 	auto prefix_end_pos = url.find("//") + 2;
@@ -680,17 +680,10 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		throw IOException("URL needs to contain a bucket name");
 	}
 
-	// See https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
-	if (params.url_style == "path") {
-		path = "/" + bucket;
-	} else {
-		path = "";
-	}
-
 	if (params.s3_url_compatibility_mode) {
 		// In url compatibility mode, we will ignore any special chars, so query param strings are disabled
 		trimmed_s3_url = url;
-		path += url.substr(slash_pos);
+		key += url.substr(slash_pos);
 	} else {
 		// Parse query parameters
 		auto question_pos = url.find_first_of('?');
@@ -702,25 +695,44 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		}
 
 		if (!query_param.empty()) {
-			path += url.substr(slash_pos, question_pos - slash_pos);
+			key += url.substr(slash_pos, question_pos - slash_pos);
 		} else {
-			path += url.substr(slash_pos);
+			key += url.substr(slash_pos);
 		}
 	}
 
-	if (path.empty()) {
+	if (key.empty()) {
 		throw IOException("URL needs to contain key");
 	}
 
-	if (params.url_style == "vhost" || params.url_style == "") {
-		host = bucket + "." + params.endpoint;
+	// Derived host and path based on the endpoint
+	auto sub_path_pos = params.endpoint.find_first_of('/');
+	if (sub_path_pos != string::npos) {
+		// Host header should conform to <host>:<port> so not include the path
+		host = params.endpoint.substr(0, sub_path_pos);
+		path = params.endpoint.substr(sub_path_pos);
 	} else {
 		host = params.endpoint;
+		path = "";
 	}
+
+	// Update host and path according to the url style
+	// See https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html
+	if (params.url_style == "vhost" || params.url_style == "") {
+		host = bucket + "." + host;
+	} else if (params.url_style == "path") {
+		path += "/" + bucket;
+	}
+
+	// Append key (including leading slash) to the path
+	path += key;
+
+	// Remove leading slash from key
+	key = key.substr(1);
 
 	http_proto = params.use_ssl ? "https://" : "http://";
 
-	return {http_proto, prefix, host, bucket, path, query_param, trimmed_s3_url};
+	return {http_proto, prefix, host, bucket, key, path, query_param, trimmed_s3_url};
 }
 
 string S3FileSystem::GetPayloadHash(char *buffer, idx_t buffer_len) {
@@ -1073,14 +1085,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		}
 	} while (!main_continuation_token.empty());
 
-	auto pattern_trimmed = parsed_s3_url.path.substr(1);
-
-	// Trim the bucket prefix for path-style urls
-	if (s3_auth_params.url_style == "path") {
-		pattern_trimmed = pattern_trimmed.substr(parsed_s3_url.bucket.length() + 1);
-	}
-
-	vector<string> pattern_splits = StringUtil::Split(pattern_trimmed, "/");
+	vector<string> pattern_splits = StringUtil::Split(parsed_s3_url.key, "/");
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
 
@@ -1125,19 +1130,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call
-	string req_path;
-	if (s3_auth_params.url_style == "path") {
-		req_path = "/" + parsed_url.bucket + "/";
-	} else {
-		req_path = "/";
-	}
-
-	string prefix = parsed_url.path.substr(1);
-
-	// Trim the bucket prefix for path-style urls
-	if (s3_auth_params.url_style == "path") {
-		prefix = prefix.substr(parsed_url.bucket.length() + 1);
-	}
+	string req_path = parsed_url.path.substr(0, parsed_url.path.length() - parsed_url.key.length());
 
 	string req_params = "";
 	if (!continuation_token.empty()) {
@@ -1145,7 +1138,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		req_params += "&";
 	}
 	req_params += "encoding-type=url&list-type=2";
-	req_params += "&prefix=" + S3FileSystem::UrlEncode(prefix, true);
+	req_params += "&prefix=" + S3FileSystem::UrlEncode(parsed_url.key, true);
 
 	if (use_delimiter) {
 		req_params += "&delimiter=%2F";

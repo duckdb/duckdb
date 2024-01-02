@@ -86,20 +86,6 @@ using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
 //! Common JSON functionality for most JSON functions
 struct JSONCommon {
 public:
-	//! The JSON logical type, registered when the extension is loaded
-	static constexpr auto JSON_TYPE_NAME = "JSON";
-
-	static const LogicalType JSONType() {
-		auto json_type = LogicalType(LogicalTypeId::VARCHAR);
-		json_type.SetAlias(JSON_TYPE_NAME);
-		return json_type;
-	}
-
-	static bool LogicalTypeIsJSON(const LogicalType &type) {
-		return type.id() == LogicalTypeId::VARCHAR && type.HasAlias() && type.GetAlias() == JSON_TYPE_NAME;
-	}
-
-public:
 	//! Read/Write flags
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
 	static constexpr auto READ_STOP_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
