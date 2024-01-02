@@ -53,8 +53,8 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
-	    : context(context_p), finalized(false), scanned_data(false) {
-		temporary_memory_state = TemporaryMemoryManager::Get(context).Register(context);
+	    : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
+	      finalized(false), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
 
 		// for perfect hash join
@@ -73,7 +73,7 @@ public:
 
 public:
 	ClientContext &context;
-	//! Temporary memory state for managing this operators memory usage
+	//! Temporary memory state for managing this operator's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 	//! Global HT used by the join
 	unique_ptr<JoinHashTable> hash_table;

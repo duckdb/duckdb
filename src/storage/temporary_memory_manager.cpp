@@ -21,6 +21,10 @@ void TemporaryMemoryState::SetRemainingSize(ClientContext &context, idx_t new_re
 	temporary_memory_manager.UpdateState(context, *this);
 }
 
+idx_t TemporaryMemoryState::GetRemainingSize() const {
+	return remaining_size;
+}
+
 void TemporaryMemoryState::SetMinimumReservation(idx_t new_minimum_reservation) {
 	minimum_reservation = new_minimum_reservation;
 }

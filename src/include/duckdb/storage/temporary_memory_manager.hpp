@@ -31,6 +31,8 @@ public:
 public:
 	//! Set the remaining size needed for this state, and updates the reservation
 	void SetRemainingSize(ClientContext &context, idx_t new_remaining_size);
+	//! Get the remaining size that was set for this state
+	idx_t GetRemainingSize() const;
 	//! Set the minimum reservation for this state (must be lower than current reservation)
 	void SetMinimumReservation(idx_t new_minimum_reservation);
 	//! Get the reservation of this state
