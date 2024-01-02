@@ -6,7 +6,7 @@ ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine) {
 }
 
-void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
+void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos, bool quoted) {
 	result.current_column_count++;
 }
 
@@ -19,7 +19,7 @@ idx_t &ColumnCountResult::operator[](size_t index) {
 	return column_counts[index];
 }
 
-bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
+bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos, bool quoted) {
 	result.InternalAddRow();
 
 	// This is hacky, should be probably moved somewhere.
@@ -37,6 +37,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos
 
 void ColumnCountResult::Kaput(ColumnCountResult &result) {
 	result.result_position = 0;
+	result.error = true;
 }
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
@@ -75,12 +76,12 @@ void ColumnCountScanner::Process() {
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
-	if (result.result_position == STANDARD_VECTOR_SIZE) {
+	if (result.result_position == STANDARD_VECTOR_SIZE || result.error) {
 		// We are done
 		return;
 	}
 	// We run until we have a full chunk, or we are done scanning
-	while (!FinishedFile() && result.result_position < STANDARD_VECTOR_SIZE) {
+	while (!FinishedFile() && result.result_position < STANDARD_VECTOR_SIZE && !result.error) {
 		if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
 			iterator.pos.buffer_pos = 0;
@@ -88,9 +89,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
 				// This means we reached the end of the file, we must add a last line if there is any to be added
-				if (result.current_column_count > 0) {
-					result.InternalAddRow();
-				}
+				result.InternalAddRow();
 				return;
 			}
 			buffer_handle_ptr = cur_buffer_handle->Ptr();

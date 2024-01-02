@@ -50,10 +50,15 @@ DataChunk &StringValueResult::ToChunk() {
 	return parse_chunk;
 }
 
-void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
+void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos, bool quoted) {
 	D_ASSERT(result.result_position < result.vector_size);
-	result.vector_ptr[result.result_position++] =
-	    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
+	if (quoted) {
+		result.vector_ptr[result.result_position++] =
+		    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 3);
+	} else {
+		result.vector_ptr[result.result_position++] =
+		    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
+	}
 	result.last_position = buffer_pos;
 	if (result.result_position % result.number_of_columns == 0) {
 		// This means this value reached the number of columns in a line. This is fine, if this is the last buffer, and
@@ -62,9 +67,13 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	}
 }
 
-inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
+inline void StringValueResult::AddRowInternal(idx_t buffer_pos, bool quoted) {
 	// We add the value
-	vector_ptr[result_position++] = string_t(buffer_ptr + last_position, buffer_pos - last_position - 1);
+	if (quoted) {
+		vector_ptr[result_position++] = string_t(buffer_ptr + last_position + 1, buffer_pos - last_position - 2);
+	} else {
+		vector_ptr[result_position++] = string_t(buffer_ptr + last_position, buffer_pos - last_position - 1);
+	}
 	last_position = buffer_pos;
 }
 
@@ -79,9 +88,9 @@ void StringValueResult::Print() {
 	}
 }
 
-bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
+bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos, bool quoted) {
 	// We add the value
-	result.AddRowInternal(buffer_pos);
+	result.AddRowInternal(buffer_pos, quoted);
 
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
@@ -245,6 +254,10 @@ void StringValueScanner::Process() {
 	idx_t to_pos;
 	if (iterator.IsSet()) {
 		to_pos = iterator.GetEndPos();
+		// If we are at the last buffer and this would overcome it's size, we adjust it
+		if (cur_buffer_handle->is_last_buffer && to_pos > cur_buffer_handle->actual_size) {
+			to_pos = cur_buffer_handle->actual_size;
+		}
 	} else {
 		to_pos = cur_buffer_handle->actual_size;
 	}
@@ -310,7 +323,11 @@ void StringValueScanner::MoveToNextBuffer() {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (result.last_position < previous_buffer_handle->actual_size) {
-				result.AddRowInternal(previous_buffer_handle->actual_size);
+				if (states.IsCurrentNew()) {
+					result.AddRowInternal(previous_buffer_handle->actual_size, states.IsQuoted());
+				} else {
+					result.AddRowInternal(previous_buffer_handle->actual_size + 1, states.IsQuotedCurrent());
+				}
 			}
 			return;
 		}
@@ -407,7 +424,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
 		MoveToNextBuffer();
-		ProcessExtraRow();
+		if (cur_buffer_handle) {
+			ProcessExtraRow();
+		}
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.

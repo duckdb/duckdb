@@ -42,6 +42,12 @@ struct CSVStates {
 	inline bool IsInvalid() {
 		return current_state == CSVState::INVALID;
 	}
+	inline bool IsQuoted() {
+		return previous_state == CSVState::UNQUOTED || pre_previous_state == CSVState::UNQUOTED;
+	}
+	inline bool IsQuotedCurrent() {
+		return current_state == CSVState::UNQUOTED;
+	}
 	CSVState current_state = CSVState::EMPTY_LINE;
 	CSVState previous_state = CSVState::EMPTY_LINE;
 	CSVState pre_previous_state = CSVState::EMPTY_LINE;

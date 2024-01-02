@@ -23,11 +23,12 @@ public:
 
 	idx_t column_counts[STANDARD_VECTOR_SIZE];
 	idx_t current_column_count = 0;
+	bool error = false;
 
 	//! Adds a Value to the result
-	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos, bool quoted);
 	//! Adds a Row to the result
-	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
+	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos, bool quoted);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(ColumnCountResult &result);
 	inline void InternalAddRow();

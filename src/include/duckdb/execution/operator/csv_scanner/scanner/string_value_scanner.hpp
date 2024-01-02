@@ -43,13 +43,13 @@ public:
 	//! If this line might have too many columns
 	bool maybe_too_many_columns = false;
 	//! Adds a Value to the result
-	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos);
+	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos, bool quoted);
 	//! Adds a Row to the result
-	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos);
+	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos, bool quoted);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(StringValueResult &result);
 
-	inline void AddRowInternal(idx_t buffer_pos);
+	inline void AddRowInternal(idx_t buffer_pos, bool quoted);
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();

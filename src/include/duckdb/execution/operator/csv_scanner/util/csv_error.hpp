@@ -51,7 +51,7 @@ enum CSVErrorType : uint8_t {
 	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
 	MISSING_COLUMNS = 2,           // If the CSV is missing a column
 	TOO_MANY_COLUMNS = 3,          // If the CSV file has too many columns
-	UNTERMINATED_QUOTES = 4,        // If a quote is not terminated
+	UNTERMINATED_QUOTES = 4,       // If a quote is not terminated
 	SNIFFING = 5
 };
 
@@ -63,7 +63,7 @@ public:
 	//! Produces error messages for casting errors
 	static CSVError CastError(string &column_name, string &cast_error);
 	//! Produces error for when the sniffer couldn't find viable options
-	static CSVError SniffingError(string& file_path);
+	static CSVError SniffingError(string &file_path);
 
 	string error_message;
 	CSVErrorType type;
@@ -83,7 +83,7 @@ private:
 	//! Return the 1-indexed line number
 	idx_t GetLine(LinesPerBatch &error_info);
 	//! If we should print the line of an error
-	bool PrintLine(CSVError& error);
+	bool PrintLine(CSVError &error);
 	//! CSV Error Handler Mutex
 	mutex main_mutex;
 	//! Map of <file,batch> -> lines

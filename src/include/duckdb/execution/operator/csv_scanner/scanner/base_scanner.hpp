@@ -84,13 +84,13 @@ public:
 		scanner.state_machine->Transition(scanner.states, current_char);
 		if (scanner.states.NewValue()) {
 			//! Add new value to result
-			T::AddValue(result, buffer_pos);
+			T::AddValue(result, buffer_pos, scanner.states.IsQuoted());
 		} else if (scanner.states.NewRow()) {
 			//! Increment Lines Read
 			scanner.lines_read++;
 			//! Add new row to result
 			//! Check if the result reached a vector size
-			if (T::AddRow(result, buffer_pos)) {
+			if (T::AddRow(result, buffer_pos, scanner.states.IsQuoted())) {
 				return true;
 			}
 		} else if (scanner.states.EmptyLine()) {
