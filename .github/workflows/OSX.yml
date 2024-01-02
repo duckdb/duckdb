@@ -257,15 +257,16 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
+            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
+            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
           else
-            echo "would do: ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
+            echo "would do: ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
           fi
 
       - name: Test loadable extensions
