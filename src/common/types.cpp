@@ -27,11 +27,6 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
 
 #include <cmath>
