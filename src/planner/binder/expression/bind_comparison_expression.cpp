@@ -137,7 +137,8 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 			uint8_t width, scale;
 			auto can_convert = argument_types[i].GetDecimalProperties(width, scale);
 			if (!can_convert) {
-				continue;
+				result_type = res;
+				return true;
 			}
 			max_width = MaxValue<uint8_t>(width, max_width);
 			max_scale = MaxValue<uint8_t>(scale, max_scale);
