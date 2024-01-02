@@ -1,11 +1,16 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -28,6 +33,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
+
 #include <cmath>
 
 namespace duckdb {
@@ -729,6 +735,7 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 			return true;
 		}
 	}
+
 	// for other types - use implicit cast rules to check if we can combine the types
 	auto left_to_right_cost = CastRules::ImplicitCast(left, right);
 	auto right_to_left_cost = CastRules::ImplicitCast(right, left);
@@ -1368,6 +1375,19 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
+}
+
+//===--------------------------------------------------------------------===//
+// JSON Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::JSON() {
+	auto json_type = LogicalType(LogicalTypeId::VARCHAR);
+	json_type.SetAlias(JSON_TYPE_NAME);
+	return json_type;
+}
+
+bool LogicalType::IsJSONType() const {
+	return id() == LogicalTypeId::VARCHAR && HasAlias() && GetAlias() == JSON_TYPE_NAME;
 }
 
 //===--------------------------------------------------------------------===//
