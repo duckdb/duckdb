@@ -23,6 +23,13 @@ public:
 	bool Empty();
 	idx_t result_position = 0;
 
+	//! Adds a Value to the result
+	static inline void SetQuoted(ScannerResult &result);
+	//! Adds a Row to the result
+	static inline void SetEscaped(ScannerResult &result);
+	// Variable to keep information regarding quoted and escaped values
+	bool quoted = false;
+	bool escaped = false;
 protected:
 	CSVStates &states;
 	CSVStateMachine &state_machine;
@@ -84,18 +91,22 @@ public:
 		scanner.state_machine->Transition(scanner.states, current_char);
 		if (scanner.states.NewValue()) {
 			//! Add new value to result
-			T::AddValue(result, buffer_pos, scanner.states.IsQuoted());
+			T::AddValue(result, buffer_pos);
 		} else if (scanner.states.NewRow()) {
 			//! Increment Lines Read
 			scanner.lines_read++;
 			//! Add new row to result
 			//! Check if the result reached a vector size
-			if (T::AddRow(result, buffer_pos, scanner.states.IsQuoted())) {
+			if (T::AddRow(result, buffer_pos)) {
 				return true;
 			}
 		} else if (scanner.states.EmptyLine()) {
 			//! Increment Lines Read
 			scanner.lines_read++;
+		} else if(scanner.states.IsQuoted()){
+			T::SetQuoted(result);
+		} else if(scanner.states.IsEscaped()){
+			T::SetEscaped(result);
 		}
 		//! Still have more to read
 		return false;

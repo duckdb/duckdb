@@ -50,11 +50,24 @@ DataChunk &StringValueResult::ToChunk() {
 	return parse_chunk;
 }
 
-void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos, bool quoted) {
+void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos){
+	result.vector_ptr[result.result_position++] =
+	    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 3);
+	if (result.escaped) {
+		// If it's an escaped value we have to remove all the escapes, this is not really great
+		auto result_str = result.vector_ptr[result.result_position - 1].GetString();
+		result_str.erase(std::remove(result_str.begin(), result_str.end(), result.state_machine.options.GetEscape()[0]), result_str.end());
+		result.vector_ptr[result.result_position - 1] = string_t(result_str);
+	}
+	    result.quoted = false;
+		result.escaped = false;
+}
+
+
+void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	D_ASSERT(result.result_position < result.vector_size);
-	if (quoted) {
-		result.vector_ptr[result.result_position++] =
-		    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 3);
+	if (result.quoted) {
+		StringValueResult::AddQuotedValue(result, buffer_pos);
 	} else {
 		result.vector_ptr[result.result_position++] =
 		    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
@@ -67,10 +80,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	}
 }
 
-inline void StringValueResult::AddRowInternal(idx_t buffer_pos, bool quoted) {
+inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	// We add the value
 	if (quoted) {
-		vector_ptr[result_position++] = string_t(buffer_ptr + last_position + 1, buffer_pos - last_position - 2);
+		StringValueResult::AddQuotedValue(*this, buffer_pos);
 	} else {
 		vector_ptr[result_position++] = string_t(buffer_ptr + last_position, buffer_pos - last_position - 1);
 	}
@@ -88,9 +101,9 @@ void StringValueResult::Print() {
 	}
 }
 
-bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos, bool quoted) {
+bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
 	// We add the value
-	result.AddRowInternal(buffer_pos, quoted);
+	result.AddRowInternal(buffer_pos);
 
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
@@ -174,8 +187,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
 	}
-
-	//	bool conversion_error_ignored = false;
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 
@@ -324,9 +335,9 @@ void StringValueScanner::MoveToNextBuffer() {
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (result.last_position < previous_buffer_handle->actual_size) {
 				if (states.IsCurrentNew()) {
-					result.AddRowInternal(previous_buffer_handle->actual_size, states.IsQuoted());
+					result.AddRowInternal(previous_buffer_handle->actual_size);
 				} else {
-					result.AddRowInternal(previous_buffer_handle->actual_size + 1, states.IsQuotedCurrent());
+					result.AddRowInternal(previous_buffer_handle->actual_size + 1);
 				}
 			}
 			return;

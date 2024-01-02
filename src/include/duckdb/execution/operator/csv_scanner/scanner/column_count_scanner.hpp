@@ -26,9 +26,9 @@ public:
 	bool error = false;
 
 	//! Adds a Value to the result
-	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos, bool quoted);
+	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);
 	//! Adds a Row to the result
-	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos, bool quoted);
+	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(ColumnCountResult &result);
 	inline void InternalAddRow();

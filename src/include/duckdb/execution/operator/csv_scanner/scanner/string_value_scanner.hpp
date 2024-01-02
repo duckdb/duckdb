@@ -42,14 +42,16 @@ public:
 
 	//! If this line might have too many columns
 	bool maybe_too_many_columns = false;
+	//! Specialized code for quoted values, makes sure to remove quotes and escapes
+	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
-	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos, bool quoted);
+	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Row to the result
-	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos, bool quoted);
+	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void Kaput(StringValueResult &result);
 
-	inline void AddRowInternal(idx_t buffer_pos, bool quoted);
+	inline void AddRowInternal(idx_t buffer_pos);
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();

@@ -6,7 +6,7 @@ ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine) {
 }
 
-void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos, bool quoted) {
+void ColumnCountResult::AddValue(ColumnCountResult &result, const idx_t buffer_pos) {
 	result.current_column_count++;
 }
 
@@ -19,7 +19,7 @@ idx_t &ColumnCountResult::operator[](size_t index) {
 	return column_counts[index];
 }
 
-bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos, bool quoted) {
+bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 
 	// This is hacky, should be probably moved somewhere.

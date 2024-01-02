@@ -14,6 +14,13 @@ bool ScannerResult::Empty() {
 	return result_position == 0;
 }
 
+void ScannerResult::SetQuoted(ScannerResult &result){
+	result.quoted = true;
+}
+void ScannerResult::SetEscaped(ScannerResult &result){
+	result.escaped = true;
+}
+
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                          shared_ptr<CSVErrorHandler> error_handler_p, CSVIterator iterator_p)
     : iterator(iterator_p), buffer_manager(buffer_manager_p), state_machine(state_machine_p),

@@ -43,7 +43,10 @@ struct CSVStates {
 		return current_state == CSVState::INVALID;
 	}
 	inline bool IsQuoted() {
-		return previous_state == CSVState::UNQUOTED || pre_previous_state == CSVState::UNQUOTED;
+		return previous_state == CSVState::UNQUOTED;
+	}
+	inline bool IsEscaped() {
+		return previous_state == CSVState::ESCAPE;
 	}
 	inline bool IsQuotedCurrent() {
 		return current_state == CSVState::UNQUOTED;
