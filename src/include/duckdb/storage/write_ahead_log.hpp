@@ -108,6 +108,10 @@ public:
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
+	BufferedFileWriter &GetWriter() {
+		return *writer;
+	}
+
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);
 
