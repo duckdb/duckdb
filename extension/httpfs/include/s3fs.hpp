@@ -58,6 +58,7 @@ struct ParsedS3Url {
 	const string prefix;
 	const string host;
 	const string bucket;
+	const string key;
 	const string path;
 	const string query_param;
 	const string trimmed_s3_url;

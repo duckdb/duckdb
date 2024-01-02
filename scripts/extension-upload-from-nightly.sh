@@ -5,10 +5,10 @@
 # WARNING: don't use this script if you don't know exactly what you're doing. To deploy a binary:
 # - Run the script with ./extension-upload-from-nightly.sh <extension_name> <duckdb_version> (<nightly_commit>)
 # - CHECK the output of the dry run thoroughly
-# - If successful, set the I_KNOW_WHAT_IM_DOING_DEPLOY_FOR_REAL env variable to the correct value
+# - If successful, set the DUCKDB_DEPLOY_SCRIPT_MODE env variable to the correct value
 # - run the script again now deploying for real
 # - check the output
-# - unset the I_KNOW_WHAT_IM_DOING_DEPLOY_FOR_REAL env var
+# - unset the DUCKDB_DEPLOY_SCRIPT_MODE env var
 
 if [ -z "$1" ] || [ -z "$2" ]; then
     echo "Usage: ./extension-upload-from-nightly.sh <extension_name> <duckdb_version> (<nightly_commit>)"
@@ -30,7 +30,7 @@ CLOUDFRONT_DISTRIBUTION_ID=E2Z28NDMI4PVXP
 REAL_RUN="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.gz' --acl public-read"
 DRY_RUN="$REAL_RUN --dryrun"
 
-if [ "$I_KNOW_WHAT_IM_DOING_DEPLOY_FOR_REAL" == "yessir" ]; then
+if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   echo "DEPLOYING"
   echo "> FROM: $FROM_BUCKET"
   echo "> TO  : $TO_BUCKET"
@@ -60,7 +60,7 @@ while IFS= read -r line; do
     fi
 done <<< "$output"
 
-if [ "$I_KNOW_WHAT_IM_DOING_DEPLOY_FOR_REAL" == "yessir" ]; then
+if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   echo "INVALIDATION"
   echo "> Total files: ${#s3_paths[@]}"
   echo "> Domain: $CLOUDFRONT_ORIGINS"

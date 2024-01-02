@@ -209,15 +209,16 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
+        DUCKDB_DEPLOY_SCRIPT_MODE: for_real
       run: |
         cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
           elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
           fi
         fi
 
