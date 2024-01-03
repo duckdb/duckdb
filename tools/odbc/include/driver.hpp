@@ -13,22 +13,34 @@ public:
 	enum ODBCConnStrKey {
 		DATABASE,
 		DSN,
+		UNSIGNED,
+		ACCESS_MODE,
+		CUSTOM_USER_AGENT,
 	};
 
 	const std::map<ODBCConnStrKey, std::string> conn_str_keynames = {
 	    {DATABASE, "database"},
 	    {DSN, "dsn"},
+	    {UNSIGNED, "allow_unsigned_extensions"},
+	    {ACCESS_MODE, "access_mode"},
+	    {CUSTOM_USER_AGENT, "custom_user_agent"},
 	};
 
 	std::map<ODBCConnStrKey, bool> set_keys = {
 	    {DATABASE, false},
 	    {DSN, false},
+	    {UNSIGNED, false},
+	    {ACCESS_MODE, false},
+	    {CUSTOM_USER_AGENT, false},
 	};
 
 	using f = SQLRETURN (Connect::*)(const std::string &);
 	const std::map<ODBCConnStrKey, f> handle_functions = {
 	    {DATABASE, &Connect::HandleDatabase},
 	    {DSN, &Connect::HandleDsn},
+	    {UNSIGNED, &Connect::HandleAllowUnsignedExtensions},
+	    {ACCESS_MODE, &Connect::HandleAccessMode},
+	    {CUSTOM_USER_AGENT, &Connect::HandleCustomUserAgent},
 	};
 
 public:
@@ -59,6 +71,9 @@ public:
 	// handle values
 	SQLRETURN HandleDatabase(const std::string &val);
 	SQLRETURN HandleDsn(const std::string &val);
+	SQLRETURN HandleAllowUnsignedExtensions(const std::string &val);
+	SQLRETURN HandleAccessMode(const std::string &val);
+	SQLRETURN HandleCustomUserAgent(const std::string &val);
 
 private:
 	OdbcHandleDbc *dbc;

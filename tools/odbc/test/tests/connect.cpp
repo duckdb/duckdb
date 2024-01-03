@@ -155,8 +155,8 @@ static void TestIniFile() {
 	out << "[DuckDB]\n";
 	out << "Driver = DuckDB Driver\n";
 	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
-//	out << "access_mode = read_only\n";
-//	out << "allow_unsigned_extensions = true\n";
+	out << "access_mode = read_only\n";
+	out << "allow_unsigned_extensions = true\n";
 	out.close();
 
 	// Connect to the database using the ini file
@@ -167,11 +167,11 @@ static void TestIniFile() {
 	// Check that the database is set
 	CheckDatabase(dbc);
 
-//	// Check that database is read only
-//	CheckConfig(dbc, "access_mode", "read_only");
-//
-//	// Check that allow_unsigned_extensions is set
-//	CheckConfig(dbc, "allow_unsigned_extensions", "true");
+	// Check that database is read only
+	CheckConfig(dbc, "access_mode", "read_only");
+
+	// Check that allow_unsigned_extensions is set
+	CheckConfig(dbc, "allow_unsigned_extensions", "true");
 
 	// Disconnect from the database
 	DISCONNECT_FROM_DATABASE(env, dbc);
@@ -192,11 +192,11 @@ TEST_CASE("Test SQLConnect and SQLDriverConnect", "[odbc]") {
 	DRIVER_CONNECT_TO_DATABASE(env, dbc, "");
 	DISCONNECT_FROM_DATABASE(env, dbc);
 
-//	TestIncorrectParams();
+	TestIncorrectParams();
 
 	TestSettingDatabase();
 
-//	TestSettingConfigs();
+	TestSettingConfigs();
 
 	ConnectWithoutDSN(env, dbc);
 	DISCONNECT_FROM_DATABASE(env, dbc);

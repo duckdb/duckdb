@@ -66,6 +66,7 @@ public:
 	static std::string ConvertSQLCHARToString(SQLCHAR *str);
 	static LPCSTR ConvertStringToLPCSTR(const std::string &str);
 
+	static duckdb::AccessMode ConvertSQLAccessModeToDuckDBAccessMode(SQLUINTEGER sql_access_mode);
 };
 } // namespace duckdb
 #endif

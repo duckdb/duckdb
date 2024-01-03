@@ -229,3 +229,14 @@ std::string OdbcUtils::ConvertSQLCHARToString(SQLCHAR *str) {
 LPCSTR duckdb::OdbcUtils::ConvertStringToLPCSTR(const std::string &str) {
 	return reinterpret_cast<LPCSTR>(const_cast<char *>(str.c_str()));
 }
+
+duckdb::AccessMode duckdb::OdbcUtils::ConvertSQLAccessModeToDuckDBAccessMode(SQLUINTEGER sql_access_mode) {
+	switch (sql_access_mode) {
+	case SQL_MODE_READ_ONLY:
+		return duckdb::AccessMode::READ_ONLY;
+	case SQL_MODE_READ_WRITE:
+		return duckdb::AccessMode::READ_WRITE;
+	}
+	return duckdb::AccessMode::AUTOMATIC;
+}
+

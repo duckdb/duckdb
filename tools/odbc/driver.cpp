@@ -461,6 +461,39 @@ SQLRETURN Connect::HandleDatabase(const string &val) {
 	return SQL_SUCCESS;
 }
 
+SQLRETURN Connect::HandleAllowUnsignedExtensions(const string &val) {
+	if (duckdb::StringUtil::Lower(val) == "true") {
+		config.options.allow_unsigned_extensions = true;
+	}
+	set_keys[UNSIGNED] = true;
+	return SQL_SUCCESS;
+}
+
+SQLRETURN Connect::HandleAccessMode(const string &val) {
+	std::string val_lower = duckdb::StringUtil::Lower(val);
+	if (val_lower == "read_only") {
+		dbc->sql_attr_access_mode = SQL_MODE_READ_ONLY;
+	} else if (val_lower == "read_write") {
+		dbc->sql_attr_access_mode = SQL_MODE_READ_WRITE;
+	} else {
+		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS_WITH_INFO, "SQLDriverConnect",
+		                                   "Invalid access mode: '" + val +
+		                                       "'.  Accepted values are 'READ_ONLY' and 'READ_WRITE'",
+		                                   SQLStateType::ST_01S09, "");
+	}
+	config.options.access_mode = OdbcUtils::ConvertSQLAccessModeToDuckDBAccessMode(dbc->sql_attr_access_mode);
+	set_keys[ACCESS_MODE] = true;
+	return SQL_SUCCESS;
+}
+
+SQLRETURN Connect::HandleCustomUserAgent(const string &val) {
+	if (!val.empty()) {
+		config.options.custom_user_agent = val;
+	}
+	set_keys[CUSTOM_USER_AGENT] = true;
+	return SQL_SUCCESS;
+}
+
 SQLRETURN Connect::SetConnection() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
 	ReadFromIniFile();

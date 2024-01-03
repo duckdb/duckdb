@@ -256,7 +256,6 @@ std::string GetTesterDirectory() {
 }
 
 std::string GetHomeDirectory() {
-	std::cerr << "In GetHomeDirectory" << std::endl;
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	return fs->GetHomeDirectory();
 }
