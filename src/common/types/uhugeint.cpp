@@ -656,12 +656,12 @@ uhugeint_t &uhugeint_t::operator*=(const uhugeint_t &rhs) {
 }
 
 uhugeint_t &uhugeint_t::operator/=(const uhugeint_t &rhs) {
-	*this = Uhugeint::Divide(*this, rhs);
+	*this = Uhugeint::Divide<false>(*this, rhs);
 	return *this;
 }
 
 uhugeint_t &uhugeint_t::operator%=(const uhugeint_t &rhs) {
-	*this = Uhugeint::Modulo(*this, rhs);
+	*this = Uhugeint::Modulo<false>(*this, rhs);
 	return *this;
 }
 

@@ -899,11 +899,11 @@ hugeint_t &hugeint_t::operator*=(const hugeint_t &rhs) {
 	return *this;
 }
 hugeint_t &hugeint_t::operator/=(const hugeint_t &rhs) {
-	*this = Hugeint::Divide(*this, rhs);
+	*this = Hugeint::Divide<false>(*this, rhs);
 	return *this;
 }
 hugeint_t &hugeint_t::operator%=(const hugeint_t &rhs) {
-	*this = Hugeint::Modulo(*this, rhs);
+	*this = Hugeint::Modulo<false>(*this, rhs);
 	return *this;
 }
 hugeint_t &hugeint_t::operator>>=(const hugeint_t &rhs) {
