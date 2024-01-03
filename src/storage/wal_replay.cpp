@@ -25,40 +25,30 @@
 
 namespace duckdb {
 
-//===--------------------------------------------------------------------===//
-// Deserializer
-//===--------------------------------------------------------------------===//
-//
-// class ChecksumWriter : public WriteStream {
-// public:
-//    ChecksumWriter(WriteAheadLog &wal) : wal(wal), stream(wal.GetWriter()) {
-//    }
-//
-//    void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
-//        if (wal.skip_writing) {
-//            return;
-//        }
-//        // FIXME buffer data
-//        stream.WriteData(buffer, write_size);
-//    }
-//
-//    void Flush() {
-//        if (wal.skip_writing) {
-//            return;
-//        }
-//        // FIXME compute checkpoint and write to underlying stream
-//    }
-//
-// private:
-//    WriteAheadLog &wal;
-//    WriteStream &stream;
-//};
-
 class WriteAheadLogDeserializer {
 public:
-	WriteAheadLogDeserializer(ReplayState &state_p, ReadStream &stream_p, bool deserialize_only = false)
-	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), stream(stream_p),
-	      deserializer(stream_p), deserialize_only(deserialize_only) {
+	WriteAheadLogDeserializer(ReplayState &state_p, unique_ptr<data_t[]> data_p, idx_t size,
+	                          bool deserialize_only = false)
+	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(std::move(data_p)),
+	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only) {
+	}
+
+	static WriteAheadLogDeserializer Open(ReplayState &state_p, ReadStream &stream, bool deserialize_only = false) {
+		// read the checksum and size
+		auto size = stream.Read<uint64_t>();
+		auto stored_checksum = stream.Read<uint64_t>();
+
+		// allocate a buffer and read data into the buffer
+		auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+		stream.ReadData(buffer.get(), size);
+
+		// compute and verify the checksum
+		auto computed_checksum = Checksum(buffer.get(), size);
+		if (stored_checksum != computed_checksum) {
+			throw IOException("Corrupt WAL file: computed checksum %llu does not match stored checksum %llu",
+			                  computed_checksum, stored_checksum);
+		}
+		return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
 	}
 
 	bool ReplayEntry() {
@@ -117,7 +107,8 @@ private:
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
-	ReadStream &stream;
+	unique_ptr<data_t[]> data;
+	MemoryStream stream;
 	BinaryDeserializer deserializer;
 	bool deserialize_only;
 };
@@ -141,7 +132,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	try {
 		while (true) {
 			// read the current entry (deserialize only)
-			WriteAheadLogDeserializer deserializer(checkpoint_state, *initial_source, true);
+			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, *initial_source, true);
 			if (deserializer.ReplayEntry()) {
 				// check if the file is exhausted
 				if (initial_source->Finished()) {
@@ -182,7 +173,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	try {
 		while (true) {
 			// read the current entry
-			WriteAheadLogDeserializer deserializer(checkpoint_state, reader);
+			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader);
 			if (deserializer.ReplayEntry()) {
 				con.Commit();
 				// check if the file is exhausted

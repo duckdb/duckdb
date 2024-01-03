@@ -12,6 +12,8 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/common/checksum.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -61,20 +63,31 @@ public:
 		if (wal.skip_writing) {
 			return;
 		}
-		// FIXME buffer data
-		stream.WriteData(buffer, write_size);
+		// buffer data into the memory stream
+		memory_stream.WriteData(buffer, write_size);
 	}
 
 	void Flush() {
 		if (wal.skip_writing) {
 			return;
 		}
-		// FIXME compute checkpoint and write to underlying stream
+		auto data = memory_stream.GetData();
+		auto size = memory_stream.GetPosition();
+		// compute the checksum over the entry
+		auto checksum = Checksum(data, size);
+		// write the checksum and the length of the entry
+		stream.Write<uint64_t>(size);
+		stream.Write<uint64_t>(checksum);
+		// write data to the underlying stream
+		stream.WriteData(memory_stream.GetData(), memory_stream.GetPosition());
+		// rewind the buffer
+		memory_stream.Rewind();
 	}
 
 private:
 	WriteAheadLog &wal;
 	WriteStream &stream;
+	MemoryStream memory_stream;
 };
 
 class WriteAheadLogSerializer {
