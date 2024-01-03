@@ -212,10 +212,10 @@ void Executor::ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipel
 void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 #ifdef DEBUG
 	const idx_t count = event_data.events.size();
-	vector<Event *> vertices;
+	vector<reference<Event>> vertices;
 	vertices.reserve(count);
 	for (const auto &event : event_data.events) {
-		vertices.push_back(event.get());
+		vertices.push_back(*event);
 	}
 	vector<bool> visited(count, false);
 	vector<bool> recursion_stack(count, false);
@@ -225,14 +225,14 @@ void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 #endif
 }
 
-void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Event *> &vertices, vector<bool> &visited,
-                                             vector<bool> &recursion_stack) {
+void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<reference<Event>> &vertices,
+                                             vector<bool> &visited, vector<bool> &recursion_stack) {
 	D_ASSERT(!recursion_stack[vertex]); // this vertex is in the recursion stack: circular dependency!
 	if (visited[vertex]) {
 		return; // early out: we already visited this vertex
 	}
 
-	auto &parents = vertices[vertex]->GetParentsVerification();
+	auto &parents = vertices[vertex].get().GetParentsVerification();
 	if (parents.empty()) {
 		return; // early out: outgoing edges
 	}
@@ -243,7 +243,7 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Ev
 	for (auto parent : parents) {
 		idx_t i;
 		for (i = 0; i < count; i++) {
-			if (vertices[i] == parent) {
+			if (&vertices[i].get() == &parent.get()) {
 				adjacent.push_back(i);
 				break;
 			}
