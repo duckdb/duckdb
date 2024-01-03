@@ -255,8 +255,7 @@ public:
 	//! dealt with in just 1 more round of probing, otherwise it is radix partitioned in the same way as the HashTable
 	struct ProbeSpill {
 	public:
-		ProbeSpill(JoinHashTable &ht, ClientContext &context, const idx_t max_ht_size,
-		           const vector<LogicalType> &probe_types);
+		ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types);
 
 	public:
 		//! Create a state for a new thread
@@ -277,22 +276,18 @@ public:
 		mutex lock;
 		ClientContext &context;
 
-		//! Whether the probe data is partitioned
-		bool partitioned;
 		//! The types of the probe DataChunks
 		const vector<LogicalType> &probe_types;
 		//! The column ids
 		vector<column_t> column_ids;
 
-		//! The partitioned probe data (if partitioned) and append states
+		//! The partitioned probe data and append states
 		unique_ptr<PartitionedColumnData> global_partitions;
 		vector<unique_ptr<PartitionedColumnData>> local_partitions;
 		vector<unique_ptr<PartitionedColumnDataAppendState>> local_partition_append_states;
 
-		//! The probe data (if not partitioned) and append states
+		//! The active probe data
 		unique_ptr<ColumnDataCollection> global_spill_collection;
-		vector<unique_ptr<ColumnDataCollection>> local_spill_collections;
-		vector<unique_ptr<ColumnDataAppendState>> local_spill_append_states;
 	};
 
 	idx_t GetRadixBits() const {
