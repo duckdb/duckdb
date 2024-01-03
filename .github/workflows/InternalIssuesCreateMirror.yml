@@ -14,12 +14,12 @@ jobs:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
     runs-on: ubuntu-latest
     steps:
-      - name: Remove needs triage / under review if reproduced
+      - name: Remove 'needs triage' / 'under review' if 'reproduced'
         if: github.event.label.name == 'reproduced'
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "under review"
 
-      - name: Remove needs triage / reproduced if under review
+      - name: Remove 'needs triage' / 'reproduced' if 'under review'
         if: github.event.label.name == 'under review'
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "reproduced"
