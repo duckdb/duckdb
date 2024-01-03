@@ -67,7 +67,7 @@ public:
 		auto file_size = stream.FileSize();
 
 		if (offset + size > file_size) {
-			throw IOException("Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
+			throw SerializationException("Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
 			                  "(found entry with size %llu bytes, file size %llu bytes)",
 			                  offset, size, file_size);
 		}
@@ -79,7 +79,7 @@ public:
 		// compute and verify the checksum
 		auto computed_checksum = Checksum(buffer.get(), size);
 		if (stored_checksum != computed_checksum) {
-			throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+			throw SerializationException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
 			                  "stored checksum %llu",
 			                  offset, computed_checksum, stored_checksum);
 		}
