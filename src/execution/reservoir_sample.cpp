@@ -1,4 +1,5 @@
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 
 namespace duckdb {
