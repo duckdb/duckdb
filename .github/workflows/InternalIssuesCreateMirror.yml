@@ -10,6 +10,14 @@ env:
   PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
 
 jobs:
+  handle_pr_submitted_label:
+    if: github.event.label.name == 'PR submitted'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove 'needs triage' label
+        run: |
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
+
   create_or_label_issue:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
     runs-on: ubuntu-latest
@@ -23,11 +31,6 @@ jobs:
         if: github.event.label.name == 'under review'
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "reproduced"
-
-      - name: Remove 'needs triage' if 'PR submitted'
-        if: github.event.label.name == 'PR submitted'
-        run: |
-          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
 
       - name: Get mirror issue number
         run: |
