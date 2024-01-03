@@ -7,7 +7,7 @@ try:
     import pyarrow as pa
 
     can_run = True
-except:
+except ImportError:
     can_run = False
 from conftest import NumpyPandas, ArrowPandas
 
