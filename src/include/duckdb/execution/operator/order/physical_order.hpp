@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/bound_query_node.hpp"

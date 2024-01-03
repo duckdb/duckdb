@@ -5,7 +5,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
