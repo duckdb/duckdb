@@ -101,14 +101,8 @@ private:
 	//! Function used to move from one buffer to the other, if necessary
 	void MoveToNextBuffer();
 
-	//! Skips a block of empty lines
-	void SkipEmptyLines();
-
 	//! Skips Notes, notes are dirty lines on top of the file, before the actual data
 	void SkipCSVRows();
-
-	//! Skips the header (i.e., the first line of the file)
-	void SkipHeader();
 
 	void SkipUntilNewLine();
 

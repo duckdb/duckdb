@@ -74,6 +74,10 @@ public:
 		return lines_read;
 	}
 
+	idx_t GetIteratorPosition() {
+		return iterator.pos.buffer_pos;
+	}
+
 	MultiFileReaderData reader_data;
 	string file_path;
 	vector<string> names;

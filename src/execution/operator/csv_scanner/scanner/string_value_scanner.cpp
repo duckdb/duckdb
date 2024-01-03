@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
-
 #include "duckdb/execution/operator/csv_scanner/util/csv_casting.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/skip_scanner.hpp"
 
 namespace duckdb {
 
@@ -264,7 +264,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 void StringValueScanner::Initialize() {
 	states.Initialize(CSVState::EMPTY_LINE);
-	if (result.result_size != 1 && iterator.IsSet()) {
+	if (result.result_size != 1) {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
@@ -359,23 +359,22 @@ void StringValueScanner::MoveToNextBuffer() {
 	}
 }
 
-void StringValueScanner::SkipEmptyLines() {
-}
-
 void StringValueScanner::SkipCSVRows() {
-	auto skip_errors = make_shared<CSVErrorHandler>(true);
-	StringValueScanner row_skipper(buffer_manager, state_machine, skip_errors, iterator,
-	                               state_machine->dialect_options.skip_rows.GetValue());
+	idx_t rows_to_skip =
+	    state_machine->dialect_options.skip_rows.GetValue() + state_machine->dialect_options.header.GetValue();
+	if (rows_to_skip == 0) {
+		return;
+	}
+	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
-	iterator.pos.buffer_pos = row_skipper.iterator.pos.buffer_pos;
-	lines_read += row_skipper.GetLinesRead();
-}
+	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
+	//! FIXME: This will get borked if we skip more than one full boundary, we probably need to do the skipping before
+	//! parallelizing
+	if (iterator.pos.buffer_pos >= iterator.GetEndPos()) {
+		throw InvalidInputException("We only support skipping lines up to the first 8 Mb of the file");
+	}
 
-void StringValueScanner::SkipHeader() {
-	StringValueScanner head_skipper(buffer_manager, state_machine, error_handler, iterator, 1);
-	head_skipper.ParseChunk();
-	iterator.pos.buffer_pos = head_skipper.iterator.pos.buffer_pos;
-	lines_read += head_skipper.GetLinesRead();
+	lines_read += row_skipper.GetLinesRead();
 }
 
 void StringValueScanner::SkipUntilNewLine() {
@@ -404,14 +403,8 @@ void StringValueScanner::SetStart() {
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
 		SkipCSVRows();
-		SkipEmptyLines();
-		if (state_machine->options.GetHeader()) {
-			SkipHeader();
-		}
-		SkipEmptyLines();
 		return;
 	}
-
 	// We have to look for a new line that fits our schema
 	while (!FinishedFile()) {
 		// 1. We walk until the next new line
