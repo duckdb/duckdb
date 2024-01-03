@@ -48,7 +48,6 @@ jobs:
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
 
     steps:
@@ -62,7 +61,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: pip install cibuildwheel twine
+      run: pip install cibuildwheel twine build
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -74,7 +73,7 @@ jobs:
       shell: bash
       working-directory: tools/pythonpkg
       run: |
-        python setup.py sdist
+        pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
     - name: Build
       shell: bash
@@ -116,8 +115,8 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1  }}
+        run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1  }}
         treat_warn_as_error: 0
         ninja: 1
 
@@ -152,7 +151,6 @@ jobs:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
 
@@ -172,7 +170,7 @@ jobs:
     - name: Install
       shell: bash
       run: |
-        pip install cibuildwheel twine
+        pip install cibuildwheel twine build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
@@ -196,7 +194,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        python setup.py sdist
+        pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         ls duckdb_tarball
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
@@ -230,7 +228,6 @@ jobs:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
 
@@ -245,7 +242,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install cibuildwheel twine
+        run: pip install cibuildwheel twine build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -257,7 +254,7 @@ jobs:
         shell: bash
         run: |
           cd tools/pythonpkg
-          python setup.py sdist
+          pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
@@ -297,7 +294,6 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
         TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
@@ -313,7 +309,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install cibuildwheel twine
+        run: pip install cibuildwheel twine build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -325,7 +321,7 @@ jobs:
         shell: bash
         run: |
           cd tools/pythonpkg
-          python setup.py sdist
+          pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030

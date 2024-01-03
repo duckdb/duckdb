@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -90,6 +90,17 @@ final class LogicalTypeTests: XCTestCase {
       validate: {
         XCTAssertEqual($0.dataType, .hugeint)
         XCTAssertEqual($0.underlyingDataType, .hugeint)
+      }
+    )
+  }
+
+  func test_uhugeint() throws {
+    try logicalTypeTest(
+      dataType: "UHUGEINT",
+      cast: { $0.cast(to: UIntHuge.self) },
+      validate: {
+        XCTAssertEqual($0.dataType, .uhugeint)
+        XCTAssertEqual($0.underlyingDataType, .uhugeint)
       }
     )
   }

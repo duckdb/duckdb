@@ -7,6 +7,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -159,6 +160,9 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		break;
 	case PhysicalType::INT128:
 		TemplatedCopy<hugeint_t>(*source, *sel, target, source_offset, target_offset, copy_count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedCopy<uhugeint_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedCopy<float>(*source, *sel, target, source_offset, target_offset, copy_count);

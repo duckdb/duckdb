@@ -74,7 +74,8 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
 		if (!TypeIsInteger(join_stat->GetType().InternalType()) ||
-		    join_stat->GetType().InternalType() == PhysicalType::INT128) {
+		    join_stat->GetType().InternalType() == PhysicalType::INT128 ||
+		    join_stat->GetType().InternalType() == PhysicalType::UINT128) {
 			// perfect join not possible for non-integral types or hugeint
 			return;
 		}

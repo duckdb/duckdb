@@ -255,6 +255,8 @@ static idx_t FindRangeBound(const WindowInputColumn &over, const idx_t order_beg
 		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INT128:
 		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+	case PhysicalType::UINT128:
+		return FindTypedRangeBound<uhugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::FLOAT:
 		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::DOUBLE:

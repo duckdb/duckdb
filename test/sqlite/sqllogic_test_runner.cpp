@@ -15,6 +15,7 @@ namespace duckdb {
 
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
+	config->options.allow_unredacted_secrets = true;
 
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (!env_var) {
@@ -181,6 +182,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("usmallint");
 		result.push_back("uinteger");
 		result.push_back("ubigint");
+		result.push_back("uhugeint");
 		collection = true;
 	}
 	if (is_numeric) {

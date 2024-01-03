@@ -9,6 +9,7 @@ add_library_unity(
   list_distance.cpp
   list_cosine_similarity.cpp
   list_inner_product.cpp
+  list_reduce.cpp
   list_transform.cpp
   list_value.cpp
   range.cpp)

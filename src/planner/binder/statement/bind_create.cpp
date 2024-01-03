@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -643,6 +645,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
 		}
+		break;
+	}
+	case CatalogType::SECRET_ENTRY: {
+		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
+		properties.return_type = StatementReturnType::QUERY_RESULT;
+		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
 		break;
 	}
 	default:
