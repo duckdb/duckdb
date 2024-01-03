@@ -50,7 +50,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<Logi
 			break;
 		}
 	}
-	return std::move(op);
+	return op;
 }
 
 } // namespace duckdb
