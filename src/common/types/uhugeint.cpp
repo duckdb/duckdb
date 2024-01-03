@@ -254,8 +254,12 @@ static uint8_t Bits(uhugeint_t x) {
 	return out;
 }
 
-// No division by zero check
 uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder) {
+	if (rhs == 0) {
+		remainder = lhs;
+		return uhugeint_t(0);
+	}
+
 	remainder = uhugeint_t(0);
 	if (rhs == uhugeint_t(1)) {
 		return lhs;
@@ -285,9 +289,6 @@ uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainde
 
 template <>
 uhugeint_t Uhugeint::Divide<false>(uhugeint_t lhs, uhugeint_t rhs) {
-	if (rhs == 0) {
-		return uhugeint_t(0);
-	}
 	uhugeint_t remainder;
 	return Uhugeint::DivMod(lhs, rhs, remainder);
 }

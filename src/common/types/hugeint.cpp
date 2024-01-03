@@ -401,8 +401,13 @@ static hugeint_t DivModMinimum(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainde
 	return result;
 }
 
-// No overflow checks or division by zero checks done
+// No overflow checks
 hugeint_t Hugeint::DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
+	if (rhs == 0) {
+		remainder = lhs;
+		return hugeint_t(0);
+	}
+
 	// Check if one of the sides is hugeint_t minimum, as that can't be negated.
 	if (lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum()) {
 		return DivModMinimum(lhs, rhs, remainder);
@@ -469,9 +474,6 @@ bool Hugeint::TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint
 
 template <>
 hugeint_t Hugeint::Divide<false>(hugeint_t lhs, hugeint_t rhs) {
-	if (rhs == 0) {
-		return hugeint_t(0);
-	}
 	hugeint_t remainder;
 	return Hugeint::DivMod(lhs, rhs, remainder);
 }
