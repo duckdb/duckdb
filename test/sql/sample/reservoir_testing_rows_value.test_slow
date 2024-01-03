@@ -1,4 +1,4 @@
-# name: test/sql/sample/reservoir_testing_rows_value.test
+# name: test/sql/sample/reservoir_testing_rows_value.test_slow
 # description: Test SAMPLE keyword
 # group: [sample]
 

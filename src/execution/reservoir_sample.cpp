@@ -4,8 +4,7 @@
 namespace duckdb {
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
-    : BlockingSample(seed), allocator(allocator), sample_count(sample_count),
-      reservoir_initialized(false) {
+    : BlockingSample(seed), allocator(allocator), sample_count(sample_count), reservoir_initialized(false) {
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
@@ -18,13 +17,18 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	// Output: A reservoir R with a size m
 	// 1: The first m items of V are inserted into R
 	// first we need to check if the reservoir already has "m" elements
-	if (reservoir_chunk->size() < sample_count) {
+	if (!reservoir_chunk || reservoir_chunk->size() < sample_count) {
 		if (FillReservoir(input) == 0) {
 			// entire chunk was consumed by reservoir
 			return;
 		}
 	}
+	D_ASSERT(reservoir_chunk);
 	D_ASSERT(reservoir_chunk->size() == sample_count);
+	// Initialize the weights if they have not been already
+	if (base_reservoir_sample.reservoir_weights.empty()) {
+		base_reservoir_sample.InitializeReservoir(reservoir_chunk->size(), sample_count);
+	}
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
@@ -45,7 +49,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
-	if (reservoir_chunk && reservoir_chunk->size() == 0) {
+	if (!reservoir_chunk || reservoir_chunk->size() == 0) {
 		return nullptr;
 	}
 	auto collected_sample_count = reservoir_chunk->size();
@@ -67,7 +71,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		reservoir_chunk->SetCardinality(samples_remaining);
 		return ret;
 	}
-	reservoir_chunk->SetCardinality(0);
 	return std::move(reservoir_chunk);
 }
 
@@ -94,10 +97,10 @@ void ReservoirSample::InitializeReservoir(DataChunk &input) {
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	idx_t chunk_count = input.size();
 	input.Flatten();
-	auto num_added_samples = reservoir_chunk->size();
+	auto num_added_samples = reservoir_chunk ? reservoir_chunk->size() : 0;
 	D_ASSERT(num_added_samples <= sample_count);
 
-	// we have not: append to the reservoir
+	// required count is what we still need to add to the reservoir
 	idx_t required_count;
 	if (num_added_samples + chunk_count >= sample_count) {
 		// have to limit the count of the chunk
@@ -113,9 +116,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 		InitializeReservoir(input);
 	}
 	reservoir_chunk->Append(input, false, nullptr, required_count);
-	base_reservoir_sample.InitializeReservoir(num_added_samples, sample_count);
-
-	reservoir_chunk->SetCardinality(num_added_samples);
+	base_reservoir_sample.InitializeReservoir(required_count, sample_count);
 
 	// check if there are still elements remaining in the Input data chunk that should be
 	// randomly sampled and potentially added. This happens if we are on a boundary
