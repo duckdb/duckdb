@@ -1,0 +1,26 @@
+# name: test/sql/function/list/lambdas/lambda_scope.test
+# description: Test the scoping of lambda variables
+# group: [lambdas]
+
+# todo: as table function
+
+mode skip
+
+statement ok
+CREATE TABLE t1 AS SELECT [1, 2, 3] AS x;
+
+query I
+SELECT list_apply(['hello'], x -> x) FROM t1;
+----
+['hello']
+
+mode skip
+
+statement ok
+CREATE TABLE t2 AS SELECT [[1], [2], [3]] AS x;
+
+query I
+SELECT list_transform([[1], [2], [3]], x -> x[1]) FROM t2;
+----
+[1, 2, 3]
+

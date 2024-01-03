@@ -55,6 +55,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string 
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, string &error_message) {
+
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
 		// we are referencing a USING column
@@ -105,6 +106,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		D_ASSERT(!binder.macro_binding->alias.empty());
 		return make_uniq<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	}
+
 	// see if it's a column
 	if (table_name.empty()) {
 		// column was not found - check if it is a SQL value function
@@ -112,6 +114,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		if (value_function) {
 			return value_function;
 		}
+
 		// it's not, find candidates and error
 		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
@@ -119,6 +122,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
 		return nullptr;
 	}
+
 	return binder.bind_context.CreateColumnReference(table_name, column_name);
 }
 

@@ -114,7 +114,11 @@ public:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
-	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
+	//! Recursively replace macro parameters with the provided input parameters
+	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
+	//! Special-handling for lambda expressions in macros: lambda parameters have priority in scoping
+	void ReplaceMacroParametersInLambda(unique_ptr<ParsedExpression> &expr,
+	                                    vector<unordered_set<string>> &lambda_params);
 
 private:
 	//! Maximum stack depth

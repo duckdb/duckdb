@@ -45,22 +45,30 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		return BindExpression(arrow_expr, depth);
 	}
 
-	// binding the lambda expression
+	// extract the lambda parameter list
 	D_ASSERT(expr.lhs);
-	if (expr.lhs->expression_class != ExpressionClass::FUNCTION &&
-	    expr.lhs->expression_class != ExpressionClass::COLUMN_REF) {
-		throw BinderException(
-		    "Invalid parameter list! Parameters must be comma-separated column names, e.g. x or (x, y).");
-	}
+	bool valid_param_list = true;
 
-	// move the lambda parameters to the params vector
 	if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
+		// single column reference
 		expr.params.push_back(std::move(expr.lhs));
-	} else {
+	} else if (expr.lhs->expression_class == ExpressionClass::FUNCTION) {
+		// list of column references
 		auto &func_expr = expr.lhs->Cast<FunctionExpression>();
 		for (idx_t i = 0; i < func_expr.children.size(); i++) {
+			if (func_expr.children[i]->expression_class != ExpressionClass::COLUMN_REF) {
+				valid_param_list = false;
+				break;
+			}
 			expr.params.push_back(std::move(func_expr.children[i]));
 		}
+	} else {
+		// invalid parameter list
+		valid_param_list = false;
+	}
+
+	if (!valid_param_list) {
+		throw BinderException("Invalid parameter list! Parameters must be comma-separated names, e.g. x or (x, y).");
 	}
 	D_ASSERT(!expr.params.empty());
 
@@ -69,40 +77,11 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	vector<string> column_names;
 	vector<string> params_strings;
 
-	// positional parameters as column references
 	for (idx_t i = 0; i < expr.params.size(); i++) {
-		if (expr.params[i]->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
-			throw BinderException("Lambda parameter must be a column name.");
-		}
-
 		auto column_ref = expr.params[i]->Cast<ColumnRefExpression>();
-		if (column_ref.IsQualified()) {
-			throw BinderException("Invalid lambda parameter name '%s': must be unqualified", column_ref.ToString());
-		}
-
 		column_types.push_back((*bind_lambda_function)(i, list_child_type));
 		column_names.push_back(column_ref.GetColumnName());
 		params_strings.push_back(expr.params[i]->ToString());
-	}
-
-	// ensure that we do not have ambiguous lambda parameters
-	if (lambda_bindings) {
-		for (const auto &binding : *lambda_bindings) {
-			for (const auto &outer_lambda_parameter : binding.names) {
-				for (const auto &this_lambda_parameter : column_names) {
-					if (outer_lambda_parameter == this_lambda_parameter) {
-						throw BinderException("Ambiguous lambda parameter name: '%s'. Try changing your lambda "
-						                      "parameter name. \n Some list functions use lambda functions "
-						                      "under the hood, so *the same* function cannot be nested, like "
-						                      "list_intersect(list_intersect(...),...), list_has_any, list_has_all, "
-						                      "and their aliases. \n "
-						                      "Try writing them out manually with lambda functions to define explicit "
-						                      "lambda parameter names.",
-						                      outer_lambda_parameter);
-					}
-				}
-			}
-		}
 	}
 
 	// base table alias
@@ -120,6 +99,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	lambda_bindings->push_back(new_lambda_binding);
 
 	// bind the parameter expressions
+	// TODO: necessary?
 	for (idx_t i = 0; i < expr.params.size(); i++) {
 		auto result = BindExpression(expr.params[i], depth, false);
 		if (result.HasError()) {
