@@ -35,55 +35,18 @@ class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
+class WriteAheadLogDeserializer;
 
 class ReplayState {
 public:
-	ReplayState(AttachedDatabase &db, ClientContext &context)
-	    : db(db), context(context), catalog(db.GetCatalog()), deserialize_only(false) {
+	ReplayState(AttachedDatabase &db, ClientContext &context) : db(db), context(context), catalog(db.GetCatalog()) {
 	}
 
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
 	optional_ptr<TableCatalogEntry> current_table;
-	bool deserialize_only;
 	MetaBlockPointer checkpoint_id;
-
-public:
-	void ReplayEntry(WALType entry_type, BinaryDeserializer &deserializer);
-
-protected:
-	virtual void ReplayCreateTable(BinaryDeserializer &deserializer);
-	void ReplayDropTable(BinaryDeserializer &deserializer);
-	void ReplayAlter(BinaryDeserializer &deserializer);
-
-	void ReplayCreateView(BinaryDeserializer &deserializer);
-	void ReplayDropView(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSchema(BinaryDeserializer &deserializer);
-	void ReplayDropSchema(BinaryDeserializer &deserializer);
-
-	void ReplayCreateType(BinaryDeserializer &deserializer);
-	void ReplayDropType(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSequence(BinaryDeserializer &deserializer);
-	void ReplayDropSequence(BinaryDeserializer &deserializer);
-	void ReplaySequenceValue(BinaryDeserializer &deserializer);
-
-	void ReplayCreateMacro(BinaryDeserializer &deserializer);
-	void ReplayDropMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateTableMacro(BinaryDeserializer &deserializer);
-	void ReplayDropTableMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateIndex(BinaryDeserializer &deserializer);
-	void ReplayDropIndex(BinaryDeserializer &deserializer);
-
-	void ReplayUseTable(BinaryDeserializer &deserializer);
-	void ReplayInsert(BinaryDeserializer &deserializer);
-	void ReplayDelete(BinaryDeserializer &deserializer);
-	void ReplayUpdate(BinaryDeserializer &deserializer);
-	void ReplayCheckpoint(BinaryDeserializer &deserializer);
 };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior

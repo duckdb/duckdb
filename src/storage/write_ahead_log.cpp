@@ -49,6 +49,9 @@ void WriteAheadLog::Delete() {
 	fs.RemoveFile(wal_path);
 }
 
+//===--------------------------------------------------------------------===//
+// Serializer
+//===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
 	ChecksumWriter(WriteAheadLog &wal) : wal(wal), stream(wal.GetWriter()) {
