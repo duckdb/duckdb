@@ -17,11 +17,16 @@
 
 namespace duckdb {
 
+const uint64_t WAL_VERSION_NUMBER = 2;
+
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &path) : skip_writing(false), database(database) {
 	wal_path = path;
 	writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), path.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                           FileFlags::FILE_FLAGS_APPEND);
+	if (writer->GetFileSize() == 0) {
+		WriteVersion();
+	}
 }
 
 WriteAheadLog::~WriteAheadLog() {
@@ -97,6 +102,8 @@ public:
 		if (wal.skip_writing) {
 			return;
 		}
+		// write a version marker if none has been written yet
+		wal.WriteVersion();
 		serializer.Begin();
 		serializer.WriteProperty(100, "wal_type", wal_type);
 	}
@@ -134,6 +141,20 @@ private:
 //===--------------------------------------------------------------------===//
 // Write Entries
 //===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteVersion() {
+	if (writer->GetFileSize() > 0) {
+		// already written - no need to write a version marker
+		return;
+	}
+	// write the version marker
+	// note that we explicitly do not checksum the version entry
+	BinarySerializer serializer(*writer);
+	serializer.Begin();
+	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
+	serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+	serializer.End();
+}
+
 void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 	WriteAheadLogSerializer serializer(*this, WALType::CHECKPOINT);
 	serializer.WriteProperty(101, "meta_block", meta_block);

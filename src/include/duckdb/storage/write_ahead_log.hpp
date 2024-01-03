@@ -37,18 +37,6 @@ class Transaction;
 class TransactionManager;
 class WriteAheadLogDeserializer;
 
-class ReplayState {
-public:
-	ReplayState(AttachedDatabase &db, ClientContext &context) : db(db), context(context), catalog(db.GetCatalog()) {
-	}
-
-	AttachedDatabase &db;
-	ClientContext &context;
-	Catalog &catalog;
-	optional_ptr<TableCatalogEntry> current_table;
-	MetaBlockPointer checkpoint_id;
-};
-
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
 //! the database to the log, which can then be replayed upon startup in case the
@@ -74,6 +62,8 @@ public:
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}
+
+	void WriteVersion();
 
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);

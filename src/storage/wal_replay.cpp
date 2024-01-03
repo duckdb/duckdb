@@ -25,8 +25,25 @@
 
 namespace duckdb {
 
+class ReplayState {
+public:
+	ReplayState(AttachedDatabase &db, ClientContext &context) : db(db), context(context), catalog(db.GetCatalog()) {
+	}
+
+	AttachedDatabase &db;
+	ClientContext &context;
+	Catalog &catalog;
+	optional_ptr<TableCatalogEntry> current_table;
+	MetaBlockPointer checkpoint_id;
+	idx_t wal_version = 1;
+};
+
 class WriteAheadLogDeserializer {
 public:
+	WriteAheadLogDeserializer(ReplayState &state_p, BufferedFileReader &stream_p, bool deserialize_only = false)
+	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(nullptr),
+	      stream(nullptr, 0), deserializer(stream_p), deserialize_only(deserialize_only) {
+	}
 	WriteAheadLogDeserializer(ReplayState &state_p, unique_ptr<data_t[]> data_p, idx_t size,
 	                          bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(std::move(data_p)),
@@ -35,6 +52,14 @@ public:
 
 	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,
 	                                      bool deserialize_only = false) {
+		if (state_p.wal_version == 1) {
+			// old WAL versions do not have checksums
+			return WriteAheadLogDeserializer(state_p, stream, deserialize_only);
+		}
+		if (state_p.wal_version != 2) {
+			throw IOException("Failed to read WAL of version %llu - can only read version 1 and 2",
+			                  state_p.wal_version);
+		}
 		// read the checksum and size
 		auto size = stream.Read<uint64_t>();
 		auto stored_checksum = stream.Read<uint64_t>();
@@ -79,6 +104,8 @@ public:
 
 protected:
 	void ReplayEntry(WALType wal_type);
+
+	void ReplayVersion();
 
 	void ReplayCreateTable();
 	void ReplayDropTable();
@@ -183,7 +210,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	try {
 		while (true) {
 			// read the current entry
-			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader);
+			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
 			if (deserializer.ReplayEntry()) {
 				con.Commit();
 				// check if the file is exhausted
@@ -215,6 +242,9 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 	switch (entry_type) {
+	case WALType::WAL_VERSION:
+		ReplayVersion();
+		break;
 	case WALType::CREATE_TABLE:
 		ReplayCreateTable();
 		break;
@@ -287,6 +317,13 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Version
+//===--------------------------------------------------------------------===//
+void WriteAheadLogDeserializer::ReplayVersion() {
+	state.wal_version = deserializer.ReadProperty<idx_t>(101, "version");
 }
 
 //===--------------------------------------------------------------------===//
