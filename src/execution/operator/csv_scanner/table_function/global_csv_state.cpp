@@ -50,6 +50,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 	if (finished) {
 		return nullptr;
 	}
+	state_machine->dialect_options.num_cols = bind_data.return_names.size();
+
 	auto csv_scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, error_handler, current_boundary);
 	finished = current_boundary.Next(*buffer_manager);
 

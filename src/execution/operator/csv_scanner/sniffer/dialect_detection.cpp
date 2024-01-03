@@ -233,7 +233,7 @@ void CSVSniffer::RefineCandidates() {
 				candidates.emplace_back(std::move(successful_candidate));
 				return;
 			}
-			if (!RefineCandidateNextChunk(*cur_candidate)) {
+			if (!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult()->error) {
 				// This candidate failed, move to the next one
 				break;
 			}

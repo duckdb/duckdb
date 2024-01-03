@@ -11,6 +11,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
       result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p) {
 	// Vector information
+	D_ASSERT(number_of_columns > 0);
 	vector_size = number_of_columns * result_size;
 	vector = make_uniq<Vector>(LogicalType::VARCHAR, vector_size);
 	vector_ptr = FlatVector::GetData<string_t>(*vector);
@@ -393,8 +394,7 @@ void StringValueScanner::Process() {
 	idx_t to_pos;
 	if (iterator.IsSet()) {
 		to_pos = iterator.GetEndPos();
-		// If we are at the last buffer and this would overcome it's size, we adjust it
-		if (cur_buffer_handle->is_last_buffer && to_pos > cur_buffer_handle->actual_size) {
+		if (to_pos > cur_buffer_handle->actual_size) {
 			to_pos = cur_buffer_handle->actual_size;
 		}
 	} else {

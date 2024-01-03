@@ -64,6 +64,7 @@ void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sn
 void CSVSniffer::SetResultOptions() {
 	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
 	                               options.sniffer_user_mismatch_error);
+	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 }
 
 SnifferResult CSVSniffer::SniffCSV(bool force_match) {
