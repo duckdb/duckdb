@@ -313,8 +313,7 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 void HashJoinGlobalSinkState::InitializeProbeSpill() {
 	lock_guard<mutex> guard(lock);
 	if (!probe_spill) {
-		probe_spill = make_uniq<JoinHashTable::ProbeSpill>(*hash_table, context,
-		                                                   temporary_memory_state->GetReservation(), probe_types);
+		probe_spill = make_uniq<JoinHashTable::ProbeSpill>(*hash_table, context, probe_types);
 	}
 }
 
