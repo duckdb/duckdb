@@ -70,8 +70,13 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.quoted) {
 		StringValueResult::AddQuotedValue(result, buffer_pos);
 	} else {
-		result.vector_ptr[result.result_position++] =
-		    string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
+		// Test against null value first
+		auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
+		if (value == result.state_machine.options.null_str) {
+			result.validity_mask->SetInvalid(result.result_position++);
+		} else {
+			result.vector_ptr[result.result_position++] = value;
+		}
 	}
 	result.last_position = buffer_pos;
 	if (result.result_position % result.number_of_columns == 0) {
@@ -86,7 +91,12 @@ inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	if (quoted) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
 	} else {
-		vector_ptr[result_position++] = string_t(buffer_ptr + last_position, buffer_pos - last_position - 1);
+		auto value = string_t(buffer_ptr + last_position, buffer_pos - last_position - 1);
+		if (value == state_machine.options.null_str) {
+			validity_mask->SetInvalid(result_position++);
+		} else {
+			vector_ptr[result_position++] = value;
+		}
 	}
 	last_position = buffer_pos;
 }
@@ -262,6 +272,115 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	}
 }
 
+//	if (conversion_error_ignored) {
+//		D_ASSERT(options.ignore_errors);
+//
+//		SelectionVector succesful_rows(parse_chunk.size());
+//		idx_t sel_size = 0;
+//
+//		// Keep track of failed cells
+//		vector<ErrorLocation> failed_cells;
+//
+//		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+//
+//			auto global_row_idx = row_idx + linenr - parse_chunk.size();
+//			auto row_line = GetLineError(global_row_idx, buffer_idx, false);
+//
+//			bool row_failed = false;
+//			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+//				auto col_idx = reader_data.column_ids[c];
+//				auto result_idx = reader_data.column_mapping[c];
+//
+//				auto &parse_vector = parse_chunk.data[col_idx];
+//				auto &result_vector = insert_chunk.data[result_idx];
+//
+//				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
+//				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
+//					Increment(buffer_idx);
+//					auto bla = GetLineError(global_row_idx, buffer_idx, false);
+//					row_idx += bla;
+//					row_idx -= bla;
+//					row_failed = true;
+//					failed_cells.emplace_back(row_idx, col_idx, row_line);
+//				}
+//			}
+//			if (!row_failed) {
+//				succesful_rows.set_index(sel_size++, row_idx);
+//			}
+//		}
+//
+//		// Now do a second pass to produce the reject table entries
+//		if (!failed_cells.empty() && !options.rejects_table_name.empty()) {
+//			auto limit = options.rejects_limit;
+//
+//			auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
+//			lock_guard<mutex> lock(rejects->write_lock);
+//
+//			// short circuit if we already have too many rejects
+//			if (limit == 0 || rejects->count < limit) {
+//				auto &table = rejects->GetTable(context);
+//				InternalAppender appender(context, table);
+//				auto file_name = GetFileName();
+//
+//				for (auto &cell : failed_cells) {
+//					if (limit != 0 && rejects->count >= limit) {
+//						break;
+//					}
+//					rejects->count++;
+//
+//					auto row_idx = cell.row_idx;
+//					auto col_idx = cell.col_idx;
+//					auto row_line = cell.row_line;
+//
+//					auto col_name = to_string(col_idx);
+//					if (col_idx < names.size()) {
+//						col_name = "\"" + names[col_idx] + "\"";
+//					}
+//
+//					auto &parse_vector = parse_chunk.data[col_idx];
+//					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx];
+//					auto &type = insert_chunk.data[col_idx].GetType();
+//					auto row_error_msg = StringUtil::Format("Could not convert string '%s' to '%s'",
+//					                                        parsed_str.GetString(), type.ToString());
+//
+//					// Add the row to the rejects table
+//					appender.BeginRow();
+//					appender.Append(string_t(file_name));
+//					appender.Append(row_line);
+//					appender.Append(col_idx);
+//					appender.Append(string_t(col_name));
+//					appender.Append(parsed_str);
+//
+//					if (!options.rejects_recovery_columns.empty()) {
+//						child_list_t<Value> recovery_key;
+//						for (auto &key_idx : options.rejects_recovery_column_ids) {
+//							// Figure out if the recovery key is valid.
+//							// If not, error out for real.
+//							auto &component_vector = parse_chunk.data[key_idx];
+//							if (FlatVector::IsNull(component_vector, row_idx)) {
+//								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
+//								                            "Could not parse recovery column", row_line, col_name,
+//								                            options.ToString());
+//							}
+//							auto component = Value(FlatVector::GetData<string_t>(component_vector)[row_idx]);
+//							recovery_key.emplace_back(names[key_idx], component);
+//						}
+//						appender.Append(Value::STRUCT(recovery_key));
+//					}
+//
+//					appender.Append(string_t(row_error_msg));
+//					appender.EndRow();
+//				}
+//				appender.Close();
+//			}
+//		}
+//
+//		// Now slice the insert chunk to only include the succesful rows
+//		insert_chunk.Slice(succesful_rows, sel_size);
+//	}
+//	parse_chunk.Reset();
+//	return true;
+
 void StringValueScanner::Initialize() {
 	states.Initialize(CSVState::EMPTY_LINE);
 	if (result.result_size != 1) {
@@ -294,7 +413,7 @@ void StringValueScanner::ProcessExtraRow() {
 	if (result.last_position != iterator.pos.buffer_pos - 1) {
 		cur_result_pos++;
 	}
-	if (states.IsCurrentNew()) {
+	if (states.IsCurrentNewRow()) {
 		cur_result_pos++;
 	}
 	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
@@ -343,8 +462,13 @@ void StringValueScanner::MoveToNextBuffer() {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (result.last_position < previous_buffer_handle->actual_size) {
-				if (states.IsCurrentNew()) {
+				if (states.IsCurrentNewRow()) {
 					result.AddRowInternal(previous_buffer_handle->actual_size);
+				} else if (states.IsCurrentDelimiter()) {
+					// we add the value
+					result.AddRowInternal(previous_buffer_handle->actual_size);
+					// And an extra empty value to represent what comes after the delimiter
+					result.AddRowInternal(previous_buffer_handle->actual_size + 1);
 				} else {
 					result.AddRowInternal(previous_buffer_handle->actual_size + 1);
 				}

@@ -25,7 +25,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
 		running_threads = MaxThreads();
 	}
 	current_boundary = CSVIterator(0, 0, 0, 0);
-	error_handler = make_shared<CSVErrorHandler>();
+	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors);
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {

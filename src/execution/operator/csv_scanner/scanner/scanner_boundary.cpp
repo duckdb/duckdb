@@ -13,7 +13,8 @@ CSVBoundary::CSVBoundary(idx_t file_idx_p, idx_t buffer_idx_p, idx_t buffer_pos_
     : file_idx(file_idx_p), buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p), boundary_idx(boundary_idx_p),
       end_pos(end_pos_p) {
 }
-CSVBoundary::CSVBoundary() : file_idx(0), buffer_idx(0), buffer_pos(0), boundary_idx(0), end_pos(0) {
+CSVBoundary::CSVBoundary()
+    : file_idx(0), buffer_idx(0), buffer_pos(0), boundary_idx(0), end_pos(NumericLimits<idx_t>::Maximum()) {
 }
 CSVIterator::CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx)
     : pos(file_idx, buffer_idx, buffer_pos),

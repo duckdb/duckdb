@@ -31,8 +31,12 @@ struct CSVStates {
 		       (current_state != CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 	}
 
-	inline bool IsCurrentNew() {
+	inline bool IsCurrentNewRow() {
 		return current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN;
+	}
+
+	inline bool IsCurrentDelimiter() {
+		return current_state == CSVState::DELIMITER;
 	}
 
 	inline bool EmptyLine() {
