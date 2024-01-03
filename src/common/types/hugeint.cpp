@@ -469,6 +469,9 @@ bool Hugeint::TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint
 
 template <>
 hugeint_t Hugeint::Divide<false>(hugeint_t lhs, hugeint_t rhs) {
+	if (rhs == 0) {
+		return hugeint_t(0);
+	}
 	hugeint_t remainder;
 	return Hugeint::DivMod(lhs, rhs, remainder);
 }

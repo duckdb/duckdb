@@ -285,6 +285,9 @@ uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainde
 
 template <>
 uhugeint_t Uhugeint::Divide<false>(uhugeint_t lhs, uhugeint_t rhs) {
+	if (rhs == 0) {
+		return uhugeint_t(0);
+	}
 	uhugeint_t remainder;
 	return Uhugeint::DivMod(lhs, rhs, remainder);
 }
