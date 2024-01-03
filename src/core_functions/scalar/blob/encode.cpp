@@ -28,12 +28,30 @@ static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 
+static void TryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
+	    args.data[0], result, args.size(), [](string_t input, ValidityMask &mask, idx_t idx) {
+		    auto input_data = input.GetData();
+		    auto input_length = input.GetSize();
+		    if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
+			    mask.SetInvalid(idx);
+			    return string_t();
+		    }
+		    return input;
+	    });
+	StringVector::AddHeapReference(result, args.data[0]);
+}
+
 ScalarFunction EncodeFun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, EncodeFunction);
 }
 
 ScalarFunction DecodeFun::GetFunction() {
 	return ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, DecodeFunction);
+}
+
+ScalarFunction TryDecodeFun::GetFunction() {
+	return ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, TryDecodeFunction);
 }
 
 } // namespace duckdb

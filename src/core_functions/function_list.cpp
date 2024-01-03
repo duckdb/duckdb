@@ -357,6 +357,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(TranslateFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TrimFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TruncFun),
+	DUCKDB_SCALAR_FUNCTION(TryDecodeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentTransactionIdFun),
 	DUCKDB_SCALAR_FUNCTION(TypeOfFun),
