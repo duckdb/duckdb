@@ -33,10 +33,19 @@ public:
 	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only) {
 	}
 
-	static WriteAheadLogDeserializer Open(ReplayState &state_p, ReadStream &stream, bool deserialize_only = false) {
+	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,
+	                                      bool deserialize_only = false) {
 		// read the checksum and size
 		auto size = stream.Read<uint64_t>();
 		auto stored_checksum = stream.Read<uint64_t>();
+		auto offset = stream.CurrentOffset();
+		auto file_size = stream.FileSize();
+
+		if (offset + size > file_size) {
+			throw IOException("Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
+			                  "(found entry with size %llu bytes, file size %llu bytes)",
+			                  offset, size, file_size);
+		}
 
 		// allocate a buffer and read data into the buffer
 		auto buffer = unique_ptr<data_t[]>(new data_t[size]);
@@ -45,8 +54,9 @@ public:
 		// compute and verify the checksum
 		auto computed_checksum = Checksum(buffer.get(), size);
 		if (stored_checksum != computed_checksum) {
-			throw IOException("Corrupt WAL file: computed checksum %llu does not match stored checksum %llu",
-			                  computed_checksum, stored_checksum);
+			throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+			                  "stored checksum %llu",
+			                  offset, computed_checksum, stored_checksum);
 		}
 		return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
 	}
