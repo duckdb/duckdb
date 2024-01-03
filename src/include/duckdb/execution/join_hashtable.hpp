@@ -299,6 +299,14 @@ public:
 		return radix_bits;
 	}
 
+	idx_t GetPartitionStart() const {
+		return partition_start;
+	}
+
+	idx_t GetPartitionEnd() const {
+		return partition_end;
+	}
+
 	//! Capacity of the pointer table given the ht count
 	//! (minimum of 1024 to prevent collision chance for small HT's)
 	static idx_t PointerTableCapacity(idx_t count) {

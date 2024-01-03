@@ -160,6 +160,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		auto root_entry = event_map.find(*pipeline);
 		D_ASSERT(root_entry != event_map.end());
 		auto &pipeline_stack = root_entry->second;
+		// iterate in reverse so the deepest dependencies are added first
 		for (auto it = dependencies->rbegin(); it != dependencies->rend(); ++it) {
 			auto event_entry = event_map.find(*it);
 			D_ASSERT(event_entry != event_map.end());

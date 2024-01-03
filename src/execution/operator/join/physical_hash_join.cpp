@@ -979,4 +979,34 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
+double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
+	auto &gstate = gstate_p.Cast<HashJoinGlobalSourceState>();
+
+	if (!sink.external) {
+		if (PropagatesBuildSide(join_type)) {
+			return double(gstate.full_outer_chunk_done) / double(gstate.full_outer_chunk_count) * 100.0;
+		}
+		return 100.0;
+	}
+
+	double num_partitions = RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits());
+	double partition_start = sink.hash_table->GetPartitionStart();
+	double partition_end = sink.hash_table->GetPartitionEnd();
+
+	// This many partitions are fully done
+	auto progress = partition_start / double(num_partitions);
+
+	double probe_chunk_done = gstate.probe_chunk_done;
+	double probe_chunk_count = gstate.probe_chunk_count;
+	if (probe_chunk_count != 0) {
+		// Progress of the current round of probing, weighed by the number of partitions
+		auto probe_progress = double(probe_chunk_done) / double(probe_chunk_count);
+		// Add it to the progress, weighed by the number of partitions in the current round
+		progress += (partition_end - partition_start) / num_partitions * probe_progress;
+	}
+
+	return progress * 100.0;
+}
+
 } // namespace duckdb
