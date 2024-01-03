@@ -24,9 +24,6 @@ WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &path) : s
 	writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), path.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                           FileFlags::FILE_FLAGS_APPEND);
-	if (writer->GetFileSize() == 0) {
-		WriteVersion();
-	}
 }
 
 WriteAheadLog::~WriteAheadLog() {
