@@ -24,6 +24,11 @@ jobs:
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "reproduced"
 
+      - name: Remove 'needs triage' if 'PR submitted'
+        if: github.event.label.name == 'PR submitted'
+        run: |
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
+
       - name: Get mirror issue number
         run: |
           gh issue list --repo duckdblabs/duckdb-internal --search "${TITLE_PREFIX}" --json title,number --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number" > mirror_issue_number.txt
