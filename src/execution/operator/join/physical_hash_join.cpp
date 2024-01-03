@@ -358,7 +358,7 @@ public:
 		auto thread_memory = 8 * partition_multiplier * Storage::BLOCK_ALLOC_SIZE;
 		auto repartition_threads = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / thread_memory, 1);
 
-		if (repartition_threads > local_hts.size()) {
+		if (repartition_threads < local_hts.size()) {
 			// Limit the number of threads working on repartitioning based on our memory reservation
 			for (idx_t thread_idx = repartition_threads; thread_idx < local_hts.size(); thread_idx++) {
 				local_hts[thread_idx % repartition_threads]->Merge(*local_hts[thread_idx]);
