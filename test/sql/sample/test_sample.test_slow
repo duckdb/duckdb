@@ -1,4 +1,4 @@
-# name: test/sql/sample/test_sample.test
+# name: test/sql/sample/test_sample.test_slow
 # description: Test SAMPLE keyword
 # group: [sample]
 

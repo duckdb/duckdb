@@ -4,7 +4,7 @@
 namespace duckdb {
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
-    : BlockingSample(seed), allocator(allocator), num_added_samples(0), sample_count(sample_count),
+    : BlockingSample(seed), allocator(allocator), sample_count(sample_count),
       reservoir_initialized(false) {
 }
 
@@ -18,13 +18,13 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	// Output: A reservoir R with a size m
 	// 1: The first m items of V are inserted into R
 	// first we need to check if the reservoir already has "m" elements
-	if (num_added_samples < sample_count) {
+	if (reservoir_chunk->size() < sample_count) {
 		if (FillReservoir(input) == 0) {
 			// entire chunk was consumed by reservoir
 			return;
 		}
 	}
-	D_ASSERT(num_added_samples == sample_count);
+	D_ASSERT(reservoir_chunk->size() == sample_count);
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
@@ -45,16 +45,19 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
-	if (num_added_samples == 0) {
+	if (reservoir_chunk && reservoir_chunk->size() == 0) {
 		return nullptr;
 	}
-	if (reservoir_chunk->size() > STANDARD_VECTOR_SIZE) {
-		// get from the back
+	auto collected_sample_count = reservoir_chunk->size();
+	if (collected_sample_count > STANDARD_VECTOR_SIZE) {
+		// get from the back to avoid creating two selection vectors
+		// one to return the first STANDARD_VECTOR_SIZE
+		// another to replace the reservoir_chunk with the first STANDARD VECTOR SIZE missing
 		auto ret = make_uniq<DataChunk>();
-		auto samples_remaining = num_added_samples - STANDARD_VECTOR_SIZE;
+		auto samples_remaining = collected_sample_count - STANDARD_VECTOR_SIZE;
 		auto reservoir_types = reservoir_chunk->GetTypes();
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
-		for (idx_t i = samples_remaining; i < num_added_samples; i++) {
+		for (idx_t i = samples_remaining; i < collected_sample_count; i++) {
 			sel.set_index(i - samples_remaining, i);
 		}
 		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
@@ -62,11 +65,9 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		ret->SetCardinality(STANDARD_VECTOR_SIZE);
 		// reduce capacity and cardinality of the sample data chunk
 		reservoir_chunk->SetCardinality(samples_remaining);
-		num_added_samples = samples_remaining;
 		return ret;
 	}
-	// TODO: Why do I need to put another selection vector over this one?
-	num_added_samples = 0;
+	reservoir_chunk->SetCardinality(0);
 	return std::move(reservoir_chunk);
 }
 
@@ -93,6 +94,7 @@ void ReservoirSample::InitializeReservoir(DataChunk &input) {
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	idx_t chunk_count = input.size();
 	input.Flatten();
+	auto num_added_samples = reservoir_chunk->size();
 	D_ASSERT(num_added_samples <= sample_count);
 
 	// we have not: append to the reservoir
@@ -111,9 +113,8 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 		InitializeReservoir(input);
 	}
 	reservoir_chunk->Append(input, false, nullptr, required_count);
-	base_reservoir_sample.InitializeReservoir(reservoir_chunk->size(), sample_count);
+	base_reservoir_sample.InitializeReservoir(num_added_samples, sample_count);
 
-	num_added_samples += required_count;
 	reservoir_chunk->SetCardinality(num_added_samples);
 
 	// check if there are still elements remaining in the Input data chunk that should be
