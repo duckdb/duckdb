@@ -145,7 +145,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	bool more_than_one_column = (num_cols > 1);
 
 	// If the start position is valid.
-	bool start_good = !candidates.empty() && (start_row <= candidates.front()->GetStateMachine().start_row);
+	bool start_good = !candidates.empty() &&
+	                  (start_row <= candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue());
 
 	// If padding happened but it is not allowed.
 	bool invalid_padding = !allow_padding && padding_count > 0;
@@ -168,7 +169,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
-		sniffing_state_machine.start_row = start_row;
+		sniffing_state_machine.dialect_options.skip_rows = start_row;
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
 		candidates.emplace_back(std::move(scanner));
@@ -189,7 +190,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			}
 		}
 		if (!same_quote_is_candidate) {
-			sniffing_state_machine.start_row = start_row;
+			sniffing_state_machine.dialect_options.skip_rows = start_row;
 			sniffing_state_machine.dialect_options.num_cols = num_cols;
 			candidates.emplace_back(std::move(scanner));
 		}

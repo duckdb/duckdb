@@ -30,7 +30,7 @@ public:
 	//! Adds a Row to the result
 	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
-	static inline void Kaput(ColumnCountResult &result);
+	static inline void InvalidState(ColumnCountResult &result);
 	inline void InternalAddRow();
 };
 

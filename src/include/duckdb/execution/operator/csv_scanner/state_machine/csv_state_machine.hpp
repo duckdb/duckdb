@@ -27,7 +27,7 @@ struct CSVStates {
 	}
 
 	inline bool NewRow() {
-		return (previous_state == CSVState::RECORD_SEPARATOR && current_state != CSVState::EMPTY_LINE) ||
+		return (previous_state == CSVState::RECORD_SEPARATOR) ||
 		       (current_state != CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 	}
 
@@ -87,9 +87,6 @@ public:
 	const CSVStateMachineOptions state_machine_options;
 	//! CSV Reader Options
 	const CSVReaderOptions &options;
-
-	//! Stores identified start row for this file (e.g., a file can start with garbage like notes, before the header)
-	idx_t start_row = 0;
 
 	//! Both these variables are used for new line identifier detection
 	bool single_record_separator = false;

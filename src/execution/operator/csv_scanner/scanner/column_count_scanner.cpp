@@ -35,7 +35,7 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos
 	return false;
 }
 
-void ColumnCountResult::Kaput(ColumnCountResult &result) {
+void ColumnCountResult::InvalidState(ColumnCountResult &result) {
 	result.result_position = 0;
 	result.error = true;
 }

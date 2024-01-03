@@ -14,10 +14,10 @@ bool ScannerResult::Empty() {
 	return result_position == 0;
 }
 
-void ScannerResult::SetQuoted(ScannerResult &result){
+void ScannerResult::SetQuoted(ScannerResult &result) {
 	result.quoted = true;
 }
-void ScannerResult::SetEscaped(ScannerResult &result){
+void ScannerResult::SetEscaped(ScannerResult &result) {
 	result.escaped = true;
 }
 

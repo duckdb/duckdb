@@ -18,7 +18,8 @@ namespace duckdb {
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
-	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position);
+	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
+	                  CSVErrorHandler &error_hander, CSVIterator &iterator);
 
 	//! Information on the vector
 	unique_ptr<Vector> vector;
@@ -42,6 +43,11 @@ public:
 
 	//! If this line might have too many columns
 	bool maybe_too_many_columns = false;
+
+	//! Information to properly handle errors
+	CSVErrorHandler &error_handler;
+	CSVIterator &iterator;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -49,7 +55,7 @@ public:
 	//! Adds a Row to the result
 	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
-	static inline void Kaput(StringValueResult &result);
+	static inline void InvalidState(StringValueResult &result);
 
 	inline void AddRowInternal(idx_t buffer_pos);
 	Value GetValue(idx_t row_idx, idx_t col_idx);
@@ -99,7 +105,7 @@ private:
 	void SkipEmptyLines();
 
 	//! Skips Notes, notes are dirty lines on top of the file, before the actual data
-	void SkipNotes();
+	void SkipCSVRows();
 
 	//! Skips the header (i.e., the first line of the file)
 	void SkipHeader();

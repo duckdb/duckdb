@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ public:
 	LinesPerBatch(idx_t file_idx, idx_t batch_idx, idx_t lines_in_batch);
 
 	BatchInfo batch_info;
-	idx_t lines_in_batch;
+	idx_t lines_in_batch = 0;
 	bool initialized;
 };
 
@@ -49,10 +50,9 @@ struct HashCSVBatchInfo {
 enum CSVErrorType : uint8_t {
 	CAST_ERROR = 0,                // If when casting a value from string to the column type fails
 	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
-	MISSING_COLUMNS = 2,           // If the CSV is missing a column
-	TOO_MANY_COLUMNS = 3,          // If the CSV file has too many columns
-	UNTERMINATED_QUOTES = 4,       // If a quote is not terminated
-	SNIFFING = 5
+	INCORRECT_COLUMN_AMOUNT = 2,   // If the CSV is missing a column
+	UNTERMINATED_QUOTES = 3,       // If a quote is not terminated
+	SNIFFING = 4
 };
 
 class CSVError {
@@ -61,11 +61,19 @@ public:
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
-	static CSVError CastError(string &column_name, string &cast_error);
+	static CSVError CastError(const CSVReaderOptions &options, DataChunk &parse_chunk, idx_t chunk_row,
+	                          string &column_name, string &cast_error);
 	//! Produces error for when the sniffer couldn't find viable options
 	static CSVError SniffingError(string &file_path);
-
+	//! Produces error messages for unterminated quoted values
+	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
+	                                        idx_t vector_line_start, idx_t current_column);
+	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
+	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
+	                                           idx_t vector_line_start, idx_t actual_columns);
+	//! Actual error message
 	string error_message;
+	//! Error Type
 	CSVErrorType type;
 };
 
@@ -83,7 +91,7 @@ private:
 	//! Return the 1-indexed line number
 	idx_t GetLine(LinesPerBatch &error_info);
 	//! If we should print the line of an error
-	bool PrintLine(CSVError &error);
+	bool PrintLineNumber(CSVError &error);
 	//! CSV Error Handler Mutex
 	mutex main_mutex;
 	//! Map of <file,batch> -> lines

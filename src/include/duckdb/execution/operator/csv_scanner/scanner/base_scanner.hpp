@@ -30,6 +30,7 @@ public:
 	// Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
+
 protected:
 	CSVStates &states;
 	CSVStateMachine &state_machine;
@@ -85,7 +86,7 @@ public:
 	inline static bool ProcessCharacter(BaseScanner &scanner, const char current_char, const idx_t buffer_pos,
 	                                    T &result) {
 		if (scanner.states.IsInvalid()) {
-			T::Kaput(result);
+			T::InvalidState(result);
 			return true;
 		}
 		scanner.state_machine->Transition(scanner.states, current_char);
@@ -103,9 +104,9 @@ public:
 		} else if (scanner.states.EmptyLine()) {
 			//! Increment Lines Read
 			scanner.lines_read++;
-		} else if(scanner.states.IsQuoted()){
+		} else if (scanner.states.IsQuoted()) {
 			T::SetQuoted(result);
-		} else if(scanner.states.IsEscaped()){
+		} else if (scanner.states.IsEscaped()) {
 			T::SetEscaped(result);
 		}
 		//! Still have more to read

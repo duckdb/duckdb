@@ -8,7 +8,6 @@ void InitializeTransitionArray(CSVState *transition_array, const CSVState state)
 		transition_array[i] = state;
 	}
 }
-
 void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_options) {
 	D_ASSERT(state_machine_cache.find(state_machine_options) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option

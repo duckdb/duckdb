@@ -5,10 +5,11 @@
 namespace duckdb {
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
-                                     Allocator &buffer_allocator, idx_t result_size_p, idx_t buffer_position)
+                                     Allocator &buffer_allocator, idx_t result_size_p, idx_t buffer_position,
+                                     CSVErrorHandler &error_hander_p, CSVIterator &iterator_p)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
-      result_size(result_size_p) {
+      result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p) {
 	// Vector information
 	vector_size = number_of_columns * result_size;
 	vector = make_uniq<Vector>(LogicalType::VARCHAR, vector_size);
@@ -50,19 +51,19 @@ DataChunk &StringValueResult::ToChunk() {
 	return parse_chunk;
 }
 
-void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos){
+void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
 	result.vector_ptr[result.result_position++] =
 	    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 3);
 	if (result.escaped) {
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		auto result_str = result.vector_ptr[result.result_position - 1].GetString();
-		result_str.erase(std::remove(result_str.begin(), result_str.end(), result.state_machine.options.GetEscape()[0]), result_str.end());
+		result_str.erase(std::remove(result_str.begin(), result_str.end(), result.state_machine.options.GetEscape()[0]),
+		                 result_str.end());
 		result.vector_ptr[result.result_position - 1] = string_t(result_str);
 	}
-	    result.quoted = false;
-		result.escaped = false;
+	result.quoted = false;
+	result.escaped = false;
 }
-
 
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	D_ASSERT(result.result_position < result.vector_size);
@@ -111,13 +112,13 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		// If the columns are incorrect:
 		// Maybe we have too many columns:
 		if (result.maybe_too_many_columns) {
-			if (result.ignore_errors) {
-				// 1) if ignore_errors is on, we invalidate the whole line.
-				result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
-			} else {
-				// 2) otherwise we error.
-				throw InvalidInputException("I'm a baddie");
-			}
+			auto csv_error = CSVError::IncorrectColumnAmountError(
+			    result.state_machine.options, result.vector_ptr, result.result_position,
+			    result.number_of_columns + result.result_position % result.number_of_columns);
+			LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
+			                              result.result_position / result.number_of_columns);
+			result.error_handler.Error(lines_per_batch, csv_error);
+			result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
 			result.maybe_too_many_columns = false;
 		}
 		// Maybe we have too few columns:
@@ -126,12 +127,14 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 			while (result.result_position % result.number_of_columns == 0) {
 				result.validity_mask->SetInvalid(result.result_position++);
 			}
-		} else if (result.ignore_errors) {
-			// 2) if ignore_errors is on, we invalidate the whole line.
-			result.result_position -= result.result_position % result.number_of_columns;
 		} else {
-			// 3) otherwise we error.
-			throw InvalidInputException("I'm a baddie");
+			auto csv_error = CSVError::IncorrectColumnAmountError(result.state_machine.options, result.vector_ptr,
+			                                                      result.result_position,
+			                                                      result.result_position % result.number_of_columns);
+			LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
+			                              result.result_position / result.number_of_columns);
+			result.error_handler.Error(lines_per_batch, csv_error);
+			result.result_position -= result.result_position % result.number_of_columns;
 		}
 	}
 
@@ -142,9 +145,14 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 	return false;
 }
 
-void StringValueResult::Kaput(StringValueResult &result) {
-	// FIXME: Add nicer error messages, also what should we do for ignore_errors?
-	throw InvalidInputException("Can't parse this CSV File");
+void StringValueResult::InvalidState(StringValueResult &result) {
+	// FIXME: How do we recover from an invalid state? Can we restart the state machine and jump to the next row?
+	auto csv_error =
+	    CSVError::UnterminatedQuotesError(result.state_machine.options, result.vector_ptr, result.result_position,
+	                                      result.result_position % result.number_of_columns);
+	LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
+	                              result.result_position / result.number_of_columns);
+	result.error_handler.Error(lines_per_batch, csv_error);
 }
 
 idx_t StringValueResult::NumberOfRows() {
@@ -158,7 +166,7 @@ StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, boundary),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             iterator.pos.buffer_pos) {};
+             iterator.pos.buffer_pos, *error_handler, iterator) {};
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	CSVStateMachineCache cache;
@@ -245,7 +253,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					break;
 				}
 			}
-			auto csv_error = CSVError::CastError(names[col_idx], error_message);
+			auto csv_error =
+			    CSVError::CastError(state_machine->options, parse_chunk, line_error, names[col_idx], error_message);
 			LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
 			                              lines_read - parse_chunk.size() + line_error);
 			error_handler->Error(lines_per_batch, csv_error);
@@ -353,7 +362,13 @@ void StringValueScanner::MoveToNextBuffer() {
 void StringValueScanner::SkipEmptyLines() {
 }
 
-void StringValueScanner::SkipNotes() {
+void StringValueScanner::SkipCSVRows() {
+	auto skip_errors = make_shared<CSVErrorHandler>(true);
+	StringValueScanner row_skipper(buffer_manager, state_machine, skip_errors, iterator,
+	                               state_machine->dialect_options.skip_rows.GetValue());
+	row_skipper.ParseChunk();
+	iterator.pos.buffer_pos = row_skipper.iterator.pos.buffer_pos;
+	lines_read += row_skipper.GetLinesRead();
 }
 
 void StringValueScanner::SkipHeader() {
@@ -388,6 +403,7 @@ void StringValueScanner::SetStart() {
 		// This means this is the very first buffer
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
+		SkipCSVRows();
 		SkipEmptyLines();
 		if (state_machine->options.GetHeader()) {
 			SkipHeader();
