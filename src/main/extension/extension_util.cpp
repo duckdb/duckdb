@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,13 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, AggregateFunctionSet 
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateSecretFunction function) {
+	D_ASSERT(!function.secret_type.empty());
+	auto &config = DBConfig::GetConfig(db);
+	config.secret_manager->RegisterSecretFunction(CatalogTransaction::GetSystemTransaction(db), std::move(function),
+	                                              OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction function) {
@@ -150,6 +158,11 @@ void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, Logical
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateType(data, info);
+}
+
+void ExtensionUtil::RegisterSecretType(DatabaseInstance &db, SecretType secret_type) {
+	auto &config = DBConfig::GetConfig(db);
+	config.secret_manager->RegisterSecretType(CatalogTransaction::GetSystemTransaction(db), secret_type);
 }
 
 void ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType &source, const LogicalType &target,

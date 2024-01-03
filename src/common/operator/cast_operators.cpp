@@ -65,6 +65,11 @@ bool TryCast::Operation(bool input, hugeint_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(bool input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<bool, uhugeint_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(bool input, uint8_t &result, bool strict) {
 	return NumericTryCast::Operation<bool, uint8_t>(input, result, strict);
 }
@@ -125,6 +130,11 @@ bool TryCast::Operation(int8_t input, int64_t &result, bool strict) {
 template <>
 bool TryCast::Operation(int8_t input, hugeint_t &result, bool strict) {
 	return NumericTryCast::Operation<int8_t, hugeint_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(int8_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<int8_t, uhugeint_t>(input, result, strict);
 }
 
 template <>
@@ -191,6 +201,11 @@ bool TryCast::Operation(int16_t input, hugeint_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(int16_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<int16_t, uhugeint_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(int16_t input, uint8_t &result, bool strict) {
 	return NumericTryCast::Operation<int16_t, uint8_t>(input, result, strict);
 }
@@ -251,6 +266,11 @@ bool TryCast::Operation(int32_t input, int64_t &result, bool strict) {
 template <>
 bool TryCast::Operation(int32_t input, hugeint_t &result, bool strict) {
 	return NumericTryCast::Operation<int32_t, hugeint_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(int32_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<int32_t, uhugeint_t>(input, result, strict);
 }
 
 template <>
@@ -317,6 +337,11 @@ bool TryCast::Operation(int64_t input, hugeint_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(int64_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<int64_t, uhugeint_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(int64_t input, uint8_t &result, bool strict) {
 	return NumericTryCast::Operation<int64_t, uint8_t>(input, result, strict);
 }
@@ -380,6 +405,11 @@ bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(hugeint_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<hugeint_t, uhugeint_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(hugeint_t input, uint8_t &result, bool strict) {
 	return NumericTryCast::Operation<hugeint_t, uint8_t>(input, result, strict);
 }
@@ -407,6 +437,74 @@ bool TryCast::Operation(hugeint_t input, float &result, bool strict) {
 template <>
 bool TryCast::Operation(hugeint_t input, double &result, bool strict) {
 	return NumericTryCast::Operation<hugeint_t, double>(input, result, strict);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast uhugeint_t -> Numeric
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(uhugeint_t input, bool &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, bool>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, int8_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, int8_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, int16_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, int16_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, int32_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, int32_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, int64_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, int64_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, uhugeint_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, hugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, hugeint_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, uint8_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, uint8_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, uint16_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, uint16_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, uint32_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, uint32_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, uint64_t &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, uint64_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, float &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, float>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uhugeint_t input, double &result, bool strict) {
+	return NumericTryCast::Operation<uhugeint_t, double>(input, result, strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -440,6 +538,11 @@ bool TryCast::Operation(uint8_t input, int64_t &result, bool strict) {
 template <>
 bool TryCast::Operation(uint8_t input, hugeint_t &result, bool strict) {
 	return NumericTryCast::Operation<uint8_t, hugeint_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uint8_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<uint8_t, uhugeint_t>(input, result, strict);
 }
 
 template <>
@@ -506,6 +609,11 @@ bool TryCast::Operation(uint16_t input, hugeint_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(uint16_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<uint16_t, uhugeint_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(uint16_t input, uint8_t &result, bool strict) {
 	return NumericTryCast::Operation<uint16_t, uint8_t>(input, result, strict);
 }
@@ -566,6 +674,11 @@ bool TryCast::Operation(uint32_t input, int64_t &result, bool strict) {
 template <>
 bool TryCast::Operation(uint32_t input, hugeint_t &result, bool strict) {
 	return NumericTryCast::Operation<uint32_t, hugeint_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(uint32_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<uint32_t, uhugeint_t>(input, result, strict);
 }
 
 template <>
@@ -632,6 +745,11 @@ bool TryCast::Operation(uint64_t input, hugeint_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(uint64_t input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<uint64_t, uhugeint_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(uint64_t input, uint8_t &result, bool strict) {
 	return NumericTryCast::Operation<uint64_t, uint8_t>(input, result, strict);
 }
@@ -695,6 +813,11 @@ bool TryCast::Operation(float input, hugeint_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(float input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<float, uhugeint_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(float input, uint8_t &result, bool strict) {
 	return NumericTryCast::Operation<float, uint8_t>(input, result, strict);
 }
@@ -755,6 +878,11 @@ bool TryCast::Operation(double input, int64_t &result, bool strict) {
 template <>
 bool TryCast::Operation(double input, hugeint_t &result, bool strict) {
 	return NumericTryCast::Operation<double, hugeint_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(double input, uhugeint_t &result, bool strict) {
+	return NumericTryCast::Operation<double, uhugeint_t>(input, result, strict);
 }
 
 template <>
@@ -1706,6 +1834,17 @@ bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool str
 	return (true);
 }
 
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, bool strict) {
+	D_ASSERT(input.GetSize() > 1);
+
+	if (input.GetSize() - 1 > sizeof(uhugeint_t)) {
+		throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<uhugeint_t>());
+	}
+	Bit::BitToNumeric(input, result);
+	return (true);
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From UUID
 //===--------------------------------------------------------------------===//
@@ -1836,7 +1975,7 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *
 }
 
 //===--------------------------------------------------------------------===//
-// Cast From Hugeint
+// Cast to hugeint / uhugeint
 //===--------------------------------------------------------------------===//
 // parsing hugeint from string is done a bit differently for performance reasons
 // for other integer types we keep track of a single value
@@ -1845,12 +1984,16 @@ bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *
 // for that reason, we parse numbers first into an int64 value
 // when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
 // this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
+
+template <typename T, typename OP>
 struct HugeIntCastData {
-	hugeint_t result;
+	using ResultType = T;
+	using Operation = OP;
+	ResultType result;
 	int64_t intermediate;
 	uint8_t digits;
 
-	hugeint_t decimal;
+	ResultType decimal;
 	uint16_t decimal_total_digits;
 	int64_t decimal_intermediate;
 	uint16_t decimal_intermediate_digits;
@@ -1863,11 +2006,11 @@ struct HugeIntCastData {
 			if (digits > 38) {
 				return false;
 			}
-			if (!Hugeint::TryMultiply(result, Hugeint::POWERS_OF_TEN[digits], result)) {
+			if (!OP::TryMultiply(result, OP::POWERS_OF_TEN[digits], result)) {
 				return false;
 			}
 		}
-		if (!Hugeint::AddInPlace(result, hugeint_t(intermediate))) {
+		if (!OP::AddInPlace(result, ResultType(intermediate))) {
 			return false;
 		}
 		digits = 0;
@@ -1883,11 +2026,11 @@ struct HugeIntCastData {
 			if (decimal_intermediate_digits > 38) {
 				return false;
 			}
-			if (!Hugeint::TryMultiply(decimal, Hugeint::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
+			if (!OP::TryMultiply(decimal, OP::POWERS_OF_TEN[decimal_intermediate_digits], decimal)) {
 				return false;
 			}
 		}
-		if (!Hugeint::AddInPlace(decimal, hugeint_t(decimal_intermediate))) {
+		if (!OP::AddInPlace(decimal, ResultType(decimal_intermediate))) {
 			return false;
 		}
 		decimal_total_digits += decimal_intermediate_digits;
@@ -1932,6 +2075,7 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int32_t exponent) {
+		using result_t = typename T::ResultType;
 		if (!state.Flush()) {
 			return false;
 		}
@@ -1943,9 +2087,12 @@ struct HugeIntegerCastOperation {
 		}
 
 		// Negative Exponent
-		hugeint_t remainder = 0;
+		result_t remainder = 0;
 		if (e < 0) {
-			state.result = Hugeint::DivMod(state.result, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.result = T::Operation::DivMod(state.result, T::Operation::POWERS_OF_TEN[-e], remainder);
+			if (remainder < 0) {
+				remainder *= -1;
+			}
 			state.decimal = remainder;
 			state.decimal_total_digits = -e;
 			state.decimal_intermediate = 0;
@@ -1955,7 +2102,7 @@ struct HugeIntegerCastOperation {
 
 		// Positive Exponent
 		if (state.result != 0) {
-			if (e > 38 || !TryMultiplyOperator::Operation(state.result, Hugeint::POWERS_OF_TEN[e], state.result)) {
+			if (e > 38 || !TryMultiplyOperator::Operation(state.result, T::Operation::POWERS_OF_TEN[e], state.result)) {
 				return false;
 			}
 		}
@@ -1968,10 +2115,11 @@ struct HugeIntegerCastOperation {
 
 		e = exponent - state.decimal_total_digits;
 		if (e < 0) {
-			state.decimal = Hugeint::DivMod(state.decimal, Hugeint::POWERS_OF_TEN[-e], remainder);
+			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
 			state.decimal_total_digits -= (exponent);
 		} else {
-			if (e > 38 || !TryMultiplyOperator::Operation(state.decimal, Hugeint::POWERS_OF_TEN[e], state.decimal)) {
+			if (e > 38 ||
+			    !TryMultiplyOperator::Operation(state.decimal, T::Operation::POWERS_OF_TEN[e], state.decimal)) {
 				return false;
 			}
 		}
@@ -2004,6 +2152,7 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool Finalize(T &state) {
+		using result_t = typename T::ResultType;
 		if (!state.Flush() || !state.FlushDecimal()) {
 			return false;
 		}
@@ -2014,17 +2163,17 @@ struct HugeIntegerCastOperation {
 
 		// Get the first (left-most) digit of the decimals
 		while (state.decimal_total_digits > 39) {
-			state.decimal /= Hugeint::POWERS_OF_TEN[39];
+			state.decimal /= T::Operation::POWERS_OF_TEN[39];
 			state.decimal_total_digits -= 39;
 		}
 		D_ASSERT((state.decimal_total_digits - 1) >= 0 && (state.decimal_total_digits - 1) <= 39);
-		state.decimal /= Hugeint::POWERS_OF_TEN[state.decimal_total_digits - 1];
+		state.decimal /= T::Operation::POWERS_OF_TEN[state.decimal_total_digits - 1];
 
-		if (state.decimal >= 5 || state.decimal <= -5) {
+		if (state.decimal >= 5) {
 			if (NEGATIVE) {
-				return TrySubtractOperator::Operation(state.result, hugeint_t(1), state.result);
+				return TrySubtractOperator::Operation(state.result, result_t(1), state.result);
 			} else {
-				return TryAddOperator::Operation(state.result, hugeint_t(1), state.result);
+				return TryAddOperator::Operation(state.result, result_t(1), state.result);
 			}
 		}
 		return true;
@@ -2033,9 +2182,20 @@ struct HugeIntegerCastOperation {
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData state {};
-	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), state,
-	                                                                           strict)) {
+	HugeIntCastData<hugeint_t, Hugeint> state {};
+	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint>, true, true, HugeIntegerCastOperation>(
+	        input.GetData(), input.GetSize(), state, strict)) {
+		return false;
+	}
+	result = state.result;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
+	HugeIntCastData<uhugeint_t, Uhugeint> state {};
+	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint>, false, true, HugeIntegerCastOperation>(
+	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
 	}
 	result = state.result;
@@ -2629,6 +2789,46 @@ bool TryCastToDecimal::Operation(hugeint_t input, hugeint_t &result, string *err
 }
 
 //===--------------------------------------------------------------------===//
+// Uhugeint -> Decimal Cast
+//===--------------------------------------------------------------------===//
+template <class DST>
+bool UhugeintToDecimalCast(uhugeint_t input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
+	// check for overflow
+	uhugeint_t max_width = Uhugeint::POWERS_OF_TEN[width - scale];
+	if (input >= max_width) {
+		string error = StringUtil::Format("Could not cast value %s to DECIMAL(%d,%d)", input.ToString(), width, scale);
+		HandleCastError::AssignError(error, error_message);
+		return false;
+	}
+	result = Uhugeint::Cast<DST>(input * Uhugeint::POWERS_OF_TEN[scale]);
+	return true;
+}
+
+template <>
+bool TryCastToDecimal::Operation(uhugeint_t input, int16_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale) {
+	return UhugeintToDecimalCast<int16_t>(input, result, error_message, width, scale);
+}
+
+template <>
+bool TryCastToDecimal::Operation(uhugeint_t input, int32_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale) {
+	return UhugeintToDecimalCast<int32_t>(input, result, error_message, width, scale);
+}
+
+template <>
+bool TryCastToDecimal::Operation(uhugeint_t input, int64_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale) {
+	return UhugeintToDecimalCast<int64_t>(input, result, error_message, width, scale);
+}
+
+template <>
+bool TryCastToDecimal::Operation(uhugeint_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale) {
+	return UhugeintToDecimalCast<hugeint_t>(input, result, error_message, width, scale);
+}
+
+//===--------------------------------------------------------------------===//
 // Float/Double -> Decimal Cast
 //===--------------------------------------------------------------------===//
 template <class SRC, class DST>
@@ -2930,6 +3130,30 @@ template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, hugeint_t &result, string *error_message, uint8_t width,
                                    uint8_t scale) {
 	return TryCastHugeDecimalToNumeric<hugeint_t>(input, result, error_message, scale);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast Decimal -> uhugeint_t
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastFromDecimal::Operation(int16_t input, uhugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale) {
+	return TryCastDecimalToNumeric<int16_t, uhugeint_t>(input, result, error_message, scale);
+}
+template <>
+bool TryCastFromDecimal::Operation(int32_t input, uhugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale) {
+	return TryCastDecimalToNumeric<int32_t, uhugeint_t>(input, result, error_message, scale);
+}
+template <>
+bool TryCastFromDecimal::Operation(int64_t input, uhugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale) {
+	return TryCastDecimalToNumeric<int64_t, uhugeint_t>(input, result, error_message, scale);
+}
+template <>
+bool TryCastFromDecimal::Operation(hugeint_t input, uhugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale) {
+	return TryCastHugeDecimalToNumeric<uhugeint_t>(input, result, error_message, scale);
 }
 
 //===--------------------------------------------------------------------===//
