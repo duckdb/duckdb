@@ -97,7 +97,8 @@ public:
 		if (scanner.states.NewValue()) {
 			//! Add new value to result
 			T::AddValue(result, buffer_pos);
-		} else if (scanner.states.EmptyLine()) {
+		}
+		if (scanner.states.EmptyLine()) {
 			//! Increment Lines Read
 			scanner.lines_read++;
 			if (T::EmptyLine(result, buffer_pos)) {
