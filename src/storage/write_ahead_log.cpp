@@ -58,7 +58,7 @@ void WriteAheadLog::Delete() {
 //===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
-	ChecksumWriter(WriteAheadLog &wal) : wal(wal), stream(wal.GetWriter()) {
+	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), stream(wal.GetWriter()) {
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
