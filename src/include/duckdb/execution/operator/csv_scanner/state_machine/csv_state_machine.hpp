@@ -50,7 +50,8 @@ struct CSVStates {
 		return previous_state == CSVState::UNQUOTED;
 	}
 	inline bool IsEscaped() {
-		return previous_state == CSVState::ESCAPE;
+		return previous_state == CSVState::ESCAPE ||
+		       (pre_previous_state == CSVState::UNQUOTED && previous_state == CSVState::QUOTED);
 	}
 	inline bool IsQuotedCurrent() {
 		return current_state == CSVState::UNQUOTED;

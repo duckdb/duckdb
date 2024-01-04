@@ -58,9 +58,19 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	if (result.escaped) {
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		auto result_str = result.vector_ptr[result.result_position - 1].GetString();
-		result_str.erase(std::remove(result_str.begin(), result_str.end(), result.state_machine.options.GetEscape()[0]),
-		                 result_str.end());
-		result.vector_ptr[result.result_position - 1] = string_t(result_str);
+		string removed_escapes;
+		char escape = result.state_machine.dialect_options.state_machine_options.escape.GetValue();
+		bool just_escaped = false;
+		for (auto &c : result_str) {
+			if (c == escape && !just_escaped) {
+				just_escaped = true;
+			} else {
+				just_escaped = false;
+				removed_escapes += c;
+			}
+		}
+		result.vector_ptr[result.result_position - 1] =
+		    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 	}
 	result.quoted = false;
 	result.escaped = false;

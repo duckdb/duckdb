@@ -66,8 +66,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 	return csv_scanner;
 
 	//		if (!reader) {
-//				file_size = file_handle->FileSize();
-//			bytes_read = 0;
+	//				file_size = file_handle->FileSize();
+	//			bytes_read = 0;
 	//			D_ASSERT(0);
 	//			//		// we either don't have a reader, or the reader was created for a different file
 	//			//		// we need to create a new reader and instantiate it
