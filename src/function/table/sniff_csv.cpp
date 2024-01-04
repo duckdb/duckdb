@@ -141,7 +141,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	str_opt = sniffer_options.dialect_options.state_machine_options.escape.GetValue();
 	output.SetValue(2, 0, str_opt);
 	// 4. NewLine Delimiter
-	auto new_line_identifier = NewLineIdentifierToString(sniffer_options.dialect_options.new_line.GetValue());
+	auto new_line_identifier =
+	    NewLineIdentifierToString(sniffer_options.dialect_options.state_machine_options.new_line.GetValue());
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Skip Rows
 	output.SetValue(4, 0, Value::UINTEGER(sniffer_options.dialect_options.skip_rows.GetValue()));
@@ -216,7 +217,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		         << separator;
 	}
 	// 11.4. NewLine Delimiter
-	if (!sniffer_options.dialect_options.new_line.IsSetByUser()) {
+	if (!sniffer_options.dialect_options.state_machine_options.new_line.IsSetByUser()) {
 		if (new_line_identifier != "mix") {
 			csv_read << "new_line="
 			         << "'" << new_line_identifier << "'" << separator;

@@ -34,25 +34,40 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	uint8_t quote = static_cast<uint8_t>(state_machine_options.quote.GetValue());
 	uint8_t escape = static_cast<uint8_t>(state_machine_options.escape.GetValue());
 
+	auto new_line_id = state_machine_options.new_line.GetValue();
+	//	D_ASSERT(new_line_id == NewLineIdentifier::SINGLE ||new_line_id == NewLineIdentifier::CARRY_ON);
+
 	// Now set values depending on configuration
 	// 1) Standard State
 	transition_array[CSVState::STANDARD][delimiter] = CSVState::DELIMITER;
 	transition_array[CSVState::STANDARD][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
-	transition_array[CSVState::STANDARD][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		transition_array[CSVState::STANDARD][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	} else {
+		transition_array[CSVState::STANDARD][static_cast<uint8_t>('\r')] = CSVState::RECORD_SEPARATOR;
+	}
 	transition_array[CSVState::STANDARD][quote] = CSVState::QUOTED;
 	// 2) Field Separator State
 	transition_array[CSVState::DELIMITER][delimiter] = CSVState::DELIMITER;
 	transition_array[CSVState::DELIMITER][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
-	transition_array[CSVState::DELIMITER][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		transition_array[CSVState::DELIMITER][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	} else {
+		transition_array[CSVState::DELIMITER][static_cast<uint8_t>('\r')] = CSVState::RECORD_SEPARATOR;
+	}
 	transition_array[CSVState::DELIMITER][quote] = CSVState::QUOTED;
 	// 3) Record Separator State
 	transition_array[CSVState::RECORD_SEPARATOR][delimiter] = CSVState::DELIMITER;
-	transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>('\n')] = CSVState::EMPTY_LINE;
-	transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>('\r')] = CSVState::EMPTY_LINE;
+	transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
+	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	} else {
+		transition_array[CSVState::RECORD_SEPARATOR][static_cast<uint8_t>('\r')] = CSVState::RECORD_SEPARATOR;
+	}
 	transition_array[CSVState::RECORD_SEPARATOR][quote] = CSVState::QUOTED;
 	// 4) Carriage Return State
 	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
-	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>('\r')] = CSVState::EMPTY_LINE;
+	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>('\r')] = CSVState::RECORD_SEPARATOR;
 	transition_array[CSVState::CARRIAGE_RETURN][escape] = CSVState::ESCAPE;
 	// 5) Quoted State
 	transition_array[CSVState::QUOTED][quote] = CSVState::UNQUOTED;
@@ -61,7 +76,11 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 	// 6) Unquoted State
 	transition_array[CSVState::UNQUOTED][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
-	transition_array[CSVState::UNQUOTED][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		transition_array[CSVState::UNQUOTED][static_cast<uint8_t>('\r')] = CSVState::CARRIAGE_RETURN;
+	} else {
+		transition_array[CSVState::UNQUOTED][static_cast<uint8_t>('\r')] = CSVState::RECORD_SEPARATOR;
+	}
 	transition_array[CSVState::UNQUOTED][delimiter] = CSVState::DELIMITER;
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[CSVState::UNQUOTED][escape] = CSVState::QUOTED;
@@ -69,11 +88,6 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	// 7) Escaped State
 	transition_array[CSVState::ESCAPE][quote] = CSVState::QUOTED;
 	transition_array[CSVState::ESCAPE][escape] = CSVState::QUOTED;
-	// 8) Empty Line State
-	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>('\r')] = CSVState::EMPTY_LINE;
-	transition_array[CSVState::EMPTY_LINE][static_cast<uint8_t>('\n')] = CSVState::EMPTY_LINE;
-	transition_array[CSVState::EMPTY_LINE][delimiter] = CSVState::DELIMITER;
-	transition_array[CSVState::EMPTY_LINE][quote] = CSVState::QUOTED;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
@@ -83,7 +97,8 @@ CSVStateMachineCache::CSVStateMachineCache() {
 			for (const auto &delimiter : default_delimiter) {
 				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					Insert({delimiter, quote, escape});
+					Insert({delimiter, quote, escape, NewLineIdentifier::SINGLE});
+					Insert({delimiter, quote, escape, NewLineIdentifier::CARRY_ON});
 				}
 			}
 		}

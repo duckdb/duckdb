@@ -53,15 +53,14 @@ DataChunk &StringValueResult::ToChunk() {
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
-	result.vector_ptr[result.result_position++] =
-	    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 3);
 	if (result.escaped) {
 		// If it's an escaped value we have to remove all the escapes, this is not really great
-		auto result_str = result.vector_ptr[result.result_position - 1].GetString();
 		string removed_escapes;
 		char escape = result.state_machine.dialect_options.state_machine_options.escape.GetValue();
 		bool just_escaped = false;
-		for (auto &c : result_str) {
+		char *str_ptr = result.buffer_ptr + result.last_position + 1;
+		for (idx_t cur_pos = 0; cur_pos <= buffer_pos - result.last_position - 3; cur_pos++) {
+			char c = str_ptr[cur_pos];
 			if (c == escape && !just_escaped) {
 				just_escaped = true;
 			} else {
@@ -69,8 +68,11 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 				removed_escapes += c;
 			}
 		}
-		result.vector_ptr[result.result_position - 1] =
+		result.vector_ptr[result.result_position++] =
 		    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
+	} else {
+		result.vector_ptr[result.result_position++] =
+		    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
 	}
 	result.quoted = false;
 	result.escaped = false;
@@ -79,7 +81,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	D_ASSERT(result.result_position < result.vector_size);
 	if (result.quoted) {
-		StringValueResult::AddQuotedValue(result, buffer_pos);
+		StringValueResult::AddQuotedValue(result, buffer_pos -1);
 	} else {
 		// Test against null value first
 		auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
@@ -102,14 +104,14 @@ inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	if (quoted) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
 	} else {
-		auto value = string_t(buffer_ptr + last_position, buffer_pos - last_position - 1);
+		auto value = string_t(buffer_ptr + last_position, buffer_pos - last_position);
 		if (value == state_machine.options.null_str) {
 			validity_mask->SetInvalid(result_position++);
 		} else {
 			vector_ptr[result_position++] = value;
 		}
 	}
-	last_position = buffer_pos;
+	last_position = buffer_pos + 1;
 }
 
 void StringValueResult::Print() {
@@ -174,6 +176,21 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
 	                              result.result_position / result.number_of_columns);
 	result.error_handler.Error(lines_per_batch, csv_error);
+}
+
+bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
+	// We care about empty lines if this is a single column csv file
+	result.last_position = buffer_pos + 1;
+	if (result.parse_chunk.ColumnCount() == 1) {
+		if (result.state_machine.options.null_str.empty()) {
+			result.validity_mask->SetInvalid(result.result_position++);
+		}
+		if (result.result_position / result.number_of_columns >= result.result_size) {
+			// We have a full chunk
+			return true;
+		}
+	}
+	return false;
 }
 
 idx_t StringValueResult::NumberOfRows() {
@@ -306,108 +323,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	}
 }
 
-//		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-//
-//
-//
-//
-//
-//			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
-//				auto col_idx = reader_data.column_ids[c];
-//				auto result_idx = reader_data.column_mapping[c];
-//
-//				auto &parse_vector = parse_chunk.data[col_idx];
-//				auto &result_vector = insert_chunk.data[result_idx];
-//
-//				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
-//				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
-//					Increment(buffer_idx);
-//					auto bla = GetLineError(global_row_idx, buffer_idx, false);
-//					row_idx += bla;
-//					row_idx -= bla;
-//					row_failed = true;
-//					failed_cells.emplace_back(row_idx, col_idx, row_line);
-//				}
-//			}
-//			if (!row_failed) {
-//				succesful_rows.set_index(sel_size++, row_idx);
-//			}
-//		}
-//
-//		// Now do a second pass to produce the reject table entries
-//		if (!failed_cells.empty() && !options.rejects_table_name.empty()) {
-//			auto limit = options.rejects_limit;
-//
-//			auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
-//			lock_guard<mutex> lock(rejects->write_lock);
-//
-//			// short circuit if we already have too many rejects
-//			if (limit == 0 || rejects->count < limit) {
-//				auto &table = rejects->GetTable(context);
-//				InternalAppender appender(context, table);
-//				auto file_name = GetFileName();
-//
-//				for (auto &cell : failed_cells) {
-//					if (limit != 0 && rejects->count >= limit) {
-//						break;
-//					}
-//					rejects->count++;
-//
-//					auto row_idx = cell.row_idx;
-//					auto col_idx = cell.col_idx;
-//					auto row_line = cell.row_line;
-//
-//					auto col_name = to_string(col_idx);
-//					if (col_idx < names.size()) {
-//						col_name = "\"" + names[col_idx] + "\"";
-//					}
-//
-//					auto &parse_vector = parse_chunk.data[col_idx];
-//					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx];
-//					auto &type = insert_chunk.data[col_idx].GetType();
-//					auto row_error_msg = StringUtil::Format("Could not convert string '%s' to '%s'",
-//					                                        parsed_str.GetString(), type.ToString());
-//
-//					// Add the row to the rejects table
-//					appender.BeginRow();
-//					appender.Append(string_t(file_name));
-//					appender.Append(row_line);
-//					appender.Append(col_idx);
-//					appender.Append(string_t(col_name));
-//					appender.Append(parsed_str);
-//
-//					if (!options.rejects_recovery_columns.empty()) {
-//						child_list_t<Value> recovery_key;
-//						for (auto &key_idx : options.rejects_recovery_column_ids) {
-//							// Figure out if the recovery key is valid.
-//							// If not, error out for real.
-//							auto &component_vector = parse_chunk.data[key_idx];
-//							if (FlatVector::IsNull(component_vector, row_idx)) {
-//								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
-//								                            "Could not parse recovery column", row_line, col_name,
-//								                            options.ToString());
-//							}
-//							auto component = Value(FlatVector::GetData<string_t>(component_vector)[row_idx]);
-//							recovery_key.emplace_back(names[key_idx], component);
-//						}
-//						appender.Append(Value::STRUCT(recovery_key));
-//					}
-//
-//					appender.Append(string_t(row_error_msg));
-//					appender.EndRow();
-//				}
-//				appender.Close();
-//			}
-//		}
-//
-//		// Now slice the insert chunk to only include the succesful rows
-//		insert_chunk.Slice(succesful_rows, sel_size);
-//	}
-//	parse_chunk.Reset();
-//	return true;
-
 void StringValueScanner::Initialize() {
-	states.Initialize(CSVState::EMPTY_LINE);
+	states.Initialize(CSVState::RECORD_SEPARATOR);
 	if (result.result_size != 1) {
 		SetStart();
 	}
@@ -426,6 +343,7 @@ void StringValueScanner::Process() {
 	}
 	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
 		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
+			iterator.pos.buffer_pos++;
 			return;
 		}
 	}
@@ -485,18 +403,17 @@ void StringValueScanner::MoveToNextBuffer() {
 		if (!cur_buffer_handle) {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
-			if (result.last_position < previous_buffer_handle->actual_size) {
-				if (states.IsCurrentNewRow()) {
-					result.AddRowInternal(previous_buffer_handle->actual_size);
-				} else if (states.IsCurrentDelimiter()) {
-					// we add the value
-					result.AddRowInternal(previous_buffer_handle->actual_size);
-					// And an extra empty value to represent what comes after the delimiter
-					result.AddRowInternal(previous_buffer_handle->actual_size + 1);
-				} else {
-					result.AddRowInternal(previous_buffer_handle->actual_size + 1);
-				}
+			if (states.EmptyLine() || states.NewRow()) {
+				return;
+			} else if (states.IsCurrentDelimiter()) {
+				// we add the value
+				result.AddRowInternal(previous_buffer_handle->actual_size);
+				// And an extra empty value to represent what comes after the delimiter
+				result.AddRowInternal(previous_buffer_handle->actual_size);
+			} else {
+				result.AddRowInternal(previous_buffer_handle->actual_size);
 			}
+
 			return;
 		}
 		iterator.pos.buffer_pos = 0;
@@ -515,7 +432,7 @@ void StringValueScanner::SkipCSVRows() {
 	}
 	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
-	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
+	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 1;
 	//! FIXME: This will get borked if we skip more than one full boundary, we probably need to do the skipping before
 	//! parallelizing
 	if (iterator.pos.buffer_pos >= iterator.GetEndPos()) {
@@ -527,7 +444,8 @@ void StringValueScanner::SkipCSVRows() {
 
 void StringValueScanner::SkipUntilNewLine() {
 	// Now skip until next newline
-	if (state_machine->options.dialect_options.new_line.GetValue() == NewLineIdentifier::CARRY_ON) {
+	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
+	    NewLineIdentifier::CARRY_ON) {
 		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
 				iterator.pos.buffer_pos++;

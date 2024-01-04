@@ -57,6 +57,8 @@ public:
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(StringValueResult &result);
 
+	//! Handles EmptyLine states
+	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline void AddRowInternal(idx_t buffer_pos);
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 

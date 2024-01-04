@@ -97,6 +97,12 @@ public:
 		if (scanner.states.NewValue()) {
 			//! Add new value to result
 			T::AddValue(result, buffer_pos);
+		} else if (scanner.states.EmptyLine()) {
+			//! Increment Lines Read
+			scanner.lines_read++;
+			if (T::EmptyLine(result, buffer_pos)) {
+				return true;
+			}
 		} else if (scanner.states.NewRow()) {
 			//! Increment Lines Read
 			scanner.lines_read++;
@@ -105,9 +111,6 @@ public:
 			if (T::AddRow(result, buffer_pos)) {
 				return true;
 			}
-		} else if (scanner.states.EmptyLine()) {
-			//! Increment Lines Read
-			scanner.lines_read++;
 		} else if (scanner.states.IsQuoted()) {
 			T::SetQuoted(result);
 		} else if (scanner.states.IsEscaped()) {

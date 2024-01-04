@@ -28,6 +28,10 @@ void SkipResult::InvalidState(SkipResult &result) {
 	// nop
 }
 
+bool SkipResult::EmptyLine(SkipResult &result, const idx_t buffer_pos) {
+	// nop
+	return false;
+}
 SkipScanner::SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
                          shared_ptr<CSVErrorHandler> error_handler, idx_t rows_to_skip)
     : BaseScanner(buffer_manager, state_machine, error_handler), result(states, *state_machine, rows_to_skip) {
@@ -44,7 +48,7 @@ SkipResult *SkipScanner::GetResult() {
 }
 
 void SkipScanner::Initialize() {
-	states.Initialize(CSVState::EMPTY_LINE);
+	states.Initialize(CSVState::RECORD_SEPARATOR);
 }
 
 void SkipScanner::Process() {

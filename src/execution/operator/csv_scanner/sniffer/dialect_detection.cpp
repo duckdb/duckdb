@@ -61,6 +61,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
                                                  const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
                                                  const unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
 	// Generate state machines for all option combinations
+	auto new_line_id = DetectNewLineDelimiter();
 	for (const auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
 		for (const auto &quote : quote_candidates) {
@@ -68,7 +69,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 				const auto &escape_candidates = escape_candidates_map.at((uint8_t)quoterule);
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
-					CSVStateMachineOptions state_machine_options(delimiter, quote, escape);
+					CSVStateMachineOptions state_machine_options(delimiter, quote, escape, new_line_id);
 					auto sniffing_state_machine =
 					    make_uniq<CSVStateMachine>(options, state_machine_options, state_machine_cache);
 					column_count_scanners.emplace_back(make_uniq<ColumnCountScanner>(
@@ -243,20 +244,26 @@ void CSVSniffer::RefineCandidates() {
 	return;
 }
 
-void SetNewLine(CSVStateMachine &machine) {
-	NewLineIdentifier suggested_newline;
-	if (machine.carry_on_separator) {
-		if (machine.single_record_separator) {
-			suggested_newline = NewLineIdentifier::MIX;
-		} else {
-			suggested_newline = NewLineIdentifier::CARRY_ON;
+NewLineIdentifier CSVSniffer::DetectNewLineDelimiter() {
+	// Get first buffer
+	auto buffer = buffer_manager->GetBuffer(0, 0);
+	auto buffer_ptr = buffer->Ptr();
+	bool carriage_return = false;
+	bool n = false;
+	for (idx_t i = 0; i < buffer->actual_size; i++) {
+		if (buffer_ptr[i] == '\r') {
+			carriage_return = true;
+		} else if (buffer_ptr[i] == '\n') {
+			n = true;
+			break;
+		} else if (carriage_return) {
+			break;
 		}
-	} else {
-		suggested_newline = NewLineIdentifier::SINGLE;
 	}
-	if (machine.options.dialect_options.new_line == NewLineIdentifier::NOT_SET) {
-		machine.dialect_options.new_line = suggested_newline;
+	if (carriage_return && n) {
+		return NewLineIdentifier::CARRY_ON;
 	}
+	return NewLineIdentifier::SINGLE;
 }
 
 // Dialect Detection consists of five steps:
@@ -305,6 +312,5 @@ void CSVSniffer::DetectDialect() {
 		auto error = CSVError::SniffingError(options.file_path);
 		error_handler->Error(error);
 	}
-	SetNewLine(candidates[0]->GetStateMachine());
 }
 } // namespace duckdb

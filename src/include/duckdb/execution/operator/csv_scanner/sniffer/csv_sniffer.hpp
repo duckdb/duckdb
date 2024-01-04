@@ -126,6 +126,8 @@ private:
 	                             idx_t &prev_padding_count);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
+
+	NewLineIdentifier DetectNewLineDelimiter();
 	//! Checks if candidate still produces good values for the next chunk
 	bool RefineCandidateNextChunk(ColumnCountScanner &candidate);
 

@@ -128,14 +128,14 @@ void CSVReaderOptions::SetQuote(const string &quote_p) {
 }
 
 NewLineIdentifier CSVReaderOptions::GetNewline() const {
-	return dialect_options.new_line.GetValue();
+	return dialect_options.state_machine_options.new_line.GetValue();
 }
 
 void CSVReaderOptions::SetNewline(const string &input) {
 	if (input == "\\n" || input == "\\r") {
-		dialect_options.new_line.Set(NewLineIdentifier::SINGLE);
+		dialect_options.state_machine_options.new_line.Set(NewLineIdentifier::SINGLE);
 	} else if (input == "\\r\\n") {
-		dialect_options.new_line.Set(NewLineIdentifier::CARRY_ON);
+		dialect_options.state_machine_options.new_line.Set(NewLineIdentifier::CARRY_ON);
 	} else {
 		throw InvalidInputException("This is not accepted as a newline: " + input);
 	}
@@ -299,7 +299,7 @@ string CSVReaderOptions::ToString() const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
-	auto &new_line = dialect_options.new_line;
+	auto &new_line = dialect_options.state_machine_options.new_line;
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
@@ -494,7 +494,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	if (delimiter.IsSetByUser()) {
 		named_params["delim"] = Value(GetDelimiter());
 	}
-	if (dialect_options.new_line.IsSetByUser()) {
+	if (dialect_options.state_machine_options.new_line.IsSetByUser()) {
 		named_params["newline"] = Value(EnumUtil::ToString(GetNewline()));
 	}
 	if (quote.IsSetByUser()) {

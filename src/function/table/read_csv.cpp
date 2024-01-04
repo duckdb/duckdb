@@ -36,7 +36,8 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	// We can't parallelize files with a mix of new line delimiters, or with null padding options
 	// Since we won't be able to detect where new lines start correctly
-	bool not_supported_options = options.null_padding || options.dialect_options.new_line == NewLineIdentifier::MIX;
+	bool not_supported_options =
+	    options.null_padding || options.dialect_options.state_machine_options.new_line == NewLineIdentifier::MIX;
 
 	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	// If we have many csv files, we run single-threaded on each file and parallelize on the number of files

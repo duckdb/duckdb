@@ -27,8 +27,13 @@ struct CSVStates {
 	}
 
 	inline bool NewRow() {
-		return (previous_state == CSVState::RECORD_SEPARATOR) ||
-		       (current_state != CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
+		return previous_state != CSVState::RECORD_SEPARATOR && previous_state != CSVState::CARRIAGE_RETURN &&
+		       (current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN);
+	}
+
+	inline bool EmptyLine() {
+		return (current_state == CSVState::CARRIAGE_RETURN || current_state == CSVState::RECORD_SEPARATOR) &&
+		       previous_state == CSVState::RECORD_SEPARATOR;
 	}
 
 	inline bool IsCurrentNewRow() {
@@ -39,15 +44,11 @@ struct CSVStates {
 		return current_state == CSVState::DELIMITER;
 	}
 
-	inline bool EmptyLine() {
-		return current_state == CSVState::EMPTY_LINE;
-	}
-
 	inline bool IsInvalid() {
 		return current_state == CSVState::INVALID;
 	}
 	inline bool IsQuoted() {
-		return previous_state == CSVState::UNQUOTED;
+		return previous_state == CSVState::QUOTED;
 	}
 	inline bool IsEscaped() {
 		return previous_state == CSVState::ESCAPE ||
@@ -56,9 +57,9 @@ struct CSVStates {
 	inline bool IsQuotedCurrent() {
 		return current_state == CSVState::UNQUOTED;
 	}
-	CSVState current_state = CSVState::EMPTY_LINE;
-	CSVState previous_state = CSVState::EMPTY_LINE;
-	CSVState pre_previous_state = CSVState::EMPTY_LINE;
+	CSVState current_state = CSVState::RECORD_SEPARATOR;
+	CSVState previous_state = CSVState::RECORD_SEPARATOR;
+	CSVState pre_previous_state = CSVState::RECORD_SEPARATOR;
 };
 
 //! The CSV State Machine comprises a state transition array (STA).
@@ -69,7 +70,6 @@ struct CSVStates {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
-	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
 
 	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
@@ -92,10 +92,6 @@ public:
 	const CSVStateMachineOptions state_machine_options;
 	//! CSV Reader Options
 	const CSVReaderOptions &options;
-
-	//! Both these variables are used for new line identifier detection
-	bool single_record_separator = false;
-	bool carry_on_separator = false;
 
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;

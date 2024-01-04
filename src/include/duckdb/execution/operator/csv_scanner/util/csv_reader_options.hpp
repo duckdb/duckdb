@@ -19,14 +19,12 @@
 
 namespace duckdb {
 
-enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
-
 //! Struct that holds the configuration of a CSV State Machine
 //! Basically which char, quote and escape were used to generate it.
 struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
-	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p)
-	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p) {};
+	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p, NewLineIdentifier new_line_p)
+	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p), new_line(new_line_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<char> delimiter = ',';
@@ -34,16 +32,17 @@ struct CSVStateMachineOptions {
 	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
 	CSVOption<char> escape = '\0';
+	//! New Line separator
+	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
-		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
+		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&
+		       new_line == other.new_line;
 	}
 };
 
 struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
-	//! New Line separator
-	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Whether or not the file has a header line
@@ -53,8 +52,6 @@ struct DialectOptions {
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! How many leading rows to skip
 	CSVOption<idx_t> skip_rows = 0;
-	//! True start of the first CSV Buffer (After skipping empty lines, headers, notes and so on)
-	idx_t true_start = 0;
 };
 
 struct CSVReaderOptions {
@@ -125,11 +122,6 @@ struct CSVReaderOptions {
 	string decimal_separator = ".";
 	//! Whether or not to pad rows that do not have enough columns with NULL values
 	bool null_padding = false;
-
-	//! If we are running the parallel version of the CSV Reader. In general, the system should always auto-detect
-	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
-	//! setting up this manually might be important
-	ParallelMode parallel_mode;
 
 	//! User defined parameters for the csv function concatenated on a string
 	string user_defined_parameters;

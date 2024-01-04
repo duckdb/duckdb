@@ -46,9 +46,10 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string
 }
 void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error) {
 	MatchAndReplace(original.header, sniffed.header, "Header", error);
-	if (sniffed.new_line.GetValue() != NewLineIdentifier::NOT_SET) {
+	if (sniffed.state_machine_options.new_line.GetValue() != NewLineIdentifier::NOT_SET) {
 		// Is sniffed line is not set (e.g., single-line file) , we don't try to replace and match.
-		MatchAndReplace(original.new_line, sniffed.new_line, "New Line", error);
+		MatchAndReplace(original.state_machine_options.new_line, sniffed.state_machine_options.new_line, "New Line",
+		                error);
 	}
 	MatchAndReplace(original.skip_rows, sniffed.skip_rows, "Skip Rows", error);
 	MatchAndReplace(original.state_machine_options.delimiter, sniffed.state_machine_options.delimiter, "Delimiter",
