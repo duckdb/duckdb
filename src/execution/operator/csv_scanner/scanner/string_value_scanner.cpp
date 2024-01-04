@@ -198,7 +198,6 @@ StringValueResult *StringValueScanner::ParseChunk() {
 }
 
 void StringValueScanner::Flush(DataChunk &insert_chunk) {
-
 	auto process_result = ParseChunk();
 	// First Get Parsed Chunk
 	auto &parse_chunk = process_result->ToChunk();
@@ -208,6 +207,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	}
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
+
+	// We keep track of the borked lines, in case we are ignoring errors
+	unordered_set<idx_t> borked_lines;
 
 	// Now Do the cast-aroo
 	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
@@ -224,6 +226,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			string error_message;
 			bool success;
 			idx_t line_error = 0;
+
 			if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue().Empty() &&
 			    type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
@@ -269,25 +272,36 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
 			                              lines_read - parse_chunk.size() + line_error);
 			error_handler->Error(lines_per_batch, csv_error);
+			D_ASSERT(state_machine->options.ignore_errors);
+			// We are ignoring errors. We must continue but ignoring borked rows
+			for (; line_error < parse_chunk.size(); line_error++) {
+				if (!inserted_column_data.validity.RowIsValid(line_error) &&
+				    parse_column_data.validity.RowIsValid(line_error)) {
+					borked_lines.insert(line_error);
+				}
+			}
 		}
+	}
+	if (!borked_lines.empty()) {
+		// We must remove the borked lines from our chunk
+		SelectionVector succesful_rows(parse_chunk.size() - borked_lines.size());
+		idx_t sel_idx = 0;
+		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+			if (borked_lines.find(row_idx) == borked_lines.end()) {
+				succesful_rows.set_index(sel_idx++, row_idx);
+			}
+		}
+		// Now we slice the result
+		insert_chunk.Slice(succesful_rows, sel_idx);
 	}
 }
 
-//	if (conversion_error_ignored) {
-//		D_ASSERT(options.ignore_errors);
-//
-//		SelectionVector succesful_rows(parse_chunk.size());
-//		idx_t sel_size = 0;
-//
-//		// Keep track of failed cells
-//		vector<ErrorLocation> failed_cells;
-//
 //		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 //
-//			auto global_row_idx = row_idx + linenr - parse_chunk.size();
-//			auto row_line = GetLineError(global_row_idx, buffer_idx, false);
 //
-//			bool row_failed = false;
+//
+//
+//
 //			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 //				auto col_idx = reader_data.column_ids[c];
 //				auto result_idx = reader_data.column_mapping[c];

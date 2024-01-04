@@ -10,7 +10,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
 #include <cmath>
 #include <fstream>
 
