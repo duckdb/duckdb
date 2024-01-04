@@ -108,11 +108,6 @@ insert into large_lists values (range(3000), range(3000));
 statement ok
 select list_intersect(l1, l2) from large_lists;
 
-statement error
-select list_intersect(list_intersect([1,2,3,4], [4,5,6,7]), list_intersect([4,5,6,7],[1,2,3,4]));
-----
-function cannot be nested
-
 query I
 select list_intersect(list_filter([1,2,3,4], x -> x > 2), list_filter([4,5,6,7], x -> x > 2));
 ----

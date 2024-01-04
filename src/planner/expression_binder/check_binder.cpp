@@ -46,11 +46,12 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 
 	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
 	// which we capture and remove later
+	// inner lambda parameters have precedence over outer lambda parameters
 	if (lambda_bindings) {
-		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
-			if (colref.GetColumnName() == (*lambda_bindings)[i].dummy_name) {
+		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
+			if (colref.ToString() == (*lambda_bindings)[i - 1].dummy_name) {
 				// FIXME: support lambdas in CHECK constraints
-				// FIXME: like so: return (*lambda_bindings)[i].Bind(colref, i, depth);
+				// FIXME: like so: return (*lambda_bindings)[i - 1].Bind(colref, i, depth);
 				throw NotImplementedException("Lambda functions are currently not supported in CHECK constraints.");
 			}
 		}

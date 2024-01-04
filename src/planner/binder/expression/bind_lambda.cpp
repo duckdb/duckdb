@@ -35,6 +35,41 @@ idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const Bou
 	return offset;
 }
 
+void ExtractParameterList(LambdaExpression &expr) {
+
+	// extract the lambda parameter list, which is a single column
+	// reference, or a list of column references
+
+	D_ASSERT(expr.lhs);
+	bool valid_param_list = true;
+
+	if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
+		// single column reference
+		expr.params.push_back(std::move(expr.lhs));
+
+	} else if (expr.lhs->expression_class == ExpressionClass::FUNCTION) {
+		// list of column references
+		auto &func_expr = expr.lhs->Cast<FunctionExpression>();
+		for (auto &column_ref_expr : func_expr.children) {
+			if (column_ref_expr->expression_class != ExpressionClass::COLUMN_REF) {
+				valid_param_list = false;
+				break;
+			}
+			expr.params.push_back(std::move(column_ref_expr));
+		}
+
+	} else {
+		// invalid parameter list
+		valid_param_list = false;
+	}
+
+	if (!valid_param_list) {
+		throw BinderException(
+		    "Invalid lambda parameter list! Parameters must be comma-separated names like x or (x, y).");
+	}
+	D_ASSERT(!expr.params.empty());
+}
+
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
 
@@ -45,32 +80,8 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		return BindExpression(arrow_expr, depth);
 	}
 
-	// extract the lambda parameter list
-	D_ASSERT(expr.lhs);
-	bool valid_param_list = true;
-
-	if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
-		// single column reference
-		expr.params.push_back(std::move(expr.lhs));
-	} else if (expr.lhs->expression_class == ExpressionClass::FUNCTION) {
-		// list of column references
-		auto &func_expr = expr.lhs->Cast<FunctionExpression>();
-		for (idx_t i = 0; i < func_expr.children.size(); i++) {
-			if (func_expr.children[i]->expression_class != ExpressionClass::COLUMN_REF) {
-				valid_param_list = false;
-				break;
-			}
-			expr.params.push_back(std::move(func_expr.children[i]));
-		}
-	} else {
-		// invalid parameter list
-		valid_param_list = false;
-	}
-
-	if (!valid_param_list) {
-		throw BinderException("Invalid parameter list! Parameters must be comma-separated names, e.g. x or (x, y).");
-	}
-	D_ASSERT(!expr.params.empty());
+	// extract and verify lambda parameters
+	ExtractParameterList(expr);
 
 	// create dummy columns for the lambda parameters (lhs)
 	vector<LogicalType> column_types;
@@ -80,8 +91,14 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	for (idx_t i = 0; i < expr.params.size(); i++) {
 		auto column_ref = expr.params[i]->Cast<ColumnRefExpression>();
 		column_types.push_back((*bind_lambda_function)(i, list_child_type));
-		column_names.push_back(column_ref.GetColumnName());
 		params_strings.push_back(expr.params[i]->ToString());
+
+		auto column_name = expr.params[i]->ToString();
+		// scoping inside macros
+		if (column_name.find(DummyBinding::DUMMY_NAME) != string::npos) {
+			column_name = column_ref.GetColumnName();
+		}
+		column_names.push_back(column_name);
 	}
 
 	// base table alias
@@ -97,15 +114,6 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	}
 	DummyBinding new_lambda_binding(column_types, column_names, params_alias);
 	lambda_bindings->push_back(new_lambda_binding);
-
-	// bind the parameter expressions
-	// TODO: necessary?
-	for (idx_t i = 0; i < expr.params.size(); i++) {
-		auto result = BindExpression(expr.params[i], depth, false);
-		if (result.HasError()) {
-			throw InternalException("Error during lambda binding: %s", result.error);
-		}
-	}
 
 	auto result = BindExpression(expr.expr, depth, false);
 	lambda_bindings->pop_back();

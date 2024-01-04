@@ -34,8 +34,8 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(unique_ptr<ParsedExpressio
 	} else {
 		// multiple lambda parameters
 		auto &func_expr = lambda_expr.lhs->Cast<FunctionExpression>();
-		for (idx_t i = 0; i < func_expr.children.size(); i++) {
-			auto column_ref = lambda_expr.lhs->Cast<ColumnRefExpression>();
+		for (const auto &column_ref_expr : func_expr.children) {
+			auto column_ref = column_ref_expr->Cast<ColumnRefExpression>();
 			lambda_params.back().emplace(column_ref.GetColumnName());
 		}
 	}
@@ -53,7 +53,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 
 	// special-handling for lambdas
 	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
-		ReplaceMacroParametersInLambda(expr, lambda_params);
+		return ReplaceMacroParametersInLambda(expr, lambda_params);
 	}
 
 	switch (expr->GetExpressionClass()) {

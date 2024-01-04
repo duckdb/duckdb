@@ -78,27 +78,23 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	// find a binding that contains this
 	string table_name = binder.bind_context.GetMatchingBinding(column_name);
 
+	// lambda parameters have precedence over macro parameters and columns
+	// inner lambda parameters have precedence over outer lambda parameters
+	if (lambda_bindings) {
+		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
+			if ((*lambda_bindings)[i - 1].HasMatchingBinding(column_name)) {
+				D_ASSERT(!(*lambda_bindings)[i - 1].alias.empty());
+				return make_uniq<LambdaRefExpression>(i - 1, column_name);
+			}
+		}
+	}
+
 	// throw an error if a macro conflicts with a column name
 	auto is_macro_column = false;
 	if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(column_name)) {
 		is_macro_column = true;
 		if (!table_name.empty()) {
 			throw BinderException("Conflicting column names for column " + column_name + "!");
-		}
-	}
-
-	if (lambda_bindings) {
-		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
-			if ((*lambda_bindings)[i].HasMatchingBinding(column_name)) {
-
-				// throw an error if a lambda conflicts with a column name or a macro
-				if (!table_name.empty() || is_macro_column) {
-					throw BinderException("Conflicting column names for column " + column_name + "!");
-				}
-
-				D_ASSERT(!(*lambda_bindings)[i].alias.empty());
-				return make_uniq<LambdaRefExpression>(i, column_name);
-			}
 		}
 	}
 
@@ -226,20 +222,34 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
+
+	// lambda parameters have precedence over columns
+	// inner lambda parameters have precedence over outer lambda parameters
+	if (lambda_bindings) {
+		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
+			if ((*lambda_bindings)[i - 1].HasMatchingBinding(colref.ToString())) {
+				D_ASSERT(!(*lambda_bindings)[i - 1].alias.empty());
+				return make_uniq<LambdaRefExpression>(i - 1, colref.ToString());
+			}
+		}
+	}
+
 	idx_t column_parts = colref.column_names.size();
+
 	// column names can have an arbitrary amount of dots
 	// here is how the resolution works:
 	if (column_parts == 1) {
 		// no dots (i.e. "part1")
 		// -> part1 refers to a column
 		// check if we can qualify the column name with the table name
-		auto qualified_colref = QualifyColumnName(colref.GetColumnName(), error_message);
-		if (qualified_colref) {
+		auto qualified_col_ref = QualifyColumnName(colref.GetColumnName(), error_message);
+		if (qualified_col_ref) {
 			// we could: return it
-			return qualified_colref;
+			return qualified_col_ref;
 		}
 		// we could not! Try creating an implicit struct_pack
 		return CreateStructPack(colref);
+
 	} else if (column_parts == 2) {
 		// one dot (i.e. "part1.part2")
 		// EITHER:
@@ -250,6 +260,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// it is! return the colref directly
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
+
 		} else {
 			// otherwise check if we can turn this into a struct extract
 			string other_error;
@@ -261,6 +272,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			// we could not! Try creating an implicit struct_pack
 			return CreateStructPack(colref);
 		}
+
 	} else {
 		// two or more dots (i.e. "part1.part2.part3.part4...")
 		// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
@@ -324,15 +336,17 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambdaref, idx_t depth) {
-	D_ASSERT(lambda_bindings && lambdaref.lambda_idx < lambda_bindings->size());
-	return (*lambda_bindings)[lambdaref.lambda_idx].Bind(lambdaref, depth);
+BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx_t depth) {
+	D_ASSERT(lambda_bindings && lambda_ref.lambda_idx < lambda_bindings->size());
+	return (*lambda_bindings)[lambda_ref.lambda_idx].Bind(lambda_ref, depth);
 }
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {
+
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
+
 	string error_message;
 	auto expr = QualifyColumnName(colref_p, error_message);
 	if (!expr) {
