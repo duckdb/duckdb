@@ -1065,8 +1065,6 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, TupleDat
 
 ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)
     : ht(ht), context(context), probe_types(probe_types) {
-	auto remaining_count = ht.GetSinkCollection().Count();
-	auto remaining_data_size = ht.GetSinkCollection().SizeInBytes();
 	global_partitions =
 	    make_uniq<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
 	column_ids.reserve(probe_types.size());
