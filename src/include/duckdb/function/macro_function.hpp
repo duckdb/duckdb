@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "duckdb/parser/query_node.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -28,7 +28,7 @@ public:
 	//! The positional parameters
 	vector<unique_ptr<ParsedExpression>> parameters;
 	//! The default parameters and their associated values
-	unordered_map<string, unique_ptr<ParsedExpression>> default_parameters;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> default_parameters;
 
 public:
 	virtual ~MacroFunction() {

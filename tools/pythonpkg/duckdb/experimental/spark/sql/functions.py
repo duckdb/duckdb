@@ -93,7 +93,7 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     [Row(d='-----')]
     """
     return _invoke_function(
-        "regexp_replace", _to_column(str), ConstantExpression(pattern), ConstantExpression(replacement)
+        "regexp_replace", _to_column(str), ConstantExpression(pattern), ConstantExpression(replacement), ConstantExpression('g')
     )
 
 

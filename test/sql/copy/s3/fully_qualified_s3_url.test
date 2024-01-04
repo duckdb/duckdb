@@ -152,6 +152,7 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=false" L
 
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_use_ssl=bla" LIMIT 3
+----
 
 #test url_style
 statement ok
@@ -173,6 +174,31 @@ SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_region='${AWS_DEFAULT_REGION
 # test faulty input
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&s3_access_key_id=incorrect_key_id" LIMIT 3
+----
 
 statement error
 SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&bla=bla" LIMIT 3
+----
+
+# test endpoint valid path
+statement ok
+SET s3_endpoint='${DUCKDB_S3_ENDPOINT}/test-bucket'; SET s3_url_style='path';
+
+statement ok
+SELECT i FROM "s3://s3_query_params/test.parquet" LIMIT 3
+
+# test endpoint invalid url style
+statement ok
+SET s3_url_style='vhost';
+
+statement error
+SELECT i FROM "s3://s3_query_params/test.parquet" LIMIT 3
+----
+
+# test endpoint invalid path
+statement ok
+SET s3_endpoint='${DUCKDB_S3_ENDPOINT}/s3_query_params'; SET s3_url_style='path';
+
+statement error
+SELECT i FROM "s3://test-bucket/test.parquet" LIMIT 3
+----

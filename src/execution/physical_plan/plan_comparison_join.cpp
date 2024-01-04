@@ -74,7 +74,8 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
 		if (!TypeIsInteger(join_stat->GetType().InternalType()) ||
-		    join_stat->GetType().InternalType() == PhysicalType::INT128) {
+		    join_stat->GetType().InternalType() == PhysicalType::INT128 ||
+		    join_stat->GetType().InternalType() == PhysicalType::UINT128) {
 			// perfect join not possible for non-integral types or hugeint
 			return;
 		}
@@ -128,6 +129,29 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
 }
 
+bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, idx_t &range_count) {
+	for (size_t c = 0; c < conds.size(); ++c) {
+		auto &cond = conds[c];
+		switch (cond.comparison) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return true;
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			++range_count;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			break;
+		default:
+			throw NotImplementedException("Unimplemented comparison join");
+		}
+	}
+	return false;
+}
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -144,34 +168,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		return make_uniq<PhysicalCrossProduct>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	}
 
-	bool has_equality = false;
-	size_t has_range = 0;
-	for (size_t c = 0; c < op.conditions.size(); ++c) {
-		auto &cond = op.conditions[c];
-		switch (cond.comparison) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			has_equality = true;
-			break;
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			++has_range;
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			break;
-		default:
-			throw NotImplementedException("Unimplemented comparison join");
-		}
-	}
-
+	idx_t has_range = 0;
+	bool has_equality = HasEquality(op.conditions, has_range);
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:
+	case JoinType::RIGHT_ANTI:
+	case JoinType::RIGHT_SEMI:
 	case JoinType::MARK:
 		can_merge = can_merge && op.conditions.size() == 1;
 		can_iejoin = false;

@@ -52,6 +52,7 @@ NULL
 # hence this does not work: "b" is from the second query
 statement error
 SELECT b FROM (SELECT * FROM test UNION SELECT * FROM test2) res ORDER BY 1;
+----
 
 # it works if we reverse the tables
 query I
@@ -108,6 +109,7 @@ NULL	1
 # if expressions are ambiguous as well, throw an error
 statement error
 SELECT 1, a+1 FROM test UNION SELECT a+1, 1 FROM test ORDER BY a+1;
+----
 
 # also if we have multiple setops
 query I
@@ -166,6 +168,7 @@ NULL
 # out of range constant reference
 statement error
 SELECT a FROM test UNION SELECT b FROM test2 ORDER BY 2;
+----
 
 # what if our subqueries have an order by clause?
 query I

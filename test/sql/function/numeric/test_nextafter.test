@@ -7,9 +7,11 @@ PRAGMA enable_verification
 
 statement error
 select nextafter()
+----
 
 statement error
 select nextafter('bla','bla')
+----
 
 query I
 select nextafter(NULL,1)

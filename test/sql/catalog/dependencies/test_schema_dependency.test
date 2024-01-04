@@ -16,6 +16,7 @@ SELECT * FROM s1.integers
 # can't drop: dependency
 statement error con1
 DROP SCHEMA s1
+----
 
 query I con1
 SELECT * FROM s1.integers
@@ -28,6 +29,7 @@ DROP SCHEMA s1 CASCADE
 # this also drops the table
 statement error con1
 SELECT * FROM s1.integers
+----
 
 # schemas and dependencies
 # create a schema and a table inside the schema
@@ -50,6 +52,7 @@ DROP TABLE s1.integers
 # we can't drop the schema from con2 because the table still exists for con2!
 statement error con2
 DROP SCHEMA s1
+----
 
 # now rollback the table drop
 statement ok con1
@@ -93,4 +96,5 @@ ROLLBACK
 
 statement error con2
 CREATE TABLE s1.dummy(i INTEGER)
+----
 

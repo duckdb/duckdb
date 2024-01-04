@@ -345,6 +345,13 @@ double IntegralConvert::ConvertValue(hugeint_t val) {
 	return result;
 }
 
+template <>
+double IntegralConvert::ConvertValue(uhugeint_t val) {
+	double result;
+	Uhugeint::TryCast(val, result);
+	return result;
+}
+
 } // namespace duckdb_py_convert
 
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
@@ -601,6 +608,9 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::HUGEINT:
 		may_have_null = ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(append_data);
+		break;
+	case LogicalTypeId::UHUGEINT:
+		may_have_null = ConvertColumn<uhugeint_t, double, duckdb_py_convert::IntegralConvert>(append_data);
 		break;
 	case LogicalTypeId::FLOAT:
 		may_have_null = ConvertColumnRegular<float>(append_data);

@@ -59,6 +59,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_hugeint_to_double(duckdb_value_hugeint(&res, 0, 0)) == 64.0);
 	duckdb_destroy_result(&res);
 
+	duckdb_bind_uhugeint(stmt, 1, duckdb_double_to_uhugeint(64));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_uhugeint_to_double(duckdb_value_uhugeint(&res, 0, 0)) == 64.0);
+	duckdb_destroy_result(&res);
+
 	// Fetching a DECIMAL from a non-DECIMAL result returns 0
 	duckdb_decimal decimal = duckdb_double_to_decimal(634.3453, 7, 4);
 	duckdb_bind_decimal(stmt, 1, decimal);
@@ -369,4 +375,99 @@ TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 	duckdb_destroy_result(&res);
 
 	duckdb_destroy_prepare(&stmt);
+}
+
+TEST_CASE("Prepared streaming result", "[capi]") {
+	CAPITester tester;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	SECTION("non streaming result") {
+		REQUIRE(tester.Query("CREATE TABLE t2 (i INTEGER, j INTEGER);"));
+
+		duckdb_prepared_statement stmt;
+		REQUIRE(duckdb_prepare(tester.connection,
+		                       "INSERT INTO t2  SELECT 2 AS i, 3 AS j  RETURNING *, i * j AS i_times_j",
+		                       &stmt) == DuckDBSuccess);
+		duckdb_result res;
+		REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+		REQUIRE(!duckdb_result_is_streaming(res));
+		duckdb_destroy_result(&res);
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("streaming result") {
+		duckdb_prepared_statement stmt;
+		REQUIRE(duckdb_prepare(tester.connection, "FROM RANGE(0, 10)", &stmt) == DuckDBSuccess);
+
+		duckdb_result res;
+		REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+		REQUIRE(duckdb_result_is_streaming(res));
+
+		duckdb_data_chunk chunk;
+		idx_t index = 0;
+		while (true) {
+			chunk = duckdb_stream_fetch_chunk(res);
+			if (!chunk) {
+				break;
+			}
+			auto chunk_size = duckdb_data_chunk_get_size(chunk);
+			REQUIRE(chunk_size > 0);
+
+			auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+			auto column_type = duckdb_vector_get_column_type(vec);
+			REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_BIGINT);
+			duckdb_destroy_logical_type(&column_type);
+
+			auto data = reinterpret_cast<int64_t *>(duckdb_vector_get_data(vec));
+			for (idx_t i = 0; i < chunk_size; i++) {
+				REQUIRE(data[i] == int64_t(index + i));
+			}
+			index += chunk_size;
+			duckdb_destroy_data_chunk(&chunk);
+		}
+
+		REQUIRE(duckdb_stream_fetch_chunk(res) == nullptr);
+
+		duckdb_destroy_result(&res);
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("streaming extracted statements") {
+		duckdb_extracted_statements stmts;
+		auto n_statements = duckdb_extract_statements(tester.connection, "Select 1; Select 2;", &stmts);
+		REQUIRE(n_statements == 2);
+
+		for (idx_t i = 0; i < n_statements; i++) {
+			duckdb_prepared_statement stmt;
+			REQUIRE(duckdb_prepare_extracted_statement(tester.connection, stmts, i, &stmt) == DuckDBSuccess);
+
+			duckdb_result res;
+			REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+			REQUIRE(duckdb_result_is_streaming(res));
+
+			duckdb_data_chunk chunk;
+			chunk = duckdb_stream_fetch_chunk(res);
+			REQUIRE(chunk != nullptr);
+			REQUIRE(duckdb_data_chunk_get_size(chunk) == 1);
+
+			auto vec = duckdb_data_chunk_get_vector(chunk, 0);
+
+			auto type = duckdb_vector_get_column_type(vec);
+			REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_INTEGER);
+			duckdb_destroy_logical_type(&type);
+
+			auto data = (int32_t *)duckdb_vector_get_data(vec);
+			REQUIRE(data[0] == (int32_t)(i + 1));
+
+			REQUIRE(duckdb_stream_fetch_chunk(res) == nullptr);
+
+			duckdb_destroy_data_chunk(&chunk);
+			duckdb_destroy_result(&res);
+			duckdb_destroy_prepare(&stmt);
+		}
+
+		duckdb_destroy_extracted(&stmts);
+	}
 }

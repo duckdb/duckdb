@@ -189,8 +189,13 @@ StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManag
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
                                                                  PartialBlockManager &partial_block_manager,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
-	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	// we need to checkpoint the main column data first
+	// that is because the checkpointing of the main column data ALSO scans the validity data
+	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
+	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
+	// flushed to disk by a different thread than the one that wrote it, causing a data race
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;

@@ -146,7 +146,7 @@ class NestedLoopJoinGlobalState : public GlobalSinkState {
 public:
 	explicit NestedLoopJoinGlobalState(ClientContext &context, const PhysicalNestedLoopJoin &op)
 	    : right_payload_data(context, op.children[1]->types), right_condition_data(context, op.GetJoinTypes()),
-	      has_null(false), right_outer(IsRightOuterJoin(op.join_type)) {
+	      has_null(false), right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex nj_lock;
@@ -296,7 +296,7 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 	case JoinType::RIGHT:
 		return ResolveComplexJoin(context, input, chunk, state_p);
 	default:
-		throw NotImplementedException("Unimplemented type for nested loop join!");
+		throw NotImplementedException("Unimplemented type " + JoinTypeToString(join_type) + " for nested loop join!");
 	}
 }
 
@@ -452,7 +452,7 @@ unique_ptr<LocalSourceState> PhysicalNestedLoopJoin::GetLocalSourceState(Executi
 
 SourceResultType PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk,
                                                  OperatorSourceInput &input) const {
-	D_ASSERT(IsRightOuterJoin(join_type));
+	D_ASSERT(PropagatesBuildSide(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();
 	auto &gstate = input.global_state.Cast<NestedLoopJoinGlobalScanState>();

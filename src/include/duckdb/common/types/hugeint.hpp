@@ -132,6 +132,8 @@ DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uint64_t &result);
 template <>
 DUCKDB_API bool Hugeint::TryCast(hugeint_t input, hugeint_t &result);
 template <>
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uhugeint_t &result);
+template <>
 DUCKDB_API bool Hugeint::TryCast(hugeint_t input, float &result);
 template <>
 DUCKDB_API bool Hugeint::TryCast(hugeint_t input, double &result);

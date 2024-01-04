@@ -62,14 +62,17 @@ SELECT (col1 + 1) AS k, k IN (SELECT ColID + k FROM tbl_ProductSales) FROM anoth
 # but as it is not a column reference directly we fail to bind it here
 statement error
 SELECT (col1 + 1) IN (SELECT ColID + (col1 + 1) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);
+----
 
 # this should fail, col1 + 42 is not a grouping column
 statement error
 SELECT col1+1, col1+42 FROM another_T GROUP BY col1+1;
+----
 
 # this should also fail, col1 + 42 is not a grouping column
 statement error
 SELECT (col1 + 1) IN (SELECT ColID + (col1 + 42) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);
+----
 
 # having without GROUP BY in subquery
 query T
@@ -121,13 +124,16 @@ SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.co
 # LEFT JOIN between correlated columns not supported for now
 statement error
 SELECT CASE WHEN NOT col1 NOT IN (SELECT (SELECT MAX(col7)) UNION (SELECT MIN(ColID) FROM tbl_ProductSales LEFT JOIN another_T t2 ON t2.col5 = t1.col1)) THEN 1 ELSE 2 END FROM another_T t1 GROUP BY col1 ORDER BY 1;
+----
 
 # REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 2}));
 # correlated columns in window functions not supported yet
 statement error
 SELECT EXISTS (SELECT RANK() OVER (PARTITION BY SUM(DISTINCT col5))) FROM another_T t1;
+----
 
 # REQUIRE(CHECK_COLUMN(result, 0, {true}));
 statement error
 SELECT (SELECT SUM(col2) OVER (PARTITION BY SUM(col2) ORDER BY MAX(col1 + ColID) ROWS UNBOUNDED PRECEDING) FROM tbl_ProductSales) FROM another_T t1 GROUP BY col1
+----
 

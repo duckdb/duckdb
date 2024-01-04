@@ -179,6 +179,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			if (argno == 1) {
 				bound = BoundCastExpression::AddCastToType(context, std::move(bound), LogicalType::BIGINT);
 			}
+			break;
 		default:
 			break;
 		}
@@ -220,6 +221,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		result->partitions.push_back(GetExpression(child));
 	}
 	result->ignore_nulls = window.ignore_nulls;
+	result->distinct = window.distinct;
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,

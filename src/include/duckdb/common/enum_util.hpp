@@ -98,6 +98,8 @@ enum class DebugInitialize : uint8_t;
 
 enum class DefaultOrderByNullType : uint8_t;
 
+enum class DependencyEntryType : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -223,6 +225,10 @@ enum class RenderMode : uint8_t;
 enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
+
+enum class SecretDisplayType : uint8_t;
+
+enum class SecretPersistType : uint8_t;
 
 enum class SequenceInfo : uint8_t;
 
@@ -397,6 +403,9 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
 const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType value);
+
+template<>
+const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
@@ -586,6 +595,12 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
+
+template<>
+const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
+
+template<>
+const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
 
 template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
@@ -799,6 +814,9 @@ template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value);
 
 template<>
+DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
+
+template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
@@ -986,6 +1004,12 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
+
+template<>
+SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
+
+template<>
+SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
 
 template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);

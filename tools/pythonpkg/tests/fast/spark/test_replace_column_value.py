@@ -36,3 +36,9 @@ class TestReplaceValue(object):
         ]
         print(expected)
         assert res == expected
+        # Replace all substrings of the specified string value that match regexp with rep.
+        df3 = spark.createDataFrame([('100-200',)], ['str'])
+        res = df3.select(regexp_replace('str', r'(\d+)', '--').alias('d')).collect()
+        expected = [Row(d='-----')]
+        print(expected)
+        assert res == expected

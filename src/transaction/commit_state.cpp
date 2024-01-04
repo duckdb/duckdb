@@ -35,19 +35,18 @@ void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
 }
 
 void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
-	if (entry.temporary || entry.parent->temporary) {
+	if (entry.temporary || entry.Parent().temporary) {
 		return;
 	}
 	D_ASSERT(log);
-	// look at the type of the parent entry
-	auto parent = entry.parent;
-	switch (parent->type) {
-	case CatalogType::TABLE_ENTRY:
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			auto &table_entry = entry.Cast<DuckTableEntry>();
-			D_ASSERT(table_entry.IsDuckTable());
-			// ALTER TABLE statement, read the extra data after the entry
 
+	// look at the type of the parent entry
+	auto &parent = entry.Parent();
+
+	switch (parent.type) {
+	case CatalogType::TABLE_ENTRY:
+		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::TABLE_ENTRY) {
+			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
 
@@ -59,6 +58,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			deserializer.End();
 
 			if (!column_name.empty()) {
+				D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+				auto &table_entry = entry.Cast<DuckTableEntry>();
+				D_ASSERT(table_entry.IsDuckTable());
 				// write the alter table in the log
 				table_entry.CommitAlter(column_name);
 			}
@@ -66,18 +68,18 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			log->WriteAlter(alter_info);
 		} else {
 			// CREATE TABLE statement
-			log->WriteCreateTable(parent->Cast<TableCatalogEntry>());
+			log->WriteCreateTable(parent.Cast<TableCatalogEntry>());
 		}
 		break;
 	case CatalogType::SCHEMA_ENTRY:
-		if (entry.type == CatalogType::SCHEMA_ENTRY) {
+		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::SCHEMA_ENTRY) {
 			// ALTER TABLE statement, skip it
 			return;
 		}
-		log->WriteCreateSchema(parent->Cast<SchemaCatalogEntry>());
+		log->WriteCreateSchema(parent.Cast<SchemaCatalogEntry>());
 		break;
 	case CatalogType::VIEW_ENTRY:
-		if (entry.type == CatalogType::VIEW_ENTRY) {
+		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::VIEW_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
@@ -95,29 +97,34 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			auto &alter_info = parse_info->Cast<AlterInfo>();
 			log->WriteAlter(alter_info);
 		} else {
-			log->WriteCreateView(parent->Cast<ViewCatalogEntry>());
+			log->WriteCreateView(parent.Cast<ViewCatalogEntry>());
 		}
 		break;
 	case CatalogType::SEQUENCE_ENTRY:
-		log->WriteCreateSequence(parent->Cast<SequenceCatalogEntry>());
+		log->WriteCreateSequence(parent.Cast<SequenceCatalogEntry>());
 		break;
 	case CatalogType::MACRO_ENTRY:
-		log->WriteCreateMacro(parent->Cast<ScalarMacroCatalogEntry>());
+		log->WriteCreateMacro(parent.Cast<ScalarMacroCatalogEntry>());
 		break;
 	case CatalogType::TABLE_MACRO_ENTRY:
-		log->WriteCreateTableMacro(parent->Cast<TableMacroCatalogEntry>());
+		log->WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
 		break;
 	case CatalogType::INDEX_ENTRY:
-		log->WriteCreateIndex(parent->Cast<IndexCatalogEntry>());
+		log->WriteCreateIndex(parent.Cast<IndexCatalogEntry>());
 		break;
 	case CatalogType::TYPE_ENTRY:
-		log->WriteCreateType(parent->Cast<TypeCatalogEntry>());
+		log->WriteCreateType(parent.Cast<TypeCatalogEntry>());
+		break;
+	case CatalogType::RENAMED_ENTRY:
+		// This is a rename, nothing needs to be done for this
 		break;
 	case CatalogType::DELETED_ENTRY:
 		switch (entry.type) {
 		case CatalogType::TABLE_ENTRY: {
 			auto &table_entry = entry.Cast<DuckTableEntry>();
 			D_ASSERT(table_entry.IsDuckTable());
+
+			// If the table was renamed, we do not need to drop the DataTable.
 			table_entry.CommitDrop();
 			log->WriteDropTable(table_entry);
 			break;
@@ -146,8 +153,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			log->WriteDropIndex(entry.Cast<IndexCatalogEntry>());
 			break;
 		}
+		case CatalogType::RENAMED_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
+		case CatalogType::DEPENDENCY_ENTRY:
 			// do nothing, prepared statements and scalar functions aren't persisted to disk
 			break;
 		default:
@@ -161,6 +170,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::COPY_FUNCTION_ENTRY:
 	case CatalogType::PRAGMA_FUNCTION_ENTRY:
 	case CatalogType::COLLATION_ENTRY:
+	case CatalogType::DEPENDENCY_ENTRY:
+	case CatalogType::SECRET_ENTRY:
+	case CatalogType::SECRET_TYPE_ENTRY:
+	case CatalogType::SECRET_FUNCTION_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:
@@ -246,7 +259,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		D_ASSERT(catalog_entry->parent);
+		D_ASSERT(catalog_entry->HasParent());
 
 		auto &catalog = catalog_entry->ParentCatalog();
 		D_ASSERT(catalog.IsDuckCatalog());
@@ -255,8 +268,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		lock_guard<mutex> read_lock(catalog_entry->set->GetCatalogLock());
-		catalog_entry->set->UpdateTimestamp(*catalog_entry->parent, commit_id);
-		if (catalog_entry->name != catalog_entry->parent->name) {
+		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), commit_id);
+		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
 		if (HAS_LOG) {
@@ -305,9 +318,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
 		auto catalog_entry = Load<CatalogEntry *>(data);
-		D_ASSERT(catalog_entry->parent);
-		catalog_entry->set->UpdateTimestamp(*catalog_entry->parent, transaction_id);
-		if (catalog_entry->name != catalog_entry->parent->name) {
+		D_ASSERT(catalog_entry->HasParent());
+		catalog_entry->set->UpdateTimestamp(catalog_entry->Parent(), transaction_id);
+		if (catalog_entry->name != catalog_entry->Parent().name) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, transaction_id);
 		}
 		break;

@@ -17,6 +17,7 @@ CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
 # can't delete the primary table because of dependency
 statement error
 DROP TABLE pk_integers
+----
 
 statement ok
 ROLLBACK
@@ -48,9 +49,12 @@ ROLLBACK
 
 statement error
 DELETE FROM pk_integers WHERE i=2;
+----
 
 statement error
 INSERT INTO fk_integers VALUES (3);
+----
 
 statement error
 DROP TABLE pk_integers
+----

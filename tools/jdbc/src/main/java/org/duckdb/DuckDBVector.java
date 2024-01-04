@@ -76,6 +76,8 @@ class DuckDBVector {
             return getLong(idx);
         case HUGEINT:
             return getHugeint(idx);
+        case UHUGEINT:
+            return getUhugeint(idx);
         case UTINYINT:
             return getUint8(idx);
         case USMALLINT:
@@ -470,6 +472,24 @@ class DuckDBVector {
                 buf[15 - i] = keep;
             }
             return new BigInteger(buf);
+        }
+        Object o = getObject(idx);
+        return new BigInteger(o.toString());
+    }
+
+    BigInteger getUhugeint(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return BigInteger.ZERO;
+        }
+        if (isType(DuckDBColumnType.UHUGEINT)) {
+            byte[] buf = new byte[16];
+            getbuf(idx, 16).get(buf);
+            for (int i = 0; i < 8; i++) {
+                byte keep = buf[i];
+                buf[i] = buf[15 - i];
+                buf[15 - i] = keep;
+            }
+            return new BigInteger(1, buf);
         }
         Object o = getObject(idx);
         return new BigInteger(o.toString());

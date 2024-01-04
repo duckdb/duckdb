@@ -19,6 +19,7 @@ CREATE TYPE name_enum AS ENUM ('Pedro', 'Mark');
 #This should error out since we can't do this cast
 statement error
 ALTER TABLE person ALTER name TYPE name_enum
+----
 
 statement ok
 DROP TYPE name_enum
@@ -50,6 +51,7 @@ mode skip
 # This should not be possible
 statement error
 DROP TYPE name_enum
+----
 
 # We should be able to cast this back to string
 statement ok
@@ -73,3 +75,4 @@ VARCHAR
 # Try to cast to bogus enum
 statement error
 ALTER TABLE person ALTER name TYPE bogus_name
+----

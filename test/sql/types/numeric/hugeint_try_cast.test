@@ -12,27 +12,35 @@ CREATE TABLE hugeints AS SELECT i::HUGEINT i FROM (VALUES (-17014118346046923173
 # -> unsigned
 statement error
 SELECT i::UTINYINT FROM hugeints
+----
 
 statement error
 SELECT i::USMALLINT FROM hugeints
+----
 
 statement error
 SELECT i::UINTEGER FROM hugeints
+----
 
 statement error
 SELECT i::UBIGINT FROM hugeints
+----
 
 statement error
 SELECT i::UTINYINT FROM hugeints WHERE i>=0 ORDER BY i
+----
 
 statement error
 SELECT i::USMALLINT FROM hugeints WHERE i>=0 ORDER BY i
+----
 
 statement error
 SELECT i::UINTEGER FROM hugeints WHERE i>=0 ORDER BY i
+----
 
 statement error
 SELECT i::UBIGINT FROM hugeints WHERE i>=0 ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS UTINYINT) FROM hugeints ORDER BY i
@@ -65,6 +73,7 @@ NULL
 # -> signed
 statement error
 SELECT i::TINYINT FROM hugeints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM hugeints ORDER BY i
@@ -75,6 +84,7 @@ NULL
 
 statement error
 SELECT i::SMALLINT FROM hugeints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM hugeints ORDER BY i
@@ -85,6 +95,7 @@ NULL
 
 statement error
 SELECT i::INTEGER FROM hugeints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS INTEGER) FROM hugeints ORDER BY i
@@ -95,6 +106,7 @@ NULL
 
 statement error
 SELECT i::BIGINT FROM hugeints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS BIGINT) FROM hugeints ORDER BY i
@@ -140,6 +152,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000
 
 statement error
 SELECT s::HUGEINT FROM strings
+----
 
 query I
 SELECT TRY_CAST(s AS HUGEINT) FROM strings
@@ -155,15 +168,19 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::HUGEINT FROM hugeints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(9,0)::HUGEINT FROM hugeints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(18,0)::HUGEINT FROM hugeints ORDER BY i
+----
 
 statement error
 SELECT i::DECIMAL(38,0)::HUGEINT FROM hugeints ORDER BY i
+----
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::HUGEINT FROM hugeints ORDER BY i
