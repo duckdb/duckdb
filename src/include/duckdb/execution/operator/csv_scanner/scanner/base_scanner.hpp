@@ -113,7 +113,8 @@ public:
 			}
 		} else if (scanner.states.IsQuoted()) {
 			T::SetQuoted(result);
-		} else if (scanner.states.IsEscaped()) {
+		}
+		if (scanner.states.IsEscaped()) {
 			T::SetEscaped(result);
 		}
 		//! Still have more to read
