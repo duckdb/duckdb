@@ -120,6 +120,8 @@ public:
 	void ReplaceMacroParametersInLambda(unique_ptr<ParsedExpression> &expr,
 	                                    vector<unordered_set<string>> &lambda_params);
 
+	static LogicalType GetExpressionReturnType(const Expression &expr);
+
 private:
 	//! Maximum stack depth
 	static constexpr const idx_t MAXIMUM_STACK_DEPTH = 128;
@@ -156,6 +158,10 @@ protected:
 	                          const LogicalType &list_child_type);
 
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+
+	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
