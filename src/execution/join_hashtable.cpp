@@ -1067,7 +1067,6 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
     : ht(ht), context(context), probe_types(probe_types) {
 	auto remaining_count = ht.GetSinkCollection().Count();
 	auto remaining_data_size = ht.GetSinkCollection().SizeInBytes();
-	auto remaining_ht_size = remaining_data_size + ht.PointerTableSize(remaining_count);
 	global_partitions =
 	    make_uniq<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
 	column_ids.reserve(probe_types.size());

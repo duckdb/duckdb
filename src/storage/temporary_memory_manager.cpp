@@ -30,6 +30,10 @@ void TemporaryMemoryState::SetMinimumReservation(idx_t new_minimum_reservation) 
 	minimum_reservation = new_minimum_reservation;
 }
 
+idx_t TemporaryMemoryState::GetMinimumReservation() const {
+	return minimum_reservation;
+}
+
 idx_t TemporaryMemoryState::GetReservation() const {
 	return reservation;
 }

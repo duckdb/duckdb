@@ -350,17 +350,19 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	auto &partitioned_data = ht.GetPartitionedData();
 
 	// Check if we're approaching the memory limit
+	auto &temporary_memory_state = *gstate.temporary_memory_state;
 	const auto total_size = ht.GetPartitionedData()->SizeInBytes() + ht.Capacity() * sizeof(aggr_ht_entry_t);
-	idx_t thread_limit = gstate.temporary_memory_state->GetReservation() / gstate.active_threads;
+	idx_t thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 	if (total_size > thread_limit) {
 		// Grab the lock and check again
 		lock_guard<mutex> guard(gstate.lock);
-		thread_limit = gstate.temporary_memory_state->GetReservation() / gstate.active_threads;
+		thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 		if (total_size > thread_limit) {
-			// Try to double the reservation
-			gstate.temporary_memory_state->SetRemainingSize(context,
-			                                                gstate.temporary_memory_state->GetRemainingSize() * 2);
-			thread_limit = gstate.temporary_memory_state->GetReservation() / gstate.active_threads;
+			// Try to double the reservation, up to a limit of 8x the minimum reservation
+			auto new_remaining_size = MinValue(temporary_memory_state.GetRemainingSize() * 2,
+			                                   temporary_memory_state.GetMinimumReservation() * 8);
+			temporary_memory_state.SetRemainingSize(context, new_remaining_size);
+			thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 		}
 	}
 
