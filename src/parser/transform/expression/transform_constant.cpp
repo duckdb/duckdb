@@ -76,7 +76,9 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst &c) {
-	return TransformValue(c.val);
+	auto constant = TransformValue(c.val);
+	constant->query_location = c.location;
+	return std::move(constant);
 }
 
 bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
