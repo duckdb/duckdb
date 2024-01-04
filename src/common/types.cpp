@@ -370,10 +370,15 @@ string LogicalType::ToString() const {
 		if (!type_info_) {
 			return "STRUCT";
 		}
+		auto is_unnamed = StructType::IsUnnamed(*this);
 		auto &child_types = StructType::GetChildTypes(*this);
 		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += StringUtil::Format("%s %s", SQLIdentifier(child_types[i].first), child_types[i].second);
+			if (is_unnamed) {
+				ret += child_types[i].second.ToString();
+			} else {
+				ret += StringUtil::Format("%s %s", SQLIdentifier(child_types[i].first), child_types[i].second);
+			}
 			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}
@@ -1206,7 +1211,9 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 }
 bool StructType::IsUnnamed(const LogicalType &type) {
 	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(child_types.size() > 0);
+	if (child_types.empty()) {
+		return false;
+	}
 	return child_types[0].first.empty();
 }
 

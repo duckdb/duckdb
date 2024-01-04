@@ -91,7 +91,7 @@ select struct_pack(a1 =>'42'::double, a2 => 'asdf'::string)::struct(a1 integer, 
 query I
 select ROW(42, 'asdf');
 ----
-{'': 42, '': asdf}
+(42, asdf)
 
 statement error
 select ROW();
@@ -101,12 +101,12 @@ Can't pack nothing into a struct
 query I
 select ROW(NULL);
 ----
-{'': NULL}
+(NULL)
 
 query I
 select ROW(NULL, NULL);
 ----
-{'': NULL, '': NULL}
+(NULL, NULL)
 
 # MB example
 query I
