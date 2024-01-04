@@ -110,6 +110,12 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 	HyperLogLog::AddToLogs(vdata, count, indices, counts, reinterpret_cast<HyperLogLog ***>(states), sdata.sel);
 }
 
+unique_ptr<FunctionData> ApproxCountDistinctAnyBind(ClientContext &context, AggregateFunction &function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
+	function.arguments[0] = LogicalType::VARCHAR;
+	return nullptr;
+}
+
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {
 	auto fun = AggregateFunction(
 	    {input_type}, LogicalTypeId::BIGINT, AggregateFunction::StateSize<ApproxDistinctCountState>,
@@ -117,7 +123,8 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    ApproxCountDistinctUpdateFunction,
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
-	    ApproxCountDistinctSimpleUpdateFunction, nullptr,
+	    ApproxCountDistinctSimpleUpdateFunction,
+	    input_type.id() == LogicalTypeId::ANY ? ApproxCountDistinctAnyBind : nullptr,
 	    AggregateFunction::StateDestroy<ApproxDistinctCountState, ApproxCountDistinctFunction>);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
@@ -136,10 +143,10 @@ AggregateFunctionSet ApproxCountDistinctFun::GetFunctions() {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::HUGEINT));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::FLOAT));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::DOUBLE));
-	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::VARCHAR));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP_TZ));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::BLOB));
+	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::ANY));
 	return approx_count;
 }
 
