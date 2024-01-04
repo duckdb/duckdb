@@ -38,4 +38,5 @@ select = "*aarch64*"
 test-command = "python -m pytest {project}/tests/fast --verbose"
 
 [tool.cibuildwheel.windows]
+archs = ["AMD64"]
 test-command = "python -m pytest {project}/tests/fast --verbose"
