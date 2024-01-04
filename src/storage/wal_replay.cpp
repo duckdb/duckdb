@@ -22,6 +22,8 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/checksum.hpp"
 
 namespace duckdb {
 
