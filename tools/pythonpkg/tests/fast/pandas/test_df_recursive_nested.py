@@ -38,7 +38,16 @@ class TestDFRecursiveNested(object):
             NULL,
             [NULL, {'key': [3, 2, 4], 'value': [NULL, 'a', NULL]}, {'key': ['a', 'b', 'c'], 'value': [1, 2, 3]}],
         ]
-        reference_query = create_reference_query(data)
+        reference_data = [
+            [{'key': ['5'], 'value': [NULL]}, NULL, {'key': [], 'value': []}],
+            NULL,
+            [
+                NULL,
+                {'key': ['3', '2', '4'], 'value': [NULL, 'a', NULL]},
+                {'key': ['a', 'b', 'c'], 'value': ['1', '2', '3']},
+            ],
+        ]
+        reference_query = create_reference_query(reference_data)
         df = pandas.DataFrame([{'a': data}])
         check_equal(df, reference_query)
 

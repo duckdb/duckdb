@@ -57,9 +57,9 @@ SELECT [1, 2] + [3, 4]
 [1, 2, 3, 4]
 
 # type casting
-foreach type_a <integral> varchar
+foreach type_a <integral>
 
-foreach type_b <integral> varchar
+foreach type_b <integral>
 
 query T
 SELECT list_concat([1, 2]::${type_a}[], [3, 4]::${type_b}[])::INTEGER[]

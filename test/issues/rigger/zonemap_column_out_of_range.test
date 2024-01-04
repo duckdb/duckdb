@@ -15,7 +15,7 @@ statement ok
 INSERT INTO t0 VALUES(0.0,NULL);
 
 query III
-SELECT t0.rowid, t0.c0, t0.c1 FROM t0 WHERE (t0.c1 IN (true, 0.478943091545613)) GROUP BY t0.rowid, t0.c0, t0.c1 UNION SELECT t0.rowid, t0.c0, t0.c1 FROM t0 WHERE (NOT (t0.c1 IN (true, 0.478943091545613))) GROUP BY t0.rowid, t0.c0, t0.c1 UNION SELECT t0.rowid, t0.c0, t0.c1 FROM t0 WHERE (((t0.c1 IN (true, 0.478943091545613))) IS NULL) GROUP BY t0.rowid, t0.c0, t0.c1 ORDER BY 1, 2, 3;
+SELECT t0.rowid, t0.c0, t0.c1 FROM t0 WHERE (t0.c1 IN (true::DOUBLE, 0.478943091545613)) GROUP BY t0.rowid, t0.c0, t0.c1 UNION SELECT t0.rowid, t0.c0, t0.c1 FROM t0 WHERE (NOT (t0.c1 IN (true::DOUBLE, 0.478943091545613))) GROUP BY t0.rowid, t0.c0, t0.c1 UNION SELECT t0.rowid, t0.c0, t0.c1 FROM t0 WHERE (((t0.c1 IN (true::DOUBLE, 0.478943091545613))) IS NULL) GROUP BY t0.rowid, t0.c0, t0.c1 ORDER BY 1, 2, 3;
 ----
 0	0	1
 1	0	NULL
