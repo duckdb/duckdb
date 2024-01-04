@@ -121,9 +121,14 @@ select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fds
 {'a': 4, 'b': fdsa}
 
 statement error
-select struct_extract({'a': a}, a) from range(10) tbl(a);
+select struct_extract({'a': a}, a) from (select a::varchar as a from range(10) tbl(a));
 ----
 Key name for struct_extract needs to be a constant string
+
+statement error
+select struct_extract({'a': 42}, 42)
+----
+No function matches
 
 # test string to struct within struct casting
 query I

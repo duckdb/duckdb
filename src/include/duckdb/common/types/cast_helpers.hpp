@@ -13,6 +13,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "fmt/format.h"
 
@@ -90,6 +91,9 @@ int NumericHelper::UnsignedLength(uint64_t value);
 
 template <>
 std::string NumericHelper::ToString(hugeint_t value);
+
+template <>
+std::string NumericHelper::ToString(uhugeint_t value);
 
 struct DecimalToString {
 	template <class SIGNED, class UNSIGNED>
@@ -340,6 +344,19 @@ struct HugeintToStringCast {
 
 		FormatDecimal(value, width, scale, dst, length);
 
+		result.Finalize();
+		return result;
+	}
+};
+
+struct UhugeintToStringCast {
+	static string_t Format(uhugeint_t value, Vector &vector) {
+		std::string str = value.ToString();
+		string_t result = StringVector::EmptyString(vector, str.length());
+		auto data = result.GetDataWriteable();
+
+		// null-termination not required
+		memcpy(data, str.data(), str.length());
 		result.Finalize();
 		return result;
 	}

@@ -1,6 +1,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -538,6 +539,9 @@ void RowOperations::HeapScatterVData(UnifiedVectorFormat &vdata, PhysicalType ty
 		break;
 	case PhysicalType::INT128:
 		TemplatedHeapScatter<hugeint_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedHeapScatter<uhugeint_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedHeapScatter<float>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);

@@ -88,6 +88,14 @@
         "aliases": ["array_filter", "filter"]
     },
     {
+        "name": "list_reduce",
+        "parameters": "list,lambda",
+        "description": "Returns a single value that is the result of applying the lambda function to each element of the input list, starting with the first element and then repeatedly applying the lambda function to the result of the previous application and the next element of the list.",
+        "example": "list_reduce([1, 2, 3], (x, y) -> x + y)",
+        "type": "scalar_function",
+        "aliases": ["array_reduce", "reduce"]
+    },
+    {
         "name": "generate_series",
         "parameters": "start,stop,step",
         "description": "Create a list of values between start and stop - the stop parameter is inclusive",

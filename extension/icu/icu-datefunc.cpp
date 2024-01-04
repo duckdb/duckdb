@@ -13,21 +13,33 @@ ICUDateFunc::BindData::BindData(const BindData &other)
     : tz_setting(other.tz_setting), cal_setting(other.cal_setting), calendar(other.calendar->clone()) {
 }
 
+ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_setting_p)
+    : tz_setting(tz_setting_p), cal_setting(cal_setting_p) {
+
+	InitCalendar();
+}
+
 ICUDateFunc::BindData::BindData(ClientContext &context) {
 	Value tz_value;
 	if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
 		tz_setting = tz_value.ToString();
 	}
-	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_setting)));
 
-	string cal_id("@calendar=");
 	Value cal_value;
 	if (context.TryGetCurrentSetting("Calendar", cal_value)) {
 		cal_setting = cal_value.ToString();
-		cal_id += cal_setting;
 	} else {
-		cal_id += "gregorian";
+		cal_setting = "gregorian";
 	}
+
+	InitCalendar();
+}
+
+void ICUDateFunc::BindData::InitCalendar() {
+	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_setting)));
+
+	string cal_id("@calendar=");
+	cal_id += cal_setting;
 
 	icu::Locale locale(cal_id.c_str());
 
