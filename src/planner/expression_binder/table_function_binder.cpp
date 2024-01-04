@@ -20,8 +20,7 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 	auto &col_ref = expr.Cast<ColumnRefExpression>();
 	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.ToString());
 	if (lambda_ref) {
-		return BindLambdaReference(*lambda_ref, depth);
-		;
+		return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 	}
 
 	auto value_function = ExpressionBinder::GetSQLValueFunction(expr.GetColumnName());
