@@ -6548,6 +6548,8 @@ const char* EnumUtil::ToChars<WALType>(WALType value) {
 		return "DELETE_TUPLE";
 	case WALType::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case WALType::WAL_VERSION:
+		return "WAL_VERSION";
 	case WALType::CHECKPOINT:
 		return "CHECKPOINT";
 	case WALType::WAL_FLUSH:
@@ -6627,6 +6629,9 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return WALType::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "WAL_VERSION")) {
+		return WALType::WAL_VERSION;
 	}
 	if (StringUtil::Equals(value, "CHECKPOINT")) {
 		return WALType::CHECKPOINT;
