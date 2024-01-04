@@ -34,7 +34,7 @@ unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {
 	throw InternalException("lambda reference expressions are transient, Copy should never be called");
 }
 
-unique_ptr<LambdaRefExpression>
+unique_ptr<ParsedExpression>
 LambdaRefExpression::FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
                                          const string &param_name) {
 

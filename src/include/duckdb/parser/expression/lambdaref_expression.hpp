@@ -37,8 +37,8 @@ public:
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	//! Traverses the lambda_bindings to find a matching binding
-	static unique_ptr<LambdaRefExpression> FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
-	                                                           const string &param_name);
+	static unique_ptr<ParsedExpression> FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
+	                                                        const string &param_name);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
