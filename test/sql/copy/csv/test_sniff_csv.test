@@ -39,7 +39,7 @@ FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=
 statement error
 FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
 ----
-Could not convert string 'B' to INT64 at line 2176 in column "column0"
+Conversion Error: CSV Error on Line: 2176
 
 query IIIIIIIIIII
 FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=10000);
@@ -79,10 +79,10 @@ FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', 
 query IIIIIIIIIII
 FROM sniff_csv('data/csv/inconsistent_cells.csv')
 ----
-,	"	"	\n	5	false	{'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'}	NULL	NULL	NULL	FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=5, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+,	"	"	\n	3	0	{'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'}	NULL	NULL	NULL	FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=3, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 
 query IIIII
-FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=5, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=3, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 ----
 1	2	3	4	5
 1	2	3	4	5

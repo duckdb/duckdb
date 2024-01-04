@@ -36,7 +36,8 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {
 	if (file_size == 0) {
 		progress = 1.0;
 	} else {
-		progress = double(bytes_read) / double(file_size);
+		// for compressed files, readed bytes may greater than files size.
+		progress = std::min(1.0, double(bytes_read) / double(file_size));
 	}
 	// now get the total percentage of files read
 	double percentage = double(current_boundary.GetFileIdx()) / total_files;
@@ -65,6 +66,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 	return csv_scanner;
 
 	//		if (!reader) {
+//				file_size = file_handle->FileSize();
+//			bytes_read = 0;
 	//			D_ASSERT(0);
 	//			//		// we either don't have a reader, or the reader was created for a different file
 	//			//		// we need to create a new reader and instantiate it
