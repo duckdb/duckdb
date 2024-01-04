@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+struct DummyBinding;
+
 //! Represents a reference to a lambda parameter
 class LambdaRefExpression : public ParsedExpression {
 public:
@@ -33,6 +35,10 @@ public:
 	string ToString() const override;
 	hash_t Hash() const override;
 	unique_ptr<ParsedExpression> Copy() const override;
+
+	//! Traverses the lambda_bindings to find a matching binding
+	static unique_ptr<LambdaRefExpression> FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
+	                                                           const string &param_name);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);

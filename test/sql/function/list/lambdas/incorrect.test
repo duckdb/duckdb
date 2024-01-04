@@ -159,14 +159,14 @@ create table lambda_check (i BIGINT[],
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
 statement error
-create table lambda_check (i BIGINT[],
+CREATE TABLE lambda_check (i BIGINT[],
     CHECK (list_transform(i, x -> x % 2) == []));
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
 statement error
-create table lambda_check (i BIGINT[],
-    CHECK ([x + 1 for x in i if i > 0] == []));
+CREATE TABLE lambda_check (i BIGINT[],
+    CHECK ([x + 1 FOR x IN i IF x > 0] == []));
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 

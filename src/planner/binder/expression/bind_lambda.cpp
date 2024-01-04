@@ -89,16 +89,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	vector<string> params_strings;
 
 	for (idx_t i = 0; i < expr.params.size(); i++) {
-		auto column_ref = expr.params[i]->Cast<ColumnRefExpression>();
 		column_types.push_back((*bind_lambda_function)(i, list_child_type));
 		params_strings.push_back(expr.params[i]->ToString());
-
-		auto column_name = expr.params[i]->ToString();
-		// scoping inside macros
-		if (column_name.find(DummyBinding::DUMMY_NAME) != string::npos) {
-			column_name = column_ref.GetColumnName();
-		}
-		column_names.push_back(column_name);
+		column_names.push_back(expr.params[i]->ToString());
 	}
 
 	// base table alias

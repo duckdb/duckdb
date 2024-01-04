@@ -16,17 +16,12 @@ BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, i
 
 BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, idx_t depth, bool root_expression) {
 
-	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
-	// which we capture and remove later
-	// inner lambda parameters have precedence over outer lambda parameters
-	if (lambda_bindings) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-			if ((*lambda_bindings)[i - 1].HasMatchingBinding(col_ref.ToString())) {
-				auto lambda_ref = make_uniq<LambdaRefExpression>(i - 1, col_ref.ToString());
-				return BindLambdaReference(*lambda_ref, depth);
-			}
-		}
+	// try binding as a lambda parameter
+	auto &col_ref = expr.Cast<ColumnRefExpression>();
+	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.ToString());
+	if (lambda_ref) {
+		return BindLambdaReference(*lambda_ref, depth);
+		;
 	}
 
 	auto value_function = ExpressionBinder::GetSQLValueFunction(expr.GetColumnName());

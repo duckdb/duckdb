@@ -78,15 +78,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	// find a binding that contains this
 	string table_name = binder.bind_context.GetMatchingBinding(column_name);
 
-	// lambda parameters have precedence over macro parameters and columns
-	// inner lambda parameters have precedence over outer lambda parameters
-	if (lambda_bindings) {
-		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-			if ((*lambda_bindings)[i - 1].HasMatchingBinding(column_name)) {
-				D_ASSERT(!(*lambda_bindings)[i - 1].alias.empty());
-				return make_uniq<LambdaRefExpression>(i - 1, column_name);
-			}
-		}
+	// try binding as a lambda parameter
+	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, column_name);
+	if (lambda_ref) {
+		return lambda_ref;
 	}
 
 	// throw an error if a macro conflicts with a column name
@@ -223,15 +218,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
 
-	// lambda parameters have precedence over columns
-	// inner lambda parameters have precedence over outer lambda parameters
-	if (lambda_bindings) {
-		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-			if ((*lambda_bindings)[i - 1].HasMatchingBinding(colref.ToString())) {
-				D_ASSERT(!(*lambda_bindings)[i - 1].alias.empty());
-				return make_uniq<LambdaRefExpression>(i - 1, colref.ToString());
-			}
-		}
+	// try binding as a lambda parameter
+	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, colref.ToString());
+	if (lambda_ref) {
+		return lambda_ref;
 	}
 
 	idx_t column_parts = colref.column_names.size();
