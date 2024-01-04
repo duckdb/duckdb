@@ -86,7 +86,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	auto &sniffed_column_counts = *scanner->ParseChunk();
 	idx_t start_row = options.dialect_options.skip_rows.GetValue();
 	idx_t consistent_rows = 0;
-	idx_t num_cols = sniffed_column_counts.Empty() ? 0 : sniffed_column_counts[0];
+	idx_t num_cols = sniffed_column_counts.Empty() ? 1 : sniffed_column_counts[0];
 	idx_t padding_count = 0;
 	bool allow_padding = options.null_padding;
 	if (sniffed_column_counts.Size() > rows_read) {
@@ -132,7 +132,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	bool require_less_padding = padding_count < prev_padding_count;
 
 	// If there was only a single column before, and the new number of columns exceeds that.
-	bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found;
+	bool single_column_before = max_columns_found < 2 && num_cols >= max_columns_found;
 
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
