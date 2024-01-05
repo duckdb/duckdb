@@ -37,8 +37,6 @@ public:
 	idx_t GetRemainingSize() const;
 	//! Set the minimum reservation for this state
 	void SetMinimumReservation(idx_t new_minimum_reservation);
-	//! Get the minimum reservation for this state
-	idx_t GetMinimumReservation() const;
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
 

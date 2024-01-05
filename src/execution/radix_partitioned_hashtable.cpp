@@ -354,15 +354,19 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const auto total_size = ht.GetPartitionedData()->SizeInBytes() + ht.Capacity() * sizeof(aggr_ht_entry_t);
 	idx_t thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 	if (total_size > thread_limit) {
-		// Grab the lock and check again
-		lock_guard<mutex> guard(gstate.lock);
-		thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
-		if (total_size > thread_limit) {
-			// Try to double the reservation, up to a limit of 8x the minimum reservation
-			auto new_remaining_size = MinValue(temporary_memory_state.GetRemainingSize() * 2,
-			                                   temporary_memory_state.GetMinimumReservation() * 8);
-			temporary_memory_state.SetRemainingSize(context, new_remaining_size);
+		// We're over the thread memory limit
+		if (!gstate.external) {
+			// We haven't yet triggered out-of-core behavior, but maybe we don't have to, grab the lock and check again
+			lock_guard<mutex> guard(gstate.lock);
 			thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
+			if (total_size > thread_limit) {
+				// Out-of-core would be triggered below, try to increase the reservation, but only up to a limit
+				auto new_remaining_size =
+				    MinValue<idx_t>(2 * temporary_memory_state.GetRemainingSize(),
+				                    BufferManager::GetBufferManager(context).GetQueryMaxMemory() / 2);
+				temporary_memory_state.SetRemainingSize(context, new_remaining_size);
+				thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
+			}
 		}
 	}
 

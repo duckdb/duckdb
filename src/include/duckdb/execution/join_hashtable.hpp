@@ -240,15 +240,12 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
-	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
+	static constexpr const idx_t INITIAL_RADIX_BITS = 3;
 
 	struct ProbeSpillLocalAppendState {
 		//! Local partition and append state (if partitioned)
 		PartitionedColumnData *local_partition;
 		PartitionedColumnDataAppendState *local_partition_append_state;
-		//! Local spill and append state (if not partitioned)
-		ColumnDataCollection *local_spill_collection;
-		ColumnDataAppendState *local_spill_append_state;
 	};
 	//! ProbeSpill represents materialized probe-side data that could not be probed during PhysicalHashJoin::Execute
 	//! because the HashTable did not fit in memory. The ProbeSpill is not partitioned if the remaining data can be
