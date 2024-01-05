@@ -119,8 +119,7 @@ public:
 	//! Special-handling for lambda expressions in macros: lambda parameters have priority in scoping
 	void ReplaceMacroParamInLambda(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
 	//! Detects if a function contains a lambda expression, and calls ReplaceMacroParamInLambda on the RHS for
-	//! special-handling
-	// of lambda parameters in macros
+	//! special-handling of lambda parameters in macros
 	bool MacroLambdaParamReplacer(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
@@ -183,6 +182,7 @@ protected:
 	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
 
+	//! Constant aliases for the UNNEST function
 	const string UNNEST_FUNCTION_ALIAS = "unnest";
 	const string UNLIST_FUNCTION_ALIAS = "unlist";
 };
