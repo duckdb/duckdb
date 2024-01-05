@@ -117,8 +117,11 @@ public:
 	//! Recursively replace macro parameters with the provided input parameters
 	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
 	//! Special-handling for lambda expressions in macros: lambda parameters have priority in scoping
-	void ReplaceMacroParametersInLambda(unique_ptr<ParsedExpression> &expr,
-	                                    vector<unordered_set<string>> &lambda_params);
+	void ReplaceMacroParamInLambda(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
+	//! Detects if a function contains a lambda expression, and calls ReplaceMacroParamInLambda on the RHS for
+	//! special-handling
+	// of lambda parameters in macros
+	bool MacroLambdaParamReplacer(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
@@ -179,6 +182,9 @@ protected:
 	ClientContext &context;
 	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
+
+	const string UNNEST_FUNCTION_ALIAS = "unnest";
+	const string UNLIST_FUNCTION_ALIAS = "unlist";
 };
 
 } // namespace duckdb

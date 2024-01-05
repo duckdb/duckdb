@@ -71,7 +71,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (function.function_name == "unnest" || function.function_name == "unlist") {
+		if (function.function_name == UNNEST_FUNCTION_ALIAS || function.function_name == UNLIST_FUNCTION_ALIAS) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}

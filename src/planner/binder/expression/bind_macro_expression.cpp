@@ -18,8 +18,8 @@ bool IsLambdaParameter(vector<unordered_set<string>> &lambda_params, ColumnRefEx
 	return false;
 }
 
-void ExpressionBinder::ReplaceMacroParametersInLambda(unique_ptr<ParsedExpression> &expr,
-                                                      vector<unordered_set<string>> &lambda_params) {
+void ExpressionBinder::ReplaceMacroParamInLambda(unique_ptr<ParsedExpression> &expr,
+                                                 vector<unordered_set<string>> &lambda_params) {
 
 	// special-handling for LHS lambda parameters
 	// we do not replace them, and we add them to the lambda_params vector
@@ -48,12 +48,81 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(unique_ptr<ParsedExpressio
 	lambda_params.pop_back();
 }
 
+bool ExpressionBinder::MacroLambdaParamReplacer(unique_ptr<ParsedExpression> &expr,
+                                                vector<unordered_set<string>> &lambda_params) {
+
+	// early-out, if not a FUNCTION
+	if (expr->GetExpressionClass() != ExpressionClass::FUNCTION) {
+		return false;
+	}
+
+	auto &function = expr->Cast<FunctionExpression>();
+
+	// early-out for UNNEST
+	if (function.function_name == UNNEST_FUNCTION_ALIAS || function.function_name == UNLIST_FUNCTION_ALIAS) {
+		return false;
+	}
+
+	// early-out, if not in the catalog
+	QueryErrorContext error_context(binder.root_statement, function.query_location);
+	binder.BindSchemaOrCatalog(function.catalog, function.schema);
+	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+	                              function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+	if (!func) {
+		return false;
+	}
+
+	// early-out, if not a SCALAR_FUNCTION_ENTRY
+	if (func->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		return false;
+	}
+
+	// early-out, if JSON extension operator
+	if (function.function_name == "->>") {
+		return false;
+	}
+
+	// early-out, if not a lambda function
+	bool has_lambda = false;
+	for (auto &child : function.children) {
+		if (child->expression_class == ExpressionClass::LAMBDA) {
+			has_lambda = true;
+			break;
+		}
+	}
+	if (!has_lambda) {
+		return false;
+	}
+
+	// early-out, if not an actual lambda function, i.e., a JSON function
+	auto &lambda_function = func->Cast<ScalarFunctionCatalogEntry>();
+	D_ASSERT(lambda_function.functions.functions.size() == 1);
+	auto &scalar_function = lambda_function.functions.functions.front();
+	auto &bind_lambda_function = scalar_function.bind_lambda;
+	if (!bind_lambda_function) {
+		return false;
+	}
+
+	// now replace the children
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		if (function.children[i]->expression_class == ExpressionClass::LAMBDA) {
+			ReplaceMacroParamInLambda(function.children[i], lambda_params);
+		} else {
+			ReplaceMacroParameters(function.children[i], lambda_params);
+		}
+	}
+
+	return true;
+}
+
 void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr,
                                               vector<unordered_set<string>> &lambda_params) {
 
-	// special-handling for lambdas
-	if (expr->GetExpressionClass() == ExpressionClass::LAMBDA) {
-		return ReplaceMacroParametersInLambda(expr, lambda_params);
+	// special-handling for lambdas, which are inside function expressions,
+	// we need to perform some checks here, to ensure that it is indeed a lambda function,
+	// and not a JSON function
+	if (MacroLambdaParamReplacer(expr, lambda_params)) {
+		return;
 	}
 
 	switch (expr->GetExpressionClass()) {
