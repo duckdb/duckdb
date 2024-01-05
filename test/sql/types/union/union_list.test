@@ -7,7 +7,7 @@ statement ok
 CREATE TABLE tbl1 (union_list UNION(str VARCHAR, num INT)[]);
 
 statement ok
-INSERT INTO tbl1 VALUES ([1, 'one']), (['two', 2]), ([3, 'three', '3']), ([4]), (list_value('five')), ([6])
+INSERT INTO tbl1 VALUES ([1::UNION(str VARCHAR, num INT), 'one']), (['two'::UNION(str VARCHAR, num INT), 2]), ([3::UNION(str VARCHAR, num INT), 'three', '3']), ([4]), (list_value('five')), ([6])
 
 query I
 SELECT * FROM tbl1

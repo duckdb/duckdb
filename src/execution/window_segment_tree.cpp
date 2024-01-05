@@ -1142,6 +1142,7 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	//	6:	prevIdcs ← []
 	//	7:	prevIdcs[0] ← “-”
 	const auto count = inputs.size();
+	using ZippedTuple = DistinctSortTree::ZippedTuple;
 	DistinctSortTree::ZippedElements prev_idcs;
 	prev_idcs.resize(count);
 
@@ -1149,13 +1150,13 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 	//	point to themselves so they won't be counted.
 	if (in_size < count) {
 		for (idx_t i = 0; i < count; ++i) {
-			prev_idcs[i] = {i + 1, i};
+			prev_idcs[i] = ZippedTuple(i + 1, i);
 		}
 	}
 
 	auto *input_idx = FlatVector::GetData<idx_t>(scan_chunk.data[0]);
 	auto i = input_idx[scan_idx++];
-	prev_idcs[i] = {0, i};
+	prev_idcs[i] = ZippedTuple(0, i);
 
 	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
@@ -1187,9 +1188,9 @@ void WindowDistinctAggregator::Finalize(const FrameStats &stats) {
 		//	11:	else
 		//	12:		prevIdcs[i] ← “-”
 		if (!lt) {
-			prev_idcs[i] = {second + 1, i};
+			prev_idcs[i] = ZippedTuple(second + 1, i);
 		} else {
-			prev_idcs[i] = {0, i};
+			prev_idcs[i] = ZippedTuple(0, i);
 		}
 	}
 	//	13:	return prevIdcs
