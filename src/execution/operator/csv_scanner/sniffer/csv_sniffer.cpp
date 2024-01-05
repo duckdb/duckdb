@@ -82,6 +82,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.
 	SetResultOptions();
+	options.auto_detect = true;
 	// Check if everything matches
 	auto &error = options.sniffer_user_mismatch_error;
 	if (set_columns.IsSet()) {

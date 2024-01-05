@@ -132,7 +132,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	bool require_less_padding = padding_count < prev_padding_count;
 
 	// If there was only a single column before, and the new number of columns exceeds that.
-	bool single_column_before = max_columns_found < 2 && num_cols >= max_columns_found;
+	bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found;
 
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.

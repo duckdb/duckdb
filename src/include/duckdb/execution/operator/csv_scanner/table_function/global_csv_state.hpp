@@ -16,6 +16,36 @@
 
 namespace duckdb {
 
+//! Struct holding information over a CSV File we will scan
+class CSVFileScan {
+public:
+	//! Constructor for when a CSV File Scan is being constructed over information acquired during sniffing
+	//! This means the options are alreadu set, and the buffer manager is already up and runinng.
+	CSVFileScan(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
+	            const CSVReaderOptions &options);
+	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
+	//! Path to this file
+	CSVFileScan(ClientContext &context, const string &file_path, idx_t file_idx, const CSVReaderOptions &options);
+	const string file_path;
+	//! File Index
+	const idx_t file_idx;
+	//! Buffer Manager for the CSV File
+	shared_ptr<CSVBufferManager> buffer_manager;
+	//! State Machine for this file
+	shared_ptr<CSVStateMachine> state_machine;
+	//! How many bytes were read up to this point
+	atomic<idx_t> bytes_read {0};
+	//! Size of this file
+	idx_t file_size;
+	//! Line Info used in error messages
+	shared_ptr<CSVErrorHandler> error_handler;
+	//! Whether or not this is an on-disk file
+	bool on_disk_file = true;
+
+	//! Options for this CSV Reader
+	CSVReaderOptions options;
+};
+
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
 public:
@@ -25,16 +55,6 @@ public:
 
 	~CSVGlobalState() override {
 	}
-
-	//! How many bytes were read up to this point
-	atomic<idx_t> bytes_read {0};
-
-	//! Size of the first file
-	//! TODO: we now have an assumption that all files have similar sizes, we possibly should do more fine-grained
-	//! Optimizations to multi-file readers.
-	idx_t file_size;
-
-	shared_ptr<CSVStateMachine> state_machine;
 
 	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
 	//! In case it returns a nullptr it means we are done reading these files.
@@ -56,14 +76,11 @@ public:
 private:
 	//! Reference to the cient context that created this scan
 	ClientContext &context;
-	//! Buffer Manager for the CSV Files in this Scan
-	shared_ptr<CSVBufferManager> buffer_manager;
+
+	vector<unique_ptr<CSVFileScan>> file_scans;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
 	mutex main_mutex;
-
-	//! Whether or not this is an on-disk file
-	bool on_disk_file = true;
 
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
@@ -72,8 +89,6 @@ private:
 	idx_t running_threads = 1;
 	//! The column ids to read
 	vector<column_t> column_ids;
-	//! Line Info used in error messages
-	shared_ptr<CSVErrorHandler> error_handler;
 
 	string sniffer_mismatch_error;
 

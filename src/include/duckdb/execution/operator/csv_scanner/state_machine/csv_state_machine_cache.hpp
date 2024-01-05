@@ -38,8 +38,8 @@ struct HashCSVStateMachineConfig {
 		auto h_delimiter = Hash(config.delimiter.GetValue());
 		auto h_quote = Hash(config.quote.GetValue());
 		auto h_escape = Hash(config.escape.GetValue());
-		auto h_newline = Hash((uint8_t) config.new_line.GetValue());
-		return CombineHash(h_delimiter, CombineHash(h_quote, CombineHash(h_escape,h_newline)));
+		auto h_newline = Hash((uint8_t)config.new_line.GetValue());
+		return CombineHash(h_delimiter, CombineHash(h_quote, CombineHash(h_escape, h_newline)));
 	}
 };
 

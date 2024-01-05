@@ -1,36 +1,70 @@
 #include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
+
 #include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
 namespace duckdb {
 
-CSVGlobalState::CSVGlobalState(ClientContext &context_p, shared_ptr<CSVBufferManager> buffer_manager_p,
+CSVFileScan::CSVFileScan(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
+                         const CSVReaderOptions &options_p)
+    : file_path(options_p.file_path), file_idx(0), buffer_manager(buffer_manager_p), state_machine(state_machine_p),
+      file_size(buffer_manager->file_handle->FileSize()),
+      error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)),
+      on_disk_file(buffer_manager->file_handle->OnDiskFile()), options(options_p) {
+}
+
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, idx_t file_idx_p,
+                         const CSVReaderOptions &options_p)
+    : file_path(file_path_p), file_idx(file_idx_p),
+      error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)), options(options_p) {
+	// Initialize Buffer Manager
+	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path, file_idx);
+	// Initialize On Disk and Size of file
+	on_disk_file = buffer_manager->file_handle->OnDiskFile();
+	file_size = buffer_manager->file_handle->FileSize();
+	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
+	// error out during scanning)
+	auto &state_machine_cache = *CSVStateMachineCache::Get(context);
+	if (options.auto_detect && options.dialect_options.num_cols == 0) {
+		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+		sniffer.SniffCSV();
+	}
+	if (options.dialect_options.num_cols == 0) {
+		// We need to define the number of columns, if the sniffer is not running this must be in the sql_type_list
+		options.dialect_options.num_cols = options.sql_type_list.size();
+	}
+	// Initialize State Machine
+	state_machine =
+	    make_shared<CSVStateMachine>(state_machine_cache.Get(options.dialect_options.state_machine_options), options);
+}
+
+CSVGlobalState::CSVGlobalState(ClientContext &context_p, shared_ptr<CSVBufferManager> buffer_manager,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
                                vector<column_t> column_ids_p)
-    : context(context_p), buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
-      column_ids(std::move(column_ids_p)), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
+    : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
+      sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 
 	if (files.size() > 1) {
 		throw InternalException("Not supported too many files");
 	}
 
-	state_machine = make_shared<CSVStateMachine>(
-	    CSVStateMachineCache::Get(context)->Get(options.dialect_options.state_machine_options), options);
-	//! If the buffer manager has not yet being initialized, we do it now.
-	if (!buffer_manager) {
-		buffer_manager = make_shared<CSVBufferManager>(context, options, files[0], 0);
-	}
+	if (buffer_manager) {
+		auto state_machine = make_shared<CSVStateMachine>(
+		    CSVStateMachineCache::Get(context)->Get(options.dialect_options.state_machine_options), options);
+		// If we already have a buffer manager, we don't need to reconstruct it to the first file
+		file_scans.emplace_back(make_uniq<CSVFileScan>(buffer_manager, state_machine, options));
+	} else {
+		// If not we need to construct it for the first file
+		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[0], 0, options));
+	};
+
 	//! There are situations where we only support single threaded scanning
 	bool single_threaded = options.null_padding;
 
-	//! Set information regarding file_size, if it's on disk and use that to set number of threads that will
-	//! be used in this scanner
-	file_size = buffer_manager->file_handle->FileSize();
-	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	if (!single_threaded) {
 		running_threads = MaxThreads();
 	}
 	current_boundary = CSVIterator(0, 0, 0, 0);
-	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors);
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {
@@ -38,11 +72,11 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {
 	idx_t total_files = bind_data.files.size();
 	// get the progress WITHIN the current file
 	double progress;
-	if (file_size == 0) {
+	if (file_scans.back()->file_size == 0) {
 		progress = 1.0;
 	} else {
 		// for compressed files, readed bytes may greater than files size.
-		progress = std::min(1.0, double(bytes_read) / double(file_size));
+		progress = std::min(1.0, double(file_scans.back()->bytes_read) / double(file_scans.back()->file_size));
 	}
 	// now get the total percentage of files read
 	double percentage = double(current_boundary.GetFileIdx()) / total_files;
@@ -56,10 +90,10 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 	if (finished) {
 		return nullptr;
 	}
-	state_machine->dialect_options.num_cols = bind_data.return_names.size();
-
-	auto csv_scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, error_handler, current_boundary);
-	finished = current_boundary.Next(*buffer_manager);
+	auto &current_file = file_scans.back();
+	auto csv_scanner = make_uniq<StringValueScanner>(current_file->buffer_manager, current_file->state_machine,
+	                                                 current_file->error_handler, current_boundary);
+	finished = current_boundary.Next(*current_file->buffer_manager);
 
 	csv_scanner->file_path = bind_data.files.front();
 	csv_scanner->names = bind_data.return_names;
@@ -118,28 +152,9 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 	//		return true;
 }
 
-// void CSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
-//	lock_guard<mutex> parallel_lock(main_mutex);
-//	if (positions.end_of_last_line > max_tuple_end) {
-//		max_tuple_end = positions.end_of_last_line;
-//	}
-//	tuple_end_to_batch[file_number_p][positions.end_of_last_line] = batch_idx;
-//	batch_to_tuple_end[file_number_p][batch_idx] = tuple_end[file_number_p].size();
-//	tuple_start[file_number_p].insert(positions.beginning_of_first_line);
-//	tuple_end[file_number_p].push_back(positions.end_of_last_line);
-//}
-//
-// void CSVGlobalState::UpdateLinesRead(CSVScanner &buffer_read, idx_t file_idx) {
-//	auto batch_idx = buffer_read.scanner_id;
-//	auto lines_read = buffer_read.GetTotalRowsEmmited();
-//	lock_guard<mutex> parallel_lock(main_mutex);
-//	line_info.current_batches[file_idx].erase(batch_idx);
-//	line_info.lines_read[file_idx][batch_idx] += lines_read;
-//}
-
 idx_t CSVGlobalState::MaxThreads() const {
 	// We initialize max one thread per our set bytes per thread limit
-	idx_t total_threads = file_size / CSVIterator::BYTES_PER_THREAD + 1;
+	idx_t total_threads = file_scans.back()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
 	if (total_threads < system_threads) {
 		return total_threads;
 	}
