@@ -1432,18 +1432,23 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::ENUM:
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
-		string ret = "{";
+		bool is_unnamed = StructType::IsUnnamed(type_);
+		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);
 		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &name = child_types[i].first;
 			auto &child = struct_values[i];
-			ret += "'" + name + "': " + child.ToSQLString();
+			if (is_unnamed) {
+				ret += child.ToSQLString();
+			} else {
+				ret += "'" + name + "': " + child.ToSQLString();
+			}
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += "}";
+		ret += is_unnamed ? ")" : "}";
 		return ret;
 	}
 	case LogicalTypeId::FLOAT:

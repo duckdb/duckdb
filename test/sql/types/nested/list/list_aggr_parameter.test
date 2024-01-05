@@ -16,7 +16,7 @@ SELECT list_aggr(list(i), 'quantile', [0.25, 0.5, 0.75]) FROM range(1, 11) tbl(i
 [3, 5, 8]
 
 query I
-SELECT list_aggr(list(i), 'string_agg', '|') FROM range(1, 4) tbl(i);
+SELECT list_aggr(list(i)::varchar[], 'string_agg', '|') FROM range(1, 4) tbl(i);
 ----
 1|2|3
 

@@ -91,7 +91,7 @@ select struct_pack(a1 =>'42'::double, a2 => 'asdf'::string)::struct(a1 integer, 
 query I
 select ROW(42, 'asdf');
 ----
-{'': 42, '': asdf}
+(42, asdf)
 
 statement error
 select ROW();
@@ -101,12 +101,12 @@ Can't pack nothing into a struct
 query I
 select ROW(NULL);
 ----
-{'': NULL}
+(NULL)
 
 query I
 select ROW(NULL, NULL);
 ----
-{'': NULL, '': NULL}
+(NULL, NULL)
 
 # MB example
 query I
@@ -121,9 +121,14 @@ select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fds
 {'a': 4, 'b': fdsa}
 
 statement error
-select struct_extract({'a': a}, a) from range(10) tbl(a);
+select struct_extract({'a': a}, a) from (select a::varchar as a from range(10) tbl(a));
 ----
 Key name for struct_extract needs to be a constant string
+
+statement error
+select struct_extract({'a': 42}, 42)
+----
+No function matches
 
 # test string to struct within struct casting
 query I
