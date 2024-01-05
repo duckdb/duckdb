@@ -115,13 +115,13 @@ void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const std::strin
 
 	if (!envvar.empty()) {
 		if (!extra_params.empty()) {
-			dsn = "DSN=" + default_dsn + ";" + extra_params + ";" + envvar + ";" + extra_params;
+			dsn = extra_params + ";" + envvar + ";" + extra_params;
 		} else {
 			dsn = "DSN=" + default_dsn + ";" + envvar;
 		}
 	} else {
 		if (!extra_params.empty()) {
-			dsn = "DSN=" + default_dsn + ";" + extra_params;
+			dsn = extra_params;
 		} else {
 			dsn = "DSN=" + default_dsn;
 		}
