@@ -21,7 +21,7 @@ struct CSVGlobalState : public GlobalTableFunctionState {
 public:
 	CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-	               vector<column_t> column_ids_p, const StateMachine &state_machine_p);
+	               vector<column_t> column_ids_p);
 
 	~CSVGlobalState() override {
 	}
@@ -54,6 +54,8 @@ public:
 	CSVIterator current_boundary;
 
 private:
+	//! Reference to the cient context that created this scan
+	ClientContext &context;
 	//! Buffer Manager for the CSV Files in this Scan
 	shared_ptr<CSVBufferManager> buffer_manager;
 
@@ -73,7 +75,6 @@ private:
 	//! Line Info used in error messages
 	shared_ptr<CSVErrorHandler> error_handler;
 
-	CSVStateMachineCache cache;
 	string sniffer_mismatch_error;
 
 	bool finished = false;

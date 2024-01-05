@@ -1,15 +1,13 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/util/csv_option.hpp
+// duckdb/execution/operator/csv_scanner/options/csv_option.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 
 namespace duckdb {
@@ -20,6 +18,9 @@ enum class NewLineIdentifier : uint8_t {
 	MIX = 3,      // Hippie-Land, can't run it multithreaded
 	NOT_SET = 4
 };
+
+class Serializer;
+class Deserializer;
 
 //! Wrapper for CSV Options that can be manually set by the user
 //! It is important to make this difference for options that can be automatically sniffed AND manually set.

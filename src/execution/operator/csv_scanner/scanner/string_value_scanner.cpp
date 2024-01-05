@@ -210,8 +210,8 @@ StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manag
              iterator.pos.buffer_pos, *error_handler, iterator) {};
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
-	CSVStateMachineCache cache;
-	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, cache);
+	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options,
+	                                                  *CSVStateMachineCache::Get(context));
 	auto buffer_manager = make_shared<CSVBufferManager>(context, options, options.file_path, 0);
 	return make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared<CSVErrorHandler>());
 }

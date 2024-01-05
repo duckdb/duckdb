@@ -70,7 +70,7 @@
 #include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/state_machine/csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/quote_rules.hpp"
 #include "duckdb/function/aggregate_state.hpp"

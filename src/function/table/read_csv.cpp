@@ -63,7 +63,6 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 			}
 		}
 	}
-	state_machine = state_machine_cache.Get(options.dialect_options.state_machine_options);
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -109,7 +108,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 		options.file_path = result->files[0];
 		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0);
-		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, {&return_types, &names});
+		CSVSniffer sniffer(options, result->buffer_manager, *CSVStateMachineCache::Get(context),
+		                   {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			names = sniffer_result.names;
@@ -178,8 +178,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		return nullptr;
 	}
 	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options,
-	                                 context.db->NumberOfThreads(), bind_data.files, input.column_ids,
-	                                 bind_data.state_machine);
+	                                 context.db->NumberOfThreads(), bind_data.files, input.column_ids);
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,

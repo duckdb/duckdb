@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
+#include "duckdb/storage/object_cache.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/state_machine_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/quote_rules.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state.hpp"
 
 namespace duckdb {
 
@@ -44,13 +45,26 @@ struct HashCSVStateMachineConfig {
 //! The CSVStateMachineCache caches state machines, although small ~2kb, the actual creation of multiple State Machines
 //! can become a bottleneck on sniffing, when reading very small csv files.
 //! Hence the cache stores State Machines based on their different delimiter|quote|escape options.
-class CSVStateMachineCache {
+class CSVStateMachineCache : public ObjectCacheEntry {
 public:
 	CSVStateMachineCache();
-	~CSVStateMachineCache() {};
+	~CSVStateMachineCache() override = default;
+	//! Gets a state machine from the cache, if it's not from one the default options
+	//! It first caches it, then returns it.
+	static shared_ptr<CSVStateMachineCache> Get(ClientContext &context);
+
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.
 	const StateMachine &Get(const CSVStateMachineOptions &state_machine_options);
+
+	static const string STATE_KEY;
+	static string ObjectType() {
+		return "CSV_STATE_MACHINE_CACHE";
+	}
+
+	string GetObjectType() override {
+		return ObjectType();
+	}
 
 private:
 	void Insert(const CSVStateMachineOptions &state_machine_options);
@@ -61,5 +75,7 @@ private:
 	const vector<vector<char>> default_quote = {{'\"'}, {'\"', '\''}, {'\0'}};
 	const vector<QuoteRule> default_quote_rule = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
 	const vector<vector<char>> default_escape = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
+	//! Because the state machine cache can be accessed in Parallel we need a mutex.
+	mutex main_mutex;
 };
 } // namespace duckdb

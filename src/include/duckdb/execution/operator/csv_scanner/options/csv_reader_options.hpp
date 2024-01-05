@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp
+// duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,37 +9,16 @@
 #pragma once
 
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/state_machine_options.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_option.hpp"
 
 namespace duckdb {
-
-//! Struct that holds the configuration of a CSV State Machine
-//! Basically which char, quote and escape were used to generate it.
-struct CSVStateMachineOptions {
-	CSVStateMachineOptions() {};
-	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p, NewLineIdentifier new_line_p)
-	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p), new_line(new_line_p) {};
-
-	//! Delimiter to separate columns within each line
-	CSVOption<char> delimiter = ',';
-	//! Quote used for columns that contain reserved characters, e.g '
-	CSVOption<char> quote = '\"';
-	//! Escape character to escape quote character
-	CSVOption<char> escape = '\0';
-	//! New Line separator
-	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
-
-	bool operator==(const CSVStateMachineOptions &other) const {
-		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&
-		       new_line == other.new_line;
-	}
-};
 
 struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;

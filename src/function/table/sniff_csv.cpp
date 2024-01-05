@@ -1,5 +1,5 @@
 #include "duckdb/function/built_in_functions.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
@@ -120,11 +120,10 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto sniffer_options = data.options;
 	sniffer_options.file_path = data.path;
 
-	CSVStateMachineCache state_machine_cache;
 	vector<string> file_paths {sniffer_options.file_path};
 
 	auto buffer_manager = make_shared<CSVBufferManager>(context, sniffer_options, file_paths[0], 0);
-	CSVSniffer sniffer(sniffer_options, buffer_manager, state_machine_cache);
+	CSVSniffer sniffer(sniffer_options, buffer_manager, *CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(true);
 	string str_opt;
 	string separator = ", ";

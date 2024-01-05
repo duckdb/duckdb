@@ -12,7 +12,7 @@
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
@@ -92,13 +92,6 @@ struct ReadCSVData : public BaseCSVData {
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
 	vector<ColumnInfo> column_info;
-	//! The CSVStateMachineCache caches state machines created for sniffing and parsing csv files
-	//! We cache them because when reading very small csv files, the cost of creating all the possible
-	//! State machines for sniffing becomes a major bottleneck.
-	CSVStateMachineCache state_machine_cache;
-
-	//! The state machine used to parse this file
-	StateMachine state_machine;
 	//! CSV Files can be parallelized either within a file or per-file, depending on the number of files
 	//! Or options used, we only parallelize per-file.
 	bool parallelize_single_file_scan = true;

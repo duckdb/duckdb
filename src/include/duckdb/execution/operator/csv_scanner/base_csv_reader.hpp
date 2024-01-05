@@ -15,7 +15,7 @@
 //#include "duckdb/common/enums/file_compression_type.hpp"
 //#include "duckdb/common/map.hpp"
 //#include "duckdb/common/queue.hpp"
-//#include "duckdb/execution/operator/csv_scanner/util/csv_reader_options.hpp"
+//#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
 //#include "duckdb/common/multi_file_reader.hpp"
 //#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
 //

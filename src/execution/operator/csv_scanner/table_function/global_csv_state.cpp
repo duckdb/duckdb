@@ -3,17 +3,18 @@
 
 namespace duckdb {
 
-CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
+CSVGlobalState::CSVGlobalState(ClientContext &context_p, shared_ptr<CSVBufferManager> buffer_manager_p,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-                               vector<column_t> column_ids_p, const StateMachine &state_machine_p)
-    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
+                               vector<column_t> column_ids_p)
+    : context(context_p), buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
       column_ids(std::move(column_ids_p)), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 
 	if (files.size() > 1) {
 		throw InternalException("Not supported too many files");
 	}
 
-	state_machine = make_shared<CSVStateMachine>(cache.Get(options.dialect_options.state_machine_options), options);
+	state_machine = make_shared<CSVStateMachine>(
+	    CSVStateMachineCache::Get(context)->Get(options.dialect_options.state_machine_options), options);
 	//! If the buffer manager has not yet being initialized, we do it now.
 	if (!buffer_manager) {
 		buffer_manager = make_shared<CSVBufferManager>(context, options, files[0], 0);

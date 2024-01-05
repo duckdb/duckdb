@@ -150,13 +150,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		options.sql_types_per_column[expected_names[i]] = i;
 	}
 
-	//	if (bind_data->files.size() > 1){
-	//		throw ("too many files bnrr");
-	//	}
-
 	if (options.auto_detect) {
 		auto buffer_manager = make_shared<CSVBufferManager>(context, options, bind_data->files[0], 0);
-		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache, {&expected_types, &expected_names});
+		CSVSniffer sniffer(options, buffer_manager, *CSVStateMachineCache::Get(context),
+		                   {&expected_types, &expected_names});
 		sniffer.SniffCSV();
 	}
 	bind_data->FinalizeRead(context);
