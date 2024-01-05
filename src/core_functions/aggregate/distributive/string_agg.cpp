@@ -119,6 +119,7 @@ struct StringAggFunction {
 
 unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction &function,
                                        vector<unique_ptr<Expression>> &arguments) {
+	function.arguments[0] = LogicalType::VARCHAR;
 	if (arguments.size() == 1) {
 		// single argument: default to comma
 		return make_uniq<StringAggBindData>(",");
@@ -155,7 +156,7 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, Aggreg
 AggregateFunctionSet StringAggFun::GetFunctions() {
 	AggregateFunctionSet string_agg;
 	AggregateFunction string_agg_param(
-	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
+	    {LogicalType::ANY}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
 	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
 	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,

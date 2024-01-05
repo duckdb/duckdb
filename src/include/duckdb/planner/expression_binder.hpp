@@ -90,7 +90,7 @@ public:
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
 
 	// Bind table names to ColumnRefExpressions
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool within_function_expression = false);
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
 	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
@@ -115,6 +115,8 @@ public:
 	                                  bool root_expression = false);
 
 	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
+
+	static LogicalType GetExpressionReturnType(const Expression &expr);
 
 private:
 	//! Maximum stack depth
@@ -152,6 +154,10 @@ protected:
 	                          const LogicalType &list_child_type);
 
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+
+	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);

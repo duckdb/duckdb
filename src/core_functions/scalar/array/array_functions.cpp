@@ -216,7 +216,7 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, S
 	auto size = left_size;
 
 	auto child_type =
-	    LogicalType::MaxLogicalType(ArrayType::GetChildType(left_type), ArrayType::GetChildType(right_type));
+	    LogicalType::MaxLogicalType(context, ArrayType::GetChildType(left_type), ArrayType::GetChildType(right_type));
 	if (child_type != LogicalTypeId::FLOAT && child_type != LogicalTypeId::DOUBLE) {
 		throw InvalidInputException(
 		    StringUtil::Format("%s: Array arguments must be of type FLOAT or DOUBLE", OP::NAME));

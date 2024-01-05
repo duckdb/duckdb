@@ -63,7 +63,10 @@ extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
-if platform.system() == 'Linux' and platform.architecture()[0] == '64bit' and not hasattr(sys, 'getandroidapilevel'):
+is_android = hasattr(sys, 'getandroidapilevel')
+use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+
+if use_jemalloc:
     extensions.append('jemalloc')
 
 unity_build = 0
@@ -245,12 +248,12 @@ if len(existing_duckdb_dir) == 0:
         # read the include files, source list and include files from the supplied lists
         with open_utf8('sources.list', 'r') as f:
             duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
+            if not use_jemalloc:
                 duckdb_sources = [x for x in duckdb_sources if 'jemalloc' not in x]
 
         with open_utf8('includes.list', 'r') as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
+            if not use_jemalloc:
                 duckdb_includes = [x for x in duckdb_includes if 'jemalloc' not in x]
 
     source_files += duckdb_sources
@@ -292,10 +295,6 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires = ['pytest-runner']
 else:
     setup_requires = []
-
-setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
-if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
-    setuptools_scm_conf['local_scheme'] = 'no-local-version'
 
 
 # data files need to be formatted as [(directory, [files...]), (directory2, [files...])]

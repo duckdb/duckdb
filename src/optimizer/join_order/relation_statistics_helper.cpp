@@ -356,12 +356,10 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 			continue;
 		}
 		auto column_count = base_stats.GetDistinctCount();
-		auto filtered_card = cardinality;
 		// column_count = 0 when there is no column count (i.e parquet scans)
 		if (column_count > 0) {
 			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-			filtered_card = (cardinality + column_count - 1) / column_count;
-			cardinality_after_filters = filtered_card;
+			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
 		}
 	}
 	return cardinality_after_filters;

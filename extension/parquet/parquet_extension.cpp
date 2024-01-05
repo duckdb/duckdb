@@ -629,7 +629,7 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return data.initial_file_row_groups * data.files.size();
+		return std::max(data.initial_file_row_groups, idx_t(1)) * data.files.size();
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files

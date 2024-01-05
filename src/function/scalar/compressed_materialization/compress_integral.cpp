@@ -26,6 +26,14 @@ struct TemplatedIntegralCompress<hugeint_t, RESULT_TYPE> {
 	}
 };
 
+template <class RESULT_TYPE>
+struct TemplatedIntegralCompress<uhugeint_t, RESULT_TYPE> {
+	static inline RESULT_TYPE Operation(const uhugeint_t &input, const uhugeint_t &min_val) {
+		D_ASSERT(min_val <= input);
+		return (input - min_val).lower;
+	}
+};
+
 template <class INPUT_TYPE, class RESULT_TYPE>
 static void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
@@ -75,6 +83,8 @@ static scalar_function_t GetIntegralCompressFunctionInputSwitch(const LogicalTyp
 		return GetIntegralCompressFunctionResultSwitch<uint32_t>(input_type, result_type);
 	case LogicalTypeId::UBIGINT:
 		return GetIntegralCompressFunctionResultSwitch<uint64_t>(input_type, result_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetIntegralCompressFunctionResultSwitch<uhugeint_t>(input_type, result_type);
 	default:
 		throw InternalException("Unexpected input type in GetIntegralCompressFunctionInputSwitch");
 	}
@@ -124,6 +134,8 @@ static scalar_function_t GetIntegralDecompressFunctionResultSwitch(const Logical
 		return GetIntegralDecompressFunction<INPUT_TYPE, uint32_t>(input_type, result_type);
 	case LogicalTypeId::UBIGINT:
 		return GetIntegralDecompressFunction<INPUT_TYPE, uint64_t>(input_type, result_type);
+	case LogicalTypeId::UHUGEINT:
+		return GetIntegralDecompressFunction<INPUT_TYPE, uhugeint_t>(input_type, result_type);
 	default:
 		throw InternalException("Unexpected input type in GetIntegralDecompressFunctionSetSwitch");
 	}

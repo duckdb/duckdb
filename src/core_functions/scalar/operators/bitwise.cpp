@@ -36,6 +36,9 @@ static scalar_function_t GetScalarIntegerUnaryFunction(const LogicalType &type) 
 	case LogicalTypeId::HUGEINT:
 		function = &ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, OP>;
 		break;
+	case LogicalTypeId::UHUGEINT:
+		function = &ScalarFunction::UnaryFunction<uhugeint_t, uhugeint_t, OP>;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunction");
 	}
@@ -72,6 +75,9 @@ static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type)
 		break;
 	case LogicalTypeId::HUGEINT:
 		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
+		break;
+	case LogicalTypeId::UHUGEINT:
+		function = &ScalarFunction::BinaryFunction<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");

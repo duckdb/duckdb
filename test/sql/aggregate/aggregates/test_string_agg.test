@@ -18,7 +18,7 @@ SELECT STRING_AGG()
 ----
 
 statement error
-SELECT STRING_AGG(1, 2, 3)
+SELECT STRING_AGG('a', 'b', 'c')
 ----
 
 statement error
@@ -66,11 +66,11 @@ SELECT STRING_AGG(x,',') FROM strings WHERE g > 100
 ----
 NULL
 
-# numerics are auto cast to strings
-query T
+# numerics are not auto cast to strings
+statement error
 SELECT STRING_AGG(1, 2)
 ----
-1
+No function matches
 
 # group concat is an alias for string_agg
 query T

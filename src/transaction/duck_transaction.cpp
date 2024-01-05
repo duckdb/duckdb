@@ -129,6 +129,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 	} else {
 		log = nullptr;
 	}
+
 	try {
 		storage->Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
