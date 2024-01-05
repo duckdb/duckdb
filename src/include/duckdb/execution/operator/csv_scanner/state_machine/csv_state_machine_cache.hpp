@@ -38,7 +38,8 @@ struct HashCSVStateMachineConfig {
 		auto h_delimiter = Hash(config.delimiter.GetValue());
 		auto h_quote = Hash(config.quote.GetValue());
 		auto h_escape = Hash(config.escape.GetValue());
-		return CombineHash(h_delimiter, CombineHash(h_quote, h_escape));
+		auto h_newline = Hash((uint8_t) config.new_line.GetValue());
+		return CombineHash(h_delimiter, CombineHash(h_quote, CombineHash(h_escape,h_newline)));
 	}
 };
 
@@ -68,7 +69,7 @@ public:
 
 private:
 	void Insert(const CSVStateMachineOptions &state_machine_options);
-	//! Cache on delimiter|quote|escape
+	//! Cache on delimiter|quote|escape|newline
 	unordered_map<CSVStateMachineOptions, StateMachine, HashCSVStateMachineConfig> state_machine_cache;
 	//! Default value for options used to intialize CSV State Machine Cache
 	const vector<char> default_delimiter = {',', '|', ';', '\t'};
