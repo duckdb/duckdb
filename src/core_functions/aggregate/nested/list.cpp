@@ -181,6 +181,14 @@ static void ListWindow(AggregateInputData &aggr_input_data, const WindowPartitio
 	// set the length and offset of this list in the result vector
 	result_data[rid].offset = total_len;
 	result_data[rid].length = linked_list.total_capacity;
+
+	// Empty frames produce NULL to track PG
+	if (!linked_list.total_capacity) {
+		auto &mask = FlatVector::Validity(result);
+		mask.SetInvalid(rid);
+		return;
+	}
+
 	D_ASSERT(linked_list.total_capacity != 0);
 	total_len += linked_list.total_capacity;
 

@@ -466,6 +466,21 @@ function duckdb_value_hugeint(result, col, row)
 end
 
 """
+	duckdb_value_uhugeint(result,col,row)
+ * returns: The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_uhugeint(result, col, row)
+    return ccall(
+        (:duckdb_value_uhugeint, libduckdb),
+        UInt64,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1
+    )
+end
+
+"""
 	duckdb_value_uint8(result,col,row)
  * returns: The uint8_t value at the specified location, or 0 if the value cannot be converted.
 
@@ -978,6 +993,23 @@ function duckdb_bind_hugeint(prepared_statement, param_idx, val)
         (:duckdb_bind_hugeint, libduckdb),
         duckdb_state,
         (duckdb_prepared_statement, Int32, duckdb_hugeint),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an duckdb_uhugeint value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_uhugeint val);
+"""
+function duckdb_bind_uhugeint(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_uhugeint, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Int32, duckdb_uhugeint),
         prepared_statement,
         param_idx,
         val
@@ -2558,6 +2590,14 @@ DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_h
 """
 function duckdb_append_hugeint(appender, value)
     return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
+end
+
+"""
+Append a duckdb_uhugeint value to the appender.
+DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value);
+"""
+function duckdb_append_uhugeint(appender, value)
+    return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
 end
 
 """

@@ -17,6 +17,7 @@ from duckdb.typing import (
     BIGINT,
     UBIGINT,
     HUGEINT,
+    UHUGEINT,
     UUID,
     FLOAT,
     DOUBLE,
@@ -53,6 +54,7 @@ class TestType(object):
         assert str(BIGINT) == 'BIGINT'
         assert str(UBIGINT) == 'UBIGINT'
         assert str(HUGEINT) == 'HUGEINT'
+        assert str(UHUGEINT) == 'UHUGEINT'
         assert str(UUID) == 'UUID'
         assert str(FLOAT) == 'FLOAT'
         assert str(DOUBLE) == 'DOUBLE'
@@ -190,6 +192,8 @@ class TestType(object):
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
 
+    # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
+    @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
     def test_optional(self):
         type = duckdb.typing.DuckDBPyType(Optional[str])
         assert type == 'VARCHAR'

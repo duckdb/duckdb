@@ -46,6 +46,7 @@ select list_histogram(name) from names;
 # incorrect usage
 statement error
 select list_histogram()
+----
 
 # temporal types
 

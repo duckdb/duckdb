@@ -73,6 +73,7 @@ SELECT a, b LIKE '%a1.csv%' FROM read_csv('s3://test-bucket/read_csv_glob_s3/gl*
 # read-csv auto fails here because of a type mismatch: most files contain dates, but one file contains integers
 statement error
 SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/*/*.csv', auto_detect=1) ORDER BY 1
+----
 
 # forcing string parsing works
 query I
@@ -116,6 +117,7 @@ SELECT COUNT(*) FROM glob('s3://test-bucket/read_csv_glob_s3/glob/[aei]*/*.csv')
 # nothing matches the glob
 statement error
 SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/[aei]*/a*a.csv', auto_detect=1) ORDER BY 1
+----
 
 query I
 SELECT COUNT(*) FROM glob('s3://test-bucket/read_csv_glob_s3/glob/[aei]*/a*a.csv')
@@ -152,5 +154,6 @@ SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/f*/f\*.csv', auto
 
 statement error
 SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/e2/e[a].csv', auto_detect=1) ORDER BY 1
+----
 
 endloop

@@ -63,9 +63,12 @@ Pragma visualize_last_profiling_output('__TEST_DIR__/test.html')
 
 statement error
 Pragma visualize_json_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/DOESNOTEXIST.json')
+----
 
 statement error
 Pragma visualize_diff_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/first.json', '__TEST_DIR__/DOESNOTEXIST.json')
+----
 
 statement error
 Pragma visualize_diff_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/DOESNOTEXIST.json', '__TEST_DIR__/DOESNOTEXIST.json')
+----

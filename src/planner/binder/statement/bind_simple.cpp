@@ -20,6 +20,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	auto entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
 	                               stmt.info->name, stmt.info->if_not_found);
 	if (entry) {
+		D_ASSERT(!entry->deleted);
 		auto &catalog = entry->ParentCatalog();
 		if (!entry->temporary) {
 			// we can only alter temporary tables/views in read-only mode

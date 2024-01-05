@@ -367,33 +367,43 @@ SELECT TRY_CAST(col1 AS INT[]) FROM try_cast_tbl;
 
 statement error
 SELECT CAST('{[3]}' AS INT[]);
+----
 
 statement error
 SELECT CAST('Hello World' AS INT[]);
+----
 
 statement error
 SELECT CAST('[3]]' AS INT[]);
+----
 
 statement error
 SELECT CAST('[3],[[]' AS INT[][]);
+----
 
 statement error
 SELECT CAST('[3], [[1]]' AS INT[][]);
+----
 
 statement error
 SELECT CAST('[[3 1]]' AS INT[][]);
+----
 
 statement error
 SELECT CAST('[[3,, 1]]' AS INT[][]);
+----
 
 statement error
 SELECT CAST('[[3], [[5], [4]]' AS INT[][]);
+----
 
 statement error
 SELECT CAST('][3]' AS INT[]);
+----
 
 statement error
 SELECT CAST('[[[[[]][3][[]][][[[][]]]]]' AS INT[][][][]);
+----
 
 
 #               Test WHERE clause
@@ -500,6 +510,7 @@ select '[{"bar":"\""}]'::VARCHAR[];
 # escaped '\', does not count as an escape for "
 statement error
 select '[{"bar":"\\""}]'::VARCHAR[];
+----
 
 # uneven amount of escapes does escape the "
 query I

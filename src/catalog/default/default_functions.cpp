@@ -92,7 +92,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, "arr[2:]"},
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, "list_concat(list_value(e), arr)"},
-	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, "list_aggr(arr, 'string_agg', sep)"},
+	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, "list_aggr(arr::varchar[], 'string_agg', sep)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
@@ -105,14 +105,14 @@ static DefaultMacro internal_macros[] = {
     {DEFAULT_SCHEMA, "array_reverse", {"l", nullptr}, "list_reverse(l)"},
 
     // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
-    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(l1, (x) -> list_contains(l2, x))"},
+    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(list_distinct(l1), (variable_intersect) -> list_contains(l2, variable_intersect))"},
     {DEFAULT_SCHEMA, "array_intersect", {"l1", "l2", nullptr}, "list_intersect(l1, l2)"},
 
-    {DEFAULT_SCHEMA, "list_has_any", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_intersect(l1, l2)) > 0 THEN true ELSE false END"},
+    {DEFAULT_SCHEMA, "list_has_any", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_filter(l1, (variable_has_any) -> list_contains(l2, variable_has_any))) > 0 THEN true ELSE false END"},
     {DEFAULT_SCHEMA, "array_has_any", {"l1", "l2", nullptr}, "list_has_any(l1, l2)" },
     {DEFAULT_SCHEMA, "&&", {"l1", "l2", nullptr}, "list_has_any(l1, l2)" }, // "&&" is the operator for "list_has_any
 
-    {DEFAULT_SCHEMA, "list_has_all", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_intersect(l2, l1)) = len(list_filter(l2, x -> x IS NOT NULL)) THEN true ELSE false END"},
+    {DEFAULT_SCHEMA, "list_has_all", {"l1", "l2", nullptr}, "CASE WHEN l1 IS NULL THEN NULL WHEN l2 IS NULL THEN NULL WHEN len(list_filter(l2, (variable_has_all) -> list_contains(l1, variable_has_all))) = len(list_filter(l2, variable_has_all -> variable_has_all IS NOT NULL)) THEN true ELSE false END"},
     {DEFAULT_SCHEMA, "array_has_all", {"l1", "l2", nullptr}, "list_has_all(l1, l2)" },
     {DEFAULT_SCHEMA, "@>", {"l1", "l2", nullptr}, "list_has_all(l1, l2)" }, // "@>" is the operator for "list_has_all
     {DEFAULT_SCHEMA, "<@", {"l1", "l2", nullptr}, "list_has_all(l2, l1)" }, // "<@" is the operator for "list_has_all

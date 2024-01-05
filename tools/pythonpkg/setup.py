@@ -63,7 +63,10 @@ extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
-if platform.system() == 'Linux' and platform.architecture()[0] == '64bit' and not hasattr(sys, 'getandroidapilevel'):
+is_android = hasattr(sys, 'getandroidapilevel')
+use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+
+if use_jemalloc:
     extensions.append('jemalloc')
 
 unity_build = 0
@@ -168,6 +171,10 @@ for ext in extensions:
 
 toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
 
+linker_args = toolchain_args
+if platform.system() == 'Windows':
+    linker_args.extend(['rstrtmgr.lib'])
+
 
 class get_pybind_include(object):
     def __init__(self, user=False):
@@ -241,12 +248,12 @@ if len(existing_duckdb_dir) == 0:
         # read the include files, source list and include files from the supplied lists
         with open_utf8('sources.list', 'r') as f:
             duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
+            if not use_jemalloc:
                 duckdb_sources = [x for x in duckdb_sources if 'jemalloc' not in x]
 
         with open_utf8('includes.list', 'r') as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
+            if not use_jemalloc:
                 duckdb_includes = [x for x in duckdb_includes if 'jemalloc' not in x]
 
     source_files += duckdb_sources
@@ -257,7 +264,7 @@ if len(existing_duckdb_dir) == 0:
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libraries,
         language='c++',
     )
@@ -277,7 +284,7 @@ else:
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libnames,
         library_dirs=library_dirs,
         language='c++',
@@ -288,10 +295,6 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires = ['pytest-runner']
 else:
     setup_requires = []
-
-setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
-if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
-    setuptools_scm_conf['local_scheme'] = 'no-local-version'
 
 
 # data files need to be formatted as [(directory, [files...]), (directory2, [files...])]
@@ -328,10 +331,13 @@ packages = [
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
+    'duckdb-stubs.value',
+    'duckdb-stubs.value.constant',
     'adbc_driver_duckdb',
 ]
 
 spark_packages = [
+    'duckdb.experimental',
     'duckdb.experimental.spark',
     'duckdb.experimental.spark.sql',
     'duckdb.experimental.spark.errors',
@@ -352,8 +358,6 @@ setup(
     packages=packages,
     include_package_data=True,
     python_requires='>=3.7.0',
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
-    use_scm_version=setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers=[
         'Topic :: Database :: Database Engines/Servers',

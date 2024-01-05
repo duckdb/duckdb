@@ -66,7 +66,7 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
 StandardBufferManager::~StandardBufferManager() {
 }
 
-BufferPool &StandardBufferManager::GetBufferPool() {
+BufferPool &StandardBufferManager::GetBufferPool() const {
 	return buffer_pool;
 }
 

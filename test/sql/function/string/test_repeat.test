@@ -49,13 +49,17 @@ MotörHeadMotörHeadMotörHeadMotörHead
 # test incorrect usage of reverse
 statement error
 select REPEAT()
+----
 
 statement error
 select REPEAT(1)
+----
 
 statement error
 select REPEAT('hello', 'world')
+----
 
 statement error
 select REPEAT('hello', 'world', 3)
+----
 

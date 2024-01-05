@@ -216,6 +216,9 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
 			auto default_copy = column.DefaultValue().Copy();
+			if (default_copy->HasParameter()) {
+				throw BinderException("DEFAULT values cannot contain parameters");
+			}
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
 			default_binder.target_type = column.Type();
 			bound_default = default_binder.Bind(default_copy);
@@ -303,17 +306,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = info->Cast<CreateTableInfo>();
 	auto &schema = BindCreateSchema(base);
 	return BindCreateTableInfo(std::move(info), schema);
-}
-
-vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry &table, CreateIndexInfo &info) {
-	auto index_binder = IndexBinder(*this, this->context, &table, &info);
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(info.expressions.size());
-	for (auto &expr : info.expressions) {
-		expressions.push_back(index_binder.Bind(expr));
-	}
-
-	return expressions;
 }
 
 } // namespace duckdb
