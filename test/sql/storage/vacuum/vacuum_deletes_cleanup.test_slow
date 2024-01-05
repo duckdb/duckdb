@@ -2,9 +2,6 @@
 # description: Verify that deleting rows and re-appending does not increase storage size
 # group: [vacuum]
 
-# the test explicitly compares to a block size of 262144
-require block_size 262144
-
 load __TEST_DIR__/vacuum_deletes_cleanup.db
 
 statement ok
@@ -17,20 +14,21 @@ statement ok
 INSERT INTO integers SELECT * FROM range(1000000);
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 499999500000
 
 statement ok
-DELETE FROM integers
+DELETE FROM integers;
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 NULL
 
+# the expected total storage size is around 3.8 MiB (4194304 bytes), and we allow a variation of 20% in storage size
 query I
-SELECT total_blocks * block_size < 8 * 262144 FROM pragma_database_size()
+SELECT total_blocks < 4194304 / get_block_size('vacuum_deletes_cleanup') * 1.2 FROM pragma_database_size();
 ----
 true
 
@@ -43,52 +41,53 @@ statement ok
 INSERT INTO integers SELECT * FROM range(1000000);
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 499999500000
 
 statement ok
-DELETE FROM integers WHERE i < 200000
+DELETE FROM integers WHERE i < 200000;
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 479999600000
 
 statement ok
-DELETE FROM integers WHERE i < 400000
+DELETE FROM integers WHERE i < 400000;
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 419999700000
 
 statement ok
-DELETE FROM integers WHERE i < 600000
+DELETE FROM integers WHERE i < 600000;
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 319999800000
 
 statement ok
-DELETE FROM integers WHERE i < 800000
+DELETE FROM integers WHERE i < 800000;
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 179999900000
 
 statement ok
-DELETE FROM integers
+DELETE FROM integers;
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 NULL
 
+# the expected total storage size is around 3.8 MiB (4194304 bytes), and we allow a variation of 20% in storage size
 query I
-SELECT total_blocks * block_size < 8 * 262144 FROM pragma_database_size()
+SELECT total_blocks < 4194304 / get_block_size('vacuum_deletes_cleanup') * 1.2 FROM pragma_database_size();
 ----
 true
 

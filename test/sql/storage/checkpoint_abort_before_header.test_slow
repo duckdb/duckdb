@@ -67,7 +67,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 ----
 0	199999	200000
 
-# the total storage size is around 800 KiB (819200 bytes),
+# the expected total storage size is around 800 KiB (819200 bytes),
 # and we allow a variation of 20% in storage size
 
 query I

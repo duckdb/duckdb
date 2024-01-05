@@ -2,27 +2,25 @@
 # description: Test truncating of the database file after data is deleted
 # group: [vacuum]
 
-# for smaller block sizes, we see different numbers of blocks written
-require block_size 262144
-
 load __TEST_DIR__/truncate_after_delete.db
 
 statement ok
-CREATE TABLE uuids(i VARCHAR);
+CREATE TABLE uuids (i VARCHAR);
 
 loop i 0 10
 
 statement ok
-DROP TABLE IF EXISTS integers
+DROP TABLE IF EXISTS integers;
 
 statement ok
 INSERT INTO uuids SELECT uuid()::varchar FROM range(1000000);
 
 statement ok
-CHECKPOINT
+CHECKPOINT;
 
+# the expected total storage size is around 20.4 MiB (20971520 bytes), and we allow a variation of 20% in storage size
 query I
-SELECT total_blocks > 50 FROM pragma_database_size();
+SELECT total_blocks < 20971520 / get_block_size('truncate_after_delete') * 1.2 FROM pragma_database_size();
 ----
 true
 
@@ -30,10 +28,10 @@ true
 # that is because deleting + checkpointing causes the metadata to be written at the END of the file
 # as we cannot override the deleted data yet
 statement ok
-DELETE FROM uuids
+DELETE FROM uuids;
 
 statement ok
-CHECKPOINT
+CHECKPOINT;
 
 # doing ANOTHER action and checkpointing again causes the data to be truncated
 # since the metadata can then overwrite the previously written data
@@ -44,10 +42,11 @@ statement ok
 INSERT INTO integers VALUES (1), (2), (3);
 
 statement ok
-CHECKPOINT
+CHECKPOINT;
 
+# the expected total storage size is around 20.4 MiB (20971520 bytes), and we allow a variation of 20% in storage size
 query I
-SELECT total_blocks < 10 FROM pragma_database_size();
+SELECT total_blocks < 20971520 / get_block_size('truncate_after_delete') * 1.2 FROM pragma_database_size();
 ----
 true
 
@@ -56,33 +55,33 @@ endloop
 restart
 
 query I
-FROM integers
+FROM integers;
 ----
 1
 2
 3
 
 query I
-FROM uuids
+FROM uuids;
 ----
 
 # resume operation after truncation
 restart
 
 statement ok
-DELETE FROM integers
+DELETE FROM integers;
 
 statement ok
 INSERT INTO integers FROM range(1000000);
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 499999500000
 
 restart
 
 query I
-SELECT SUM(i) FROM integers
+SELECT SUM(i) FROM integers;
 ----
 499999500000

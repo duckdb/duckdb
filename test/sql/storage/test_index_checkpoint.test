@@ -24,7 +24,7 @@ CHECKPOINT;
 
 # A prior version of index checkpointing caused index data to be written twice.
 # If a node type exists, then we write at least one block for it. The ART in this example has the
-# following node types: PREFIX, NODE4, NODE16. The total storage size including the table data
+# following node types: PREFIX, NODE4, NODE16. The expected total storage size including the table data
 # is around 5.8MiB (6291456 bytes), and we allow a variation of 20% in storage size
 query I
 SELECT total_blocks < 6291456 / get_block_size('index_checkpoint') * 1.2 FROM pragma_database_size();

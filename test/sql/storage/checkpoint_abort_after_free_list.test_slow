@@ -2,9 +2,6 @@
 # description: Test correct behavior if we unexpectedly abort after a checkpoint right after the free list is written
 # group: [storage]
 
-# for smaller block sizes, we see different numbers of blocks written
-require block_size 262144
-
 require skip_reload
 
 load __TEST_DIR__/checkpoint_abort.db
@@ -64,12 +61,13 @@ restart
 
 # verify that the change was correctly loaded from disk
 query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 ----
 0	199999	200000
 
+# the expected total storage size is around 800.0 KiB (819200 bytes), and we allow a variation of 20% in storage size
 query I
-select total_blocks < 25 from pragma_database_size();
+SELECT total_blocks < 819200 / get_block_size('checkpoint_abort') * 1.2 FROM pragma_database_size();
 ----
 true
 
