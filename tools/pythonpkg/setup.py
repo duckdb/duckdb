@@ -42,11 +42,11 @@ class CompilerLauncherMixin:
         compiler_launcher = os.getenv("DISTUTILS_C_COMPILER_LAUNCHER")
         if compiler_launcher:
 
-            def spawn_with_compiler_launcher(cmd):
+            def spawn_with_compiler_launcher(cmd, **kwargs):
                 exclude_programs = ("link.exe",)
                 if not cmd[0].endswith(exclude_programs):
                     cmd = [compiler_launcher] + cmd
-                return original_spawn(cmd)
+                return original_spawn(cmd, **kwargs)
 
             original_spawn = self.compiler.spawn
             self.compiler.spawn = spawn_with_compiler_launcher
