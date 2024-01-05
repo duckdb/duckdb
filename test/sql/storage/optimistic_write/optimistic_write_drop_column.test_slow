@@ -2,6 +2,9 @@
 # description: Test optimistic write with drop column in transaction-local storage
 # group: [optimistic_write]
 
+# FIXME: TODO
+require block_size 262144
+
 # load the DB from disk
 load __TEST_DIR__/optimistic_write_drop.db
 

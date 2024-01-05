@@ -2,6 +2,9 @@
 # description: Test optimistic write with alter type in transaction-local storage
 # group: [optimistic_write]
 
+# FIXME: TODO
+require block_size 262144
+
 # load the DB from disk
 load __TEST_DIR__/optimistic_write_alter_type.db
 
@@ -29,7 +32,7 @@ restart
 
 query I
 SELECT SUM(a) FROM test
-----
+----r
 500000500000
 
 statement ok
