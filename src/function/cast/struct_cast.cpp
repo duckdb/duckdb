@@ -80,6 +80,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 
 	// now construct the actual varchar vector
 	varchar_struct.Flatten(count);
+	bool is_unnamed = StructType::IsUnnamed(source.GetType());
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto &validity = FlatVector::Validity(varchar_struct);
@@ -101,13 +102,15 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
 			auto &name = child_types[c].first;
-			string_length += name.size() + NAME_SEP_LENGTH; // "'{name}': "
+			if (!is_unnamed) {
+				string_length += name.size() + NAME_SEP_LENGTH; // "'{name}': "
+			}
 			string_length += child_validity.RowIsValid(i) ? data[i].GetSize() : NULL_LENGTH;
 		}
 		result_data[i] = StringVector::EmptyString(result, string_length);
 		auto dataptr = result_data[i].GetDataWriteable();
 		idx_t offset = 0;
-		dataptr[offset++] = '{';
+		dataptr[offset++] = is_unnamed ? '(' : '{';
 		for (idx_t c = 0; c < children.size(); c++) {
 			if (c > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
@@ -115,14 +118,16 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
-			auto &name = child_types[c].first;
-			// "'{name}': "
-			dataptr[offset++] = '\'';
-			memcpy(dataptr + offset, name.c_str(), name.size());
-			offset += name.size();
-			dataptr[offset++] = '\'';
-			dataptr[offset++] = ':';
-			dataptr[offset++] = ' ';
+			if (!is_unnamed) {
+				auto &name = child_types[c].first;
+				// "'{name}': "
+				dataptr[offset++] = '\'';
+				memcpy(dataptr + offset, name.c_str(), name.size());
+				offset += name.size();
+				dataptr[offset++] = '\'';
+				dataptr[offset++] = ':';
+				dataptr[offset++] = ' ';
+			}
 			// value
 			if (child_validity.RowIsValid(i)) {
 				auto len = data[i].GetSize();
@@ -133,7 +138,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				offset += NULL_LENGTH;
 			}
 		}
-		dataptr[offset++] = '}';
+		dataptr[offset++] = is_unnamed ? ')' : '}';
 		result_data[i].Finalize();
 	}
 

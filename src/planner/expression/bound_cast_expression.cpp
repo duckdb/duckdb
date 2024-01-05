@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
@@ -28,7 +29,7 @@ BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expr
 
 unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                  BoundCastInfo bound_cast, bool try_cast) {
-	if (expr->return_type == target_type) {
+	if (ExpressionBinder::GetExpressionReturnType(*expr) == target_type) {
 		return expr;
 	}
 	auto &expr_type = expr->return_type;
@@ -79,6 +80,12 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 		D_ASSERT(target_type.IsValid());
 		auto &def = expr->Cast<BoundDefaultExpression>();
 		def.return_type = target_type;
+	}
+	if (expr->return_type.id() == LogicalTypeId::STRING_LITERAL) {
+		// when adding a cast to a string literal we need to transform the constant back into a VARCHAR
+		auto &constant = expr->Cast<BoundConstantExpression>();
+		constant.value = Value(StringValue::Get(constant.value));
+		constant.return_type = LogicalType::VARCHAR;
 	}
 	if (!target_type.IsValid()) {
 		return expr;

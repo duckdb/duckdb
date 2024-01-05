@@ -38,11 +38,14 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	// only handle constant and flat vectors here for now
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(source.GetVectorType());
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+		const bool is_null = ConstantVector::IsNull(source);
+		ConstantVector::SetNull(result, is_null);
 
-		auto ldata = ConstantVector::GetData<list_entry_t>(source);
-		auto tdata = ConstantVector::GetData<list_entry_t>(result);
-		*tdata = *ldata;
+		if (!is_null) {
+			auto ldata = ConstantVector::GetData<list_entry_t>(source);
+			auto tdata = ConstantVector::GetData<list_entry_t>(result);
+			*tdata = *ldata;
+		}
 	} else {
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
