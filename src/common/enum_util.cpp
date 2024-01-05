@@ -3127,6 +3127,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "TIME WITH TIME ZONE";
 	case LogicalTypeId::BIT:
 		return "BIT";
+	case LogicalTypeId::STRING_LITERAL:
+		return "STRING_LITERAL";
 	case LogicalTypeId::UHUGEINT:
 		return "UHUGEINT";
 	case LogicalTypeId::HUGEINT:
@@ -3251,6 +3253,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BIT")) {
 		return LogicalTypeId::BIT;
+	}
+	if (StringUtil::Equals(value, "STRING_LITERAL")) {
+		return LogicalTypeId::STRING_LITERAL;
 	}
 	if (StringUtil::Equals(value, "UHUGEINT")) {
 		return LogicalTypeId::UHUGEINT;
@@ -6543,6 +6548,8 @@ const char* EnumUtil::ToChars<WALType>(WALType value) {
 		return "DELETE_TUPLE";
 	case WALType::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case WALType::WAL_VERSION:
+		return "WAL_VERSION";
 	case WALType::CHECKPOINT:
 		return "CHECKPOINT";
 	case WALType::WAL_FLUSH:
@@ -6622,6 +6629,9 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return WALType::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "WAL_VERSION")) {
+		return WALType::WAL_VERSION;
 	}
 	if (StringUtil::Equals(value, "CHECKPOINT")) {
 		return WALType::CHECKPOINT;
