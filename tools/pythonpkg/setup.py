@@ -5,6 +5,7 @@ import os
 import sys
 import platform
 import multiprocessing.pool
+import traceback
 from glob import glob
 
 from setuptools import setup, Extension
@@ -46,7 +47,11 @@ class CompilerLauncherMixin:
                 exclude_programs = ("link.exe",)
                 if not cmd[0].endswith(exclude_programs):
                     cmd = [compiler_launcher] + cmd
-                return original_spawn(cmd, **kwargs)
+                try:
+                    return original_spawn(cmd, **kwargs)
+                except Exception:
+                    traceback.print_exc()
+                    raise
 
             original_spawn = self.compiler.spawn
             self.compiler.spawn = spawn_with_compiler_launcher
