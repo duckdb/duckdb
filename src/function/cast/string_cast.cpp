@@ -191,13 +191,16 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 	Vector varchar_vector(varchar_struct_type, count);
 	auto &child_vectors = StructVector::GetEntries(varchar_vector);
 	auto &result_children = StructVector::GetEntries(result);
+	auto is_unnamed = StructType::IsUnnamed(result.GetType());
 
 	string_map_t<idx_t> child_names;
-	vector<ValidityMask *> child_masks;
+	vector<reference<ValidityMask>> child_masks;
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
-		child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
-		child_masks.emplace_back(&FlatVector::Validity(*child_vectors[child_idx]));
-		child_masks[child_idx]->SetAllInvalid(count);
+		if (!is_unnamed) {
+			child_names.insert({StructType::GetChildName(result.GetType(), child_idx), child_idx});
+		}
+		child_masks.emplace_back(FlatVector::Validity(*child_vectors[child_idx]));
+		child_masks[child_idx].get().SetAllInvalid(count);
 	}
 
 	bool all_converted = true;
@@ -210,11 +213,14 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 			result_mask.SetInvalid(i);
 			continue;
 		}
+		if (is_unnamed) {
+			throw ConversionException("Casting strings to unnamed structs is unsupported");
+		}
 		if (!VectorStringToStruct::SplitStruct(source_data[idx], child_vectors, i, child_names, child_masks)) {
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type STRUCT";
 			for (auto &child_mask : child_masks) {
-				child_mask->SetInvalid(idx); // some values may have already been found and set valid
+				child_mask.get().SetInvalid(idx); // some values may have already been found and set valid
 			}
 			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, parameters.error_message, all_converted);
 		}

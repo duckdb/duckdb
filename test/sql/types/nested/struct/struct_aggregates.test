@@ -17,7 +17,7 @@ select min(struct_pack(i := -i, j := -i - 2)), max(struct_pack(i := i + 2, j := 
 {'i': -9, 'j': -11}	{'i': 11, 'j': 13}	{'i': 0, 'j': 2}
 
 query I
-select string_agg(struct_pack(i :=  i, j := i + 2), ',') from range(10) tbl(i);
+select string_agg(struct_pack(i :=  i, j := i + 2)::VARCHAR, ',') from range(10) tbl(i);
 ----
 {'i': 0, 'j': 2},{'i': 1, 'j': 3},{'i': 2, 'j': 4},{'i': 3, 'j': 5},{'i': 4, 'j': 6},{'i': 5, 'j': 7},{'i': 6, 'j': 8},{'i': 7, 'j': 9},{'i': 8, 'j': 10},{'i': 9, 'j': 11}
 
