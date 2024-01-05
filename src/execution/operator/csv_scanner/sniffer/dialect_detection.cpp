@@ -246,7 +246,7 @@ void CSVSniffer::RefineCandidates() {
 
 NewLineIdentifier CSVSniffer::DetectNewLineDelimiter() {
 	// Get first buffer
-	auto buffer = buffer_manager->GetBuffer(0, 0);
+	auto buffer = buffer_manager->GetBuffer(0);
 	auto buffer_ptr = buffer->Ptr();
 	bool carriage_return = false;
 	bool n = false;

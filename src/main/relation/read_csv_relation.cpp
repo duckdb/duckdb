@@ -52,7 +52,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 
 	// Run the auto-detect, populating the options with the detected settings
 
-	auto buffer_manager = make_shared<CSVBufferManager>(*context, csv_options, files);
+	auto buffer_manager = make_shared<CSVBufferManager>(*context, csv_options, files[0], 0);
 	CSVStateMachineCache state_machine_cache;
 	CSVSniffer sniffer(csv_options, buffer_manager, state_machine_cache);
 	auto sniffer_result = sniffer.SniffCSV();

@@ -81,7 +81,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	D_ASSERT(result.result_position < result.vector_size);
 	if (result.quoted) {
-		StringValueResult::AddQuotedValue(result, buffer_pos -1);
+		StringValueResult::AddQuotedValue(result, buffer_pos - 1);
 	} else {
 		// Test against null value first
 		auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
@@ -194,7 +194,10 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 }
 
 idx_t StringValueResult::NumberOfRows() {
-	D_ASSERT(result_position % number_of_columns == 0);
+	if (result_position % number_of_columns != 0) {
+		throw InternalException("Something went wrong when reading the CSV file, more positions than columns. Open an "
+		                        "issue on the issue tracker.");
+	}
 	return result_position / number_of_columns;
 }
 
@@ -209,8 +212,7 @@ StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manag
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	CSVStateMachineCache cache;
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, cache);
-	vector<string> file_paths = {options.file_path};
-	auto buffer_manager = make_shared<CSVBufferManager>(context, options, file_paths);
+	auto buffer_manager = make_shared<CSVBufferManager>(context, options, options.file_path, 0);
 	return make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared<CSVErrorHandler>());
 }
 
@@ -399,7 +401,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 void StringValueScanner::MoveToNextBuffer() {
 	if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 		previous_buffer_handle = std::move(cur_buffer_handle);
-		cur_buffer_handle = buffer_manager->GetBuffer(iterator.pos.file_idx, ++iterator.pos.buffer_idx);
+		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
 		if (!cur_buffer_handle) {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added

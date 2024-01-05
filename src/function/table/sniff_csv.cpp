@@ -123,7 +123,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	CSVStateMachineCache state_machine_cache;
 	vector<string> file_paths {sniffer_options.file_path};
 
-	auto buffer_manager = make_shared<CSVBufferManager>(context, sniffer_options, file_paths);
+	auto buffer_manager = make_shared<CSVBufferManager>(context, sniffer_options, file_paths[0], 0);
 	CSVSniffer sniffer(sniffer_options, buffer_manager, state_machine_cache);
 	auto sniffer_result = sniffer.SniffCSV(true);
 	string str_opt;

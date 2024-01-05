@@ -104,8 +104,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect) {
+		if (result->files.size() > 1) {
+			throw InternalException("too many files bbrrr");
+		}
 		options.file_path = result->files[0];
-		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files);
+		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0);
 		CSVSniffer sniffer(options, result->buffer_manager, result->state_machine_cache, {&return_types, &names});
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {

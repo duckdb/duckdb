@@ -37,23 +37,12 @@ void CSVIterator::Print() {
 }
 
 bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
-	if (boundary.file_idx >= buffer_manager.FileCount()) {
-		// We are done
-		return true;
-	}
 	boundary.boundary_idx++;
 	// This is our start buffer
-	auto buffer = buffer_manager.GetBuffer(boundary.file_idx, boundary.buffer_idx);
+	auto buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
 	if (buffer->is_last_buffer && boundary.buffer_pos + CSVIterator::BYTES_PER_THREAD > buffer->actual_size) {
-		// 1) We are done with the current file, we must move to the next file
-		// We are done with this file, we need to reset everything for the next file
-		boundary.file_idx++;
-		if (boundary.file_idx >= buffer_manager.FileCount()) {
-			// We are done
-			return true;
-		}
-		boundary.buffer_idx = 0;
-		boundary.buffer_pos = buffer_manager.GetStartPos();
+		// 1) We are done with the current file
+		return true;
 	} else if (boundary.buffer_pos + BYTES_PER_THREAD >= buffer->actual_size) {
 		// 2) We still have data to scan in this file, we set the iterator accordingly.
 		// We must move the buffer

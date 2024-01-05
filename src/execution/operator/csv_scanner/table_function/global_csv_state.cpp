@@ -9,10 +9,14 @@ CSVGlobalState::CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManag
     : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
       column_ids(std::move(column_ids_p)), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 
+	if (files.size() > 1) {
+		throw InternalException("Not supported too many files");
+	}
+
 	state_machine = make_shared<CSVStateMachine>(cache.Get(options.dialect_options.state_machine_options), options);
 	//! If the buffer manager has not yet being initialized, we do it now.
 	if (!buffer_manager) {
-		buffer_manager = make_shared<CSVBufferManager>(context, options, files);
+		buffer_manager = make_shared<CSVBufferManager>(context, options, files[0], 0);
 	}
 	//! There are situations where we only support single threaded scanning
 	bool single_threaded = options.null_padding;

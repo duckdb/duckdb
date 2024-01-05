@@ -28,7 +28,7 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
 	// Initialize current buffer handle
-	cur_buffer_handle = buffer_manager->GetBuffer(iterator.GetFileIdx(), iterator.GetBufferIdx());
+	cur_buffer_handle = buffer_manager->GetBuffer(iterator.GetBufferIdx());
 	buffer_handle_ptr = cur_buffer_handle->Ptr();
 	D_ASSERT(cur_buffer_handle);
 };
@@ -37,16 +37,12 @@ bool BaseScanner::FinishedFile() {
 	if (!cur_buffer_handle) {
 		return true;
 	}
-	if (buffer_manager->FileCount() > 1) {
-		//! Fixme: We might want to lift this if we want to run the sniffer over multiple files.
-		throw InternalException("We can't have a buffer manager that scans to infinity with more than one file");
-	}
 	// we have to scan to infinity, so we must check if we are done checking the whole file
 	if (!buffer_manager->Done()) {
 		return false;
 	}
 	// If yes, are we in the last buffer?
-	if (iterator.pos.buffer_idx != buffer_manager->CachedBufferPerFile(iterator.pos.buffer_idx)) {
+	if (iterator.pos.buffer_idx != buffer_manager->BufferCount()) {
 		return false;
 	}
 	// If yes, are we in the last position?

@@ -3,11 +3,11 @@
 #include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
 
-CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options,
-                                   const vector<string> &file_path_p)
-    : context(context_p), file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
+CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options, const string &file_path_p,
+                                   const idx_t file_idx_p)
+    : context(context_p), file_idx(file_idx_p), file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	D_ASSERT(!file_path.empty());
-	file_handle = ReadCSV::OpenCSV(file_path[0], options.compression, context);
+	file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
 	skip_rows = options.dialect_options.skip_rows.GetValue();
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {
@@ -19,17 +19,17 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
 	Initialize();
 }
 
-void CSVBufferManager::UnpinBuffer(const idx_t file_idx, const idx_t cache_idx) {
-	if (file_idx < cached_buffers.size() && cache_idx < cached_buffers[file_idx].size()) {
-		cached_buffers[file_idx][cache_idx]->Unpin();
+void CSVBufferManager::UnpinBuffer(const idx_t cache_idx) {
+	if (cache_idx < cached_buffers.size()) {
+		cached_buffers[cache_idx]->Unpin();
 	}
 }
 
 void CSVBufferManager::Initialize() {
 	if (cached_buffers.empty()) {
-		cached_buffers.resize(file_path.size());
-		cached_buffers[0].emplace_back(make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0));
-		last_buffer = cached_buffers.front().front();
+		cached_buffers.emplace_back(
+		    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
+		last_buffer = cached_buffers.front();
 	}
 	start_pos = last_buffer->GetStart();
 }
@@ -37,7 +37,8 @@ void CSVBufferManager::Initialize() {
 idx_t CSVBufferManager::GetStartPos() {
 	return start_pos;
 }
-bool CSVBufferManager::ReadNextAndCacheIt(const idx_t file_idx) {
+
+bool CSVBufferManager::ReadNextAndCacheIt() {
 	D_ASSERT(last_buffer);
 	if (!last_buffer->IsCSVFileLastBuffer()) {
 		auto maybe_last_buffer = last_buffer->Next(*file_handle, buffer_size, file_idx);
@@ -46,46 +47,38 @@ bool CSVBufferManager::ReadNextAndCacheIt(const idx_t file_idx) {
 			return false;
 		}
 		last_buffer = std::move(maybe_last_buffer);
-		cached_buffers[file_idx].emplace_back(last_buffer);
+		cached_buffers.emplace_back(last_buffer);
 		return true;
 	}
 	return false;
 }
 
-unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t file_idx, const idx_t pos) {
+unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (file_idx >= file_path.size()) {
-		// This file is bigger than the scanner
-		return nullptr;
-	}
-	while (pos >= cached_buffers[file_idx].size()) {
+	while (pos >= cached_buffers.size()) {
 		if (done) {
 			return nullptr;
 		}
-		if (!ReadNextAndCacheIt(file_idx)) {
+		if (!ReadNextAndCacheIt()) {
 			done = true;
 		}
 	}
 	if (pos != 0) {
-		cached_buffers[file_idx][pos - 1]->Unpin();
+		cached_buffers[pos - 1]->Unpin();
 	}
-	return cached_buffers[file_idx][pos]->Pin(*file_handle);
+	return cached_buffers[pos]->Pin(*file_handle);
 }
 
 idx_t CSVBufferManager::GetBufferSize() {
 	return buffer_size;
 }
-idx_t CSVBufferManager::FileCount() {
-	return file_path.size();
+
+idx_t CSVBufferManager::BufferCount() {
+	return cached_buffers.size();
 }
 
 bool CSVBufferManager::Done() {
 	return done;
-}
-
-idx_t CSVBufferManager::CachedBufferPerFile(idx_t file_idx) {
-	D_ASSERT(file_idx < cached_buffers.size());
-	return cached_buffers[file_idx].size();
 }
 
 } // namespace duckdb
