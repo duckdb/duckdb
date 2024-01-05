@@ -279,6 +279,15 @@ struct MD5NumberUpperFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ParsePathFun {
+	static constexpr const char *Name = "parse_path";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the path. seperator_option: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_path('/home/user/documents/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct PrintfFun {
 	static constexpr const char *Name = "printf";
 	static constexpr const char *Parameters = "format,parameters...";

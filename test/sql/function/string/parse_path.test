@@ -1,0 +1,89 @@
+# name: test/sql/function/string/parse_path.test
+# description: parse path functions test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+require notwindows
+
+query T
+SELECT parse_path('home/user/documents/file.csv', 'system');
+----
+[home, user, documents, file.csv]
+
+query T
+SELECT parse_path('home/user/documents/file.csv\file2.csv', 'both_slash');
+----
+[home, user, documents, file.csv, file2.csv]
+
+query T
+SELECT parse_path('/home/user/documents/file.csv', 'forward_slash');
+----
+[, home, user, documents, file.csv]
+
+query T
+SELECT parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'backslash');
+----
+[C:, Users, User, Documents, File.csv/File2.csv]
+
+# default separator
+query T
+SELECT parse_path('home/user/documents/file.csv\file2.csv');
+----
+[home, user, documents, file.csv, file2.csv]
+
+# no seperator in path
+query T
+SELECT parse_path('file.csv', 'backslash');
+----
+[file.csv]
+
+# consecutive separators 
+query T
+SELECT parse_path('/home/user/documents//file.csv', 'forward_slash');
+----
+[, home, user, documents, , file.csv]
+
+# special characters
+query T
+SELECT parse_path('home\wh@t3ve%\42/12 ch,ars.sth', 'both_slash');
+----
+[home, wh@t3ve%, 42, 12 ch,ars.sth]
+
+query T
+SELECT parse_path('home/user/documents/file.csv', NULL);
+----
+[home, user, documents, file.csv]
+
+query T
+SELECT parse_path(NULL, NULL);
+----
+NULL
+
+query T
+SELECT parse_path(NULL, '');
+----
+NULL
+
+query T
+SELECT parse_path('');
+----
+[]
+
+query T
+SELECT parse_path('', '');
+----
+[]
+
+# custom seperator
+query T
+SELECT parse_path('home/user/documents/file.csv','@');
+----
+[home, user, documents, file.csv]
+
+# test incorrect usage
+statement error
+SELECT parse_path();
+----
+

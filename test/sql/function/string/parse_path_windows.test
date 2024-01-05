@@ -1,0 +1,35 @@
+# name: test/sql/function/string/parse_path_windows.test
+# description: test parse path functions in windows
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+require windows
+
+query T
+SELECT parse_path('C:\Users\User\Documents\File.csv', 'system');
+----
+[C:, Users, User, Documents, File.csv]
+
+# default separator
+query T
+SELECT parse_path('home/user/documents/file.csv\file2.csv');
+----
+[home, user, documents, file.csv, file2.csv]
+
+query T
+SELECT parse_path(NULL, NULL);
+----
+NULL
+
+query T
+SELECT parse_path('');
+----
+[]
+
+# test incorrect usage
+statement error
+SELECT parse_path();
+----
+

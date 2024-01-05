@@ -181,6 +181,14 @@
         "struct": "MD5NumberUpperFun"
     },
     {
+        "name": "parse_path",
+        "parameters": "string,separator",
+        "description": "Returns a list of the components (directories and filename) in the path. seperator_option: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_path('/home/user/documents/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParsePathFun"
+    },
+    {
         "name": "printf",
         "parameters": "format,parameters...",
         "description": "Formats a string using printf syntax",
