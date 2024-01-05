@@ -154,22 +154,22 @@ for i in range(len(sys.argv)):
     else:
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
-toolchain_args.append('-DDUCKDB_PYTHON_LIB_NAME=' + lib_name)
+define_macros = [('DUCKDB_PYTHON_LIB_NAME', lib_name)]
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 if platform.system() == 'Windows':
-    toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY', '-DWIN32'])
+    define_macros.extend([('DUCKDB_BUILD_LIBRARY', None), ('WIN32', None)])
 
 if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
     extensions += ['httpfs']
 
 for ext in extensions:
-    toolchain_args.extend(['-DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())])
+    define_macros.append(('DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()), None))
 
-toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
+define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
 linker_args = toolchain_args
 if platform.system() == 'Windows':
@@ -267,6 +267,7 @@ if len(existing_duckdb_dir) == 0:
         extra_link_args=linker_args,
         libraries=libraries,
         language='c++',
+        define_macros=define_macros,
     )
 else:
     sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
@@ -288,6 +289,7 @@ else:
         libraries=libnames,
         library_dirs=library_dirs,
         language='c++',
+        define_macros=define_macros,
     )
 
 # Only include pytest-runner in setup_requires if we're invoking tests
