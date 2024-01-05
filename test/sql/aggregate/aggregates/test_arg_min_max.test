@@ -94,7 +94,7 @@ select argmin(b,a), argmax(b,a)  from blobs ;
 \xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
 
 query II
-select argmin(a,b), argmax(a,b)  from blobs ;
+select argmin(a,b), argmax(a,b)  from blobs;
 ----
 5	20
 

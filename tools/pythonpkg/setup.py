@@ -63,7 +63,10 @@ extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
-if platform.system() == 'Linux' and platform.architecture()[0] == '64bit' and not hasattr(sys, 'getandroidapilevel'):
+is_android = hasattr(sys, 'getandroidapilevel')
+use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+
+if use_jemalloc:
     extensions.append('jemalloc')
 
 unity_build = 0
@@ -245,12 +248,12 @@ if len(existing_duckdb_dir) == 0:
         # read the include files, source list and include files from the supplied lists
         with open_utf8('sources.list', 'r') as f:
             duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
+            if not use_jemalloc:
                 duckdb_sources = [x for x in duckdb_sources if 'jemalloc' not in x]
 
         with open_utf8('includes.list', 'r') as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
+            if not use_jemalloc:
                 duckdb_includes = [x for x in duckdb_includes if 'jemalloc' not in x]
 
     source_files += duckdb_sources
