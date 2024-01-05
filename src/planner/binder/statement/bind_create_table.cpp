@@ -216,6 +216,9 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
 			auto default_copy = column.DefaultValue().Copy();
+			if (default_copy->HasParameter()) {
+				throw BinderException("DEFAULT values cannot contain parameters");
+			}
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
 			default_binder.target_type = column.Type();
 			bound_default = default_binder.Bind(default_copy);
