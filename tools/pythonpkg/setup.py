@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import io
 import logging
 import os
 import sys
@@ -7,6 +8,7 @@ import platform
 import multiprocessing.pool
 import traceback
 from glob import glob
+from typing import TextIO
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -181,6 +183,15 @@ include_directories = [main_include_path, get_pybind_include(), get_pybind_inclu
 if 'BUILD_HTTPFS' in os.environ and 'OPENSSL_ROOT_DIR' in os.environ:
     include_directories += [os.path.join(os.environ['OPENSSL_ROOT_DIR'], 'include')]
 
+
+def exclude_extensions(f: TextIO):
+    files = [x for x in f.read().split('\n') if len(x) > 0]
+    if use_jemalloc:
+        return files
+    else:
+        return [x for x in files if 'jemalloc' not in x]
+
+
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
     source_files = main_source_files
@@ -225,14 +236,10 @@ if len(existing_duckdb_dir) == 0:
         # if amalgamation does not exist, we are in a package distribution
         # read the include files, source list and include files from the supplied lists
         with open_utf8('sources.list', 'r') as f:
-            duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
-            if not use_jemalloc:
-                duckdb_sources = [x for x in duckdb_sources if 'jemalloc' not in x]
+            duckdb_sources = exclude_extensions(f)
 
         with open_utf8('includes.list', 'r') as f:
-            duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
-            if not use_jemalloc:
-                duckdb_includes = [x for x in duckdb_includes if 'jemalloc' not in x]
+            duckdb_includes = exclude_extensions(f)
 
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
