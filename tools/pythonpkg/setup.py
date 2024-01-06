@@ -44,6 +44,9 @@ class CompilerLauncherMixin:
         if compiler_launcher:
 
             def spawn_with_compiler_launcher(cmd, **kwargs):
+                if len(' '.join(cmd)) > 32766:
+                    raise Exception("command too long: " + ' '.join(cmd))
+
                 exclude_programs = ("link.exe",)
                 if not cmd[0].endswith(exclude_programs):
                     cmd = [compiler_launcher] + cmd
