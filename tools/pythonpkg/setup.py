@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import io
+import ctypes
 import logging
 import os
 import sys
 import platform
-import multiprocessing.pool
+import sys
 import traceback
+from functools import lru_cache
 from glob import glob
+from os.path import exists
 from typing import TextIO
 
 from setuptools import setup, Extension
@@ -60,6 +62,53 @@ class CompilerLauncherMixin:
 
             original_spawn = self.compiler.spawn
             self.compiler.spawn = spawn_with_compiler_launcher
+
+            # for some reason, the copy of distutils included with setuptools  (instead of the one that was previously
+            # part of the stdlib) pushes the link call over the maximum command line length on windows.
+            # We can fix this by using special windows short paths, of the form C:\Program ~1\...
+
+            def link_with_short_paths(
+                target_desc,
+                objects,
+                *args,
+                **kwargs,
+            ):
+                return original_link(target_desc, [get_short_path(x) for x in objects], *args, **kwargs)
+
+            original_link = self.compiler.link
+            self.compiler.link = link_with_short_paths
+
+
+def get_short_path(long_name: str) -> str:
+    """
+    Gets the short path name of a given long path.
+    http://stackoverflow.com/a/23598461/200291
+    """
+
+    @lru_cache
+    def get_short_path_name_w():
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        _GetShortPathNameW = kernel32.GetShortPathNameW
+        _GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        _GetShortPathNameW.restype = wintypes.DWORD
+        return _GetShortPathNameW
+
+    if platform.system() != 'Windows':
+        return long_name
+
+    assert exists(long_name), long_name
+    gspn = get_short_path_name_w()
+
+    output_buf_size = 0
+    while True:
+        output_buf = ctypes.create_unicode_buffer(output_buf_size)
+        needed = gspn(long_name, output_buf, output_buf_size)
+        if output_buf_size >= needed:
+            return output_buf.value or long_name
+        else:
+            output_buf_size = needed
 
 
 class build_ext(CompilerLauncherMixin, _build_ext):
