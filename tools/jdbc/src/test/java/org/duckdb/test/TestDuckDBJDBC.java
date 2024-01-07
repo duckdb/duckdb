@@ -4053,40 +4053,74 @@ public class TestDuckDBJDBC {
             try (Statement s = conn.createStatement()) {
                 s.execute("CREATE TABLE test (x INT, y INT, z INT)");
             }
-            try (PreparedStatement ps1 = conn.prepareStatement("INSERT INTO test (x, y, z) VALUES (?, ?, ?);")) {
-                ps1.setObject(1, 1);
-                ps1.setObject(2, 2);
-                ps1.setObject(3, 3);
-                ps1.addBatch();
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO test (x, y, z) VALUES (?, ?, ?);")) {
+                ps.setObject(1, 1);
+                ps.setObject(2, 2);
+                ps.setObject(3, 3);
+                ps.addBatch();
 
-                ps1.setObject(1, 4);
-                ps1.setObject(2, 5);
-                ps1.setObject(3, 6);
-                ps1.addBatch();
+                ps.setObject(1, 4);
+                ps.setObject(2, 5);
+                ps.setObject(3, 6);
+                ps.addBatch();
 
-                ps1.executeBatch();
+                ps.executeBatch();
             }
-            try (Statement s = conn.createStatement();
-                 ResultSet rs2 = s.executeQuery("SELECT * FROM test ORDER BY x")) {
-                rs2.next();
-                assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
-                assertEquals(rs2.getObject(1, Integer.class), 1);
+            try (Statement s = conn.createStatement(); ResultSet rs = s.executeQuery("SELECT * FROM test ORDER BY x")) {
+                rs.next();
+                assertEquals(rs.getInt(1), rs.getObject(1, Integer.class));
+                assertEquals(rs.getObject(1, Integer.class), 1);
 
-                assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
-                assertEquals(rs2.getObject(2, Integer.class), 2);
+                assertEquals(rs.getInt(2), rs.getObject(2, Integer.class));
+                assertEquals(rs.getObject(2, Integer.class), 2);
 
-                assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
-                assertEquals(rs2.getObject(3, Integer.class), 3);
+                assertEquals(rs.getInt(3), rs.getObject(3, Integer.class));
+                assertEquals(rs.getObject(3, Integer.class), 3);
 
-                rs2.next();
-                assertEquals(rs2.getInt(1), rs2.getObject(1, Integer.class));
-                assertEquals(rs2.getObject(1, Integer.class), 4);
+                rs.next();
+                assertEquals(rs.getInt(1), rs.getObject(1, Integer.class));
+                assertEquals(rs.getObject(1, Integer.class), 4);
 
-                assertEquals(rs2.getInt(2), rs2.getObject(2, Integer.class));
-                assertEquals(rs2.getObject(2, Integer.class), 5);
+                assertEquals(rs.getInt(2), rs.getObject(2, Integer.class));
+                assertEquals(rs.getObject(2, Integer.class), 5);
 
-                assertEquals(rs2.getInt(3), rs2.getObject(3, Integer.class));
-                assertEquals(rs2.getObject(3, Integer.class), 6);
+                assertEquals(rs.getInt(3), rs.getObject(3, Integer.class));
+                assertEquals(rs.getObject(3, Integer.class), 6);
+            }
+        }
+    }
+
+    public static void test_batch_statement() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement s = conn.createStatement()) {
+                s.execute("CREATE TABLE test (x INT, y INT, z INT)");
+
+                s.addBatch("INSERT INTO test (x, y, z) VALUES (1, 2, 3);");
+                s.addBatch("INSERT INTO test (x, y, z) VALUES (4, 5, 6);");
+
+                s.executeBatch();
+            }
+            try (Statement s2 = conn.createStatement();
+                 ResultSet rs = s2.executeQuery("SELECT * FROM test ORDER BY x")) {
+                rs.next();
+                assertEquals(rs.getInt(1), rs.getObject(1, Integer.class));
+                assertEquals(rs.getObject(1, Integer.class), 1);
+
+                assertEquals(rs.getInt(2), rs.getObject(2, Integer.class));
+                assertEquals(rs.getObject(2, Integer.class), 2);
+
+                assertEquals(rs.getInt(3), rs.getObject(3, Integer.class));
+                assertEquals(rs.getObject(3, Integer.class), 3);
+
+                rs.next();
+                assertEquals(rs.getInt(1), rs.getObject(1, Integer.class));
+                assertEquals(rs.getObject(1, Integer.class), 4);
+
+                assertEquals(rs.getInt(2), rs.getObject(2, Integer.class));
+                assertEquals(rs.getObject(2, Integer.class), 5);
+
+                assertEquals(rs.getInt(3), rs.getObject(3, Integer.class));
+                assertEquals(rs.getObject(3, Integer.class), 6);
             }
         }
     }
@@ -4094,7 +4128,7 @@ public class TestDuckDBJDBC {
     public static void test_execute_while_batch() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (Statement s = conn.createStatement()) {
-                s.execute("create table test (id int)");
+                s.execute("CREATE TABLE test (id INT)");
             }
             try (PreparedStatement ps = conn.prepareStatement("INSERT INTO test (id) VALUES (?)")) {
                 ps.setObject(1, 1);
@@ -4110,6 +4144,18 @@ public class TestDuckDBJDBC {
 
                 String msg3 = assertThrows(() -> { ps.executeQuery("SELECT * FROM test"); }, SQLException.class);
                 assertTrue(msg3.contains("Batched queries must be executed with executeBatch."));
+            }
+        }
+    }
+
+    public static void test_prepared_statement_batch_exception() throws Exception{
+        try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
+            try (Statement s = conn.createStatement()) {
+                s.execute("CREATE TABLE test (id INT)");
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO test (id) VALUES (?)")) {
+                String msg = assertThrows(() -> { ps.addBatch("DUMMY SQL"); }, SQLException.class);
+                assertTrue(msg.contains("Cannot add batched SQL statement to PreparedStatement"));
             }
         }
     }
