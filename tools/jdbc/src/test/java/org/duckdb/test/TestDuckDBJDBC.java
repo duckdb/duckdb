@@ -4148,7 +4148,7 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_prepared_statement_batch_exception() throws Exception{
+    public static void test_prepared_statement_batch_exception() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL)) {
             try (Statement s = conn.createStatement()) {
                 s.execute("CREATE TABLE test (id INT)");
