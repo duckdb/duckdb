@@ -42,6 +42,8 @@ public:
 	//! once.
 	bool Done();
 
+	string GetFilePath();
+
 	ClientContext &context;
 	idx_t skip_rows = 0;
 

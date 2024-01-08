@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/util/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner/skip_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
 
 namespace duckdb {
 
@@ -239,7 +240,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 	// We keep track of the borked lines, in case we are ignoring errors
 	unordered_set<idx_t> borked_lines;
+	D_ASSERT(csv_file_scan);
 
+	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
 	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 		auto col_idx = reader_data.column_ids[c];
@@ -296,8 +299,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					break;
 				}
 			}
-			auto csv_error =
-			    CSVError::CastError(state_machine->options, parse_chunk, line_error, names[col_idx], error_message);
+			auto csv_error = CSVError::CastError(state_machine->options, parse_chunk, line_error,
+			                                     csv_file_scan->names[col_idx], error_message);
 			LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
 			                              lines_read - parse_chunk.size() + line_error);
 			error_handler->Error(lines_per_batch, csv_error);
@@ -488,7 +491,7 @@ void StringValueScanner::SetStart() {
 		// 2. We try to cast all columns to the correct types
 		bool all_cast = true;
 		for (idx_t col_idx = 0; col_idx < tuples.Size(); col_idx++) {
-			if (!tuples.GetValue(0, col_idx).TryCastAs(buffer_manager->context, types[col_idx])) {
+			if (!tuples.GetValue(0, col_idx).TryCastAs(buffer_manager->context, csv_file_scan->types[col_idx])) {
 				// We could not cast it to the right type, this is probably not the correct line start.
 				all_cast = false;
 				break;

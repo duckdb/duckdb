@@ -15,6 +15,7 @@
 
 namespace duckdb {
 
+class CSVFileScan;
 class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
@@ -54,16 +55,6 @@ public:
 	//! Returns the result from the last Parse call. Shouts at you if you call it wrong
 	virtual ScannerResult *GetResult();
 
-	const string &GetFileName() {
-		return file_path;
-	}
-	const vector<string> &GetNames() {
-		return names;
-	}
-	const vector<LogicalType> &GetTypes() {
-		return types;
-	}
-
 	CSVIterator &GetIterator();
 
 	idx_t GetBoundaryIndex() {
@@ -78,12 +69,7 @@ public:
 		return iterator.pos.buffer_pos;
 	}
 
-	MultiFileReaderData reader_data;
-	string file_path;
-	vector<string> names;
-	vector<LogicalType> types;
-
-	//! Templated function that process the parsing of a charecter
+	//! Templated function that process the parsing of a character
 	//! OP = Operation used to alter the result of the parser
 	//! T = Type of the result
 	template <class T>
@@ -123,6 +109,8 @@ public:
 	}
 
 	CSVStateMachine &GetStateMachine();
+
+	shared_ptr<CSVFileScan> csv_file_scan;
 
 protected:
 	//! Boundaries of this scanner

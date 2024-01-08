@@ -20,6 +20,10 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
+
+#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
 
 #include <limits>
 
@@ -32,21 +36,10 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression);
 }
 
+ReadCSVData::ReadCSVData() {};
+
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
-	// We can't parallelize files with a mix of new line delimiters, or with null padding options
-	// Since we won't be able to detect where new lines start correctly
-	bool not_supported_options =
-	    options.null_padding || options.dialect_options.state_machine_options.new_line == NewLineIdentifier::MIX;
-
-	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	// If we have many csv files, we run single-threaded on each file and parallelize on the number of files
-	bool many_csv_files = files.size() > 1 && int64_t(files.size() * 2) >= number_of_threads;
-	if (many_csv_files || not_supported_options) {
-		// not supported for parallel CSV reading
-		parallelize_single_file_scan = false;
-	}
-
 	if (!options.rejects_recovery_columns.empty()) {
 		for (auto &recovery_col : options.rejects_recovery_columns) {
 			bool found = false;
@@ -102,7 +95,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		                      "read_csv_auto or set read_csv(..., "
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
-	if (options.auto_detect) {
+	if (options.auto_detect && !options.file_options.union_by_name) {
 		options.file_path = result->files[0];
 		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0);
 		CSVSniffer sniffer(options, result->buffer_manager, *CSVStateMachineCache::Get(context),
@@ -115,34 +108,28 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 
 	D_ASSERT(return_types.size() == names.size());
-
-	result->csv_types = return_types;
-	result->csv_names = names;
-
+	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
-		D_ASSERT(0);
-		//		result->reader_bind =
-		//		    MultiFileReader::BindUnionReader<CSVScanner>(context, return_types, names, *result, options);
-		//		if (result->union_readers.size() > 1) {
-		//			result->column_info.emplace_back(result->csv_names, result->csv_types);
-		//			for (idx_t i = 1; i < result->union_readers.size(); i++) {
-		//				result->column_info.emplace_back(result->union_readers[i]->names,
-		//				                                 result->union_readers[i]->return_types);
-		//			}
-		//		}
-		//		if (!options.sql_types_per_column.empty()) {
-		//			auto exception = CSVScanner::ColumnTypesError(options.sql_types_per_column, names);
-		//			if (!exception.empty()) {
-		//				throw BinderException(exception);
-		//			}
-		//		}
+		result->reader_bind =
+		    MultiFileReader::BindUnionReader<CSVFileScan>(context, return_types, names, *result, options);
+		if (result->union_readers.size() > 1) {
+			result->column_info.emplace_back(result->csv_names, result->csv_types);
+			for (idx_t i = 1; i < result->union_readers.size(); i++) {
+				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
+			}
+		}
+		if (!options.sql_types_per_column.empty()) {
+			auto exception = CSVError::ColumnTypesError(options.sql_types_per_column, names);
+			if (!exception.error_message.empty()) {
+				throw BinderException(exception.error_message);
+			}
+		}
 	} else {
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
 	result->FinalizeRead(context);
-	result->options.dialect_options.num_cols = names.size();
 	return std::move(result);
 }
 
@@ -175,14 +162,13 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		return nullptr;
 	}
 	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options,
-	                                 context.db->NumberOfThreads(), bind_data.files, input.column_ids);
+	                                 context.db->NumberOfThreads(), bind_data.files, input.column_ids, bind_data);
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
-	auto &csv_data = input.bind_data->Cast<ReadCSVData>();
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
-	auto csv_scanner = global_state.Next(csv_data);
+	auto csv_scanner = global_state.Next();
 	if (!csv_scanner) {
 		global_state.DecrementThread();
 	}
@@ -200,13 +186,12 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 	do {
 		if (output.size() != 0) {
-			MultiFileReader::FinalizeChunk(bind_data.reader_bind, csv_local_state.csv_reader->reader_data, output);
+			MultiFileReader::FinalizeChunk(bind_data.reader_bind,
+			                               csv_local_state.csv_reader->csv_file_scan->reader_data, output);
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
-
-			csv_local_state.csv_reader = csv_global_state.Next(bind_data);
-
+			csv_local_state.csv_reader = csv_global_state.Next();
 			if (!csv_local_state.csv_reader) {
 				csv_global_state.DecrementThread();
 				break;
@@ -273,8 +258,7 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	auto reset_reader =
 	    MultiFileReader::ComplexFilterPushdown(context, data.files, data.options.file_options, get, filters);
 	if (reset_reader) {
-		D_ASSERT(0);
-		//		MultiFileReader::PruneReaders(data);
+		MultiFileReader::PruneReaders(data);
 	}
 }
 

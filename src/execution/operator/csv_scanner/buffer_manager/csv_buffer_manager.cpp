@@ -81,4 +81,8 @@ bool CSVBufferManager::Done() {
 	return done;
 }
 
+string CSVBufferManager::GetFilePath() {
+	return file_path;
+}
+
 } // namespace duckdb
