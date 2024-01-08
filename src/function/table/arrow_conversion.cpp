@@ -19,7 +19,7 @@ ArrowArrayPhysicalType GetArrowArrayPhysicalType(const ArrowType &type) {
 		return ArrowArrayPhysicalType::RUN_END_ENCODED;
 	}
 	return ArrowArrayPhysicalType::DEFAULT;
-};
+}
 
 } // namespace
 
