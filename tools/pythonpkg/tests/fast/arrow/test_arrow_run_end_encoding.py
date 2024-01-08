@@ -257,6 +257,54 @@ class TestArrowREE(object):
 
         assert expected == actual
 
+    def test_arrow_ree_union(self, duckdb_cursor):
+        duckdb_cursor.query(
+            """
+            create table tbl
+            as select
+                i // 4 as ree,
+                i as a,
+                i % 2 == 0 as b,
+                i::VARCHAR as c
+            FROM range(1000) t(i)
+        """
+        )
+
+        # Populate the table with data
+        unstructured = duckdb_cursor.query(
+            """
+            select * from tbl
+        """
+        ).arrow()
+
+        columns = unstructured.columns
+        # Run-encode the first column ('ree')
+        columns[0] = pc.run_end_encode(columns[0])
+
+        # Create a (chunked) UnionArray from the chunked arrays (columns) of the ArrowTable
+        names = unstructured.column_names
+        iterables = [x.iterchunks() for x in columns]
+        zipped = zip(*iterables)
+
+        structured_chunks = []
+        for chunk in zipped:
+            ree, a, b, c = chunk
+            chunk_length = len(ree)
+            new_array = pa.UnionArray.from_sparse(
+                pa.array([i % len(names) for i in range(chunk_length)], type=pa.int8()), [ree, a, b, c]
+            )
+            structured_chunks.append(new_array)
+
+        structured = pa.chunked_array(structured_chunks)
+        arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
+        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+
+        # expected = duckdb_cursor.query("select {'ree': ree, 'a': a, 'b': b, 'c': c} as s from tbl").fetchall()
+        actual = duckdb_cursor.query("select * from result").fetchall()
+        print(actual)
+
+        # assert expected == actual
+
 
 # TODO: add tests with maps
 # TODO: add tests with ENUMs
