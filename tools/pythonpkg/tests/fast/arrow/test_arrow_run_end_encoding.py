@@ -239,10 +239,6 @@ class TestArrowREE(object):
         columns[0] = pc.run_end_encode(columns[0])
 
         # Create a (chunked) ListArray from the chunked arrays (columns) of the ArrowTable
-        names = unstructured.column_names
-        iterables = [x.iterchunks() for x in columns]
-        zipped = zip(*iterables)
-
         structured_chunks = []
         for chunk in columns[0].iterchunks():
             ree = chunk
@@ -416,5 +412,44 @@ class TestArrowREE(object):
         # Verify that the resulting scan is the same as the input
         assert result.to_pylist() == arrow_tbl.to_pylist()
 
+    def test_arrow_ree_dictionary(self, duckdb_cursor):
+        size = 1000
 
-# TODO: add tests with ENUMs
+        duckdb_cursor.query(
+            """
+            create table tbl
+            as select
+                i // 4 as ree,
+            FROM range({}) t(i)
+        """.format(
+                size
+            )
+        )
+
+        # Populate the table with data
+        unstructured = duckdb_cursor.query(
+            """
+            select * from tbl
+        """
+        ).arrow()
+
+        columns = unstructured.columns
+        # Run-encode the first column ('ree')
+        columns[0] = pc.run_end_encode(columns[0])
+
+        # Create a (chunked) MapArray from the chunked arrays (columns) of the ArrowTable
+        structured_chunks = []
+        for chunk in columns[0].iterchunks():
+            ree = chunk
+            chunk_length = len(ree)
+            offsets = [i for i in reversed(range(chunk_length))]
+
+            new_array = pa.DictionaryArray.from_arrays(indices=offsets, dictionary=ree)
+            structured_chunks.append(new_array)
+
+        structured = pa.chunked_array(structured_chunks)
+        arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
+        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+
+        # Verify that the resulting scan is the same as the input
+        assert result.to_pylist() == arrow_tbl.to_pylist()

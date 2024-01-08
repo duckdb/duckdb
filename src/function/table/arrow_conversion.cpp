@@ -591,6 +591,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	}
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
+
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -1074,8 +1075,24 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, 0, has_nulls);
-		ColumnArrowToDuckDB(*base_vector, *array.dictionary, array_state, array.dictionary->length,
-		                    arrow_type.GetDictionary());
+		auto &dictionary_type = arrow_type.GetDictionary();
+		auto arrow_physical_type = GetArrowArrayPhysicalType(dictionary_type);
+		switch (arrow_physical_type) {
+		case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
+			ColumnArrowToDuckDBDictionary(*base_vector, *array.dictionary, array_state, array.dictionary->length,
+			                              dictionary_type);
+			break;
+		case ArrowArrayPhysicalType::RUN_END_ENCODED:
+			ColumnArrowToDuckDBRunEndEncoded(*base_vector, *array.dictionary, array_state, array.dictionary->length,
+			                                 dictionary_type);
+			break;
+		case ArrowArrayPhysicalType::DEFAULT:
+			ColumnArrowToDuckDB(*base_vector, *array.dictionary, array_state, array.dictionary->length,
+			                    dictionary_type);
+			break;
+		default:
+			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
+		};
 		array_state.AddDictionary(std::move(base_vector));
 	}
 	auto offset_type = arrow_type.GetDuckType();
