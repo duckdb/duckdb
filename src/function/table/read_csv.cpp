@@ -123,9 +123,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (!exception.error_message.empty()) {
 				throw BinderException(exception.error_message);
 			}
-			for (idx_t  i = 0; i < names.size(); i++){
+			for (idx_t i = 0; i < names.size(); i++) {
 				auto it = options.sql_types_per_column.find(names[i]);
-				if (it != options.sql_types_per_column.end()){
+				if (it != options.sql_types_per_column.end()) {
 					return_types[i] = options.sql_type_list[it->second];
 				}
 			}
@@ -173,7 +173,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
-	if (!global_state_p){
+	if (!global_state_p) {
 		return nullptr;
 	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
@@ -186,7 +186,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<ReadCSVData>();
-	if (!data_p.global_state){
+	if (!data_p.global_state) {
 		return;
 	}
 	auto &csv_global_state = data_p.global_state->Cast<CSVGlobalState>();

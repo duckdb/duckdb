@@ -66,6 +66,8 @@ private:
 	bool finished = false;
 
 	const ReadCSVData &bind_data;
+
+	vector<LogicalType> file_schema;
 };
 
 } // namespace duckdb

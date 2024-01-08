@@ -15,11 +15,12 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, shared_ptr<CSVBufferMan
 		auto state_machine = make_shared<CSVStateMachine>(
 		    CSVStateMachineCache::Get(context)->Get(options.dialect_options.state_machine_options), options);
 		// If we already have a buffer manager, we don't need to reconstruct it to the first file
-		file_scans.emplace_back(
-		    make_uniq<CSVFileScan>(context, buffer_manager, state_machine, options, bind_data, column_ids));
+		file_scans.emplace_back(make_uniq<CSVFileScan>(context, buffer_manager, state_machine, options, bind_data,
+		                                               column_ids, file_schema));
 	} else {
 		// If not we need to construct it for the first file
-		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids));
+		file_scans.emplace_back(
+		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema));
 	};
 
 	//! There are situations where we only support single threaded scanning
@@ -65,8 +66,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		if (current_file_idx < bind_data.files.size()) {
 			// If we have a next file we have to construct the file scan for that
 			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[current_file_idx],
-			                                                 bind_data.options, current_file_idx, bind_data,
-			                                                 column_ids));
+			                                                 bind_data.options, current_file_idx, bind_data, column_ids,
+			                                                 file_schema));
 			// And re-start the boundary-iterator
 			current_boundary = CSVIterator(current_file_idx, 0, 0, current_boundary.GetBoundaryIdx() + 1);
 		} else {

@@ -247,6 +247,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 		auto col_idx = reader_data.column_ids[c];
 		auto result_idx = reader_data.column_mapping[c];
+		if (col_idx >= parse_chunk.ColumnCount()) {
+			throw InvalidInputException("Mismatch between the schema of different files");
+		}
 		auto &parse_vector = parse_chunk.data[col_idx];
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();

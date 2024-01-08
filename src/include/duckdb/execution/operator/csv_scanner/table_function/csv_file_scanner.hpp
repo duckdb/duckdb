@@ -22,11 +22,11 @@ public:
 	//! This means the options are alreadu set, and the buffer manager is already up and runinng.
 	CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager,
 	            shared_ptr<CSVStateMachine> state_machine, const CSVReaderOptions &options,
-	            const ReadCSVData &bind_data, const vector<column_t> column_ids);
+	            const ReadCSVData &bind_data, const vector<column_t> column_ids, vector<LogicalType> &file_schema);
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, idx_t file_idx,
-	            const ReadCSVData &bind_data, const vector<column_t> column_ids);
+	            const ReadCSVData &bind_data, const vector<column_t> column_ids, vector<LogicalType> &file_schema);
 
 	CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options);
 
