@@ -231,6 +231,9 @@ endif
 ifneq ("${CUSTOM_LINKER}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCUSTOM_LINKER=${CUSTOM_LINKER}
 endif
+ifdef SKIP_PLATFORM_UTIL
+	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_PLATFORM_UTIL=1
+endif
 
 # Enable VCPKG for this build
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")

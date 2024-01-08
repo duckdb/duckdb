@@ -1084,6 +1084,17 @@ if(BUILD_PYTHON)
   endif()
 endif()
 
+if(NOT SKIP_PLATFORM_UTIL)
+  set(VERSION_SOURCES tools/utils/test_platform.cpp)
+
+  add_executable(duckdb_platform ${VERSION_SOURCES})
+  link_threads(duckdb_platform)
+
+  set_target_properties(duckdb_platform PROPERTIES OUTPUT_NAME duckdb_platform)
+  set_target_properties(duckdb_platform PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                         ${PROJECT_BINARY_DIR})
+endif()
+
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
     add_subdirectory(test)
