@@ -147,7 +147,8 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanD
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
     : scan_count(0), batch_index(DConstants::INVALID_INDEX), total_read_size(0), total_tuple_count(0),
       bind_data(gstate.bind_data), allocator(BufferAllocator::Get(context)), current_reader(nullptr),
-      current_buffer_handle(nullptr), is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
+      current_buffer_handle(nullptr), is_last(false), fs(FileSystem::GetFileSystem(context)),
+      thread_local_filehandle(nullptr), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON values when they cross a buffer boundary
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
@@ -718,9 +719,21 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, optiona
 		return;
 	}
 
+	auto &raw_handle = file_handle.GetHandle();
+	// For non-on-disk files, we create a handle per thread: this is faster for e.g. S3Filesystem where throttling
+	// per tcp connection can occur meaning that using multiple connections is faster.
+	if (!raw_handle.OnDiskFile() && raw_handle.CanSeek()) {
+		if (!thread_local_filehandle || thread_local_filehandle->GetPath() != raw_handle.GetPath()) {
+			thread_local_filehandle =
+			    fs.OpenFile(raw_handle.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+		}
+	} else if (thread_local_filehandle) {
+		thread_local_filehandle = nullptr;
+	}
+
 	// Now read the file lock-free!
 	file_handle.ReadAtPosition(buffer_ptr + prev_buffer_remainder, read_size, read_position,
-	                           gstate.bind_data.type == JSONScanType::SAMPLE);
+	                           gstate.bind_data.type == JSONScanType::SAMPLE, thread_local_filehandle);
 }
 
 void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index) {

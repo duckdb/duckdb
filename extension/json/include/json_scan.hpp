@@ -250,6 +250,12 @@ private:
 	//! Whether this is the last batch of the file
 	bool is_last;
 
+	//! The current main filesystem
+	FileSystem &fs;
+
+	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
+	unique_ptr<FileHandle> thread_local_filehandle;
+
 	//! Current buffer read info
 	char *buffer_ptr;
 	idx_t buffer_size;
