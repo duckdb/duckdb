@@ -85,7 +85,7 @@ def get_short_path(long_name: str) -> str:
     http://stackoverflow.com/a/23598461/200291
     """
 
-    @lru_cache
+    @lru_cache()
     def get_short_path_name_w():
         from ctypes import wintypes
 
