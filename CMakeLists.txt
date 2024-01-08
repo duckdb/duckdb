@@ -286,7 +286,15 @@ else()
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
-message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}")
+string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
+
+if(DUCKDB_EXTENSION_FOLDER_IS_VERSION)
+  set(DUCKDB_EXTENSION_FOLDER "${GIT_COMMIT_HASH}")
+else()
+  set(DUCKDB_EXTENSION_FOLDER "${DUCKDB_VERSION}")
+endif()
+
+message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_EXTENSION_FOLDER}")
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
