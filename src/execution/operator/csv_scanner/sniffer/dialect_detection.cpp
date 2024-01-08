@@ -110,7 +110,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
 			num_cols = sniffed_column_counts[row];
-			start_row = row + options.dialect_options.skip_rows.GetValue();
+			start_row = !options.null_padding*row + options.dialect_options.skip_rows.GetValue();
 			consistent_rows = 1;
 
 		} else if (num_cols >= sniffed_column_counts[row]) {

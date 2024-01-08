@@ -148,7 +148,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		// Maybe we have too few columns:
 		// 1) if null_padding is on we null pad it
 		if (result.null_padding) {
-			while (result.result_position % result.number_of_columns == 0) {
+			while (result.result_position % result.number_of_columns != 0) {
 				result.validity_mask->SetInvalid(result.result_position++);
 			}
 		} else {
@@ -528,6 +528,11 @@ void StringValueScanner::FinalizeChunkProcess() {
 			MoveToNextBuffer();
 			if (cur_buffer_handle) {
 				Process();
+			}
+		}
+		if (result.null_padding) {
+			while (result.result_position % result.number_of_columns != 0) {
+				result.validity_mask->SetInvalid(result.result_position++);
 			}
 		}
 	}

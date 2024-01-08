@@ -88,6 +88,9 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 				if (states.EmptyLine() || states.NewRow()) {
 					return;
 				}
+				if (states.IsCurrentDelimiter()){
+					result.current_column_count++;
+				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
 				result.InternalAddRow();
 				return;

@@ -24,7 +24,8 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, shared_ptr<CSVBufferMan
 	};
 
 	//! There are situations where we only support single threaded scanning
-	bool single_threaded = options.null_padding;
+	bool many_csv_files = files.size() > 1 && files.size() * 2 >= system_threads;
+	single_threaded = options.null_padding || many_csv_files;
 
 	if (!single_threaded) {
 		running_threads = MaxThreads();
@@ -56,6 +57,9 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	}
 	// We first create the scanner for the currenot boundary
 	auto &current_file = *file_scans.back();
+	if (single_threaded){
+		current_boundary = CSVIterator();
+	}
 	auto csv_scanner = make_uniq<StringValueScanner>(current_file.buffer_manager, current_file.state_machine,
 	                                                 current_file.error_handler, current_boundary);
 	csv_scanner->csv_file_scan = file_scans.back();
@@ -80,20 +84,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 }
 
 idx_t CSVGlobalState::MaxThreads() const {
-
-	// We can't parallelize files with a mix of new line delimiters, or with null padding options
-	// Since we won't be able to detect where new lines start correctly
-	//	bool not_supported_options =
-	//	    options.null_padding || options.dialect_options.state_machine_options.new_line == NewLineIdentifier::MIX;
-	//
-	//	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	//	// If we have many csv files, we run single-threaded on each file and parallelize on the number of files
-	//	bool many_csv_files = files.size() > 1 && int64_t(files.size() * 2) >= number_of_threads;
-	//	if (many_csv_files || not_supported_options) {
-	//		// not supported for parallel CSV reading
-	//		parallelize_single_file_scan = false;
-	//	}
-
 	// We initialize max one thread per our set bytes per thread limit
 	idx_t total_threads = file_scans.back()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
 	if (total_threads < system_threads) {
