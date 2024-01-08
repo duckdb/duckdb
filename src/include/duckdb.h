@@ -893,7 +893,7 @@ Test a `duckdb_date` to see if it is a finite value.
 * date: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
 * returns: True if the date is finite, false if it is ±infinity.
 */
-DUCKDB_API bool duckdb_is_finite_date(duckdb_date_struct date);
+DUCKDB_API bool duckdb_is_finite_date(duckdb_date date);
 
 /*!
 Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).
