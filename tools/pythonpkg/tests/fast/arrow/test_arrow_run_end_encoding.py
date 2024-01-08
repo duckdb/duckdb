@@ -318,6 +318,58 @@ class TestArrowREE(object):
         actual = duckdb_cursor.query("select * from result").fetchall()
         assert expected == actual
 
+    def test_arrow_ree_map(self, duckdb_cursor):
+        size = 1000
+
+        duckdb_cursor.query(
+            """
+            create table tbl
+            as select
+                i // 4 as ree,
+                i as a,
+            FROM range({}) t(i)
+        """.format(
+                size
+            )
+        )
+
+        # Populate the table with data
+        unstructured = duckdb_cursor.query(
+            """
+            select * from tbl
+        """
+        ).arrow()
+
+        columns = unstructured.columns
+        # Run-encode the first column ('ree')
+        columns[0] = pc.run_end_encode(columns[0])
+
+        # Create a (chunked) MapArray from the chunked arrays (columns) of the ArrowTable
+        names = unstructured.column_names
+        iterables = [x.iterchunks() for x in columns]
+        zipped = zip(*iterables)
+
+        structured_chunks = []
+        for chunk in zipped:
+            ree, a = chunk
+            chunk_length = len(ree)
+            offsets = []
+            offset = 0
+            while chunk_length > 10:
+                offsets.append(offset)
+                offset += 10
+                chunk_length -= 10
+
+            new_array = pa.MapArray.from_arrays(offsets, a, ree)
+            structured_chunks.append(new_array)
+
+        structured = pa.chunked_array(structured_chunks)
+        arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
+        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+
+        # Verify that the resulting scan is the same as the input
+        assert result.to_pylist() == arrow_tbl.to_pylist()
+
 
 # TODO: add tests with maps
 # TODO: add tests with ENUMs
