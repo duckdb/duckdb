@@ -8,28 +8,13 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
-
-struct NextvalBindData : public FunctionData {
-	explicit NextvalBindData(optional_ptr<SequenceCatalogEntry> sequence) : sequence(sequence) {
-	}
-
-	//! The sequence to use for the nextval computation; only if the sequence is a constant
-	optional_ptr<SequenceCatalogEntry> sequence;
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<NextvalBindData>(sequence);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<NextvalBindData>();
-		return sequence == other.sequence;
-	}
-};
 
 struct CurrentSequenceValueOperator {
 	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq) {
@@ -134,10 +119,30 @@ static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dep
 	}
 }
 
+void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const ScalarFunction &) {
+	auto &next_val_bind_data = bind_data->Cast<NextvalBindData>();
+	serializer.WritePropertyWithDefault(100, "sequence_create_info", next_val_bind_data.create_info);
+}
+
+unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &) {
+	auto create_info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(100, "sequence_create_info",
+	                                                                                unique_ptr<CreateInfo>());
+	optional_ptr<SequenceCatalogEntry> catalog_entry_ptr;
+	if (create_info) {
+		auto &seq_info = create_info->Cast<CreateSequenceInfo>();
+		auto &context = deserializer.Get<ClientContext &>();
+		catalog_entry_ptr =
+		    &Catalog::GetEntry<SequenceCatalogEntry>(context, seq_info.catalog, seq_info.schema, seq_info.name);
+	}
+	return make_uniq<NextvalBindData>(catalog_entry_ptr);
+}
+
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, NextValBind, NextValDependency);
 	next_val.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	next_val.serialize = Serialize;
+	next_val.deserialize = Deserialize;
 	set.AddFunction(next_val);
 }
 
@@ -145,6 +150,8 @@ void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, NextValBind, NextValDependency);
 	curr_val.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	curr_val.serialize = Serialize;
+	curr_val.deserialize = Deserialize;
 	set.AddFunction(curr_val);
 }
 
