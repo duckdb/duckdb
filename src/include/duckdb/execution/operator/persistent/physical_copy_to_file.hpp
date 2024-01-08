@@ -73,7 +73,6 @@ public:
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 
 private:
-	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
-	                                               bool already_locked = false) const;
+	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink) const;
 };
 } // namespace duckdb
