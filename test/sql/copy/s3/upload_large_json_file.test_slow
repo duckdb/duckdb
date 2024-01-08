@@ -67,3 +67,21 @@ WHERE
     AND l_quantity < 24;
 ----
 11803420.2534
+
+# This query triggers an edge case where we apply an S3-specific optimization using multiple cached filehandles
+query I
+SELECT
+    sum(l_extendedprice * l_discount)/3 AS revenue
+FROM
+    read_json_auto([
+        's3://test-bucket/multipart/export_large.json',
+        's3://test-bucket/multipart/export_large.json',
+        's3://test-bucket/multipart/export_large.json',])
+WHERE
+    l_shipdate >= CAST('1994-01-01' AS date)
+    AND l_shipdate < CAST('1995-01-01' AS date)
+    AND l_discount BETWEEN 0.05
+    AND 0.07
+    AND l_quantity < 24;
+----
+11803420.2534

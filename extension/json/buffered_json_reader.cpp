@@ -74,12 +74,12 @@ idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) 
 void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run,
                                     optional_ptr<FileHandle> override_handle) {
 	D_ASSERT(size != 0);
-	auto handle = override_handle ? override_handle.get() : file_handle.get();
+	auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
 
 	if (can_seek) {
-		handle->Read(pointer, size, position);
+		handle.Read(pointer, size, position);
 	} else if (sample_run) { // Cache the buffer
-		handle->Read(pointer, size, position);
+		handle.Read(pointer, size, position);
 
 		cached_buffers.emplace_back(allocator.Allocate(size));
 		memcpy(cached_buffers.back().get(), pointer, size);
@@ -90,7 +90,7 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 		}
 
 		if (size != 0) {
-			handle->Read(pointer, size, position);
+			handle.Read(pointer, size, position);
 		}
 	}
 	if (++actual_reads > requested_reads) {
