@@ -32,7 +32,7 @@ select count(*) from parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data
 
 # empty list
 statement error
-select count(*) from parquet_scan([]);
+select count(*) from parquet_scan([]::varchar[]);
 ----
 at least one file
 

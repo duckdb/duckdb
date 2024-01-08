@@ -181,6 +181,8 @@ struct DBConfigOptions {
 	string duckdb_api;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
+	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
+	bool old_implicit_casting = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
