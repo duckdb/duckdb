@@ -100,7 +100,7 @@ Pipeline &MetaPipeline::CreatePipeline() {
 void MetaPipeline::AddDependenciesFrom(Pipeline &dependant, Pipeline &start, bool including) {
 	// find 'start'
 	auto it = pipelines.begin();
-	for (; RefersToSameObject(**it, start); it++) {
+	for (; !RefersToSameObject(**it, start); it++) {
 	}
 
 	if (!including) {
@@ -128,7 +128,7 @@ void MetaPipeline::AddFinishEvent(Pipeline &pipeline) {
 
 	// add all pipelines that were added since 'pipeline' was added (including 'pipeline') to the finish group
 	auto it = pipelines.begin();
-	for (; RefersToSameObject(**it, pipeline); it++) {
+	for (; !RefersToSameObject(**it, pipeline); it++) {
 	}
 	it++;
 	for (; it != pipelines.end(); it++) {
