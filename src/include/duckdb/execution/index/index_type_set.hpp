@@ -12,6 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
