@@ -48,7 +48,7 @@ class CompilerLauncherMixin:
         if compiler_launcher:
 
             def spawn_with_compiler_launcher(cmd, **kwargs):
-                if len(' '.join(cmd)) > 32766:
+                if platform.system() == 'Windows' and len(' '.join(cmd)) > 32766:
                     raise Exception("command too long: " + ' '.join(cmd))
 
                 exclude_programs = ("link.exe",)
@@ -85,7 +85,7 @@ def get_short_path(long_name: str) -> str:
     http://stackoverflow.com/a/23598461/200291
     """
 
-    @lru_cache
+    @lru_cache()
     def get_short_path_name_w():
         from ctypes import wintypes
 
