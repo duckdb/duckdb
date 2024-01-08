@@ -27,8 +27,16 @@ TO_BUCKET=duckdb-extensions
 CLOUDFRONT_DISTRIBUTION_ID=E2Z28NDMI4PVXP
 
 ### COPY THE FILES
+## REAL_RUN is to be used to move non-Wasm extensions
 REAL_RUN="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.gz' --acl public-read"
 DRY_RUN="$REAL_RUN --dryrun"
+## REAL_RUN_WASM is to be used to move Wasm extensions to new style path (no extra duckdb-wasm)
+REAL_RUN_WASM="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.wasm' --acl public-read --content-encoding br --content-type='application/wasm'"
+DRY_RUN_WASM="$REAL_RUN_WASM --dryrun"
+## REAL_RUN_WASM_OLD_STYLE is to be used to move Wasm extensions to old style path (additional /duckdb-wasm/ in the path)
+## This can be phased with release 0.10.0
+REAL_RUN_WASM_OLD_STYLE="aws s3 cp s3://$FROM_BUCKET/$BASE_NIGHTLY_DIR s3://$TO_BUCKET/duckdb-wasm/$2 --recursive --exclude '*' --include '*/$1.duckdb_extension.wasm' --acl public-read --content-encoding br --content-type='application/wasm'"
+DRY_RUN_WASM_OLD_STYLE="$REAL_RUN_WASM_OLD_STYLE --dryrun"
 
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   echo "DEPLOYING"
@@ -36,12 +44,16 @@ if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   echo "> TO  : $TO_BUCKET"
   echo "> AWS CLI deploy: "
   eval "$REAL_RUN"
+  eval "$REAL_RUN_WASM"
+  eval "$REAL_RUN_WASM_OLD_STYLE"
 else
   echo "DEPLOYING (DRY RUN)"
   echo "> FROM: $FROM_BUCKET"
   echo "> TO  : $TO_BUCKET"
   echo "> AWS CLI Dry run: "
   eval "$DRY_RUN"
+  eval "$DRY_RUN_WASM"
+  eval "$DRY_RUN_WASM_OLD_STYLE"
 fi
 
 echo ""
@@ -51,7 +63,7 @@ echo ""
 CLOUDFRONT_ORIGINS=`aws cloudfront get-distribution --id $CLOUDFRONT_DISTRIBUTION_ID --query 'Distribution.DistributionConfig.Origins.Items[*].DomainName' --output text`
 
 # Parse the dry run output
-output=$(eval "$DRY_RUN")
+output=$(eval "$DRY_RUN" && eval "$DRY_RUN_WASM" && eval "$DRY_RUN_WASM_OLD_STYLE")
 s3_paths=()
 while IFS= read -r line; do
     if [[ $line == *"copy:"* ]]; then

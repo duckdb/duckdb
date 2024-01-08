@@ -163,7 +163,7 @@ bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 
 template <>
 bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
-	if (!Uhugeint::AddInPlace(left, right)) {
+	if (!Uhugeint::TryAddInPlace(left, right)) {
 		return false;
 	}
 	result = left;
@@ -172,7 +172,7 @@ bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &re
 
 template <>
 bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	if (!Hugeint::AddInPlace(left, right)) {
+	if (!Hugeint::TryAddInPlace(left, right)) {
 		return false;
 	}
 	result = left;
@@ -214,7 +214,9 @@ bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result) {
 
 template <>
 bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	result = left + right;
+	if (!TryAddOperator::Operation(left, right, result)) {
+		return false;
+	}
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}
