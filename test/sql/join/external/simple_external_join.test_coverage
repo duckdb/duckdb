@@ -13,10 +13,10 @@ create table t2 (j varchar)
 # Create tables with large string values so that strings aren't inlined
 # The tables have some overlapping values to keep the join result small
 statement ok
-insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(100000)
+insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(1000000)
 
 statement ok
-insert into t2 select concat(range::VARCHAR, repeat('0', 50)) j from range(90000, 500000)
+insert into t2 select concat(range::VARCHAR, repeat('0', 50)) j from range(900000, 5000000)
 
 # we want tight memory settings for the external joins
 statement ok
@@ -27,28 +27,41 @@ statement ok
 pragma threads=1
 
 statement ok
-pragma memory_limit='25mb'
-
-query I
-select count(*) from t1, t2 where i = j
-----
-10000
-
-# now with more threads and a slightly higher limit
-statement ok
-pragma threads=4
-
-statement ok
 pragma memory_limit='50mb'
 
 query I
 select count(*) from t1, t2 where i = j
 ----
-10000
+100000
+
+# now with more threads
+statement ok
+pragma threads=4
+
+query I
+select count(*) from t1, t2 where i = j
+----
+100000
+
+# now trigger repartitioning
+statement ok
+pragma debug_force_external=true
+
+# we need more memory for repartitioning (
+statement ok
+pragma memory_limit='250mb'
+
+query I
+select count(*) from t1, t2 where i = j
+----
+100000
+
+statement ok
+pragma debug_force_external=false
 
 # higher memory limit for this because the strings are so large
 statement ok
-pragma memory_limit='100mb'
+pragma memory_limit='150mb'
 
 # add some strings that are longer than Storage::BLOCK_SIZE
 statement ok
@@ -60,4 +73,4 @@ insert into t2 select concat(range::VARCHAR, repeat('0', 300000)) i from range(9
 query T
 select count(*) from t1, t2 where i = j
 ----
-10010
+100010

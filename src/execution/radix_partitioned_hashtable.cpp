@@ -834,6 +834,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	         sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE);
 
 	if (gstate.finished) {
+		sink.temporary_memory_state->SetRemainingSize(context.client, 0);
 		return SourceResultType::FINISHED;
 	}
 

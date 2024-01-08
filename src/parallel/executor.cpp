@@ -243,7 +243,7 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<re
 	for (auto parent : parents) {
 		idx_t i;
 		for (i = 0; i < count; i++) {
-			if (&vertices[i].get() == &parent.get()) {
+			if (RefersToSameObject(vertices[i], parent)) {
 				adjacent.push_back(i);
 				break;
 			}

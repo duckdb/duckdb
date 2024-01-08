@@ -10,7 +10,6 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
@@ -55,6 +54,8 @@ private:
 //! TemporaryMemoryManager is a one-of class owned by the buffer pool that tries to dynamically assign memory
 //! to concurrent states, such that their combined memory usage does not exceed the limit
 class TemporaryMemoryManager {
+	//! TemporaryMemoryState is a friend class so it can access the private methods of this class,
+	//! but it should not access the private fields!
 	friend class TemporaryMemoryState;
 
 public:
@@ -79,6 +80,8 @@ public:
 	unique_ptr<TemporaryMemoryState> Register(ClientContext &context);
 
 private:
+	//! Locks the TemporaryMemoryManager
+	unique_lock<mutex> Lock();
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
 	void UpdateConfiguration(ClientContext &context);
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)

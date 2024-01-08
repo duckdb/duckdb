@@ -17,7 +17,7 @@ TemporaryMemoryState::~TemporaryMemoryState() {
 }
 
 void TemporaryMemoryState::SetRemainingSize(ClientContext &context, idx_t new_remaining_size) {
-	lock_guard<mutex> guard(temporary_memory_manager.lock);
+	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
 	temporary_memory_manager.UpdateState(context, *this);
 }
@@ -37,6 +37,10 @@ idx_t TemporaryMemoryState::GetReservation() const {
 TemporaryMemoryManager::TemporaryMemoryManager() : reservation(0), remaining_size(0) {
 }
 
+unique_lock<mutex> TemporaryMemoryManager::Lock() {
+	return unique_lock<mutex>(lock);
+}
+
 void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto &task_scheduler = TaskScheduler::GetScheduler(context);
@@ -51,7 +55,7 @@ TemporaryMemoryManager &TemporaryMemoryManager::Get(ClientContext &context) {
 }
 
 unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext &context) {
-	lock_guard<mutex> guard(lock);
+	auto guard = Lock();
 	UpdateConfiguration(context);
 
 	auto minimum_reservation = MinValue(num_threads * MINIMUM_RESERVATION_PER_STATE_PER_THREAD,
@@ -117,7 +121,7 @@ void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memo
 }
 
 void TemporaryMemoryManager::Unregister(TemporaryMemoryState &temporary_memory_state) {
-	lock_guard<mutex> guard(lock);
+	auto guard = Lock();
 
 	SetReservation(temporary_memory_state, 0);
 	SetRemainingSize(temporary_memory_state, 0);

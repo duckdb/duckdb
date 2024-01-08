@@ -351,10 +351,21 @@ public:
 	void Schedule() override {
 		D_ASSERT(sink.hash_table->GetRadixBits() > JoinHashTable::INITIAL_RADIX_BITS);
 
+		idx_t total_size = 0;
+		idx_t total_count = 0;
+		for (auto &local_ht : local_hts) {
+			auto &sink_collection = local_ht->GetSinkCollection();
+			total_size += sink_collection.SizeInBytes();
+			total_count += sink_collection.Count();
+		}
+		auto total_blocks = (double(total_size) + Storage::BLOCK_SIZE - 1) / Storage::BLOCK_SIZE;
+		auto count_per_block = total_count / total_blocks;
+		auto blocks_per_vector = MaxValue<idx_t>(STANDARD_VECTOR_SIZE / count_per_block, 2);
+
 		// Assume 8 blocks per partition per thread (4 input, 4 output)
 		auto partition_multiplier =
 		    RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits() - JoinHashTable::INITIAL_RADIX_BITS);
-		auto thread_memory = 8 * partition_multiplier * Storage::BLOCK_ALLOC_SIZE;
+		auto thread_memory = 2 * blocks_per_vector * partition_multiplier * Storage::BLOCK_SIZE;
 		auto repartition_threads = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / thread_memory, 1);
 
 		if (repartition_threads < local_hts.size()) {
@@ -735,6 +746,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	// Try to put the next partitions in the block collection of the HT
 	if (!sink.external || !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation())) {
 		global_stage = HashJoinSourceStage::DONE;
+		sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
 		return;
 	}
 
@@ -955,7 +967,7 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 		lock_guard<mutex> guard(gstate.lock);
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
-			sink.temporary_memory_state.reset();
+			sink.temporary_memory_state->SetRemainingSize(context.client, 0);
 		}
 		return SourceResultType::FINISHED;
 	}
