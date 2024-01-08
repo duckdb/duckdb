@@ -53,7 +53,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		// [x + 1 COMP 10] OR [1 + x COMP 10]
 		// order does not matter in addition:
 		// simply change right side to 10-1 (outer_constant - inner_constant)
-		if (!Hugeint::SubtractInPlace(outer_value, inner_value)) {
+		if (!Hugeint::TrySubtractInPlace(outer_value, inner_value)) {
 			return nullptr;
 		}
 		auto result_value = Value::HUGEINT(outer_value);
@@ -74,7 +74,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		if (arithmetic_child_index == 0) {
 			// [x - 1 COMP 10]
 			// change right side to 10+1 (outer_constant + inner_constant)
-			if (!Hugeint::AddInPlace(outer_value, inner_value)) {
+			if (!Hugeint::TryAddInPlace(outer_value, inner_value)) {
 				return nullptr;
 			}
 			auto result_value = Value::HUGEINT(outer_value);
@@ -90,7 +90,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		} else {
 			// [1 - x COMP 10]
 			// change right side to 1-10=-9
-			if (!Hugeint::SubtractInPlace(inner_value, outer_value)) {
+			if (!Hugeint::TrySubtractInPlace(inner_value, outer_value)) {
 				return nullptr;
 			}
 			auto result_value = Value::HUGEINT(inner_value);
