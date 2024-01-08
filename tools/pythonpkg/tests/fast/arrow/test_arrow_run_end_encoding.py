@@ -348,15 +348,14 @@ class TestArrowREE(object):
         # Recreate the same result set
         expected = []
         for i in range(size):
-            match i % 4:
-                case 0:
-                    expected.append((i // 4,))
-                case 1:
-                    expected.append((i,))
-                case 2:
-                    expected.append((i % 2 == 0,))
-                case 3:
-                    expected.append((str(i),))
+            if i % 4 == 0:
+                expected.append((i // 4,))
+            elif i % 4 == 1:
+                expected.append((i,))
+            elif i % 4 == 2:
+                expected.append((i % 2 == 0,))
+            elif i % 4 == 3:
+                expected.append((str(i),))
         actual = duckdb_cursor.query("select * from result").fetchall()
         assert expected == actual
 
