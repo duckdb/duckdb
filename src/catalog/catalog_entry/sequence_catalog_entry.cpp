@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -19,6 +20,7 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry 
 
 unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSequenceInfo>();
+	result->catalog = catalog.GetName();
 	result->schema = schema.name;
 	result->name = name;
 	result->usage_count = usage_count;
