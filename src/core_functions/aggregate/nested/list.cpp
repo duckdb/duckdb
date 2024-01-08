@@ -67,7 +67,9 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	}
 }
 
-static void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &, idx_t count) {
+static void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data,
+                               idx_t count) {
+	D_ASSERT(aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 	UnifiedVectorFormat states_data;
 	states_vector.ToUnifiedFormat(count, states_data);
@@ -150,6 +152,12 @@ static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_d
 static void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data,
                                 idx_t count) {
 
+	//	Can we use destructive combining?
+	if (aggr_input_data.combine_type == AggregateCombineType::ALLOW_DESTRUCTIVE) {
+		ListAbsorbFunction(states_vector, combined, aggr_input_data, count);
+		return;
+	}
+
 	UnifiedVectorFormat states_data;
 	states_vector.ToUnifiedFormat(count, states_data);
 	auto states_ptr = UnifiedVectorFormat::GetData<const ListAggState *>(states_data);
@@ -195,7 +203,6 @@ AggregateFunction ListFun::GetFunction() {
 	    AggregateFunction({LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
 	                      AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
 	                      ListCombineFunction, ListFinalize, nullptr, ListBindFunction, nullptr, nullptr, nullptr);
-	func.absorb = ListAbsorbFunction;
 
 	return func;
 }

@@ -81,9 +81,10 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 	idx_t offset = layout.GetAggrOffset();
 
 	for (auto &aggr : layout.GetAggregates()) {
-		D_ASSERT(aggr.function.absorb);
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-		aggr.function.absorb(sources, targets, aggr_input_data, count);
+		D_ASSERT(aggr.function.combine);
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
+		aggr.function.combine(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
 		VectorOperations::AddInPlace(sources, aggr.payload_size, count);

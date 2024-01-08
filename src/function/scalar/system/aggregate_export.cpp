@@ -171,8 +171,8 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		memcpy(local_state.state_buffer0.get(), state0.GetData(), bind_data.state_size);
 		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
 
-		AggregateInputData aggr_input_data(nullptr, local_state.allocator);
-		bind_data.aggr.absorb(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
+		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
 		result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()),
 		                                              bind_data.state_size);
@@ -299,7 +299,7 @@ static unique_ptr<FunctionData> ExportStateScalarDeserialize(Deserializer &deser
 unique_ptr<BoundAggregateExpression>
 ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggregate) {
 	auto &bound_function = child_aggregate->function;
-	if (!bound_function.absorb) {
+	if (!bound_function.combine) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.name);
 	}
 	if (bound_function.bind) {
@@ -329,7 +329,6 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                      bound_function.combine, ExportAggregateFinalize, bound_function.simple_update,
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
-	export_function.absorb = bound_function.absorb;
 	export_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	export_function.serialize = ExportStateAggregateSerialize;
 	export_function.deserialize = ExportStateAggregateDeserialize;
