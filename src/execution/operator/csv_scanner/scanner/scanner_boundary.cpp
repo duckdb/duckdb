@@ -42,7 +42,7 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 	auto buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
 	if (buffer->is_last_buffer && boundary.buffer_pos + CSVIterator::BYTES_PER_THREAD > buffer->actual_size) {
 		// 1) We are done with the current file
-		return true;
+		return false;
 	} else if (boundary.buffer_pos + BYTES_PER_THREAD >= buffer->actual_size) {
 		// 2) We still have data to scan in this file, we set the iterator accordingly.
 		// We must move the buffer
@@ -55,7 +55,7 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 	}
 	boundary.end_pos = boundary.buffer_pos + BYTES_PER_THREAD;
 	SetCurrentPositionToBoundary();
-	return false;
+	return true;
 }
 
 bool CSVIterator::IsSet() const {

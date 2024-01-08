@@ -103,9 +103,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (options.auto_detect) {
-		if (result->files.size() > 1) {
-			throw InternalException("too many files bbrrr");
-		}
 		options.file_path = result->files[0];
 		result->buffer_manager = make_shared<CSVBufferManager>(context, options, result->files[0], 0);
 		CSVSniffer sniffer(options, result->buffer_manager, *CSVStateMachineCache::Get(context),
@@ -185,7 +182,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
                                                      GlobalTableFunctionState *global_state_p) {
 	auto &csv_data = input.bind_data->Cast<ReadCSVData>();
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
-	auto csv_scanner = global_state.Next(context.client, csv_data, global_state.current_boundary);
+	auto csv_scanner = global_state.Next(csv_data);
 	if (!csv_scanner) {
 		global_state.DecrementThread();
 	}
@@ -216,8 +213,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			//									                                    csv_local_state.csv_reader->scanner->scanner_id);
 			//			                        csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
 			//			                                 csv_local_state.csv_reader->file_idx);
-			csv_local_state.csv_reader =
-			    csv_global_state.Next(context, bind_data, csv_local_state.csv_reader->GetIterator());
+			csv_local_state.csv_reader = csv_global_state.Next(bind_data);
 			//			if (csv_local_state.csv_reader) {
 			//				csv_local_state.csv_reader->linenr = 0;
 			//			}

@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # simple globbing
 query I
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -20,7 +20,7 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/*.csv', auto_detect=1) OR
 2019-08-25
 
 query I
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -31,7 +31,7 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv', auto_detect=1) O
 
 # list parameter
 query I
-SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv'], auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv']) ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -52,7 +52,7 @@ SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/
 
 # multiple globs
 query I
-SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/csv/data/glob/a?/a*.csv'], auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/csv/data/glob/a?/a*.csv']) ORDER BY 1
 ----
 2019-06-05
 2019-06-05
@@ -69,7 +69,7 @@ SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/
 
 # more asterisks for directories
 query I
-SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15

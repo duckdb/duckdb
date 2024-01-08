@@ -61,7 +61,8 @@ public:
 	CSVIterator();
 
 	void Print();
-	//! Moves the boundary to the next one to be scanned
+	//! Moves the boundary to the next one to be scanned, if there are no next boundaries, it returns False
+	//! Otherwise, if there are boundaries, it returns True
 	bool Next(CSVBufferManager &buffer_manager);
 	//! If boundary is set
 	bool IsSet() const;

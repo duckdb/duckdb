@@ -58,8 +58,7 @@ public:
 
 	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
 	//! In case it returns a nullptr it means we are done reading these files.
-	unique_ptr<StringValueScanner> Next(ClientContext &context, const ReadCSVData &bind_data,
-	                                    CSVIterator &csv_position);
+	unique_ptr<StringValueScanner> Next(const ReadCSVData &bind_data);
 
 	void DecrementThread();
 
@@ -93,6 +92,8 @@ private:
 	string sniffer_mismatch_error;
 
 	bool finished = false;
+
+	unique_ptr<StringValueScanner> InitializeScanner(const ReadCSVData &bind_data);
 };
 
 } // namespace duckdb

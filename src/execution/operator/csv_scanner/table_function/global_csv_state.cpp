@@ -38,15 +38,42 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, idx_
 	    make_shared<CSVStateMachine>(state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 }
 
+// void SetupMultifileReader(){
+//	if (!reader || reader->options.file_path != current_file_path) {
+//		// we either don't have a reader, or the reader was created for a different file
+//		// we need to create a new reader and instantiate it
+//		if (file_index > 0 && file_index <= bind_data.union_readers.size() && bind_data.union_readers[file_index - 1]) {
+//			// we are doing UNION BY NAME - fetch the options from the union reader for this file
+//			auto &union_reader = *bind_data.union_readers[file_index - 1];
+//			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), first_position,
+//			                                      union_reader.GetTypes(), file_index - 1);
+//			reader->names = union_reader.GetNames();
+//		} else if (file_index <= bind_data.column_info.size()) {
+//			// Serialized Union By name
+//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
+//			                                      bind_data.column_info[file_index - 1].types, file_index - 1);
+//			reader->names = bind_data.column_info[file_index - 1].names;
+//		} else {
+//			// regular file - use the standard options
+//			if (!result) {
+//				return false;
+//			}
+//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
+//			                                      bind_data.csv_types, file_index - 1);
+//			reader->names = bind_data.csv_names;
+//		}
+//		reader->options.file_path = current_file_path;
+//		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
+//		                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
+//		                                  bind_data.files.front(), context);
+//	}
+//}
+
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, shared_ptr<CSVBufferManager> buffer_manager,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
                                vector<column_t> column_ids_p)
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
-
-	if (files.size() > 1) {
-		throw InternalException("Not supported too many files");
-	}
 
 	if (buffer_manager) {
 		auto state_machine = make_shared<CSVStateMachine>(
@@ -84,17 +111,10 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data) const {
 	return percentage * 100;
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
-                                                    CSVIterator &csv_position) {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (finished) {
-		return nullptr;
-	}
-	auto &current_file = file_scans.back();
-	auto csv_scanner = make_uniq<StringValueScanner>(current_file->buffer_manager, current_file->state_machine,
-	                                                 current_file->error_handler, current_boundary);
-	finished = current_boundary.Next(*current_file->buffer_manager);
-
+unique_ptr<StringValueScanner> CSVGlobalState::InitializeScanner(const ReadCSVData &bind_data) {
+	auto &current_file = *file_scans.back();
+	auto csv_scanner = make_uniq<StringValueScanner>(current_file.buffer_manager, current_file.state_machine,
+	                                                 current_file.error_handler, current_boundary);
 	csv_scanner->file_path = bind_data.files.front();
 	csv_scanner->names = bind_data.return_names;
 	csv_scanner->types = bind_data.return_types;
@@ -103,53 +123,31 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(ClientContext &context, cons
 	                                  bind_data.files.front(), context);
 
 	return csv_scanner;
-
-	//		if (!reader) {
-	//				file_size = file_handle->FileSize();
-	//			bytes_read = 0;
-	//			D_ASSERT(0);
-	//			//		// we either don't have a reader, or the reader was created for a different file
-	//			//		// we need to create a new reader and instantiate it
-	//			//		if (file_index > 0 && file_index <= bind_data.union_readers.size() &&
-	//	 bind_data.union_readers[file_index
-	//			//- 1]) {
-	//			//			// we are doing UNION BY NAME - fetch the options from the union reader for this file
-	//			//			auto &union_reader = *bind_data.union_readers[file_index - 1];
-	//			//			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result),
-	//			// first_position, 			                                      union_reader.GetTypes(), file_index -
-	// 1);
-	//			// reader->names = union_reader.GetNames(); 		} else if (file_index <=
-	// bind_data.column_info.size())
-	//{
-	//			//			// Serialized Union By name
-	//			//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
-	//	 first_position,
-	//			//			                                      bind_data.column_info[file_index - 1].types,
-	// file_index
-	//- 	 1);
-	//			//			reader->names = bind_data.column_info[file_index - 1].names;
-	//			//		} else {
-	//			//			// regular file - use the standard options
-	//			//			if (!result) {
-	//			//				return false;
-	//			//			}
-	//			//			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
-	//	 first_position,
-	//			//			                                      bind_data.csv_types, file_index - 1);
-	//			//			reader->names = bind_data.csv_names;
-	//			//		}
-	//			//		reader->options.file_path = current_file_path;
-	//			//		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options,
-	// bind_data.reader_bind,
-	//			//		                                  bind_data.return_types, bind_data.return_names, column_ids,
-	//	 nullptr,
-	//			//		                                  bind_data.files.front(), context);
-	//		} else {
-	//			// update the current reader
-	//			//		reader->SetBufferRead(std::move(result));
-	//		}
-	//
-	//		return true;
+}
+unique_ptr<StringValueScanner> CSVGlobalState::Next(const ReadCSVData &bind_data) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (finished) {
+		return nullptr;
+	}
+	auto next_scanner = InitializeScanner(bind_data);
+	// We first check if we are done with this file
+	auto &current_file = *file_scans.back();
+	if (!current_boundary.Next(*current_file.buffer_manager)) {
+		// This means we are done scanning the current file
+		auto current_file_idx = current_file.file_idx + 1;
+		if (current_file_idx < bind_data.files.size()) {
+			// If we have a next file we have to construct the file scan for that
+			file_scans.emplace_back(make_uniq<CSVFileScan>(context, bind_data.files[current_file_idx], current_file_idx,
+			                                               bind_data.options));
+			// And re-start the boundary-iterator
+			current_boundary = CSVIterator(current_file_idx, 0, 0, current_boundary.GetBoundaryIdx() + 1);
+		} else {
+			// If not we are done with this CSV Scanning
+			finished = true;
+		}
+	}
+	// We initialize the scan
+	return next_scanner;
 }
 
 idx_t CSVGlobalState::MaxThreads() const {
