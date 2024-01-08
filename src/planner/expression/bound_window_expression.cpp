@@ -46,6 +46,12 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 			return false;
 		}
 	}
+	// If there's function data, check if they are equal
+	if (bind_info.get() != other.bind_info.get()) {
+		if (!bind_info || !other.bind_info || !bind_info->Equals(*other.bind_info)) {
+			return false;
+		}
+	}
 	// check if the child expressions are equivalent
 	if (!Expression::ListEquals(children, other.children)) {
 		return false;

@@ -272,6 +272,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
+
 		if (HAS_LOG) {
 			// push the catalog update to the WAL
 			WriteCatalogEntry(*catalog_entry, data + sizeof(CatalogEntry *));

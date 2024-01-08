@@ -85,29 +85,41 @@ struct AggregateState {
 class UngroupedAggregateGlobalSinkState : public GlobalSinkState {
 public:
 	UngroupedAggregateGlobalSinkState(const PhysicalUngroupedAggregate &op, ClientContext &client)
-	    : state(op.aggregates), finished(false), allocator(BufferAllocator::Get(client)) {
+	    : state(op.aggregates), finished(false), client_allocator(BufferAllocator::Get(client)),
+	      allocator(client_allocator) {
 		if (op.distinct_data) {
 			distinct_state = make_uniq<DistinctAggregateState>(*op.distinct_data, client);
 		}
 	}
 
+	//! Create an ArenaAllocator with cross-thread lifetime
+	ArenaAllocator &CreateAllocator() const {
+		lock_guard<mutex> glock(lock);
+		stored_allocators.emplace_back(make_uniq<ArenaAllocator>(client_allocator));
+		return *stored_allocators.back();
+	}
+
 	//! The lock for updating the global aggregate state
-	mutex lock;
+	mutable mutex lock;
 	//! The global aggregate state
 	AggregateState state;
 	//! Whether or not the aggregate is finished
 	bool finished;
 	//! The data related to the distinct aggregates (if there are any)
 	unique_ptr<DistinctAggregateState> distinct_state;
+	//! Client base allocator
+	Allocator &client_allocator;
 	//! Global arena allocator
 	ArenaAllocator allocator;
+	//! Allocator pool
+	mutable vector<unique_ptr<ArenaAllocator>> stored_allocators;
 };
 
 class UngroupedAggregateLocalSinkState : public LocalSinkState {
 public:
 	UngroupedAggregateLocalSinkState(const PhysicalUngroupedAggregate &op, const vector<LogicalType> &child_types,
-	                                 GlobalSinkState &gstate_p, ExecutionContext &context)
-	    : allocator(BufferAllocator::Get(context.client)), state(op.aggregates), child_executor(context.client),
+	                                 UngroupedAggregateGlobalSinkState &gstate_p, ExecutionContext &context)
+	    : allocator(gstate_p.CreateAllocator()), state(op.aggregates), child_executor(context.client),
 	      aggregate_input_chunk(), filter_set() {
 		auto &gstate = gstate_p.Cast<UngroupedAggregateGlobalSinkState>();
 
@@ -133,7 +145,7 @@ public:
 	}
 
 	//! Local arena allocator
-	ArenaAllocator allocator;
+	ArenaAllocator &allocator;
 	//! The local aggregate state
 	AggregateState state;
 	//! The executor
@@ -192,7 +204,7 @@ unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(Clien
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	D_ASSERT(sink_state);
-	auto &gstate = *sink_state;
+	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalSinkState>();
 	return make_uniq<UngroupedAggregateLocalSinkState>(*this, children[0]->GetTypes(), gstate, context);
 }
 
@@ -348,7 +360,6 @@ SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &cont
 		gstate.state.counts[aggr_idx] += lstate.state.counts[aggr_idx];
 #endif
 	}
-	lstate.allocator.Destroy();
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.child_executor, "child_executor", 0);
@@ -391,7 +402,7 @@ public:
 	                                       const PhysicalUngroupedAggregate &op,
 	                                       UngroupedAggregateGlobalSinkState &state_p)
 	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p),
-	      allocator(BufferAllocator::Get(executor.context)) {
+	      allocator(gstate.CreateAllocator()) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -405,7 +416,7 @@ private:
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalSinkState &gstate;
 
-	ArenaAllocator allocator;
+	ArenaAllocator &allocator;
 };
 
 void UngroupedDistinctAggregateFinalizeEvent::Schedule() {

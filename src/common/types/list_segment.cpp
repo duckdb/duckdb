@@ -339,10 +339,7 @@ static void WriteDataToArraySegment(const ListSegmentFunctions &functions, Arena
 	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
 	null_mask[segment->count] = !valid;
 
-	if (!valid) {
-		return;
-	}
-
+	// Arrays require there to be values in the child even when the entry is NULL.
 	auto array_size = ArrayType::GetSize(input_data.logical_type);
 	auto array_offset = sel_entry_idx * array_size;
 

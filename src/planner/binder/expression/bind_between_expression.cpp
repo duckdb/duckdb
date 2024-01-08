@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -22,14 +23,25 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	auto &lower = BoundExpression::GetExpression(*expr.lower);
 	auto &upper = BoundExpression::GetExpression(*expr.upper);
 
-	auto input_sql_type = input->return_type;
-	auto lower_sql_type = lower->return_type;
-	auto upper_sql_type = upper->return_type;
+	auto input_sql_type = ExpressionBinder::GetExpressionReturnType(*input);
+	auto lower_sql_type = ExpressionBinder::GetExpressionReturnType(*lower);
+	auto upper_sql_type = ExpressionBinder::GetExpressionReturnType(*upper);
 
 	// cast the input types to the same type
 	// now obtain the result type of the input types
-	auto input_type = BoundComparisonExpression::BindComparison(input_sql_type, lower_sql_type);
-	input_type = BoundComparisonExpression::BindComparison(input_type, upper_sql_type);
+	LogicalType input_type;
+	if (!BoundComparisonExpression::TryBindComparison(context, input_sql_type, lower_sql_type, input_type, expr.type)) {
+		throw BinderException(binder.FormatError(
+		    expr,
+		    StringUtil::Format("Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
+		                       input_sql_type.ToString(), lower_sql_type.ToString())));
+	}
+	if (!BoundComparisonExpression::TryBindComparison(context, input_type, upper_sql_type, input_type, expr.type)) {
+		throw BinderException(binder.FormatError(
+		    expr,
+		    StringUtil::Format("Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
+		                       input_type.ToString(), upper_sql_type.ToString())));
+	}
 	// add casts (if necessary)
 	input = BoundCastExpression::AddCastToType(context, std::move(input), input_type);
 	lower = BoundCastExpression::AddCastToType(context, std::move(lower), input_type);
