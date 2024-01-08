@@ -56,26 +56,28 @@ bool TableIndexList::NameIsUnique(const string &name) {
 void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info) {
 	lock_guard<mutex> lock(indexes_lock);
 	for (auto &index : indexes) {
-		if (index->IsUnknown()) {
-			auto &unknown_index = index->Cast<UnknownIndex>();
-			auto &index_type_name = unknown_index.GetIndexType();
-
-			// Do we know the type of this index now?
-			auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
-			if (!index_type) {
-				continue;
-			}
-
-			// Swap this with a new index
-			auto &create_info = unknown_index.GetCreateInfo();
-			auto &storage_info = unknown_index.GetStorageInfo();
-
-			auto index_instance = index_type->create_instance(
-			    create_info.index_name, create_info.constraint_type, create_info.column_ids,
-			    unknown_index.unbound_expressions, *table_info.table_io_manager, table_info.db, storage_info);
-
-			index = std::move(index_instance);
+		if (!index->IsUnknown()) {
+			continue;
 		}
+
+		auto &unknown_index = index->Cast<UnknownIndex>();
+		auto &index_type_name = unknown_index.GetIndexType();
+
+		// Do we know the type of this index now?
+		auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
+		if (!index_type) {
+			continue;
+		}
+
+		// Swap this with a new index
+		auto &create_info = unknown_index.GetCreateInfo();
+		auto &storage_info = unknown_index.GetStorageInfo();
+
+		auto index_instance = index_type->create_instance(create_info.index_name, create_info.constraint_type,
+		                                                  create_info.column_ids, unknown_index.unbound_expressions,
+		                                                  *table_info.table_io_manager, table_info.db, storage_info);
+
+		index = std::move(index_instance);
 	}
 }
 
