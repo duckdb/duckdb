@@ -214,8 +214,54 @@ class TestArrowREE(object):
         actual = duckdb_cursor.query("select {} from res".format(projection)).fetchall()
         assert expected == actual
 
-    # TODO: add tests with lists
-    # TODO: add tests with structs
+    def test_arrow_ree_list(self, duckdb_cursor):
+        size = 1000
+        duckdb_cursor.query(
+            """
+            create table tbl
+            as select
+                i // 4 as ree,
+            FROM range({}) t(i)
+        """.format(
+                size
+            )
+        )
+
+        # Populate the table with data
+        unstructured = duckdb_cursor.query(
+            """
+            select * from tbl
+        """
+        ).arrow()
+
+        columns = unstructured.columns
+        # Run-encode the first column ('ree')
+        columns[0] = pc.run_end_encode(columns[0])
+
+        # Create a (chunked) ListArray from the chunked arrays (columns) of the ArrowTable
+        names = unstructured.column_names
+        iterables = [x.iterchunks() for x in columns]
+        zipped = zip(*iterables)
+
+        structured_chunks = []
+        for chunk in columns[0].iterchunks():
+            ree = chunk
+            chunk_length = len(ree)
+            offsets = []
+            offset = 0
+            while chunk_length > 10:
+                offsets.append(offset)
+                offset += 10
+                chunk_length -= 10
+
+            new_array = pa.ListArray.from_arrays(offsets, values=ree)
+            structured_chunks.append(new_array)
+
+        structured = pa.chunked_array(structured_chunks)
+
+        arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
+        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+        assert arrow_tbl.to_pylist() == result.to_pylist()
 
     def test_arrow_ree_struct(self, duckdb_cursor):
         duckdb_cursor.query(
@@ -371,5 +417,4 @@ class TestArrowREE(object):
         assert result.to_pylist() == arrow_tbl.to_pylist()
 
 
-# TODO: add tests with maps
 # TODO: add tests with ENUMs

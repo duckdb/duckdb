@@ -188,13 +188,23 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	if (list_size == 0 && start_offset == 0) {
 		D_ASSERT(!child_array.dictionary);
 		ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, -1);
-	} else {
-		if (child_array.dictionary) {
-			// TODO: add support for offsets
-			ColumnArrowToDuckDBDictionary(child_vector, child_array, child_state, list_size, child_type, start_offset);
-		} else {
-			ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, start_offset);
-		}
+		return;
+	}
+
+	auto array_physical_type = GetArrowArrayPhysicalType(child_type);
+	switch (array_physical_type) {
+	case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
+		// TODO: add support for offsets
+		ColumnArrowToDuckDBDictionary(child_vector, child_array, child_state, list_size, child_type, start_offset);
+		break;
+	case ArrowArrayPhysicalType::RUN_END_ENCODED:
+		ColumnArrowToDuckDBRunEndEncoded(child_vector, child_array, child_state, list_size, child_type, start_offset);
+		break;
+	case ArrowArrayPhysicalType::DEFAULT:
+		ColumnArrowToDuckDB(child_vector, child_array, child_state, list_size, child_type, start_offset);
+		break;
+	default:
+		throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 	}
 }
 
