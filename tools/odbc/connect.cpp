@@ -146,8 +146,8 @@ SQLRETURN Connect::ReadFromIniFile() {
 		return SQL_SUCCESS;
 	}
 
-    auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
-    auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);
+	auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
+	auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);
 	for (auto &key_pair : conn_str_keynames) {
 		if (CheckSet(key_pair.first)) {
 			continue;
@@ -155,8 +155,8 @@ SQLRETURN Connect::ReadFromIniFile() {
 		const int max_val_len = 256;
 		char char_val[max_val_len];
 		auto converted_key = key_pair.second.c_str();
-		int read_size = SQLGetPrivateProfileString(converted_dsn, converted_key,
-		                                           "", char_val, max_val_len, converted_odbc_file);
+		int read_size =
+		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, converted_odbc_file);
 		if (read_size == 0) {
 			continue;
 		} else if (read_size < 0) {

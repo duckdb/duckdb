@@ -239,4 +239,3 @@ duckdb::AccessMode duckdb::OdbcUtils::ConvertSQLAccessModeToDuckDBAccessMode(SQL
 	}
 	return duckdb::AccessMode::AUTOMATIC;
 }
-
