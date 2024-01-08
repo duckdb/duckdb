@@ -1113,6 +1113,9 @@ if(NOT CLANG_TIDY)
 endif()
 
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
+  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/deploy)
+endif()
 if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
   add_custom_target(
           duckdb_local_extension_repo ALL
