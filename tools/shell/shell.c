@@ -11617,18 +11617,21 @@ static int shell_callback(
       if (nArg != 2) {
         break;
       }
-      utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
-      utf8_printf(p->out, "│┌───────────────────────────┐│\n");
-      if (strcmp(azArg[0], "logical_plan") == 0) {
-      utf8_printf(p->out, "││ Unoptimized Logical Plan  ││\n");
-      } else if (strcmp(azArg[0], "logical_opt") == 0) {
-      utf8_printf(p->out, "││  Optimized Logical Plan   ││\n");
-      } else if (strcmp(azArg[0], "physical_plan") == 0) {
-      utf8_printf(p->out, "││       Physical Plan       ││\n");
-
+      if (strcmp(azArg[0], "logical_plan") == 0
+            || strcmp(azArg[0], "logical_opt") == 0
+            || strcmp(azArg[0], "physical_plan") == 0) { 
+        utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
+        utf8_printf(p->out, "│┌───────────────────────────┐│\n");
+        if (strcmp(azArg[0], "logical_plan") == 0) {
+          utf8_printf(p->out, "││ Unoptimized Logical Plan  ││\n");
+        } else if (strcmp(azArg[0], "logical_opt") == 0) {
+          utf8_printf(p->out, "││  Optimized Logical Plan   ││\n");
+        } else if (strcmp(azArg[0], "physical_plan") == 0) {
+          utf8_printf(p->out, "││       Physical Plan       ││\n");
+        }
+        utf8_printf(p->out, "│└───────────────────────────┘│\n");
+        utf8_printf(p->out, "└─────────────────────────────┘\n");
       }
-      utf8_printf(p->out, "│└───────────────────────────┘│\n");
-      utf8_printf(p->out, "└─────────────────────────────┘\n");
       utf8_printf(p->out, "%s", azArg[1]);
       break;
     }
@@ -12537,37 +12540,7 @@ static void bind_table_init(ShellState *p){
 ** tables.  The table must be in the TEMP schema.
 */
 static void bind_prepared_stmt(ShellState *pArg, sqlite3_stmt *pStmt){
-  int nVar;
-  int i;
-  int rc;
-  sqlite3_stmt *pQ = 0;
-
-  nVar = sqlite3_bind_parameter_count(pStmt);
-  if( nVar==0 ) return;  /* Nothing to do */
-  if( sqlite3_table_column_metadata(pArg->db, "TEMP", "sqlite_parameters",
-                                    "key", 0, 0, 0, 0, 0)!=SQLITE_OK ){
-    return; /* Parameter table does not exist */
-  }
-  rc = sqlite3_prepare_v2(pArg->db,
-          "SELECT value FROM temp.sqlite_parameters"
-          " WHERE key=?1", -1, &pQ, 0);
-  if( rc || pQ==0 ) return;
-  for(i=1; i<=nVar; i++){
-    char zNum[30];
-    const char *zVar = sqlite3_bind_parameter_name(pStmt, i);
-    if( zVar==0 ){
-      sqlite3_snprintf(sizeof(zNum),zNum,"?%d",i);
-      zVar = zNum;
-    }
-    sqlite3_bind_text(pQ, 1, zVar, -1, SQLITE_STATIC);
-    if( sqlite3_step(pQ)==SQLITE_ROW ){
-      sqlite3_bind_value(pStmt, i, sqlite3_column_value(pQ, 0));
-    }else{
-      sqlite3_bind_null(pStmt, i);
-    }
-    sqlite3_reset(pQ);
-  }
-  sqlite3_finalize(pQ);
+  return;
 }
 
 /*
@@ -19950,6 +19923,7 @@ static const char zOptions[] =
 #endif
   "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
+  "   -unredacted          allow printing unredacted secrets\n"
   "   -unsigned            allow loading of unsigned extensions\n"
   "   -version             show DuckDB version\n"
 #ifdef SQLITE_HAVE_ZLIB
@@ -20265,6 +20239,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
       data.openFlags = SQLITE_OPEN_NOFOLLOW;
+    }else if( strcmp(z,"-unredacted")==0 ){
+      data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
     }else if( strcmp(z,"-unsigned")==0 ){
       data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_HAVE_ZLIB)
@@ -20415,6 +20391,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.scanstatsOn = 1;
     }else if( strcmp(z,"-unsigned")==0 ){
       data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
+    }else if( strcmp(z,"-unredacted")==0 ){
+      data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
     }else if( strcmp(z,"-backslash")==0 ){
       /* Undocumented command-line option: -backslash
       ** Causes C-style backslash escapes to be evaluated in SQL statements

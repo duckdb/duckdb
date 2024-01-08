@@ -1335,6 +1335,9 @@ static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunct
 		bound_function.return_type = LogicalType::DOUBLE;
 		switch (arguments[0]->return_type.id()) {
 		case LogicalType::TIMESTAMP:
+		case LogicalType::TIMESTAMP_S:
+		case LogicalType::TIMESTAMP_MS:
+		case LogicalType::TIMESTAMP_NS:
 			bound_function.function = DatePart::UnaryFunction<timestamp_t, double, DatePart::JulianDayOperator>;
 			bound_function.statistics = DatePart::JulianDayOperator::template PropagateStatistics<timestamp_t>;
 			break;
@@ -1353,6 +1356,9 @@ static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunct
 		bound_function.return_type = LogicalType::DOUBLE;
 		switch (arguments[0]->return_type.id()) {
 		case LogicalType::TIMESTAMP:
+		case LogicalType::TIMESTAMP_S:
+		case LogicalType::TIMESTAMP_MS:
+		case LogicalType::TIMESTAMP_NS:
 			bound_function.function = DatePart::UnaryFunction<timestamp_t, double, DatePart::EpochOperator>;
 			bound_function.statistics = DatePart::EpochOperator::template PropagateStatistics<timestamp_t>;
 			break;

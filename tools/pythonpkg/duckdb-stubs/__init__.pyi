@@ -686,10 +686,10 @@ def register(view_name: str, python_object: object, connection: DuckDBPyConnecti
 def remove_function(name: str, connection : DuckDBPyConnection = ...) -> DuckDBPyConnection: ...
 def create_function(
     name: str,
-    func: Callable,
-    args: Optional[List[DuckDBPyType]] = None,
+    function: Callable,
+    parameters: Optional[List[DuckDBPyType]] = None,
     return_type: Optional[DuckDBPyType] = None,
-    vectorized: Optional[bool] = False,
+    type: Optional[PythonUDFType] = PythonUDFType.NATIVE,
     null_handling: Optional[FunctionNullHandling] = FunctionNullHandling.DEFAULT,
     exception_handling: Optional[PythonExceptionHandling] = PythonExceptionHandling.DEFAULT,
     side_effects: Optional[bool] = False,

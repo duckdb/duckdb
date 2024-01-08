@@ -138,7 +138,7 @@ public:
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
-	void Combine(TupleDataCollection &other_data);
+	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
 
 	//! Unpins the data blocks
 	void UnpinData();

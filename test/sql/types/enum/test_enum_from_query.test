@@ -18,6 +18,7 @@ CREATE TABLE test (x VARCHAR, y VARCHAR);
 
 statement error
 CREATE TYPE a AS ENUM (SELECT * FROM test);
+----
 
 statement ok
 DROP TABLE test;
@@ -37,6 +38,7 @@ INSERT INTO test SELECT CAST(range AS VARCHAR) FROM range(0, 100);
 
 statement error
 INSERT INTO test VALUES ('100');
+----
 
 statement ok
 DROP TABLE number_str;
@@ -108,6 +110,7 @@ DROP TYPE number_enum;
 # Throw exception for NULL
 statement error
 CREATE TYPE number_enum AS ENUM (SELECT NULL::VARCHAR);
+----
 
 # Test inserted order
 statement ok

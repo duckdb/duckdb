@@ -17,6 +17,7 @@ BEGIN TRANSACTION
 
 statement error
 INSERT INTO integers VALUES (1, 2)
+----
 
 statement ok
 ROLLBACK

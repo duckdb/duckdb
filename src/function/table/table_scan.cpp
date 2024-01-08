@@ -181,8 +181,9 @@ idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_da
 	return 0;
 }
 
-BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
-	return BindInfo(ScanType::TABLE);
+BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	return BindInfo(bind_data.table);
 }
 
 void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
@@ -456,6 +457,7 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.get_batch_index = nullptr;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = false;
+	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
@@ -472,22 +474,13 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_batch_index = TableScanGetBatchIndex;
-	scan_function.get_batch_info = TableScanGetBindInfo;
+	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
-}
-
-optional_ptr<TableCatalogEntry> TableScanFunction::GetTableEntry(const TableFunction &function,
-                                                                 const optional_ptr<FunctionData> bind_data_p) {
-	if (function.function != TableScanFunc || !bind_data_p) {
-		return nullptr;
-	}
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	return &bind_data.table;
 }
 
 void TableScanFunction::RegisterFunction(BuiltinFunctions &set) {

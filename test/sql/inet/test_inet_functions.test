@@ -13,11 +13,17 @@ SELECT host(INET '127.0.0.1/17')
 ----
 127.0.0.1
 
-# we support auto-cast from varchar to inet
+# we support auto-cast from string literals to inet
 query I
 SELECT host('127.0.0.1/17')
 ----
 127.0.0.1
+
+# we don't support auto-casting of VARCHAR to INET
+statement error
+SELECT host(a) from (values ('127.0.0.1/17')) t(a);
+----
+No function matches
 
 # subtract
 query I
@@ -38,3 +44,4 @@ SELECT INET '127.0.0.31' - -32;
 # underflow
 statement error
 SELECT INET '0.0.0.0' - 32;
+----

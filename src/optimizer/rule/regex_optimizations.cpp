@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include "re2/re2.h"
 #include "re2/regexp.h"
@@ -39,6 +40,19 @@ static void AddCharacter(char chr, LikeString &ret, bool contains) {
 	ret.like_string += run_as_str;
 }
 
+static void AddCodepoint(int32_t codepoint, LikeString &ret, bool contains) {
+	int sz = 0;
+	char utf8_str[4];
+	if (!Utf8Proc::CodepointToUtf8(codepoint, sz, utf8_str)) {
+		// invalid codepoint
+		ret.exists = false;
+		return;
+	}
+	for (idx_t i = 0; i < idx_t(sz); i++) {
+		AddCharacter(utf8_str[i], ret, contains);
+	}
+}
+
 static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains = false) {
 	D_ASSERT(regexp->op() == duckdb_re2::kRegexpLiteralString || regexp->op() == duckdb_re2::kRegexpLiteral);
 	LikeString ret;
@@ -57,16 +71,14 @@ static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains
 		auto nrunes = (idx_t)regexp->nrunes();
 		auto runes = regexp->runes();
 		for (idx_t i = 0; i < nrunes; i++) {
-			char chr = toascii(runes[i]);
-			AddCharacter(chr, ret, contains);
+			AddCodepoint(runes[i], ret, contains);
 			if (!ret.exists) {
 				return ret;
 			}
 		}
 	} else {
 		auto rune = regexp->rune();
-		char chr = toascii(rune);
-		AddCharacter(chr, ret, contains);
+		AddCodepoint(rune, ret, contains);
 	}
 	D_ASSERT(ret.like_string.size() >= 1 || !ret.exists);
 	return ret;
@@ -143,13 +155,13 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr.return_type);
-	auto patt_str = StringValue::Get(constant_value);
 
 	duckdb_re2::RE2::Options parsed_options = regexp_bind_data.options;
 
 	if (constant_expr.value.IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(root.return_type));
 	}
+	auto patt_str = StringValue::Get(constant_value);
 
 	// the constant_expr is a scalar expression that we have to fold
 	if (!constant_expr.IsFoldable()) {

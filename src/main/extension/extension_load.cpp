@@ -178,7 +178,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}
-	auto basename = fs.ExtractBaseName(filename);
+	auto filebase = fs.ExtractBaseName(filename);
 
 #ifdef WASM_LOADABLE_EXTENSIONS
 	EM_ASM(
@@ -196,8 +196,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		    // Here we add the uInt8Array to Emscripten's filesystem, for it to be found by dlopen
 		    FS.writeFile(UTF8ToString($1), new Uint8Array(uInt8Array));
 	    },
-	    filename.c_str(), basename.c_str());
-	auto dopen_from = basename;
+	    filename.c_str(), filebase.c_str());
+	auto dopen_from = filebase;
 #else
 	auto dopen_from = filename;
 #endif
@@ -208,7 +208,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 
 	ext_version_fun_t version_fun;
-	auto version_fun_name = basename + "_version";
+	auto version_fun_name = filebase + "_version";
 
 	version_fun = LoadFunctionFromDLL<ext_version_fun_t>(lib_hdl, version_fun_name, filename);
 
@@ -235,7 +235,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		                            extension_version, engine_version);
 	}
 
-	result.basename = basename;
+	result.filebase = filebase;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
@@ -290,7 +290,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
 	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension, client_config);
-	auto init_fun_name = res.basename + "_init";
+	auto init_fun_name = res.filebase + "_init";
 
 	ext_init_fun_t init_fun;
 	init_fun = LoadFunctionFromDLL<ext_init_fun_t>(res.lib_hdl, init_fun_name, res.filename);

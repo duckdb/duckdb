@@ -12,9 +12,12 @@
 #include "duckdb/common/stack_checker.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -87,14 +90,14 @@ public:
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
 
 	// Bind table names to ColumnRefExpressions
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool within_function_expression = false);
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
 	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
 	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
-	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
+	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message);
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
@@ -113,6 +116,8 @@ public:
 
 	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
+	static LogicalType GetExpressionReturnType(const Expression &expr);
+
 private:
 	//! Maximum stack depth
 	static constexpr const idx_t MAXIMUM_STACK_DEPTH = 128;
@@ -128,23 +133,31 @@ protected:
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
 	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
+	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> &expr_ptr);
-	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const bool is_lambda,
-	                          const LogicalType &list_child_type);
+	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
+	                          optional_ptr<bind_lambda_function_t> bind_lambda_function);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
-	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type);
-	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
-	                          unique_ptr<Expression> &expr);
+	                                   BoundLambdaExpression &bound_lambda_expr,
+	                                   const optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                                   const LogicalType &list_child_type);
+	void CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
+	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                          const LogicalType &list_child_type);
 
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+
+	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
+	LogicalType ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);

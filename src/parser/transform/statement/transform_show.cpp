@@ -4,6 +4,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -21,7 +22,7 @@ static void TransformShowName(unique_ptr<PragmaStatement> &result, const string 
 	} else {
 		// show one specific table
 		info.name = "show";
-		info.parameters.emplace_back(name);
+		info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(name)));
 	}
 }
 

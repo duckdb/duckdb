@@ -5,22 +5,22 @@
 statement ok
 PRAGMA enable_verification
 
-query I
+statement error
 SELECT '1' LIKE [];
 ----
-false
+No function matches
 
-query I
+statement error
 SELECT [] LIKE 1;
 ----
-false
+No function matches
 
-query I
+statement error
 SELECT [] LIKE [];
 ----
-true
+No function matches
 
-query I
+statement error
 SELECT 1 FROM (SELECT 2) t1(c0) NATURAL RIGHT JOIN (SELECT 2) t0(c0) WHERE (0, t1.c0) NOT LIKE '0';
 ----
-1
+No function matches

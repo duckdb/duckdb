@@ -76,7 +76,9 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst &c) {
-	return TransformValue(c.val);
+	auto constant = TransformValue(c.val);
+	constant->query_location = c.location;
+	return std::move(constant);
 }
 
 bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
@@ -99,6 +101,26 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 				values.emplace_back(child->alias, std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
+			return true;
+		} else if (function.function_name == "list_value") {
+			vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(std::move(child_value));
+			}
+
+			// figure out child type
+			LogicalType child_type(LogicalTypeId::SQLNULL);
+			for (auto &child_value : values) {
+				child_type = LogicalType::ForceMaxLogicalType(child_type, child_value.type());
+			}
+
+			// finally create the list
+			value = Value::LIST(child_type, values);
 			return true;
 		} else {
 			return false;

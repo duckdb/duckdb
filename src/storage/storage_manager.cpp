@@ -19,7 +19,7 @@ namespace duckdb {
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
 	if (path.empty()) {
-		path = ":memory:";
+		path = IN_MEMORY_PATH;
 	} else {
 		auto &fs = FileSystem::Get(db);
 		this->path = fs.ExpandPath(path);
@@ -52,9 +52,35 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 	return context.db->config.options.object_cache_enable;
 }
 
+optional_ptr<WriteAheadLog> StorageManager::GetWriteAheadLog() {
+	if (InMemory() || read_only || !load_complete) {
+		return nullptr;
+	}
+
+	if (wal) {
+		return wal.get();
+	}
+
+	// lazy WAL creation
+	wal = make_uniq<WriteAheadLog>(db, GetWALPath());
+	return wal.get();
+}
+
+string StorageManager::GetWALPath() {
+
+	std::size_t question_mark_pos = path.find('?');
+	auto wal_path = path;
+	if (question_mark_pos != std::string::npos) {
+		wal_path.insert(question_mark_pos, ".wal");
+	} else {
+		wal_path += ".wal";
+	}
+	return wal_path;
+}
+
 bool StorageManager::InMemory() {
 	D_ASSERT(!path.empty());
-	return path == ":memory:";
+	return path == IN_MEMORY_PATH;
 }
 
 void StorageManager::Initialize() {
@@ -92,21 +118,15 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 }
 
 void SingleFileStorageManager::LoadDatabase() {
+
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
-	std::size_t question_mark_pos = path.find('?');
-	auto wal_path = path;
-	if (question_mark_pos != std::string::npos) {
-		wal_path.insert(question_mark_pos, ".wal");
-	} else {
-		wal_path += ".wal";
-	}
+
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
-	bool truncate_wal = false;
 	if (!config.options.enable_external_access) {
 		if (!db.IsInitialDatabase()) {
 			throw PermissionException("Attaching on-disk databases is disabled through configuration");
@@ -117,22 +137,27 @@ void SingleFileStorageManager::LoadDatabase() {
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
+
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
 		if (read_only) {
 			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 		}
+
 		// check if the WAL exists
+		auto wal_path = GetWALPath();
 		if (fs.FileExists(wal_path)) {
 			// WAL file exists but database file does not
 			// remove the WAL
 			fs.RemoveFile(wal_path);
 		}
+
 		// initialize the block manager while creating a new db file
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
+
 	} else {
 		// initialize the block manager while loading the current db file
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
@@ -140,22 +165,21 @@ void SingleFileStorageManager::LoadDatabase() {
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 
-		//! Load from storage
-		auto checkpointer = SingleFileCheckpointReader(*this);
-		checkpointer.LoadFromStorage();
+		// load the db from storage
+		auto checkpoint_reader = SingleFileCheckpointReader(*this);
+		checkpoint_reader.LoadFromStorage();
+
 		// check if the WAL file exists
+		auto wal_path = GetWALPath();
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
-			truncate_wal = WriteAheadLog::Replay(db, wal_path);
+			if (WriteAheadLog::Replay(db, wal_path)) {
+				fs.RemoveFile(wal_path);
+			}
 		}
 	}
-	// initialize the WAL file
-	if (!read_only) {
-		wal = make_uniq<WriteAheadLog>(db, wal_path);
-		if (truncate_wal) {
-			wal->Truncate(0);
-		}
-	}
+
+	load_complete = true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

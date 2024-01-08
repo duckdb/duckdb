@@ -15,8 +15,13 @@ PhysicalVacuum::PhysicalVacuum(unique_ptr<VacuumInfo> info_p, idx_t estimated_ca
 class VacuumLocalSinkState : public LocalSinkState {
 public:
 	explicit VacuumLocalSinkState(VacuumInfo &info) {
-		for (idx_t col_idx = 0; col_idx < info.columns.size(); col_idx++) {
-			column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
+		for (const auto &column_name : info.columns) {
+			auto &column = info.table->GetColumn(column_name);
+			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
+				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
+			} else {
+				column_distinct_stats.push_back(nullptr);
+			}
 		}
 	};
 
@@ -30,8 +35,14 @@ unique_ptr<LocalSinkState> PhysicalVacuum::GetLocalSinkState(ExecutionContext &c
 class VacuumGlobalSinkState : public GlobalSinkState {
 public:
 	explicit VacuumGlobalSinkState(VacuumInfo &info) {
-		for (idx_t col_idx = 0; col_idx < info.columns.size(); col_idx++) {
-			column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
+
+		for (const auto &column_name : info.columns) {
+			auto &column = info.table->GetColumn(column_name);
+			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
+				column_distinct_stats.push_back(make_uniq<DistinctStatistics>());
+			} else {
+				column_distinct_stats.push_back(nullptr);
+			}
 		}
 	};
 
@@ -58,13 +69,17 @@ SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, DataChunk &chunk,
 }
 
 SinkCombineResultType PhysicalVacuum::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
-	auto &gstate = input.global_state.Cast<VacuumGlobalSinkState>();
-	auto &lstate = input.local_state.Cast<VacuumLocalSinkState>();
+	auto &g_state = input.global_state.Cast<VacuumGlobalSinkState>();
+	auto &l_state = input.local_state.Cast<VacuumLocalSinkState>();
 
-	lock_guard<mutex> lock(gstate.stats_lock);
-	D_ASSERT(gstate.column_distinct_stats.size() == lstate.column_distinct_stats.size());
-	for (idx_t col_idx = 0; col_idx < gstate.column_distinct_stats.size(); col_idx++) {
-		gstate.column_distinct_stats[col_idx]->Merge(*lstate.column_distinct_stats[col_idx]);
+	lock_guard<mutex> lock(g_state.stats_lock);
+	D_ASSERT(g_state.column_distinct_stats.size() == l_state.column_distinct_stats.size());
+
+	for (idx_t col_idx = 0; col_idx < g_state.column_distinct_stats.size(); col_idx++) {
+		if (g_state.column_distinct_stats[col_idx]) {
+			D_ASSERT(l_state.column_distinct_stats[col_idx]);
+			g_state.column_distinct_stats[col_idx]->Merge(*l_state.column_distinct_stats[col_idx]);
+		}
 	}
 
 	return SinkCombineResultType::FINISHED;

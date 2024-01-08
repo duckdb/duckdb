@@ -179,6 +179,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 			if (argno == 1) {
 				bound = BoundCastExpression::AddCastToType(context, std::move(bound), LogicalType::BIGINT);
 			}
+			break;
 		default:
 			break;
 		}
@@ -220,6 +221,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		result->partitions.push_back(GetExpression(child));
 	}
 	result->ignore_nulls = window.ignore_nulls;
+	result->distinct = window.distinct;
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,
@@ -263,10 +265,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
 		auto order_type = bound_order->return_type;
 		if (window.start_expr) {
-			order_type = LogicalType::MaxLogicalType(order_type, start_type);
+			order_type = LogicalType::MaxLogicalType(context, order_type, start_type);
 		}
 		if (window.end_expr) {
-			order_type = LogicalType::MaxLogicalType(order_type, end_type);
+			order_type = LogicalType::MaxLogicalType(context, order_type, end_type);
 		}
 
 		// Cast all three to match
@@ -289,6 +291,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->default_expr = CastWindowExpression(window.default_expr, result->return_type);
 	result->start = window.start;
 	result->end = window.end;
+	result->exclude_clause = window.exclude_clause;
 
 	// create a BoundColumnRef that references this entry
 	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), result->return_type,

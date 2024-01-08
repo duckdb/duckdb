@@ -27,19 +27,23 @@ SELECT list_unique([]) WHERE 1 = 0
 
 statement error
 SELECT list_unique()
+----
 
 statement error
 SELECT list_unique(*)
+----
 
 statement error
 SELECT list_unique([1, 2], 2)
+----
 
 # test incorrect parameter type
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 
 statement error
 SELECT list_unique(NULL::${type})
+----
 
 endloop
 
@@ -110,7 +114,7 @@ SELECT list_unique([NULL::VARCHAR])
 0
 
 # INTEGER types
-foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint
 
 query I
 SELECT list_unique([1::${type}, NULL, 1::${type}])

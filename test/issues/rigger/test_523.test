@@ -8,4 +8,5 @@ PRAGMA enable_verification
 # The trigonometric functions can result in -nan
 statement error
 SELECT SIN(1e1000);
+----
 

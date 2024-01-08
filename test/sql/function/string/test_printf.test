@@ -72,6 +72,12 @@ SELECT printf('%s', 120381902481294715712::HUGEINT)
 ----
 120381902481294715712
 
+# uhugeint
+query T
+SELECT printf('%s', 120381902481294715712::UHUGEINT)
+----
+120381902481294715712
+
 # decimal
 query T
 SELECT printf('%.3f', '1.234'::DECIMAL)
@@ -112,9 +118,11 @@ floats: 3.14 +3e+00 3.141600E+00
 # too few parameters
 statement error
 SELECT printf('%s')
+----
 
 statement error
 SELECT printf('%s %s', 'hello')
+----
 
 # excess parameters are ignored
 query T
@@ -125,9 +133,11 @@ hello
 # incorrect types
 statement error
 SELECT printf('%s', 42)
+----
 
 statement error
 SELECT printf('%d', 'hello')
+----
 
 # Test printf with vectors
 statement ok
@@ -145,9 +155,10 @@ INSERT INTO strings VALUES (3, NULL, 30, 'abcde')
 # printf without format specifiers: too few parameters
 statement error
 SELECT printf(fmt) FROM strings ORDER BY idx
+----
 
 query T
-SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint END) FROM strings ORDER BY idx
+SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint::VARCHAR END) FROM strings ORDER BY idx
 ----
 NULL
 20

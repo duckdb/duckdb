@@ -1,9 +1,0 @@
-# name: test/sql/pragma/test_pragma_enable_index_join.test
-# description: Test the enable_index_join pragma for code coverage
-# group: [pragma]
-
-statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA enable_index_join

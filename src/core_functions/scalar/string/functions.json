@@ -55,10 +55,17 @@
     {
         "name": "format_bytes",
         "parameters": "bytes",
-        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)",
         "example": "format_bytes(1000 * 16)",
         "type": "scalar_function",
-        "aliases": ["formatReadableDecimalSize"]
+        "aliases": ["formatReadableSize"]
+    },
+    {
+        "name": "formatReadableDecimalSize",
+        "parameters": "bytes",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)",
+        "example": "format_bytes(1000 * 16)",
+        "type": "scalar_function"
     },
     {
         "name": "hamming",

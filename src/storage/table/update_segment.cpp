@@ -143,6 +143,8 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 		return UpdateMergeFetch<uint64_t>;
 	case PhysicalType::INT128:
 		return UpdateMergeFetch<hugeint_t>;
+	case PhysicalType::UINT128:
+		return UpdateMergeFetch<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return UpdateMergeFetch<float>;
 	case PhysicalType::DOUBLE:
@@ -208,6 +210,8 @@ static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(Physi
 		return TemplatedFetchCommitted<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchCommitted<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedFetchCommitted<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedFetchCommitted<float>;
 	case PhysicalType::DOUBLE:
@@ -304,6 +308,8 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 		return TemplatedFetchCommittedRange<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchCommittedRange<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedFetchCommittedRange<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedFetchCommittedRange<float>;
 	case PhysicalType::DOUBLE:
@@ -406,6 +412,8 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 		return TemplatedFetchRow<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchRow<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedFetchRow<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedFetchRow<float>;
 	case PhysicalType::DOUBLE:
@@ -473,6 +481,8 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 		return RollbackUpdate<uint64_t>;
 	case PhysicalType::INT128:
 		return RollbackUpdate<hugeint_t>;
+	case PhysicalType::UINT128:
+		return RollbackUpdate<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return RollbackUpdate<float>;
 	case PhysicalType::DOUBLE:
@@ -660,6 +670,8 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 		return InitializeUpdateData<uint64_t>;
 	case PhysicalType::INT128:
 		return InitializeUpdateData<hugeint_t>;
+	case PhysicalType::UINT128:
+		return InitializeUpdateData<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return InitializeUpdateData<float>;
 	case PhysicalType::DOUBLE:
@@ -867,6 +879,8 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 		return MergeUpdateLoop<uint64_t>;
 	case PhysicalType::INT128:
 		return MergeUpdateLoop<hugeint_t>;
+	case PhysicalType::UINT128:
+		return MergeUpdateLoop<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return MergeUpdateLoop<float>;
 	case PhysicalType::DOUBLE:
@@ -895,7 +909,7 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 	if (!mask.AllValid() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!mask.RowIsValid(i)) {
-				validity.SetHasNull();
+				validity.SetHasNullFast();
 				break;
 			}
 		}
@@ -981,6 +995,8 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 		return TemplatedUpdateNumericStatistics<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedUpdateNumericStatistics<hugeint_t>;
+	case PhysicalType::UINT128:
+		return TemplatedUpdateNumericStatistics<uhugeint_t>;
 	case PhysicalType::FLOAT:
 		return TemplatedUpdateNumericStatistics<float>;
 	case PhysicalType::DOUBLE:

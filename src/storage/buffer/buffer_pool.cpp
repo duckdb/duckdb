@@ -54,11 +54,14 @@ void BufferPool::IncreaseUsedMemory(idx_t size) {
 	current_memory += size;
 }
 
-idx_t BufferPool::GetUsedMemory() {
+idx_t BufferPool::GetUsedMemory() const {
 	return current_memory;
 }
-idx_t BufferPool::GetMaxMemory() {
+idx_t BufferPool::GetMaxMemory() const {
 	return maximum_memory;
+}
+idx_t BufferPool::GetQueryMaxMemory() const {
+	return GetMaxMemory();
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,

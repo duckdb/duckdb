@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -39,12 +40,6 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	}
 
 	switch (stmt.removeType) {
-	case duckdb_libpgquery::PG_OBJECT_TYPE: {
-		auto view_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects);
-		auto target = PGPointerCast<duckdb_libpgquery::PGTypeName>(view_list->head->data.ptr_value);
-		info.name = PGPointerCast<duckdb_libpgquery::PGValue>(target->names->tail->data.ptr_value)->val.str;
-		break;
-	}
 	case duckdb_libpgquery::PG_OBJECT_SCHEMA: {
 		auto view_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects->head->data.ptr_value);
 		if (view_list->length == 2) {
@@ -77,6 +72,28 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	info.cascade = stmt.behavior == duckdb_libpgquery::PGDropBehavior::PG_DROP_CASCADE;
 	info.if_not_found = TransformOnEntryNotFound(stmt.missing_ok);
 	return std::move(result);
+}
+
+unique_ptr<DropStatement> Transformer::TransformDropSecret(duckdb_libpgquery::PGDropSecretStmt &stmt) {
+	auto result = make_uniq<DropStatement>();
+
+	auto persist_type = EnumUtil::FromString<SecretPersistType>(StringUtil::Upper(stmt.persist_type));
+
+	result->info->type = CatalogType::SECRET_ENTRY;
+	result->info->name = stmt.secret_name;
+	result->info->if_not_found = stmt.missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+
+	// When TEMPORARY type is passed explicitly, we are deleting from the temp storage
+	if (persist_type == SecretPersistType::TEMPORARY) {
+		if (!string(stmt.secret_storage).empty()) {
+			throw ParserException("Can not combine TEMPORARY with specifying a storage for drop secret");
+		}
+		result->info->schema = SecretManager::TEMPORARY_STORAGE_NAME;
+	} else {
+		result->info->schema = stmt.secret_storage;
+	}
+
+	return result;
 }
 
 } // namespace duckdb

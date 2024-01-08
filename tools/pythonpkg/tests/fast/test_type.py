@@ -2,7 +2,8 @@ import duckdb
 import os
 import pandas as pd
 import pytest
-from typing import Union
+from typing import Union, Optional
+import sys
 
 from duckdb.typing import (
     SQLNULL,
@@ -16,6 +17,7 @@ from duckdb.typing import (
     BIGINT,
     UBIGINT,
     HUGEINT,
+    UHUGEINT,
     UUID,
     FLOAT,
     DOUBLE,
@@ -32,6 +34,7 @@ from duckdb.typing import (
     BIT,
     INTERVAL,
 )
+import duckdb.typing
 
 
 class TestType(object):
@@ -51,6 +54,7 @@ class TestType(object):
         assert str(BIGINT) == 'BIGINT'
         assert str(UBIGINT) == 'UBIGINT'
         assert str(HUGEINT) == 'HUGEINT'
+        assert str(UHUGEINT) == 'UHUGEINT'
         assert str(UUID) == 'UUID'
         assert str(FLOAT) == 'FLOAT'
         assert str(DOUBLE) == 'DOUBLE'
@@ -187,3 +191,28 @@ class TestType(object):
 
         child_type = type.v2.child
         assert str(child_type) == 'MAP(BLOB, BIT)'
+
+    # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
+    @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
+    def test_optional(self):
+        type = duckdb.typing.DuckDBPyType(Optional[str])
+        assert type == 'VARCHAR'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[int, bool]])
+        assert type == 'UNION(u1 BIGINT, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Optional[list[int]])
+        assert type == 'BIGINT[]'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[int, str]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        assert type == 'MAP(BIGINT, VARCHAR)'
+        type = duckdb.typing.DuckDBPyType(Optional[Union[Optional[str], Optional[bool]]])
+        assert type == 'UNION(u1 VARCHAR, u2 BOOLEAN)'
+        type = duckdb.typing.DuckDBPyType(Union[str, None])
+        assert type == 'VARCHAR'
+
+    @pytest.mark.skipif(sys.version_info < (3, 10), reason="'str | None' syntax requires Python 3.10 or higher")
+    def test_optional_310(self):
+        type = duckdb.typing.DuckDBPyType(str | None)
+        assert type == 'VARCHAR'

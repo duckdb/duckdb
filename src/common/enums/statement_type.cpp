@@ -23,6 +23,8 @@ string StatementTypeToString(StatementType type) {
 		return "TRANSACTION";
 	case StatementType::COPY_STATEMENT:
 		return "COPY";
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return "COPY_DATABASE";
 	case StatementType::ANALYZE_STATEMENT:
 		return "ANALYZE";
 	case StatementType::VARIABLE_SET_STATEMENT:

@@ -63,7 +63,7 @@ SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     rejects_table='csv_rejects_table',
-    ignore_errors=true, parallel=${PARALLEL});
+    ignore_errors=true, parallel=${PARALLEL}, auto_detect=false);
 ----
 1	2	AAA
 6	7	CCC
@@ -83,7 +83,7 @@ SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad2.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'INTEGER'}, 
     rejects_table='csv_rejects_table',
-    ignore_errors=true, parallel=${PARALLEL});
+    ignore_errors=true, parallel=${PARALLEL}, auto_detect=false);
 ----
 4	5	9
 
@@ -104,7 +104,7 @@ SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
     rejects_table='csv_rejects_table',
-    ignore_errors=true, parallel=${PARALLEL});
+    ignore_errors=true, parallel=${PARALLEL}, auto_detect=false);
 ----
 1	2	AAA
 1	2	DDD
@@ -130,7 +130,7 @@ SELECT * FROM read_csv(
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     rejects_table='csv_rejects_table',
     rejects_limit=2,
-    ignore_errors=true, parallel=${PARALLEL});
+    ignore_errors=true, parallel=${PARALLEL}, auto_detect=false);
 ----
 1	2	AAA
 1	2	DDD
@@ -152,7 +152,7 @@ SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_bad.csv', 
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table',
-    ignore_errors=true, parallel=${PARALLEL});
+    ignore_errors=true, parallel=${PARALLEL}, auto_detect=false);
 ----
 4270
 
@@ -171,7 +171,7 @@ SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_bad2.csv', 
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table',
-    ignore_errors=true, parallel=${PARALLEL})
+    ignore_errors=true, parallel=${PARALLEL}, auto_detect=false)
 ----
 6774
 
@@ -191,7 +191,7 @@ SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_*.csv', 
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table',
-    ignore_errors=true, parallel=${PARALLEL});
+    ignore_errors=true, parallel=${PARALLEL}, auto_detect=false);
 ----
 11044
 
@@ -216,14 +216,14 @@ FROM read_csv(
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table_left',
     ignore_errors=true,
-	parallel=${PARALLEL}) as L
+	parallel=${PARALLEL}, auto_detect=false) as L
 JOIN read_csv(
     'test/sql/copy/csv/data/error/mismatch/small2.csv',
     header = true,
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table_right',
     ignore_errors=true,
-	parallel=${PARALLEL}) as R
+	parallel=${PARALLEL}, auto_detect=false) as R
 ON L.num = R.num;
 ----
 1	A	1	A
@@ -259,7 +259,7 @@ FROM read_csv(
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table_left',
     ignore_errors=true,
-	parallel=${PARALLEL}) as L
+	parallel=${PARALLEL}, auto_detect=false) as L
 JOIN read_csv(
     'test/sql/copy/csv/data/error/mismatch/small2.csv',
     header = true,
@@ -267,7 +267,7 @@ JOIN read_csv(
     rejects_table='csv_rejects_table_right',
 	rejects_limit=1,
     ignore_errors=true,
-	parallel=${PARALLEL}) as R
+	parallel=${PARALLEL}, auto_detect=false) as R
 ON L.num = R.num;
 ----
 1	A	1	A

@@ -62,22 +62,27 @@ SELECT id, MIN(COLUMNS('[0-9]')) FROM grouped_table GROUP BY all ORDER BY ALL
 # regex without matches
 statement error
 SELECT id, MIN(COLUMNS('xxx')) FROM grouped_table GROUP BY all
+----
 
 # empty regex
 statement error
 SELECT MIN(COLUMNS('xxx')) FROM grouped_table
+----
 
 # invalid regex
 statement error
 SELECT MIN(COLUMNS('[asdadd')) FROM grouped_table
+----
 
 # multiple different COLUMNS statements in the same expression are not supported
 statement error
 SELECT COLUMNS(*) + COLUMNS(* EXCLUDE(j)) FROM integers
+----
 
 # COLUMNS in subquery without FROM clause
 statement error
 SELECT (SELECT COLUMNS(*)) FROM integers
+----
 
 # COLUMNS in order by clause
 query III

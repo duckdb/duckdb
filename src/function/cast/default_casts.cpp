@@ -91,6 +91,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -137,6 +138,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return UnionCastSwitch(input, source, target);
 	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(input, source, target);
+	case LogicalTypeId::ARRAY:
+		return ArrayCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
 		return AggregateStateToBlobCast;
 	default:

@@ -98,6 +98,8 @@ enum class DebugInitialize : uint8_t;
 
 enum class DefaultOrderByNullType : uint8_t;
 
+enum class DependencyEntryType : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -224,6 +226,10 @@ enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
+enum class SecretDisplayType : uint8_t;
+
+enum class SecretPersistType : uint8_t;
+
 enum class SequenceInfo : uint8_t;
 
 enum class SetOperationType : uint8_t;
@@ -293,6 +299,10 @@ enum class WALType : uint8_t;
 enum class WindowAggregationMode : uint32_t;
 
 enum class WindowBoundary : uint8_t;
+
+enum class WindowExcludeMode : uint8_t;
+
+enum class WithinCollection : uint8_t;
 
 
 template<>
@@ -393,6 +403,9 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
 const char* EnumUtil::ToChars<DefaultOrderByNullType>(DefaultOrderByNullType value);
+
+template<>
+const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
@@ -584,6 +597,12 @@ template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
+const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
+
+template<>
+const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
+
+template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
@@ -688,6 +707,12 @@ const char* EnumUtil::ToChars<WindowAggregationMode>(WindowAggregationMode value
 template<>
 const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 
+template<>
+const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
+
+template<>
+const char* EnumUtil::ToChars<WithinCollection>(WithinCollection value);
+
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
@@ -787,6 +812,9 @@ DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
 DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *value);
+
+template<>
+DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
@@ -978,6 +1006,12 @@ template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
 
 template<>
+SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
+
+template<>
+SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
+
+template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);
 
 template<>
@@ -1081,6 +1115,12 @@ WindowAggregationMode EnumUtil::FromString<WindowAggregationMode>(const char *va
 
 template<>
 WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
+
+template<>
+WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
+
+template<>
+WithinCollection EnumUtil::FromString<WithinCollection>(const char *value);
 
 
 }

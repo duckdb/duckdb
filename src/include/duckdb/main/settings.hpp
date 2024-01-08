@@ -25,6 +25,16 @@ struct AccessModeSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct AllowPersistentSecrets {
+	static constexpr const char *Name = "allow_persistent_secrets";
+	static constexpr const char *Description =
+	    "Allow the creation of persistent secrets, that are stored and loaded on restarts";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct CheckpointThresholdSetting {
 	static constexpr const char *Name = "checkpoint_threshold";
 	static constexpr const char *Description =
@@ -125,6 +135,15 @@ struct DefaultOrderSetting {
 struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
 	static constexpr const char *Description = "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DefaultSecretStorage {
+	static constexpr const char *Name = "default_secret_storage";
+	static constexpr const char *Description = "Allows switching the default storage for secrets";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -388,6 +407,15 @@ struct MaximumMemorySetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct OldImplicitCasting {
+	static constexpr const char *Name = "old_implicit_casting";
+	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct PasswordSetting {
 	static constexpr const char *Name = "password";
 	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
@@ -512,6 +540,15 @@ struct SearchPathSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct SecretDirectorySetting {
+	static constexpr const char *Name = "secret_directory";
+	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 
