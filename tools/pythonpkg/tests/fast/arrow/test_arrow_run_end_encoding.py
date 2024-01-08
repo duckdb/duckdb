@@ -258,6 +258,8 @@ class TestArrowREE(object):
         assert expected == actual
 
     def test_arrow_ree_union(self, duckdb_cursor):
+        size = 1000
+
         duckdb_cursor.query(
             """
             create table tbl
@@ -266,8 +268,10 @@ class TestArrowREE(object):
                 i as a,
                 i % 2 == 0 as b,
                 i::VARCHAR as c
-            FROM range(1000) t(i)
-        """
+            FROM range({}) t(i)
+        """.format(
+                size
+            )
         )
 
         # Populate the table with data
@@ -299,11 +303,20 @@ class TestArrowREE(object):
         arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
         result = duckdb_cursor.query("select * from arrow_tbl").arrow()
 
-        # expected = duckdb_cursor.query("select {'ree': ree, 'a': a, 'b': b, 'c': c} as s from tbl").fetchall()
+        # Recreate the same result set
+        expected = []
+        for i in range(size):
+            match i % 4:
+                case 0:
+                    expected.append((i // 4,))
+                case 1:
+                    expected.append((i,))
+                case 2:
+                    expected.append((i % 2 == 0,))
+                case 3:
+                    expected.append((str(i),))
         actual = duckdb_cursor.query("select * from result").fetchall()
-        print(actual)
-
-        # assert expected == actual
+        assert expected == actual
 
 
 # TODO: add tests with maps
