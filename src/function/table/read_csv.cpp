@@ -123,6 +123,12 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			if (!exception.error_message.empty()) {
 				throw BinderException(exception.error_message);
 			}
+			for (idx_t  i = 0; i < names.size(); i++){
+				auto it = options.sql_types_per_column.find(names[i]);
+				if (it != options.sql_types_per_column.end()){
+					return_types[i] = options.sql_type_list[it->second];
+				}
+			}
 		}
 	} else {
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
