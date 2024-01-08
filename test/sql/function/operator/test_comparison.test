@@ -21,12 +21,15 @@ SELECT 1 <> 1, 1 != 1, 1 <> 0, 1 != 0, 1 <> NULL
 # string <> number comparisons should result in the string being cast to a number
 statement error
 select ('abc' between 20 and True);
+----
 
 statement error
 select 'abc' > 10
+----
 
 statement error
 select 20.0 = 'abc'
+----
 
 # 1000 > 20
 query T

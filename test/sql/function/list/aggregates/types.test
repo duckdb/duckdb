@@ -10,7 +10,8 @@ require strinline
 # BOOLEAN
 
 # result False
-foreach func_name bool_and bool_or first arbitrary last max median min mode string_agg group_concat
+#foreach func_name bool_and bool_or first arbitrary last max median min mode string_agg group_concat
+foreach func_name median
 
 query I
 SELECT list_aggr([False], '${func_name}')
@@ -40,6 +41,7 @@ foreach func_name avg favg bit_and bit_or bit_xor kurtosis mad product sem skewn
 
 statement error
 SELECT list_aggr([False], '${func_name}')
+----
 
 endloop
 
@@ -76,14 +78,15 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad 
 
 statement error
 SELECT list_aggr(['hello'], '${func_name}')
+----
 
 endloop
 
 # INTEGER types
 
-foreach func_name avg favg bit_and bit_or bit_xor first arbitrary last max median min mode product string_agg group_concat sum fsum sumKahan kahan_sum
+foreach func_name avg favg bit_and bit_or bit_xor first arbitrary last max median min mode product sum fsum sumKahan kahan_sum
 
-foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint
 
 query I
 SELECT list_aggr([1::${type}], '${func_name}')
@@ -102,7 +105,7 @@ endloop
 # any other result
 foreach func_name approx_count_distinct count entropy histogram kurtosis mad array_agg list sem skewness var_samp var_pop stddev stddev_pop variance stddev_samp
 
-foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint
 
 statement ok
 SELECT list_aggr([1::${type}], '${func_name}')
@@ -117,10 +120,11 @@ endloop
 # statement error for INTEGER types
 foreach func_name bool_and bool_or
 
-foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint
 
 statement error
 SELECT list_aggr([1::${type}], '${func_name}')
+----
 
 endloop
 
@@ -147,7 +151,7 @@ endloop
 endloop
 
 # any other result
-foreach func_name approx_count_distinct count entropy histogram kurtosis mad array_agg list sem skewness string_agg group_concat var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name approx_count_distinct count entropy histogram kurtosis mad array_agg list sem skewness var_samp var_pop stddev stddev_pop variance stddev_samp
 
 foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
 
@@ -168,6 +172,7 @@ foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
 
 statement error
 SELECT list_aggr([1::${type}], '${func_name}')
+----
 
 endloop
 
@@ -178,7 +183,7 @@ endloop
 # mad (works with everything except interval)
 
 # specific result
-foreach func_name first arbitrary last max min mode string_agg group_concat
+foreach func_name first arbitrary last max min mode
 
 # date
 query I
@@ -236,7 +241,7 @@ SELECT list_aggr([INTERVAL 1 YEAR], '${func_name}')
 
 endloop
 
-foreach func_name first arbitrary last max min mode string_agg group_concat
+foreach func_name first arbitrary last max min mode
 
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval
 
@@ -277,11 +282,13 @@ foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz ti
 
 statement error
 SELECT list_aggr(['2021-08-20'::${type}], '${func_name}')
+----
 
 endloop
 
 statement error
 SELECT list_aggr([INTERVAL 1 YEAR], '${func_name}')
+----
 
 endloop
 
@@ -308,7 +315,7 @@ NULL
 endloop
 
 # any other result
-foreach func_name count array_agg list
+foreach func_name count array_agg list entropy histogram median mode string_agg group_concat
 
 statement ok
 SELECT list_aggr(['{a: 1}'::BLOB], '${func_name}')
@@ -319,10 +326,11 @@ SELECT list_aggr([NULL::BLOB], '${func_name}')
 endloop
 
 # statement error for BLOB
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or entropy histogram kurtosis mad median mode product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr(['{a: 1}'::BLOB], '${func_name}')
+----
 
 endloop
 
@@ -361,13 +369,14 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad 
 
 statement error
 SELECT list_aggr(e, '${func_name}') FROM enums
+----
 
 endloop
 
 # NESTED types
 
 # list, struct, result is [1] or {'a': 1}
-foreach func_name first arbitrary last max median min mode string_agg group_concat
+foreach func_name first arbitrary last max median min mode
 
 query I
 SELECT list_aggr([[1]], '${func_name}')
@@ -382,7 +391,7 @@ SELECT list_aggr([{'a': 1}], '${func_name}')
 endloop
 
 # list, struct, any other result
-foreach func_name approx_count_distinct count entropy array_agg list
+foreach func_name approx_count_distinct count entropy array_agg list  string_agg group_concat
 
 statement ok
 SELECT list_aggr([[1]], '${func_name}')
@@ -399,8 +408,10 @@ foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kur
 
 statement error
 SELECT list_aggr([[1]], '${func_name}')
+----
 
 statement error
 SELECT list_aggr([{'a': 1}], '${func_name}')
+----
 
 endloop

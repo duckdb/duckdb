@@ -40,7 +40,7 @@ SELECT c0, c1 FROM t0;
 
 
 query III
-SELECT c0, c1, ((t0.c0)!~(((t0.c0)/(t0.c1)))) FROM t0;
+SELECT c0, c1, ((t0.c0)::varchar!~(((t0.c0)/(t0.c1)))::varchar) FROM t0;
 ----
 0.5	0	NULL
 0.5	1	false

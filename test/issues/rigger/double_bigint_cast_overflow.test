@@ -12,12 +12,16 @@ select 9.2233720368547750E+18::int8;
 
 statement error
 select 9.2233720368547758E+18::real::int8;
+----
 
 statement error
 select 9.2233720368547758E+18::int8;
+----
 
 statement error
 select 2147483648::real::int4;
+----
 
 statement error
 select 2147483648::double::int4;
+----

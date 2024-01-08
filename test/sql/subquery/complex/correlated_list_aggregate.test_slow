@@ -87,9 +87,11 @@ SELECT MIN(l[1]), (SELECT SUM(i1.l[1])) FROM lists i1;
 # this will fail, because "l[1]" is not an aggregate but the SUM(i1.l[1]) turns this query into an aggregate
 statement error
 SELECT l, (SELECT SUM(i1.l[1])) FROM lists i1;
+----
 
 statement error
 SELECT l[1]+1, (SELECT SUM(i1.l[1])) FROM lists i1;
+----
 
 query IR
 SELECT MIN(l[1]), (SELECT SUM(i1.l[1])) FROM lists i1;
@@ -115,6 +117,7 @@ SELECT SUM(l[1]), (SELECT SUM(l[1]) FROM lists WHERE l[1]>SUM(i1.l[1])) FROM lis
 # subquery with aggregation inside aggregation should fail
 statement error
 SELECT SUM((SELECT SUM(l[1]))) FROM lists
+----
 
 # aggregate with correlation in filter
 query II

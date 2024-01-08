@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -103,6 +103,11 @@ private extension Vector {
   func unwrap(_ type: IntHuge.Type, at index: Int) throws -> IntHuge {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .hugeint)
     return unsafelyUnwrapElement(as: duckdb_hugeint.self, at: index) { $0.asIntHuge }
+  }
+  
+  func unwrap(_ type: UIntHuge.Type, at index: Int) throws -> UIntHuge {
+    try assertNonNullTypeMatch(of: type, at: index, withColumnType: .uhugeint)
+    return unsafelyUnwrapElement(as: duckdb_uhugeint.self, at: index) { $0.asUIntHuge }
   }
   
   func unwrap(_ type: UUID.Type, at index: Int) throws -> UUID {
@@ -264,6 +269,7 @@ extension Vector.Element {
   func unwrap<T: PrimitiveDatabaseValue>(_ type: T.Type) throws -> T { try vector.unwrap(type, at: index) }
   func unwrap(_ type: String.Type) throws -> String { try vector.unwrap(type, at: index) }
   func unwrap(_ type: IntHuge.Type) throws -> IntHuge { try vector.unwrap(type, at: index) }
+  func unwrap(_ type: UIntHuge.Type) throws -> UIntHuge { try vector.unwrap(type, at: index) }
   func unwrap(_ type: UUID.Type) throws -> UUID { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Time.Type) throws -> Time { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Date.Type) throws -> Date { try vector.unwrap(type, at: index) }

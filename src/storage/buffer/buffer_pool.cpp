@@ -60,6 +60,9 @@ idx_t BufferPool::GetUsedMemory() const {
 idx_t BufferPool::GetMaxMemory() const {
 	return maximum_memory;
 }
+idx_t BufferPool::GetQueryMaxMemory() const {
+	return GetMaxMemory();
+}
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {

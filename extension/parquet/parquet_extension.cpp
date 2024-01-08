@@ -491,10 +491,9 @@ public:
 		if (bind_data.initial_file_cardinality == 0) {
 			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
 		}
-		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality) /
-		                  bind_data.files.size();
-		percentage += 100.0 * bind_data.cur_file / bind_data.files.size();
-		return percentage;
+		auto percentage = std::min(
+		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
+		return (percentage + 100.0 * bind_data.cur_file) / bind_data.files.size();
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -630,7 +629,7 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return data.initial_file_row_groups * data.files.size();
+		return std::max(data.initial_file_row_groups, idx_t(1)) * data.files.size();
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files

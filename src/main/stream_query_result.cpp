@@ -55,7 +55,12 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	{
 		auto lock = LockContext();
 		CheckExecutableInternal(*lock);
-		chunk = context->Fetch(*lock, *this);
+		auto system_chunk = context->Fetch(*lock, *this);
+		if (system_chunk) {
+			chunk = make_uniq<DataChunk>();
+			chunk->Initialize(Allocator::DefaultAllocator(), system_chunk->GetTypes());
+			system_chunk->Copy(*chunk, 0);
+		}
 	}
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
