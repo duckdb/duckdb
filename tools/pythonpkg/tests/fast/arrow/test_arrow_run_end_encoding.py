@@ -169,7 +169,7 @@ class TestArrowREE(object):
                 i,
                 i % 2 == 0,
                 i::VARCHAR
-            from range(1000) t(i)
+            from range(100000) t(i)
         """
         )
 
@@ -214,10 +214,49 @@ class TestArrowREE(object):
         actual = duckdb_cursor.query("select {} from res".format(projection)).fetchall()
         assert expected == actual
 
+    # TODO: add tests with lists
+    # TODO: add tests with structs
 
-# TODO: add tests with a WHERE clause
-# TODO: add tests with projections
-# TODO: add tests with lists
-# TODO: add tests with structs
+    def test_arrow_ree_struct(self, duckdb_cursor):
+        duckdb_cursor.query(
+            """
+            create table tbl
+            as select
+                i // 4 as ree,
+                i as a,
+                i % 2 == 0 as b,
+                i::VARCHAR as c
+            FROM range(1000) t(i)
+        """
+        )
+
+        # Populate the table with data
+        unstructured = duckdb_cursor.query(
+            """
+            select * from tbl
+        """
+        ).arrow()
+
+        columns = unstructured.columns
+        # Run-encode the first column ('ree')
+        columns[0] = pc.run_end_encode(columns[0])
+
+        # Create a (chunked) StructArray from the chunked arrays (columns) of the ArrowTable
+        names = unstructured.column_names
+        iterables = [x.iterchunks() for x in columns]
+        zipped = zip(*iterables)
+
+        structured_chunks = [pa.StructArray.from_arrays([y for y in x], names=names) for x in zipped]
+        structured = pa.chunked_array(structured_chunks)
+
+        arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
+        result = duckdb_cursor.query("select * from arrow_tbl").arrow()
+
+        expected = duckdb_cursor.query("select * from tbl").fetchall()
+        actual = duckdb_cursor.query("select * from result").fetchall()
+
+        assert expected == actual
+
+
 # TODO: add tests with maps
 # TODO: add tests with ENUMs
