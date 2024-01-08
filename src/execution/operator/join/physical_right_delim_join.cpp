@@ -114,28 +114,8 @@ void PhysicalRightDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 		    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	// The rest of this function replicates the PhysicalJoin::BuildJoinPipelines,
-	// without building the RHS because we already build that in the Sink phase of this operator
-	state.AddPipelineOperator(current, *join);
-
-	// save the last added pipeline to set up dependencies later (in case we need to add a child pipeline)
-	vector<shared_ptr<Pipeline>> pipelines_so_far;
-	meta_pipeline.GetPipelines(pipelines_so_far, false);
-	auto last_pipeline = pipelines_so_far.back().get();
-
-	// continue building the current pipeline on the LHS (probe side)
-	join->children[0]->BuildPipelines(current, meta_pipeline);
-
-	// Join can become a source operator if it's RIGHT/OUTER, or if the hash join goes out-of-core
-	bool add_child_pipeline = false;
-	auto &join_op = join->Cast<PhysicalJoin>();
-	if (join_op.IsSource()) {
-		add_child_pipeline = true;
-	}
-
-	if (add_child_pipeline) {
-		meta_pipeline.CreateChildPipeline(current, *join, last_pipeline);
-	}
+	// Build join pipelines without building the RHS (already built in the Sink of this op)
+	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *join, false);
 }
 
 } // namespace duckdb
