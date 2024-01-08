@@ -1093,6 +1093,9 @@ if(NOT SKIP_PLATFORM_UTIL)
   set_target_properties(duckdb_platform PROPERTIES OUTPUT_NAME duckdb_platform)
   set_target_properties(duckdb_platform PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                          ${PROJECT_BINARY_DIR})
+
+  execute_process(COMMAND ./duckdb_platform OUTPUT_VARIABLE DUCKDB_UTIL_PLATFROM)
+  message(STATUS "Detected platform is: ${DUCKDB_UTIL_PLATFROM}")
 endif()
 
 if(NOT CLANG_TIDY)
