@@ -289,12 +289,12 @@ endif()
 string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
 
 if(DUCKDB_EXTENSION_FOLDER_IS_VERSION)
-  set(DUCKDB_EXTENSION_FOLDER "${GIT_COMMIT_HASH}")
+  set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
 else()
-  set(DUCKDB_EXTENSION_FOLDER "${DUCKDB_VERSION}")
+  set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
 endif()
 
-message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_EXTENSION_FOLDER}")
+message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_NORMALIZED_VERSION}")
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
@@ -1092,18 +1092,27 @@ if(BUILD_PYTHON)
   endif()
 endif()
 
-if(NOT SKIP_PLATFORM_UTIL)
+if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
 
-  add_executable(duckdb_platform ${VERSION_SOURCES})
-  link_threads(duckdb_platform)
+  add_executable(duckdb_platform_binary ${VERSION_SOURCES})
+  link_threads(duckdb_platform_binary)
 
-  set_target_properties(duckdb_platform PROPERTIES OUTPUT_NAME duckdb_platform)
-  set_target_properties(duckdb_platform PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+  set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
+  set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                          ${PROJECT_BINARY_DIR})
-
-  execute_process(COMMAND ./duckdb_platform OUTPUT_VARIABLE DUCKDB_UTIL_PLATFROM)
-  message(STATUS "Detected platform is: ${DUCKDB_UTIL_PLATFROM}")
+  add_custom_target(
+          duckdb_platform ALL
+	  COMMAND
+	  ./duckdb_platform_binary > duckdb_platform_out
+          )
+  add_dependencies(duckdb_platform duckdb_platform_binary)
+else()
+  add_custom_target(
+          duckdb_platform ALL
+	  COMMAND
+	  echo "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
+          )
 endif()
 
 if(NOT CLANG_TIDY)
@@ -1121,17 +1130,21 @@ if(NOT CLANG_TIDY)
 endif()
 
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
-  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/deploy)
+if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
+  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/.duckdb/extensions/)
 endif()
 if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
   add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
-          python3 scripts/create_local_extension_repo.py $<TARGET_FILE:shell> "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO}"
-          DEPENDS shell
+          ${CMAKE_COMMAND} -E make_directory "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
+          COMMAND
+          ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/extension/*/*.duckdb_extension" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
+          COMMAND
+          cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
+  add_dependencies(duckdb_local_extension_repo duckdb_platform)
   add_extension_dependencies(duckdb_local_extension_repo)
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     # jemalloc is odd duck
