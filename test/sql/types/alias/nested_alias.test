@@ -1,6 +1,6 @@
 # name: test/sql/types/alias/nested_alias.test
-# description: Verify that nested aliases workl
-# group: [alter_type]
+# description: Verify that nested aliases work correctly
+# group: [alias]
 
 statement ok
 CREATE TYPE my_int AS INT

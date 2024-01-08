@@ -1,6 +1,6 @@
 # name: test/sql/types/alias/recursive_alias.test
 # description: Issue #10141 - DuckDB SIGSEGV when setting up ill-formed custom type
-# group: [alter_type]
+# group: [alias]
 
 # recursive type definitions are not allowed
 statement error
