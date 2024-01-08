@@ -252,7 +252,7 @@ class TestArrowREE(object):
         arrow_tbl = pa.Table.from_arrays([structured], names=['ree'])
         result = duckdb_cursor.query("select * from arrow_tbl").arrow()
 
-        expected = duckdb_cursor.query("select * from tbl").fetchall()
+        expected = duckdb_cursor.query("select {'ree': ree, 'a': a, 'b': b, 'c': c} as s from tbl").fetchall()
         actual = duckdb_cursor.query("select * from result").fetchall()
 
         assert expected == actual
