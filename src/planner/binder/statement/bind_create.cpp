@@ -634,16 +634,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(std::move(query));
-		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
+		} else {
 			// two cases:
-			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.
+			// 1: create a type with a non-existent type as source, Binder::BindLogicalType(...) will throw exception.
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
-			                                   UserType::GetTypeName(create_type_info.type));
-			inner_type.SetAlias(create_type_info.name);
-			create_type_info.type = inner_type;
+			Binder::BindLogicalType(context, create_type_info.type);
 		}
 		break;
 	}
@@ -651,7 +648,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
 		properties.return_type = StatementReturnType::QUERY_RESULT;
 		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
-		break;
 	}
 	default:
 		throw Exception("Unrecognized type!");
