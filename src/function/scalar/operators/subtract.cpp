@@ -157,13 +157,13 @@ bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result
 template <>
 bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left;
-	return Hugeint::SubtractInPlace(result, right);
+	return Hugeint::TrySubtractInPlace(result, right);
 }
 
 template <>
 bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
 	result = left;
-	return Uhugeint::SubtractInPlace(result, right);
+	return Uhugeint::TrySubtractInPlace(result, right);
 }
 
 //===--------------------------------------------------------------------===//
@@ -201,7 +201,9 @@ bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t &result)
 
 template <>
 bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	result = left - right;
+	if (!TrySubtractOperator::Operation(left, right, result)) {
+		return false;
+	}
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}

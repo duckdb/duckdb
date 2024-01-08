@@ -217,7 +217,9 @@ bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t &result)
 
 template <>
 bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	result = left * right;
+	if (!TryMultiplyOperator::Operation(left, right, result)) {
+		return false;
+	}
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}
