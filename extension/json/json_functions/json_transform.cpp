@@ -79,7 +79,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else {
-		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
+		if (!structure_val.DefaultTryCastAs(LogicalType::JSON())) {
 			throw BinderException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
@@ -826,7 +826,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformFromStringWithFormat(vals, result, count, options);
 	}
 
-	if (JSONCommon::LogicalTypeIsJSON(result_type)) {
+	if (result_type.IsJSONType()) {
 		return TransformToJSON(vals, alc, result, count);
 	}
 
@@ -956,7 +956,7 @@ static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	ScalarFunctionSet set("json_transform");
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
-	GetTransformFunctionInternal(set, JSONCommon::JSONType());
+	GetTransformFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 
@@ -968,7 +968,7 @@ static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const Log
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	ScalarFunctionSet set("json_transform_strict");
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
-	GetTransformStrictFunctionInternal(set, JSONCommon::JSONType());
+	GetTransformStrictFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 
@@ -1019,7 +1019,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
 		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
-		casts.RegisterCastFunction(JSONCommon::JSONType(), target_type, JSONToAnyCastBind, json_to_target_cost);
+		casts.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }
 

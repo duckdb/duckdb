@@ -182,7 +182,7 @@ CREATE MACRO ifelse(a,b) AS a+b
 ----
 
 query T
-SELECT IFELSE(1, 'random', RANDOM())
+SELECT IFELSE('1', 'random', RANDOM()::VARCHAR)
 ----
 random
 

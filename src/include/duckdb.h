@@ -55,7 +55,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -1517,7 +1517,7 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 * type_amount: The size of the types array.
 * returns: The logical type.
 */
-DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type member_types, const char **member_names,
+DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *member_types, const char **member_names,
                                                         idx_t member_count);
 
 /*!

@@ -184,8 +184,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
 	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
 	auto wal = storage_manager.GetWriteAheadLog();
-	wal->WriteCheckpoint(meta_block);
-	wal->Flush();
+	bool wal_is_empty = wal->GetWALSize() == 0;
+	if (!wal_is_empty) {
+		wal->WriteCheckpoint(meta_block);
+		wal->Flush();
+	}
 
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
@@ -204,7 +207,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	block_manager.Truncate();
 
 	// truncate the WAL
-	wal->Truncate(0);
+	if (!wal_is_empty) {
+		wal->Truncate(0);
+	}
 }
 
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
