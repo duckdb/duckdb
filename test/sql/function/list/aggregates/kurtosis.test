@@ -15,6 +15,7 @@ NULL
 # out of range
 statement error
 select list_kurtosis([2e304, 2e305, 2e306, 2e307])
+----
 
 statement ok
 create table aggr(k int[]);
@@ -38,3 +39,4 @@ NULL
 # incorrect usage
 statement error
 select list_kurtosis()
+----

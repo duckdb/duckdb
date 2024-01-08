@@ -16,6 +16,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -812,6 +813,22 @@ struct ParquetHugeintOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Hugeint::Cast<double>(input);
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<ColumnWriterStatistics>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+	}
+};
+
+struct ParquetUhugeintOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Uhugeint::Cast<double>(input);
 	}
 
 	template <class SRC, class TGT>
@@ -1996,6 +2013,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::HUGEINT:
 		return make_uniq<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
+		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
+	case LogicalTypeId::UHUGEINT:
+		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(

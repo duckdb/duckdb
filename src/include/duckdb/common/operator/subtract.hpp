@@ -70,6 +70,8 @@ template <>
 bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result);
 template <>
 bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
 
 struct SubtractOperatorOverflowCheck {
 	template <class TA, class TB, class TR>

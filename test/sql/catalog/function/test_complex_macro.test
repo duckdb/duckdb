@@ -60,10 +60,12 @@ SELECT IFELSE(1, IFELSE(1,a,'b'), 'c') FROM integers
 
 statement error
 SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
+----
 
 # conflicting bindings
 statement error
 CREATE MACRO f1(x) AS (SELECT MIN(a) + x FROM integers)
+----
 
 # macro in GROUP BY
 statement ok
@@ -121,6 +123,7 @@ SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
 # parameter expression
 statement error
 CREATE MACRO prep(x) AS ?+1
+----
 
 # prepared statements
 statement ok

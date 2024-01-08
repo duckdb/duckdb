@@ -54,6 +54,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
+                                                 DUCKDB_GLOBAL(AllowPersistentSecrets),
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
@@ -91,6 +92,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
+                                                 DUCKDB_GLOBAL(OldImplicitCasting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(OrderedAggregateThreshold),
@@ -107,6 +109,8 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(ProgressBarTimeSetting),
                                                  DUCKDB_LOCAL(SchemaSetting),
                                                  DUCKDB_LOCAL(SearchPathSetting),
+                                                 DUCKDB_GLOBAL(SecretDirectorySetting),
+                                                 DUCKDB_GLOBAL(DefaultSecretStorage),
                                                  DUCKDB_GLOBAL(TempDirectorySetting),
                                                  DUCKDB_GLOBAL(ThreadsSetting),
                                                  DUCKDB_GLOBAL(UsernameSetting),
@@ -180,6 +184,14 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 		SetOption(name, std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
+	}
+}
+
+void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
+	for (auto &kv : values) {
+		auto &name = kv.first;
+		auto &value = kv.second;
+		SetOptionByName(name, value);
 	}
 }
 

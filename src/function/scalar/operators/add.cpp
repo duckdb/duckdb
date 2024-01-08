@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -157,6 +158,15 @@ bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 		return false;
 	}
 #endif
+	return true;
+}
+
+template <>
+bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
+	if (!Uhugeint::AddInPlace(left, right)) {
+		return false;
+	}
+	result = left;
 	return true;
 }
 

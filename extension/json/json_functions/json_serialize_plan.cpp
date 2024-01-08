@@ -1,17 +1,15 @@
+#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
-
+#include "json_common.hpp"
 #include "json_deserializer.hpp"
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
-#include "json_common.hpp"
-
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -182,24 +180,23 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 	ScalarFunctionSet set("json_serialize_plan");
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, JSONCommon::JSONType(), JsonSerializePlanFunction,
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializePlanFunction,
 	                               JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, JSONCommon::JSONType(),
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
 	                               JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                               JSONCommon::JSONType(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
+	                               LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
 	                               nullptr, JSONFunctionLocalState::Init));
 
-	set.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                   JSONCommon::JSONType(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
-	                   JSONFunctionLocalState::Init));
+	set.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
+	    JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	    JSONCommon::JSONType(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
+	    LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
 	    JSONFunctionLocalState::Init));
 	return set;
 }

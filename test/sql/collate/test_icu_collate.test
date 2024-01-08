@@ -50,6 +50,7 @@ Göbel
 # but not with NOACCENT
 statement error
 SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1
+----
 
 # japanese collation
 statement ok

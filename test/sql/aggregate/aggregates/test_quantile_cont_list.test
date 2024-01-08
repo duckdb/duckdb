@@ -40,6 +40,7 @@ FROM quantiles
 
 statement error
 SELECT quantile_cont(interval (r/100) second, [0.25, 0.5, 0.75]) FROM quantiles
+----
 
 # single GROUP
 query R
@@ -140,18 +141,24 @@ SELECT quantile_cont(r, []) FROM quantiles
 
 statement error
 SELECT quantile_cont(r, [-0.25, 0.5, 0.75]) FROM quantiles
+----
 
 statement error
 SELECT quantile_cont(r, (0.25, 0.5, 1.1)) FROM quantiles
+----
 
 statement error
 SELECT quantile_cont(r, [0.25, 0.5, NULL]) FROM quantiles
+----
 
 statement error
 SELECT quantile_cont(r, ["0.25", "0.5", "0.75"]) FROM quantiles
+----
 
 statement error
 SELECT quantile_cont(r::string, [0.25, 0.5, 0.75]) FROM quantiles
+----
 
 statement error
 SELECT quantile_cont(r, [0.25, 0.5, 0.75], 50) FROM quantiles
+----

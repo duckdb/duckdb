@@ -368,12 +368,15 @@ endloop
 # Overflow
 statement error
 SELECT datesub('week',TIMESTAMP '-214169-1-18 21:29:6',TIMESTAMP '93495-11-19 13:3:22');
+----
 
 statement error
 SELECT datesub('dayofyear',TIMESTAMP '-109502-12-4 20:26:13',TIMESTAMP '252823-4-6 9:56:28');
+----
 
 statement error
 SELECT datesub('epoch',TIMESTAMP '153520-4-1 20:33:43',TIMESTAMP '-269898-3-29 12:9:14');
+----
 
 #
 # TIME
@@ -462,6 +465,7 @@ foreach datepart year month day decade century millennium quarter week
 
 statement error
 select DATESUB('${datepart}', '12:00:00.000050'::TIME, '12:00:00'::TIME)
+----
 
 endloop
 
@@ -621,3 +625,4 @@ INSERT into parts VALUES('duck');
 statement error
 SELECT datepart, DATESUB(datepart, '2004-01-31 12:00:00'::TIMESTAMP, '2004-02-29 13:05:47.123456'::TIMESTAMP)
 FROM parts;
+----

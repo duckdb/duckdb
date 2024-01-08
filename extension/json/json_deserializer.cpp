@@ -255,6 +255,19 @@ hugeint_t JsonDeserializer::ReadHugeInt() {
 	return result;
 }
 
+uhugeint_t JsonDeserializer::ReadUhugeInt() {
+	auto val = GetNextValue();
+	if (!yyjson_is_obj(val)) {
+		ThrowTypeError(val, "object");
+	}
+	Push(val);
+	uhugeint_t result;
+	ReadProperty(100, "upper", result.upper);
+	ReadProperty(101, "lower", result.lower);
+	Pop();
+	return result;
+}
+
 void JsonDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
 	auto val = GetNextValue();
 	if (!yyjson_is_str(val)) {

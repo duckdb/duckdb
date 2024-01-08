@@ -9,6 +9,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -406,6 +407,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case PhysicalType::UINT64:
 		reinterpret_cast<uint64_t *>(data)[index] = val.GetValueUnsafe<uint64_t>();
 		break;
+	case PhysicalType::UINT128:
+		reinterpret_cast<uhugeint_t *>(data)[index] = val.GetValueUnsafe<uhugeint_t>();
+		break;
 	case PhysicalType::FLOAT:
 		reinterpret_cast<float *>(data)[index] = val.GetValueUnsafe<float>();
 		break;
@@ -560,6 +564,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::TIMESTAMPTZ(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<hugeint_t *>(data)[index]);
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(reinterpret_cast<uhugeint_t *>(data)[index]);
 	case LogicalTypeId::UUID:
 		return Value::UUID(reinterpret_cast<hugeint_t *>(data)[index]);
 	case LogicalTypeId::DECIMAL: {
@@ -847,6 +853,9 @@ void Vector::Flatten(idx_t count) {
 			break;
 		case PhysicalType::INT128:
 			TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT128:
+			TemplatedFlattenConstantVector<uhugeint_t>(data, old_data, count);
 			break;
 		case PhysicalType::FLOAT:
 			TemplatedFlattenConstantVector<float>(data, old_data, count);
