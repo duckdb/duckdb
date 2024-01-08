@@ -101,7 +101,7 @@ class TestArrowREE(object):
             from range({}) t(i);
         """
         # Create the table
-        query = query.format(val1, dbtype, val2, dbtype, 10000, filter)
+        query = query.format(val1, dbtype, val2, dbtype, 10000)
         duckdb_cursor.execute(query)
 
         rel = duckdb_cursor.query("select * from ree_tbl")
@@ -146,6 +146,73 @@ class TestArrowREE(object):
         pa_res = pa.Table.from_arrays([encoded_array], schema=schema)
         res = duckdb_cursor.sql("select * from pa_res").fetchall()
         assert res == expected
+
+    @pytest.mark.parametrize('projection', ['*', 'a, c, b', 'ree, a, b, c', 'c, b, a, ree', 'c', 'b, ree, c, a'])
+    def test_arrow_ree_projections(self, duckdb_cursor, projection):
+        # Create the schema
+        duckdb_cursor.query(
+            """
+            create table tbl (
+                ree integer,
+                a int,
+                b bool,
+                c varchar
+            )
+        """
+        )
+
+        # Populate the table with data
+        duckdb_cursor.query(
+            """
+            insert into tbl select
+                i // 4,
+                i,
+                i % 2 == 0,
+                i::VARCHAR
+            from range(1000) t(i)
+        """
+        )
+
+        # Fetch the result as an Arrow Table
+        result = duckdb_cursor.table('tbl').arrow()
+
+        # Turn 'ree' into a run-end-encoded array and reconstruct a table from it
+        arrays = {
+            'ree': pc.run_end_encode(result['ree']),
+            'a': result['a'],
+            'b': result['b'],
+            'c': result['c'],
+        }
+
+        schema = pa.schema(
+            [
+                ("ree", arrays['ree'].type),
+                ("a", arrays['a'].type),
+                ("b", arrays['b'].type),
+                ("c", arrays['c'].type),
+            ]
+        )
+        arrow_tbl = pa.Table.from_arrays([arrays['ree'], arrays['a'], arrays['b'], arrays['c']], schema=schema)
+
+        # Verify that the array is run end encoded
+        ar_type = arrow_tbl['ree'].type
+        assert pa.types.is_run_end_encoded(ar_type) == True
+
+        # Scan the arrow table, making projections that don't cover the entire table
+        # This should be pushed down into arrow to only provide us with the necessary columns
+
+        res = duckdb_cursor.query(
+            """
+            select {} from arrow_tbl
+        """.format(
+                projection
+            )
+        ).arrow()
+
+        # Verify correctness by fetching from the original table and the constructed result
+        expected = duckdb_cursor.query("select {} from tbl".format(projection)).fetchall()
+        actual = duckdb_cursor.query("select {} from res".format(projection)).fetchall()
+        assert expected == actual
 
 
 # TODO: add tests with a WHERE clause
