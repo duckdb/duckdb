@@ -167,6 +167,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
+	if (!global_state_p){
+		return nullptr;
+	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
 	auto csv_scanner = global_state.Next();
 	if (!csv_scanner) {
@@ -177,6 +180,9 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<ReadCSVData>();
+	if (!data_p.global_state){
+		return;
+	}
 	auto &csv_global_state = data_p.global_state->Cast<CSVGlobalState>();
 	auto &csv_local_state = data_p.local_state->Cast<CSVLocalState>();
 
