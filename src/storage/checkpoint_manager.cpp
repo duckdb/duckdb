@@ -407,7 +407,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// backwards compatability:
 	// if the index type is not specified, we default to ART
 	if (info.index_type.empty()) {
-		info.index_type = "ART";
+		info.index_type = ART::TYPE_NAME;
 	}
 
 	// now we can look for the index in the catalog and assign the table info
@@ -466,7 +466,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
-	if (info.index_type == "ART") {
+	// The ART index type is always present in the default catalog, so its never unknown
+	if (info.index_type == ART::TYPE_NAME) {
 		data_table.info->indexes.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
 		                                                 TableIOManager::Get(data_table), unbound_expressions,
 		                                                 data_table.db, nullptr, index_storage_info));

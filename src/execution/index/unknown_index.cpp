@@ -21,14 +21,6 @@ string UnknownIndex::GenerateErrorMessage() const {
 	    index_type.c_str(), name.c_str());
 }
 
-unique_ptr<IndexScanState> UnknownIndex::TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
-                                                           const Expression &filter_expr) {
-	throw NotImplementedException(GenerateErrorMessage());
-}
-
-bool UnknownIndex::Scan(const Transaction &, const DataTable &, IndexScanState &, idx_t, vector<row_t> &) {
-	throw NotImplementedException(GenerateErrorMessage());
-}
 PreservedError UnknownIndex::Append(IndexLock &, DataChunk &, Vector &) {
 	throw NotImplementedException(GenerateErrorMessage());
 }

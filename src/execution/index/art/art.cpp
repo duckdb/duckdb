@@ -39,7 +39,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
-    : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
+    : Index(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 
 	// initialize all allocators
@@ -894,7 +894,7 @@ bool ART::SearchCloseRange(ARTIndexScanState &state, ARTKey &lower_bound, ARTKey
 	return it.Scan(upper_bound, max_count, result_ids, right_equal);
 }
 
-bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
+bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, const idx_t max_count,
                vector<row_t> &result_ids) {
 
 	auto &scan_state = state.Cast<ARTIndexScanState>();
@@ -1266,5 +1266,7 @@ string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t
 	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
 	return exception_msg;
 }
+
+constexpr const char *ART::TYPE_NAME;
 
 } // namespace duckdb

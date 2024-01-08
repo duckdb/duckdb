@@ -45,11 +45,6 @@ public:
 	}
 
 	// Index interface (unused)
-	unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
-	                                             const Expression &filter_expr) override;
-
-	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
-	          vector<row_t> &result_ids) override;
 
 	PreservedError Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	void VerifyAppend(DataChunk &chunk) override;

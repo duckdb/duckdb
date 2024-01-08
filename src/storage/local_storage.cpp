@@ -23,11 +23,10 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups->InitializeEmpty();
 
 	table.info->indexes.Scan([&](Index &index) {
-		if (index.index_type != "ART") {
-			// TODO: support other index types
+		if (index.index_type != ART::TYPE_NAME) {
 			return false;
 		}
-		D_ASSERT(index.index_type == "ART");
+		D_ASSERT(index.index_type == ART::TYPE_NAME);
 
 		auto &art = index.Cast<ART>();
 		if (art.index_constraint_type != IndexConstraintType::NONE) {

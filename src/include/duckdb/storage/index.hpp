@@ -64,16 +64,6 @@ public:
 		return false;
 	}
 
-	//! Try to intialize a index scan with the given expressions.
-	//! If we cannot perform an index scan, returns nullptr.
-	virtual unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
-	                                                     const Expression &filter_expr) = 0;
-
-	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
-	//! and false otherwise
-	virtual bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
-	                  vector<row_t> &result_ids) = 0;
-
 	//! Obtain a lock on the index
 	void InitializeLock(IndexLock &state);
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held

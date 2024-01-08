@@ -43,7 +43,6 @@ public:
 	bool NameIsUnique(const string &name);
 	//! Initializes unknown indexes that might now be present after an extension load
 	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info);
-
 	bool Empty();
 	idx_t Count();
 	void Move(TableIndexList &other);

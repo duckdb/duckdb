@@ -1,21 +1,22 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -309,14 +310,21 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			return false;
 		}
 
-		if (index.unbound_expressions.size() > 1) {
+		if (index.index_type != ART::TYPE_NAME) {
+			// only ART indexes are supported for now
+			return false;
+		}
+
+		auto &art_index = index.Cast<ART>();
+
+		if (art_index.unbound_expressions.size() > 1) {
 			// NOTE: index scans are not (yet) supported for compound index keys
 			return false;
 		}
 
-		auto index_expression = index.unbound_expressions[0]->Copy();
+		auto index_expression = art_index.unbound_expressions[0]->Copy();
 		bool rewrite_possible = true;
-		RewriteIndexExpression(index, get, *index_expression, rewrite_possible);
+		RewriteIndexExpression(art_index, get, *index_expression, rewrite_possible);
 		if (!rewrite_possible) {
 			// could not rewrite!
 			return false;
@@ -326,9 +334,9 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		auto &transaction = Transaction::Get(context, bind_data.table.catalog);
 
 		for (auto &filter : filters) {
-			auto index_state = index.TryInitializeScan(transaction, *index_expression, *filter);
+			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
 			if (index_state != nullptr) {
-				if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
+				if (art_index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 					// use an index scan!
 					bind_data.is_index_scan = true;
 					get.function = TableScanFunction::GetIndexScanFunction();

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/create_function_info.hpp
+// duckdb/parser/parsed_data/create_index_type_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
