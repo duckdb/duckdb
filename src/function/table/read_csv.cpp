@@ -113,7 +113,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		result->reader_bind =
 		    MultiFileReader::BindUnionReader<CSVFileScan>(context, return_types, names, *result, options);
 		if (result->union_readers.size() > 1) {
-			result->column_info.emplace_back(result->csv_names, result->csv_types);
+			result->column_info.emplace_back(result->initial_reader->names, result->initial_reader->types);
 			for (idx_t i = 1; i < result->union_readers.size(); i++) {
 				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
 			}
