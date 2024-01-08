@@ -200,29 +200,18 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 	do {
 		if (output.size() != 0) {
-			//			MultiFileReader::FinalizeChunk(bind_data.reader_bind,
-			//			                               csv_local_state.csv_reader->reader_data,
-			//			                               output);
+			MultiFileReader::FinalizeChunk(bind_data.reader_bind, csv_local_state.csv_reader->reader_data, output);
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
 
-			//			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-			//			csv_global_state.UpdateVerification(verification_updates,
-			//			 csv_local_state.csv_reader->file_idx,
-			//									                                    csv_local_state.csv_reader->scanner->scanner_id);
-			//			                        csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
-			//			                                 csv_local_state.csv_reader->file_idx);
 			csv_local_state.csv_reader = csv_global_state.Next(bind_data);
-			//			if (csv_local_state.csv_reader) {
-			//				csv_local_state.csv_reader->linenr = 0;
-			//			}
+
 			if (!csv_local_state.csv_reader) {
 				csv_global_state.DecrementThread();
 				break;
 			}
 		}
-		//		VerificationPositions positions;
 		csv_local_state.csv_reader->Flush(output);
 
 	} while (true);

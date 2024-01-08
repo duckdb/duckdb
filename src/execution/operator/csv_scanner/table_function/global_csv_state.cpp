@@ -33,6 +33,12 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, idx_
 		// We need to define the number of columns, if the sniffer is not running this must be in the sql_type_list
 		options.dialect_options.num_cols = options.sql_type_list.size();
 	}
+
+	if (options.file_options.filename) {
+		// This means that one of the columns is the filename, we are effectively scanning on column less than expected
+		options.dialect_options.num_cols--;
+	}
+
 	// Initialize State Machine
 	state_machine =
 	    make_shared<CSVStateMachine>(state_machine_cache.Get(options.dialect_options.state_machine_options), options);
@@ -115,12 +121,12 @@ unique_ptr<StringValueScanner> CSVGlobalState::InitializeScanner(const ReadCSVDa
 	auto &current_file = *file_scans.back();
 	auto csv_scanner = make_uniq<StringValueScanner>(current_file.buffer_manager, current_file.state_machine,
 	                                                 current_file.error_handler, current_boundary);
-	csv_scanner->file_path = bind_data.files.front();
+	csv_scanner->file_path = current_file.file_path;
 	csv_scanner->names = bind_data.return_names;
 	csv_scanner->types = bind_data.return_types;
 	MultiFileReader::InitializeReader(*csv_scanner, bind_data.options.file_options, bind_data.reader_bind,
 	                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
-	                                  bind_data.files.front(), context);
+	                                  current_file.file_path, context);
 
 	return csv_scanner;
 }

@@ -399,9 +399,6 @@ void StringValueScanner::ProcessOverbufferValue() {
 }
 
 void StringValueScanner::MoveToNextBuffer() {
-	if (iterator.pos.buffer_pos > cur_buffer_handle->actual_size) {
-		throw InternalException("The buffer position can not be bigger than it's actual size. Please open an issue.");
-	}
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 		previous_buffer_handle = std::move(cur_buffer_handle);
 		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
