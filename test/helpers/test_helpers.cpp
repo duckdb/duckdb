@@ -8,6 +8,8 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
+
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include <cmath>
