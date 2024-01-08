@@ -107,6 +107,11 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_LOAD = 180,
 	LOGICAL_RESET = 181,
 
+	// -----------------------------
+	// Secrets
+	// -----------------------------
+	LOGICAL_CREATE_SECRET = 190,
+
 	LOGICAL_EXTENSION_OPERATOR = 255
 };
 

@@ -394,6 +394,8 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		return py::cast(val.GetValue<uint64_t>());
 	case LogicalTypeId::HUGEINT:
 		return py::reinterpret_steal<py::object>(PyLong_FromString(val.GetValue<string>().c_str(), nullptr, 10));
+	case LogicalTypeId::UHUGEINT:
+		return py::reinterpret_steal<py::object>(PyLong_FromString(val.GetValue<string>().c_str(), nullptr, 10));
 	case LogicalTypeId::FLOAT:
 		return py::cast(val.GetValue<float>());
 	case LogicalTypeId::DOUBLE:

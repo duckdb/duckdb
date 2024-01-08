@@ -106,6 +106,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
+	case LogicalOperatorType::LOGICAL_CREATE_SECRET:
+		return "CREATE_SECRET";
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DETACH:

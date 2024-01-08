@@ -1,5 +1,6 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/main/capi/cast/utils.hpp"
@@ -7,6 +8,8 @@
 
 using duckdb::Hugeint;
 using duckdb::hugeint_t;
+using duckdb::Uhugeint;
+using duckdb::uhugeint_t;
 using duckdb::Value;
 
 double duckdb_hugeint_to_double(duckdb_hugeint val) {
@@ -14,6 +17,13 @@ double duckdb_hugeint_to_double(duckdb_hugeint val) {
 	internal.lower = val.lower;
 	internal.upper = val.upper;
 	return Hugeint::Cast<double>(internal);
+}
+
+double duckdb_uhugeint_to_double(duckdb_uhugeint val) {
+	uhugeint_t internal;
+	internal.lower = val.lower;
+	internal.upper = val.upper;
+	return Uhugeint::Cast<double>(internal);
 }
 
 static duckdb_decimal to_decimal_cast(double val, uint8_t width, uint8_t scale) {
@@ -44,6 +54,19 @@ duckdb_hugeint duckdb_double_to_hugeint(double val) {
 	}
 
 	duckdb_hugeint result;
+	result.lower = internal_result.lower;
+	result.upper = internal_result.upper;
+	return result;
+}
+
+duckdb_uhugeint duckdb_double_to_uhugeint(double val) {
+	uhugeint_t internal_result;
+	if (!Value::DoubleIsFinite(val) || !Uhugeint::TryConvert<double>(val, internal_result)) {
+		internal_result.lower = 0;
+		internal_result.upper = 0;
+	}
+
+	duckdb_uhugeint result;
 	result.lower = internal_result.lower;
 	result.upper = internal_result.upper;
 	return result;

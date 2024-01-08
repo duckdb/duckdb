@@ -59,12 +59,10 @@ SELECT * FROM (VALUES ((SELECT MIN(a) FROM test), 2, 3), ((SELECT MAX(b) FROM te
 4	2	3
 
 # value list with different types
-query TI
+statement error
 SELECT * FROM (VALUES ('hello', 2), (1 + 3, '5'), (DATE '1992-09-20', 3)) v1;
 ----
-hello	2
-4	5
-1992-09-20	3
+an explicit cast is required
 
 # value list with NULLs
 query TI
@@ -86,12 +84,21 @@ SELECT * FROM (VALUES (NULL, NULL), (3, 4)) v1;
 NULL	NULL
 3	4
 
-# type is the max type of all input columns
 query I
-SELECT * FROM (VALUES (3), ('hello')) v1;
+SELECT * FROM (VALUES (3), ('42')) v1;
 ----
 3
+42
+
+statement error
+SELECT * FROM (VALUES (3), ('hello')) v1;
+----
 hello
+
+query I
+SELECT typeof(x) FROM (VALUES (DATE '1992-01-01'), ('1992-01-01')) v1(x) LIMIT 1;
+----
+DATE
 
 query I
 SELECT * FROM (VALUES (NULL), ('hello')) v1;
