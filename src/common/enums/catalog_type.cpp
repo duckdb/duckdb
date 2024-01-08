@@ -45,8 +45,6 @@ string CatalogTypeToString(CatalogType type) {
 		return "Secret Type";
 	case CatalogType::SECRET_FUNCTION_ENTRY:
 		return "Secret Function";
-	case CatalogType::INDEX_TYPE_ENTRY:
-		return "Index Type";
 	case CatalogType::INVALID:
 	case CatalogType::DELETED_ENTRY:
 	case CatalogType::RENAMED_ENTRY:

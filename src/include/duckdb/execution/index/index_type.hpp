@@ -1,18 +1,26 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp
+// duckdb/execution/index/index_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/parser/parsed_data/create_index_type_info.hpp"
-#include "duckdb/storage/index.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
+
+class Index;
+enum class IndexConstraintType : uint8_t;
+class Expression;
+class TableIOManager;
+class AttachedDatabase;
+struct IndexStorageInfo;
 
 typedef unique_ptr<Index> (*index_create_function_t)(const string &name,
                                                      const IndexConstraintType index_constraint_type,
@@ -20,18 +28,12 @@ typedef unique_ptr<Index> (*index_create_function_t)(const string &name,
                                                      const vector<unique_ptr<Expression>> &unbound_expressions,
                                                      TableIOManager &table_io_manager, AttachedDatabase &db,
                                                      const IndexStorageInfo &storage_info);
-
-//! An catalog entry for an index "type"
-class IndexTypeCatalogEntry : public StandardEntry {
+//! A index "type"
+class IndexType {
 public:
-	static constexpr const CatalogType Type = CatalogType::INDEX_TYPE_ENTRY;
-	static constexpr const char *Name = "index type";
+	// The name of the index type
+	string name;
 
-public:
-	//! Create an IndexCatalogEntry
-	IndexTypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexTypeInfo &info);
-
-public:
 	// Callbacks
 	index_create_function_t create_instance;
 };

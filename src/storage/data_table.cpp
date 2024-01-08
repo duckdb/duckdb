@@ -24,7 +24,6 @@
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 
 namespace duckdb {
 

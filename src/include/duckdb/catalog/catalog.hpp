@@ -31,7 +31,6 @@ struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
 struct CreateIndexInfo;
-struct CreateIndexTypeInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
@@ -153,11 +152,6 @@ public:
 	//! Creates an index in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info);
-	//! Creates an index type entry in the catalog
-	DUCKDB_API optional_ptr<CatalogEntry> CreateIndexType(CatalogTransaction transaction, CreateIndexTypeInfo &info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateIndexType(ClientContext &context, CreateIndexTypeInfo &info);
-	DUCKDB_API optional_ptr<CatalogEntry> CreateIndexType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                                      CreateIndexTypeInfo &info);
 
 	//! Creates a table in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,

@@ -36,8 +36,6 @@ private:
 	CatalogSet collations;
 	//! The catalog set holding the types
 	CatalogSet types;
-	//! The catalog set holding all the index types
-	CatalogSet index_types;
 
 public:
 	optional_ptr<CatalogEntry> AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
@@ -49,7 +47,6 @@ public:
 	optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info,
 	                                       TableCatalogEntry &table) override;
-	optional_ptr<CatalogEntry> CreateIndexType(CatalogTransaction transaction, CreateIndexTypeInfo &info) override;
 	optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) override;
 	optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) override;
 	optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,

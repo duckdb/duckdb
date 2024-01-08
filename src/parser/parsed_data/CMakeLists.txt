@@ -8,7 +8,6 @@ add_library_unity(
   attach_info.cpp
   create_info.cpp
   create_index_info.cpp
-  create_index_type_info.cpp
   create_aggregate_function_info.cpp
   create_collation_info.cpp
   create_copy_function_info.cpp

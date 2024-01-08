@@ -754,10 +754,6 @@ vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo() {
 }
 
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
-
-	// try to initialize unknown indexes
-	storage->info->InitializeIndexes(context);
-
 	TableStorageInfo result;
 	result.cardinality = storage->info->cardinality.load();
 	storage->info->indexes.Scan([&](Index &index) {

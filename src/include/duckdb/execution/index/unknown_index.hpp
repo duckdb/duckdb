@@ -17,7 +17,7 @@ namespace duckdb {
 // It is used as a placeholder for the index until the extension is loaded, at which point the extension will replace
 // all recognized unknown indexes with the correct index type.
 // Calling any function on an unknown index will throw a NotImplementedException
-class UnknownIndex : public Index {
+class UnknownIndex final : public Index {
 private:
 	CreateIndexInfo create_info;
 	IndexStorageInfo storage_info;

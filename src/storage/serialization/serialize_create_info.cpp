@@ -13,7 +13,6 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
-#include "duckdb/parser/parsed_data/create_index_type_info.hpp"
 
 namespace duckdb {
 
@@ -40,9 +39,6 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	switch (type) {
 	case CatalogType::INDEX_ENTRY:
 		result = CreateIndexInfo::Deserialize(deserializer);
-		break;
-	case CatalogType::INDEX_TYPE_ENTRY:
-		result = CreateIndexTypeInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::MACRO_ENTRY:
 		result = CreateMacroInfo::Deserialize(deserializer);
@@ -104,17 +100,6 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(207, "column_ids", result->column_ids);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", result->options);
 	deserializer.ReadPropertyWithDefault<string>(209, "index_type_name", result->index_type);
-	return std::move(result);
-}
-
-void CreateIndexTypeInfo::Serialize(Serializer &serializer) const {
-	CreateInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "name", name);
-}
-
-unique_ptr<CreateInfo> CreateIndexTypeInfo::Deserialize(Deserializer &deserializer) {
-	auto name = deserializer.ReadPropertyWithDefault<string>(200, "name");
-	auto result = duckdb::unique_ptr<CreateIndexTypeInfo>(new CreateIndexTypeInfo(std::move(name)));
 	return std::move(result);
 }
 

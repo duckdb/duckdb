@@ -43,9 +43,4 @@ string SchemaCatalogEntry::ToSQL() const {
 	return create_schema_info->ToString();
 }
 
-optional_ptr<CatalogEntry> SchemaCatalogEntry::CreateIndexType(CatalogTransaction transaction,
-                                                               CreateIndexTypeInfo &info) {
-	throw NotImplementedException("Schema does not support creating index types!");
-}
-
 } // namespace duckdb

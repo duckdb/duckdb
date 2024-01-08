@@ -17,7 +17,6 @@
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/parser/parsed_data/create_index_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -285,24 +284,6 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIn
 	auto &schema = GetSchema(context, info.schema);
 	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table);
 	return schema.CreateIndex(context, info, table);
-}
-
-//===--------------------------------------------------------------------===//
-// Index Type
-//===--------------------------------------------------------------------===//
-
-optional_ptr<CatalogEntry> Catalog::CreateIndexType(CatalogTransaction transaction, CreateIndexTypeInfo &info) {
-	auto &schema = GetSchema(transaction, info.schema);
-	return CreateIndexType(transaction, schema, info);
-}
-
-optional_ptr<CatalogEntry> Catalog::CreateIndexType(ClientContext &context, CreateIndexTypeInfo &info) {
-	return CreateIndexType(GetCatalogTransaction(context), info);
-}
-
-optional_ptr<CatalogEntry> Catalog::CreateIndexType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                                    CreateIndexTypeInfo &info) {
-	return schema.CreateIndexType(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//

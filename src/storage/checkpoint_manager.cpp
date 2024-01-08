@@ -8,7 +8,6 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -471,7 +470,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
 
-	// The ART index type is always present in the default catalog, so its never unknown
+	// This is executed before any extensions can be loaded, which is why we must treat any index type that is not
+	// built-in (ART) as unknown
 	if (info.index_type == ART::TYPE_NAME) {
 		data_table.info->indexes.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
 		                                                 TableIOManager::Get(data_table), unbound_expressions,

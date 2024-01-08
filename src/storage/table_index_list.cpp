@@ -2,8 +2,8 @@
 
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/catalog/catalog_entry/index_type_catalog_entry.hpp"
 #include "duckdb/execution/index/unknown_index.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 
 namespace duckdb {
@@ -58,13 +58,11 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 	for (auto &index : indexes) {
 		if (index->IsUnknown()) {
 			auto &unknown_index = index->Cast<UnknownIndex>();
-			auto &index_type = unknown_index.GetIndexType();
+			auto &index_type_name = unknown_index.GetIndexType();
 
 			// Do we know the type of this index now?
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			auto index_type_entry = catalog.GetEntry<IndexTypeCatalogEntry>(context, DEFAULT_SCHEMA, index_type,
-			                                                                OnEntryNotFound::RETURN_NULL);
-			if (!index_type_entry) {
+			auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
+			if (!index_type) {
 				continue;
 			}
 
@@ -72,7 +70,7 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 			auto &create_info = unknown_index.GetCreateInfo();
 			auto &storage_info = unknown_index.GetStorageInfo();
 
-			auto index_instance = index_type_entry->create_instance(
+			auto index_instance = index_type->create_instance(
 			    create_info.index_name, create_info.constraint_type, create_info.column_ids,
 			    unknown_index.unbound_expressions, *table_info.table_io_manager, table_info.db, storage_info);
 
