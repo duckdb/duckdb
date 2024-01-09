@@ -119,7 +119,7 @@ void CSVSniffer::DetectHeader() {
 		}
 	}
 	bool has_header;
-	if (!sniffer_state_machine.dialect_options.header.IsSetByUser()) {
+	if (!sniffer_state_machine.options.dialect_options.header.IsSetByUser()) {
 		has_header = !first_row_consistent || first_row_nulls;
 	} else {
 		has_header = sniffer_state_machine.options.dialect_options.header.GetValue();
