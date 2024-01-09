@@ -36,6 +36,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::DATE;
 	case DUCKDB_TYPE_TIME:
 		return LogicalTypeId::TIME;
+	case DUCKDB_TYPE_TIME_TZ:
+		return LogicalTypeId::TIME_TZ;
 	case DUCKDB_TYPE_VARCHAR:
 		return LogicalTypeId::VARCHAR;
 	case DUCKDB_TYPE_BLOB:
@@ -96,8 +98,9 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return DUCKDB_TYPE_TIME;
+	case LogicalTypeId::TIME_TZ:
+		return DUCKDB_TYPE_TIME_TZ;
 	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
 	case LogicalTypeId::BLOB:

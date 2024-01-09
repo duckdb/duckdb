@@ -413,6 +413,34 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<string>(0, 0) == "-123.45");
 }
 
+TEST_CASE("decompose timetz with duckdb_time_tz_extract", "[capi]") {
+	CAPITester tester;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto res = tester.Query("SELECT TIMETZ '11:30:00.123456-02:00'");
+	REQUIRE(res->success);
+
+	auto chunk = res->FetchChunk(0);
+
+	REQUIRE(chunk->ColumnCount() == 1);
+	REQUIRE(res->ColumnType(0) == DUCKDB_TYPE_TIME_TZ);
+
+	auto data = (uint64_t *)chunk->GetData(0);
+
+	duckdb_time time;
+	int32_t offset;
+	duckdb_time_tz_extract(data[0], &time.micros, &offset);
+
+	auto val = duckdb_from_time(time);
+	REQUIRE(val.hour == 11);
+	REQUIRE(val.min == 30);
+	REQUIRE(val.sec == 0);
+	REQUIRE(val.micros == 123456);
+
+	REQUIRE(offset == 7200);
+}
+
 TEST_CASE("Test errors in C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;

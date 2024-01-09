@@ -128,6 +128,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_UNION,
 	// duckdb_bit
 	DUCKDB_TYPE_BIT,
+	// uint64_t (40 bits for int64_t micros, and 24 bits for int32_t offset)
+	DUCKDB_TYPE_TIME_TZ,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01
@@ -902,6 +904,17 @@ Decompose a `duckdb_time` object into hour, minute, second and microsecond (stor
 * returns: The `duckdb_time_struct` with the decomposed elements.
 */
 DUCKDB_API duckdb_time_struct duckdb_from_time(duckdb_time time);
+
+/*!
+Decompose a TIME_TZ objects into micros and a timezone offset.
+
+Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
+
+* micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+* out_micros: The microsecond component of the time.
+* out_offset: The timezone offset component of the time.
+*/
+DUCKDB_API void duckdb_time_tz_extract(uint64_t micros, int64_t *out_micros, int32_t *out_offset);
 
 /*!
 Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).
