@@ -92,7 +92,7 @@ public:
 	//! In case the file has a size < 32MB, we will use this size instead
 	//! This is to avoid mallocing a lot of memory for a small file
 	//! And if it's a compressed file we can't use the actual size of the file
-	static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 10000000; // 10MB
+	static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 8000000; // 8MB
 	//! If this is the last buffer of the CSV File
 	bool last_buffer = false;
 

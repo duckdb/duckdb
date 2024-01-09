@@ -87,7 +87,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
-				if (states.EmptyLine() || states.NewRow()) {
+				if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow()) {
 					return;
 				}
 				if (states.IsCurrentDelimiter()) {

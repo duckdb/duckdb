@@ -421,7 +421,7 @@ void StringValueScanner::MoveToNextBuffer() {
 		if (!cur_buffer_handle) {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
-			if (states.EmptyLine() || states.NewRow()) {
+			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow()) {
 				return;
 			} else if (states.IsCurrentDelimiter()) {
 				// we add the value
@@ -442,8 +442,9 @@ void StringValueScanner::MoveToNextBuffer() {
 	}
 }
 
-void StringValueScanner::SkipBOM(){
-	if (cur_buffer_handle->actual_size >= 3 && result.buffer_ptr[0] == '\xEF' && result.buffer_ptr[1] == '\xBB' && result.buffer_ptr[2] == '\xBF'){
+void StringValueScanner::SkipBOM() {
+	if (cur_buffer_handle->actual_size >= 3 && result.buffer_ptr[0] == '\xEF' && result.buffer_ptr[1] == '\xBB' &&
+	    result.buffer_ptr[2] == '\xBF') {
 		iterator.pos.buffer_pos = 3;
 	}
 }
