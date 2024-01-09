@@ -7,10 +7,14 @@ PRAGMA enable_verification
 
 require windows
 
+# all separators option
 query T
-SELECT parse_path('C:\Users\User\Documents\File.csv', 'system');
+SELECT * FROM (VALUES (parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'system')), (parse_path('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_path('/home/user/documents/file.csv', 'forward_slash')), (parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i)
 ----
-[C:, Users, User, Documents, File.csv]
+[C:, Users, User, Documents, File.csv/File2.csv]
+[home, user, documents, file.csv, file2.csv]
+[, home, user, documents, file.csv]
+[C:, Users, User, Documents, File.csv/File2.csv]
 
 # default separator
 query T
@@ -33,3 +37,29 @@ statement error
 SELECT parse_path();
 ----
 
+
+# test parse_dirname
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_dirname('C:\Users\User\Documents\File.csv/File2.csv', 'system')), (parse_dirname('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_dirname('home/user/documents/file.csv', 'forward_slash')), (parse_dirname('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i)
+----
+C:
+home
+home
+C:
+
+# default separator
+query T
+SELECT parse_dirname('home/user/documents/file.csv\file2.csv');
+----
+home
+
+query T
+SELECT parse_dirname('');
+----
+(empty)
+
+# test incorrect usage
+statement error
+SELECT parse_dirname('file.csv');
+----

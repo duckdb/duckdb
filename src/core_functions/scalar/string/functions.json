@@ -179,6 +179,13 @@
         "example": "md5_number_upper('123')",
         "type": "scalar_function",
         "struct": "MD5NumberUpperFun"
+    },{
+        "name": "parse_dirname",
+        "parameters": "string,separator",
+        "description": "Returns the top-level directory name from the given path. seperator_option: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_dirname('/home/user/documents/file.csv', 'system');",
+        "type": "scalar_function_set",
+        "struct": "ParseDirnameFun"
     },
     {
         "name": "parse_path",

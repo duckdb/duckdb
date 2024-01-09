@@ -7,24 +7,13 @@ PRAGMA enable_verification
 
 require notwindows
 
+# all separators option
 query T
-SELECT parse_path('home/user/documents/file.csv', 'system');
+SELECT * FROM (VALUES (parse_path('home/user/documents/file.csv', 'system')), (parse_path('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_path('/home/user/documents/file.csv', 'forward_slash')), (parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i)
 ----
 [home, user, documents, file.csv]
-
-query T
-SELECT parse_path('home/user/documents/file.csv\file2.csv', 'both_slash');
-----
 [home, user, documents, file.csv, file2.csv]
-
-query T
-SELECT parse_path('/home/user/documents/file.csv', 'forward_slash');
-----
 [, home, user, documents, file.csv]
-
-query T
-SELECT parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'backslash');
-----
 [C:, Users, User, Documents, File.csv/File2.csv]
 
 # default separator
@@ -87,3 +76,73 @@ statement error
 SELECT parse_path();
 ----
 
+
+# test parse_dirname
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_dirname('home/user/documents/file.csv', 'system')), (parse_dirname('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_dirname('home/user/documents/file.csv', 'forward_slash')), (parse_dirname('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i)
+----
+home
+home
+home
+C:
+
+# default separator
+query T
+SELECT parse_dirname('home/user/documents/file.csv\file2.csv');
+----
+home
+
+# no seperator in path
+query T
+SELECT parse_dirname('file.csv', 'backslash');
+----
+file.csv
+
+# empty value before the separator
+query T
+SELECT parse_dirname('/home/user/documents/file.csv', 'forward_slash');
+----
+(empty)
+
+# special characters
+query T
+SELECT parse_dirname('wh@t3ve%\42/12 ch,ars.sth', 'both_slash');
+----
+wh@t3ve%
+
+query T
+SELECT parse_dirname('home/user/documents/file.csv', NULL);
+----
+home
+
+query T
+SELECT parse_dirname(NULL, NULL);
+----
+NULL
+
+query T
+SELECT parse_dirname(NULL, '');
+----
+NULL
+
+query T
+SELECT parse_dirname('');
+----
+(empty)
+
+query T
+SELECT parse_dirname('', '');
+----
+(empty)
+
+# custom seperator
+query T
+SELECT parse_dirname('home/user/documents/file.csv','@');
+----
+home
+
+# test incorrect usage
+statement error
+SELECT parse_dirname();
+----
