@@ -1430,6 +1430,32 @@ LogicalType LogicalType::ARRAY(const LogicalType &child) {
 }
 
 //===--------------------------------------------------------------------===//
+// Any Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::ANY_PARAMS(LogicalType target, idx_t cast_score) {
+	auto type_info = make_shared<AnyTypeInfo>(std::move(target), cast_score);
+	return LogicalType(LogicalTypeId::ANY, std::move(type_info));
+}
+
+LogicalType AnyType::GetTargetType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ANY);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return LogicalType::ANY;
+	}
+	return info->Cast<AnyTypeInfo>().target_type;
+}
+
+idx_t AnyType::GetCastScore(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ANY);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return 5;
+	}
+	return info->Cast<AnyTypeInfo>().cast_score;
+}
+
+//===--------------------------------------------------------------------===//
 // Logical Type
 //===--------------------------------------------------------------------===//
 

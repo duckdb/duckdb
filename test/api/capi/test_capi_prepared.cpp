@@ -436,7 +436,7 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 
 	SECTION("streaming extracted statements") {
 		duckdb_extracted_statements stmts;
-		auto n_statements = duckdb_extract_statements(tester.connection, "Select 1; Select 2;", &stmts);
+		auto n_statements = duckdb_extract_statements(tester.connection, "Select 1::INT; Select 2::INT;", &stmts);
 		REQUIRE(n_statements == 2);
 
 		for (idx_t i = 0; i < n_statements; i++) {

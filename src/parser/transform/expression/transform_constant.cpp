@@ -9,12 +9,35 @@
 
 namespace duckdb {
 
+// FIXME todo
+//Value TransformToSmallestInteger(int64_t val) {
+//	// for small values we prefer UNSIGNED numbers
+//	if (val >= int64_t(NumericLimits<uint8_t>::Minimum()) && val <= int64_t(NumericLimits<uint8_t>::Maximum())) {
+//		return Value::UTINYINT(uint8_t(val));
+//	}
+//	if (val >= int64_t(NumericLimits<int8_t>::Minimum()) && val <= int64_t(NumericLimits<int8_t>::Maximum())) {
+//		return Value::TINYINT(int8_t(val));
+//	}
+//	if (val >= int64_t(NumericLimits<uint16_t>::Minimum()) && val <= int64_t(NumericLimits<uint16_t>::Maximum())) {
+//		return Value::USMALLINT(uint16_t(val));
+//	}
+//	if (val >= int64_t(NumericLimits<int16_t>::Minimum()) && val <= int64_t(NumericLimits<int16_t>::Maximum())) {
+//		return Value::SMALLINT(int16_t(val));
+//	}
+//	// for larger values we prefer SIGNED numbers
+//	if (val >= int64_t(NumericLimits<int32_t>::Minimum()) && val <= int64_t(NumericLimits<int32_t>::Maximum())) {
+//		return Value::INTEGER(int32_t(val));
+//	}
+//	if (val >= int64_t(NumericLimits<uint32_t>::Minimum()) && val <= int64_t(NumericLimits<uint32_t>::Maximum())) {
+//		return Value::UINTEGER(uint32_t(val));
+//	}
+//	return Value::BIGINT(val);
+//}
 
 unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PGValue val) {
 	switch (val.type) {
 	case duckdb_libpgquery::T_PGInteger:
-		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
-		return make_uniq<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
+		return make_uniq<ConstantExpression>(Value::INTEGER(int32_t(val.val.ival)));
 	case duckdb_libpgquery::T_PGBitString: // FIXME: this should actually convert to BLOB
 	case duckdb_libpgquery::T_PGString:
 		return make_uniq<ConstantExpression>(Value(string(val.val.str)));

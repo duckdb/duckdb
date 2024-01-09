@@ -330,4 +330,19 @@ bool ArrayTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	return child_type == other.child_type && size == other.size;
 }
 
+//===--------------------------------------------------------------------===//
+// Any Type Info
+//===--------------------------------------------------------------------===//
+AnyTypeInfo::AnyTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::ANY_TYPE_INFO) {
+}
+
+AnyTypeInfo::AnyTypeInfo(LogicalType target_type_p, idx_t cast_score_p)
+		: ExtraTypeInfo(ExtraTypeInfoType::ANY_TYPE_INFO), target_type(std::move(target_type_p)), cast_score(cast_score_p) {
+}
+
+bool AnyTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<AnyTypeInfo>();
+	return target_type == other.target_type && cast_score == other.cast_score;
+}
+
 } // namespace duckdb

@@ -22,6 +22,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		result = AggregateStateTypeInfo::Deserialize(deserializer);
 		break;
+	case ExtraTypeInfoType::ANY_TYPE_INFO:
+		result = AnyTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
 		result = ArrayTypeInfo::Deserialize(deserializer);
 		break;
@@ -67,6 +70,19 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
+	return std::move(result);
+}
+
+void AnyTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WriteProperty<LogicalType>(200, "target_type", target_type);
+	serializer.WritePropertyWithDefault<idx_t>(201, "cast_score", cast_score);
+}
+
+shared_ptr<ExtraTypeInfo> AnyTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<AnyTypeInfo>(new AnyTypeInfo());
+	deserializer.ReadProperty<LogicalType>(200, "target_type", result->target_type);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "cast_score", result->cast_score);
 	return std::move(result);
 }
 

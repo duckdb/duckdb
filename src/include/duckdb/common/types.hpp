@@ -374,6 +374,8 @@ public:
 	// an array of unknown size (only used for binding)
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);        // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
+	// ANY but with special rules (default is LogicalType::ANY, 5)
+	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
@@ -454,6 +456,11 @@ struct ArrayType {
 struct AggregateStateType {
 	DUCKDB_API static const string GetTypeName(const LogicalType &type);
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
+};
+
+struct AnyType {
+	DUCKDB_API static LogicalType GetTargetType(const LogicalType &type);
+	DUCKDB_API static idx_t GetCastScore(const LogicalType &type);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.

@@ -32,7 +32,7 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 		return 160;
 	case LogicalTypeId::ANY:
-		return 5;
+		return int64_t(AnyType::GetCastScore(type));
 	default:
 		return 110;
 	}
