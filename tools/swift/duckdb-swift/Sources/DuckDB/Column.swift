@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -201,6 +201,19 @@ public extension Column {
   /// - Parameter type: the native Swift type to cast to
   /// - Returns: a typed DuckDB result set ``Column``
   func cast(to type: IntHuge.Type) -> Column<IntHuge> {
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  /// Casts the column to the given type
+  ///
+  /// A column cast always succeeds but if there is a type-mismatch between
+  /// the given type and the column's underlying database type, returned
+  /// elements will always be equal to `nil`.
+  ///
+  /// - Parameter type: the native Swift type to cast to
+  /// - Returns: a typed DuckDB result set ``Column``
+  func cast(to type: UIntHuge.Type) -> Column<UIntHuge> {
     let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }

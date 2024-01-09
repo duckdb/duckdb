@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import ctypes
 import logging
 import os
 import sys
 import platform
-import multiprocessing.pool
+import sys
+import traceback
+from functools import lru_cache
 from glob import glob
+from os.path import exists
+from typing import TextIO
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -42,14 +47,68 @@ class CompilerLauncherMixin:
         compiler_launcher = os.getenv("DISTUTILS_C_COMPILER_LAUNCHER")
         if compiler_launcher:
 
-            def spawn_with_compiler_launcher(cmd):
+            def spawn_with_compiler_launcher(cmd, **kwargs):
+                if platform.system() == 'Windows' and len(' '.join(cmd)) > 32766:
+                    raise Exception("command too long: " + ' '.join(cmd))
+
                 exclude_programs = ("link.exe",)
                 if not cmd[0].endswith(exclude_programs):
                     cmd = [compiler_launcher] + cmd
-                return original_spawn(cmd)
+                try:
+                    return original_spawn(cmd, **kwargs)
+                except Exception:
+                    traceback.print_exc()
+                    raise
 
             original_spawn = self.compiler.spawn
             self.compiler.spawn = spawn_with_compiler_launcher
+
+            # for some reason, the copy of distutils included with setuptools  (instead of the one that was previously
+            # part of the stdlib) pushes the link call over the maximum command line length on windows.
+            # We can fix this by using special windows short paths, of the form C:\Program ~1\...
+
+            def link_with_short_paths(
+                target_desc,
+                objects,
+                *args,
+                **kwargs,
+            ):
+                return original_link(target_desc, [get_short_path(x) for x in objects], *args, **kwargs)
+
+            original_link = self.compiler.link
+            self.compiler.link = link_with_short_paths
+
+
+def get_short_path(long_name: str) -> str:
+    """
+    Gets the short path name of a given long path.
+    http://stackoverflow.com/a/23598461/200291
+    """
+
+    @lru_cache()
+    def get_short_path_name_w():
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        _GetShortPathNameW = kernel32.GetShortPathNameW
+        _GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        _GetShortPathNameW.restype = wintypes.DWORD
+        return _GetShortPathNameW
+
+    if platform.system() != 'Windows':
+        return long_name
+
+    assert exists(long_name), long_name
+    gspn = get_short_path_name_w()
+
+    output_buf_size = 0
+    while True:
+        output_buf = ctypes.create_unicode_buffer(output_buf_size)
+        needed = gspn(long_name, output_buf, output_buf_size)
+        if output_buf_size >= needed:
+            return output_buf.value or long_name
+        else:
+            output_buf_size = needed
 
 
 class build_ext(CompilerLauncherMixin, _build_ext):
@@ -63,42 +122,15 @@ extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
-if platform.system() == 'Linux' and platform.architecture()[0] == '64bit' and not hasattr(sys, 'getandroidapilevel'):
+is_android = hasattr(sys, 'getandroidapilevel')
+use_jemalloc = not is_android and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
+
+if use_jemalloc:
     extensions.append('jemalloc')
 
 unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
     unity_build = 16
-
-
-def parallel_cpp_compile(
-    self,
-    sources,
-    output_dir=None,
-    macros=None,
-    include_dirs=None,
-    debug=0,
-    extra_preargs=None,
-    extra_postargs=None,
-    depends=None,
-):
-    # Copied from distutils.ccompiler.CCompiler
-    macros, objects, extra_postargs, pp_opts, build = self._setup_compile(
-        output_dir, macros, include_dirs, sources, depends, extra_postargs
-    )
-
-    cc_args = self._get_cc_args(pp_opts, debug, extra_preargs)
-
-    def _single_compile(obj):
-        try:
-            src, ext = build[obj]
-        except KeyError:
-            return
-        self._compile(obj, src, ext, cc_args, extra_postargs, pp_opts)
-
-    list(multiprocessing.pool.ThreadPool(multiprocessing.cpu_count()).imap(_single_compile, objects))
-    return objects
-
 
 # speed up compilation with: -j = cpu_number() on non Windows machines
 if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
@@ -151,22 +183,26 @@ for i in range(len(sys.argv)):
     else:
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
-toolchain_args.append('-DDUCKDB_PYTHON_LIB_NAME=' + lib_name)
+define_macros = [('DUCKDB_PYTHON_LIB_NAME', lib_name)]
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 if platform.system() == 'Windows':
-    toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY', '-DWIN32'])
+    define_macros.extend([('DUCKDB_BUILD_LIBRARY', None), ('WIN32', None)])
 
 if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
     extensions += ['httpfs']
 
 for ext in extensions:
-    toolchain_args.extend(['-DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())])
+    define_macros.append(('DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()), None))
 
-toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
+define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
+
+linker_args = toolchain_args
+if platform.system() == 'Windows':
+    linker_args.extend(['rstrtmgr.lib'])
 
 
 class get_pybind_include(object):
@@ -195,6 +231,15 @@ main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
 include_directories = [main_include_path, get_pybind_include(), get_pybind_include(user=True)]
 if 'BUILD_HTTPFS' in os.environ and 'OPENSSL_ROOT_DIR' in os.environ:
     include_directories += [os.path.join(os.environ['OPENSSL_ROOT_DIR'], 'include')]
+
+
+def exclude_extensions(f: TextIO):
+    files = [x for x in f.read().split('\n') if len(x) > 0]
+    if use_jemalloc:
+        return files
+    else:
+        return [x for x in files if 'jemalloc' not in x]
+
 
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
@@ -240,14 +285,10 @@ if len(existing_duckdb_dir) == 0:
         # if amalgamation does not exist, we are in a package distribution
         # read the include files, source list and include files from the supplied lists
         with open_utf8('sources.list', 'r') as f:
-            duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
-                duckdb_sources = [x for x in duckdb_sources if 'jemalloc' not in x]
+            duckdb_sources = exclude_extensions(f)
 
         with open_utf8('includes.list', 'r') as f:
-            duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
-            if hasattr(sys, 'getandroidapilevel'):
-                duckdb_includes = [x for x in duckdb_includes if 'jemalloc' not in x]
+            duckdb_includes = exclude_extensions(f)
 
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
@@ -257,9 +298,10 @@ if len(existing_duckdb_dir) == 0:
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libraries,
         language='c++',
+        define_macros=define_macros,
     )
 else:
     sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
@@ -277,21 +319,12 @@ else:
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
-        extra_link_args=toolchain_args,
+        extra_link_args=linker_args,
         libraries=libnames,
         library_dirs=library_dirs,
         language='c++',
+        define_macros=define_macros,
     )
-
-# Only include pytest-runner in setup_requires if we're invoking tests
-if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
-    setup_requires = ['pytest-runner']
-else:
-    setup_requires = []
-
-setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
-if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
-    setuptools_scm_conf['local_scheme'] = 'no-local-version'
 
 
 # data files need to be formatted as [(directory, [files...]), (directory2, [files...])]
@@ -328,10 +361,13 @@ packages = [
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
+    'duckdb-stubs.value',
+    'duckdb-stubs.value.constant',
     'adbc_driver_duckdb',
 ]
 
 spark_packages = [
+    'duckdb.experimental',
     'duckdb.experimental.spark',
     'duckdb.experimental.spark.sql',
     'duckdb.experimental.spark.errors',
@@ -352,8 +388,6 @@ setup(
     packages=packages,
     include_package_data=True,
     python_requires='>=3.7.0',
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
-    use_scm_version=setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers=[
         'Topic :: Database :: Database Engines/Servers',

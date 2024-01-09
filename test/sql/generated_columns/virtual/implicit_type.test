@@ -25,6 +25,7 @@ CREATE TABLE tbl (
     foo,
     bar GENERATED ALWAYS AS (foo+1)
 );
+----
 
 statement ok
 INSERT INTO test(foo) VALUES (1);

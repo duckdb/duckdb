@@ -64,7 +64,7 @@ SELECT i, list_contains(i,'aaaaaaaaaaaaaaaaaaaaaaaa') from STR_TEST;
 [aaaaaaaaaaaaaaaaaaaaaaaa]	1
 
 query TT
-SELECT i, list_contains(i,0) from STR_TEST;
+SELECT i, list_contains(i, '0') from STR_TEST;
 ----
 [a, b, c]	0
 [d, a, e]	0
@@ -118,14 +118,15 @@ SELECT list_contains([1.0,2.0,3.0],4)
 0
 
 
-query T
+statement error
 SELECT list_contains([1.0,2.0,3.0], 'a')
 ----
-0
+an explicit cast is required
 
 # Not a list as input
 statement error
 SELECT list_contains('a', 'a')
+----
 
 query T
 SELECT list_contains(NULL,NULL)
@@ -222,22 +223,26 @@ SELECT list_contains([NULL,7], 7)
 
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3])
+----
 
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3]])
+----
 
 statement error
 SELECT list_contains(1)
+----
 
 statement error
 SELECT list_contains(1,1)
+----
 
 statement ok
 PRAGMA debug_force_external=true
 
 loop i 0 2
 
-foreach type <integral> varchar
+foreach type <integral>
 
 # list tests
 statement ok

@@ -96,28 +96,37 @@ PRAGMA memory_limit='0.01 terabytes'
 # no unit or unknown units fail
 statement error
 PRAGMA memory_limit=100
+----
 
 statement error
 PRAGMA memory_limit='0.01BG'
+----
 
 statement error
 PRAGMA memory_limit='0.01BLA'
+----
 
 statement error
 PRAGMA memory_limit='0.01PP'
+----
 
 statement error
 PRAGMA memory_limit='0.01TEST'
+----
 
 # we can't invoke it like this either
 statement error
 PRAGMA memory_limit
+----
 
 statement error
 PRAGMA memory_limit()
+----
 
 statement error
 PRAGMA memory_limit(1, 2)
+----
 
 statement error
 PRAGMA memory_limit='blabla'
+----

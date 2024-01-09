@@ -1,6 +1,6 @@
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
@@ -85,7 +85,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 			} else {
 				// non-inlined string, need to allocate space for it
 				auto len = value.GetSize();
-				auto ptr = new char[len];
+				auto ptr = LAST ? new char[len] : char_ptr_cast(input_data.allocator.Allocate(len));
 				memcpy(ptr, value.GetData(), len);
 
 				state.value = string_t(ptr, len);
@@ -258,6 +258,8 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<uint64_t, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::HUGEINT:
 		return GetFirstAggregateTemplated<hugeint_t, LAST, SKIP_NULLS>(type);
+	case LogicalTypeId::UHUGEINT:
+		return GetFirstAggregateTemplated<uhugeint_t, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::FLOAT:
 		return GetFirstAggregateTemplated<float, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::DOUBLE:
@@ -266,8 +268,13 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<interval_t, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
-		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
-		                                                   FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
+		if (LAST) {
+			return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
+			                                                   FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
+		} else {
+			return AggregateFunction::UnaryAggregate<FirstState<string_t>, string_t, string_t,
+			                                         FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
+		}
 	case LogicalTypeId::DECIMAL: {
 		type.Verify();
 		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);

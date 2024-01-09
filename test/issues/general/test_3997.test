@@ -56,6 +56,7 @@ select x from x;
 
 statement error
 with y(y) as (select 2) delete from x using (select y) z(z) where x = z;
+----
 
 statement ok
 insert into x default values;

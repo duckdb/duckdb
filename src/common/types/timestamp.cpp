@@ -271,6 +271,18 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_t time, timestamp_t &result) 
 	return Timestamp::IsFinite(result);
 }
 
+bool Timestamp::TryFromDatetime(date_t date, dtime_tz_t timetz, timestamp_t &result) {
+	if (!TryFromDatetime(date, timetz.time(), result)) {
+		return false;
+	}
+	// Offset is in seconds
+	const auto offset = int64_t(timetz.offset() * Interval::MICROS_PER_SEC);
+	if (!TryAddOperator::Operation(result.value, -offset, result.value)) {
+		return false;
+	}
+	return Timestamp::IsFinite(result);
+}
+
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
 	timestamp_t result;
 	if (!TryFromDatetime(date, time, result)) {

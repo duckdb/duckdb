@@ -82,7 +82,7 @@ public:
 	//! Unpins the data
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData
-	vector<unique_ptr<TupleDataCollection>> &GetPartitions();
+	unsafe_vector<unique_ptr<TupleDataCollection>> &GetPartitions();
 	//! Get the data of this PartitionedTupleData as a single unpartitioned TupleDataCollection
 	unique_ptr<TupleDataCollection> GetUnpartitioned();
 	//! Get the count of this PartitionedTupleData
@@ -91,6 +91,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Get the number of partitions of this PartitionedTupleData
 	idx_t PartitionCount() const;
+	//! Get the count and size of the largest partition
+	void GetSizesAndCounts(vector<idx_t> &partition_sizes, vector<idx_t> &partition_counts) const;
 	//! Converts this PartitionedTupleData to a string representation
 	string ToString();
 	//! Prints the string representation of this PartitionedTupleData
@@ -169,7 +171,7 @@ protected:
 
 	mutex lock;
 	shared_ptr<PartitionTupleDataAllocators> allocators;
-	vector<unique_ptr<TupleDataCollection>> partitions;
+	unsafe_vector<unique_ptr<TupleDataCollection>> partitions;
 
 public:
 	template <class TARGET>
