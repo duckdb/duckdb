@@ -138,8 +138,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// start row.
 	bool rows_consistent = consistent_rows + (start_row - options.dialect_options.skip_rows.GetValue()) ==
 	                       sniffed_column_counts.Size() - options.dialect_options.skip_rows.GetValue();
-	//		bool rows_consistent =
-	//	    start_row + consistent_rows - options.dialect_options.skip_rows.GetValue() == sniffed_column_counts.Size();
 	// If there are more than one consistent row.
 	bool more_than_one_row = (consistent_rows > 1);
 

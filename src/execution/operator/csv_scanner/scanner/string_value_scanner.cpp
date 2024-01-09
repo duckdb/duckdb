@@ -333,7 +333,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 void StringValueScanner::Initialize() {
 	states.Initialize(CSVState::RECORD_SEPARATOR);
-	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding)) {
+	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding && !state_machine
+	                                 ->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
