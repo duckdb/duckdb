@@ -359,6 +359,7 @@ void StringValueScanner::Initialize() {
 }
 
 void StringValueScanner::Process() {
+	result.validity_mask->SetAllValid(result.vector_size);
 	idx_t to_pos;
 	if (iterator.IsSet()) {
 		to_pos = iterator.GetEndPos();
