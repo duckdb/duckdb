@@ -101,7 +101,7 @@ private:
 
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
-	void MoveToNextBuffer();
+	bool MoveToNextBuffer();
 
 	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
 	void SkipBOM();

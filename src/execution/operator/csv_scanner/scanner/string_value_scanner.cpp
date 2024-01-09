@@ -121,7 +121,11 @@ inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 			vector_ptr[result_position++] = value;
 		}
 	}
-	last_position = buffer_pos + 1;
+	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+		last_position = buffer_pos + 2;
+	} else {
+		last_position = buffer_pos + 1;
+	}
 }
 
 void StringValueResult::Print() {
@@ -406,7 +410,12 @@ void StringValueScanner::ProcessOverbufferValue() {
 		result.vector_ptr[result.result_position - 1] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
 	} else {
-		auto string_length = first_buffer_length + iterator.pos.buffer_pos - 2;
+		idx_t string_length;
+		if (states.IsCurrentNewRow() || states.IsCurrentDelimiter()) {
+			string_length = first_buffer_length + iterator.pos.buffer_pos - 1;
+		} else {
+			string_length = first_buffer_length + iterator.pos.buffer_pos - 2;
+		}
 		auto &result_str = result.vector_ptr[result.result_position - 1];
 		result_str = StringVector::EmptyString(*result.vector, string_length);
 		// Copy the first buffer
@@ -419,7 +428,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	}
 }
 
-void StringValueScanner::MoveToNextBuffer() {
+bool StringValueScanner::MoveToNextBuffer() {
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 		previous_buffer_handle = std::move(cur_buffer_handle);
 		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
@@ -427,7 +436,7 @@ void StringValueScanner::MoveToNextBuffer() {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow()) {
-				return;
+				return false;
 			} else if (states.IsCurrentDelimiter()) {
 				lines_read++;
 				// we add the value
@@ -439,14 +448,16 @@ void StringValueScanner::MoveToNextBuffer() {
 				result.AddRowInternal(previous_buffer_handle->actual_size);
 			}
 
-			return;
+			return false;
 		}
 		iterator.pos.buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
 		ProcessOverbufferValue();
 		result.buffer_ptr = buffer_handle_ptr;
+		return true;
 	}
+	return false;
 }
 
 void StringValueScanner::SkipBOM() {
@@ -542,7 +553,11 @@ void StringValueScanner::FinalizeChunkProcess() {
 	if (iterator.IsSet()) {
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
-		MoveToNextBuffer();
+		auto moved = MoveToNextBuffer();
+		if (moved && result.result_position % result.number_of_columns == 0) {
+			// nothing more to process
+			return;
+		}
 		if (cur_buffer_handle) {
 			ProcessExtraRow();
 		}
