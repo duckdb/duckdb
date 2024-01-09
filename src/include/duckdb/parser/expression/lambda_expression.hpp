@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -24,18 +25,23 @@ public:
 public:
 	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 
-	// we need the context to determine if this is a list of column references or an expression (for JSON)
+	//! The LHS of a scalar function implementing a lambda function, or the JSON -> operator. We need the context
+	//! to determine if the LHS is a list of column references (lambda parameters) or an expression (for JSON)
 	unique_ptr<ParsedExpression> lhs;
-
-	vector<unique_ptr<ParsedExpression>> params;
+	//! The lambda or JSON expression (RHS)
 	unique_ptr<ParsedExpression> expr;
 
 public:
-	string ToString() const override;
+	//! Returns a vector of the column references in the LHS expression
+	vector<reference<ParsedExpression>> ExtractColumnRefExpressions(string &error_message);
+	//! TODO
+	static string InvalidParametersErrorMessage();
+	//! TODO
+	static bool IsLambdaParameter(const vector<unordered_set<string>> &lambda_params, const string &column_name);
 
+	string ToString() const override;
 	static bool Equal(const LambdaExpression &a, const LambdaExpression &b);
 	hash_t Hash() const override;
-
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(Serializer &serializer) const override;

@@ -82,15 +82,26 @@ public:
 
 	string Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
-	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
-	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &colref);
+	//! Returns the STRUCT_EXTRACT operator expression
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
+	//! Returns a struct_pack function expression
+	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
+
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
+	//! Returns a qualified column reference from a column name
 	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
-	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
-
-	// Bind table names to ColumnRefExpressions
-	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool within_function_expression = false);
+	//! Returns a qualified column reference from a column reference with column_names.size() > 2
+	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, string &error_message);
+	//! Returns a qualified column reference from a column reference
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, string &error_message);
+	//! Skips qualifying the column references in the LHS of a lambda expression
+	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
+	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
+	//! within_function_expression state from outer expressions, or sets it
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params,
+	                        const bool within_function_expression = false);
+	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
 
 	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
@@ -116,11 +127,8 @@ public:
 
 	//! Recursively replace macro parameters with the provided input parameters
 	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
-	//! Special-handling for lambda expressions in macros: lambda parameters have priority in scoping
-	void ReplaceMacroParamInLambda(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
-	//! Detects if a function contains a lambda expression, and calls ReplaceMacroParamInLambda on the RHS for
-	//! special-handling of lambda parameters in macros
-	bool MacroLambdaParamReplacer(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
+	//! Performs special-handling on the children of a function expression, if they are lambda expressions
+	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
@@ -182,9 +190,12 @@ protected:
 	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
 
-	//! Constant aliases for the UNNEST function
-	const string UNNEST_FUNCTION_ALIAS = "unnest";
-	const string UNLIST_FUNCTION_ALIAS = "unlist";
+	//! Returns true if the function name is an alias for the UNNEST function
+	static bool IsUnnestFunction(const string &function_name);
+	//! Return true, if the function contains a lambda expression and is not the '->>' operator
+	static bool IsLambdaFunction(const FunctionExpression &function);
+	//! Returns the bind result of binding a lambda or JSON function
+	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);
 };
 
 } // namespace duckdb

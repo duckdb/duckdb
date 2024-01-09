@@ -11,6 +11,12 @@ LambdaRefExpression::LambdaRefExpression(idx_t lambda_idx, string column_name_p)
 	alias = column_name;
 }
 
+LambdaRefExpression::LambdaRefExpression(string column_name_p)
+    : ParsedExpression(ExpressionType::LAMBDA_REF, ExpressionClass::LAMBDA_REF), lambda_idx(DConstants::INVALID_INDEX),
+      column_name(std::move(column_name_p)) {
+	alias = column_name;
+}
+
 bool LambdaRefExpression::IsScalar() const {
 	throw InternalException("lambda reference expressions are transient, IsScalar should never be called");
 }

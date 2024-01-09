@@ -18,9 +18,11 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 
 	// try binding as a lambda parameter
 	auto &col_ref = expr.Cast<ColumnRefExpression>();
-	auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.ToString());
-	if (lambda_ref) {
-		return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
+	if (!col_ref.IsQualified()) {
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
+		if (lambda_ref) {
+			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
+		}
 	}
 
 	auto value_function = ExpressionBinder::GetSQLValueFunction(expr.GetColumnName());

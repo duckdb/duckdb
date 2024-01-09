@@ -24,6 +24,9 @@ public:
 	//! Constructs a LambdaRefExpression from a lambda_idx and a column_name. We do not specify a table name,
 	//! because we use dummy tables to bind lambda parameters
 	LambdaRefExpression(idx_t lambda_idx, string column_name_p);
+	//! Constructs a LambdaRefExpression from a column_name. We do not specify a table name,
+	//! because we use dummy tables to bind lambda parameters
+	LambdaRefExpression(string column_name_p);
 
 	//! The index of the lambda parameter in the lambda_bindings vector
 	idx_t lambda_idx;

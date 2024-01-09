@@ -42,12 +42,12 @@ SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test;
 ----
 [1, 2]	[2]
 
-# we'll treat 'a.x' as the name of the lambda parameter
+# don't allow qualified lambda parameters (LHS parameters)
 
-query I
+statement error
 SELECT list_apply(i, a.x -> a.x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
 ----
-[2, 3, 4]
+Invalid lambda parameters
 
 statement ok
 CREATE TABLE qualified_tbl (x INTEGER[]);
@@ -56,9 +56,14 @@ statement ok
 INSERT INTO qualified_tbl VALUES ([1, 2]);
 
 query I
+SELECT list_transform(qualified_tbl.x, x -> (qualified_tbl.x)[1] + 1 + x) FROM qualified_tbl;
+----
+[3, 4]
+
+statement error
 SELECT list_transform(qualified_tbl.x, qualified_tbl.x -> qualified_tbl.x + 1) FROM qualified_tbl;
 ----
-[2, 3]
+Invalid lambda parameters
 
 # previously ambiguous lambda parameters
 # issue #9970
@@ -132,4 +137,30 @@ query I
 SELECT list_intersect(list_intersect([1, 2, 3, 4], [4, 5, 6, 7]), list_intersect([4, 5, 6, 7], [1, 2, 3, 4]));
 ----
 [4]
+
+# more tests for qualifying column names
+
+statement ok
+CREATE TABLE tbl_qualified AS SELECT 42 AS x;
+
+query II
+SELECT x, list_transform([1], x -> x) FROM tbl_qualified;
+----
+42	[1]
+
+statement error
+SELECT list_transform([1,2,3], sqrt(xxx.z) -> xxx.z + 1) AS l ;
+----
+Invalid lambda parameters
+
+query I
+SELECT list_transform([1, 2, 3], "x.y" -> "x.y" + x.y) AS l FROM (VALUES (42), (84)) x(y);
+----
+[43, 44, 45]
+[85, 86, 87]
+
+statement error
+SELECT list_reduce([1, 2, 3, 4], x *++++++++* y -> x - y) AS l;
+----
+Invalid lambda parameters
 

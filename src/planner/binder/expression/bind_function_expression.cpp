@@ -16,6 +16,24 @@
 
 namespace duckdb {
 
+BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func) {
+
+	auto lambda_bind_result = BindLambdaFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	if (!lambda_bind_result.HasError()) {
+		return lambda_bind_result;
+	}
+
+	auto json_bind_result = BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
+	if (!json_bind_result.HasError()) {
+		return json_bind_result;
+	}
+
+	return BindResult("failed to bind function, either: " + lambda_bind_result.error +
+	                  "\n"
+	                  " or: " +
+	                  json_bind_result.error);
+}
+
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	// lookup the function in the catalog
@@ -72,36 +90,11 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	switch (func->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		// scalar function
-
-		// check for lambda parameters, ignore ->> operator (JSON extension)
-		bool try_bind_lambda = false;
-		if (function.function_name != "->>") {
-			for (auto &child : function.children) {
-				if (child->expression_class == ExpressionClass::LAMBDA) {
-					try_bind_lambda = true;
-				}
-			}
+		if (IsLambdaFunction(function)) {
+			// special case
+			return TryBindLambdaOrJson(function, depth, *func);
 		}
-
-		// other scalar function
-		if (!try_bind_lambda) {
-			return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
-		}
-
-		auto lambda_bind_result = BindLambdaFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
-		if (!lambda_bind_result.HasError()) {
-			return lambda_bind_result;
-		}
-
-		auto json_bind_result = BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
-		if (!json_bind_result.HasError()) {
-			return json_bind_result;
-		}
-
-		return BindResult("failed to bind function, either: " + lambda_bind_result.error +
-		                  "\n"
-		                  " or: " +
-		                  json_bind_result.error);
+		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 	case CatalogType::MACRO_ENTRY:
 		// macro function
