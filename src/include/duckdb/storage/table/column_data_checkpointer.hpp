@@ -13,6 +13,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
+struct TableScanOptions;
 
 class ColumnDataCheckpointer {
 public:
@@ -30,7 +31,7 @@ public:
 	CompressionFunction &GetCompressionFunction(CompressionType type);
 
 private:
-	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
+	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback, TableScanOptions &options);
 	unique_ptr<AnalyzeState> DetectBestCompressionMethod(idx_t &compression_idx);
 	void WriteToDisk();
 	bool HasChanges();

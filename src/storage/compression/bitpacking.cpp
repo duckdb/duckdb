@@ -1,19 +1,18 @@
 #include "duckdb/common/bitpacking.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-
+#include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/common/operator/add.hpp"
-#include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 
 #include <functional>
 
@@ -687,42 +686,57 @@ public:
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
+		//		printf("Skipping %llu\n", skip_count);
+		//		printf(" -> current offset %llu\n", current_group_offset);
 		bool skip_sign_extend = true;
 
 		idx_t skipped = 0;
-		while (skipped < skip_count) {
-			// Exhausted this metadata group, move pointers to next group and load metadata for next group.
-			if (current_group_offset >= BITPACKING_METADATA_GROUP_SIZE) {
-				LoadNextGroup();
-			}
+		idx_t initial_group_offset = current_group_offset;
 
-			idx_t offset_in_compression_group =
-			    current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		// This skips straight to the correct metadata group
+		idx_t meta_groups_to_skip = (skip_count + current_group_offset) / BITPACKING_METADATA_GROUP_SIZE;
+		if (meta_groups_to_skip) {
 
-			if (current_group.mode == BitpackingMode::CONSTANT) {
-				idx_t remaining = skip_count - skipped;
-				idx_t to_skip = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - current_group_offset);
-				skipped += to_skip;
-				current_group_offset += to_skip;
-				continue;
-			}
-			if (current_group.mode == BitpackingMode::CONSTANT_DELTA) {
-				idx_t remaining = skip_count - skipped;
-				idx_t to_skip = MinValue(remaining, BITPACKING_METADATA_GROUP_SIZE - current_group_offset);
-				skipped += to_skip;
-				current_group_offset += to_skip;
-				continue;
-			}
-			D_ASSERT(current_group.mode == BitpackingMode::FOR || current_group.mode == BitpackingMode::DELTA_FOR);
+			// bitpacking_metadata_ptr points to the next metadata: this means we need to advance the pointer by n-1
+			bitpacking_metadata_ptr -= (meta_groups_to_skip - 1) * sizeof(bitpacking_metadata_encoded_t);
+			LoadNextGroup();
+			// The first (partial) group we skipped
+			skipped += BITPACKING_METADATA_GROUP_SIZE - initial_group_offset;
+			// The remaining groups that were skipped
+			skipped += (meta_groups_to_skip - 1) * BITPACKING_METADATA_GROUP_SIZE;
+		}
 
-			idx_t to_skip =
-			    MinValue<idx_t>(skip_count - skipped,
-			                    BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
-			// Calculate start of compression algorithm group
-			if (current_group.mode == BitpackingMode::DELTA_FOR) {
+		// Assert we can are in the correct metadata group
+		idx_t remaining_to_skip = skip_count - skipped;
+		D_ASSERT(current_group_offset + remaining_to_skip < BITPACKING_METADATA_GROUP_SIZE);
+
+		if (current_group.mode == BitpackingMode::CONSTANT || current_group.mode == BitpackingMode::CONSTANT_DELTA ||
+		    current_group.mode == BitpackingMode::FOR) {
+			// Skipping within a constant or constant delta is done by increasing the current_group_offset
+			skipped += remaining_to_skip;
+			current_group_offset += remaining_to_skip;
+		} else {
+			// For DELTA we actually need to decompress from the current_group_offset up until the row we want to skip
+			// to this is because we need that delta to be able to continue scanning from here
+			D_ASSERT(current_group.mode == BitpackingMode::DELTA_FOR);
+
+			//			printf(" -> Starting delta skip loop\n");
+			while (skipped < skip_count) {
+				// Calculate compression group offset and pointer
+				idx_t offset_in_compression_group =
+				    current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 				data_ptr_t current_position_ptr = current_group_ptr + current_group_offset * current_width / 8;
 				data_ptr_t decompression_group_start_pointer =
 				    current_position_ptr - offset_in_compression_group * current_width / 8;
+
+				idx_t skipping_this_algorithm_group =
+				    MinValue(remaining_to_skip,
+				             BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
+
+				//				printf("  - this loop %llu\n", skipping_this_algorithm_group);
+				//				printf("   - remaining_to_skip %llu\n", remaining_to_skip);
+				//				printf("   - current_group_offset %llu\n", current_group_offset);
+				//				printf("   - offset_in_compression_group %llu\n", offset_in_compression_group);
 
 				BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(decompression_buffer),
 				                                     decompression_group_start_pointer, current_width,
@@ -730,15 +744,18 @@ public:
 
 				T *decompression_ptr = decompression_buffer + offset_in_compression_group;
 				ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_ptr),
-				                           static_cast<T_S>(current_frame_of_reference), to_skip);
+				                           static_cast<T_S>(current_frame_of_reference), skipping_this_algorithm_group);
 				DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_ptr), static_cast<T_S>(current_delta_offset),
-				                 to_skip);
-				current_delta_offset = decompression_ptr[to_skip - 1];
-			}
+				                 skipping_this_algorithm_group);
+				current_delta_offset = decompression_ptr[skipping_this_algorithm_group - 1];
 
-			skipped += to_skip;
-			current_group_offset += to_skip;
+				skipped += skipping_this_algorithm_group;
+				current_group_offset += skipping_this_algorithm_group;
+				remaining_to_skip -= skipping_this_algorithm_group;
+			}
 		}
+
+		D_ASSERT(skipped == skip_count);
 	}
 
 	data_ptr_t GetPtr(bitpacking_metadata_t group) {
@@ -752,14 +769,9 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	return std::move(result);
 }
 
-//===--------------------------------------------------------------------===//
-// Scan base data
-//===--------------------------------------------------------------------===//
 template <class T, class T_S = typename MakeSigned<T>::type>
-void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                           idx_t result_offset) {
-	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
-
+static void BitpackingScanInternal(ColumnSegment &segment, BitpackingScanState<T> &scan_state, idx_t scan_count,
+                                   Vector &result, idx_t result_offset) {
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -768,8 +780,10 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	idx_t scanned = 0;
 	while (scanned < scan_count) {
+		D_ASSERT(scan_state.current_group_offset <= BITPACKING_METADATA_GROUP_SIZE);
+
 		// Exhausted this metadata group, move pointers to next group and load metadata for next group.
-		if (scan_state.current_group_offset >= BITPACKING_METADATA_GROUP_SIZE) {
+		if (scan_state.current_group_offset == BITPACKING_METADATA_GROUP_SIZE) {
 			scan_state.LoadNextGroup();
 		}
 
@@ -842,6 +856,17 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Scan base data
+//===--------------------------------------------------------------------===//
+template <class T, class T_S = typename MakeSigned<T>::type>
+void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                           idx_t result_offset) {
+	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
+	BitpackingScanInternal(segment, scan_state, scan_count, result, result_offset);
+	return;
+}
+
 template <class T>
 void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	BitpackingScanPartial<T>(segment, state, scan_count, result, 0);
@@ -855,6 +880,10 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
                         idx_t result_idx) {
 	BitpackingScanState<T> scan_state(segment);
 	scan_state.Skip(segment, row_id);
+
+	D_ASSERT(scan_state.current_group_offset < BITPACKING_METADATA_GROUP_SIZE);
+
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	T *result_data = FlatVector::GetData<T>(result);
 	T *current_result_ptr = result_data + result_idx;
 
@@ -900,6 +929,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 		*current_result_ptr += scan_state.current_delta_offset;
 	}
 }
+
 template <class T>
 void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);

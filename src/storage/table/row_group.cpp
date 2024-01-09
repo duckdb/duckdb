@@ -125,7 +125,10 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void ColumnScanState::Initialize(const LogicalType &type) {
+void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options) {
+	// Register the options in the state
+	scan_options = options;
+
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		// validity - nothing to initialize
 		return;
@@ -135,16 +138,16 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 		auto &struct_children = StructType::GetChildTypes(type);
 		child_states.resize(struct_children.size() + 1);
 		for (idx_t i = 0; i < struct_children.size(); i++) {
-			child_states[i + 1].Initialize(struct_children[i].second);
+			child_states[i + 1].Initialize(struct_children[i].second, options);
 		}
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
 		child_states.resize(2);
-		child_states[1].Initialize(ListType::GetChildType(type));
+		child_states[1].Initialize(ListType::GetChildType(type), options);
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
 		child_states.resize(2);
-		child_states[1].Initialize(ArrayType::GetChildType(type));
+		child_states[1].Initialize(ArrayType::GetChildType(type), options);
 	} else {
 		// validity
 		child_states.resize(1);
@@ -158,7 +161,7 @@ void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
-		column_scans[i].Initialize(types[column_ids[i]]);
+		column_scans[i].Initialize(types[column_ids[i]], &GetOptions());
 	}
 }
 
@@ -440,8 +443,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				} else {
 					auto &col_data = GetColumn(column);
 					if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
-						col_data.ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-						                       ALLOW_UPDATES);
+						col_data.ScanCommitted(state.vector_index, state.column_scans[i], result.data[i], ALLOW_UPDATES);
 					} else {
 						col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 					}

@@ -41,6 +41,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 		// This verification is quite slow, so we only run it for the async sink/source debug mode

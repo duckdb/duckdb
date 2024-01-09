@@ -7,6 +7,7 @@ import time
 no_exit = False
 profile = False
 assertions = True
+force_storage_flag = ''
 
 for i in range(len(sys.argv)):
     if sys.argv[i] == '--no-exit':
@@ -21,10 +22,14 @@ for i in range(len(sys.argv)):
         assertions = False
         del sys.argv[i]
         i -= 1
+    elif sys.argv[i] == '--force-storage':
+        force_storage_flag = '--force-storage'
+        del sys.argv[i]
+        i -= 1
 
 if len(sys.argv) < 2:
     print(
-        "Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit] [--profile] [--no-assertions]"
+        "Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit] [--profile] [--no-assertions] [--force-storage] [--add-timing]"
     )
     exit(1)
 unittest_program = sys.argv[1]
@@ -32,6 +37,8 @@ extra_args = []
 if len(sys.argv) > 2:
     extra_args = [sys.argv[2]]
 
+if force_storage_flag != '':
+    extra_args.append(force_storage_flag)
 
 proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout = proc.stdout.read().decode('utf8')
