@@ -25,21 +25,21 @@ AttachStmt:
 		;
 
 DetachStmt:
-				DETACH ColId
+				DETACH ColLabel
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = false;
 					n->db_name = $2;
 					$$ = (PGNode *)n;
 				}
-			|	DETACH DATABASE ColId
+			|	DETACH DATABASE ColLabel
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = false;
 					n->db_name = $3;
 					$$ = (PGNode *)n;
 				}
-			|	DETACH DATABASE IF_P EXISTS ColId
+			|	DETACH DATABASE IF_P EXISTS ColLabel
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = true;
