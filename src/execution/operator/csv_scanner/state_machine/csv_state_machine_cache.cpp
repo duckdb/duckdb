@@ -48,7 +48,6 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	} else {
 		transition_array[CSVState::STANDARD][static_cast<uint8_t>('\r')] = CSVState::RECORD_SEPARATOR;
 	}
-	transition_array[CSVState::STANDARD][quote] = CSVState::QUOTED;
 	// 2) Field Separator State
 	transition_array[CSVState::DELIMITER][delimiter] = CSVState::DELIMITER;
 	transition_array[CSVState::DELIMITER][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
