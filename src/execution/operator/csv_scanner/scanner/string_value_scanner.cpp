@@ -442,6 +442,12 @@ void StringValueScanner::MoveToNextBuffer() {
 	}
 }
 
+void StringValueScanner::SkipBOM(){
+	if (cur_buffer_handle->actual_size >= 3 && result.buffer_ptr[0] == '\xEF' && result.buffer_ptr[1] == '\xBB' && result.buffer_ptr[2] == '\xBF'){
+		iterator.pos.buffer_pos = 3;
+	}
+}
+
 void StringValueScanner::SkipCSVRows() {
 	idx_t rows_to_skip =
 	    state_machine->dialect_options.skip_rows.GetValue() + state_machine->dialect_options.header.GetValue();
@@ -486,6 +492,7 @@ void StringValueScanner::SetStart() {
 		// This means this is the very first buffer
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.
+		SkipBOM();
 		SkipCSVRows();
 		return;
 	}
