@@ -154,18 +154,18 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 
 	// FILE_SIZE_BYTES is set, but threads write to the same file, synchronize using lock
 	auto &gstate = g.global_state;
-	auto lock = g.lock.GetSharedLock();
-
-	function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
-
-	lock.reset();
-	lock = g.lock.GetExclusiveLock();
+	auto lock = g.lock.GetExclusiveLock();
 	if (function.file_size_bytes(*gstate) > file_size_bytes.GetIndex()) {
 		auto owned_gstate = std::move(gstate);
 		gstate = CreateFileState(context.client, *sink_state);
 		lock.reset();
 		function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
+	} else {
+		lock.reset();
 	}
+
+	lock = g.lock.GetSharedLock();
+	function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

@@ -49,11 +49,11 @@ SELECT COUNT(*) FROM read_json_auto('__TEST_DIR__/file_size_bytes_json/*.json')
 ----
 10000
 
-# JSON is a bit more wasteful, 6 files
+# JSON is a bit more wasteful, 5 files
 query I
 SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_json/*.json')
 ----
-6
+5
 
 require parquet
 
