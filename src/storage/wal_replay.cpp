@@ -24,6 +24,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 

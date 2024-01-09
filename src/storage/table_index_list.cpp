@@ -5,6 +5,8 @@
 #include "duckdb/execution/index/unknown_index.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {

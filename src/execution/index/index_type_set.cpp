@@ -21,7 +21,7 @@ optional_ptr<IndexType> IndexTypeSet::FindByName(const string &name) {
 	return &entry->second;
 }
 
-void IndexTypeSet::RegisterIndexType(IndexType index_type) {
+void IndexTypeSet::RegisterIndexType(const IndexType &index_type) {
 	lock_guard<mutex> g(lock);
 	if (functions.find(index_type.name) != functions.end()) {
 		throw CatalogException("Index type with name \"%s\" already exists!", index_type.name.c_str());

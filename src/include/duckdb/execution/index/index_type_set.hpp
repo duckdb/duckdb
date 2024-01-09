@@ -23,7 +23,7 @@ class IndexTypeSet {
 public:
 	IndexTypeSet();
 	DUCKDB_API optional_ptr<IndexType> FindByName(const string &name);
-	DUCKDB_API void RegisterIndexType(IndexType index_type);
+	DUCKDB_API void RegisterIndexType(const IndexType &index_type);
 };
 
 } // namespace duckdb
