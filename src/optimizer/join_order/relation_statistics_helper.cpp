@@ -244,17 +244,23 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_EXCEPT: {
+	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = op.Cast<LogicalSetOperation>();
-		if (setop.type == LogicalOperatorType::LOGICAL_EXCEPT) {
-			ret.cardinality = child_1_card;
-		} else if (setop.type == LogicalOperatorType::LOGICAL_INTERSECT) {
-			ret.cardinality = child_2_card;
-		} else if (setop.type == LogicalOperatorType::LOGICAL_UNION) {
+		if (setop.setop_all) {
+			// setop returns all records
 			ret.cardinality = child_1_card + child_2_card;
 		}
+		// TODO: Add heuristics for unions that are not setop all
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		ret.cardinality = child_2_card;
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EXCEPT: {
+		auto &setop = op.Cast<LogicalSetOperation>();
+		ret.cardinality = child_1_card;
 		break;
 	}
 	default:
