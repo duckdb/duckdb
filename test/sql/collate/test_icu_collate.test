@@ -4,6 +4,11 @@
 
 require icu
 
+query I
+select typeof(2*16*256+1*256+2*16+11)
+----
+INTEGER
+
 statement ok
 CREATE TABLE strings(s VARCHAR);
 
@@ -83,7 +88,6 @@ statement error
 SELECT icu_sort_key('goose', 'DUCK_DUCK_ENUM');
 ----
 Invalid Input Error
-
 
 # issue duckdb/duckdb#9692
 query I

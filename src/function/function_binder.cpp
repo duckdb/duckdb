@@ -249,15 +249,17 @@ LogicalType PrepareTypeForCast(const LogicalType &type) {
 }
 
 void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children) {
-	for(auto &arg : function.arguments) {
+	for (auto &arg : function.arguments) {
 		arg = PrepareTypeForCast(arg);
 	}
 	function.varargs = PrepareTypeForCast(function.varargs);
 
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
-		if (target_type.id() == LogicalTypeId::STRING_LITERAL) {
-			throw InternalException("Function %s returned a STRING_LITERAL type - use VARCHAR instead", function.name);
+		if (target_type.id() == LogicalTypeId::STRING_LITERAL || target_type.id() == LogicalTypeId::INTEGER_LITERAL) {
+			throw InternalException(
+			    "Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
+			    function.name);
 		}
 		target_type.Verify();
 		// don't cast lambda children, they get removed before execution

@@ -147,8 +147,9 @@ AggregateFunction GetEntropyFunctionInternal(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<double>, double, double, EntropyFunction>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	case PhysicalType::VARCHAR: {
-		return AggregateFunction::UnaryAggregateDestructor<EntropyState<string>, string_t, double, EntropyFunctionString>(
-		        LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150), LogicalType::DOUBLE);
+		return AggregateFunction::UnaryAggregateDestructor<EntropyState<string>, string_t, double,
+		                                                   EntropyFunctionString>(
+		    LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150), LogicalType::DOUBLE);
 	}
 
 	default:

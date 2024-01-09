@@ -2,6 +2,12 @@
 # description: Test string literal binding
 # group: [binder]
 
+# we can do equality comparison with string columns
+query I
+select i=1 from (values ('01')) t(i);
+----
+true
+
 # string literals bind differently from strings
 # they can be auto-cast to everything
 # this is an integer comparison

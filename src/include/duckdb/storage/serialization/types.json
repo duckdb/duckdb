@@ -173,5 +173,17 @@
         "type": "idx_t"
       }
     ]
+  },
+  {
+    "class": "IntegerLiteralTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "INTEGER_LITERAL_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "constant_value",
+        "type": "Value"
+      }
+    ]
   }
 ]

@@ -1655,10 +1655,13 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
 }
 
 vector<LogicalType> GetQuantileTypes() {
-	return {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,      LogicalType::BIGINT,
-	        LogicalType::HUGEINT,   LogicalType::FLOAT,    LogicalType::DOUBLE,       LogicalType::DATE,
-	        LogicalType::TIMESTAMP, LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
-	        LogicalType::INTERVAL,  LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150)};
+	return {LogicalType::TINYINT,      LogicalType::SMALLINT,
+	        LogicalType::INTEGER,      LogicalType::BIGINT,
+	        LogicalType::HUGEINT,      LogicalType::FLOAT,
+	        LogicalType::DOUBLE,       LogicalType::DATE,
+	        LogicalType::TIMESTAMP,    LogicalType::TIME,
+	        LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+	        LogicalType::INTERVAL,     LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150)};
 }
 
 AggregateFunctionSet MedianFun::GetFunctions() {

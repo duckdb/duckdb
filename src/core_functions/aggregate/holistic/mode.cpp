@@ -350,7 +350,8 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<interval_t, interval_t>(type);
 
 	case PhysicalType::VARCHAR:
-		return GetTypedModeFunction<string_t, string, ModeAssignmentString>(LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150));
+		return GetTypedModeFunction<string_t, string, ModeAssignmentString>(
+		    LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150));
 
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");

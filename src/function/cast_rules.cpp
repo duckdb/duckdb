@@ -325,18 +325,26 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// string literals can be cast to any type for low cost as long as the type is valid
 		// i.e. we cannot cast to LIST(ANY) as we don't know what "ANY" should be
 		// we cannot cast to DECIMAL without precision/width specified
-		// etc...
-		// the exception is the ANY type - for the ANY type we just cast to VARCHAR
-		// but we prefer casting to VARCHAR
-		if (to.id() != LogicalType::ANY) {
-			if (!LogicalTypeIsValid(to)) {
-				return -1;
-			}
+		if (!LogicalTypeIsValid(to)) {
+			return -1;
 		}
 		if (to.id() == LogicalTypeId::VARCHAR && to.GetAlias().empty()) {
 			return 1;
 		}
 		return 20;
+	}
+	if (from.id() == LogicalTypeId::INTEGER_LITERAL) {
+		// the integer literal has an underlying type - this type always matches
+		if (IntegerLiteral::GetType(from).id() == to.id()) {
+			return 0;
+		}
+		// integer literals can be cast to any other integer type for a low cost, but only if the literal fits
+		if (IntegerLiteral::FitsInType(from, to)) {
+			// to avoid ties we prefer BIGINT, INT, ...
+			return TargetTypeCost(to) - 90;
+		}
+		// in any other case we use the casting rules of the preferred type of the literal
+		return CastRules::ImplicitCast(IntegerLiteral::GetType(from), to);
 	}
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible

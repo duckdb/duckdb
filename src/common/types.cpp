@@ -151,6 +151,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::STRING_LITERAL:
+	case LogicalTypeId::INTEGER_LITERAL:
 		return PhysicalType::INVALID;
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
@@ -634,6 +635,8 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 		width = DecimalType::GetWidth(*this);
 		scale = DecimalType::GetScale(*this);
 		break;
+	case LogicalTypeId::INTEGER_LITERAL:
+		return IntegerLiteral::GetType(*this).GetDecimalProperties(width, scale);
 	default:
 		// Nonsense values to ensure initialization
 		width = 255u;
@@ -677,6 +680,7 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 
 static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalType &right) {
 	D_ASSERT(left.id() != right.id());
+	// for integer literals - grab the inner type
 	if (left.id() > right.id()) {
 		// this method is symmetric
 		// arrange it so the left type is smaller to limit the number of options we need to check
@@ -708,11 +712,15 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 	throw InternalException("Cannot combine these numeric types (%s & %s)", left.ToString(), right.ToString());
 }
 
-static LogicalType ReturnType(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::STRING_LITERAL) {
+LogicalType LogicalType::NormalizeType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRING_LITERAL:
 		return LogicalType::VARCHAR;
+	case LogicalTypeId::INTEGER_LITERAL:
+		return IntegerLiteral::GetType(type);
+	default:
+		return type;
 	}
-	return type;
 }
 
 template <class OP>
@@ -728,10 +736,10 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 	LogicalTypeId other_types[] = {LogicalTypeId::UNKNOWN, LogicalTypeId::SQLNULL, LogicalTypeId::STRING_LITERAL};
 	for (auto &other_type : other_types) {
 		if (left.id() == other_type) {
-			result = ReturnType(right);
+			result = LogicalType::NormalizeType(right);
 			return true;
 		} else if (right.id() == other_type) {
-			result = ReturnType(left);
+			result = LogicalType::NormalizeType(left);
 			return true;
 		}
 	}
@@ -759,6 +767,13 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		}
 		return true;
 	}
+	// for integer literals - rerun the operation with the underlying type
+	if (left.id() == LogicalTypeId::INTEGER_LITERAL) {
+		return OP::Operation(IntegerLiteral::GetType(left), right, result);
+	}
+	if (right.id() == LogicalTypeId::INTEGER_LITERAL) {
+		return OP::Operation(left, IntegerLiteral::GetType(right), result);
+	}
 	// for unsigned/signed comparisons we have a few fallbacks
 	if (left.IsNumeric() && right.IsNumeric()) {
 		result = CombineNumericTypes(left, right);
@@ -783,6 +798,10 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	case LogicalTypeId::STRING_LITERAL:
 		// two string literals convert to varchar
 		result = LogicalType::VARCHAR;
+		return true;
+	case LogicalTypeId::INTEGER_LITERAL:
+		// for integer literals we pick the highest type of the provided integer literal type
+		result = LogicalType::ForceMaxLogicalType(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right));
 		return true;
 	case LogicalTypeId::ENUM:
 		// If both types are different ENUMs we do a string comparison.
@@ -920,13 +939,13 @@ bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType
 }
 
 static idx_t GetLogicalTypeScore(const LogicalType &type) {
-	return idx_t(type.id());
 	switch (type.id()) {
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::STRING_LITERAL:
+	case LogicalTypeId::INTEGER_LITERAL:
 		return 0;
 	// numerics
 	case LogicalTypeId::BOOLEAN:
@@ -1453,6 +1472,41 @@ idx_t AnyType::GetCastScore(const LogicalType &type) {
 		return 5;
 	}
 	return info->Cast<AnyTypeInfo>().cast_score;
+}
+
+//===--------------------------------------------------------------------===//
+// Integer Literal Type
+//===--------------------------------------------------------------------===//
+LogicalType IntegerLiteral::GetType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::INTEGER_LITERAL);
+	auto info = type.AuxInfo();
+	D_ASSERT(info && info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
+	return info->Cast<IntegerLiteralTypeInfo>().constant_value.type();
+}
+
+bool IntegerLiteral::FitsInType(const LogicalType &type, const LogicalType &target) {
+	D_ASSERT(type.id() == LogicalTypeId::INTEGER_LITERAL);
+	// we can always cast integer literals to float and double
+	if (target.id() == LogicalTypeId::FLOAT || target.id() == LogicalTypeId::DOUBLE) {
+		return true;
+	}
+	if (!target.IsIntegral()) {
+		return false;
+	}
+	// we can cast to integral types if the constant value fits within that type
+	auto info = type.AuxInfo();
+	D_ASSERT(info && info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
+	auto &literal_info = info->Cast<IntegerLiteralTypeInfo>();
+	Value copy = literal_info.constant_value;
+	return copy.DefaultTryCastAs(target);
+}
+
+LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) {
+	if (!constant.type().IsIntegral()) {
+		throw InternalException("INTEGER_LITERAL can only be made from literals of integer types");
+	}
+	auto type_info = make_shared<IntegerLiteralTypeInfo>(constant);
+	return LogicalType(LogicalTypeId::INTEGER_LITERAL, std::move(type_info));
 }
 
 //===--------------------------------------------------------------------===//

@@ -117,8 +117,7 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    ApproxCountDistinctUpdateFunction,
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
-	    ApproxCountDistinctSimpleUpdateFunction,
-	    nullptr,
+	    ApproxCountDistinctSimpleUpdateFunction, nullptr,
 	    AggregateFunction::StateDestroy<ApproxDistinctCountState, ApproxCountDistinctFunction>);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;

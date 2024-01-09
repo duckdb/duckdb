@@ -26,6 +26,7 @@ enum class ExtraTypeInfoType : uint8_t {
 	AGGREGATE_STATE_TYPE_INFO = 8,
 	ARRAY_TYPE_INFO = 9,
 	ANY_TYPE_INFO = 10,
+	INTEGER_LITERAL_TYPE_INFO = 11
 };
 
 struct ExtraTypeInfo {
@@ -215,6 +216,22 @@ protected:
 
 private:
 	AnyTypeInfo();
+};
+
+struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
+	IntegerLiteralTypeInfo(Value constant_value);
+
+	Value constant_value;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	IntegerLiteralTypeInfo();
 };
 
 } // namespace duckdb

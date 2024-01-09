@@ -82,6 +82,7 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 		def.return_type = target_type;
 	}
 	if (expr->return_type.id() == LogicalTypeId::STRING_LITERAL) {
+		throw InternalException("FIXME - does this ever happen...?");
 		// when adding a cast to a string literal we need to transform the constant back into a VARCHAR
 		auto &constant = expr->Cast<BoundConstantExpression>();
 		constant.value = Value(StringValue::Get(constant.value));
