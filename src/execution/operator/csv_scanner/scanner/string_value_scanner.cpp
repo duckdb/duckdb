@@ -270,6 +270,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			string error_message;
 			bool success;
 			idx_t line_error = 0;
+			bool line_error_set = true;
 
 			if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::DATE).GetValue().Empty() &&
 			    type.id() == LogicalTypeId::DATE) {
@@ -296,6 +297,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				// target type is not varchar: perform a cast
 				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
 				                                    parse_chunk.size(), &error_message);
+				line_error_set = false;
 			}
 			if (success) {
 				continue;
@@ -305,12 +307,15 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
 			UnifiedVectorFormat parse_column_data;
 			parse_vector.ToUnifiedFormat(parse_chunk.size(), parse_column_data);
-			for (; line_error < parse_chunk.size(); line_error++) {
-				if (!inserted_column_data.validity.RowIsValid(line_error) &&
-				    parse_column_data.validity.RowIsValid(line_error)) {
-					break;
+			if (!line_error_set) {
+				for (; line_error < parse_chunk.size(); line_error++) {
+					if (!inserted_column_data.validity.RowIsValid(line_error) &&
+					    parse_column_data.validity.RowIsValid(line_error)) {
+						break;
+					}
 				}
 			}
+
 			auto csv_error = CSVError::CastError(state_machine->options, parse_chunk, line_error,
 			                                     csv_file_scan->names[col_idx], error_message);
 			LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
@@ -424,11 +429,13 @@ void StringValueScanner::MoveToNextBuffer() {
 			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow()) {
 				return;
 			} else if (states.IsCurrentDelimiter()) {
+				lines_read++;
 				// we add the value
 				result.AddRowInternal(previous_buffer_handle->actual_size - 1);
 				// And an extra empty value to represent what comes after the delimiter
 				result.AddRowInternal(previous_buffer_handle->actual_size);
 			} else {
+				lines_read++;
 				result.AddRowInternal(previous_buffer_handle->actual_size);
 			}
 

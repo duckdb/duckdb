@@ -73,7 +73,7 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_c
 	// What is the problematic CSV Line
 	error << "Problematic CSV Line:" << std::endl;
 	for (idx_t column_idx = 0; column_idx < parse_chunk.ColumnCount(); column_idx++) {
-		error << parse_chunk.GetValue(column_idx, chunk_row).ToString();
+		// error << parse_chunk.GetValue(column_idx, chunk_row).ToString();
 		if (column_idx < parse_chunk.ColumnCount() - 1) {
 			// we are not in the last line, add the delimiter
 			error << options.dialect_options.state_machine_options.delimiter.GetValue();

@@ -53,7 +53,7 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 		boundary.buffer_pos = buffer_manager.GetStartPos();
 		// Verify this buffer really exists
 		auto next_buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
-		if (!next_buffer){
+		if (!next_buffer) {
 			return false;
 		}
 
