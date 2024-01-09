@@ -37,7 +37,6 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	uint8_t escape = static_cast<uint8_t>(state_machine_options.escape.GetValue());
 
 	auto new_line_id = state_machine_options.new_line.GetValue();
-	//	D_ASSERT(new_line_id == NewLineIdentifier::SINGLE ||new_line_id == NewLineIdentifier::CARRY_ON);
 
 	// Now set values depending on configuration
 	// 1) Standard State
@@ -107,7 +106,7 @@ CSVStateMachineCache::CSVStateMachineCache() {
 }
 
 const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &state_machine_options) {
-	//! Custom State Machine, we need to create it and cache it first
+	// Custom State Machine, we need to create it and cache it first
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (state_machine_cache.find(state_machine_options) == state_machine_cache.end()) {
 		Insert(state_machine_options);
