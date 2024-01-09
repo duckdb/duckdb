@@ -123,7 +123,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	m.def("create_function", &DuckDBPyConnection::RegisterScalarUDF,
 	      "Create a DuckDB function out of the passing in Python function so it can be used in queries",
-	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
+	      py::arg("name"), py::arg("function"), py::arg("parameters") = py::none(), py::arg("return_type") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
 	      py::arg("exception_handling") = 0, py::arg("side_effects") = false);
 

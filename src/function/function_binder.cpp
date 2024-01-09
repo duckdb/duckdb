@@ -102,7 +102,7 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 	if (best_function == DConstants::INVALID_INDEX) {
 		// no matching function was found, throw an error
 		string call_str = Function::CallToString(name, arguments);
-		string candidate_str = "";
+		string candidate_str;
 		for (auto &f : functions.functions) {
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
@@ -123,7 +123,7 @@ idx_t FunctionBinder::MultipleCandidateException(const string &name, FunctionSet
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
 	string call_str = Function::CallToString(name, arguments);
-	string candidate_str = "";
+	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		T f = functions.GetFunctionByOffset(conf);
 		candidate_str += "\t" + f.ToString() + "\n";
@@ -197,7 +197,7 @@ vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique
 	vector<LogicalType> types;
 	types.reserve(arguments.size());
 	for (auto &argument : arguments) {
-		types.push_back(argument->return_type);
+		types.push_back(ExpressionBinder::GetExpressionReturnType(*argument));
 	}
 	return types;
 }
@@ -241,6 +241,9 @@ LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const L
 void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children) {
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
+		if (target_type.id() == LogicalTypeId::STRING_LITERAL) {
+			throw InternalException("Function %s returned a STRING_LITERAL type - use VARCHAR instead", function.name);
+		}
 		target_type.Verify();
 		// don't cast lambda children, they get removed before execution
 		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {

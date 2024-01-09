@@ -231,6 +231,15 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
+static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	for (auto &arg : bound_function.arguments) {
+		arg = LogicalType::VARCHAR;
+	}
+	bound_function.varargs = LogicalType::VARCHAR;
+	return nullptr;
+}
+
 void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// the concat operator and concat function have different behavior regarding NULLs
 	// this is strange but seems consistent with postgresql and mysql
@@ -247,14 +256,15 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// e.g.:
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
-	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatFunction);
-	concat.varargs = LogicalType::VARCHAR;
+	ScalarFunction concat =
+	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::VARCHAR, ConcatFunction, BindConcatFunction);
+	concat.varargs = LogicalType::ANY;
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat);
 
 	ScalarFunctionSet concat_op("||");
 	concat_op.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatOperator));
+	    ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::VARCHAR, ConcatOperator, BindConcatFunction));
 	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
 	concat_op.AddFunction(ListConcatFun::GetFunction());
 	for (auto &fun : concat_op.functions) {
@@ -262,9 +272,9 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 	set.AddFunction(concat_op);
 
-	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                          LogicalType::VARCHAR, ConcatWSFunction);
-	concat_ws.varargs = LogicalType::VARCHAR;
+	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::ANY},
+	                                          LogicalType::VARCHAR, ConcatWSFunction, BindConcatFunction);
+	concat_ws.varargs = LogicalType::ANY;
 	concat_ws.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat_ws);
 }

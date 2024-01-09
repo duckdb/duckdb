@@ -25,7 +25,6 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -629,7 +628,7 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return data.initial_file_row_groups * data.files.size();
+		return std::max(data.initial_file_row_groups, idx_t(1)) * data.files.size();
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files

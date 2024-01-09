@@ -86,7 +86,7 @@ select json_object('nested', map(['duck', 'goose'], [42, 7]))
 {"nested":{"duck":42,"goose":7}}
 
 query T
-select json_object('nested', map([0, 'goose'], [42, 7]))
+select json_object('nested', map(['0', 'goose'], [42, 7]))
 ----
 {"nested":{"0":42,"goose":7}}
 

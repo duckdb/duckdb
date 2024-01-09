@@ -12540,37 +12540,7 @@ static void bind_table_init(ShellState *p){
 ** tables.  The table must be in the TEMP schema.
 */
 static void bind_prepared_stmt(ShellState *pArg, sqlite3_stmt *pStmt){
-  int nVar;
-  int i;
-  int rc;
-  sqlite3_stmt *pQ = 0;
-
-  nVar = sqlite3_bind_parameter_count(pStmt);
-  if( nVar==0 ) return;  /* Nothing to do */
-  if( sqlite3_table_column_metadata(pArg->db, "TEMP", "sqlite_parameters",
-                                    "key", 0, 0, 0, 0, 0)!=SQLITE_OK ){
-    return; /* Parameter table does not exist */
-  }
-  rc = sqlite3_prepare_v2(pArg->db,
-          "SELECT value FROM temp.sqlite_parameters"
-          " WHERE key=?1", -1, &pQ, 0);
-  if( rc || pQ==0 ) return;
-  for(i=1; i<=nVar; i++){
-    char zNum[30];
-    const char *zVar = sqlite3_bind_parameter_name(pStmt, i);
-    if( zVar==0 ){
-      sqlite3_snprintf(sizeof(zNum),zNum,"?%d",i);
-      zVar = zNum;
-    }
-    sqlite3_bind_text(pQ, 1, zVar, -1, SQLITE_STATIC);
-    if( sqlite3_step(pQ)==SQLITE_ROW ){
-      sqlite3_bind_value(pStmt, i, sqlite3_column_value(pQ, 0));
-    }else{
-      sqlite3_bind_null(pStmt, i);
-    }
-    sqlite3_reset(pQ);
-  }
-  sqlite3_finalize(pQ);
+  return;
 }
 
 /*
