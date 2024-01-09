@@ -6,8 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 # allow_quoted_nulls set as true by default
-
-
 query II
 SELECT * FROM read_csv_auto('test/sql/copy/csv/data/null_comparison.csv');
 ----

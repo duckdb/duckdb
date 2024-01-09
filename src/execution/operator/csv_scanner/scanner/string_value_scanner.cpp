@@ -72,8 +72,17 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		result.vector_ptr[result.result_position++] =
 		    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 	} else {
-		result.vector_ptr[result.result_position++] =
-		    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
+		if (result.state_machine.options.allow_quoted_nulls) {
+			auto value = string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
+			if (value == result.state_machine.options.null_str) {
+				result.validity_mask->SetInvalid(result.result_position++);
+			} else {
+				result.vector_ptr[result.result_position++] = value;
+			}
+		} else {
+			result.vector_ptr[result.result_position++] =
+			    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
+		}
 	}
 	result.quoted = false;
 	result.escaped = false;
@@ -333,8 +342,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 void StringValueScanner::Initialize() {
 	states.Initialize(CSVState::RECORD_SEPARATOR);
-	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding && !state_machine
-	                                 ->options.dialect_options.skip_rows.IsSetByUser())) {
+	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
+	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
