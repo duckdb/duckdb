@@ -6129,6 +6129,8 @@ const char* EnumUtil::ToChars<TaskType>(TaskType value) {
 	switch(value) {
 	case TaskType::EXECUTOR:
 		return "EXECUTOR";
+	case TaskType::CHECKPOINTER:
+		return "CHECKPOINTER";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6138,6 +6140,9 @@ template<>
 TaskType EnumUtil::FromString<TaskType>(const char *value) {
 	if (StringUtil::Equals(value, "EXECUTOR")) {
 		return TaskType::EXECUTOR;
+	}
+	if (StringUtil::Equals(value, "CHECKPOINTER")) {
+		return TaskType::CHECKPOINTER;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

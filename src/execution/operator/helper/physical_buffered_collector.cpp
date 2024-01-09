@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/helper/physical_buffered_collector.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 

@@ -655,7 +655,7 @@ private:
 
 class BaseCheckpointTask : public Task {
 public:
-	explicit BaseCheckpointTask(CollectionCheckpointState &checkpoint_state) : checkpoint_state(checkpoint_state) {
+	explicit BaseCheckpointTask(CollectionCheckpointState &checkpoint_state) : Task(TaskType::CHECKPOINTER), checkpoint_state(checkpoint_state) {
 	}
 
 	virtual void ExecuteTask() = 0;
