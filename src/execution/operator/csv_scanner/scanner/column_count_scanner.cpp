@@ -42,11 +42,13 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        shared_ptr<CSVStateMachine> state_machine,
                                        shared_ptr<CSVErrorHandler> error_handler)
     : BaseScanner(buffer_manager, state_machine, error_handler), result(states, *state_machine), column_count(1) {
-
-                                                                                                 };
+	sniffing = true;
+};
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
-	return make_uniq<StringValueScanner>(buffer_manager, state_machine, error_handler);
+	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, error_handler);
+	scanner->sniffing = true;
+	return scanner;
 }
 
 ColumnCountResult *ColumnCountScanner::ParseChunk() {
@@ -88,7 +90,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 				if (states.EmptyLine() || states.NewRow()) {
 					return;
 				}
-				if (states.IsCurrentDelimiter()){
+				if (states.IsCurrentDelimiter()) {
 					result.current_column_count++;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added

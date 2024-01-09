@@ -202,9 +202,6 @@ void CSVSniffer::DetectTypes() {
 		auto candidate = candidate_cc->UpgradeToStringValueScanner();
 
 		// Parse chunk and read csv with info candidate
-
-		idx_t true_line_start = 0;
-		true_line_start = 0;
 		auto &tuples = *candidate->ParseChunk();
 		idx_t row_idx = 0;
 		if (tuples.NumberOfRows() > 1 &&
@@ -269,11 +266,6 @@ void CSVSniffer::DetectTypes() {
 		// best_num_cols.
 		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
 			// we have a new best_options candidate
-			if (true_line_start > 0) {
-				// Add empty rows to skip_rows
-				sniffing_state_machine.dialect_options.skip_rows.Set(
-				    sniffing_state_machine.dialect_options.skip_rows.GetValue() + true_line_start, false);
-			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;

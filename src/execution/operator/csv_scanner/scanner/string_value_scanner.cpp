@@ -333,7 +333,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 
 void StringValueScanner::Initialize() {
 	states.Initialize(CSVState::RECORD_SEPARATOR);
-	if (result.result_size != 1) {
+	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding)) {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
@@ -415,7 +415,7 @@ void StringValueScanner::MoveToNextBuffer() {
 				return;
 			} else if (states.IsCurrentDelimiter()) {
 				// we add the value
-				result.AddRowInternal(previous_buffer_handle->actual_size);
+				result.AddRowInternal(previous_buffer_handle->actual_size - 1);
 				// And an extra empty value to represent what comes after the delimiter
 				result.AddRowInternal(previous_buffer_handle->actual_size);
 			} else {

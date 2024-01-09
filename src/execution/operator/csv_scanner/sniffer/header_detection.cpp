@@ -1,5 +1,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
 #include "utf8proc.hpp"
 
 namespace duckdb {
@@ -126,6 +127,13 @@ void CSVSniffer::DetectHeader() {
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (has_header) {
 		sniffer_state_machine.dialect_options.header = true;
+		if (sniffer_state_machine.options.null_padding &&
+		    !sniffer_state_machine.options.dialect_options.skip_rows.IsSetByUser()) {
+			if (sniffer_state_machine.dialect_options.skip_rows.GetValue() > 0) {
+				sniffer_state_machine.dialect_options.skip_rows =
+				    sniffer_state_machine.dialect_options.skip_rows.GetValue() - 1;
+			}
+		}
 		case_insensitive_map_t<idx_t> name_collision_count;
 
 		// get header names from CSV

@@ -37,8 +37,8 @@ void CSVIterator::Print() {
 }
 
 bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
-	if (!is_set){
-		return  false;
+	if (!is_set) {
+		return false;
 	}
 	boundary.boundary_idx++;
 	// This is our start buffer

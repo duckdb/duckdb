@@ -112,6 +112,9 @@ public:
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 
+	//! If this scanner is being used for sniffing
+	bool sniffing = false;
+
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;

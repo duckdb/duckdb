@@ -57,7 +57,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	}
 	// We first create the scanner for the currenot boundary
 	auto &current_file = *file_scans.back();
-	if (single_threaded){
+	if (single_threaded) {
 		current_boundary = CSVIterator();
 	}
 	auto csv_scanner = make_uniq<StringValueScanner>(current_file.buffer_manager, current_file.state_machine,
