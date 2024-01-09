@@ -1,0 +1,13 @@
+# name: test/sql/attach/detach_keyword.test
+# description: Test DETACH with keywords
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS varchar;
+
+# we cannot attach a database with the same name
+statement ok
+DETACH varchar

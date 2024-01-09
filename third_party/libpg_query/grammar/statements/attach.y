@@ -25,14 +25,21 @@ AttachStmt:
 		;
 
 DetachStmt:
-				DETACH opt_database IDENT
+				DETACH ColId
+				{
+					PGDetachStmt *n = makeNode(PGDetachStmt);
+					n->missing_ok = false;
+					n->db_name = $2;
+					$$ = (PGNode *)n;
+				}
+			|	DETACH DATABASE ColId
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = false;
 					n->db_name = $3;
 					$$ = (PGNode *)n;
 				}
-			|	DETACH DATABASE IF_P EXISTS IDENT
+			|	DETACH DATABASE IF_P EXISTS ColId
 				{
 					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = true;
