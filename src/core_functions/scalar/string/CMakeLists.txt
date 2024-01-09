@@ -16,6 +16,7 @@ add_library_unity(
   md5.cpp
   pad.cpp
   printf.cpp
+  regexp_escape.cpp
   repeat.cpp
   replace.cpp
   reverse.cpp
