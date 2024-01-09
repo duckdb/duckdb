@@ -9,6 +9,7 @@
 
 namespace duckdb {
 
+
 unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PGValue val) {
 	switch (val.type) {
 	case duckdb_libpgquery::T_PGInteger:

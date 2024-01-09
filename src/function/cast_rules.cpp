@@ -5,14 +5,16 @@ namespace duckdb {
 //! The target type determines the preferred implicit casts
 static int64_t TargetTypeCost(const LogicalType &type) {
 	switch (type.id()) {
-	case LogicalTypeId::INTEGER:
-		return 103;
 	case LogicalTypeId::BIGINT:
 		return 101;
-	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::INTEGER:
 		return 102;
 	case LogicalTypeId::HUGEINT:
-		return 120;
+		return 103;
+	case LogicalTypeId::DOUBLE:
+		return 104;
+	case LogicalTypeId::DECIMAL:
+		return 105;
 	case LogicalTypeId::TIMESTAMP_NS:
 		return 119;
 	case LogicalTypeId::TIMESTAMP:
@@ -23,8 +25,6 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 122;
 	case LogicalTypeId::VARCHAR:
 		return 149;
-	case LogicalTypeId::DECIMAL:
-		return 104;
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
