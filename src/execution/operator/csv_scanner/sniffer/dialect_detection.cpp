@@ -61,7 +61,12 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
                                                  const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
                                                  const unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
 	// Generate state machines for all option combinations
-	auto new_line_id = DetectNewLineDelimiter();
+	NewLineIdentifier new_line_id;
+	if (options.dialect_options.state_machine_options.new_line.IsSetByUser()){
+		new_line_id = options.dialect_options.state_machine_options.new_line.GetValue();
+	} else{
+		new_line_id = DetectNewLineDelimiter();
+	}
 	for (const auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
 		for (const auto &quote : quote_candidates) {

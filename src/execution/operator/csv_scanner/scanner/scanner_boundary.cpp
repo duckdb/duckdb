@@ -51,6 +51,11 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 		// We must move the buffer
 		boundary.buffer_idx++;
 		boundary.buffer_pos = buffer_manager.GetStartPos();
+		// Verify this buffer really exists
+		auto next_buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
+		if (!next_buffer){
+			return false;
+		}
 
 	} else {
 		// 3) We are not done with the current buffer, hence we just move where we start within the buffer
