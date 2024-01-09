@@ -59,7 +59,8 @@ enum class PhysicalOperatorType : uint8_t {
 	CROSS_PRODUCT,
 	PIECEWISE_MERGE_JOIN,
 	IE_JOIN,
-	DELIM_JOIN,
+	LEFT_DELIM_JOIN,
+	RIGHT_DELIM_JOIN,
 	POSITIONAL_JOIN,
 	ASOF_JOIN,
 	// -----------------------------
