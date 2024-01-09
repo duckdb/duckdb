@@ -29,11 +29,9 @@ public:
 	}
 
 	bool IsValid() const {
-		return index != DConstants::INVALID_INDEX;
+		return index != INVALID_INDEX;
 	}
-	void Invalidate() {
-		index = INVALID_INDEX;
-	}
+
 	idx_t GetIndex() const {
 		if (index == INVALID_INDEX) {
 			throw InternalException("Attempting to get the index of an optional_idx that is not set");
