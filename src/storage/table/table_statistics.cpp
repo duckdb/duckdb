@@ -69,10 +69,7 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	for (idx_t i = 0; i < column_stats.size(); i++) {
-		if (column_stats[i]) {
-			D_ASSERT(other.column_stats[i]);
-			column_stats[i]->Merge(*other.column_stats[i]);
-		}
+		column_stats[i]->Merge(*other.column_stats[i]);
 	}
 }
 

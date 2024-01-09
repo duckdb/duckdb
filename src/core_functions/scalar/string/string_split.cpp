@@ -2,10 +2,10 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
 
@@ -24,7 +24,8 @@ struct StringSplitInput {
 			ListVector::SetListSize(result_list, offset + list_idx);
 			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
 		}
-		FlatVector::GetData<string_t>(result_child)[list_entry] = string_t(split_data, split_size);
+		FlatVector::GetData<string_t>(result_child)[list_entry] =
+		    StringVector::AddString(result_child, split_data, split_size);
 	}
 };
 
@@ -152,8 +153,6 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-
-	StringVector::AddHeapReference(child_entry, args.data[0]);
 }
 
 static void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {

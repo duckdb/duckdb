@@ -240,6 +240,8 @@ private:
 		values.push_back(Value::CreateValue<T>(value));
 		return QueryParamsRecursive(query, values, args...);
 	}
+        transaction_t GetHLCTimestamp();
+        void SetHLCTimestamp(transaction_t ts);
 };
 
 } // namespace duckdb

@@ -51,10 +51,6 @@ string ConvertToString::Operation(hugeint_t input) {
 	return StandardStringCast(input);
 }
 template <>
-string ConvertToString::Operation(uhugeint_t input) {
-	return StandardStringCast(input);
-}
-template <>
 string ConvertToString::Operation(float input) {
 	return StandardStringCast(input);
 }

@@ -38,14 +38,11 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	// only handle constant and flat vectors here for now
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(source.GetVectorType());
-		const bool is_null = ConstantVector::IsNull(source);
-		ConstantVector::SetNull(result, is_null);
+		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
 
-		if (!is_null) {
-			auto ldata = ConstantVector::GetData<list_entry_t>(source);
-			auto tdata = ConstantVector::GetData<list_entry_t>(result);
-			*tdata = *ldata;
-		}
+		auto ldata = ConstantVector::GetData<list_entry_t>(source);
+		auto tdata = ConstantVector::GetData<list_entry_t>(result);
+		*tdata = *ldata;
 	} else {
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -107,7 +104,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		}
 		result_data[i] = StringVector::EmptyString(result, list_length);
 		auto dataptr = result_data[i].GetDataWriteable();
-		idx_t offset = 0;
+		auto offset = 0;
 		dataptr[offset++] = '[';
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			auto idx = list.offset + list_idx;

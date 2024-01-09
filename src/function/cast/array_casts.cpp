@@ -130,7 +130,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 		out_data[i] = StringVector::EmptyString(result, array_varchar_length);
 		auto dataptr = out_data[i].GetDataWriteable();
-		idx_t offset = 0;
+		auto offset = 0;
 		dataptr[offset++] = '[';
 
 		// Second pass, write the actual data

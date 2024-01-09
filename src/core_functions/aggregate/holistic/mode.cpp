@@ -3,7 +3,6 @@
 // NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
@@ -17,9 +16,7 @@ namespace std {
 template <>
 struct hash<duckdb::interval_t> {
 	inline size_t operator()(const duckdb::interval_t &val) const {
-		int64_t months, days, micros;
-		val.Normalize(months, days, micros);
-		return hash<int32_t> {}(days) ^ hash<int32_t> {}(months) ^ hash<int64_t> {}(micros);
+		return hash<int32_t> {}(val.days) ^ hash<int32_t> {}(val.months) ^ hash<int64_t> {}(val.micros);
 	}
 };
 
@@ -27,13 +24,6 @@ template <>
 struct hash<duckdb::hugeint_t> {
 	inline size_t operator()(const duckdb::hugeint_t &val) const {
 		return hash<int64_t> {}(val.upper) ^ hash<int64_t> {}(val.lower);
-	}
-};
-
-template <>
-struct hash<duckdb::uhugeint_t> {
-	inline size_t operator()(const duckdb::uhugeint_t &val) const {
-		return hash<uint64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
 	}
 };
 
@@ -308,21 +298,11 @@ struct ModeFunction {
 	}
 };
 
-static unique_ptr<FunctionData> ModeVarcharBind(ClientContext &context, AggregateFunction &function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	function.arguments[0] = LogicalType::VARCHAR;
-	return nullptr;
-}
-
 template <typename INPUT_TYPE, typename KEY_TYPE, typename ASSIGN_OP = ModeAssignmentStandard>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<KEY_TYPE>;
 	using OP = ModeFunction<KEY_TYPE, ASSIGN_OP>;
-	auto return_type = type.id() == LogicalTypeId::ANY ? LogicalType::VARCHAR : type;
-	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, return_type);
-	if (type.id() == LogicalTypeId::ANY) {
-		func.bind = ModeVarcharBind;
-	}
+	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return func;
 }
@@ -347,8 +327,6 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<uint64_t, uint64_t>(type);
 	case PhysicalType::INT128:
 		return GetTypedModeFunction<hugeint_t, hugeint_t>(type);
-	case PhysicalType::UINT128:
-		return GetTypedModeFunction<uhugeint_t, uhugeint_t>(type);
 
 	case PhysicalType::FLOAT:
 		return GetTypedModeFunction<float, float>(type);
@@ -359,7 +337,7 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 		return GetTypedModeFunction<interval_t, interval_t>(type);
 
 	case PhysicalType::VARCHAR:
-		return GetTypedModeFunction<string_t, string, ModeAssignmentString>(LogicalType::ANY);
+		return GetTypedModeFunction<string_t, string, ModeAssignmentString>(type);
 
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");

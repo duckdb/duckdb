@@ -122,8 +122,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	return binder.bind_context.CreateColumnReference(table_name, column_name);
 }
 
-void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bool within_function_expression) {
-	bool next_within_function_expression = false;
+void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
@@ -131,12 +130,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bo
 		auto new_expr = QualifyColumnName(colref, error_message);
 		if (new_expr) {
 			if (!expr->alias.empty()) {
-				// Pre-existing aliases are added to the qualified colref
 				new_expr->alias = expr->alias;
-			} else if (within_function_expression) {
-				// Qualifying the colref may add an alias, but this needs to be removed within function expressions,
-				// because the alias here means a named parameter instead of a positional parameter
-				new_expr->alias = "";
 			}
 			new_expr->query_location = colref.query_location;
 			expr = std::move(new_expr);
@@ -154,15 +148,11 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, bo
 		}
 		break;
 	}
-	case ExpressionType::FUNCTION:
-		next_within_function_expression = true;
-		break;
 	default:
 		break;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		QualifyColumnNames(child, next_within_function_expression);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnNames(child); });
 }
 
 void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr) {

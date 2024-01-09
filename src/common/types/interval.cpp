@@ -22,7 +22,7 @@ bool Interval::FromString(const string &str, interval_t &result) {
 }
 
 template <class T>
-void IntervalTryAddition(T &target, int64_t input, int64_t multiplier, int64_t fraction = 0) {
+void IntervalTryAddition(T &target, int64_t input, int64_t multiplier) {
 	int64_t addition;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, multiplier, addition)) {
 		throw OutOfRangeException("interval value is out of range");
@@ -30,15 +30,6 @@ void IntervalTryAddition(T &target, int64_t input, int64_t multiplier, int64_t f
 	T addition_base = Cast::Operation<int64_t, T>(addition);
 	if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
 		throw OutOfRangeException("interval value is out of range");
-	}
-	if (fraction) {
-		//	Add in (fraction * multiplier) / MICROS_PER_SEC
-		//	This is always in range
-		addition = (fraction * multiplier) / Interval::MICROS_PER_SEC;
-		addition_base = Cast::Operation<int64_t, T>(addition);
-		if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
-			throw OutOfRangeException("interval fraction is out of range");
-		}
 	}
 }
 
@@ -119,7 +110,7 @@ interval_parse_number:
 				int32_t mult = 100000;
 				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
 					if (mult > 0) {
-						fraction += int64_t(str[pos] - '0') * mult;
+						fraction += (str[pos] - '0') * mult;
 					}
 				}
 			}
@@ -193,55 +184,43 @@ interval_parse_identifier:
 	// add the specifier to the interval
 	switch (specifier) {
 	case DatePartSpecifier::MILLENNIUM:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM, fraction);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM);
 		break;
 	case DatePartSpecifier::CENTURY:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_CENTURY, fraction);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_CENTURY);
 		break;
 	case DatePartSpecifier::DECADE:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_DECADE, fraction);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_DECADE);
 		break;
 	case DatePartSpecifier::YEAR:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_YEAR, fraction);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_YEAR);
 		break;
 	case DatePartSpecifier::QUARTER:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_QUARTER, fraction);
-		// Reduce to fraction of a month
-		fraction *= MONTHS_PER_QUARTER;
-		fraction %= MICROS_PER_SEC;
-		IntervalTryAddition<int32_t>(result.days, 0, DAYS_PER_MONTH, fraction);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_QUARTER);
 		break;
 	case DatePartSpecifier::MONTH:
 		IntervalTryAddition<int32_t>(result.months, number, 1);
-		IntervalTryAddition<int32_t>(result.days, 0, DAYS_PER_MONTH, fraction);
 		break;
 	case DatePartSpecifier::DAY:
 		IntervalTryAddition<int32_t>(result.days, number, 1);
-		IntervalTryAddition<int64_t>(result.micros, 0, MICROS_PER_DAY, fraction);
 		break;
 	case DatePartSpecifier::WEEK:
-		IntervalTryAddition<int32_t>(result.days, number, DAYS_PER_WEEK, fraction);
-		// Reduce to fraction of a day
-		fraction *= DAYS_PER_WEEK;
-		fraction %= MICROS_PER_SEC;
-		IntervalTryAddition<int64_t>(result.micros, 0, MICROS_PER_DAY, fraction);
+		IntervalTryAddition<int32_t>(result.days, number, DAYS_PER_WEEK);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		// Round the fraction
-		number += (fraction * 2) / MICROS_PER_SEC;
 		IntervalTryAddition<int64_t>(result.micros, number, 1);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MSEC, fraction);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MSEC);
 		break;
 	case DatePartSpecifier::SECOND:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC, fraction);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC);
 		break;
 	case DatePartSpecifier::MINUTE:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MINUTE, fraction);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MINUTE);
 		break;
 	case DatePartSpecifier::HOUR:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_HOUR, fraction);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_HOUR);
 		break;
 	default:
 		HandleCastError::AssignError(
@@ -511,10 +490,6 @@ dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 		date.days--;
 	}
 	return left;
-}
-
-dtime_tz_t Interval::Add(dtime_tz_t left, interval_t right, date_t &date) {
-	return dtime_tz_t(Interval::Add(left.time(), right, date), left.offset());
 }
 
 timestamp_t Interval::Add(timestamp_t left, interval_t right) {

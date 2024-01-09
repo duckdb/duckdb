@@ -1,6 +1,5 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
@@ -103,7 +102,7 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		Value left_copy = left;
 		Value right_copy = right;
 
-		auto comparison_type = LogicalType::ForceMaxLogicalType(left_type, right_type);
+		LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
 		if (!left_copy.DefaultTryCastAs(comparison_type) || !right_copy.DefaultTryCastAs(comparison_type)) {
 			return false;
 		}
@@ -129,8 +128,6 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(left.GetValueUnsafe<uint32_t>(), right.GetValueUnsafe<uint32_t>());
 	case PhysicalType::UINT64:
 		return OP::Operation(left.GetValueUnsafe<uint64_t>(), right.GetValueUnsafe<uint64_t>());
-	case PhysicalType::UINT128:
-		return OP::Operation(left.GetValueUnsafe<uhugeint_t>(), right.GetValueUnsafe<uhugeint_t>());
 	case PhysicalType::INT128:
 		return OP::Operation(left.GetValueUnsafe<hugeint_t>(), right.GetValueUnsafe<hugeint_t>());
 	case PhysicalType::FLOAT:

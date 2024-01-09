@@ -24,7 +24,6 @@ add_library_unity(
   transform_load.cpp
   transform_pragma.cpp
   transform_rename.cpp
-  transform_secret.cpp
   transform_select.cpp
   transform_select_node.cpp
   transform_set.cpp

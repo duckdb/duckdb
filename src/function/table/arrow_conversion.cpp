@@ -389,7 +389,6 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:

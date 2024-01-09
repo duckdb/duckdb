@@ -29,7 +29,6 @@ struct CatalogTransaction {
 
 	ClientContext &GetContext();
 
-	static CatalogTransaction GetSystemCatalogTransaction(ClientContext &context);
 	static CatalogTransaction GetSystemTransaction(DatabaseInstance &db);
 };
 

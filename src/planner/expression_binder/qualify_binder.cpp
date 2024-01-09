@@ -22,9 +22,8 @@ BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, 
 		return result;
 	}
 
-	BindResult alias_result;
-	auto found_alias = column_alias_binder.BindAlias(*this, expr, depth, root_expression, alias_result);
-	if (found_alias) {
+	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
+	if (!alias_result.HasError()) {
 		return alias_result;
 	}
 

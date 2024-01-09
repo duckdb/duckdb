@@ -14,10 +14,10 @@ namespace duckdb {
 
 class EmptyTableRef : public TableRef {
 public:
-	static constexpr const TableReferenceType TYPE = TableReferenceType::EMPTY_FROM;
+	static constexpr const TableReferenceType TYPE = TableReferenceType::EMPTY;
 
 public:
-	EmptyTableRef() : TableRef(TableReferenceType::EMPTY_FROM) {
+	EmptyTableRef() : TableRef(TableReferenceType::EMPTY) {
 	}
 
 public:

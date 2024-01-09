@@ -11,11 +11,9 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
-
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
@@ -90,7 +88,6 @@ public:
 	//! (Basically we put lower expected cardinality columns on the build side, and larger
 	//! tables on the probe side)
 	unique_ptr<LogicalOperator> LeftRightOptimizations(unique_ptr<LogicalOperator> op);
-	void TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
 
 private:
 	vector<reference<LogicalOperator>> filter_operators;

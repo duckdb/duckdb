@@ -12,22 +12,19 @@ ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const case_insensiti
     : node(node), alias_map(alias_map), visited_select_indexes() {
 }
 
-bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
-                                  bool root_expression, BindResult &result) {
+BindResult ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
+                                        bool root_expression) {
 	if (expr.IsQualified()) {
-		// qualified columns cannot be aliases
-		return false;
+		return BindResult(StringUtil::Format("Alias %s cannot be qualified.", expr.ToString()));
 	}
 
 	auto alias_entry = alias_map.find(expr.column_names[0]);
 	if (alias_entry == alias_map.end()) {
-		// no alias found
-		return false;
+		return BindResult(StringUtil::Format("Alias %s is not found.", expr.ToString()));
 	}
 
 	if (visited_select_indexes.find(alias_entry->second) != visited_select_indexes.end()) {
-		// self-referential alias cannot be resolved
-		return false;
+		return BindResult("Cannot resolve self-referential alias");
 	}
 
 	// found an alias: bind the alias expression
@@ -36,9 +33,9 @@ bool ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, ColumnRefE
 
 	// since the alias has been found, pass a depth of 0. See Issue 4978 (#16)
 	// ColumnAliasBinders are only in Having, Qualify and Where Binders
-	result = enclosing_binder.BindExpression(expression, depth, root_expression);
+	auto result = enclosing_binder.BindExpression(expression, depth, root_expression);
 	visited_select_indexes.erase(alias_entry->second);
-	return true;
+	return result;
 }
 
 } // namespace duckdb

@@ -47,7 +47,7 @@ SimpleFunction::~SimpleFunction() {
 }
 
 string SimpleFunction::ToString() const {
-	return Function::CallToString(name, arguments, varargs);
+	return Function::CallToString(name, arguments);
 }
 
 bool SimpleFunction::HasVarArgs() const {
@@ -81,7 +81,7 @@ BaseScalarFunction::~BaseScalarFunction() {
 }
 
 string BaseScalarFunction::ToString() const {
-	return Function::CallToString(name, arguments, varargs, return_type);
+	return Function::CallToString(name, arguments, return_type);
 }
 
 // add your initializer for new functions here
@@ -118,22 +118,16 @@ hash_t BaseScalarFunction::Hash() const {
 	return hash;
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &varargs) {
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments) {
 	string result = name + "(";
-	vector<string> string_arguments;
-	for (auto &arg : arguments) {
-		string_arguments.push_back(arg.ToString());
-	}
-	if (varargs.IsValid()) {
-		string_arguments.push_back("[" + varargs.ToString() + "...]");
-	}
-	result += StringUtil::Join(string_arguments, ", ");
+	result += StringUtil::Join(arguments, arguments.size(), ", ",
+	                           [](const LogicalType &argument) { return argument.ToString(); });
 	return result + ")";
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &varargs,
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
                               const LogicalType &return_type) {
-	string result = CallToString(name, arguments, varargs);
+	string result = CallToString(name, arguments);
 	result += " -> " + return_type.ToString();
 	return result;
 }

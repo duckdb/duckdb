@@ -1,13 +1,12 @@
 #include "duckdb/common/tree_renderer.hpp"
-
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
-#include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <sstream>
@@ -379,8 +378,7 @@ public:
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
 	switch (op.type) {
-	case PhysicalOperatorType::LEFT_DELIM_JOIN:
-	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+	case PhysicalOperatorType::DELIM_JOIN:
 	case PhysicalOperatorType::POSITIONAL_SCAN:
 		return true;
 	default:
@@ -393,7 +391,7 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 	for (auto &child : op.children) {
 		callback(*child);
 	}
-	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
+	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
 		auto &delim = op.Cast<PhysicalDelimJoin>();
 		callback(*delim.join);
 	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {

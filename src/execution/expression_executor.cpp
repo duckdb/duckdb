@@ -171,8 +171,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 #ifdef DEBUG
-	// the result vector has to be used for the first time or has to be reset
-	// otherwise, the validity mask might contain previous (now incorrect) data
+	//! The result Vector must be "clean"
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
 		D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
 	}

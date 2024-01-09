@@ -6,6 +6,7 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/transaction/timestamp_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
@@ -311,6 +312,14 @@ bool Connection::IsAutoCommit() {
 }
 bool Connection::HasActiveTransaction() {
 	return context->transaction.HasActiveTransaction();
+}
+
+transaction_t Connection::GetHLCTimestamp() {
+  return TimestampManager::GetHLCTimestamp();
+}
+
+void Connection::SetHLCTimestamp(transaction_t ts) {
+  TimestampManager::SetHLCTimestamp(ts);
 }
 
 } // namespace duckdb

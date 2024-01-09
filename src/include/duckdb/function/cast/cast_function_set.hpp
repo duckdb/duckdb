@@ -13,7 +13,6 @@
 namespace duckdb {
 struct MapCastInfo;
 struct MapCastNode;
-struct DBConfig;
 
 typedef BoundCastInfo (*bind_cast_function_t)(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target);
@@ -39,7 +38,6 @@ struct BindCastFunction {
 class CastFunctionSet {
 public:
 	CastFunctionSet();
-	CastFunctionSet(DBConfig &config);
 
 public:
 	DUCKDB_API static CastFunctionSet &Get(ClientContext &context);
@@ -59,7 +57,6 @@ public:
 	                                     bind_cast_function_t bind, int64_t implicit_cast_cost = -1);
 
 private:
-	optional_ptr<DBConfig> config;
 	vector<BindCastFunction> bind_functions;
 	//! If any custom cast functions have been defined using RegisterCastFunction, this holds the map
 	optional_ptr<MapCastInfo> map_info;

@@ -33,9 +33,6 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 public:
-	static LogicalType BindComparison(ClientContext &context, const LogicalType &left_type,
-	                                  const LogicalType &right_type, ExpressionType comparison_type);
-	static bool TryBindComparison(ClientContext &context, const LogicalType &left_type, const LogicalType &right_type,
-	                              LogicalType &result_type, ExpressionType comparison_type);
+	static LogicalType BindComparison(LogicalType left_type, LogicalType right_type);
 };
 } // namespace duckdb

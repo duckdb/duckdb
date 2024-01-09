@@ -165,9 +165,6 @@ public:
 		case LogicalTypeId::HUGEINT:
 			function = &ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, OP>;
 			break;
-		case LogicalTypeId::UHUGEINT:
-			function = &ScalarFunction::UnaryFunction<uhugeint_t, uhugeint_t, OP>;
-			break;
 		case LogicalTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, float, OP>;
 			break;
@@ -210,9 +207,6 @@ public:
 			break;
 		case LogicalTypeId::HUGEINT:
 			function = &ScalarFunction::UnaryFunction<hugeint_t, TR, OP>;
-			break;
-		case LogicalTypeId::UHUGEINT:
-			function = &ScalarFunction::UnaryFunction<uhugeint_t, TR, OP>;
 			break;
 		case LogicalTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, TR, OP>;

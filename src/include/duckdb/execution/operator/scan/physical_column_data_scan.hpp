@@ -23,7 +23,10 @@ public:
 	                       unique_ptr<ColumnDataCollection> owned_collection = nullptr);
 
 	PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality,
-	                       idx_t cte_index);
+	                       idx_t cte_index)
+	    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr),
+	      cte_index(cte_index) {
+	}
 
 	// the column data collection to scan
 	optional_ptr<ColumnDataCollection> collection;

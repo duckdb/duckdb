@@ -59,8 +59,7 @@ enum class PhysicalOperatorType : uint8_t {
 	CROSS_PRODUCT,
 	PIECEWISE_MERGE_JOIN,
 	IE_JOIN,
-	LEFT_DELIM_JOIN,
-	RIGHT_DELIM_JOIN,
+	DELIM_JOIN,
 	POSITIONAL_JOIN,
 	ASOF_JOIN,
 	// -----------------------------
@@ -112,12 +111,7 @@ enum class PhysicalOperatorType : uint8_t {
 	INOUT_FUNCTION,
 	RESULT_COLLECTOR,
 	RESET,
-	EXTENSION,
-
-	// -----------------------------
-	// Secret
-	// -----------------------------
-	CREATE_SECRET,
+	EXTENSION
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

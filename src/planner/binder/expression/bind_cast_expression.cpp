@@ -18,7 +18,7 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	// the children have been successfully resolved
 	auto &child = BoundExpression::GetExpression(*expr.child);
 	if (expr.try_cast) {
-		if (ExpressionBinder::GetExpressionReturnType(*child) == expr.cast_type) {
+		if (child->return_type == expr.cast_type) {
 			// no cast required: type matches
 			return BindResult(std::move(child));
 		}

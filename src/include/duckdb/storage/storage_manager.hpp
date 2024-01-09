@@ -54,14 +54,13 @@ public:
 	}
 
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
-	optional_ptr<WriteAheadLog> GetWriteAheadLog();
+	optional_ptr<WriteAheadLog> GetWriteAheadLog() {
+		return wal.get();
+	}
 
-	//! Returns the database file path
 	string GetDBPath() {
 		return path;
 	}
-	//! The path to the WAL, derived from the database file path
-	string GetWALPath();
 	bool InMemory();
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
@@ -76,7 +75,7 @@ protected:
 	virtual void LoadDatabase() = 0;
 
 protected:
-	//! The database this storage manager belongs to
+	//! The database this storagemanager belongs to
 	AttachedDatabase &db;
 	//! The path of the database
 	string path;
@@ -84,9 +83,6 @@ protected:
 	unique_ptr<WriteAheadLog> wal;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
-	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
-	//! return nullptr when loading a database
-	bool load_complete = false;
 
 public:
 	template <class TARGET>

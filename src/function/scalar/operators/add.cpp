@@ -7,7 +7,6 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -70,27 +69,8 @@ timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 }
 
 template <>
-timestamp_t AddOperator::Operation(date_t left, dtime_tz_t right) {
-	if (left == date_t::infinity()) {
-		return timestamp_t::infinity();
-	} else if (left == date_t::ninfinity()) {
-		return timestamp_t::ninfinity();
-	}
-	timestamp_t result;
-	if (!Timestamp::TryFromDatetime(left, right, result)) {
-		throw OutOfRangeException("Timestamp with time zone out of range");
-	}
-	return result;
-}
-
-template <>
 timestamp_t AddOperator::Operation(dtime_t left, date_t right) {
 	return AddOperator::Operation<date_t, dtime_t, timestamp_t>(right, left);
-}
-
-template <>
-timestamp_t AddOperator::Operation(dtime_tz_t left, date_t right) {
-	return AddOperator::Operation<date_t, dtime_tz_t, timestamp_t>(right, left);
 }
 
 template <>
@@ -181,17 +161,8 @@ bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 }
 
 template <>
-bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
-	if (!Uhugeint::TryAddInPlace(left, right)) {
-		return false;
-	}
-	result = left;
-	return true;
-}
-
-template <>
 bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	if (!Hugeint::TryAddInPlace(left, right)) {
+	if (!Hugeint::AddInPlace(left, right)) {
 		return false;
 	}
 	result = left;
@@ -233,9 +204,7 @@ bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result) {
 
 template <>
 bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	if (!TryAddOperator::Operation(left, right, result)) {
-		return false;
-	}
+	result = left + right;
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}
@@ -263,17 +232,6 @@ dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
 template <>
 dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right) {
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(right, left);
-}
-
-template <>
-dtime_tz_t AddTimeOperator::Operation(dtime_tz_t left, interval_t right) {
-	date_t date(0);
-	return Interval::Add(left, right, date);
-}
-
-template <>
-dtime_tz_t AddTimeOperator::Operation(interval_t left, dtime_tz_t right) {
-	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(right, left);
 }
 
 } // namespace duckdb

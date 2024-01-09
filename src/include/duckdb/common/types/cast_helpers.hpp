@@ -13,7 +13,6 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "fmt/format.h"
 
@@ -91,9 +90,6 @@ int NumericHelper::UnsignedLength(uint64_t value);
 
 template <>
 std::string NumericHelper::ToString(hugeint_t value);
-
-template <>
-std::string NumericHelper::ToString(uhugeint_t value);
 
 struct DecimalToString {
 	template <class SIGNED, class UNSIGNED>
@@ -349,19 +345,6 @@ struct HugeintToStringCast {
 	}
 };
 
-struct UhugeintToStringCast {
-	static string_t Format(uhugeint_t value, Vector &vector) {
-		std::string str = value.ToString();
-		string_t result = StringVector::EmptyString(vector, str.length());
-		auto data = result.GetDataWriteable();
-
-		// null-termination not required
-		memcpy(data, str.data(), str.length());
-		result.Finalize();
-		return result;
-	}
-};
-
 struct DateToStringCast {
 	static idx_t Length(int32_t date[], idx_t &year_length, bool &add_bc) {
 		// format is YYYY-MM-DD with optional (BC) at the end
@@ -409,7 +392,7 @@ struct DateToStringCast {
 		}
 		// optionally add BC to the end of the date
 		if (add_bc) {
-			memcpy(ptr, " (BC)", 5); // NOLINT
+			memcpy(ptr, " (BC)", 5);
 		}
 	}
 };
@@ -510,7 +493,7 @@ struct IntervalToStringCast {
 		// append the name together with a potential "s" (for plurals)
 		memcpy(buffer + length, name, name_len);
 		length += name_len;
-		if (value != 1 && value != -1) {
+		if (value != 1) {
 			buffer[length++] = 's';
 		}
 	}
@@ -571,7 +554,7 @@ struct IntervalToStringCast {
 			}
 		} else if (length == 0) {
 			// empty interval: default to 00:00:00
-			memcpy(buffer, "00:00:00", 8); // NOLINT
+			memcpy(buffer, "00:00:00", 8);
 			return 8;
 		}
 		return length;

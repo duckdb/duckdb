@@ -33,8 +33,7 @@ public:
 	                                    bool has_null);
 
 public:
-	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &confluent_pipelines, PhysicalOperator &op,
-	                               bool build_rhs = true);
+	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &confluent_pipelines, PhysicalOperator &op);
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
 

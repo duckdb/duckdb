@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! LogicalPragma represents a simple logical operator that only passes on the parse info
+//! LogicalSimple represents a simple logical operator that only passes on the parse info
 class LogicalPragma : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PRAGMA;

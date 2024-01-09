@@ -155,10 +155,6 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	    arguments[0]->return_type.id() == LogicalTypeId::MAP) {
 		throw NotImplementedException("Unimplemented type for histogram %s", arguments[0]->return_type.ToString());
 	}
-	if (function.arguments[0].id() == LogicalTypeId::ANY) {
-		// add varchar cast for ANY
-		function.arguments[0] = LogicalType::VARCHAR;
-	}
 
 	auto struct_type = LogicalType::MAP(arguments[0]->return_type, LogicalType::UBIGINT);
 
@@ -180,6 +176,7 @@ static AggregateFunction GetHistogramFunction(const LogicalType &type) {
 
 template <class OP, class T, bool IS_ORDERED>
 AggregateFunction GetMapType(const LogicalType &type) {
+
 	if (IS_ORDERED) {
 		return GetHistogramFunction<OP, T>(type);
 	}
@@ -212,6 +209,8 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 		return GetMapType<HistogramFunctor, float, IS_ORDERED>(type);
 	case LogicalType::DOUBLE:
 		return GetMapType<HistogramFunctor, double, IS_ORDERED>(type);
+	case LogicalType::VARCHAR:
+		return GetMapType<HistogramStringFunctor, string, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP:
 		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_TZ:
@@ -228,8 +227,6 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 		return GetMapType<HistogramFunctor, dtime_tz_t, IS_ORDERED>(type);
 	case LogicalType::DATE:
 		return GetMapType<HistogramFunctor, date_t, IS_ORDERED>(type);
-	case LogicalType::ANY:
-		return GetMapType<HistogramStringFunctor, string, IS_ORDERED>(type);
 	default:
 		throw InternalException("Unimplemented histogram aggregate");
 	}
@@ -248,6 +245,7 @@ AggregateFunctionSet HistogramFun::GetFunctions() {
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::BIGINT));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::FLOAT));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::DOUBLE));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::VARCHAR));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP_TZ));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIMESTAMP_S));
@@ -256,7 +254,6 @@ AggregateFunctionSet HistogramFun::GetFunctions() {
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME_TZ));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::DATE));
-	fun.AddFunction(GetHistogramFunction<>(LogicalType::ANY));
 	return fun;
 }
 

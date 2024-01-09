@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
 namespace duckdb {
@@ -42,7 +43,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
-		return PropagatesBuildSide(join_type);
+		return IsRightOuterJoin(join_type);
 	}
 	bool ParallelSource() const override {
 		return true;

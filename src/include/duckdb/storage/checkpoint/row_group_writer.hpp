@@ -34,6 +34,9 @@ public:
 
 	virtual MetadataWriter &GetPayloadWriter() = 0;
 
+	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
+	PartialBlockAllocation GetBlockAllocation(uint32_t segment_size);
+
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
 	}

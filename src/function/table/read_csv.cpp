@@ -232,8 +232,7 @@ public:
 		if (file_size == 0) {
 			progress = 1.0;
 		} else {
-			// for compressed files, readed bytes may greater than files size.
-			progress = std::min(1.0, double(bytes_read) / double(file_size));
+			progress = double(bytes_read) / double(file_size);
 		}
 		// now get the total percentage of files read
 		double percentage = double(file_index - 1) / total_files;
@@ -398,8 +397,6 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		if (file_index < bind_data.files.size()) {
 			current_file_path = bind_data.files[file_index];
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
-			file_size = file_handle->FileSize();
-			bytes_read = 0;
 			buffer_manager =
 			    make_shared<CSVBufferManager>(context, std::move(file_handle), bind_data.options, file_index);
 			cur_buffer_idx = 0;

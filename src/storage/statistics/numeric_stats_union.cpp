@@ -33,11 +33,6 @@ hugeint_t &NumericValueUnion::GetReferenceUnsafe() {
 }
 
 template <>
-uhugeint_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.uhugeint;
-}
-
-template <>
 uint8_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.utinyint;
 }

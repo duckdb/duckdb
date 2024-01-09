@@ -152,9 +152,6 @@ void BaseAppender::AppendValueInternal(T input) {
 	case LogicalTypeId::HUGEINT:
 		AppendValueInternal<T, hugeint_t>(col, input);
 		break;
-	case LogicalTypeId::UHUGEINT:
-		AppendValueInternal<T, uhugeint_t>(col, input);
-		break;
 	case LogicalTypeId::FLOAT:
 		AppendValueInternal<T, float>(col, input);
 		break;
@@ -233,11 +230,6 @@ void BaseAppender::Append(int64_t value) {
 template <>
 void BaseAppender::Append(hugeint_t value) {
 	AppendValueInternal<hugeint_t>(value);
-}
-
-template <>
-void BaseAppender::Append(uhugeint_t value) {
-	AppendValueInternal<uhugeint_t>(value);
 }
 
 template <>

@@ -36,9 +36,7 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 	for (auto &it : value_map) {
 		auto &identifier = it.first;
 		auto lookup = values->find(identifier);
-		if (lookup == values->end()) {
-			break;
-		}
+		D_ASSERT(lookup != values->end());
 		if (lookup->second.type() != it.second->return_type) {
 			return true;
 		}

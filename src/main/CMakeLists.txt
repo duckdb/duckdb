@@ -3,7 +3,6 @@ if(NOT CLANG_TIDY)
 endif()
 add_subdirectory(extension)
 add_subdirectory(relation)
-add_subdirectory(secret)
 add_subdirectory(settings)
 add_subdirectory(chunk_scan_state)
 

@@ -1,3 +1,4 @@
+
 #include "duckdb/function/cast/cast_function_set.hpp"
 
 #include "duckdb/common/pair.hpp"
@@ -23,10 +24,6 @@ BindCastFunction::BindCastFunction(bind_cast_function_t function_p, unique_ptr<B
 
 CastFunctionSet::CastFunctionSet() : map_info(nullptr) {
 	bind_functions.emplace_back(DefaultCasts::GetDefaultCastFunction);
-}
-
-CastFunctionSet::CastFunctionSet(DBConfig &config_p) : CastFunctionSet() {
-	this->config = &config_p;
 }
 
 CastFunctionSet &CastFunctionSet::Get(ClientContext &context) {
@@ -159,13 +156,7 @@ int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const Logic
 		}
 	}
 	// if not, fallback to the default implicit cast rules
-	auto score = CastRules::ImplicitCast(source, target);
-	if (score < 0 && config && config->options.old_implicit_casting) {
-		if (source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
-			score = 149;
-		}
-	}
-	return score;
+	return CastRules::ImplicitCast(source, target);
 }
 
 BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {

@@ -11,7 +11,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -264,12 +263,6 @@ bool TryCastWithOverflowCheck(hugeint_t input, bool &result) {
 	return true;
 }
 
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t input, bool &result) {
-	result = input.upper != 0 || input.lower != 0;
-	return true;
-}
-
 //===--------------------------------------------------------------------===//
 // Cast bool -> Numeric
 //===--------------------------------------------------------------------===//
@@ -335,13 +328,6 @@ bool TryCastWithOverflowCheck(bool value, double &result) {
 
 template <>
 bool TryCastWithOverflowCheck(bool input, hugeint_t &result) {
-	result.upper = 0;
-	result.lower = input ? 1 : 0;
-	return true;
-}
-
-template <>
-bool TryCastWithOverflowCheck(bool input, uhugeint_t &result) {
 	result.upper = 0;
 	result.lower = input ? 1 : 0;
 	return true;
@@ -450,11 +436,6 @@ bool TryCastWithOverflowCheck(hugeint_t value, uint64_t &result) {
 }
 
 template <>
-bool TryCastWithOverflowCheck(hugeint_t value, uhugeint_t &result) {
-	return Hugeint::TryCast(value, result);
-}
-
-template <>
 bool TryCastWithOverflowCheck(hugeint_t value, float &result) {
 	return Hugeint::TryCast(value, result);
 }
@@ -462,123 +443,6 @@ bool TryCastWithOverflowCheck(hugeint_t value, float &result) {
 template <>
 bool TryCastWithOverflowCheck(hugeint_t value, double &result) {
 	return Hugeint::TryCast(value, result);
-}
-
-//===--------------------------------------------------------------------===//
-// Cast Uhugeint -> Numeric
-//===--------------------------------------------------------------------===//
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, int8_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, int16_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, int32_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, int64_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, uint8_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, uint16_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, uint32_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, uint64_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, hugeint_t &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, float &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, double &result) {
-	return Uhugeint::TryCast(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, uhugeint_t &result) {
-	result = value;
-	return true;
-}
-
-//===--------------------------------------------------------------------===//
-// Cast Numeric -> uhugeint
-//===--------------------------------------------------------------------===//
-template <>
-bool TryCastWithOverflowCheck(int8_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(int16_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(int32_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(int64_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uint8_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uint16_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uint32_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uint64_t value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(value, result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(float value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(std::nearbyintf(value), result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(double value, uhugeint_t &result) {
-	return Uhugeint::TryConvert(std::nearbyint(value), result);
 }
 
 struct NumericTryCastToBit {
