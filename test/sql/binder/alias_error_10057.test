@@ -1,4 +1,4 @@
-# name: test/sql/binder/old_implicit_cast.test
+# name: test/sql/binder/alias_error_10057.test
 # description: Test old_implicit_cast setting
 # group: [binder]
 
