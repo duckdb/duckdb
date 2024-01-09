@@ -25,7 +25,6 @@ Unlike simple scalar functions, there are several of these:
 | `update` | Accumulate the arguments into the corresponding `State` | X |
 | `simple_update` | Accumulate the arguments into a single `State`. |  |
 | `combine` | Merge one `State` into another |  |
-| `absorb` | Destructively merge one `State` into another |  |
 | `finalize` | Convert a `State` into a final value. | X |
 | `window` | Compute a windowed aggregate value from the inputs and frame bounds |  |
 | `bind` | Modify the binding of the aggregate |  |
@@ -128,35 +127,16 @@ the generator is `StateCombine` and the method it wraps is:
 Combine(const State& source, State &target, AggregateInputData &info)
 ```
 
-Note that the `sources` should _not_ be modified for efficiency because the caller may be using them
-for multiple operations(e.g., window segment trees).
-If you wish to combine destructively, you _must_ define an `absorb` function.
+Note that the `source` should _not_ be modified for efficiency because the caller may be using them
+for multiple operations (e.g., window segment trees).
+
+If you wish to combine destructively, you _must_ check that the `combine_type` member
+of the `AggregateInputData` argument is set to `ALLOW_DESTRUCTIVE`.
+This is useful when the aggregate can move data more efficiently than copying it.
+`LIST` is an example, where the internal linked list data structures can be spliced instead of copied.
 
 The `combine` operation is optional, but it is needed for multi-threaded aggregation.
 If it is not provided, then _all_ aggregate functions in the grouping must be computed on a single thread. 
-
-### Absorb
-
-```cpp
-absorb(Vector &sources, Vector &targets, AggregateInputData &info, idx_t count)
-```
-
-Merges the source states into the corresponding target states.
-If you are using template generators, 
-the generator is `StateAbsorb` and the method it wraps is:
-
-```cpp
-Absorb(State& source, State &target, AggregateInputData &info)
-```
-Absorb should be defined when the aggregate can move data more efficiently than copying it.
-`LIST` is an example, where the internal linked list data structures can be 
-
-`absorb` is optional and defaults to `combine`, but it is called in situations
-where destructively moving the source data is allowed because the caller no longer needs the source
-(typically for `GROUP BY` operations).
-The source still needs to allow the destructor (if any) to be called,
-and a separate, non-destructive `combine` operation _must_ to be defined for use by
-windowing accelerators.
 
 ### Finalize
 
@@ -207,9 +187,6 @@ Window(const ArgType *arg, ValidityMask &filter, ValidityMask &valid,
        const FrameBounds &frame, const FrameBounds &prev, 
        ResultType &result, idx_t rid, idx_tbias)
 ```
-
-Defining `window` is also useful if the aggregate wishes to use a destructive `combine` operation.
-This may be tricky to implement efficiently. 
 
 ### Bind
 

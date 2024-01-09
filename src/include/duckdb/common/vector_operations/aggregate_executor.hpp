@@ -340,18 +340,6 @@ public:
 		}
 	}
 
-	template <class STATE_TYPE, class OP>
-	static void Absorb(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
-		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		//	Destructive combine
-		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
-		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
-
-		for (idx_t i = 0; i < count; i++) {
-			OP::template Absorb<STATE_TYPE, OP>(*sdata[i], *tdata[i], aggr_input_data);
-		}
-	}
-
 	template <class STATE_TYPE, class RESULT_TYPE, class OP>
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                     idx_t offset) {
