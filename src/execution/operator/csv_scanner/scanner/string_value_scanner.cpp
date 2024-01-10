@@ -611,10 +611,10 @@ void StringValueScanner::FinalizeChunkProcess() {
 		// We are done
 		return;
 	}
-	iterator.done = true;
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
 	if (iterator.IsSet()) {
+		iterator.done = true;
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
 		auto moved = MoveToNextBuffer();
@@ -634,6 +634,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 				Process();
 			}
 		}
+		iterator.done = FinishedFile();
 		if (result.null_padding) {
 			while (result.result_position % result.number_of_columns != 0) {
 				result.validity_mask->SetInvalid(result.result_position++);
