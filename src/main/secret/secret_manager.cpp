@@ -162,19 +162,17 @@ optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransacti
 		throw InvalidInputException("Can not set secret storage for temporary secrets!");
 	}
 
+	if (persist_type == SecretPersistType::PERSISTENT) {
+		if (!config.allow_persistent_secrets) {
+			throw InvalidInputException("Persistent secrets are currently disabled. To enable them, restart duckdb and "
+			                            "run 'SET allow_persistent_secrets=true'");
+		}
+	}
+
 	//! Lookup which backend to store the secret in
 	auto backend = GetSecretStorage(resolved_storage);
 	if (backend) {
 		return backend->StoreSecret(transaction, std::move(secret), on_conflict);
-	}
-
-	if (resolved_storage == LOCAL_FILE_STORAGE_NAME) {
-		if (!config.allow_persistent_secrets) {
-			throw InvalidInputException("Persistent secrets are currently disabled. To enable them, restart duckdb and "
-			                            "run 'SET allow_persistent_secrets=true'");
-		} else {
-			throw InternalException("The default local file storage for secrets was not found.");
-		}
 	}
 
 	throw InvalidInputException("Secret storage '%s' not found!", resolved_storage);
