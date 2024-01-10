@@ -777,6 +777,13 @@ end
 #     return ccall((:duckdb_from_timestamp, libduckdb), Ptr{Cvoid}, (Ptr{Cvoid},), ts)
 # end
 #
+
+function duckdb_time_tz_extract(val:UInt64, micros: Ptr{Int64}, tz: Ptr{Int32})
+    return ccall((:duckdb_time_tz_extract, libduckdb), Cvoid, (UInt64, Ptr{Int64}, Ptr{Int32}), val, micros, tz)
+end
+
+
+#
 # """
 # duckdb_to_timestamp(ts)
 # Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
