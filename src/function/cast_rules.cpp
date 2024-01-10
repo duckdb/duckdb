@@ -341,7 +341,11 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// integer literals can be cast to any other integer type for a low cost, but only if the literal fits
 		if (IntegerLiteral::FitsInType(from, to)) {
 			// to avoid ties we prefer BIGINT, INT, ...
-			return TargetTypeCost(to) - 90;
+			auto target_cost = TargetTypeCost(to);
+			if (target_cost < 100) {
+				throw InternalException("Integer literal implicit cast - TargetTypeCost should be >= 100");
+			}
+			return target_cost - 90;
 		}
 		// in any other case we use the casting rules of the preferred type of the literal
 		return CastRules::ImplicitCast(IntegerLiteral::GetType(from), to);

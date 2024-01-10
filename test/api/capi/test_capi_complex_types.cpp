@@ -98,8 +98,7 @@ TEST_CASE("Test list types C API", "[capi]") {
 	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	result =
-	    tester.Query("select [1, 2, 3]::INT[] l, ['hello', 'world'] s, [[1, 2, 3], [4, 5]]::INT[][] nested, 3::int");
+	result = tester.Query("select [1, 2, 3] l, ['hello', 'world'] s, [[1, 2, 3], [4, 5]] nested, 3::int");
 	REQUIRE(NO_FAIL(*result));
 	REQUIRE(result->ColumnCount() == 4);
 	REQUIRE(result->ErrorMessage() == nullptr);
