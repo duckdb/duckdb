@@ -453,7 +453,9 @@ bool Executor::ResultCollectorIsBlocked() {
 	lock_guard<mutex> l(executor_lock);
 	for (auto &kv : to_be_rescheduled_tasks) {
 		auto &task = kv.second;
-		D_ASSERT(task->Type() == TaskType::EXECUTOR);
+		if (task->Type() != TaskType::EXECUTOR) {
+			return false;
+		}
 		auto &executor_task = dynamic_cast<ExecutorTask &>(*task);
 		if (!executor_task.IsPipelineTask()) {
 			return false;

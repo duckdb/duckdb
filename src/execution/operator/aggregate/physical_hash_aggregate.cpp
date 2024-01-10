@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -805,6 +806,7 @@ public:
 		}
 	}
 
+	optional_idx radix_idx;
 	vector<unique_ptr<LocalSourceState>> radix_states;
 };
 
@@ -819,32 +821,37 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	auto &gstate = input.global_state.Cast<HashAggregateGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<HashAggregateLocalSourceState>();
 	while (true) {
-		idx_t radix_idx = gstate.state_index;
+		if (!lstate.radix_idx.IsValid()) {
+			lstate.radix_idx = gstate.state_index.load();
+		}
+		const auto radix_idx = lstate.radix_idx.GetIndex();
 		if (radix_idx >= groupings.size()) {
 			break;
 		}
+
 		auto &grouping = groupings[radix_idx];
 		auto &radix_table = grouping.table_data;
 		auto &grouping_gstate = sink_gstate.grouping_states[radix_idx];
 
-		InterruptState interrupt_state;
 		OperatorSourceInput source_input {*gstate.radix_states[radix_idx], *lstate.radix_states[radix_idx],
-		                                  interrupt_state};
+		                                  input.interrupt_state};
 		auto res = radix_table.GetData(context, chunk, *grouping_gstate.table_state, source_input);
+		if (res == SourceResultType::BLOCKED) {
+			return res;
+		}
 		if (chunk.size() != 0) {
 			return SourceResultType::HAVE_MORE_OUTPUT;
-		} else if (res == SourceResultType::BLOCKED) {
-			throw InternalException("Unexpectedly Blocked from radix_table");
 		}
 
 		// move to the next table
 		lock_guard<mutex> l(gstate.lock);
-		radix_idx++;
-		if (radix_idx > gstate.state_index) {
+		lstate.radix_idx = lstate.radix_idx.GetIndex() + 1;
+		if (lstate.radix_idx.GetIndex() > gstate.state_index) {
 			// we have not yet worked on the table
 			// move the global index forwards
-			gstate.state_index = radix_idx;
+			gstate.state_index = lstate.radix_idx.GetIndex();
 		}
+		lstate.radix_idx = gstate.state_index.load();
 	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
