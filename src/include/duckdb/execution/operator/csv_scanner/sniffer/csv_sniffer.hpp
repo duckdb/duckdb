@@ -49,7 +49,7 @@ struct SetColumns {
 	//! How many columns
 	idx_t Size();
 	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
-	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors) {
+	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors, bool last_value_always_empty) {
 		if (!IsSet() || ignore_errors) {
 			// We can't say its unacceptable if it's not set or if we ignore errors
 			return false;
@@ -59,7 +59,7 @@ struct SetColumns {
 		// ignore_errors not set, we don't have a suitable candidate.
 		// Note that we compare with max_columns_found + 1, because some broken files have the behaviour where two
 		// columns are represented as: | col 1 | col_2 |
-		if (num_cols == size || num_cols == size + 1) {
+		if (num_cols == size || num_cols == size + last_value_always_empty) {
 			// Good Candidate
 			return false;
 		}

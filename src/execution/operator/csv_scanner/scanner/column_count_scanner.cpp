@@ -21,6 +21,9 @@ idx_t &ColumnCountResult::operator[](size_t index) {
 
 bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
+	if (!result.states.EmptyLastValue()){
+		result.last_value_always_empty = false;
+	}
 	if (result.result_position >= STANDARD_VECTOR_SIZE) {
 		// We sniffed enough rows
 		return true;

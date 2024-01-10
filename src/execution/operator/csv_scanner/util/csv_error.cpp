@@ -97,6 +97,7 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, stri
                                            idx_t vector_line_start, idx_t current_column) {
 	std::ostringstream error;
 	// What is the problematic CSV Line
+	error << "Value with unterminated quote found." << std::endl;
 	error << "Problematic CSV Line (Up to unquoted value):" << std::endl;
 	for (; vector_line_start < current_column; vector_line_start++) {
 		error << vector_ptr[vector_line_start].GetString();

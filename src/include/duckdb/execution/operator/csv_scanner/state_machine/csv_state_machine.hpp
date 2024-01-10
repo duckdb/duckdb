@@ -32,6 +32,12 @@ struct CSVStates {
 		       (current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN);
 	}
 
+	inline bool EmptyLastValue() {
+		// It is a new row, if the previous state is not a record separator, and the current one is
+		return previous_state == CSVState::DELIMITER &&
+		       (current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN);
+	}
+
 	inline bool EmptyLine() {
 		return (current_state == CSVState::CARRIAGE_RETURN || current_state == CSVState::RECORD_SEPARATOR) &&
 		       previous_state == CSVState::RECORD_SEPARATOR;
@@ -56,7 +62,7 @@ struct CSVStates {
 		       (pre_previous_state == CSVState::UNQUOTED && previous_state == CSVState::QUOTED);
 	}
 	inline bool IsQuotedCurrent() {
-		return current_state == CSVState::UNQUOTED;
+		return current_state == CSVState::QUOTED;
 	}
 	CSVState current_state = CSVState::RECORD_SEPARATOR;
 	CSVState previous_state = CSVState::RECORD_SEPARATOR;

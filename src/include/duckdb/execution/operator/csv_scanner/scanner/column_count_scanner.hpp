@@ -24,6 +24,7 @@ public:
 	idx_t column_counts[STANDARD_VECTOR_SIZE];
 	idx_t current_column_count = 0;
 	bool error = false;
+	bool last_value_always_empty = true;
 
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);

@@ -88,6 +88,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	result.escaped = false;
 }
 
+
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	D_ASSERT(result.result_position < result.vector_size);
 	if (result.quoted) {
@@ -109,7 +110,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	}
 }
 
-inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
+void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	// We add the value
 	if (quoted) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
@@ -449,7 +450,11 @@ bool StringValueScanner::MoveToNextBuffer() {
 				result.AddRowInternal(previous_buffer_handle->actual_size - 1);
 				// And an extra empty value to represent what comes after the delimiter
 				result.AddRowInternal(previous_buffer_handle->actual_size);
-			} else {
+			} else if (states.IsQuotedCurrent()){
+					// Unterminated quote
+					result.InvalidState(result);
+			}
+			else {
 				lines_read++;
 				result.AddRowInternal(previous_buffer_handle->actual_size);
 			}
