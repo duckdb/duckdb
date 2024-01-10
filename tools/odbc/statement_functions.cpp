@@ -6,6 +6,7 @@
 #include "descriptor.hpp"
 #include "parameter_descriptor.hpp"
 
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -38,6 +39,7 @@ using duckdb::SQLStateType;
 using duckdb::Store;
 using duckdb::string;
 using duckdb::string_t;
+using duckdb::Timestamp;
 using duckdb::timestamp_t;
 using duckdb::vector;
 
@@ -189,7 +191,8 @@ template <class CAST_OP, typename TARGET_TYPE, class CAST_FUNC = std::function<t
 static bool CastTimestampValue(duckdb::OdbcHandleStmt *hstmt, const duckdb::Value &val, TARGET_TYPE &target,
                                CAST_FUNC cast_timestamp_fun) {
 	try {
-		auto timestamp = timestamp_t(val.GetValue<int64_t>());
+		auto input = val.GetValue<int64_t>();
+		auto timestamp = timestamp_t(input);
 		// FIXME: add test for casting infinity/-infinity timestamp values
 		if (Timestamp::IsFinite(timestamp)) {
 			timestamp = cast_timestamp_fun(input);
