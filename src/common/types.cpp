@@ -799,9 +799,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		result = LogicalType::VARCHAR;
 		return true;
 	case LogicalTypeId::INTEGER_LITERAL:
-		// for integer literals we pick the highest type of the provided integer literal type
-		result = LogicalType::ForceMaxLogicalType(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right));
-		return true;
+		// for two integer literals we unify the underlying types
+		return OP::Operation(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
 	case LogicalTypeId::ENUM:
 		// If both types are different ENUMs we do a string comparison.
 		result = left == right ? left : LogicalType::VARCHAR;
