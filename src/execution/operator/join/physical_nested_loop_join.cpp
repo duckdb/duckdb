@@ -118,6 +118,12 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 			return false;
 		}
 	}
+	// To avoid situations like https://github.com/duckdb/duckdb/issues/10046
+	// If there is an equality in the conditions, a hash join is planned
+	// with one condition, we can use mark join logic, otherwise we should use physical blockwise nl join
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		return conditions.size() == 1;
+	}
 	return true;
 }
 
@@ -309,7 +315,10 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	state.left_condition.Reset();
 	state.lhs_executor.Execute(input, state.left_condition);
 
-	bool found_match[STANDARD_VECTOR_SIZE] = {false};
+	bool found_match[STANDARD_VECTOR_SIZE] = {true};
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		found_match[i] = true;
+	}
 	NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions);
 	switch (join_type) {
 	case JoinType::MARK:
