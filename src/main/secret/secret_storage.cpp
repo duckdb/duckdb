@@ -102,7 +102,9 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(CatalogTransaction transaction
 
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretEntry>();
-		best_match = SelectBestMatch(cast_entry, path, best_match);
+		if (cast_entry.secret->GetType() == type) {
+			best_match = SelectBestMatch(cast_entry, path, best_match);
+		}
 	};
 	secrets->Scan(transaction, callback);
 
