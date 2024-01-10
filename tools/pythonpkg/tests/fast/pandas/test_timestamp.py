@@ -63,3 +63,14 @@ class TestPandasTimestamps(object):
         )
         df_from_duck = duckdb.from_df(df).df()
         assert df_from_duck.equals(df)
+
+    def test_timestamp_timezone(self, duckdb_cursor):
+        rel = duckdb_cursor.query(
+            """
+            SELECT
+                '2019-01-01 00:00:00+00'::TIMESTAMPTZ AS dateTime,
+                '2019-01-01 00:00:00+00'::TIMESTAMPTZ AS dateTime
+        """
+        )
+        res = rel.df()
+        assert res['dateTime'][0] == res['dateTime_2'][0]

@@ -116,8 +116,8 @@ SELECT TIMESTAMPTZ '-276069-9-30 0:0:00 America/Whitehorse';
 statement ok
 PRAGMA CALENDAR='japanese';
 
-query I
+# The TIMETZ cast is not valid (checked against PG)
+statement error
 SELECT strftime(TIMESTAMPTZ '-23831-1-15 2:5:17 America/La_Paz',TIMETZ '0:8:29 America/Cayman'::VARCHAR);
 ----
-00:08:29+00
-
+time field value out of range

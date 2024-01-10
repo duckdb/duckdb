@@ -8,18 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
-
-class PhysicalRecursiveCTE;
-
-struct PipelineFinishGroup {
-	explicit PipelineFinishGroup(Pipeline *group_base_p) : group_base(group_base_p) {
-	}
-	Pipeline *group_base;
-	unordered_set<Pipeline *> group_members;
-};
 
 //! MetaPipeline represents a set of pipelines that all have the same sink
 class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
@@ -34,7 +26,7 @@ class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
 	//!         * And all pipelines that were added to the MetaPipeline after 'current'
 public:
 	//! Create a MetaPipeline with the given sink
-	explicit MetaPipeline(Executor &executor, PipelineBuildState &state, PhysicalOperator *sink);
+	MetaPipeline(Executor &executor, PipelineBuildState &state, optional_ptr<PhysicalOperator> sink);
 
 public:
 	//! Get the Executor for this MetaPipeline
@@ -51,22 +43,22 @@ public:
 	//! Get the MetaPipeline children of this MetaPipeline
 	void GetMetaPipelines(vector<shared_ptr<MetaPipeline>> &result, bool recursive, bool skip);
 	//! Get the dependencies (within this MetaPipeline) of the given Pipeline
-	const vector<Pipeline *> *GetDependencies(Pipeline *dependant) const;
+	optional_ptr<const vector<reference<Pipeline>>> GetDependencies(Pipeline &dependant) const;
 	//! Whether this MetaPipeline has a recursive CTE
 	bool HasRecursiveCTE() const;
 	//! Set the flag that this MetaPipeline is a recursive CTE pipeline
 	void SetRecursiveCTE();
 	//! Assign a batch index to the given pipeline
-	void AssignNextBatchIndex(Pipeline *pipeline);
+	void AssignNextBatchIndex(Pipeline &pipeline);
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
 	//! where 'including' determines whether 'start' is added to the dependencies
-	void AddDependenciesFrom(Pipeline *dependant, Pipeline *start, bool including);
+	void AddDependenciesFrom(Pipeline &dependant, Pipeline &start, bool including);
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
-	void AddFinishEvent(Pipeline *pipeline);
+	void AddFinishEvent(Pipeline &pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent
-	bool HasFinishEvent(Pipeline *pipeline) const;
+	bool HasFinishEvent(Pipeline &pipeline) const;
 	//! Whether this pipeline is part of a PipelineFinishEvent
-	optional_ptr<Pipeline> GetFinishGroup(Pipeline *pipeline) const;
+	optional_ptr<Pipeline> GetFinishGroup(Pipeline &pipeline) const;
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
@@ -75,12 +67,12 @@ public:
 	void Ready();
 
 	//! Create an empty pipeline within this MetaPipeline
-	Pipeline *CreatePipeline();
+	Pipeline &CreatePipeline();
 	//! Create a union pipeline (clone of 'current')
-	Pipeline *CreateUnionPipeline(Pipeline &current, bool order_matters);
+	Pipeline &CreateUnionPipeline(Pipeline &current, bool order_matters);
 	//! Create a child pipeline op 'current' starting at 'op',
 	//! where 'last_pipeline' is the last pipeline added before building out 'current'
-	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline *last_pipeline);
+	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline &last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
 	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op);
 
@@ -96,15 +88,15 @@ private:
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! Dependencies within this MetaPipeline
-	unordered_map<Pipeline *, vector<Pipeline *>> dependencies;
+	reference_map_t<Pipeline, vector<reference<Pipeline>>> dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
 	vector<shared_ptr<MetaPipeline>> children;
 	//! Next batch index
 	idx_t next_batch_index;
 	//! Pipelines (other than the base pipeline) that need their own PipelineFinishEvent (e.g., for IEJoin)
-	unordered_set<Pipeline *> finish_pipelines;
+	reference_set_t<Pipeline> finish_pipelines;
 	//! Mapping from pipeline (e.g., child or union) to finish pipeline
-	unordered_map<Pipeline *, Pipeline *> finish_map;
+	reference_map_t<Pipeline, Pipeline &> finish_map;
 };
 
 } // namespace duckdb

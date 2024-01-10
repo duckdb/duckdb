@@ -4173,8 +4173,10 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "PIECEWISE_MERGE_JOIN";
 	case PhysicalOperatorType::IE_JOIN:
 		return "IE_JOIN";
-	case PhysicalOperatorType::DELIM_JOIN:
-		return "DELIM_JOIN";
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+		return "LEFT_DELIM_JOIN";
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+		return "RIGHT_DELIM_JOIN";
 	case PhysicalOperatorType::POSITIONAL_JOIN:
 		return "POSITIONAL_JOIN";
 	case PhysicalOperatorType::ASOF_JOIN:
@@ -4366,8 +4368,11 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	if (StringUtil::Equals(value, "IE_JOIN")) {
 		return PhysicalOperatorType::IE_JOIN;
 	}
-	if (StringUtil::Equals(value, "DELIM_JOIN")) {
-		return PhysicalOperatorType::DELIM_JOIN;
+	if (StringUtil::Equals(value, "LEFT_DELIM_JOIN")) {
+		return PhysicalOperatorType::LEFT_DELIM_JOIN;
+	}
+	if (StringUtil::Equals(value, "RIGHT_DELIM_JOIN")) {
+		return PhysicalOperatorType::RIGHT_DELIM_JOIN;
 	}
 	if (StringUtil::Equals(value, "POSITIONAL_JOIN")) {
 		return PhysicalOperatorType::POSITIONAL_JOIN;
