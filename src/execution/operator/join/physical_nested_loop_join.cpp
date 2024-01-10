@@ -315,10 +315,7 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	state.left_condition.Reset();
 	state.lhs_executor.Execute(input, state.left_condition);
 
-	bool found_match[STANDARD_VECTOR_SIZE] = {true};
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		found_match[i] = true;
-	}
+	bool found_match[STANDARD_VECTOR_SIZE] = {false};
 	NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions);
 	switch (join_type) {
 	case JoinType::MARK:
