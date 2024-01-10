@@ -2,8 +2,8 @@
 # description: Test show select
 # group: [show_select]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER)
