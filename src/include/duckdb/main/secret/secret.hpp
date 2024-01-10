@@ -90,6 +90,11 @@ public:
 	      serializable(other.serializable) {
 		D_ASSERT(!type.empty());
 	}
+	BaseSecret(const BaseSecret &other)
+	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name),
+	      serializable(other.serializable) {
+		D_ASSERT(!type.empty());
+	}
 	virtual ~BaseSecret() = default;
 
 	//! The score of how well this secret's scope matches the path (by default: the length of the longest matching
