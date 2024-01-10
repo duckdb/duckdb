@@ -206,6 +206,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
 		break;
+	case TableReferenceType::SHOW_REF:
+		result = Bind(ref.Cast<ShowRef>());
+		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 	default:

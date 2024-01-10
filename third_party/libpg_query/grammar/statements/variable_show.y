@@ -58,7 +58,7 @@ VariableShowStmt:
 			}
 		;
 
-show_or_describe: SHOW | DESCRIBE | DESC
+show_or_describe: SHOW | DESCRIBE | DESC_P
 
 opt_tables: TABLES | /* empty */
 

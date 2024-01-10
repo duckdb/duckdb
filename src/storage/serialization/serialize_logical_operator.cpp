@@ -681,12 +681,14 @@ void LogicalShow::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(200, "types_select", types_select);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "aliases", aliases);
+	serializer.WritePropertyWithDefault<idx_t>(202, "table_index", table_index);
 }
 
 unique_ptr<LogicalOperator> LogicalShow::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalShow>(new LogicalShow());
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(200, "types_select", result->types_select);
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases", result->aliases);
+	deserializer.ReadPropertyWithDefault<idx_t>(202, "table_index", result->table_index);
 	return std::move(result);
 }
 

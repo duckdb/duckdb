@@ -38,6 +38,7 @@ add_library_unity(
   logical_set.cpp
   logical_reset.cpp
   logical_set_operation.cpp
+  logical_show.cpp
   logical_simple.cpp
   logical_top_n.cpp
   logical_unconditional_join.cpp

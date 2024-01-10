@@ -98,6 +98,7 @@ class TableFunctionRef;
 class EmptyTableRef;
 class ExpressionListRef;
 class PivotRef;
+class ShowRef;
 
 //===--------------------------------------------------------------------===//
 // Other

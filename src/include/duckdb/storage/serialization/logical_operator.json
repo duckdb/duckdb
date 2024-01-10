@@ -814,6 +814,11 @@
         "id": 201,
         "name": "aliases",
         "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "table_index",
+        "type": "idx_t"
       }
     ]
   },
