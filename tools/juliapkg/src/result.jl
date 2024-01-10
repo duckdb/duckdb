@@ -90,10 +90,10 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
 end
 
 function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
-    micros = 0
-    tz = 0
-    duckdb_time_tz_extract(val, pointer_from_objref(micros), pointer_from_objref(tz))
-    return Dates.Time(Dates.Nanosecond(micros * 1000))
+    micros = [0]
+    tz = [0]
+    duckdb_time_tz_extract(val, pointer(micros), pointer(tz))
+    return Dates.Time(Dates.Nanosecond(micros[0] * 1000))
 end
 
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
