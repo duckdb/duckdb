@@ -28,11 +28,6 @@ public:
 			auto byte = *(pointer + (size - i - 1));
 			res_ptr[i] = positive ? byte : byte ^ 0xFF;
 		}
-		if (!positive) {
-			res += 1;
-			return -res;
-		}
-
 		// Verify that there are only 0s here
 		if (size > sizeof(PHYSICAL_TYPE)) {
 			for (idx_t i = sizeof(PHYSICAL_TYPE); i < size; i++) {
@@ -41,6 +36,10 @@ public:
 					throw InvalidInputException("Invalid decimal encoding in Parquet file");
 				}
 			}
+		}
+		if (!positive) {
+			res += 1;
+			return -res;
 		}
 		return res;
 	}
