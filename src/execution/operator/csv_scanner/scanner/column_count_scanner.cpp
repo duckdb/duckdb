@@ -43,7 +43,7 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        shared_ptr<CSVErrorHandler> error_handler)
     : BaseScanner(buffer_manager, state_machine, error_handler), result(states, *state_machine), column_count(1) {
 	sniffing = true;
-};
+}
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
 	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, error_handler);

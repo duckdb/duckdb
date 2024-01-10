@@ -221,7 +221,7 @@ StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, boundary),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             iterator.pos.buffer_pos, *error_handler, iterator) {};
+             iterator.pos.buffer_pos, *error_handler, iterator) {}
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options,
@@ -535,7 +535,7 @@ void StringValueScanner::SetStart() {
 				// We could not cast it to the right type, this is probably not the correct line start.
 				all_cast = false;
 				break;
-			};
+			}
 		}
 		if (all_cast) {
 			break;

@@ -34,7 +34,7 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	} else {
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 	}
-};
+}
 
 bool BaseScanner::FinishedFile() {
 	if (!cur_buffer_handle) {
