@@ -3,14 +3,19 @@
 
 namespace duckdb {
 
-BatchInfo::BatchInfo() : file_idx(0), batch_idx(0) {}
-BatchInfo::BatchInfo(idx_t file_idx_p, idx_t batch_idx_p) : file_idx(file_idx_p), batch_idx(batch_idx_p) {}
+BatchInfo::BatchInfo() : file_idx(0), batch_idx(0) {
+}
+BatchInfo::BatchInfo(idx_t file_idx_p, idx_t batch_idx_p) : file_idx(file_idx_p), batch_idx(batch_idx_p) {
+}
 
-LinesPerBatch::LinesPerBatch() : initialized(false) {}
+LinesPerBatch::LinesPerBatch() : initialized(false) {
+}
 LinesPerBatch::LinesPerBatch(idx_t file_idx_p, idx_t batch_idx_p, idx_t lines_in_batch_p)
-    : batch_info(file_idx_p, batch_idx_p), lines_in_batch(lines_in_batch_p) {}
+    : batch_info(file_idx_p, batch_idx_p), lines_in_batch(lines_in_batch_p) {
+}
 
-CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {}
+CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {
+}
 
 void CSVErrorHandler::Error(CSVError &csv_error) {
 	LinesPerBatch mock;
@@ -85,11 +90,10 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_c
 	return CSVError(error.str(), CSVErrorType::CAST_ERROR);
 }
 
-
-CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size){
+CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size) {
 	std::ostringstream error;
-	error << "Maximum line size of "<< options.maximum_line_size  << " bytes exceeded. ";
-	error << "Actual Size:" << actual_size  << " bytes."<< std::endl;
+	error << "Maximum line size of " << options.maximum_line_size << " bytes exceeded. ";
+	error << "Actual Size:" << actual_size << " bytes." << std::endl;
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE);
 }

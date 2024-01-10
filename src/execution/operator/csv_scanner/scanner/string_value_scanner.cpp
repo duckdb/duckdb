@@ -72,7 +72,13 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		result.vector_ptr[result.result_position++] =
 		    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 	} else {
-		if (result.state_machine.options.allow_quoted_nulls) {
+		bool empty = false;
+		idx_t cur_pos = result.result_position % result.number_of_columns;
+		if (cur_pos < result.state_machine.options.force_not_null.size()) {
+			empty = result.state_machine.options.force_not_null[cur_pos];
+		}
+
+		if (result.state_machine.options.allow_quoted_nulls && !empty) {
 			auto value = string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
 			if (value == result.state_machine.options.null_str) {
 				result.validity_mask->SetInvalid(result.result_position++);
@@ -88,7 +94,6 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	result.escaped = false;
 }
 
-
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	D_ASSERT(result.result_position < result.vector_size);
 	if (result.quoted) {
@@ -97,7 +102,16 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 		// Test against null value first
 		auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
 		if (value == result.state_machine.options.null_str) {
-			result.validity_mask->SetInvalid(result.result_position++);
+			bool empty = false;
+			idx_t cur_pos = result.result_position % result.number_of_columns;
+			if (cur_pos < result.state_machine.options.force_not_null.size()) {
+				empty = result.state_machine.options.force_not_null[cur_pos];
+			}
+			if (empty) {
+				result.vector_ptr[result.result_position++] = string_t();
+			} else {
+				result.validity_mask->SetInvalid(result.result_position++);
+			}
 		} else {
 			result.vector_ptr[result.result_position++] = value;
 		}
@@ -111,9 +125,8 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::AddRowInternal(idx_t buffer_pos) {
-	if (buffer_pos - previous_line_start > state_machine.options.maximum_line_size){
-		auto csv_error =
-		    CSVError::LineSizeError(state_machine.options, buffer_pos - previous_line_start);
+	if (buffer_pos - previous_line_start > state_machine.options.maximum_line_size) {
+		auto csv_error = CSVError::LineSizeError(state_machine.options, buffer_pos - previous_line_start);
 		LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
 		                              result_position / number_of_columns);
 		error_handler.Error(lines_per_batch, csv_error);
@@ -125,13 +138,22 @@ void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	} else {
 		auto value = string_t(buffer_ptr + last_position, buffer_pos - last_position);
 		if (value == state_machine.options.null_str) {
-			validity_mask->SetInvalid(result_position++);
+			bool empty = false;
+			idx_t cur_pos = result_position % number_of_columns;
+			if (cur_pos < state_machine.options.force_not_null.size()) {
+				empty = state_machine.options.force_not_null[cur_pos];
+			}
+			if (empty) {
+				vector_ptr[result_position++] = string_t();
+			} else {
+				validity_mask->SetInvalid(result_position++);
+			}
 		} else {
 			vector_ptr[result_position++] = value;
 		}
 	}
 	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		if (states.current_state == CSVState::RECORD_SEPARATOR){
+		if (states.current_state == CSVState::RECORD_SEPARATOR) {
 			// Even though this is marked as a carry on, this is a hippie mixie
 			last_position = buffer_pos + 1;
 		} else {
@@ -176,7 +198,16 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		// 1) if null_padding is on we null pad it
 		if (result.null_padding) {
 			while (result.result_position % result.number_of_columns != 0) {
-				result.validity_mask->SetInvalid(result.result_position++);
+				bool empty = false;
+				idx_t cur_pos = result.result_position % result.number_of_columns;
+				if (cur_pos < result.state_machine.options.force_not_null.size()) {
+					empty = result.state_machine.options.force_not_null[cur_pos];
+				}
+				if (empty) {
+					result.vector_ptr[result.result_position++] = string_t();
+				} else {
+					result.validity_mask->SetInvalid(result.result_position++);
+				}
 			}
 		} else {
 			auto csv_error = CSVError::IncorrectColumnAmountError(result.state_machine.options, result.vector_ptr,
@@ -211,7 +242,15 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 	result.last_position = buffer_pos + 1;
 	if (result.parse_chunk.ColumnCount() == 1) {
 		if (result.state_machine.options.null_str.empty()) {
-			result.validity_mask->SetInvalid(result.result_position++);
+			bool empty = false;
+			if (!result.state_machine.options.force_not_null.empty()) {
+				empty = result.state_machine.options.force_not_null[result.result_position % result.number_of_columns];
+			}
+			if (empty) {
+				result.vector_ptr[result.result_position++] = string_t();
+			} else {
+				result.validity_mask->SetInvalid(result.result_position++);
+			}
 		}
 		if (result.result_position / result.number_of_columns >= result.result_size) {
 			// We have a full chunk
@@ -235,7 +274,8 @@ StringValueScanner::StringValueScanner(shared_ptr<CSVBufferManager> buffer_manag
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, boundary),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             iterator.pos.buffer_pos, *error_handler, iterator) {}
+             iterator.pos.buffer_pos, *error_handler, iterator) {
+}
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options,
@@ -459,11 +499,10 @@ bool StringValueScanner::MoveToNextBuffer() {
 				result.AddRowInternal(previous_buffer_handle->actual_size - 1);
 				// And an extra empty value to represent what comes after the delimiter
 				result.AddRowInternal(previous_buffer_handle->actual_size);
-			} else if (states.IsQuotedCurrent()){
-					// Unterminated quote
-					result.InvalidState(result);
-			}
-			else {
+			} else if (states.IsQuotedCurrent()) {
+				// Unterminated quote
+				result.InvalidState(result);
+			} else {
 				lines_read++;
 				result.AddRowInternal(previous_buffer_handle->actual_size);
 			}
@@ -496,7 +535,7 @@ void StringValueScanner::SkipCSVRows() {
 	}
 	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
-	if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON){
+	if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 2;
 	} else {
 		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 1;

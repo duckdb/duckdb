@@ -18,9 +18,11 @@ CSVBoundary::CSVBoundary()
 }
 CSVIterator::CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx)
     : pos(file_idx, buffer_idx, buffer_pos),
-      boundary(file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_pos + BYTES_PER_THREAD), is_set(true) {}
+      boundary(file_idx, buffer_idx, buffer_pos, boundary_idx, buffer_pos + BYTES_PER_THREAD), is_set(true) {
+}
 
-CSVIterator::CSVIterator() : is_set(false) {}
+CSVIterator::CSVIterator() : is_set(false) {
+}
 
 void CSVBoundary::Print() {
 	std::cout << "---Boundary: " << boundary_idx << " ---" << std::endl;

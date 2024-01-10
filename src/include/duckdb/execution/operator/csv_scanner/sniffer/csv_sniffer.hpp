@@ -49,7 +49,8 @@ struct SetColumns {
 	//! How many columns
 	idx_t Size();
 	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
-	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors, bool last_value_always_empty) {
+	inline bool IsCandidateUnacceptable(idx_t num_cols, bool null_padding, bool ignore_errors,
+	                                    bool last_value_always_empty) {
 		if (!IsSet() || ignore_errors) {
 			// We can't say its unacceptable if it's not set or if we ignore errors
 			return false;

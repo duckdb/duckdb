@@ -36,7 +36,8 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression);
 }
 
-ReadCSVData::ReadCSVData() {}
+ReadCSVData::ReadCSVData() {
+}
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();

@@ -34,8 +34,7 @@ bool SkipResult::EmptyLine(SkipResult &result, const idx_t buffer_pos) {
 SkipScanner::SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
                          shared_ptr<CSVErrorHandler> error_handler, idx_t rows_to_skip)
     : BaseScanner(buffer_manager, state_machine, error_handler), result(states, *state_machine, rows_to_skip) {
-
-                                                                 }
+}
 
 SkipResult *SkipScanner::ParseChunk() {
 	ParseChunkInternal();

@@ -114,8 +114,10 @@ void CSVSniffer::DetectHeader() {
 
 		// try cast to sql_type of column
 		const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
-		if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
-			first_row_consistent = false;
+		if (sql_type != LogicalType::VARCHAR) {
+			if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
+				first_row_consistent = false;
+			}
 		}
 	}
 	bool has_header;

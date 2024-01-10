@@ -52,7 +52,7 @@ enum CSVErrorType : uint8_t {
 	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
 	INCORRECT_COLUMN_AMOUNT = 2,   // If the CSV is missing a column
 	UNTERMINATED_QUOTES = 3,       // If a quote is not terminated
-	SNIFFING = 4,  // If something went wrong during sniffing and was not possible to find suitable candidates
+	SNIFFING = 4,     // If something went wrong during sniffing and was not possible to find suitable candidates
 	MAXIMUM_LINE_SIZE // Maximum line size was exceeded by a line in the CSV File
 };
 
