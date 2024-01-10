@@ -2175,6 +2175,10 @@ const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
 		return "AGGREGATE_STATE_TYPE_INFO";
 	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
 		return "ARRAY_TYPE_INFO";
+	case ExtraTypeInfoType::ANY_TYPE_INFO:
+		return "ANY_TYPE_INFO";
+	case ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO:
+		return "INTEGER_LITERAL_TYPE_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2211,6 +2215,12 @@ ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ARRAY_TYPE_INFO")) {
 		return ExtraTypeInfoType::ARRAY_TYPE_INFO;
+	}
+	if (StringUtil::Equals(value, "ANY_TYPE_INFO")) {
+		return ExtraTypeInfoType::ANY_TYPE_INFO;
+	}
+	if (StringUtil::Equals(value, "INTEGER_LITERAL_TYPE_INFO")) {
+		return ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3129,6 +3139,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "BIT";
 	case LogicalTypeId::STRING_LITERAL:
 		return "STRING_LITERAL";
+	case LogicalTypeId::INTEGER_LITERAL:
+		return "INTEGER_LITERAL";
 	case LogicalTypeId::UHUGEINT:
 		return "UHUGEINT";
 	case LogicalTypeId::HUGEINT:
@@ -3256,6 +3268,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "STRING_LITERAL")) {
 		return LogicalTypeId::STRING_LITERAL;
+	}
+	if (StringUtil::Equals(value, "INTEGER_LITERAL")) {
+		return LogicalTypeId::INTEGER_LITERAL;
 	}
 	if (StringUtil::Equals(value, "UHUGEINT")) {
 		return LogicalTypeId::UHUGEINT;
