@@ -778,7 +778,7 @@ end
 # end
 #
 
-function duckdb_time_tz_extract(val:UInt64, micros: Ptr{Int64}, tz: Ptr{Int32})
+function duckdb_time_tz_extract(val, micros, tz)
     return ccall((:duckdb_time_tz_extract, libduckdb), Cvoid, (UInt64, Ptr{Int64}, Ptr{Int32}), val, micros, tz)
 end
 
