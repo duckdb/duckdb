@@ -126,7 +126,6 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
 
-		// qualify the column reference
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
 		// don't qualify lambda parameters

@@ -84,7 +84,7 @@ public:
 
 	//! Returns the STRUCT_EXTRACT operator expression
 	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
-	//! Returns a struct_pack function expression
+	//! Returns a STRUCT_PACK function expression
 	unique_ptr<ParsedExpression> CreateStructPack(ColumnRefExpression &col_ref);
 
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
@@ -95,7 +95,7 @@ public:
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, string &error_message);
 	//! Returns a qualified column reference from a column reference
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, string &error_message);
-	//! Skips qualifying the column references in the LHS of a lambda expression
+	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
 	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
 	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
 	//! within_function_expression state from outer expressions, or sets it
@@ -120,14 +120,14 @@ public:
 
 	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
 
-	//! Bind the given expresion. Unlike Bind(), this does *not* mute the given ParsedExpression.
+	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
-	//! Recursively replace macro parameters with the provided input parameters
+	//! Recursively replaces macro parameters with the provided input parameters
 	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params);
-	//! Performs special-handling on the children of a function expression, if they are lambda expressions
+	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
 	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
@@ -192,7 +192,7 @@ protected:
 
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const string &function_name);
-	//! Return true, if the function contains a lambda expression and is not the '->>' operator
+	//! Returns true, if the function contains a lambda expression and is not the '->>' operator
 	static bool IsLambdaFunction(const FunctionExpression &function);
 	//! Returns the bind result of binding a lambda or JSON function
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);

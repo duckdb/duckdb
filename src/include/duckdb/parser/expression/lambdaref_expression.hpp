@@ -24,9 +24,6 @@ public:
 	//! Constructs a LambdaRefExpression from a lambda_idx and a column_name. We do not specify a table name,
 	//! because we use dummy tables to bind lambda parameters
 	LambdaRefExpression(idx_t lambda_idx, string column_name_p);
-	//! Constructs a LambdaRefExpression from a column_name. We do not specify a table name,
-	//! because we use dummy tables to bind lambda parameters
-	LambdaRefExpression(string column_name_p);
 
 	//! The index of the lambda parameter in the lambda_bindings vector
 	idx_t lambda_idx;
@@ -40,9 +37,9 @@ public:
 	hash_t Hash() const override;
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	//! Traverses the lambda_bindings to find a matching binding
+	//! Traverses the lambda_bindings to find a matching binding for the column_name
 	static unique_ptr<ParsedExpression> FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
-	                                                        const string &param_name);
+	                                                        const string &column_name);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);

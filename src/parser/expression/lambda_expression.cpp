@@ -16,9 +16,8 @@ LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<
 
 vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpressions(string &error_message) {
 
-	// we only return an error message, because we can't throw here
-	// that's because for the (similar) JSON function, this fails
-	D_ASSERT(lhs);
+	// we return an error message because we can't throw a binder exception here,
+	// since we can't distinguish between a lambda function and the JSON operator yet
 	vector<reference<ParsedExpression>> column_refs;
 
 	if (lhs->expression_class == ExpressionClass::COLUMN_REF) {

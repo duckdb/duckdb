@@ -15,9 +15,9 @@
 namespace duckdb {
 
 //! LambdaExpression represents either:
-//!  1. A lambda operator that can be used for e.g. mapping an expression to a list
-//!  2. An OperatorExpression with the "->" operator
-//! Lambda expressions are written in the form of "params -> expr", e.g. "x -> x + 1"
+//! 	1. A lambda function that can be used for, e.g., mapping an expression to a list
+//! 	2. An OperatorExpression with the "->" operator (JSON)
+//! Lambda expressions are written in the form of "params -> expr", e.g., "x -> x + 1"
 class LambdaExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA;
@@ -25,18 +25,19 @@ public:
 public:
 	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 
-	//! The LHS of a scalar function implementing a lambda function, or the JSON -> operator. We need the context
-	//! to determine if the LHS is a list of column references (lambda parameters) or an expression (for JSON)
+	//! The LHS of a lambda expression or the JSON "->"-operator. We need the context
+	//! to determine if the LHS is a list of column references (lambda parameters) or an expression (JSON)
 	unique_ptr<ParsedExpression> lhs;
 	//! The lambda or JSON expression (RHS)
 	unique_ptr<ParsedExpression> expr;
 
 public:
-	//! Returns a vector of the column references in the LHS expression
+	//! Returns a vector to the column references in the LHS expression, and fills the error message,
+	//! if the LHS is not a valid lambda parameter list
 	vector<reference<ParsedExpression>> ExtractColumnRefExpressions(string &error_message);
-	//! TODO
+	//! Returns the error message for an invalid lambda parameter list
 	static string InvalidParametersErrorMessage();
-	//! TODO
+	//! Returns true, if the column_name is a lambda parameter name
 	static bool IsLambdaParameter(const vector<unordered_set<string>> &lambda_params, const string &column_name);
 
 	string ToString() const override;

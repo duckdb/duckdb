@@ -11,12 +11,6 @@ LambdaRefExpression::LambdaRefExpression(idx_t lambda_idx, string column_name_p)
 	alias = column_name;
 }
 
-LambdaRefExpression::LambdaRefExpression(string column_name_p)
-    : ParsedExpression(ExpressionType::LAMBDA_REF, ExpressionClass::LAMBDA_REF), lambda_idx(DConstants::INVALID_INDEX),
-      column_name(std::move(column_name_p)) {
-	alias = column_name;
-}
-
 bool LambdaRefExpression::IsScalar() const {
 	throw InternalException("lambda reference expressions are transient, IsScalar should never be called");
 }
@@ -42,7 +36,7 @@ unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {
 
 unique_ptr<ParsedExpression>
 LambdaRefExpression::FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
-                                         const string &param_name) {
+                                         const string &column_name) {
 
 	// if this is a lambda parameter, then we temporarily add a BoundLambdaRef,
 	// which we capture and remove later
@@ -52,9 +46,9 @@ LambdaRefExpression::FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lam
 
 	if (lambda_bindings) {
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-			if ((*lambda_bindings)[i - 1].HasMatchingBinding(param_name)) {
+			if ((*lambda_bindings)[i - 1].HasMatchingBinding(column_name)) {
 				D_ASSERT(!(*lambda_bindings)[i - 1].alias.empty());
-				return make_uniq<LambdaRefExpression>(i - 1, param_name);
+				return make_uniq<LambdaRefExpression>(i - 1, column_name);
 			}
 		}
 	}
