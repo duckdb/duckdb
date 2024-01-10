@@ -1451,7 +1451,7 @@ LogicalType LogicalType::ARRAY(const LogicalType &child) {
 //===--------------------------------------------------------------------===//
 // Any Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::ANY_PARAMS(LogicalType target, idx_t cast_score) {
+LogicalType LogicalType::ANY_PARAMS(LogicalType target, idx_t cast_score) { // NOLINT
 	auto type_info = make_shared<AnyTypeInfo>(std::move(target), cast_score);
 	return LogicalType(LogicalTypeId::ANY, std::move(type_info));
 }
@@ -1501,7 +1501,7 @@ bool IntegerLiteral::FitsInType(const LogicalType &type, const LogicalType &targ
 	return copy.DefaultTryCastAs(target);
 }
 
-LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) {
+LogicalType LogicalType::INTEGER_LITERAL(const Value &constant) { // NOLINT
 	if (!constant.type().IsIntegral()) {
 		throw InternalException("INTEGER_LITERAL can only be made from literals of integer types");
 	}
