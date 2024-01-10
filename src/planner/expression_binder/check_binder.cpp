@@ -47,7 +47,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		if (lambda_bindings) {
 			for (idx_t i = lambda_bindings->size(); i > 0; i--) {
-				if ((*lambda_bindings)[i - 1].HasMatchingBinding(colref.GetColumnName())) {
+				if ((*lambda_bindings)[i - 1].HasMatchingBinding(colref.GetName())) {
 					// FIXME: support lambdas in CHECK constraints
 					// FIXME: like so: return (*lambda_bindings)[i - 1].Bind(colref, i, depth);
 					// FIXME: and move this to LambdaRefExpression::FindMatchingBinding

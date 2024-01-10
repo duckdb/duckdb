@@ -19,7 +19,7 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 	// try binding as a lambda parameter
 	auto &col_ref = expr.Cast<ColumnRefExpression>();
 	if (!col_ref.IsQualified()) {
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}

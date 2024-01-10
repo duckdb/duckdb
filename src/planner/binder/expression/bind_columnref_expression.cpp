@@ -129,7 +129,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
 		// don't qualify lambda parameters
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
 			return;
 		}
 
@@ -213,7 +213,7 @@ void ExpressionBinder::QualifyColumnNamesInLambda(FunctionExpression &function,
 		// push the lambda parameter names
 		for (const auto column_ref_expr : column_ref_expressions) {
 			auto column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
-			lambda_params.back().emplace(column_ref.GetColumnName());
+			lambda_params.back().emplace(column_ref.GetName());
 		}
 
 		// only qualify in RHS
@@ -367,7 +367,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 
 	// try binding as a lambda parameter
 	if (!col_ref.IsQualified()) {
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
 		if (lambda_ref) {
 			return lambda_ref;
 		}

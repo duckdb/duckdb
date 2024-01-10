@@ -39,7 +39,7 @@ public:
 
 	//! Traverses the lambda_bindings to find a matching binding for the column_name
 	static unique_ptr<ParsedExpression> FindMatchingBinding(optional_ptr<vector<DummyBinding>> &lambda_bindings,
-	                                                        const string &column_name);
+	                                                        const string &parameter_name);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);

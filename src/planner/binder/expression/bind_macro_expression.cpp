@@ -42,7 +42,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 		// push the lambda parameter names
 		for (const auto column_ref_expr : column_ref_expressions) {
 			auto column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
-			lambda_params.back().emplace(column_ref.GetColumnName());
+			lambda_params.back().emplace(column_ref.GetName());
 		}
 
 		// only replace in RHS
@@ -64,7 +64,7 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
 		// don't replace lambda parameters
-		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetColumnName())) {
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
 			return;
 		}
 

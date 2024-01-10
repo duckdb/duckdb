@@ -42,7 +42,7 @@ void ExtractParameter(ParsedExpression &expr, vector<string> &column_names, vect
 		throw BinderException(LambdaExpression::InvalidParametersErrorMessage());
 	}
 
-	column_names.push_back(column_ref.GetColumnName());
+	column_names.push_back(column_ref.GetName());
 	column_aliases.push_back(column_ref.ToString());
 }
 
