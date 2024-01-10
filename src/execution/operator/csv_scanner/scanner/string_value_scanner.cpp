@@ -476,7 +476,11 @@ void StringValueScanner::SkipCSVRows() {
 	}
 	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
-	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 1;
+	if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON){
+		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 2;
+	} else {
+		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 1;
+	}
 	//! FIXME: This will get borked if we skip more than one full boundary, we probably need to do the skipping before
 	//! parallelizing
 	if (iterator.pos.buffer_pos >= iterator.GetEndPos()) {
