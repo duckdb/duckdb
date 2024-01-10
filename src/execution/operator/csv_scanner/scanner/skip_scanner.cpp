@@ -29,7 +29,10 @@ void SkipResult::InvalidState(SkipResult &result) {
 }
 
 bool SkipResult::EmptyLine(SkipResult &result, const idx_t buffer_pos) {
-	return AddRow(result, buffer_pos);
+	if (result.state_machine.dialect_options.num_cols == 1){
+		return AddRow(result, buffer_pos);
+	}
+	return false;
 }
 SkipScanner::SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
                          shared_ptr<CSVErrorHandler> error_handler, idx_t rows_to_skip)

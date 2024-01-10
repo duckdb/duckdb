@@ -103,6 +103,7 @@ private:
 	//! Information regarding columns that were set by user/query
 	SetColumns set_columns;
 	shared_ptr<CSVErrorHandler> error_handler;
+	shared_ptr<CSVErrorHandler> detection_error_handler;
 	//! Sets the result options
 	void SetResultOptions();
 
