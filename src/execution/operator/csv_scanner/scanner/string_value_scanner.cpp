@@ -122,7 +122,12 @@ inline void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 		}
 	}
 	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		last_position = buffer_pos + 2;
+		if (states.current_state == CSVState::RECORD_SEPARATOR){
+			// Even though this is marked as a carry on, this is a hippie mixie
+			last_position = buffer_pos + 1;
+		} else {
+			last_position = buffer_pos + 2;
+		}
 	} else {
 		last_position = buffer_pos + 1;
 	}

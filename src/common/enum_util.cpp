@@ -3435,8 +3435,6 @@ const char* EnumUtil::ToChars<NewLineIdentifier>(NewLineIdentifier value) {
 		return "SINGLE";
 	case NewLineIdentifier::CARRY_ON:
 		return "CARRY_ON";
-	case NewLineIdentifier::MIX:
-		return "MIX";
 	case NewLineIdentifier::NOT_SET:
 		return "NOT_SET";
 	default:
@@ -3451,9 +3449,6 @@ NewLineIdentifier EnumUtil::FromString<NewLineIdentifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CARRY_ON")) {
 		return NewLineIdentifier::CARRY_ON;
-	}
-	if (StringUtil::Equals(value, "MIX")) {
-		return NewLineIdentifier::MIX;
 	}
 	if (StringUtil::Equals(value, "NOT_SET")) {
 		return NewLineIdentifier::NOT_SET;

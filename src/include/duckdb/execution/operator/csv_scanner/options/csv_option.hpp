@@ -15,8 +15,7 @@ namespace duckdb {
 enum class NewLineIdentifier : uint8_t {
 	SINGLE = 1,   // Either \r or \n
 	CARRY_ON = 2, // \r\n
-	MIX = 3,      // Hippie-Land, can't run it multithreaded
-	NOT_SET = 4
+	NOT_SET = 3
 };
 
 class Serializer;
