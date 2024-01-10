@@ -85,11 +85,6 @@ public:
 	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
-	BaseSecret(BaseSecret &other)
-	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name),
-	      serializable(other.serializable) {
-		D_ASSERT(!type.empty());
-	}
 	BaseSecret(const BaseSecret &other)
 	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name),
 	      serializable(other.serializable) {
@@ -150,12 +145,6 @@ public:
 	}
 	KeyValueSecret(BaseSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
-		serializable = true;
-	};
-	KeyValueSecret(KeyValueSecret &secret)
-	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
-		secret_map = secret.secret_map;
-		redact_keys = secret.redact_keys;
 		serializable = true;
 	};
 	KeyValueSecret(const KeyValueSecret &secret)
