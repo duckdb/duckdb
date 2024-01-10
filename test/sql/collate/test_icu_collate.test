@@ -5,6 +5,9 @@
 require icu
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE strings(s VARCHAR);
 
 statement ok
@@ -83,7 +86,6 @@ statement error
 SELECT icu_sort_key('goose', 'DUCK_DUCK_ENUM');
 ----
 Invalid Input Error
-
 
 # issue duckdb/duckdb#9692
 query I
