@@ -48,7 +48,8 @@ public:
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
 	//! Where the previous line started, used to validate the maximum_line_size option
-	idx_t previous_line_start = 0;
+	CSVPosition previous_line_start;
+	CSVPosition pre_previous_line_start;
 
 	bool added_last_line = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes

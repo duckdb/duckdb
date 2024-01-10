@@ -8,7 +8,7 @@ BatchInfo::BatchInfo() : file_idx(0), batch_idx(0) {
 BatchInfo::BatchInfo(idx_t file_idx_p, idx_t batch_idx_p) : file_idx(file_idx_p), batch_idx(batch_idx_p) {
 }
 
-LinesPerBatch::LinesPerBatch() : initialized(false) {
+LinesPerBatch::LinesPerBatch() {
 }
 LinesPerBatch::LinesPerBatch(idx_t file_idx_p, idx_t batch_idx_p, idx_t lines_in_batch_p)
     : batch_info(file_idx_p, batch_idx_p), lines_in_batch(lines_in_batch_p) {
@@ -40,9 +40,14 @@ void CSVErrorHandler::Error(LinesPerBatch &error_info, CSVError &csv_error) {
 	}
 }
 
-void CSVErrorHandler::Insert(LinesPerBatch &error_info) {
+void CSVErrorHandler::Insert(idx_t file_idx, idx_t batch_idx, idx_t rows) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	lines_per_batch_map[error_info.batch_info] = error_info;
+	BatchInfo batch_info(file_idx, batch_idx);
+	if (lines_per_batch_map.find(batch_info) == lines_per_batch_map.end()) {
+		lines_per_batch_map[batch_info] = {file_idx, batch_idx, rows};
+	} else {
+		lines_per_batch_map[batch_info].lines_in_batch += rows;
+	}
 }
 
 CSVError::CSVError(string error_message_p, CSVErrorType type_p) : error_message(error_message_p), type(type_p) {
@@ -165,7 +170,7 @@ idx_t CSVErrorHandler::GetLine(LinesPerBatch &error_info) {
 		while (!batch_done) {
 			unique_ptr<lock_guard<mutex>> parallel_lock;
 			auto batch_info = lines_per_batch_map[error_info.batch_info];
-			if (batch_info.initialized) {
+			if (lines_per_batch_map[error_info.batch_info].finished) {
 				batch_done = true;
 				current_line += batch_info.lines_in_batch;
 			}

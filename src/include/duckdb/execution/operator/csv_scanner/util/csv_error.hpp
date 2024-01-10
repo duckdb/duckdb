@@ -37,7 +37,7 @@ public:
 
 	BatchInfo batch_info;
 	idx_t lines_in_batch = 0;
-	bool initialized;
+	bool finished;
 };
 
 //! Hash function used in to hash the Lines Per Batch Information
@@ -88,7 +88,7 @@ public:
 	//! Throws the error
 	void Error(CSVError &csv_error);
 	//! Inserts a finished error info
-	void Insert(LinesPerBatch &error_info);
+	void Insert(idx_t file_idx, idx_t batch_idx, idx_t rows);
 
 private:
 	//! Return the 1-indexed line number

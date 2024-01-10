@@ -24,7 +24,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 
 	// Current Result information
 	result_position = 0;
-
+	pre_previous_line_start = iterator.pos;
+	previous_line_start = iterator.pos;
 	// Initialize Parse Chunk
 	parse_chunk.Initialize(buffer_allocator, {number_of_columns, LogicalType::VARCHAR}, result_size);
 }
@@ -125,13 +126,20 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::AddRowInternal(idx_t buffer_pos) {
-	if (buffer_pos - previous_line_start > state_machine.options.maximum_line_size) {
-		auto csv_error = CSVError::LineSizeError(state_machine.options, buffer_pos - previous_line_start);
+	idx_t current_line_size;
+	if (iterator.pos.buffer_idx == previous_line_start.buffer_idx) {
+		current_line_size = iterator.pos.buffer_pos - previous_line_start.buffer_pos;
+	} else {
+		current_line_size = 0;
+	}
+	if (current_line_size > state_machine.options.maximum_line_size) {
+		auto csv_error = CSVError::LineSizeError(state_machine.options, current_line_size);
 		LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
 		                              result_position / number_of_columns);
 		error_handler.Error(lines_per_batch, csv_error);
 	}
-	previous_line_start = buffer_pos;
+	pre_previous_line_start = previous_line_start;
+	previous_line_start = iterator.pos;
 	// We add the value
 	if (quoted) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
@@ -167,7 +175,7 @@ void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 void StringValueResult::Print() {
 	for (idx_t i = 0; i < result_position; i++) {
 		std::cout << vector_ptr[i].GetString();
-		if (i + 1 % number_of_columns == 0) {
+		if ((i + 1) % number_of_columns == 0) {
 			std::cout << std::endl;
 		} else {
 			std::cout << ",";
@@ -186,10 +194,10 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		// Maybe we have too many columns:
 		if (result.maybe_too_many_columns) {
 			auto csv_error = CSVError::IncorrectColumnAmountError(
-			    result.state_machine.options, result.vector_ptr, result.result_position,
+			    result.state_machine.options, result.vector_ptr, result.number_of_columns,
 			    result.number_of_columns + result.result_position % result.number_of_columns);
 			LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
-			                              result.result_position / result.number_of_columns +1);
+			                              result.result_position / result.number_of_columns + 1);
 			result.error_handler.Error(lines_per_batch, csv_error);
 			result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
 			D_ASSERT(result.result_position % result.number_of_columns == 0);
@@ -215,7 +223,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 			                                                      result.result_position,
 			                                                      result.result_position % result.number_of_columns);
 			LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
-			                              result.result_position / result.number_of_columns +1);
+			                              result.result_position / result.number_of_columns + 1);
 			result.error_handler.Error(lines_per_batch, csv_error);
 			result.result_position -= result.result_position % result.number_of_columns;
 			D_ASSERT(result.result_position % result.number_of_columns == 0);
@@ -412,7 +420,8 @@ void StringValueScanner::Initialize() {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
-	result.previous_line_start = iterator.pos.buffer_pos;
+	result.previous_line_start = iterator.pos;
+	result.pre_previous_line_start = result.previous_line_start;
 }
 
 void StringValueScanner::Process() {
@@ -455,39 +464,49 @@ void StringValueScanner::ProcessExtraRow() {
 void StringValueScanner::ProcessOverbufferValue() {
 	// Get next value
 	idx_t first_buffer_pos = result.last_position;
-	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos;
 	idx_t cur_value_idx = result.result_position;
+	bool quoted = false;
+	bool escaped = false;
 	while (cur_value_idx == result.result_position && iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
 		ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result);
+		quoted = quoted || result.quoted;
+		escaped = escaped || result.escaped;
 		iterator.pos.buffer_pos++;
 	}
-	if(iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer){
+	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
 	}
-	 result.result_position = cur_value_idx + 1;
+	result.result_position = cur_value_idx + 1;
+	D_ASSERT(!escaped);
+	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos - quoted;
+
 	if (iterator.pos.buffer_pos == 0) {
 		result.vector_ptr[cur_value_idx] =
-		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
+		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1);
 	} else if (iterator.pos.buffer_pos == 1) {
 		result.vector_ptr[cur_value_idx] =
-		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
+		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1);
 	} else {
 		idx_t string_length;
 		if (states.IsCurrentNewRow() || states.IsCurrentDelimiter()) {
-			string_length = first_buffer_length + iterator.pos.buffer_pos - 1;
+			string_length = first_buffer_length + iterator.pos.buffer_pos - 1 - quoted;
 		} else {
-			string_length = first_buffer_length + iterator.pos.buffer_pos - 2;
+			string_length = first_buffer_length + iterator.pos.buffer_pos - 2 - quoted;
 		}
 		auto &result_str = result.vector_ptr[cur_value_idx];
 		result_str = StringVector::EmptyString(*result.vector, string_length);
 		// Copy the first buffer
-		FastMemcpy(result_str.GetDataWriteable(), previous_buffer_handle->Ptr() + first_buffer_pos,
+		FastMemcpy(result_str.GetDataWriteable(), previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
 		           first_buffer_length);
 		// Copy the second buffer
-		FastMemcpy(result_str.GetDataWriteable() + first_buffer_length, cur_buffer_handle->Ptr(),
-		           string_length - first_buffer_length);
+		if (string_length > first_buffer_length) {
+			FastMemcpy(result_str.GetDataWriteable() + first_buffer_length, cur_buffer_handle->Ptr(),
+			           string_length - first_buffer_length);
+		}
 		result_str.Finalize();
 	}
+	result.quoted = false;
+	result.escaped = false;
 }
 
 bool StringValueScanner::MoveToNextBuffer() {
@@ -512,10 +531,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 				lines_read++;
 				result.AddRowInternal(previous_buffer_handle->actual_size);
 			}
-
 			return false;
 		}
-		result.previous_line_start = 0;
 		iterator.pos.buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
@@ -586,30 +603,18 @@ void StringValueScanner::SetStart() {
 		return;
 	}
 	// We have to look for a new line that fits our schema
-	while (!FinishedFile()) {
-		// 1. We walk until the next new line
-		SkipUntilNewLine();
-		StringValueScanner scan_finder(buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), iterator, 1);
-		auto &tuples = *scan_finder.ParseChunk();
-		if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
-			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
-			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
-			continue;
-		}
-
-		// 2. We try to cast all columns to the correct types
-		bool all_cast = true;
-		for (idx_t col_idx = 0; col_idx < tuples.Size(); col_idx++) {
-			if (!tuples.GetValue(0, col_idx).TryCastAs(buffer_manager->context, csv_file_scan->types[col_idx])) {
-				// We could not cast it to the right type, this is probably not the correct line start.
-				all_cast = false;
-				break;
-			}
-		}
-		if (all_cast) {
-			break;
+	// 1. We walk until the next new line
+	SkipUntilNewLine();
+	StringValueScanner scan_finder(buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), iterator, 1);
+	auto &tuples = *scan_finder.ParseChunk();
+	if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
+		// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
+		// Or if columns don't match, this is not the correct start, we need to skip until the next new line
+		if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
+			return;
 		}
 	}
+	iterator.pos = scan_finder.result.pre_previous_line_start;
 }
 
 void StringValueScanner::FinalizeChunkProcess() {
@@ -623,6 +628,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 		iterator.done = true;
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
+		if (!cur_buffer_handle) {
+			return;
+		}
 		auto moved = MoveToNextBuffer();
 		if (moved && result.result_position % result.number_of_columns == 0) {
 			// nothing more to process
@@ -630,6 +638,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		if (cur_buffer_handle) {
 			ProcessExtraRow();
+			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
+				MoveToNextBuffer();
+			}
 		}
 	} else {
 		// 2) If a boundary is not set

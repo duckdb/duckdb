@@ -276,7 +276,6 @@ void CSVSniffer::DetectTypes() {
 			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
 				best_header_row.emplace_back(tuples.GetValue(0, col_idx));
 			}
-
 		}
 	}
 	// Assert that it's all good at this point.
