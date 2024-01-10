@@ -9,8 +9,9 @@
     df = DataFrame(
         DBInterface.execute(
             con,
-            """SELECT * EXCLUDE(time)
+            """SELECT * EXCLUDE(time, time_tz)
                 , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
+                , CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS time_tz
             FROM test_all_types()
             """
         )
@@ -28,6 +29,7 @@
         df.hugeint,
         [-170141183460469231731687303715884105728, 170141183460469231731687303715884105727, missing]
     )
+    @test isequal(df.uhugeint, [0, 340282366920938463463374607431768211455, missing])
     @test isequal(df.utinyint, [0, 255, missing])
     @test isequal(df.usmallint, [0, 65535, missing])
     @test isequal(df.uint, [0, 4294967295, missing])

@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -164,6 +164,12 @@ extension ResultSet {
     forColumn columnIndex: DBInt, to type: IntHuge.Type
   ) -> @Sendable (DBInt) -> IntHuge? {
     transformer(forColumn: columnIndex, to: type, fromType: .hugeint) { try? $0.unwrap(type) }
+  }
+
+  func transformer(
+    forColumn columnIndex: DBInt, to type: UIntHuge.Type
+  ) -> @Sendable (DBInt) -> UIntHuge? {
+    transformer(forColumn: columnIndex, to: type, fromType: .uhugeint) { try? $0.unwrap(type) }
   }
   
   func transformer(

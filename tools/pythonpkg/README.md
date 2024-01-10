@@ -22,10 +22,10 @@ Note that this will override any existing DuckDB installation you might have. Yo
     source .venv/bin/activate
     BUILD_PYTHON=1 make
 
-You can also directly invoke the setup.py script from the `tools/pythonpkg` environment.
+You can also directly invoke pip from the `tools/pythonpkg` environment.
 
     cd tools/pythonpkg
-    python3 setup.py install
+    python3 -m pip install .
 
 Alternatively, using virtualenv and pip:
 
@@ -49,9 +49,10 @@ storage from a notebook.
 
 First, get the repository based version number and extract the source distribution.
 
+    python3 -m pip install build # required for pep517 compliant source dists
     cd tools/pythonpkg
-    export SETUPTOOLS_SCM_PRETEND_VERSION=$(python setup.py --version)
-    python setup.py sdist
+    export SETUPTOOLS_SCM_PRETEND_VERSION=$(python3 -m setuptools_scm)
+    pyproject-build . --sdist
     cd ../..
 
 Next, copy over the python package related files, and install the package.
@@ -108,7 +109,7 @@ All the above should be done in a virtualenv.
 
 ## Clang-tidy and CMakeLists
 
-The pythonpkg does not use the CMakeLists for compilation, for that it uses `setup.py` and `package_build.py` mostly.
+The pythonpkg does not use the CMakeLists for compilation, for that it uses pip and `package_build.py` mostly.
 But we still have CMakeLists in the pythonpkg, for tidy-check and intellisense purposes.
 For this reason it might not be instantly apparent that the CMakeLists are incorrectly set up, and will only result in a very confusing CI failure of TidyCheck.
 

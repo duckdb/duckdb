@@ -61,3 +61,23 @@ class TestStreamingResult(object):
             result = []
             for batch in reader:
                 result += batch.to_pydict()['i']
+
+    def test_9801(self, duckdb_cursor):
+        duckdb_cursor.execute('CREATE TABLE test(id INTEGER , name VARCHAR NOT NULL);')
+
+        words = ['aaaaaaaaaaaaaaaaaaaaaaa', 'bbbb', 'ccccccccc', 'ííííííííí']
+        lines = [(i, words[i % 4]) for i in range(1000)]
+        duckdb_cursor.executemany("INSERT INTO TEST (id, name) VALUES (?, ?)", lines)
+
+        rel1 = duckdb_cursor.sql(
+            """
+            SELECT id, name FROM test ORDER BY id ASC
+        """
+        )
+        result = rel1.fetchmany(size=5)
+        counter = 0
+        while result != []:
+            for x in result:
+                assert x == (counter, words[counter % 4])
+                counter += 1
+            result = rel1.fetchmany(size=5)

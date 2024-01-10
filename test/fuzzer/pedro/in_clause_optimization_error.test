@@ -13,6 +13,7 @@ INSERT INTO t0 VALUES (42)
 
 statement error
 SELECT 0 FROM t0 WHERE ? IN (1);
+----
 
 statement ok
 PREPARE v1 AS SELECT 0 FROM t0 WHERE ? IN (1);

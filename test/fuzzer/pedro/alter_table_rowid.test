@@ -10,12 +10,16 @@ CREATE TABLE t0(c0 INTEGER, c1 INTEGER);
 
 statement error
 ALTER TABLE t0 DROP COLUMN rowid;
+----
 
 statement error
 ALTER TABLE t0 RENAME rowid TO ups;
+----
 
 statement error
 ALTER TABLE t0 ALTER rowid TYPE VARCHAR;
+----
 
 statement error
 ALTER TABLE t0 ALTER rowidx SET DEFAULT 0;
+----

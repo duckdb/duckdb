@@ -145,12 +145,15 @@ NULL
 
 statement error
 SELECT date_part('timezone', d) FROM dates;
+----
 
 statement error
 SELECT date_part('timezone_hour', d) FROM dates;
+----
 
 statement error
 SELECT date_part('timezone_minute', d) FROM dates;
+----
 
 # timestamps
 query I
@@ -260,6 +263,16 @@ SELECT date_part('timezone_minute', d::TIMESTAMP) FROM dates;
 NULL
 NULL
 NULL
+
+#
+# Two-argument timezone
+#
+
+# Normalise to +00:00, add interval, then set offset
+query I
+select timezone(interval '4 minute', '12:15:37.123456-08'::TIMETZ);
+----
+20:19:37.123456+00:04
 
 #  last_day
 query TTT

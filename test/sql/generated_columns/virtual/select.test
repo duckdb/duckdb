@@ -13,6 +13,7 @@ INSERT INTO unit VALUES (5,4)
 
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+----
 
 # CREATE
 

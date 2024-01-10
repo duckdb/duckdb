@@ -19,6 +19,7 @@ namespace duckdb {
 
 class Allocator;
 class BufferPool;
+class TemporaryMemoryManager;
 
 class BufferManager {
 	friend class BufferHandle;
@@ -59,7 +60,9 @@ public:
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Get the underlying buffer pool responsible for managing the buffers
-	virtual BufferPool &GetBufferPool();
+	virtual BufferPool &GetBufferPool() const;
+	//! Get the manager that assigns reservations for temporary memory, e.g., for query intermediates
+	virtual TemporaryMemoryManager &GetTemporaryMemoryManager();
 
 	// Static methods
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);
@@ -69,6 +72,8 @@ public:
 	static idx_t GetAllocSize(idx_t block_size) {
 		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
 	}
+	//! Returns the maximum available memory for a given query
+	idx_t GetQueryMaxMemory() const;
 
 protected:
 	virtual void PurgeQueue() = 0;

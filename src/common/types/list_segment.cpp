@@ -1,4 +1,5 @@
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -338,10 +339,7 @@ static void WriteDataToArraySegment(const ListSegmentFunctions &functions, Arena
 	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
 	null_mask[segment->count] = !valid;
 
-	if (!valid) {
-		return;
-	}
-
+	// Arrays require there to be values in the child even when the entry is NULL.
 	auto array_size = ArrayType::GetSize(input_data.logical_type);
 	auto array_offset = sel_entry_idx * array_size;
 
@@ -589,6 +587,9 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		break;
 	case PhysicalType::INT128:
 		SegmentPrimitiveFunction<hugeint_t>(functions);
+		break;
+	case PhysicalType::UINT128:
+		SegmentPrimitiveFunction<uhugeint_t>(functions);
 		break;
 	case PhysicalType::INTERVAL:
 		SegmentPrimitiveFunction<interval_t>(functions);

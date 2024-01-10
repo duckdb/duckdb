@@ -156,9 +156,7 @@ struct ArgMinMaxBase {
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
-		auto result_type =
-		    BoundComparisonExpression::BindComparison(arguments[0]->return_type, arguments[1]->return_type);
-		ExpressionBinder::PushCollation(context, arguments[1], result_type, false);
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type, false);
 		function.arguments[0] = arguments[0]->return_type;
 		function.return_type = arguments[0]->return_type;
 		return nullptr;

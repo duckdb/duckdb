@@ -13,13 +13,14 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/block_manager.hpp"
-
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
+
 class BlockManager;
+class TemporaryMemoryManager;
 class DatabaseInstance;
 class TemporaryDirectoryHandle;
 struct EvictionQueue;
@@ -109,7 +110,8 @@ protected:
 	//! Garbage collect eviction queue
 	void PurgeQueue() final override;
 
-	BufferPool &GetBufferPool() final override;
+	BufferPool &GetBufferPool() const final override;
+	TemporaryMemoryManager &GetTemporaryMemoryManager() final override;
 
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;

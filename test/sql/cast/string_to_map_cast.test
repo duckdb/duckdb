@@ -182,27 +182,35 @@ NULL
 # ---------------------------------------------------
 statement error
 SELECT CAST('{3==3}' AS MAP(INT, INT));
+----
 
 statement error
 SELECT CAST('{[5]=5}' AS MAP(INT, INT));
+----
 
 statement error
 SELECT CAST('{3=three}}' AS MAP(INT, VARCHAR));
+----
 
 statement error   
 SELECT CAST('{Ducky=, DB=ok}' AS MAP(VARCHAR, INT));
+----
 
 statement error
 SELECT CAST('{5=5,, 3=3}' AS MAP(INT, INT));
+----
 
 statement error
 SELECT CAST('{3=3, 4=4' AS MAP(INT, INT));
+----
 
 statement error
 SELECT CAST('{3=3, 4=4} bla' AS MAP(INT, INT));
+----
 
 statement error
 SELECT CAST('{                                                                      ' AS MAP(INT, INT));
+----
 
 #               Test WHERE clause
 # ---------------------------------------------------
@@ -263,7 +271,7 @@ SELECT CAST('{True=[true, FALSE, true], False=[false, false, false]}' AS MAP(BOO
 ----
 {true=[true, false, true], false=[false, false, false]}
 
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
 
 query I
 SELECT CAST('{0={a:1, b: 8.3}, 5.7={a:2, b: 3}}' AS MAP(${type}, STRUCT(a ${type}, b ${type})));
@@ -296,6 +304,7 @@ SELECT '{ok=happy, sad=ok}'::MAP(MOOD, MOOD)
 
 statement error
 SELECT '{sadDucky: nothappy}'::MAP(VARCHAR, MOOD)
+----
 
 #               Larger input test
 # ---------------------------------------------------
