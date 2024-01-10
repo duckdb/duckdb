@@ -4,10 +4,8 @@
 
 require icu
 
-query I
-select typeof(2*16*256+1*256+2*16+11)
-----
-INTEGER
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE strings(s VARCHAR);

@@ -888,6 +888,14 @@ Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).
 DUCKDB_API duckdb_date duckdb_to_date(duckdb_date_struct date);
 
 /*!
+Test a `duckdb_date` to see if it is a finite value.
+
+* date: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
+* returns: True if the date is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_date(duckdb_date date);
+
+/*!
 Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).
 
 * time: The time object, as obtained from a `DUCKDB_TYPE_TIME` column.
@@ -918,6 +926,14 @@ Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
 * returns: The `duckdb_timestamp` element.
 */
 DUCKDB_API duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts);
+
+/*!
+Test a `duckdb_timestamp` to see if it is a finite value.
+
+* ts: The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+* returns: True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp(duckdb_timestamp ts);
 
 //===--------------------------------------------------------------------===//
 // Hugeint Helpers

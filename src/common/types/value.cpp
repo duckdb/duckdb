@@ -233,7 +233,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MIN_OFFSET));
+		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
+		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(Timestamp::FromDatetime(
 		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0)));
@@ -305,8 +306,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(
-		    dtime_tz_t(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1), dtime_tz_t::MAX_OFFSET));
+		//	"24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59"
+		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return MaximumValue(LogicalType::TIMESTAMP);
 	case LogicalTypeId::FLOAT:
@@ -1375,6 +1376,12 @@ template <>
 dtime_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.time;
+}
+
+template <>
+dtime_tz_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.timetz;
 }
 
 template <>

@@ -680,7 +680,6 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 
 static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalType &right) {
 	D_ASSERT(left.id() != right.id());
-	// for integer literals - grab the inner type
 	if (left.id() > right.id()) {
 		// this method is symmetric
 		// arrange it so the left type is smaller to limit the number of options we need to check

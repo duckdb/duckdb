@@ -1,6 +1,8 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -10,8 +12,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 
 #include <limits>
 
@@ -291,6 +291,11 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 		handle->Write((void *)data, size);
 	}
 
+	idx_t FileSize() {
+		lock_guard<mutex> flock(lock);
+		return handle->GetFileSize();
+	}
+
 	FileSystem &fs;
 	//! The mutex for writing to the physical file
 	mutex lock;
@@ -339,6 +344,11 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	}
 
 	return std::move(global_data);
+}
+
+idx_t WriteCSVFileSize(GlobalFunctionData &gstate) {
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
+	return global_state.FileSize();
 }
 
 static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_data, DataChunk &cast_chunk,
@@ -519,6 +529,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.execution_mode = WriteCSVExecutionMode;
 	info.prepare_batch = WriteCSVPrepareBatch;
 	info.flush_batch = WriteCSVFlushBatch;
+	info.file_size_bytes = WriteCSVFileSize;
 
 	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();

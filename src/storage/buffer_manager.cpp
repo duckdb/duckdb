@@ -1,4 +1,5 @@
 #include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
@@ -40,6 +41,10 @@ const string &BufferManager::GetTemporaryDirectory() {
 
 BufferPool &BufferManager::GetBufferPool() const {
 	throw InternalException("This type of BufferManager does not have a buffer pool");
+}
+
+TemporaryMemoryManager &BufferManager::GetTemporaryMemoryManager() {
+	throw NotImplementedException("This type of BufferManager does not have a TemporaryMemoryManager");
 }
 
 void BufferManager::SetTemporaryDirectory(const string &new_dir) {
