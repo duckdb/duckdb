@@ -158,6 +158,12 @@ public:
 		redact_keys = secret.redact_keys;
 		serializable = true;
 	};
+	KeyValueSecret(const KeyValueSecret &secret)
+	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
+		secret_map = secret.secret_map;
+		redact_keys = secret.redact_keys;
+		serializable = true;
+	};
 	KeyValueSecret(KeyValueSecret &&secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = std::move(secret.secret_map);
