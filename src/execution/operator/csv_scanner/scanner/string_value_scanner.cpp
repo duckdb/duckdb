@@ -189,9 +189,10 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 			    result.state_machine.options, result.vector_ptr, result.result_position,
 			    result.number_of_columns + result.result_position % result.number_of_columns);
 			LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
-			                              result.result_position / result.number_of_columns);
+			                              result.result_position / result.number_of_columns +1);
 			result.error_handler.Error(lines_per_batch, csv_error);
 			result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
+			D_ASSERT(result.result_position % result.number_of_columns == 0);
 			result.maybe_too_many_columns = false;
 		}
 		// Maybe we have too few columns:
@@ -214,9 +215,10 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 			                                                      result.result_position,
 			                                                      result.result_position % result.number_of_columns);
 			LinesPerBatch lines_per_batch(result.iterator.GetFileIdx(), result.iterator.GetBufferIdx(),
-			                              result.result_position / result.number_of_columns);
+			                              result.result_position / result.number_of_columns +1);
 			result.error_handler.Error(lines_per_batch, csv_error);
 			result.result_position -= result.result_position % result.number_of_columns;
+			D_ASSERT(result.result_position % result.number_of_columns == 0);
 		}
 	}
 
@@ -455,15 +457,19 @@ void StringValueScanner::ProcessOverbufferValue() {
 	idx_t first_buffer_pos = result.last_position;
 	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos;
 	idx_t cur_value_idx = result.result_position;
-	while (cur_value_idx == result.result_position) {
+	while (cur_value_idx == result.result_position && iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
 		ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result);
 		iterator.pos.buffer_pos++;
 	}
+	if(iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer){
+		result.added_last_line = true;
+	}
+	 result.result_position = cur_value_idx + 1;
 	if (iterator.pos.buffer_pos == 0) {
-		result.vector_ptr[result.result_position - 1] =
+		result.vector_ptr[cur_value_idx] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
 	} else if (iterator.pos.buffer_pos == 1) {
-		result.vector_ptr[result.result_position - 1] =
+		result.vector_ptr[cur_value_idx] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos, first_buffer_length - 1);
 	} else {
 		idx_t string_length;
@@ -472,7 +478,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		} else {
 			string_length = first_buffer_length + iterator.pos.buffer_pos - 2;
 		}
-		auto &result_str = result.vector_ptr[result.result_position - 1];
+		auto &result_str = result.vector_ptr[cur_value_idx];
 		result_str = StringVector::EmptyString(*result.vector, string_length);
 		// Copy the first buffer
 		FastMemcpy(result_str.GetDataWriteable(), previous_buffer_handle->Ptr() + first_buffer_pos,
@@ -491,7 +497,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 		if (!cur_buffer_handle) {
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
-			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow()) {
+			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || result.added_last_line) {
 				return false;
 			} else if (states.IsCurrentDelimiter()) {
 				lines_read++;

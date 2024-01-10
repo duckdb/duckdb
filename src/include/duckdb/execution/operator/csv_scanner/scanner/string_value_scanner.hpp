@@ -50,6 +50,7 @@ public:
 	//! Where the previous line started, used to validate the maximum_line_size option
 	idx_t previous_line_start = 0;
 
+	bool added_last_line = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
