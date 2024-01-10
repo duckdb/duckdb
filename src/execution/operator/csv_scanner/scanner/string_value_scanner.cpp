@@ -111,6 +111,14 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::AddRowInternal(idx_t buffer_pos) {
+	if (buffer_pos - previous_line_start > state_machine.options.maximum_line_size){
+		auto csv_error =
+		    CSVError::LineSizeError(state_machine.options, buffer_pos - previous_line_start);
+		LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
+		                              result_position / number_of_columns);
+		error_handler.Error(lines_per_batch, csv_error);
+	}
+	previous_line_start = buffer_pos;
 	// We add the value
 	if (quoted) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
@@ -362,6 +370,7 @@ void StringValueScanner::Initialize() {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
+	result.previous_line_start = iterator.pos.buffer_pos;
 }
 
 void StringValueScanner::Process() {
@@ -461,6 +470,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 
 			return false;
 		}
+		result.previous_line_start = 0;
 		iterator.pos.buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value

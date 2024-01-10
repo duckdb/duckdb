@@ -52,7 +52,8 @@ enum CSVErrorType : uint8_t {
 	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
 	INCORRECT_COLUMN_AMOUNT = 2,   // If the CSV is missing a column
 	UNTERMINATED_QUOTES = 3,       // If a quote is not terminated
-	SNIFFING = 4
+	SNIFFING = 4,  // If something went wrong during sniffing and was not possible to find suitable candidates
+	MAXIMUM_LINE_SIZE // Maximum line size was exceeded by a line in the CSV File
 };
 
 class CSVError {
@@ -63,6 +64,8 @@ public:
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, DataChunk &parse_chunk, idx_t chunk_row,
 	                          string &column_name, string &cast_error);
+	//! Produces error for when the line size exceeds the maximum line size option
+	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size);
 	//! Produces error for when the sniffer couldn't find viable options
 	static CSVError SniffingError(string &file_path);
 	//! Produces error messages for unterminated quoted values

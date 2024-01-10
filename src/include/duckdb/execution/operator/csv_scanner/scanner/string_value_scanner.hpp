@@ -47,6 +47,8 @@ public:
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
+	//! Where the previous line started, used to validate the maximum_line_size option
+	idx_t previous_line_start = 0;
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);

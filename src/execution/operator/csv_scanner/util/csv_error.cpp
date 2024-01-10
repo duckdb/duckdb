@@ -85,6 +85,15 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_c
 	return CSVError(error.str(), CSVErrorType::CAST_ERROR);
 }
 
+
+CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size){
+	std::ostringstream error;
+	error << "Maximum line size of "<< options.maximum_line_size  << " bytes exceeded. ";
+	error << "Actual Size:" << actual_size  << " bytes."<< std::endl;
+	error << options.ToString();
+	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE);
+}
+
 CSVError CSVError::SniffingError(string &file_path) {
 	std::ostringstream error;
 	// Which column
@@ -138,6 +147,7 @@ bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
 	case CSVErrorType::CAST_ERROR:
 	case CSVErrorType::UNTERMINATED_QUOTES:
 	case CSVErrorType::INCORRECT_COLUMN_AMOUNT:
+	case CSVErrorType::MAXIMUM_LINE_SIZE:
 		return true;
 	default:
 		return false;
