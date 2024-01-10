@@ -235,6 +235,7 @@ private:
 	void ThrowObjectSizeError(const idx_t object_size);
 	void ThrowInvalidAtEndError();
 
+	//! Must hold the lock
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
