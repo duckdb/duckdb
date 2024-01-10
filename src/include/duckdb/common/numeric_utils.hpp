@@ -33,8 +33,6 @@ struct MakeUnsigned {
 	using type = typename std::make_unsigned<T>::type;
 };
 
-// hugeint_t does not actually have an unsigned variant (yet), but this is required to make compression work
-// if an unsigned variant gets implemented this (probably) can be changed without breaking anything
 template <>
 struct MakeUnsigned<hugeint_t> {
 	using type = uhugeint_t;
@@ -59,6 +57,5 @@ template <>
 struct IsIntegral<uhugeint_t> {
 	static constexpr bool value = true;
 };
-
 
 } // namespace duckdb
