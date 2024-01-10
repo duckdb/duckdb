@@ -49,11 +49,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
 
 	// the result types of the CTE are the types of the LHS
 	result->types = result->child->types;
-	// names are picked from the LHS, unless aliases are explicitly specified
 	result->names = result->child->names;
-	for (idx_t i = 0; i < statement.aliases.size() && i < result->names.size(); i++) {
-		result->names[i] = statement.aliases[i];
-	}
 
 	MoveCorrelatedExpressions(*result->query_binder);
 	MoveCorrelatedExpressions(*result->child_binder);

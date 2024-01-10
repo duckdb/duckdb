@@ -70,8 +70,27 @@ timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 }
 
 template <>
+timestamp_t AddOperator::Operation(date_t left, dtime_tz_t right) {
+	if (left == date_t::infinity()) {
+		return timestamp_t::infinity();
+	} else if (left == date_t::ninfinity()) {
+		return timestamp_t::ninfinity();
+	}
+	timestamp_t result;
+	if (!Timestamp::TryFromDatetime(left, right, result)) {
+		throw OutOfRangeException("Timestamp with time zone out of range");
+	}
+	return result;
+}
+
+template <>
 timestamp_t AddOperator::Operation(dtime_t left, date_t right) {
 	return AddOperator::Operation<date_t, dtime_t, timestamp_t>(right, left);
+}
+
+template <>
+timestamp_t AddOperator::Operation(dtime_tz_t left, date_t right) {
+	return AddOperator::Operation<date_t, dtime_tz_t, timestamp_t>(right, left);
 }
 
 template <>
@@ -244,6 +263,17 @@ dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
 template <>
 dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right) {
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(right, left);
+}
+
+template <>
+dtime_tz_t AddTimeOperator::Operation(dtime_tz_t left, interval_t right) {
+	date_t date(0);
+	return Interval::Add(left, right, date);
+}
+
+template <>
+dtime_tz_t AddTimeOperator::Operation(interval_t left, dtime_tz_t right) {
+	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(right, left);
 }
 
 } // namespace duckdb
