@@ -364,7 +364,7 @@ void PartitionedTupleData::Unpin() {
 	}
 }
 
-vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
+unsafe_vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
 	return partitions;
 }
 
@@ -398,6 +398,16 @@ idx_t PartitionedTupleData::SizeInBytes() const {
 
 idx_t PartitionedTupleData::PartitionCount() const {
 	return partitions.size();
+}
+
+void PartitionedTupleData::GetSizesAndCounts(vector<idx_t> &partition_sizes, vector<idx_t> &partition_counts) const {
+	D_ASSERT(partition_sizes.size() == PartitionCount());
+	D_ASSERT(partition_sizes.size() == partition_counts.size());
+	for (idx_t i = 0; i < PartitionCount(); i++) {
+		auto &partition = *partitions[i];
+		partition_sizes[i] += partition.SizeInBytes();
+		partition_counts[i] += partition.Count();
+	}
 }
 
 void PartitionedTupleData::Verify() const {

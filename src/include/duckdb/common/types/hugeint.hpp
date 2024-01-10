@@ -48,14 +48,14 @@ public:
 	static bool TryNegate(hugeint_t input, hugeint_t &result);
 
 	template <bool CHECK_OVERFLOW = true>
-	static void NegateInPlace(hugeint_t &input) {
+	inline static void NegateInPlace(hugeint_t &input) {
 		if (!TryNegate(input, input)) {
 			throw OutOfRangeException("Negation of HUGEINT is out of range!");
 		}
 	}
 
 	template <bool CHECK_OVERFLOW = true>
-	static hugeint_t Negate(hugeint_t input) {
+	inline static hugeint_t Negate(hugeint_t input) {
 		NegateInPlace<CHECK_OVERFLOW>(input);
 		return input;
 	}
@@ -63,7 +63,7 @@ public:
 	static bool TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
 
 	template <bool CHECK_OVERFLOW = true>
-	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs) {
+	inline static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs) {
 		hugeint_t result;
 		if (!TryMultiply(lhs, rhs, result)) {
 			throw OutOfRangeException("Overflow in HUGEINT multiplication: %s + %s", lhs.ToString(), rhs.ToString());
@@ -74,7 +74,7 @@ public:
 	static bool TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint_t &remainder);
 
 	template <bool CHECK_OVERFLOW = true>
-	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs) {
+	inline static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs) {
 		// No division by zero
 		if (rhs == 0) {
 			throw OutOfRangeException("Division of HUGEINT by zero!");
@@ -88,7 +88,7 @@ public:
 	}
 
 	template <bool CHECK_OVERFLOW = true>
-	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs) {
+	inline static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs) {
 		// No division by zero
 		if (rhs == 0) {
 			throw OutOfRangeException("Modulo of HUGEINT by zero: %s + %s", lhs.ToString(), rhs.ToString());
@@ -104,7 +104,7 @@ public:
 	static bool TryAddInPlace(hugeint_t &lhs, hugeint_t rhs);
 
 	template <bool CHECK_OVERFLOW = true>
-	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs) {
+	inline static hugeint_t Add(hugeint_t lhs, hugeint_t rhs) {
 		if (!TryAddInPlace(lhs, rhs)) {
 			throw OutOfRangeException("Overflow in HUGEINT addition: %s + %s", lhs.ToString(), rhs.ToString());
 		}
@@ -114,7 +114,7 @@ public:
 	static bool TrySubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
 
 	template <bool CHECK_OVERFLOW = true>
-	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs) {
+	inline static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs) {
 		if (!TrySubtractInPlace(lhs, rhs)) {
 			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
 		}

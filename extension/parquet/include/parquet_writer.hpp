@@ -87,6 +87,10 @@ public:
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}
+	idx_t FileSize() {
+		lock_guard<mutex> glock(lock);
+		return writer->total_written;
+	}
 
 	static CopyTypeSupport TypeIsSupported(const LogicalType &type);
 

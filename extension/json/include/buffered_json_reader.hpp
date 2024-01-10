@@ -66,9 +66,13 @@ public:
 
 	bool CanSeek() const;
 
+	FileHandle &GetHandle();
+
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
-	void ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run);
 	idx_t Read(char *pointer, idx_t requested_size, bool sample_run);
+	//! Read at position optionally allows passing a custom handle to read from, otherwise the default one is used
+	void ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run,
+	                    optional_ptr<FileHandle> override_handle = nullptr);
 
 private:
 	idx_t ReadInternal(char *pointer, const idx_t requested_size);
@@ -81,7 +85,6 @@ private:
 
 	//! File properties
 	const bool can_seek;
-	const bool plain_file_source;
 	const idx_t file_size;
 
 	//! Read properties

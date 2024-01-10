@@ -3127,6 +3127,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "TIME WITH TIME ZONE";
 	case LogicalTypeId::BIT:
 		return "BIT";
+	case LogicalTypeId::STRING_LITERAL:
+		return "STRING_LITERAL";
 	case LogicalTypeId::UHUGEINT:
 		return "UHUGEINT";
 	case LogicalTypeId::HUGEINT:
@@ -3251,6 +3253,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BIT")) {
 		return LogicalTypeId::BIT;
+	}
+	if (StringUtil::Equals(value, "STRING_LITERAL")) {
+		return LogicalTypeId::STRING_LITERAL;
 	}
 	if (StringUtil::Equals(value, "UHUGEINT")) {
 		return LogicalTypeId::UHUGEINT;
@@ -4168,8 +4173,10 @@ const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "PIECEWISE_MERGE_JOIN";
 	case PhysicalOperatorType::IE_JOIN:
 		return "IE_JOIN";
-	case PhysicalOperatorType::DELIM_JOIN:
-		return "DELIM_JOIN";
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+		return "LEFT_DELIM_JOIN";
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+		return "RIGHT_DELIM_JOIN";
 	case PhysicalOperatorType::POSITIONAL_JOIN:
 		return "POSITIONAL_JOIN";
 	case PhysicalOperatorType::ASOF_JOIN:
@@ -4361,8 +4368,11 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	if (StringUtil::Equals(value, "IE_JOIN")) {
 		return PhysicalOperatorType::IE_JOIN;
 	}
-	if (StringUtil::Equals(value, "DELIM_JOIN")) {
-		return PhysicalOperatorType::DELIM_JOIN;
+	if (StringUtil::Equals(value, "LEFT_DELIM_JOIN")) {
+		return PhysicalOperatorType::LEFT_DELIM_JOIN;
+	}
+	if (StringUtil::Equals(value, "RIGHT_DELIM_JOIN")) {
+		return PhysicalOperatorType::RIGHT_DELIM_JOIN;
 	}
 	if (StringUtil::Equals(value, "POSITIONAL_JOIN")) {
 		return PhysicalOperatorType::POSITIONAL_JOIN;
@@ -6543,6 +6553,8 @@ const char* EnumUtil::ToChars<WALType>(WALType value) {
 		return "DELETE_TUPLE";
 	case WALType::UPDATE_TUPLE:
 		return "UPDATE_TUPLE";
+	case WALType::WAL_VERSION:
+		return "WAL_VERSION";
 	case WALType::CHECKPOINT:
 		return "CHECKPOINT";
 	case WALType::WAL_FLUSH:
@@ -6622,6 +6634,9 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UPDATE_TUPLE")) {
 		return WALType::UPDATE_TUPLE;
+	}
+	if (StringUtil::Equals(value, "WAL_VERSION")) {
+		return WALType::WAL_VERSION;
 	}
 	if (StringUtil::Equals(value, "CHECKPOINT")) {
 		return WALType::CHECKPOINT;

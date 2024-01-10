@@ -13,7 +13,7 @@ cannot reference alias
 statement error
 SELECT count() as c0 FROM (SELECT 1) t1(c2) HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));
 ----
-Binder Error: column c0 must appear in the GROUP BY clause or be used in an aggregate function
+cannot reference alias
 
 statement error
 SELECT count() as c0 FROM (SELECT 1) t1(c2) GROUP BY c0 HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));
@@ -29,9 +29,9 @@ CREATE TABLE t1 (c0 INT);
 statement error
 SELECT count(*) c1 HAVING EXISTS (SELECT 1 FROM t1 WHERE c1 BETWEEN c0 AND 0);
 ----
-Binder Error: column c1 must appear in the GROUP BY clause or be used in an aggregate function
+cannot reference alias
 
 statement error
 SELECT count(*) c1 HAVING EXISTS (SELECT 1 FROM t1 WHERE c1 = c0);
 ----
-Binder Error: column c1 must appear in the GROUP BY clause or be used in an aggregate function
+cannot reference alias

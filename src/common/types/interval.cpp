@@ -513,6 +513,10 @@ dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 	return left;
 }
 
+dtime_tz_t Interval::Add(dtime_tz_t left, interval_t right, date_t &date) {
+	return dtime_tz_t(Interval::Add(left.time(), right, date), left.offset());
+}
+
 timestamp_t Interval::Add(timestamp_t left, interval_t right) {
 	if (!Timestamp::IsFinite(left)) {
 		return left;

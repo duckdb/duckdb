@@ -49,14 +49,14 @@ public:
 	// "The negative of an unsigned quantity is computed by subtracting its value from 2^n, where n is the number of
 	// bits in the promoted operand."
 	template <bool CHECK_OVERFLOW = true>
-	static void NegateInPlace(uhugeint_t &input) {
+	inline static void NegateInPlace(uhugeint_t &input) {
 		if (!TryNegate(input, input)) {
 			throw OutOfRangeException("UHUGEINT is out of range");
 		}
 	}
 
 	template <bool CHECK_OVERFLOW = true>
-	static uhugeint_t Negate(uhugeint_t input) {
+	inline static uhugeint_t Negate(uhugeint_t input) {
 		NegateInPlace<CHECK_OVERFLOW>(input);
 		return input;
 	}
@@ -64,7 +64,7 @@ public:
 	static bool TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
 
 	template <bool CHECK_OVERFLOW = true>
-	static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs) {
+	inline static uhugeint_t Multiply(uhugeint_t lhs, uhugeint_t rhs) {
 		uhugeint_t result;
 		if (!TryMultiply(lhs, rhs, result)) {
 			throw OutOfRangeException("Overflow in UHUGEINT multiplication!: %s + %s", lhs.ToString(), rhs.ToString());
@@ -75,7 +75,7 @@ public:
 	static bool TryDivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result, uhugeint_t &remainder);
 
 	template <bool CHECK_OVERFLOW = true>
-	static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs) {
+	inline static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs) {
 		// division between two same-size unsigned intergers can only go wrong with division by zero
 		if (rhs == 0) {
 			throw OutOfRangeException("Division of UHUGEINT by zero!");
@@ -84,7 +84,7 @@ public:
 	}
 
 	template <bool CHECK_OVERFLOW = true>
-	static uhugeint_t Modulo(uhugeint_t lhs, uhugeint_t rhs) {
+	inline static uhugeint_t Modulo(uhugeint_t lhs, uhugeint_t rhs) {
 		if (rhs == 0) {
 			throw OutOfRangeException("Modulo of UHUGEINT by zero!");
 		}
@@ -94,7 +94,7 @@ public:
 	static bool TryAddInPlace(uhugeint_t &lhs, uhugeint_t rhs);
 
 	template <bool CHECK_OVERFLOW = true>
-	static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs) {
+	inline static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs) {
 		if (!TryAddInPlace(lhs, rhs)) {
 			throw OutOfRangeException("Overflow in UHUGEINT addition: %s + %s", lhs.ToString(), rhs.ToString());
 		}
@@ -104,7 +104,7 @@ public:
 	static bool TrySubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs);
 
 	template <bool CHECK_OVERFLOW = true>
-	static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs) {
+	inline static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs) {
 		if (!TrySubtractInPlace(lhs, rhs)) {
 			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
 		}

@@ -27,6 +27,11 @@ static DefaultMacro internal_macros[] = {
 
 	{"pg_catalog", "pg_typeof", {"expression", nullptr}, "lower(typeof(expression))"},  // get the data type of any value
 
+	{"pg_catalog", "current_database", {nullptr}, "current_database()"},  	    // name of current database (called "catalog" in the SQL standard)
+	{"pg_catalog", "current_query", {nullptr}, "current_query()"},  	        // the currently executing query (NULL if not inside a plpgsql function)
+	{"pg_catalog", "current_schema", {nullptr}, "current_schema()"},  	        // name of current schema
+	{"pg_catalog", "current_schemas", {"include_implicit"}, "current_schemas(include_implicit)"},  	// names of schemas in search path
+
 	// privilege functions
 	// {"has_any_column_privilege", {"user", "table", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for any column of table
 	{"pg_catalog", "has_any_column_privilege", {"table", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for any column of table
@@ -92,7 +97,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_pop_front", {"arr", nullptr}, "arr[2:]"},
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, "list_concat(list_value(e), arr)"},
-	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, "list_aggr(arr, 'string_agg', sep)"},
+	{DEFAULT_SCHEMA, "array_to_string", {"arr", "sep", nullptr}, "list_aggr(arr::varchar[], 'string_agg', sep)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
