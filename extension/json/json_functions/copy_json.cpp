@@ -12,7 +12,7 @@
 namespace duckdb {
 
 static void ThrowJSONCopyParameterException(const string &loption) {
-	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.");
+	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.", loption);
 }
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
@@ -23,7 +23,8 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	// Parse the options, creating options for the CSV writer while doing so
 	string date_format;
 	string timestamp_format;
-	case_insensitive_map_t<vector<Value>> csv_copy_options;
+	// We insert the JSON file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
+	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"json"}}};
 	for (const auto &kv : info.options) {
 		const auto &loption = StringUtil::Lower(kv.first);
 		if (loption == "dateformat" || loption == "date_format") {
@@ -36,8 +37,6 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 				ThrowJSONCopyParameterException(loption);
 			}
 			timestamp_format = StringValue::Get(kv.second.back());
-		} else if (loption == "compression") {
-			csv_copy_options.insert(kv);
 		} else if (loption == "array") {
 			if (kv.second.size() > 1) {
 				ThrowJSONCopyParameterException(loption);
@@ -47,6 +46,11 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 				csv_copy_options["suffix"] = {"\n]\n"};
 				csv_copy_options["new_line"] = {",\n\t"};
 			}
+		} else if (loption == "compression" || loption == "encoding" || loption == "per_thread_output" ||
+		           loption == "file_size_bytes" || loption == "use_tmp_file" || loption == "overwrite_or_ignore" ||
+		           loption == "filename_pattern" || loption == "file_extension") {
+			// We support these base options
+			csv_copy_options.insert(kv);
 		} else {
 			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): \"%s\".", loption);
 		}
