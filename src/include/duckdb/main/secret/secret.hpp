@@ -185,7 +185,7 @@ public:
 			result->redact_keys.insert(entry.ToString());
 		}
 
-		return result;
+		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
 	}
 
 	//! the map of key -> values that make up the secret
