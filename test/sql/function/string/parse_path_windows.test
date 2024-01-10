@@ -63,3 +63,37 @@ SELECT parse_dirname('');
 statement error
 SELECT parse_dirname('file.csv');
 ----
+
+
+# test parse_filename
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', 'system')), (parse_filename('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_filename('home/user/documents/file.csv', 'forward_slash')), (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', 'backslash')), , (parse_filename('C:\Users\User\Documents\File.csv', 'backslash', true))) tbl(i)
+----
+File.csv/File2.csv
+file2.csv
+file.csv
+File.csv/File2.csv
+File
+
+# default args
+query T
+SELECT parse_filename('home/user/documents/file.csv\file2.csv');
+----
+file2.csv
+
+# trim extension
+query T
+SELECT parse_filename('home/user/documents/file.csv\file2.csv', true);
+----
+file2
+
+query T
+SELECT parse_filename('');
+----
+(empty)
+
+# test incorrect usage
+statement error
+SELECT parse_filename('file.csv');
+----

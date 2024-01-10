@@ -1,6 +1,7 @@
 #include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -24,7 +25,6 @@ static string GetSeparator(const string_t &input) {
 	return separator;
 }
 
-// TODO: should I somehow use the StringSplitInput from stringSplit
 struct SplitInput {
 	SplitInput(Vector &result_list, Vector &result_child, idx_t offset)
 	    : result_list(result_list), result_child(result_child), offset(offset) {
@@ -45,6 +45,13 @@ struct SplitInput {
 	}
 };
 
+static bool IsIdxValid(const idx_t &i, const idx_t &sentence_size) {
+	if (i > sentence_size || i == DConstants::INVALID_INDEX) {
+		return false;
+	}
+	return true;
+}
+
 static idx_t Find(const char *input_data, idx_t input_size, const string &sep_data) {
 	if (sep_data.size() == 0) {
 		return 0;
@@ -62,6 +69,22 @@ static idx_t Find(const char *input_data, idx_t input_size, const string &sep_da
 	return pos;
 }
 
+static idx_t FindLast(const char *data_ptr, idx_t input_size, const string &sep_data) {
+	idx_t start = 0;
+	while (input_size > 0) {
+		auto pos = Find(data_ptr, input_size, sep_data);
+		if (!IsIdxValid(pos, input_size)) {
+			break;
+		}
+		start += (pos + 1);
+		data_ptr += (pos + 1);
+		input_size -= (pos + 1);
+	}
+	if (start < 1)
+		return DConstants::INVALID_INDEX;
+	return start - 1;
+}
+
 static idx_t Split(string_t input, const string &sep, SplitInput &state) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
@@ -72,7 +95,7 @@ static idx_t Split(string_t input, const string &sep, SplitInput &state) {
 	idx_t list_idx = 0;
 	while (input_size > 0) {
 		auto pos = Find(input_data, input_size, sep);
-		if (pos > input_size || pos == DConstants::INVALID_INDEX) {
+		if (!IsIdxValid(pos, input_size)) {
 			break;
 		}
 		D_ASSERT(input_size >= pos);
@@ -86,51 +109,110 @@ static idx_t Split(string_t input, const string &sep, SplitInput &state) {
 	return list_idx;
 }
 
+static void ReadOptionalArgs(DataChunk &args, Vector &sep, Vector &trim, const bool &front_trim) {
+	switch (args.ColumnCount()) {
+	case 1: {
+		// use default values
+		break;
+	}
+	case 2: {
+		UnifiedVectorFormat sec_arg;
+		args.data[1].ToUnifiedFormat(args.size(), sec_arg);
+		if (sec_arg.validity.RowIsValid(0)) { // if not NULL
+			switch (args.data[1].GetType().id()) {
+			case LogicalTypeId::VARCHAR: {
+				sep.Reinterpret(args.data[1]);
+				break;
+			}
+			case LogicalTypeId::BOOLEAN: { // parse_path and parse_driname won't get in here
+				trim.Reinterpret(args.data[1]);
+				break;
+			}
+			default:
+				throw InvalidInputException("Invalid argument type");
+			}
+		}
+		break;
+	}
+	case 3: {
+		if (!front_trim) {
+			// set trim_extension
+			UnifiedVectorFormat sec_arg;
+			args.data[1].ToUnifiedFormat(args.size(), sec_arg);
+			if (sec_arg.validity.RowIsValid(0)) {
+				trim.Reinterpret(args.data[1]);
+			}
+			UnifiedVectorFormat third_arg;
+			args.data[2].ToUnifiedFormat(args.size(), third_arg);
+			if (third_arg.validity.RowIsValid(0)) {
+				sep.Reinterpret(args.data[2]);
+			}
+		} else {
+			InvalidInputException("Invalid number of arguments");
+		}
+		break;
+	}
+	default:
+		throw InvalidInputException("Invalid number of arguments");
+	}
+}
+
 template <bool FRONT_TRIM>
 static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	// check separator argument
-	if (args.ColumnCount() == 1) {
-		args.data.emplace_back(string_t("default"));
-	} else {
-		UnifiedVectorFormat sep_data;
-		args.data[1].ToUnifiedFormat(args.size(), sep_data);
-		if (!sep_data.validity.RowIsValid(0)) {
-			args.data[1].SetValue(0, string_t("default"));
-		}
-	}
-	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result, args.size(),
-	                                                      [&](string_t inputs, string_t input_sep) {
-		                                                      auto data = inputs.GetData();
-		                                                      auto size = inputs.GetSize();
-		                                                      auto sep = GetSeparator(input_sep);
+	// set default values
+	Vector &path = args.data[0];
+	Vector separator(string_t("default"));
+	Vector trim_extension(false);
+	ReadOptionalArgs(args, separator, trim_extension, FRONT_TRIM);
 
-		                                                      // find the first separator in the path
-		                                                      idx_t sep_pos = 0;
-		                                                      if (FRONT_TRIM) {
-			                                                      sep_pos = Find(data, size, sep);
-			                                                      if (sep_pos == DConstants::INVALID_INDEX) {
-				                                                      sep_pos = size;
-			                                                      }
-		                                                      }
+	TernaryExecutor::Execute<string_t, string_t, bool, string_t>(
+	    path, separator, trim_extension, result, args.size(),
+	    [&](string_t &inputs, string_t input_sep, bool trim_extension) {
+		    auto data = inputs.GetData();
+		    auto input_size = inputs.GetSize();
+		    auto sep = GetSeparator(input_sep.GetString());
 
-		                                                      // Copy the trimmed string
-		                                                      auto target = StringVector::EmptyString(result, sep_pos);
-		                                                      auto output = target.GetDataWriteable();
-		                                                      memcpy(output, data, sep_pos);
+		    // find the beginning idx and the size of the result string
+		    idx_t begin = 0;
+		    idx_t new_size = input_size;
+		    if (FRONT_TRIM) { // left trim
+			    auto pos = Find(data, input_size, sep);
+			    if (!IsIdxValid(pos, input_size)) {
+				    pos = input_size;
+			    }
+			    new_size = pos;
+		    } else { // right trim
+			    auto idx_last_sep = FindLast(data, input_size, sep);
+			    if (IsIdxValid(idx_last_sep, input_size)) {
+				    begin = idx_last_sep + 1;
+			    }
+			    if (trim_extension) {
+				    auto idx_last_sep = FindLast(data, input_size, ".");
+				    if (begin <= idx_last_sep && IsIdxValid(idx_last_sep, input_size)) {
+					    new_size = idx_last_sep;
+				    }
+			    }
+		    }
+		    // copy the trimmed string
+		    D_ASSERT(begin <= new_size);
+		    auto target = StringVector::EmptyString(result, new_size - begin);
+		    auto output = target.GetDataWriteable();
+		    memcpy(output, data + begin, new_size - begin);
 
-		                                                      target.Finalize();
-		                                                      return target;
-	                                                      });
+		    target.Finalize();
+		    return target;
+	    });
 }
 
 static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
 	UnifiedVectorFormat input_data;
 	args.data[0].ToUnifiedFormat(args.size(), input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// set the separator
 	string input_sep = "default";
-	if (args.ColumnCount() > 1) {
+	if (args.ColumnCount() == 2) {
 		UnifiedVectorFormat sep_data;
 		args.data[1].ToUnifiedFormat(args.size(), sep_data);
 		if (sep_data.validity.RowIsValid(0)) {
@@ -178,6 +260,22 @@ ScalarFunctionSet ParseDirnameFun::GetFunctions() {
 	func.arguments.emplace_back(LogicalType::VARCHAR);
 	parse_dirname.AddFunction(func);
 	return parse_dirname;
+}
+
+ScalarFunctionSet ParseFilenameFun::GetFunctions() {
+	ScalarFunctionSet parse_filename;
+	parse_filename.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr, nullptr,
+	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::ANY}, LogicalType::VARCHAR,
+	                                          TrimPathFunction<false>, nullptr, nullptr, nullptr, nullptr,
+	                                          LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS,
+	                                          FunctionNullHandling::SPECIAL_HANDLING));
+	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::VARCHAR},
+	                                          LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
+	                                          nullptr, LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS,
+	                                          FunctionNullHandling::SPECIAL_HANDLING));
+	return parse_filename;
 }
 
 ScalarFunctionSet ParsePathFun::GetFunctions() {

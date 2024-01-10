@@ -282,8 +282,17 @@ struct MD5NumberUpperFun {
 struct ParseDirnameFun {
 	static constexpr const char *Name = "parse_dirname";
 	static constexpr const char *Parameters = "string,separator";
-	static constexpr const char *Description = "Returns the top-level directory name from the given path. seperator_option: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Description = "Returns the top-level directory name. seperator_option: system, both_slash (default), forward_slash, backslash";
 	static constexpr const char *Example = "parse_dirname('/home/user/documents/file.csv', 'system');";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParseFilenameFun {
+	static constexpr const char *Name = "parse_filename";
+	static constexpr const char *Parameters = "string,trim_extension,separator";
+	static constexpr const char *Description = "Returns the file name. If trim_extension is true, the file extension will be removed (it defaults to false). seperator_option: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_filename('/home/user/documents/file.csv', true, 'forward_slash')";
 
 	static ScalarFunctionSet GetFunctions();
 };
