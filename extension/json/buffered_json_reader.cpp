@@ -14,8 +14,7 @@ JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, Alloca
 
 JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
     : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
-      plain_file_source(file_handle->OnDiskFile() && can_seek), file_size(file_handle->GetFileSize()), read_position(0),
-      requested_reads(0), actual_reads(0), cached_size(0) {
+      file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0), actual_reads(0), cached_size(0) {
 }
 
 bool JSONFileHandle::IsOpen() const {
@@ -55,6 +54,10 @@ bool JSONFileHandle::CanSeek() const {
 	return can_seek;
 }
 
+FileHandle &JSONFileHandle::GetHandle() {
+	return *file_handle;
+}
+
 idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) {
 	D_ASSERT(requested_size != 0);
 
@@ -68,12 +71,15 @@ idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) 
 	return actual_size;
 }
 
-void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run) {
+void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run,
+                                    optional_ptr<FileHandle> override_handle) {
 	D_ASSERT(size != 0);
-	if (plain_file_source) {
-		file_handle->Read(pointer, size, position);
+	auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
+
+	if (can_seek) {
+		handle.Read(pointer, size, position);
 	} else if (sample_run) { // Cache the buffer
-		file_handle->Read(pointer, size, position);
+		handle.Read(pointer, size, position);
 
 		cached_buffers.emplace_back(allocator.Allocate(size));
 		memcpy(cached_buffers.back().get(), pointer, size);
@@ -84,7 +90,7 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 		}
 
 		if (size != 0) {
-			file_handle->Read(pointer, size, position);
+			handle.Read(pointer, size, position);
 		}
 	}
 	if (++actual_reads > requested_reads) {
@@ -94,7 +100,7 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 
 idx_t JSONFileHandle::Read(char *pointer, idx_t requested_size, bool sample_run) {
 	D_ASSERT(requested_size != 0);
-	if (plain_file_source) {
+	if (can_seek) {
 		auto actual_size = ReadInternal(pointer, requested_size);
 		read_position += actual_size;
 		return actual_size;

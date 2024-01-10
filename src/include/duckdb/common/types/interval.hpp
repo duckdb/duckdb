@@ -14,6 +14,7 @@ namespace duckdb {
 
 struct dtime_t;
 struct date_t;
+struct dtime_tz_t;
 struct timestamp_t;
 
 class Serializer;
@@ -150,6 +151,7 @@ public:
 	//! Add an interval to a time. In case the time overflows or underflows, modify the date by the overflow.
 	//! For example if we go from 23:00 to 02:00, we add a day to the date
 	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
+	static dtime_tz_t Add(dtime_tz_t left, interval_t right, date_t &date);
 
 	//! Comparison operators
 	inline static bool Equals(const interval_t &left, const interval_t &right) {

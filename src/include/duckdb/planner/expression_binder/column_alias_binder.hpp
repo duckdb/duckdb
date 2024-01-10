@@ -21,8 +21,8 @@ class ColumnAliasBinder {
 public:
 	ColumnAliasBinder(BoundSelectNode &node, const case_insensitive_map_t<idx_t> &alias_map);
 
-	BindResult BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
-	                     bool root_expression);
+	bool BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth, bool root_expression,
+	               BindResult &result);
 
 private:
 	BoundSelectNode &node;

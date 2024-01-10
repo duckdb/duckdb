@@ -25,7 +25,6 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -985,7 +984,13 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, const CopyInfo
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
 	}
-	if (!row_group_size_bytes_set) {
+	if (row_group_size_bytes_set) {
+		if (DBConfig::GetConfig(context).options.preserve_insertion_order) {
+			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
+			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
+		}
+	} else {
+		// We always set a max row group size bytes so we don't use too much memory
 		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 
@@ -1179,6 +1184,14 @@ idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_da
 }
 
 //===--------------------------------------------------------------------===//
+// Current File Size
+//===--------------------------------------------------------------------===//
+idx_t ParquetWriteFileSize(GlobalFunctionData &gstate) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	return global_state.writer->FileSize();
+}
+
+//===--------------------------------------------------------------------===//
 // Scan Replacement
 //===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
@@ -1239,6 +1252,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
+	function.file_size_bytes = ParquetWriteFileSize;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
 	function.supports_type = ParquetWriter::TypeIsSupported;

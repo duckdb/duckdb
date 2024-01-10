@@ -111,6 +111,7 @@ class TestAllTypes(object):
         }
         adjusted_values = {
             'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
+            'time_tz': """CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS "time_tz" """,
         }
         min_datetime = datetime.datetime.min
         min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)

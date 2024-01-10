@@ -55,10 +55,10 @@ if [ "$DUCKDB_EXTENSION_SIGNING_PK" != "" ]; then
   $script_dir/compute-extension-hash.sh $ext.append > $ext.hash
   openssl pkeyutl -sign -in $ext.hash -inkey private.pem -pkeyopt digest:sha256 -out $ext.sign
   rm -f private.pem
+else
+  # Default to 256 zeros
+  dd if=/dev/zero of=$ext.sign bs=256 count=1
 fi
-
-# Signature is always there, potentially defaulting to 256 zeros
-truncate -s 256 $ext.sign
 
 # append signature to extension binary
 cat $ext.sign >> $ext.append
