@@ -59,7 +59,7 @@ optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(CatalogTransactio
 	}
 
 	// Call write function
-	WriteSecret(transaction, *secret);
+	WriteSecret(transaction, *secret, on_conflict);
 
 	auto secret_name = secret->GetName();
 	auto secret_entry =
@@ -151,14 +151,16 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	                                make_uniq<DefaultSecretGenerator>(catalog, manager, persistent_secrets));
 }
 
-void CatalogSetSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) {
+void CatalogSetSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret,
+                                          OnCreateConflict on_conflict) {
 	// By default, this writes nothing
 }
 void CatalogSetSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &name) {
 	// By default, this writes nothing
 }
 
-void LocalFileSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) {
+void LocalFileSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret,
+                                         OnCreateConflict on_conflict) {
 	LocalFileSystem fs;
 	auto file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
 

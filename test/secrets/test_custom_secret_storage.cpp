@@ -36,7 +36,7 @@ public:
 	bool include_in_lookups;
 
 protected:
-	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) override {
+	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret, OnCreateConflict on_conflict) override {
 		duckdb::lock_guard<duckdb::mutex> lock(logger.lock);
 		logger.write_secret_requests.push_back(secret.GetName());
 	};

@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/parser/parsed_data/drop_secret_info.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -76,22 +77,22 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 
 unique_ptr<DropStatement> Transformer::TransformDropSecret(duckdb_libpgquery::PGDropSecretStmt &stmt) {
 	auto result = make_uniq<DropStatement>();
+	auto info = make_uniq<DropSecretInfo>();
 
-	auto persist_type = EnumUtil::FromString<SecretPersistType>(StringUtil::Upper(stmt.persist_type));
+	info->type = CatalogType::SECRET_ENTRY;
+	info->name = stmt.secret_name;
+	info->if_not_found = stmt.missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
-	result->info->type = CatalogType::SECRET_ENTRY;
-	result->info->name = stmt.secret_name;
-	result->info->if_not_found = stmt.missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	info->persist_mode = EnumUtil::FromString<SecretPersistType>(StringUtil::Upper(stmt.persist_type));
+	info->secret_storage = stmt.secret_storage;
 
-	// When TEMPORARY type is passed explicitly, we are deleting from the temp storage
-	if (persist_type == SecretPersistType::TEMPORARY) {
-		if (!string(stmt.secret_storage).empty()) {
+	if (info->persist_mode == SecretPersistType::TEMPORARY) {
+		if (!info->secret_storage.empty()) {
 			throw ParserException("Can not combine TEMPORARY with specifying a storage for drop secret");
 		}
-		result->info->schema = SecretManager::TEMPORARY_STORAGE_NAME;
-	} else {
-		result->info->schema = stmt.secret_storage;
 	}
+
+	result->info = std::move(info);
 
 	return result;
 }

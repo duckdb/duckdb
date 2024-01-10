@@ -91,7 +91,7 @@ public:
 
 protected:
 	//! Callback called on Store to allow child classes to implement persistence.
-	virtual void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret);
+	virtual void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret, OnCreateConflict on_conflict);
 	virtual void RemoveSecret(CatalogTransaction transaction, const string &name);
 
 	//! CatalogSet containing the secrets
@@ -123,7 +123,7 @@ public:
 
 protected:
 	//! Implements the writes to disk
-	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) override;
+	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret, OnCreateConflict on_conflict) override;
 	//! Implements the deletes from disk
 	virtual void RemoveSecret(CatalogTransaction transaction, const string &secret) override;
 

@@ -11,9 +11,10 @@
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/secret/secret.hpp"
-#include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/parser/parsed_data/drop_secret_info.hpp"
 
 namespace duckdb {
 class SecretManager;
@@ -115,7 +116,9 @@ public:
 	                                                     const string &storage = "");
 	//! Delete a secret by name, optionally by providing the storage to drop from
 	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
-	                                 OnEntryNotFound on_entry_not_found, const string &storage = "");
+	                                 OnEntryNotFound on_entry_not_found,
+	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
+	                                 const string &storage = "");
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction);
 
@@ -134,6 +137,7 @@ public:
 
 	//! Utility functions
 	DUCKDB_API void DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found,
+	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
 	                                 const string &storage = "");
 
 private:
