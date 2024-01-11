@@ -58,18 +58,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	if (result.escaped) {
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		string removed_escapes;
-		char escape = result.state_machine.dialect_options.state_machine_options.escape.GetValue();
-		bool just_escaped = false;
-		char *str_ptr = result.buffer_ptr + result.last_position + 1;
-		for (idx_t cur_pos = 0; cur_pos <= buffer_pos - result.last_position - 3; cur_pos++) {
-			char c = str_ptr[cur_pos];
-			if (c == escape && !just_escaped) {
-				just_escaped = true;
-			} else {
-				just_escaped = false;
-				removed_escapes += c;
-			}
-		}
+		StringValueScanner::RemoveEscape(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2,result.state_machine.options.GetEscape()[0], removed_escapes);
 		result.vector_ptr[result.result_position++] =
 		    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 	} else {
@@ -461,8 +450,21 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
+void StringValueScanner::RemoveEscape(char* str_ptr, idx_t end,char escape, string& removed_escapes){
+	bool just_escaped = false;
+	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
+		char c = str_ptr[cur_pos];
+		if (c == escape && !just_escaped) {
+			just_escaped = true;
+		} else {
+			just_escaped = false;
+			removed_escapes += c;
+		}
+	}
+}
+
 void StringValueScanner::ProcessOverbufferValue() {
-	// Get next value
+	// Process the next value
 	idx_t first_buffer_pos = result.last_position;
 	idx_t cur_value_idx = result.result_position;
 	bool quoted = false;
@@ -478,33 +480,57 @@ void StringValueScanner::ProcessOverbufferValue() {
 	}
 	result.result_position = cur_value_idx + 1;
 	D_ASSERT(!escaped);
+
 	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos - quoted;
 
-	if (iterator.pos.buffer_pos == 0) {
-		result.vector_ptr[cur_value_idx] =
+	if (iterator.pos.buffer_pos == 0 || iterator.pos.buffer_pos == 1) {
+		// Value is only on the first buffer
+		if (escaped){
+			string removed_escapes;
+			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1,state_machine->options.GetEscape()[0], removed_escapes);
+			result.vector_ptr[result.result_position++] =
+			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
+		} else{
+			result.vector_ptr[cur_value_idx] =
 		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1);
-	} else if (iterator.pos.buffer_pos == 1) {
-		result.vector_ptr[cur_value_idx] =
-		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1);
+		}
 	} else {
+		// Figure out the max string length
 		idx_t string_length;
 		if (states.IsCurrentNewRow() || states.IsCurrentDelimiter()) {
 			string_length = first_buffer_length + iterator.pos.buffer_pos - 1 - quoted;
 		} else {
 			string_length = first_buffer_length + iterator.pos.buffer_pos - 2 - quoted;
 		}
-		auto &result_str = result.vector_ptr[cur_value_idx];
-		result_str = StringVector::EmptyString(*result.vector, string_length);
-		// Copy the first buffer
-		FastMemcpy(result_str.GetDataWriteable(), previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
-		           first_buffer_length);
-		// Copy the second buffer
-		if (string_length > first_buffer_length) {
-			FastMemcpy(result_str.GetDataWriteable() + first_buffer_length, cur_buffer_handle->Ptr(),
-			           string_length - first_buffer_length);
+		// Our value is actually over two buffers, we must do copying of the proper parts os the value
+		if (escaped) {
+			string removed_escapes;
+			// First Buffer
+			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
+			                                 first_buffer_length, state_machine->options.GetEscape()[0],
+			                                 removed_escapes);
+			// Second Buffer
+			if (string_length > first_buffer_length) {
+				StringValueScanner::RemoveEscape(cur_buffer_handle->Ptr(), string_length - first_buffer_length,
+				                                 state_machine->options.GetEscape()[0], removed_escapes);
+			}
+			result.vector_ptr[result.result_position++] =
+			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
+		} else {
+			auto &result_str = result.vector_ptr[cur_value_idx];
+			result_str = StringVector::EmptyString(*result.vector, string_length);
+			// Copy the first buffer
+			FastMemcpy(result_str.GetDataWriteable(), previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
+			           first_buffer_length);
+			// Copy the second buffer
+			if (string_length > first_buffer_length) {
+				FastMemcpy(result_str.GetDataWriteable() + first_buffer_length, cur_buffer_handle->Ptr(),
+				           string_length - first_buffer_length);
+			}
+			result_str.Finalize();
 		}
-		result_str.Finalize();
 	}
+	// Be sure to reset the quoted and escaped variables
 	result.quoted = false;
 	result.escaped = false;
 }

@@ -93,6 +93,9 @@ public:
 
 	bool FinishedIterator();
 
+	//! Creates a new string with all escaped values removed
+	static void RemoveEscape(char* str_ptr, idx_t end, char escape, string& removed_escapes);
+
 private:
 	void Initialize() override;
 
