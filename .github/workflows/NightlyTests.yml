@@ -312,11 +312,8 @@ jobs:
 
   sqllogic:
      name: Sqllogic tests
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-latest # Secondary task of this CI job is to test building duckdb on latest ubuntu
      needs: linux-memory-leaks
-     env:
-       CC: gcc-10
-       CXX: g++-10
 
      steps:
      - uses: actions/checkout@v3
