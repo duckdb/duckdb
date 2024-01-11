@@ -29,7 +29,7 @@ jobs:
   rstats-windows-extensions:
     # Builds extensions for windows_amd64_rtools
     name: R Package Windows (Extensions)
-    #if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
