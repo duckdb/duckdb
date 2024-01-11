@@ -10,21 +10,21 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
+#include "duckdb/common/deque.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/client_properties.hpp"
-#include "duckdb/main/external_dependencies.hpp"
-#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
 class Appender;
