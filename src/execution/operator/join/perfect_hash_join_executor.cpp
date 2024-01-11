@@ -190,8 +190,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
 	for (idx_t i = 0; i < join.rhs_output_types.size(); i++) {
 		auto &result_vector = result.data[input.ColumnCount() + i];
-		const auto output_col_idx = ht.output_columns[i];
-		D_ASSERT(result_vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
+		D_ASSERT(result_vector.GetType() == ht.layout.GetTypes()[ht.output_columns[i]]);
 		auto &build_vec = perfect_hash_table[i];
 		result_vector.Reference(build_vec);
 		result_vector.Slice(state.build_sel_vec, probe_sel_count);
