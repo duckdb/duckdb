@@ -41,13 +41,22 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 }
 
 unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
-	auto lock = LockContext();
-	CheckExecutableInternal(*lock);
-	buffered_data->ReplenishBuffer(*this, *lock);
-	auto chunk = buffered_data->Scan();
-	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+	bool last_chunk = false;
+	unique_ptr<DataChunk> chunk;
+	{
+		auto lock = LockContext();
+		CheckExecutableInternal(*lock);
+		buffered_data->ReplenishBuffer(*this, *lock);
+		chunk = buffered_data->Scan();
+		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+			context->CleanupInternal(*lock, this);
+			chunk = nullptr;
+			last_chunk = true;
+		}
+	}
+	if (last_chunk) {
+		// This will grab the ClientContextLock so it's done outside of the block above
 		Close();
-		return nullptr;
 	}
 	return chunk;
 }
