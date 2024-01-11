@@ -136,7 +136,7 @@ private extension Vector {
   }
   
   func unwrap(_ type: Timestamp.Type, at index: Int) throws -> Timestamp {
-    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampTz, .timestampNS]
     try assertNonNullTypeMatch(of: type, at: index, withColumnTypes: .init(columnTypes))
     return unsafelyUnwrapElement(as: duckdb_timestamp.self, at: index) { ctimestamp in
       switch logicalType.dataType {
