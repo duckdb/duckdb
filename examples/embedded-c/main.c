@@ -42,6 +42,7 @@ int main() {
 		}
 		printf("\n");
 	}
+	printf("%llu", duckdb_get_hlc_timestamp());
 	// duckdb_print_result(result);
 cleanup:
 	duckdb_destroy_result(&result);

@@ -2640,6 +2640,8 @@ It is not known beforehand how many chunks will be returned by this result.
 */
 DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
 
+DUCKDB_API uint64_t duckdb_get_hlc_timestamp();
+DUCKDB_API void duckdb_set_hlc_timestamp(uint64_t ts);
 #ifdef __cplusplus
 }
 #endif

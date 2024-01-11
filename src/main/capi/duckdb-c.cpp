@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/transaction/timestamp_manager.hpp"
 
 using duckdb::Connection;
 using duckdb::DatabaseData;
@@ -102,4 +103,12 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 
 const char *duckdb_library_version() {
 	return DuckDB::LibraryVersion();
+}
+
+uint64_t duckdb_get_hlc_timestamp() {
+  return duckdb::TimestampManager::GetHLCTimestamp();
+}
+
+void duckdb_set_hlc_timestamp(uint64_t ts) {
+  duckdb::TimestampManager::SetHLCTimestamp(ts);
 }
