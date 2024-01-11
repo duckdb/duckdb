@@ -53,7 +53,7 @@ public:
 	idx_t buffer_size;
 
 	//! CSV Options that impact the parsing
-	const idx_t number_of_columns;
+	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
 
@@ -85,6 +85,8 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline void AddRowInternal(idx_t buffer_pos);
+
+	void HandleOverLimitRows();
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
