@@ -59,6 +59,13 @@ select_with_parens:
 				n->is_summary = 0;
 				$$ = (PGNode *) n;
 			}
+			| '(' describe_or_desc table_id ')'
+			{
+				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
+				n->name = $3;
+				n->is_summary = 0;
+				$$ = (PGNode *) n;
+			}
 		;
 
 /*

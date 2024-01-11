@@ -17,3 +17,15 @@ a
 
 statement ok
 (DESCRIBE SELECT 42 AS a)
+
+statement ok
+CREATE TABLE t AS SELECT 42 AS a
+
+query I
+SELECT t.column_name FROM (DESCRIBE t) t
+----
+a
+
+statement ok
+FROM (DESCRIBE databases) t
+

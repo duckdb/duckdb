@@ -109,7 +109,7 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DETACH:
-		return "ATTACH";
+		return "DETACH";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:
