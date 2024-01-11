@@ -33,7 +33,7 @@ public:
 	const string &GetFileName();
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
-
+	void InitializeProjection();
 	const string file_path;
 	//! File Index
 	idx_t file_idx;

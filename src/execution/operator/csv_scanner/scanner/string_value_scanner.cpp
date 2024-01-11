@@ -284,8 +284,14 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, shared_ptr<CSVBuffer
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                  *CSVStateMachineCache::Get(context));
+
+	state_machine->dialect_options.num_cols = options.dialect_options.num_cols;
+	state_machine->dialect_options.header = options.dialect_options.header;
 	auto buffer_manager = make_shared<CSVBufferManager>(context, options, options.file_path, 0);
-	return make_uniq<StringValueScanner>(0, buffer_manager, state_machine, make_shared<CSVErrorHandler>());
+	auto scanner = make_uniq<StringValueScanner>(0, buffer_manager, state_machine, make_shared<CSVErrorHandler>());
+	scanner->csv_file_scan = make_shared<CSVFileScan>(context, options.file_path, options);
+	scanner->csv_file_scan->InitializeProjection();
+	return scanner;
 }
 
 bool StringValueScanner::FinishedIterator() {

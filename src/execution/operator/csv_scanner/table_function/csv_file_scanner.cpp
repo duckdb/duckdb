@@ -150,4 +150,11 @@ const vector<string> &CSVFileScan::GetNames() {
 const vector<LogicalType> &CSVFileScan::GetTypes() {
 	return types;
 }
+
+void CSVFileScan::InitializeProjection() {
+	for (idx_t i = 0; i < options.dialect_options.num_cols; i++) {
+		reader_data.column_ids.push_back(i);
+		reader_data.column_mapping.push_back(i);
+	}
+}
 } // namespace duckdb
