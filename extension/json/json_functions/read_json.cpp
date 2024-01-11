@@ -16,7 +16,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	ArenaAllocator allocator(BufferAllocator::Get(context));
 	Vector string_vector(LogicalType::VARCHAR);
 
-	// Loop through the files (if union_by_name, else just sample the first file)
+	// Loop through the files (if union_by_name, else sample up to sample_size rows or maximum_sample_files files)
 	idx_t remaining = bind_data.sample_size;
 	for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
 		// Create global/local state and place the reader in the right field
@@ -59,8 +59,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		if (bind_data.options.file_options.union_by_name) {
 			// When union_by_name=true we sample sample_size per file
 			remaining = bind_data.sample_size;
-		} else if (remaining == 0) {
-			// When union_by_name=false, we sample sample_size in total (across the first files)
+		} else if (remaining == 0 || file_idx == bind_data.maximum_sample_files - 1) {
+			// When union_by_name=false, we sample sample_size in total (across the first maximum_sample_files files)
 			break;
 		}
 	}
@@ -116,6 +116,9 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
+		if (kv.second.IsNull()) {
+			throw BinderException("read_json \"%s\" parameter cannot be NULL.", loption);
+		}
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
@@ -146,8 +149,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else if (arg > 0) {
 				bind_data->sample_size = arg;
 			} else {
-				throw BinderException(
-				    "read_json \"sample_size\" parameter must be positive, or -1 to sample the entire file.");
+				throw BinderException("read_json \"sample_size\" parameter must be positive, or -1 to sample all input "
+				                      "files entirely, up to \"maximum_sample_files\" files.");
 			}
 		} else if (loption == "maximum_depth") {
 			auto arg = BigIntValue::Get(kv.second);
@@ -197,6 +200,16 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 				bind_data->options.record_type = JSONRecordType::VALUES;
 			} else {
 				throw BinderException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
+			}
+		} else if (loption == "maximum_sample_files") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				bind_data->maximum_sample_files = NumericLimits<idx_t>::Maximum();
+			} else if (arg > 0) {
+				bind_data->maximum_sample_files = arg;
+			} else {
+				throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
+				                      "the limit on the number of files used to sample \"sample_size\" rows.");
 			}
 		}
 	}
@@ -313,6 +326,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["records"] = LogicalType::VARCHAR;
+	table_function.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 
 	// TODO: might be able to do filter pushdown/prune ?
 
