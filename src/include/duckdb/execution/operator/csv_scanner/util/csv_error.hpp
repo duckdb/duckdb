@@ -40,7 +40,7 @@ enum CSVErrorType : uint8_t {
 
 class CSVError {
 public:
-	CSVError(string error_message, CSVErrorType type, idx_t column_idx, vector<Value> row, string original_error);
+	CSVError(string error_message, CSVErrorType type, idx_t column_idx, vector<Value> row);
 	CSVError(string error_message, CSVErrorType type);
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
@@ -65,7 +65,6 @@ public:
 	idx_t column_idx;
 	//! Values from the row where error happened
 	vector<Value> row;
-	string original_error;
 };
 
 class CSVErrorHandler {

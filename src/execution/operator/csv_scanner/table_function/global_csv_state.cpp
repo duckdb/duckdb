@@ -140,7 +140,7 @@ void CSVGlobalState::FillRejectsTable() {
 					appender.Append(string_t(file_name));
 					appender.Append(row_line);
 					appender.Append(col_idx);
-					appender.Append(string_t(col_name));
+					appender.Append(string_t("\"" + col_name + "\""));
 					appender.Append(error->row[col_idx]);
 
 					if (!options.rejects_recovery_columns.empty()) {
@@ -158,8 +158,10 @@ void CSVGlobalState::FillRejectsTable() {
 						}
 						appender.Append(Value::STRUCT(recovery_key));
 					}
-
-					appender.Append(string_t(error->original_error));
+					auto row_error_msg =
+					    StringUtil::Format("Could not convert string '%s' to '%s'", error->row[col_idx].ToString(),
+					                       file->types[col_idx].ToString());
+					appender.Append(string_t(row_error_msg));
 					appender.EndRow();
 				}
 				appender.Close();

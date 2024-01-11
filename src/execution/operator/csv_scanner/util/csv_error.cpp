@@ -50,10 +50,8 @@ void CSVErrorHandler::Insert(idx_t boundary_idx, idx_t rows) {
 CSVError::CSVError(string error_message_p, CSVErrorType type_p) : error_message(error_message_p), type(type_p) {
 }
 
-CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p,
-                   string original_error_p)
-    : error_message(error_message_p), type(type_p), column_idx(column_idx_p), row(row_p),
-      original_error(original_error_p) {
+CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p)
+    : error_message(error_message_p), type(type_p), column_idx(column_idx_p), row(row_p) {
 }
 
 CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
@@ -95,7 +93,7 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_c
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row, cast_error);
+	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row);
 }
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size) {

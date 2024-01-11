@@ -377,20 +377,34 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-			vector<Value> row;
-			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-				row.push_back(parse_chunk.GetValue(col, line_error));
+
+			{
+				vector<Value> row;
+				for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+					row.push_back(parse_chunk.GetValue(col, line_error));
+				}
+				auto csv_error = CSVError::CastError(state_machine->options, parse_chunk, line_error,
+				                                     csv_file_scan->names[col_idx], error_message, col_idx, row);
+				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
+				                                 lines_read - parse_chunk.size() + line_error);
+				error_handler->Error(lines_per_batch, csv_error);
 			}
-			auto csv_error = CSVError::CastError(state_machine->options, parse_chunk, line_error,
-			                                     csv_file_scan->names[col_idx], error_message, col_idx, row);
-			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - parse_chunk.size() + line_error);
-			error_handler->Error(lines_per_batch, csv_error);
+			borked_lines.insert(line_error++);
 			D_ASSERT(state_machine->options.ignore_errors);
 			// We are ignoring errors. We must continue but ignoring borked rows
 			for (; line_error < parse_chunk.size(); line_error++) {
 				if (!inserted_column_data.validity.RowIsValid(line_error) &&
 				    parse_column_data.validity.RowIsValid(line_error)) {
 					borked_lines.insert(line_error);
+					vector<Value> row;
+					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+						row.push_back(parse_chunk.GetValue(col, line_error));
+					}
+					auto csv_error = CSVError::CastError(state_machine->options, parse_chunk, line_error,
+					                                     csv_file_scan->names[col_idx], error_message, col_idx, row);
+					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
+					                                 lines_read - parse_chunk.size() + line_error);
+					error_handler->Error(lines_per_batch, csv_error);
 				}
 			}
 		}
