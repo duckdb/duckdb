@@ -71,7 +71,7 @@ class CSVErrorHandler {
 public:
 	CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(LinesPerBoundary &error_info, CSVError &csv_error);
+	void Error(LinesPerBoundary &error_info, CSVError &csv_error, bool force_error = false);
 	//! Throws the error
 	void Error(CSVError &csv_error);
 	//! Inserts a finished error info

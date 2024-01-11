@@ -14,11 +14,11 @@ CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_er
 
 void CSVErrorHandler::Error(CSVError &csv_error) {
 	LinesPerBoundary mock;
-	Error(mock, csv_error);
+	Error(mock, csv_error, true);
 }
-void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error) {
+void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (ignore_errors) {
+	if (ignore_errors && !force_error) {
 		// We store this error
 		errors.push_back({error_info, csv_error});
 		return;
