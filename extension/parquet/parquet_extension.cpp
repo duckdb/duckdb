@@ -25,6 +25,7 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -490,9 +491,10 @@ public:
 		if (bind_data.initial_file_cardinality == 0) {
 			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
 		}
-		auto percentage = std::min(
-		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * bind_data.cur_file) / bind_data.files.size();
+		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality) /
+		                  bind_data.files.size();
+		percentage += 100.0 * bind_data.cur_file / bind_data.files.size();
+		return percentage;
 	}
 
 	static unique_ptr<LocalTableFunctionState>
@@ -628,7 +630,7 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return std::max(data.initial_file_row_groups, idx_t(1)) * data.files.size();
+		return data.initial_file_row_groups * data.files.size();
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files

@@ -3,7 +3,6 @@
 #include "duckdb.hpp"
 #include "httpfs_extension.hpp"
 #include "s3fs.hpp"
-#include "create_secret_functions.hpp"
 
 namespace duckdb {
 
@@ -57,8 +56,6 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
 	provider->SetAll();
-
-	CreateS3SecretFunctions::Register(instance);
 }
 
 void HttpfsExtension::Load(DuckDB &db) {

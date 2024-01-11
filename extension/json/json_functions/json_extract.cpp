@@ -2,11 +2,11 @@
 
 namespace duckdb {
 
-static inline string_t ExtractFromVal(yyjson_val *val, yyjson_alc *alc, Vector &) {
+static inline string_t ExtractFromVal(yyjson_val *val, yyjson_alc *alc, Vector &result) {
 	return JSONCommon::WriteVal<yyjson_val>(val, alc);
 }
 
-static inline string_t ExtractStringFromVal(yyjson_val *val, yyjson_alc *alc, Vector &) {
+static inline string_t ExtractStringFromVal(yyjson_val *val, yyjson_alc *alc, Vector &result) {
 	return yyjson_is_str(val) ? string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val))
 	                          : JSONCommon::WriteVal<yyjson_val>(val, alc);
 }
@@ -28,12 +28,10 @@ static void ExtractStringManyFunction(DataChunk &args, ExpressionState &state, V
 }
 
 static void GetExtractFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::JSON(), ExtractFunction,
-	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::JSON(), ExtractFunction,
+	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, JSONCommon::JSONType(), ExtractFunction,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::JSON()), ExtractManyFunction,
+	                               LogicalType::LIST(JSONCommon::JSONType()), ExtractManyFunction,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
@@ -41,13 +39,11 @@ ScalarFunctionSet JSONFunctions::GetExtractFunction() {
 	// Generic extract function
 	ScalarFunctionSet set("json_extract");
 	GetExtractFunctionsInternal(set, LogicalType::VARCHAR);
-	GetExtractFunctionsInternal(set, LogicalType::JSON());
+	GetExtractFunctionsInternal(set, JSONCommon::JSONType());
 	return set;
 }
 
 static void GetExtractStringFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::VARCHAR, ExtractStringFunction,
-	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, ExtractStringFunction,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
@@ -59,7 +55,7 @@ ScalarFunctionSet JSONFunctions::GetExtractStringFunction() {
 	// String extract function
 	ScalarFunctionSet set("json_extract_string");
 	GetExtractStringFunctionsInternal(set, LogicalType::VARCHAR);
-	GetExtractStringFunctionsInternal(set, LogicalType::JSON());
+	GetExtractStringFunctionsInternal(set, JSONCommon::JSONType());
 	return set;
 }
 

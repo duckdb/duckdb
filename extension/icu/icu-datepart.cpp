@@ -327,13 +327,8 @@ struct ICUDatePart : public ICUDateFunc {
 		using bigints_t = vector<part_bigint_t>;
 		using doubles_t = vector<part_double_t>;
 
-		BindStructData(ClientContext &context, part_codes_t &&part_codes_p)
-		    : BindData(context), part_codes(part_codes_p) {
-			InitFactories();
-		}
-		BindStructData(const string &tz_setting_p, const string &cal_setting_p, part_codes_t &&part_codes_p)
-		    : BindData(tz_setting_p, cal_setting_p), part_codes(part_codes_p) {
-			InitFactories();
+		BindStructData(ClientContext &context, part_codes_t &part_codes_p, bigints_t &bigints_p, doubles_t &doubles_p)
+		    : BindData(context), part_codes(part_codes_p), bigints(bigints_p), doubles(doubles_p) {
 		}
 		BindStructData(const BindStructData &other)
 		    : BindData(other), part_codes(other.part_codes), bigints(other.bigints), doubles(other.doubles) {
@@ -345,26 +340,12 @@ struct ICUDatePart : public ICUDateFunc {
 
 		bool Equals(const FunctionData &other_p) const override {
 			const auto &other = other_p.Cast<BindStructData>();
-			return BindData::Equals(other_p) && part_codes == other.part_codes;
+			return BindData::Equals(other_p) && part_codes == other.part_codes && bigints == other.bigints &&
+			       doubles == other.doubles;
 		}
 
 		duckdb::unique_ptr<FunctionData> Copy() const override {
 			return make_uniq<BindStructData>(*this);
-		}
-
-		void InitFactories() {
-			bigints.clear();
-			bigints.resize(part_codes.size(), nullptr);
-			doubles.clear();
-			doubles.resize(part_codes.size(), nullptr);
-			for (size_t col = 0; col < part_codes.size(); ++col) {
-				const auto part_code = part_codes[col];
-				if (IsBigintDatepart(part_code)) {
-					bigints[col] = PartCodeBigintFactory(part_code);
-				} else {
-					doubles[col] = PartCodeDoubleFactory(part_code);
-				}
-			}
 		}
 	};
 
@@ -523,6 +504,8 @@ struct ICUDatePart : public ICUDateFunc {
 		case_insensitive_set_t name_collision_set;
 		child_list_t<LogicalType> struct_children;
 		BindStructData::part_codes_t part_codes;
+		BindStructData::bigints_t bigints;
+		BindStructData::doubles_t doubles;
 
 		Value parts_list = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
@@ -531,6 +514,8 @@ struct ICUDatePart : public ICUDateFunc {
 				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
 			}
 
+			bigints.resize(list_children.size(), nullptr);
+			doubles.resize(list_children.size(), nullptr);
 			for (size_t col = 0; col < list_children.size(); ++col) {
 				const auto &part_value = list_children[col];
 				if (part_value.IsNull()) {
@@ -544,8 +529,10 @@ struct ICUDatePart : public ICUDateFunc {
 				name_collision_set.insert(part_name);
 				part_codes.emplace_back(part_code);
 				if (IsBigintDatepart(part_code)) {
+					bigints[col] = PartCodeBigintFactory(part_code);
 					struct_children.emplace_back(make_pair(part_name, LogicalType::BIGINT));
 				} else {
+					doubles[col] = PartCodeDoubleFactory(part_code);
 					struct_children.emplace_back(make_pair(part_name, LogicalType::DOUBLE));
 				}
 			}
@@ -555,24 +542,17 @@ struct ICUDatePart : public ICUDateFunc {
 
 		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
-		return make_uniq<BindStructData>(context, std::move(part_codes));
+		return make_uniq<BindStructData>(context, part_codes, bigints, doubles);
 	}
 
-	static void SerializeStructFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                                    const ScalarFunction &function) {
-		D_ASSERT(bind_data);
-		auto &info = bind_data->Cast<BindStructData>();
-		serializer.WriteProperty(100, "tz_setting", info.tz_setting);
-		serializer.WriteProperty(101, "cal_setting", info.cal_setting);
-		serializer.WriteProperty(102, "part_codes", info.part_codes);
+	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                              const ScalarFunction &function) {
+		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
-	static duckdb::unique_ptr<FunctionData> DeserializeStructFunction(Deserializer &deserializer,
-	                                                                  ScalarFunction &bound_function) {
-		auto tz_setting = deserializer.ReadProperty<string>(100, "tz_setting");
-		auto cal_setting = deserializer.ReadProperty<string>(101, "cal_setting");
-		auto part_codes = deserializer.ReadProperty<vector<DatePartSpecifier>>(102, "part_codes");
-		return make_uniq<BindStructData>(tz_setting, cal_setting, std::move(part_codes));
+	static duckdb::unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer,
+	                                                            ScalarFunction &bound_function) {
+		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
@@ -601,8 +581,8 @@ struct ICUDatePart : public ICUDateFunc {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
 		ScalarFunction result({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, BindStruct);
-		result.serialize = SerializeStructFunction;
-		result.deserialize = DeserializeStructFunction;
+		result.serialize = SerializeFunction;
+		result.deserialize = DeserializeFunction;
 		return result;
 	}
 

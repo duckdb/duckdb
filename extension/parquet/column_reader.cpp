@@ -20,6 +20,7 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #endif
 
 namespace duckdb {

@@ -54,7 +54,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
                                                     vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
-	string path;
+	string path = "";
 	size_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->IsFoldable()) {
@@ -62,7 +62,6 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		path_type = CheckPath(path_val, path, len);
 	}
-	bound_function.arguments[1] = LogicalType::VARCHAR;
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
 		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
 	}
@@ -229,7 +228,6 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 				    success = false;
 			    }
 		    }
-
 		    return input;
 	    });
 	StringVector::AddHeapReference(result, source);
@@ -238,17 +236,16 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 
 void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
 	// JSON to VARCHAR is basically free
-	casts.RegisterCastFunction(LogicalType::JSON(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
+	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
 
 	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than a cast to STRUCT
 	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
-	BoundCastInfo varchar_to_json_info(CastVarcharToJSON, nullptr, JSONFunctionLocalState::InitCastLocalState);
-	casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::JSON(), std::move(varchar_to_json_info),
-	                           varchar_to_json_cost);
+	BoundCastInfo info(CastVarcharToJSON, nullptr, JSONFunctionLocalState::InitCastLocalState);
+	casts.RegisterCastFunction(LogicalType::VARCHAR, JSONCommon::JSONType(), std::move(info), varchar_to_json_cost);
 
 	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions
 	auto null_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
-	casts.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::ReinterpretCast,
+	casts.RegisterCastFunction(LogicalType::SQLNULL, JSONCommon::JSONType(), DefaultCasts::ReinterpretCast,
 	                           null_to_json_cost);
 }
 

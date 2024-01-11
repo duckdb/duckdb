@@ -21,7 +21,6 @@ struct ICUDateFunc {
 
 	struct BindData : public FunctionData {
 		explicit BindData(ClientContext &context);
-		BindData(const string &tz_setting, const string &cal_setting);
 		BindData(const BindData &other);
 
 		string tz_setting;
@@ -30,8 +29,6 @@ struct ICUDateFunc {
 
 		bool Equals(const FunctionData &other_p) const override;
 		duckdb::unique_ptr<FunctionData> Copy() const override;
-
-		void InitCalendar();
 	};
 
 	struct CastData : public BoundCastData {

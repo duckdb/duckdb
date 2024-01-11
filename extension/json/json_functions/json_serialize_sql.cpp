@@ -1,11 +1,12 @@
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "json_deserializer.hpp"
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
+
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -131,20 +132,21 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 
 ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 	ScalarFunctionSet set("json_serialize_sql");
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializeFunction,
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, JSONCommon::JSONType(), JsonSerializeFunction,
 	                               JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
+	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, JSONCommon::JSONType(),
 	                               JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                               LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
+	                               JSONCommon::JSONType(), JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 
-	set.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	    JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
+	                   JSONCommon::JSONType(), JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init));
 
 	return set;
 }
@@ -202,7 +204,7 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 
 ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 	ScalarFunctionSet set("json_deserialize_sql");
-	set.AddFunction(ScalarFunction({LogicalType::JSON()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
+	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
 	                               nullptr, nullptr, JSONFunctionLocalState::Init));
 	return set;
 }

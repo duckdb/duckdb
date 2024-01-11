@@ -101,7 +101,6 @@ CopyTypeSupport ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType
 	case LogicalTypeId::DOUBLE:
 		parquet_type = Type::DOUBLE;
 		break;
-	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 		parquet_type = Type::DOUBLE;
 		return CopyTypeSupport::LOSSY;

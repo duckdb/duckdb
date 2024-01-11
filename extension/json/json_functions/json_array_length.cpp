@@ -31,7 +31,7 @@ static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const Logica
 ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
-	GetArrayLengthFunctionsInternal(set, LogicalType::JSON());
+	GetArrayLengthFunctionsInternal(set, JSONCommon::JSONType());
 	return set;
 }
 

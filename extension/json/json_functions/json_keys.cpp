@@ -52,7 +52,7 @@ static void GetJSONKeysFunctionsInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetKeysFunction() {
 	ScalarFunctionSet set("json_keys");
 	GetJSONKeysFunctionsInternal(set, LogicalType::VARCHAR);
-	GetJSONKeysFunctionsInternal(set, LogicalType::JSON());
+	GetJSONKeysFunctionsInternal(set, JSONCommon::JSONType());
 	return set;
 }
 

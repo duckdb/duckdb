@@ -31,7 +31,7 @@ static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &
 ScalarFunctionSet JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
 	GetTypeFunctionsInternal(set, LogicalType::VARCHAR);
-	GetTypeFunctionsInternal(set, LogicalType::JSON());
+	GetTypeFunctionsInternal(set, JSONCommon::JSONType());
 	return set;
 }
 
