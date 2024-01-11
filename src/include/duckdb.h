@@ -905,6 +905,7 @@ Decompose a `duckdb_time` object into hour, minute, second and microsecond (stor
 * returns: The `duckdb_time_struct` with the decomposed elements.
 */
 DUCKDB_API duckdb_time_struct duckdb_from_time(duckdb_time time);
+DUCKDB_API uint64_t duckdb_create_time_tz(int64_t micros, int32_t offset);
 
 /*!
 Decompose a TIME_TZ objects into micros and a timezone offset.
