@@ -14,5 +14,4 @@ INSERT INTO integers VALUES (2, 12)
 # aggregates in WHERE are not allowed
 statement error
 SELECT * FROM integers WHERE SUM(a)>10
-----
 

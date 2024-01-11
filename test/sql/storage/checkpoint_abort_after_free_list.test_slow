@@ -27,7 +27,6 @@ INSERT INTO integers SELECT * FROM range(100000, 200000) tbl(i);
 
 statement error
 CHECKPOINT;
-----
 
 restart
 
@@ -56,7 +55,6 @@ UPDATE integers SET i=i;
 
 statement error
 CHECKPOINT;
-----
 
 restart
 

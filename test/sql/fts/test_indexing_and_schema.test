@@ -17,7 +17,6 @@ INSERT INTO test.documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('
 
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body')
-----
 
 statement ok
 SET SCHEMA='test'
@@ -30,7 +29,6 @@ SET SCHEMA='main'
 
 statement error
 PRAGMA drop_fts_index('documents')
-----
 
 statement ok
 SET SCHEMA='test'

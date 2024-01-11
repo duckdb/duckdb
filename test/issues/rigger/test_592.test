@@ -13,5 +13,6 @@ statement ok
 INSERT INTO t0 VALUES (0);
 
 query T
-SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true::VARCHAR;
+SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true;
 ----
+

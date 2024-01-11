@@ -11,4 +11,3 @@ endloop
 
 statement error
 PRAGMA force_compression='unknown'
-----

@@ -31,7 +31,6 @@ create table y (y int references x(x));
 
 statement error
 insert into y values (1);
-----
 
 statement ok
 insert into x values (1);
@@ -41,14 +40,12 @@ insert into y values (1);
 
 statement error
 insert into x values (NULL);
-----
 
 statement ok
 insert into y values (NULL);
 
 statement error
 delete from x;
-----
 
 statement ok
 delete from y;

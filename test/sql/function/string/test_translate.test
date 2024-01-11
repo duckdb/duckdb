@@ -126,13 +126,10 @@ Hi
 # test incorrect usage of translate
 statement error
 select TRANSLATE(1)
-----
 
 statement error
 select TRANSLATE(1, 2)
-----
 
 statement error
 select TRANSLATE(1, 2, 3, 4)
-----
 

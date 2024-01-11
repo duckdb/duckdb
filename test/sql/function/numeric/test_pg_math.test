@@ -104,23 +104,18 @@ select log(2, 64)
 
 statement error
 select log(0, 64)
-----
 
 statement error
 select log(2, 0)
-----
 
 statement error
 select log(-1, 64)
-----
 
 statement error
 select log(2, -1)
-----
 
 statement error
 select log(1, 64)
-----
 
 query I
 select log(2, 1)
@@ -160,12 +155,9 @@ NaN
 
 statement error
 select log('-Inf'::DOUBLE, 64)
-----
 
 statement error
 select log(64, '-Inf'::DOUBLE)
-----
 
 statement error
 select log(2, -1)
-----

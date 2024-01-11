@@ -32,7 +32,6 @@ SELECT  v.trim('><') as trim_inequality,
         only_alphabet.lower() as lower
         trim_inequality.replace('%', '') as only_alphabet,
 FROM varchars
-----
 
 
 query III
@@ -64,7 +63,7 @@ INSERT INTO varchars VALUES ('Test Function Chainging Alias');
 
 # list
 query III
-SELECT  v.split(' ')::VARCHAR strings,
+SELECT  v.split(' ') strings,
         strings.lower() lower,
         lower.upper() upper
 FROM varchars
@@ -83,8 +82,8 @@ FROM varchars
 # prepared statements
 statement ok
 PREPARE v1 AS 
-SELECT (?.split(' ')::VARCHAR).lower() lstrings,
-       (?.split(' ')::VARCHAR).upper() ustrings,
+SELECT ?.split(' ').lower() lstrings,
+       ?.split(' ').upper() ustrings,
        list_concat(lstrings::VARCHAR[], ustrings::VARCHAR[]) as mix_case_srings
 
 query III

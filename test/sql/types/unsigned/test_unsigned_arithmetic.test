@@ -22,7 +22,6 @@ select * from unsigned;
 # Addition
 statement error
 SELECT (200)::UTINYINT + (200)::UTINYINT;
-----
 
 
 query I
@@ -37,12 +36,10 @@ SELECT (20)::UBIGINT + (200)::UBIGINT;
 
 statement error
 SELECT (18446744073709551615)::UBIGINT + (18446744073709551615)::UBIGINT;
-----
 
 # Multiplication
 statement error
 SELECT (200)::UTINYINT * (200)::UTINYINT;
-----
 
 query I
 SELECT (200)::UTINYINT * (200)::USMALLINT;
@@ -56,16 +53,13 @@ SELECT (200)::UBIGINT * (200)::UBIGINT;
 
 statement error
 SELECT (18446744073709551615)::UBIGINT * (3)::UBIGINT;
-----
 
 # Subtraction
 statement error
 SELECT (200)::UTINYINT - (201)::UTINYINT;
-----
 
 statement error
 SELECT (200)::UTINYINT - (201)::USMALLINT;
-----
 
 query I
 SELECT (200)::UTINYINT - (20)::USMALLINT;

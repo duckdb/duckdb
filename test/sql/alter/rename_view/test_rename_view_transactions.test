@@ -28,7 +28,6 @@ SELECT * FROM vw2
 
 statement error con1
 SELECT * FROM vw
-----
 
 query I con2
 SELECT * FROM vw
@@ -38,7 +37,6 @@ SELECT * FROM vw
 
 statement error con2
 SELECT * FROM vw2
-----
 
 statement ok con1
 COMMIT
@@ -48,11 +46,9 @@ COMMIT
 
 statement error con1
 SELECT * FROM vw
-----
 
 statement error con2
 SELECT * FROM vw
-----
 
 query I con1
 SELECT * FROM vw2

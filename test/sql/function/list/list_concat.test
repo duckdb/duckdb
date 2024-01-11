@@ -43,7 +43,6 @@ SELECT list_concat([1, 2], [])
 
 statement error
 SELECT list_concat([1, 2], 3)
-----
 
 # operators
 query T
@@ -57,12 +56,12 @@ SELECT [1, 2] + [3, 4]
 [1, 2, 3, 4]
 
 # type casting
-foreach type_a <integral>
+foreach type_a <integral> varchar
 
-foreach type_b <integral>
+foreach type_b <integral> varchar
 
 query T
-SELECT list_concat([1, 2]::${type_a}[], [3, 4]::${type_b}[])::INTEGER[]
+SELECT list_concat([1, 2]::${type_a}[], [3, 4]::${type_b}[])
 ----
 [1, 2, 3, 4]
 
@@ -128,7 +127,6 @@ SELECT i, list_concat(j, k) FROM lists
 
 statement error
 SELECT i, list_concat(j, cast(k AS VARCHAR)) FROM lists
-----
 
 # list_append(l, e) is an alias for list_concat(l, list_value(e))
 query T

@@ -9,13 +9,13 @@ PRAGMA enable_verification
 statement error
 VALUES((0, 0) = ALL(SELECT 2));
 ----
-explicit cast is required
+Unimplemented
 
 # use ALL with complex types
-statement error
+query I
 SELECT {'a': 42} = ALL(SELECT {'a': '42'})
 ----
-explicit cast is required
+1
 
 foreach val 42 [1,2,3] {'a':42} {'a':[1,2,3],'b':'thisisalongstring'}
 

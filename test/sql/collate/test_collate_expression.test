@@ -38,7 +38,6 @@ hEllO
 
 statement error
 SELECT * FROM collate_test WHERE s COLLATE NOCASE='hello' COLLATE NOACCENT
-----
 
 query T
 SELECT * FROM collate_test ORDER BY s COLLATE NOCASE

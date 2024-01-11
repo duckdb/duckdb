@@ -68,6 +68,5 @@ DROP TABLE test.t
 
 statement error
 SELECT * FROM test.v
-----
 
 endloop

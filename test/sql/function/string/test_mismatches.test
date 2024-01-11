@@ -82,7 +82,6 @@ NULL
 
 statement error
 SELECT mismatches('', '')
-----
 
 query I
 SELECT mismatches(NULL, s) FROM strings ORDER BY s
@@ -109,27 +108,21 @@ NULL
 # incorrect usages
 statement error
 SELECT mismatches('hoi', 'hallo')
-----
 
 statement error
 SELECT mismatches('hallo', 'hoi')
-----
 
 statement error
 SELECT mismatches('', 'hallo')
-----
 
 statement error
 SELECT mismatches('hi', '')
-----
 
 statement error
 SELECT mismatches('', s) FROM strings ORDER BY s
-----
 
 statement error
 SELECT mismatches(s, '') FROM strings ORDER BY s
-----
 
 
 statement ok
@@ -146,11 +139,9 @@ INSERT INTO strings VALUES ('hello'), ('halo'), (NULL)
 
 statement error
 SELECT mismatches(s, 'hallo') FROM strings
-----
 
 statement error
 SELECT mismatches('hallo', s) FROM strings
-----
 
 
 
@@ -185,8 +176,6 @@ INSERT INTO strings VALUES ('hello', 'world'), ('hallo', 'ola'), ('hello', ''), 
 
 statement error
 SELECT s, t, hamming(s, t) hd FROM strings WHERE length(s) = length(t)
-----
 
 statement error
 SELECT hamming(s, t)  FROM strings
-----

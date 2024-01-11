@@ -289,5 +289,4 @@ aaa
 # Reject invalid collations
 statement error
 SELECT 'hello' LIKE 'hê?llo' COLLATE idontexist;
-----
 

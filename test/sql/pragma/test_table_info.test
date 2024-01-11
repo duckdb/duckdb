@@ -69,7 +69,6 @@ PRAGMA table_info('test.v1')
 
 statement error
 PRAGMA table_info('nonexistant_table');
-----
 
 # handle constraints + default values
 statement ok
@@ -96,7 +95,6 @@ PRAGMA table_info(tconstraint2)
 # incorrect number of parameters
 statement error
 PRAGMA table_info(1,2,3);
-----
 
 statement ok
 create table t1 (

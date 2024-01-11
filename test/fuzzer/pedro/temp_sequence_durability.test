@@ -20,4 +20,3 @@ restart
 
 statement error
 SELECT nextval('s0');
-----

@@ -4,7 +4,6 @@
 
 statement error
 PRAGMA memory_limit=100000000
-----
 
 statement ok
 CREATE TABLE test (a VARCHAR);

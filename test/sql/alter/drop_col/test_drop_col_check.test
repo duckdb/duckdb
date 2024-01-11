@@ -45,5 +45,4 @@ SELECT * FROM test2
 
 statement error
 ALTER TABLE test2 DROP COLUMN j
-----
 

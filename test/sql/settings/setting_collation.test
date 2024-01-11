@@ -40,7 +40,6 @@ wozld
 
 statement error
 PRAGMA default_collation='unknown'
-----
 
 statement ok
 SET GLOBAL default_collation='NOCASE'

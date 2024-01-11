@@ -19,7 +19,6 @@ PRAGMA explain_output='all'
 
 statement error
 PRAGMA explain_output='unknown'
-----
 
 statement ok
 PRAGMA enable_progress_bar
@@ -38,6 +37,5 @@ PRAGMA debug_checkpoint_abort='none'
 
 statement error
 PRAGMA debug_checkpoint_abort='unknown'
-----
 
 

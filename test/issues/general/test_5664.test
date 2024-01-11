@@ -8,7 +8,6 @@ PRAGMA enable_verification
 # create a type with a non-existant type as source
 statement error
 CREATE TYPE alias as BLOBL;
-----
 
 statement ok
 CREATE TYPE a as BLOB;
@@ -25,4 +24,4 @@ INSERT INTO test VALUES ('duckdb');
 query I
 SELECT typeof(x) FROM test;
 ----
-BLOB
+b

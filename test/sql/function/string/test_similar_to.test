@@ -133,5 +133,4 @@ aaa
 # invalid SIMILAR TO expression
 statement error
 SELECT s FROM strings WHERE s SIMILAR TO 'ab.*%' {escape ''}
-----
 

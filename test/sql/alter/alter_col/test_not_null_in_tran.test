@@ -21,7 +21,6 @@ INSERT INTO t VALUES(9999, NULL)
 
 statement error
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
-----
 
 statement ok
 ROLLBACK
@@ -32,7 +31,6 @@ INSERT INTO t VALUES(9999, NULL)
 # Has null, cannot alter after tran
 statement error
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
-----
 
 query I
 SELECT i FROM t WHERE j IS NULL
@@ -65,7 +63,6 @@ COMMIT
 # Cannot insert after tran
 statement error 
 INSERT INTO t VALUES(9999, NULL)
-----
 
 # No null data
 query II
@@ -172,7 +169,6 @@ ROLLBACK
 # CANNOT insert null after rollback 
 statement error 
 INSERT INTO t VALUES(8888, NULL)
-----
 
 # NO null values
 query I
@@ -202,7 +198,6 @@ COMMIT
 
 statement error
 INSERT INTO t VALUES(NULL)
-----
 
 # Drop in the same tran
 statement ok
@@ -259,7 +254,6 @@ COMMIT
 
 statement error
 INSERT INTO t VALUES(3, NULL)
-----
 
 # NO null values
 query I

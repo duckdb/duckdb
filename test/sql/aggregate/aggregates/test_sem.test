@@ -8,7 +8,6 @@ PRAGMA enable_verification
 #Corner cases
 statement error
 select sem()
-----
 
 query I
 select sem(NULL)
@@ -22,7 +21,6 @@ select sem(1)
 
 statement error
 select sem(*)
-----
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

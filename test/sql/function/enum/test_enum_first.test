@@ -15,4 +15,3 @@ red
 
 statement error
 SELECT enum_first('bla')
-----

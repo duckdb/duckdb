@@ -20,7 +20,6 @@ restart
 # insert values and create index
 statement error
 INSERT INTO integers VALUES (1);
-----
 
 # now we want to ensure that we use partial blocks for serializing small ARTs
 

@@ -11,7 +11,6 @@ CREATE TABLE unit (
 	price INTEGER,
 	amount_sold AS (price) NOT NULL,
 );
-----
 
 # Show that proper NOT NULL constraints still work when mixed in when generated columns
 statement ok
@@ -27,4 +26,3 @@ INSERT INTO tbl VALUES (5);
 # Violates not null constraint
 statement error
 INSERT INTO tbl VALUES (null);
-----

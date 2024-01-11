@@ -14,7 +14,6 @@ BEGIN TRANSACTION
 
 statement error
 INSERT INTO integers VALUES (3)
-----
 
 statement ok
 ROLLBACK
@@ -36,7 +35,6 @@ SELECT * FROM integers ORDER BY i
 
 statement error
 UPDATE integers SET i=3 WHERE i=4
-----
 
 statement ok
 ROLLBACK

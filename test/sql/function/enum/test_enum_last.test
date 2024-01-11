@@ -15,4 +15,3 @@ purple
 
 statement error
 SELECT enum_last('bla')
-----

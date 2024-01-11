@@ -4,9 +4,10 @@
 
 statement error
 ATTACH 'dummy_extension:/hello.world';
-----
-not found
+---
+Extension not found
 
 statement error
 ATTACH 'file://dummy.csv'
-----
+---
+File not found

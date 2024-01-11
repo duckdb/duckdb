@@ -20,7 +20,6 @@ select from_json_strict('42', '"UBIGINT"')
 
 statement error
 select from_json_strict('42', '"DATE"')
-----
 
 # singletons
 statement error
@@ -96,7 +95,6 @@ select json_transform('{"a": 42}', '{"a":"NULL"}')
 
 statement error
 select json_transform('{"a": 42}', '{"a":"ARRAY"}')
-----
 
 # arrays
 statement error
@@ -153,7 +151,6 @@ NULL
 # conflicting names
 statement error
 select json_transform('{"a": 4, "a": 2}', '{"a": "UBIGINT", "a": "UBIGINT"}')
-----
 
 # can actually get parts of the JSON back as string
 query T
@@ -203,11 +200,9 @@ NULL
 
 statement error
 select json_transform_strict('[]', '"${type}"')
-----
 
 statement error
 select json_transform_strict('{}', '"${type}"')
-----
 
 query T
 select json_transform('null', '"${type}"')
@@ -228,7 +223,6 @@ NULL
 
 statement error
 select json_transform_strict('-42', '"UINTEGER"')
-----
 
 # varchar
 query T
@@ -359,19 +353,15 @@ NULL
 
 statement error
 select json_transform_strict('42', '"DECIMAL(2,1)"')
-----
 
 statement error
 select json_transform('42', '"DECIMAL(39)"')
-----
 
 statement error
 select json_transform('42', '"DECIMAL(2,4)"')
-----
 
 statement error
 select json_transform('42', '"DECIMAL(5,1,1)"')
-----
 
 # uuid
 query T
@@ -416,7 +406,6 @@ NULL
 
 statement error
 select json_transform_strict('42', '"UUID"')
-----
 
 # date / time
 query T
@@ -476,7 +465,6 @@ NULL
 
 statement error
 select json_transform_strict('false', '"DATE"')
-----
 
 # timestamp
 query T
@@ -511,4 +499,3 @@ NULL
 
 statement error
 select json_transform_strict('42', '"TIMESTAMP"')
-----

@@ -19,7 +19,6 @@ CREATE TABLE tbl (
 	gcol10 AS (gcol3),
 	x INTEGER
 );
-----
 
 statement ok
 CREATE TABLE tbl (
@@ -51,4 +50,3 @@ CREATE TABLE circular (
 	b AS (a),
 	x INTEGER,
 );
-----

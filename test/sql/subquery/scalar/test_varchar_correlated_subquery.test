@@ -23,13 +23,8 @@ SELECT NULL IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
 NULL
 NULL
 
-statement error
-SELECT 3 IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
-----
-explicit cast is required
-
 query T
-SELECT '3' IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
+SELECT 3 IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
 ----
 0
 0

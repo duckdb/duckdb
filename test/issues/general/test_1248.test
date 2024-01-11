@@ -15,7 +15,6 @@ select test.round
 from
     (select round from test limit 1) as subselect,
     test;
-----
 
 query I
 with test(round) as (

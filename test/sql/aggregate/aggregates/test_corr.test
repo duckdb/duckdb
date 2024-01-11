@@ -8,7 +8,6 @@ PRAGMA enable_verification
 #Corner cases
 statement error
 select corr()
-----
 
 query I
 select corr(NULL,NULL)
@@ -22,7 +21,6 @@ NULL
 
 statement error
 select corr(*)
-----
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
@@ -54,8 +52,6 @@ NULL
 
 statement error
 SELECT corr(a,b) FROM (values (1e301, 0), (-1e301, 0)) tbl(a,b);
-----
 
 statement error
 SELECT corr(b,a) FROM (values (1e301, 0), (-1e301, 0)) tbl(a,b);
-----

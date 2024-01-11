@@ -130,9 +130,4 @@ duckdb_hugeint CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_hugeint(&result, col, row);
 }
 
-template <>
-duckdb_uhugeint CAPIResult::Fetch(idx_t col, idx_t row) {
-	return duckdb_value_uhugeint(&result, col, row);
-}
-
 } // namespace duckdb

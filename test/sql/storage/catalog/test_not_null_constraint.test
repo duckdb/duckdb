@@ -20,7 +20,6 @@ restart
 # constraint failure
 statement error
 INSERT INTO test VALUES (NULL)
-----
 
 # constraint ok
 statement ok

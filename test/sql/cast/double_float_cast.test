@@ -7,7 +7,6 @@ PRAGMA enable_verification
 
 statement error
 select 1e308::float;
-----
 
 query I
 select '1e308'::float;

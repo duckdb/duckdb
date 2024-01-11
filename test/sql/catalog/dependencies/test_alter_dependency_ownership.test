@@ -22,7 +22,6 @@ DROP TABLE tablename;
 
 statement error
 SELECT nextval('sequence1');
-----
 
 ##TEST: If the table is dropped, then the sequence is also droppped, using schemas
 statement ok
@@ -41,7 +40,6 @@ DROP TABLE main.tablename;
 
 statement error
 SELECT nextval('main.sequence1');
-----
 
 ##TEST: If the owned sequence is dropped with CASCADE, then the table is also dropped
 statement ok
@@ -60,7 +58,6 @@ DROP SEQUENCE sequence1 CASCADE;
 
 statement error
 SELECT * FROM tablename;
-----
 
 ##TEST: The owned sequence cannot be dropped without CASCADE
 statement ok
@@ -76,7 +73,6 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP TABLE tablename;
@@ -162,15 +158,12 @@ DROP TABLE tablename;
 
 statement error
 SELECT nextval('sequence1');
-----
 
 statement error
 SELECT nextval('sequence2');
-----
 
 statement error
 SELECT nextval('sequence3');
-----
 
 ##TEST: When owning a sequence, insertions work normally
 statement ok
@@ -233,11 +226,9 @@ CREATE TABLE tablename (
 
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename;
-----
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement error
 CREATE OR REPLACE SEQUENCE sequence1;
@@ -274,7 +265,6 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP TABLE tablename;
@@ -297,7 +287,6 @@ ALTER TABLE tablename DROP colname2;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP TABLE tablename;
@@ -319,7 +308,6 @@ ALTER TABLE tablename ALTER colname TYPE float;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP TABLE tablename;
@@ -344,21 +332,18 @@ ALTER TABLE tablename DROP colname4;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 ALTER TABLE tablename DROP colname3;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 ALTER TABLE tablename DROP colname2;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP TABLE tablename;
@@ -383,7 +368,6 @@ DROP TABLE tablename;
 
 statement error
 select nextval('sequence1');
-----
 
 statement ok
 ROLLBACK;
@@ -395,7 +379,6 @@ select nextval('sequence1');
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP TABLE tablename;
@@ -412,14 +395,12 @@ ALTER SEQUENCE sequence1 OWNED BY v1_sequence1;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP VIEW v1_sequence1;
 
 statement error
 SELECT nextval('sequence1');
-----
 
 ##TEST: Sequence can own a sequence
 statement ok
@@ -433,14 +414,12 @@ ALTER SEQUENCE sequence1 OWNED BY sequence2;
 
 statement error
 DROP SEQUENCE sequence1;
-----
 
 statement ok
 DROP SEQUENCE sequence2;
 
 statement error
 SELECT nextval('sequence1');
-----
 
 ##TEST: Sequence cant own its owner
 statement ok
@@ -497,16 +476,12 @@ DROP SEQUENCE sequence4;
 
 statement error
 SELECT nextval('sequence1');
-----
 
 statement error
 SELECT nextval('sequence2');
-----
 
 statement error
 SELECT nextval('sequence3');
-----
 
 statement error
 SELECT nextval('sequence4');
-----

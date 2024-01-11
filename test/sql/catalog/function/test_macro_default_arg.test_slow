@@ -39,7 +39,6 @@ statement error
 select f(
 	x := j
 ) from tbl;
-----
 
 # cast
 statement ok

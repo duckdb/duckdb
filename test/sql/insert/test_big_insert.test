@@ -41,7 +41,6 @@ INSERT INTO integers VALUES (DEFAULT, 4);
 # operations on default not supported
 statement error
 INSERT INTO integers VALUES (DEFAULT+1, 4);
-----
 
 statement ok
 INSERT INTO integers (i) SELECT j FROM integers;

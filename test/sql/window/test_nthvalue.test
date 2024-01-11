@@ -192,7 +192,6 @@ SELECT depname, empno,
 		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 		) fv
 FROM empsalary
-----
 
 statement error
 SELECT depname, empno,
@@ -201,4 +200,3 @@ SELECT depname, empno,
 		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 		) fv
 FROM empsalary
-----

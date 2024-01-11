@@ -15,7 +15,6 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 
 statement error
 INSERT INTO test VALUES (3, NULL)
-----
 
 query II
 SELECT * FROM test
@@ -62,7 +61,6 @@ INSERT INTO test VALUES (1), (2)
 
 statement error
 INSERT INTO test VALUES (NULL)
-----
 
 query II
 SELECT * FROM test

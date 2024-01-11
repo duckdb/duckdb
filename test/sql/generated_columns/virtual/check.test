@@ -20,7 +20,6 @@ CREATE TABLE tbl (
 	price INTEGER,
 	amount_sold AS (price) CHECK (amount_sold > 5)
 );
-----
 
 # Also when used in this way
 statement error
@@ -29,7 +28,6 @@ CREATE TABLE tbl (
 	amount_sold AS (price),
 	CHECK (amount_sold > price)
 );
-----
 
 statement ok
 CREATE TABLE chk (
@@ -44,4 +42,3 @@ INSERT INTO chk VALUES (6);
 
 statement error
 INSERT INTO chk VALUES (3);
-----

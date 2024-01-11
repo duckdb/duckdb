@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SELECT "trim"('hello');
+SELECT "trim"(1);
 
 statement ok
-SELECT trim('hello');
+SELECT trim(1);

@@ -12,7 +12,6 @@ CREATE TABLE ubigints AS SELECT i::UBIGINT i FROM (VALUES (0), (1844674407370955
 # unsigned
 statement error
 SELECT i::UTINYINT FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS UTINYINT) FROM ubigints ORDER BY i
@@ -22,7 +21,6 @@ NULL
 
 statement error
 SELECT i::USMALLINT FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS USMALLINT) FROM ubigints ORDER BY i
@@ -32,7 +30,6 @@ NULL
 
 statement error
 SELECT i::UINTEGER FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS UINTEGER) FROM ubigints ORDER BY i
@@ -43,7 +40,6 @@ NULL
 # signed
 statement error
 SELECT i::TINYINT FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM ubigints ORDER BY i
@@ -53,7 +49,6 @@ NULL
 
 statement error
 SELECT i::SMALLINT FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM ubigints ORDER BY i
@@ -63,7 +58,6 @@ NULL
 
 statement error
 SELECT i::INTEGER FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS INTEGER) FROM ubigints ORDER BY i
@@ -73,7 +67,6 @@ NULL
 
 statement error
 SELECT i::BIGINT FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS BIGINT) FROM ubigints ORDER BY i
@@ -120,7 +113,6 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 
 statement error
 SELECT s::UBIGINT FROM strings
-----
 
 query I
 SELECT TRY_CAST(s AS UBIGINT) FROM strings
@@ -137,15 +129,12 @@ NULL
 # -> decimal casts
 statement error
 SELECT i::DECIMAL(3,0)::UBIGINT FROM ubigints ORDER BY i
-----
 
 statement error
 SELECT i::DECIMAL(9,0)::UBIGINT FROM ubigints ORDER BY i
-----
 
 statement error
 SELECT i::DECIMAL(18,0)::UBIGINT FROM ubigints ORDER BY i
-----
 
 query I
 SELECT i::DECIMAL(38,0)::UBIGINT FROM ubigints ORDER BY i
@@ -155,7 +144,6 @@ SELECT i::DECIMAL(38,0)::UBIGINT FROM ubigints ORDER BY i
 
 statement error
 SELECT i::DECIMAL(38,20)::UBIGINT FROM ubigints ORDER BY i
-----
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::UBIGINT FROM ubigints ORDER BY i

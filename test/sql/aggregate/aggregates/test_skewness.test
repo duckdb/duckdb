@@ -8,7 +8,6 @@ PRAGMA enable_verification
 #Corner cases
 statement error
 select skewness()
-----
 
 query I
 select skewness(NULL)
@@ -22,7 +21,6 @@ NULL
 
 statement error
 select skewness(*)
-----
 
 # Constant Value
 query I
@@ -39,7 +37,6 @@ NULL
 # out of range
 statement error
 select skewness(i) from (values (-2e307), (0), (2e307)) tbl(i)
-----
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

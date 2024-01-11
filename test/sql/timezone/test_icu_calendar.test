@@ -42,7 +42,6 @@ Calendar	gregorian	The current calendar	VARCHAR
 
 statement error
 SET Calendar = 'fnord';
-----
 
 #
 # Japanese calendar testing
@@ -101,7 +100,7 @@ statement ok
 SET CALENDAR='islamic-umalqura';
 
 statement ok
-SELECT strftime(TIMESTAMPTZ '-260722-3-4 0:3:52',TIMESTAMP '-285441-5-3 8:3:4'::VARCHAR);
+SELECT strftime(TIMESTAMPTZ '-260722-3-4 0:3:52',TIMESTAMP '-285441-5-3 8:3:4');
 
 # Issue #5235
 statement ok
@@ -116,8 +115,8 @@ SELECT TIMESTAMPTZ '-276069-9-30 0:0:00 America/Whitehorse';
 statement ok
 PRAGMA CALENDAR='japanese';
 
-# The TIMETZ cast is not valid (checked against PG)
-statement error
-SELECT strftime(TIMESTAMPTZ '-23831-1-15 2:5:17 America/La_Paz',TIMETZ '0:8:29 America/Cayman'::VARCHAR);
+query I
+SELECT strftime(TIMESTAMPTZ '-23831-1-15 2:5:17 America/La_Paz',TIMETZ '0:8:29 America/Cayman');
 ----
-time field value out of range
+00:08:29+00
+

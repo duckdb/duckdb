@@ -148,4 +148,3 @@ CREATE TABLE aliens (
     name text,
     current_mood mood
 );
-----

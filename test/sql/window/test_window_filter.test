@@ -120,7 +120,6 @@ SELECT
 	, ${nullary}() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
-----
 
 endloop
 
@@ -136,7 +135,6 @@ SELECT
 	, ${unary}(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
-----
 
 endloop
 
@@ -152,6 +150,5 @@ SELECT
 	, ${binary}(x, 1) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
 FROM testing
 ORDER BY y, x;
-----
 
 endloop
