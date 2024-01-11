@@ -181,13 +181,18 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		// If the columns are incorrect:
 		// Maybe we have too many columns:
 		if (result.maybe_too_many_columns) {
-			auto csv_error = CSVError::IncorrectColumnAmountError(
+			if (result.result_position % result.number_of_columns == 1 && !result.validity_mask->RowIsValid(result.result_position-1)){
+				// This is a weird case, where we ignore an extra value, if it is a null value
+				result.result_position--;
+			} else{
+				auto csv_error = CSVError::IncorrectColumnAmountError(
 			    result.state_machine.options, result.vector_ptr, result.number_of_columns,
 			    result.number_of_columns + result.result_position % result.number_of_columns);
-			LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(),
-			                              result.result_position / result.number_of_columns + 1);
-			result.error_handler.Error(lines_per_batch, csv_error);
-			result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
+				LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(),
+											  result.result_position / result.number_of_columns + 1);
+				result.error_handler.Error(lines_per_batch, csv_error);
+				result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
+			}
 			D_ASSERT(result.result_position % result.number_of_columns == 0);
 			result.maybe_too_many_columns = false;
 		}
@@ -547,18 +552,20 @@ bool StringValueScanner::MoveToNextBuffer() {
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || result.added_last_line) {
 				return false;
-			} else if (states.IsCurrentDelimiter()) {
+			}
+			else if (states.IsCurrentDelimiter()) {
 				lines_read++;
 				// we add the value
-				result.AddRowInternal(previous_buffer_handle->actual_size - 1);
+				result.AddValue(result, previous_buffer_handle->actual_size);
 				// And an extra empty value to represent what comes after the delimiter
-				result.AddRowInternal(previous_buffer_handle->actual_size);
-			} else if (states.IsQuotedCurrent()) {
+				result.AddRow(result, previous_buffer_handle->actual_size);
+			}
+			else if (states.IsQuotedCurrent()) {
 				// Unterminated quote
 				result.InvalidState(result);
 			} else {
 				lines_read++;
-				result.AddRowInternal(previous_buffer_handle->actual_size);
+				result.AddRow(result, previous_buffer_handle->actual_size);
 			}
 			return false;
 		}
