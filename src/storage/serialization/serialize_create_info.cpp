@@ -78,7 +78,7 @@ void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", index_name);
 	serializer.WritePropertyWithDefault<string>(201, "table", table);
-	/* [Deleted] (IndexType) "index_type" */
+	/* [Deleted] (DeprecatedIndexType) "index_type" */
 	serializer.WriteProperty<IndexConstraintType>(203, "constraint_type", constraint_type);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", parsed_expressions);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "scan_types", scan_types);
@@ -92,7 +92,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->index_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "table", result->table);
-	deserializer.ReadDeletedProperty<IndexType>(202, "index_type");
+	deserializer.ReadDeletedProperty<DeprecatedIndexType>(202, "index_type");
 	deserializer.ReadProperty<IndexConstraintType>(203, "constraint_type", result->constraint_type);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", result->parsed_expressions);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "scan_types", result->scan_types);
