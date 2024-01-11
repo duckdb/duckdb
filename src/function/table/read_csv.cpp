@@ -204,6 +204,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
+			csv_local_state.csv_reader->csv_file_scan->error_handler->Insert(csv_local_state.csv_reader->GetBoundaryIndex(),csv_local_state.csv_reader->GetLinesRead());
 			csv_local_state.csv_reader = csv_global_state.Next();
 			if (!csv_local_state.csv_reader) {
 				csv_global_state.DecrementThread();
@@ -218,7 +219,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                                     LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &data = local_state->Cast<CSVLocalState>();
-	return data.csv_reader->GetBoundaryIndex();
+	return data.csv_reader->scanner_idx;
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {

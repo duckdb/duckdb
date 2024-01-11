@@ -61,7 +61,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	if (single_threaded) {
 		current_boundary = CSVIterator();
 	}
-	auto csv_scanner = make_uniq<StringValueScanner>(current_file.buffer_manager, current_file.state_machine,
+	auto csv_scanner = make_uniq<StringValueScanner>(scanner_idx++,current_file.buffer_manager, current_file.state_machine,
 	                                                 current_file.error_handler, current_boundary);
 	csv_scanner->csv_file_scan = file_scans.back();
 	// We then produce the next boundary
@@ -75,7 +75,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 			                                                 file_schema));
 			// And re-start the boundary-iterator
 			auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
-			current_boundary = CSVIterator(current_file_idx, 0, 0, current_boundary.GetBoundaryIdx() + 1, buffer_size);
+			current_boundary = CSVIterator(current_file_idx, 0, 0, 0, buffer_size);
 		} else {
 			// If not we are done with this CSV Scanning
 			finished = true;

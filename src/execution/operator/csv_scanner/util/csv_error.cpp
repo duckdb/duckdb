@@ -3,26 +3,24 @@
 
 namespace duckdb {
 
-BatchInfo::BatchInfo() : file_idx(0), boundary_idx(0) {
+LinesPerBoundary::LinesPerBoundary() {
 }
-BatchInfo::BatchInfo(idx_t file_idx_p, idx_t batch_idx_p) : file_idx(file_idx_p), boundary_idx(batch_idx_p) {
-}
-
-LinesPerBatch::LinesPerBatch() {
-}
-LinesPerBatch::LinesPerBatch(idx_t file_idx_p, idx_t batch_idx_p, idx_t lines_in_batch_p)
-    : batch_info(file_idx_p, batch_idx_p), lines_in_batch(lines_in_batch_p) {
+LinesPerBoundary::LinesPerBoundary(idx_t boundary_idx_p, idx_t lines_in_batch_p)
+    : boundary_idx(boundary_idx_p), lines_in_batch(lines_in_batch_p) {
 }
 
 CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {
 }
 
 void CSVErrorHandler::Error(CSVError &csv_error) {
-	LinesPerBatch mock;
+	LinesPerBoundary mock;
 	Error(mock, csv_error);
 }
-void CSVErrorHandler::Error(LinesPerBatch &error_info, CSVError &csv_error) {
+void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error) {
+	lock_guard<mutex> parallel_lock(main_mutex);
 	if (ignore_errors) {
+		// We store this error
+		errors.push_back({error_info,csv_error});
 		return;
 	}
 	std::ostringstream error;
@@ -40,13 +38,12 @@ void CSVErrorHandler::Error(LinesPerBatch &error_info, CSVError &csv_error) {
 	}
 }
 
-void CSVErrorHandler::Insert(idx_t file_idx, idx_t boundary_idx, idx_t rows) {
+void CSVErrorHandler::Insert(idx_t boundary_idx, idx_t rows) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	BatchInfo batch_info(file_idx, boundary_idx);
-	if (lines_per_batch_map.find(batch_info) == lines_per_batch_map.end()) {
-		lines_per_batch_map[batch_info] = {file_idx, boundary_idx, rows};
+	if (lines_per_batch_map.find(boundary_idx) == lines_per_batch_map.end()) {
+		lines_per_batch_map[boundary_idx] = {boundary_idx, rows};
 	} else {
-		lines_per_batch_map[batch_info].lines_in_batch += rows;
+		lines_per_batch_map[boundary_idx].lines_in_batch += rows;
 	}
 }
 
@@ -163,16 +160,15 @@ bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
 	}
 }
 
-idx_t CSVErrorHandler::GetLine(LinesPerBatch &error_info) {
+idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
 	idx_t current_line = 1 + error_info.lines_in_batch; // We start from one, since the lines are 1-indexed
-	for (idx_t boundary_idx = 0; boundary_idx < error_info.batch_info.boundary_idx; boundary_idx++) {
+	for (idx_t boundary_idx = 0; boundary_idx < error_info.boundary_idx; boundary_idx++) {
 		bool batch_done = false;
 		while (!batch_done) {
 			unique_ptr<lock_guard<mutex>> parallel_lock;
-			auto batch_info = lines_per_batch_map[error_info.batch_info];
-			if (lines_per_batch_map.find(error_info.batch_info) != lines_per_batch_map.end()) {
+			if (lines_per_batch_map.find(boundary_idx) != lines_per_batch_map.end()) {
 				batch_done = true;
-				current_line += batch_info.lines_in_batch;
+				current_line += lines_per_batch_map[boundary_idx].lines_in_batch;
 			}
 		}
 	}

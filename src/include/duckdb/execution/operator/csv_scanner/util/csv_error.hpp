@@ -20,30 +20,13 @@ namespace duckdb {
 
 //! Object that holds information on how many lines each csv batch read.
 
-struct BatchInfo {
-	BatchInfo();
-	BatchInfo(idx_t file_idx, idx_t boundary_idx);
-	idx_t file_idx;
-	idx_t boundary_idx;
-	bool operator==(const BatchInfo &other) const {
-		return file_idx == other.file_idx && boundary_idx == other.boundary_idx;
-	}
-};
-
-class LinesPerBatch {
+class LinesPerBoundary {
 public:
-	LinesPerBatch();
-	LinesPerBatch(idx_t file_idx, idx_t batch_idx, idx_t lines_in_batch);
+	LinesPerBoundary();
+	LinesPerBoundary(idx_t boundary_idx, idx_t lines_in_batch);
 
-	BatchInfo batch_info;
+	idx_t boundary_idx = 0;
 	idx_t lines_in_batch = 0;
-};
-
-//! Hash function used in to hash the Lines Per Batch Information
-struct HashCSVBatchInfo {
-	size_t operator()(BatchInfo const &batch_info) const noexcept {
-		return CombineHash(batch_info.file_idx, batch_info.boundary_idx);
-	}
 };
 
 enum CSVErrorType : uint8_t {
@@ -83,21 +66,22 @@ class CSVErrorHandler {
 public:
 	CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(LinesPerBatch &error_info, CSVError &csv_error);
+	void Error(LinesPerBoundary &error_info, CSVError &csv_error);
 	//! Throws the error
 	void Error(CSVError &csv_error);
 	//! Inserts a finished error info
-	void Insert(idx_t file_idx, idx_t boundary_idx, idx_t rows);
+	void Insert(idx_t boundary_idx, idx_t rows);
 
 private:
 	//! Return the 1-indexed line number
-	idx_t GetLine(LinesPerBatch &error_info);
+	idx_t GetLine(LinesPerBoundary &error_info);
 	//! If we should print the line of an error
 	bool PrintLineNumber(CSVError &error);
 	//! CSV Error Handler Mutex
 	mutex main_mutex;
 	//! Map of <file,batch> -> lines
-	unordered_map<BatchInfo, LinesPerBatch, HashCSVBatchInfo> lines_per_batch_map;
+	unordered_map<idx_t , LinesPerBoundary> lines_per_batch_map;
+	vector<pair<LinesPerBoundary,CSVError>> errors;
 	bool ignore_errors = false;
 };
 

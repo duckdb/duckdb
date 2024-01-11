@@ -97,7 +97,7 @@ public:
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
 class StringValueScanner : public BaseScanner {
 public:
-	StringValueScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
+	StringValueScanner(idx_t scanner_idx, shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
 	                   shared_ptr<CSVErrorHandler> error_handler, CSVIterator boundary = {},
 	                   idx_t result_size = STANDARD_VECTOR_SIZE);
 
@@ -117,6 +117,7 @@ public:
 	//! Creates a new string with all escaped values removed
 	static void RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes);
 
+	const idx_t scanner_idx;
 private:
 	void Initialize() override;
 

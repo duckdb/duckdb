@@ -70,6 +70,8 @@ private:
 	vector<LogicalType> file_schema;
 
 	bool single_threaded = false;
+
+	idx_t scanner_idx = 0;
 };
 
 } // namespace duckdb
