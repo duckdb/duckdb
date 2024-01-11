@@ -115,6 +115,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <signal.h>
 #include "linenoise.h"
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
@@ -226,6 +227,7 @@ enum KEY_ACTION {
 	CTRL_T = 20,    /* Ctrl-t */
 	CTRL_U = 21,    /* Ctrl+u */
 	CTRL_W = 23,    /* Ctrl+w */
+	CTRL_Z = 26,    /* Ctrl+z */
 	ESC = 27,       /* Escape */
 	BACKSPACE = 127 /* Backspace */
 };
@@ -1936,6 +1938,12 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				free(history[history_len]);
 				return -1;
 			}
+			break;
+		case CTRL_Z: /* ctrl-z, suspends shell */
+			disableRawMode(STDIN_FILENO);
+			raise(SIGTSTP);
+			enableRawMode(STDIN_FILENO);
+			refreshLine(&l);
 			break;
 		case CTRL_T: /* ctrl-t, swaps current character with previous. */
 			if (l.pos > 0 && l.pos < l.len) {

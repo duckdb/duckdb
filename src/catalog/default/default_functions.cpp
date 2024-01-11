@@ -27,6 +27,11 @@ static DefaultMacro internal_macros[] = {
 
 	{"pg_catalog", "pg_typeof", {"expression", nullptr}, "lower(typeof(expression))"},  // get the data type of any value
 
+	{"pg_catalog", "current_database", {nullptr}, "current_database()"},  	    // name of current database (called "catalog" in the SQL standard)
+	{"pg_catalog", "current_query", {nullptr}, "current_query()"},  	        // the currently executing query (NULL if not inside a plpgsql function)
+	{"pg_catalog", "current_schema", {nullptr}, "current_schema()"},  	        // name of current schema
+	{"pg_catalog", "current_schemas", {"include_implicit"}, "current_schemas(include_implicit)"},  	// names of schemas in search path
+
 	// privilege functions
 	// {"has_any_column_privilege", {"user", "table", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for any column of table
 	{"pg_catalog", "has_any_column_privilege", {"table", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for any column of table

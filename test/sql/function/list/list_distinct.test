@@ -7,7 +7,6 @@
 # different on Windows and other systems
 
 # test null or empty
-
 query I
 SELECT list_distinct(NULL)
 ----

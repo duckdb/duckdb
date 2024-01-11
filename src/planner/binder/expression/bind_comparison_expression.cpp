@@ -97,6 +97,7 @@ static bool SwitchVarcharComparison(const LogicalType &type) {
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::INTEGER_LITERAL:
 		return true;
 	default:
 		return false;
@@ -155,9 +156,9 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 	case LogicalTypeId::VARCHAR:
 		// for comparison with strings, we prefer to bind to the numeric types
 		if (left_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(left_type)) {
-			res = left_type;
+			res = LogicalType::NormalizeType(left_type);
 		} else if (right_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(right_type)) {
-			res = right_type;
+			res = LogicalType::NormalizeType(right_type);
 		} else {
 			// else: check if collations are compatible
 			auto left_collation = StringType::GetCollation(left_type);
@@ -185,9 +186,14 @@ LogicalType BoundComparisonExpression::BindComparison(ClientContext &context, co
 }
 
 LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
-	if (expr.return_type == LogicalTypeId::VARCHAR && expr.expression_class == ExpressionClass::BOUND_CONSTANT &&
-	    StringType::GetCollation(expr.return_type).empty()) {
-		return LogicalTypeId::STRING_LITERAL;
+	if (expr.expression_class == ExpressionClass::BOUND_CONSTANT) {
+		if (expr.return_type == LogicalTypeId::VARCHAR && StringType::GetCollation(expr.return_type).empty()) {
+			return LogicalTypeId::STRING_LITERAL;
+		}
+		if (expr.return_type.IsIntegral()) {
+			auto &constant = expr.Cast<BoundConstantExpression>();
+			return LogicalType::INTEGER_LITERAL(constant.value);
+		}
 	}
 	return expr.return_type;
 }
