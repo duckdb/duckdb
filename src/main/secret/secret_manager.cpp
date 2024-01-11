@@ -158,24 +158,28 @@ optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransacti
 		resolved_storage = storage;
 	}
 
-	if (resolved_storage != TEMPORARY_STORAGE_NAME && persist_type == SecretPersistType::TEMPORARY) {
-		throw InvalidInputException("Can not set secret storage for temporary secrets!");
-	}
-
-	if (persist_type == SecretPersistType::PERSISTENT) {
-		if (!config.allow_persistent_secrets) {
-			throw InvalidInputException("Persistent secrets are currently disabled. To enable them, restart duckdb and "
-			                            "run 'SET allow_persistent_secrets=true'");
-		}
-	}
-
 	//! Lookup which backend to store the secret in
 	auto backend = GetSecretStorage(resolved_storage);
-	if (backend) {
-		return backend->StoreSecret(transaction, std::move(secret), on_conflict);
+	if (!backend) {
+		throw InvalidInputException("Secret storage '%s' not found!", resolved_storage);
 	}
 
-	throw InvalidInputException("Secret storage '%s' not found!", resolved_storage);
+	// Validation on both allow_persistent_secrets and storage backend's own persist type
+	if (persist_type == SecretPersistType::PERSISTENT) {
+		if (backend->persistent) {
+			if (!config.allow_persistent_secrets) {
+				throw InvalidInputException("Persistent secrets are currently disabled. To enable them, restart duckdb and "
+				                            "run 'SET allow_persistent_secrets=true'");
+			}
+		} else { // backend is temp
+			throw InvalidInputException("Cannot create persistent secrets in a temporary secret storage!");
+		}
+	} else { // SecretPersistType::TEMPORARY
+		if (backend->persistent) {
+			throw InvalidInputException("Cannot create temporary secrets in a persistent secret storage!");
+		}
+	}
+	return backend->StoreSecret(transaction, std::move(secret), on_conflict);
 }
 
 optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(CatalogTransaction transaction,
@@ -491,10 +495,8 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 		LoadSecretStorageInternal(make_uniq<TemporarySecretStorage>(TEMPORARY_STORAGE_NAME, *transaction.db));
 
 		// load the persistent storage if enabled
-		if (config.allow_persistent_secrets) {
-			LoadSecretStorageInternal(
-			    make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path));
-		}
+		LoadSecretStorageInternal(
+			make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path));
 
 		initialized = true;
 	}
