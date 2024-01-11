@@ -726,7 +726,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
-	unique_ptr<PendingQueryResult> result;
+	unique_ptr<PendingQueryResult> pending;
 
 	try {
 		BeginQueryInternal(lock, query);
@@ -734,8 +734,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// fatal exceptions invalidate the entire database
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, ex.what());
-		result = make_uniq<PendingQueryResult>(PreservedError(ex));
-		return result;
+		pending = make_uniq<PendingQueryResult>(PreservedError(ex));
+		return pending;
 	} catch (const Exception &ex) {
 		return make_uniq<PendingQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
@@ -748,7 +748,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	bool invalidate_query = true;
 	try {
 		if (statement) {
-			result = PendingStatementInternal(lock, query, std::move(statement), parameters);
+			pending = PendingStatementInternal(lock, query, std::move(statement), parameters);
 		} else {
 			if (prepared->RequireRebind(*this, parameters.parameters)) {
 				// catalog was modified: rebind the statement before execution
@@ -759,11 +759,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				prepared = std::move(new_prepared);
 				prepared->properties.bound_all_parameters = false;
 			}
-			result = PendingPreparedStatement(lock, prepared, parameters);
+			pending = PendingPreparedStatement(lock, prepared, parameters);
 		}
 	} catch (StandardException &ex) {
 		// standard exceptions do not invalidate the current transaction
-		result = make_uniq<PendingQueryResult>(PreservedError(ex));
+		pending = make_uniq<PendingQueryResult>(PreservedError(ex));
 		invalidate_query = false;
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
@@ -771,21 +771,21 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, ex.what());
 		}
-		result = make_uniq<PendingQueryResult>(PreservedError(ex));
+		pending = make_uniq<PendingQueryResult>(PreservedError(ex));
 	} catch (const Exception &ex) {
 		// other types of exceptions do invalidate the current transaction
-		result = make_uniq<PendingQueryResult>(PreservedError(ex));
+		pending = make_uniq<PendingQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		// other types of exceptions do invalidate the current transaction
-		result = make_uniq<PendingQueryResult>(PreservedError(ex));
+		pending = make_uniq<PendingQueryResult>(PreservedError(ex));
 	}
-	if (result->HasError()) {
+	if (pending->HasError()) {
 		// query failed: abort now
 		EndQueryInternal(lock, false, invalidate_query);
-		return result;
+		return pending;
 	}
-	D_ASSERT(active_query->IsOpenResult(*result));
-	return result;
+	D_ASSERT(active_query->IsOpenResult(*pending));
+	return pending;
 }
 
 void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
