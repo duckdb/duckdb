@@ -90,8 +90,8 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
 end
 
 function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
-    micros = [0]
-    tz = [0]
+    micros = [Int64(0)]
+    tz = [Int32(0)]
     duckdb_time_tz_extract(val, pointer(micros), pointer(tz))
     return Dates.Time(Dates.Nanosecond(micros[1] * 1000))
 end
