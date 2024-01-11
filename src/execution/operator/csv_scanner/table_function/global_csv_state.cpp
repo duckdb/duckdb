@@ -2,6 +2,8 @@
 
 #include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/main/appender.hpp"
 
 namespace duckdb {
 
@@ -61,8 +63,9 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	if (single_threaded) {
 		current_boundary = CSVIterator();
 	}
-	auto csv_scanner = make_uniq<StringValueScanner>(scanner_idx++,current_file.buffer_manager, current_file.state_machine,
-	                                                 current_file.error_handler, current_boundary);
+	auto csv_scanner =
+	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
+	                                  current_file.error_handler, current_boundary);
 	csv_scanner->csv_file_scan = file_scans.back();
 	// We then produce the next boundary
 	if (!current_boundary.Next(*current_file.buffer_manager)) {
@@ -98,11 +101,71 @@ void CSVGlobalState::DecrementThread() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	D_ASSERT(running_threads > 0);
 	running_threads--;
+	if (running_threads == 0) {
+		FillRejectsTable();
+	}
 }
 
-bool CSVGlobalState::Finished() {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	return running_threads == 0;
+void CSVGlobalState::FillRejectsTable() {
+	auto &options = bind_data.options;
+
+	if (!options.rejects_table_name.empty()) {
+		auto limit = options.rejects_limit;
+
+		auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
+		lock_guard<mutex> lock(rejects->write_lock);
+		auto &table = rejects->GetTable(context);
+		InternalAppender appender(context, table);
+
+		for (auto &file : file_scans) {
+			auto file_name = file->file_path;
+			auto &errors = file->error_handler->errors;
+			for (auto &error_info : errors) {
+				if (error_info.second.type != CSVErrorType::CAST_ERROR) {
+					// For now we only will use it for casting errors
+					continue;
+				}
+				// short circuit if we already have too many rejects
+				if (limit == 0 || rejects->count < limit) {
+					if (limit != 0 && rejects->count >= limit) {
+						break;
+					}
+					rejects->count++;
+					auto error = &error_info.second;
+					auto row_line = file->error_handler->GetLine(error_info.first);
+					auto col_idx = error->column_idx;
+					auto col_name = bind_data.return_names[col_idx];
+					// Add the row to the rejects table
+					appender.BeginRow();
+					appender.Append(string_t(file_name));
+					appender.Append(row_line);
+					appender.Append(col_idx);
+					appender.Append(string_t(col_name));
+					appender.Append(error->row[col_idx]);
+
+					if (!options.rejects_recovery_columns.empty()) {
+						child_list_t<Value> recovery_key;
+						for (auto &key_idx : options.rejects_recovery_column_ids) {
+							// Figure out if the recovery key is valid.
+							// If not, error out for real.
+							auto &value = error->row[key_idx];
+							if (value.IsNull()) {
+								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
+								                            "Could not parse recovery column", row_line, col_name,
+								                            options.ToString());
+							}
+							recovery_key.emplace_back(bind_data.return_names[key_idx], value);
+						}
+						appender.Append(Value::STRUCT(recovery_key));
+					}
+
+					appender.Append(string_t(error->original_error));
+					appender.EndRow();
+				}
+				appender.Close();
+			}
+		}
+	}
 }
 
 } // namespace duckdb

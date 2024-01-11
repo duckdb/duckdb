@@ -20,7 +20,7 @@ void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (ignore_errors) {
 		// We store this error
-		errors.push_back({error_info,csv_error});
+		errors.push_back({error_info, csv_error});
 		return;
 	}
 	std::ostringstream error;
@@ -50,6 +50,12 @@ void CSVErrorHandler::Insert(idx_t boundary_idx, idx_t rows) {
 CSVError::CSVError(string error_message_p, CSVErrorType type_p) : error_message(error_message_p), type(type_p) {
 }
 
+CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p,
+                   string original_error_p)
+    : error_message(error_message_p), type(type_p), column_idx(column_idx_p), row(row_p),
+      original_error(original_error_p) {
+}
+
 CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto it = sql_types_per_column.find(names[i]);
@@ -71,7 +77,7 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 }
 
 CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_chunk, idx_t chunk_row,
-                             string &column_name, string &cast_error) {
+                             string &column_name, string &cast_error, idx_t &column_idx, vector<Value> &row) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\"." << std::endl;
@@ -79,9 +85,9 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_c
 	error << cast_error << std::endl;
 	// What is the problematic CSV Line
 	error << "Problematic CSV Line:" << std::endl;
-	for (idx_t column_idx = 0; column_idx < parse_chunk.ColumnCount(); column_idx++) {
+	for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 		// error << parse_chunk.GetValue(column_idx, chunk_row).ToString();
-		if (column_idx < parse_chunk.ColumnCount() - 1) {
+		if (col < parse_chunk.ColumnCount() - 1) {
 			// we are not in the last line, add the delimiter
 			error << options.dialect_options.state_machine_options.delimiter.GetValue();
 		}
@@ -89,7 +95,7 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_c
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::CAST_ERROR);
+	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row, cast_error);
 }
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size) {

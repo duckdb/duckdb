@@ -32,9 +32,9 @@ public:
 	//! In case it returns a nullptr it means we are done reading these files.
 	unique_ptr<StringValueScanner> Next();
 
-	void DecrementThread();
+	void FillRejectsTable();
 
-	bool Finished();
+	void DecrementThread();
 
 	//! Returns Current Progress of this CSV Read
 	double GetProgress(const ReadCSVData &bind_data) const;
