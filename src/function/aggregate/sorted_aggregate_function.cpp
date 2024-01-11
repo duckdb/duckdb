@@ -189,7 +189,9 @@ struct SortedAggregateState {
 		}
 
 		if (count > CHUNK_CAPACITY && !ordering) {
-			InitializeChunks(order_bind);
+			if (CHUNK_CAPACITY < LIST_CAPACITY) {
+				FlushLinkedLists(order_bind);
+			}
 			InitializeCollections(order_bind);
 			FlushChunks(order_bind);
 		}
