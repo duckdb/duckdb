@@ -187,7 +187,10 @@ extension ResultSet {
   func transformer(
     forColumn columnIndex: DBInt, to type: Time.Type
   ) -> @Sendable (DBInt) -> Time? {
-    transformer(forColumn: columnIndex, to: type, fromType: .time) { try? $0.unwrap(type) }
+    let columnTypes = [DatabaseType.time, .timeTz]
+    return transformer(
+      forColumn: columnIndex, to: type, fromTypes: .init(columnTypes)
+    ) { try? $0.unwrap(type) }
   }
   
   func transformer(
@@ -199,7 +202,7 @@ extension ResultSet {
   func transformer(
     forColumn columnIndex: DBInt, to type: Timestamp.Type
   ) -> @Sendable (DBInt) -> Timestamp? {
-    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampTz, .timestampNS]
     return transformer(
       forColumn: columnIndex, to: type, fromTypes: .init(columnTypes)
     ) { try? $0.unwrap(type) }
