@@ -120,6 +120,11 @@ private extension Vector {
     return unsafelyUnwrapElement(as: duckdb_time.self, at: index) { $0.asTime }
   }
   
+  func unwrap(_ type: TimeTz.Type, at index: Int) throws -> Time {
+    try assertNonNullTypeMatch(of: type, at: index, withColumnType: .timeTz)
+    return unsafelyUnwrapElement(as: UInt64.self, at: index) { $0.asTime }
+  }
+
   func unwrap(_ type: Date.Type, at index: Int) throws -> Date {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .date)
     return unsafelyUnwrapElement(as: duckdb_date.self, at: index) { $0.asDate }
@@ -277,6 +282,7 @@ extension Vector.Element {
   func unwrap(_ type: Timestamp.Type) throws -> Timestamp  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Data.Type) throws -> Data  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Decimal.Type) throws -> Decimal  { try vector.unwrap(type, at: index) }
+  func unwrap(_ type: TimeTz.Type) throws -> Time { try vector.unwrap(type, at: index) }
 }
 
 // MARK: - Map Contents accessors

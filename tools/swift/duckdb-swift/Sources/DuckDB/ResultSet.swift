@@ -187,10 +187,14 @@ extension ResultSet {
   func transformer(
     forColumn columnIndex: DBInt, to type: Time.Type
   ) -> @Sendable (DBInt) -> Time? {
-    let columnTypes = [DatabaseType.time, .timeTz]
-    return transformer(
-      forColumn: columnIndex, to: type, fromTypes: .init(columnTypes)
-    ) { try? $0.unwrap(type) }
+    switch columnDataType(at: columnIndex) {
+      case .time:
+        return transformer(forColumn: columnIndex, to: type, fromType: .time) { try? $0.unwrap(type) }
+      case .timeTz:
+        return transformer(forColumn: columnIndex, to: Time.self, fromType: .timeTz) { try? $0.unwrap(TimeTz.self) }
+      default:
+        fatalError();
+    }
   }
   
   func transformer(

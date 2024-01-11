@@ -147,6 +147,16 @@ extension duckdb_time_struct {
   }
 }
 
+extension UInt64 {
+  var asTime: Time {
+    let out_micros = UnsafeMutablePointer<Int64>.allocate(capacity: 1);
+    let out_offset = UnsafeMutablePointer<Int32>.allocate(capacity: 1);
+    duckdb_time_tz_extract(self, out_micros, out_offset)
+    // TODO: use offset
+    return Time(microseconds: out_micros.pointee)
+  }
+}
+
 // MARK: - Date
 
 extension duckdb_date {
