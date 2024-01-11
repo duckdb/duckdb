@@ -507,7 +507,7 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_time
     elseif type == DUCKDB_TYPE_TIME_TZ
         return convert_time_tz
-    elseif type == DUCKDB_TYPE_TIMESTAMP
+    elseif type == DUCKDB_TYPE_TIMESTAMP || type == DUCKDB_TYPE_TIMESTAMP_TZ
         return convert_timestamp
     elseif type == DUCKDB_TYPE_TIMESTAMP_S
         return convert_timestamp_s
