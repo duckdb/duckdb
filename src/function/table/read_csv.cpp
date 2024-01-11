@@ -136,6 +136,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	result->return_types = return_types;
 	result->return_names = names;
+	result->csv_types = return_types;
+	result->csv_names = names;
 	result->FinalizeRead(context);
 	return std::move(result);
 }
