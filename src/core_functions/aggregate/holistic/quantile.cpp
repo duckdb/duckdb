@@ -1224,7 +1224,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 		return GetTypedContinuousQuantileListAggregateFunction<int64_t, double>(type, LogicalType::DOUBLE);
 	case LogicalTypeId::HUGEINT:
 		return GetTypedContinuousQuantileListAggregateFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
-
 	case LogicalTypeId::FLOAT:
 		return GetTypedContinuousQuantileListAggregateFunction<float, float>(type, type);
 	case LogicalTypeId::DOUBLE:
@@ -1242,8 +1241,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 		default:
 			throw NotImplementedException("Unimplemented discrete quantile DECIMAL list aggregate");
 		}
-		break;
-
 	case LogicalTypeId::DATE:
 		return GetTypedContinuousQuantileListAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
 	case LogicalTypeId::TIMESTAMP:
@@ -1252,7 +1249,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 		return GetTypedContinuousQuantileListAggregateFunction<dtime_t, dtime_t>(type, type);
-
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 	}
@@ -1415,9 +1411,6 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
                                     vector<unique_ptr<Expression>> &arguments) {
-	if (function.arguments[0].id() == LogicalTypeId::ANY) {
-		function.arguments[0] = LogicalType::VARCHAR;
-	}
 	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
@@ -1662,10 +1655,13 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
 }
 
 vector<LogicalType> GetQuantileTypes() {
-	return {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,      LogicalType::BIGINT,
-	        LogicalType::HUGEINT,   LogicalType::FLOAT,    LogicalType::DOUBLE,       LogicalType::DATE,
-	        LogicalType::TIMESTAMP, LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
-	        LogicalType::INTERVAL,  LogicalType::ANY};
+	return {LogicalType::TINYINT,      LogicalType::SMALLINT,
+	        LogicalType::INTEGER,      LogicalType::BIGINT,
+	        LogicalType::HUGEINT,      LogicalType::FLOAT,
+	        LogicalType::DOUBLE,       LogicalType::DATE,
+	        LogicalType::TIMESTAMP,    LogicalType::TIME,
+	        LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+	        LogicalType::INTERVAL,     LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150)};
 }
 
 AggregateFunctionSet MedianFun::GetFunctions() {

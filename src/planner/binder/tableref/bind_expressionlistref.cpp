@@ -50,9 +50,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 			}
 		}
 		for (auto &type : result->types) {
-			if (type.id() == LogicalTypeId::STRING_LITERAL) {
-				type = LogicalType::VARCHAR;
-			}
+			type = LogicalType::NormalizeType(type);
 		}
 		// finally do another loop over the expressions and add casts where required
 		for (idx_t list_idx = 0; list_idx < result->values.size(); list_idx++) {

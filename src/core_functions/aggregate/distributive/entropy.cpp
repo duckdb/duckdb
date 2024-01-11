@@ -120,12 +120,6 @@ AggregateFunction GetEntropyFunction(const LogicalType &input_type, const Logica
 	return fun;
 }
 
-static unique_ptr<FunctionData> EntropyVarcharBind(ClientContext &context, AggregateFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-	function.arguments[0] = LogicalType::VARCHAR;
-	return nullptr;
-}
-
 AggregateFunction GetEntropyFunctionInternal(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::UINT16:
@@ -153,11 +147,9 @@ AggregateFunction GetEntropyFunctionInternal(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<double>, double, double, EntropyFunction>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	case PhysicalType::VARCHAR: {
-		AggregateFunction result =
-		    AggregateFunction::UnaryAggregateDestructor<EntropyState<string>, string_t, double, EntropyFunctionString>(
-		        LogicalType::ANY, LogicalType::DOUBLE);
-		result.bind = EntropyVarcharBind;
-		return result;
+		return AggregateFunction::UnaryAggregateDestructor<EntropyState<string>, string_t, double,
+		                                                   EntropyFunctionString>(
+		    LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150), LogicalType::DOUBLE);
 	}
 
 	default:
