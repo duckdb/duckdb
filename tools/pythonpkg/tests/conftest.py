@@ -4,18 +4,12 @@ import shutil
 from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
-import warnings
-from importlib import import_module
 
 try:
-    # need to ignore warnings that might be thrown deep inside pandas's import tree (from dateutil in this case)
-    warnings.simplefilter(action='ignore', category=DeprecationWarning)
-    pandas = import_module('pandas')
-    warnings.resetwarnings()
+    import pandas
 
-    pyarrow_dtype = getattr(pandas, 'ArrowDtype', None)
-except ImportError:
-    pandas = None
+    pyarrow_dtype = pandas.ArrowDtype
+except:
     pyarrow_dtype = None
 
 # Check if pandas has arrow dtypes enabled
@@ -23,15 +17,8 @@ try:
     from pandas.compat import pa_version_under7p0
 
     pyarrow_dtypes_enabled = not pa_version_under7p0
-except ImportError:
+except:
     pyarrow_dtypes_enabled = False
-
-
-def import_pandas():
-    if pandas:
-        return pandas
-    else:
-        pytest.skip("Couldn't import pandas")
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
@@ -70,8 +57,9 @@ def duckdb_empty_cursor(request):
 
 def pandas_2_or_higher():
     from packaging.version import Version
+    import pandas as pd
 
-    return Version(import_pandas().__version__) >= Version('2.0.0')
+    return Version(pd.__version__) >= Version('2.0.0')
 
 
 def pandas_supports_arrow_backend():
@@ -80,13 +68,14 @@ def pandas_supports_arrow_backend():
 
         if pa_version_under7p0 == True:
             return False
-    except ImportError:
+    except:
         return False
     return pandas_2_or_higher()
 
 
 def numpy_pandas_df(*args, **kwargs):
-    return import_pandas().DataFrame(*args, **kwargs)
+    pandas = pytest.importorskip("pandas")
+    return pandas.DataFrame(*args, **kwargs)
 
 
 def arrow_pandas_df(*args, **kwargs):
@@ -98,19 +87,21 @@ class NumpyPandas:
     def __init__(self):
         self.backend = 'numpy_nullable'
         self.DataFrame = numpy_pandas_df
-        self.pandas = import_pandas()
+        self.pandas = pytest.importorskip("pandas")
 
-    def __getattr__(self, name: str):
-        return getattr(self.pandas, name)
+    def __getattr__(self, __name: str):
+        item = eval(f'self.pandas.{__name}')
+        return item
 
 
 def convert_arrow_to_numpy_backend(df):
+    pandas = pytest.importorskip("pandas")
     names = df.columns
     df_content = {}
     for name in names:
         df_content[name] = df[name].array.__arrow_array__()
     # This should convert the pyarrow chunked arrays into numpy arrays
-    return import_pandas().DataFrame(df_content)
+    return pandas.DataFrame(df_content)
 
 
 def convert_to_numpy(df):
@@ -126,16 +117,17 @@ def convert_to_numpy(df):
 def convert_and_equal(df1, df2, **kwargs):
     df1 = convert_to_numpy(df1)
     df2 = convert_to_numpy(df2)
-    import_pandas().testing.assert_frame_equal(df1, df2, **kwargs)
+    pytest.importorskip("pandas").testing.assert_frame_equal(df1, df2, **kwargs)
 
 
 class ArrowMockTesting:
     def __init__(self):
-        self.testing = import_pandas().testing
+        self.testing = pytest.importorskip("pandas").testing
         self.assert_frame_equal = convert_and_equal
 
-    def __getattr__(self, name: str):
-        return getattr(self.testing, name)
+    def __getattr__(self, __name: str):
+        item = eval(f'self.testing.{__name}')
+        return item
 
 
 # This converts dataframes constructed with 'DataFrame(...)' to pyarrow backed dataframes
@@ -143,7 +135,7 @@ class ArrowMockTesting:
 # this is done because we don't produce pyarrow backed dataframes yet
 class ArrowPandas:
     def __init__(self):
-        self.pandas = import_pandas()
+        self.pandas = pytest.importorskip("pandas")
         if pandas_2_or_higher() and pyarrow_dtypes_enabled:
             self.backend = 'pyarrow'
             self.DataFrame = arrow_pandas_df
@@ -153,8 +145,9 @@ class ArrowPandas:
             self.DataFrame = self.pandas.DataFrame
         self.testing = ArrowMockTesting()
 
-    def __getattr__(self, name: str):
-        return getattr(self.pandas, name)
+    def __getattr__(self, __name: str):
+        item = eval(f'self.pandas.{__name}')
+        return item
 
 
 @pytest.fixture(scope="function")

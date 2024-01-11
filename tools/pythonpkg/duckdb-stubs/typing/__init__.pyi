@@ -12,7 +12,6 @@ UINTEGER: DuckDBPyType
 BIGINT: DuckDBPyType
 UBIGINT: DuckDBPyType
 HUGEINT: DuckDBPyType
-UHUGEINT: DuckDBPyType
 UUID: DuckDBPyType
 FLOAT: DuckDBPyType
 DOUBLE: DuckDBPyType

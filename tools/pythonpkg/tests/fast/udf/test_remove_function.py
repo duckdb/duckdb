@@ -62,17 +62,24 @@ class TestRemoveFunction(object):
 
         con = duckdb.connect()
         con.create_function('func', func)
-
-        with pytest.raises(duckdb.BinderException, match='No function matches the given name'):
-            rel1 = con.sql('select func(42)')
-        rel2 = con.sql("select func('test'::VARCHAR)")
+        rel1 = con.sql('select func(42)')
+        rel2 = con.sql("select func('test')")
         con.remove_function('func')
 
         def also_func(x: int) -> int:
             return x
 
         con.create_function('func', also_func)
-        with pytest.raises(duckdb.InvalidInputException, match='No function matches the given name'):
+        res = rel1.fetchall()
+        assert res[0][0] == 42
+        """
+            Error: Binder Error: No function matches the given name and argument types 'func(VARCHAR)'. You might need to add explicit type casts.
+                Candidate functions:
+                func(BIGINT) -> BIGINT
+        """
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Attempting to execute an unsuccessful or closed pending query result'
+        ):
             res = rel2.fetchall()
 
     def test_overwrite_name(self):
@@ -84,7 +91,7 @@ class TestRemoveFunction(object):
         con.create_function('func', func, [BIGINT], BIGINT)
 
         # create relation that uses the function
-        rel1 = con.sql("select func('3')")
+        rel1 = con.sql('select func(3)')
 
         def other_func(x):
             return x

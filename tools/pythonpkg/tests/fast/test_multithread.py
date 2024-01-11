@@ -11,7 +11,7 @@ try:
     import pyarrow as pa
 
     can_run = True
-except ImportError:
+except:
     can_run = False
 
 

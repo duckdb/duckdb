@@ -157,7 +157,6 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case UINTEGER:
             return Long.class.getName();
         case HUGEINT:
-        case UHUGEINT:
         case UBIGINT:
             return BigInteger.class.getName();
         case FLOAT:

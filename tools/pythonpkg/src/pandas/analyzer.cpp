@@ -139,7 +139,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 		}
 	}
 	// If one of the types is map, this will set the resulting type to map
-	left = LogicalType::ForceMaxLogicalType(left, right);
+	left = LogicalType::MaxLogicalType(left, right);
 	return true;
 }
 

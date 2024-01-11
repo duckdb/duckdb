@@ -51,9 +51,8 @@ public class DuckDBTimestamp {
 
     public static OffsetTime toOffsetTime(long timeBits) {
         long timeMicros = timeBits >> 24;   // High 40 bits are micros
-        long offset = timeBits & 0x0FFFFFF; // Low 24 bits are inverted biased offset in seconds
-        long max_offset = 16 * 60 * 60 - 1; // ±15:59:59
-        offset = max_offset - offset;
+        long offset = timeBits & 0x0FFFFFF; // Low 24 bits are biased offset in seconds
+        offset -= 1559 * 60 * 60;
         int sign = (offset < 0) ? -1 : 1;
         offset = Math.abs(offset);
 
@@ -63,7 +62,7 @@ public class DuckDBTimestamp {
         int mm = (int) offset % 60;
         int hh = (int) offset / 60;
 
-        if (hh > 15) {
+        if (hh > 18) {
             return OffsetTime.of(toLocalTime(timeMicros), ZoneOffset.UTC);
         } else {
             return OffsetTime.of(toLocalTime(timeMicros),

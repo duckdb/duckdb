@@ -9,7 +9,6 @@ from duckdb.typing import (
     DOUBLE,
     FLOAT,
     HUGEINT,
-    UHUGEINT,
     INTEGER,
     INTERVAL,
     SMALLINT,
@@ -102,11 +101,6 @@ class LongValue(Value):
 class HugeIntegerValue(Value):
     def __init__(self, object: Any):
         super().__init__(object, HUGEINT)
-
-
-class UnsignedHugeIntegerValue(Value):
-    def __init__(self, object: Any):
-        super().__init__(object, UHUGEINT)
 
 
 # Fractional
@@ -248,7 +242,6 @@ __all__ = [
     "IntegerValue",
     "LongValue",
     "HugeIntegerValue",
-    "UnsignedHugeIntegerValue",
     "FloatValue",
     "DoubleValue",
     "DecimalValue",
