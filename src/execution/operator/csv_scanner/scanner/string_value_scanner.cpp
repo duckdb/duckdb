@@ -89,6 +89,9 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	D_ASSERT(result.result_position < result.vector_size);
+	if (result.result_position == result.vector_size) {
+		result.HandleOverLimitRows();
+	}
 	if (result.quoted) {
 		StringValueResult::AddQuotedValue(result, buffer_pos - 1);
 	} else {
@@ -117,6 +120,14 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	}
 }
 
+void StringValueResult::HandleOverLimitRows() {
+	auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, vector_ptr, number_of_columns,
+	                                                      number_of_columns + result_position % number_of_columns);
+	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), result_position / number_of_columns + 1);
+	error_handler.Error(lines_per_batch, csv_error);
+	result_position -= result_position % number_of_columns + number_of_columns;
+}
+
 void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - previous_line_start;
@@ -127,6 +138,9 @@ void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	}
 	pre_previous_line_start = previous_line_start;
 	previous_line_start = current_line_start;
+	if (result_position == vector_size) {
+		HandleOverLimitRows();
+	}
 	// We add the value
 	if (quoted) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
@@ -186,13 +200,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 				result.result_position--;
 				result.validity_mask->SetValid(result.result_position);
 			} else {
-				auto csv_error = CSVError::IncorrectColumnAmountError(
-				    result.state_machine.options, result.vector_ptr, result.number_of_columns,
-				    result.number_of_columns + result.result_position % result.number_of_columns);
-				LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(),
-				                                 result.result_position / result.number_of_columns + 1);
-				result.error_handler.Error(lines_per_batch, csv_error);
-				result.result_position -= result.result_position % result.number_of_columns + result.number_of_columns;
+				result.HandleOverLimitRows();
 			}
 			D_ASSERT(result.result_position % result.number_of_columns == 0);
 			result.maybe_too_many_columns = false;

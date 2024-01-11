@@ -79,7 +79,13 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	DetectHeader();
 	// 5. Type Replacement
 	ReplaceTypes();
-	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors){
+	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors) {
+		for (auto &error : best_candidate->error_handler->errors) {
+			if (error.second.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
+				// If it's a maximul line size error, we can do it now.
+				error_handler->Error(error.second);
+			}
+		}
 		auto error = CSVError::SniffingError(options.file_path);
 		error_handler->Error(error);
 	}
