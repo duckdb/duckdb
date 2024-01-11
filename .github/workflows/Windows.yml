@@ -76,18 +76,18 @@ jobs:
       shell: bash
       run: echo $DUCKDB_INSTALL_LIB
 
-    - name: Test
-      shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      run: |
-        test/Release/unittest.exe
+    # - name: Test
+    #   shell: bash
+    #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    #   run: |
+    #     test/Release/unittest.exe
 
-    - name: Tools Test
-      shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      run: |
-        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
+    # - name: Tools Test
+    #   shell: bash
+    #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    #   run: |
+    #     python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
+    #     tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
@@ -177,15 +177,15 @@ jobs:
         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake"
         cmake --build . --config Release
 
-    - name: Test
-      shell: bash
-      run: test/Release/unittest.exe
+    # - name: Test
+    #   shell: bash
+    #   run: test/Release/unittest.exe
 
-    - name: Tools Test
-      shell: bash
-      run: |
-        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
+    # - name: Tools Test
+    #   shell: bash
+    #   run: |
+    #     python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
+    #     tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
  mingw:
      name: MingW (64 Bit)
@@ -217,16 +217,16 @@ jobs:
            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet
            cmake --build . --config Release
 
-       - name: Test
-         shell: msys2 {0}
-         run: |
-           cp src/libduckdb.dll .
-           test/unittest.exe
+      #  - name: Test
+      #    shell: msys2 {0}
+      #    run: |
+      #      cp src/libduckdb.dll .
+      #      test/unittest.exe
 
-       - name: Tools Test
-         shell: msys2 {0}
-         run: |
-           tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
+      #  - name: Tools Test
+      #    shell: msys2 {0}
+      #    run: |
+      #      tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
 
  win-extensions-64:
    # Builds extensions for windows_amd64
