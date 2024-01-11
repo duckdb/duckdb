@@ -438,7 +438,7 @@ TEST_CASE("decompose timetz with duckdb_time_tz_extract", "[capi]") {
 	REQUIRE(val.sec == 0);
 	REQUIRE(val.micros == 123456);
 
-	REQUIRE(offset == 7200);
+	REQUIRE(offset == -7200);
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
