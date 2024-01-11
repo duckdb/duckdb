@@ -114,7 +114,8 @@ public:
 
 	//! If this scanner is being used for sniffing
 	bool sniffing = false;
-
+	//! The guy that handles errors
+	shared_ptr<CSVErrorHandler> error_handler;
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;
@@ -137,8 +138,7 @@ protected:
 	idx_t lines_read = 0;
 	//! States
 	CSVStates states;
-	//! The guy that handles errors
-	shared_ptr<CSVErrorHandler> error_handler;
+
 
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner

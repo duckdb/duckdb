@@ -14,7 +14,7 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	// Initialize max columns found to either 0 or however many were set
 	max_columns_found = set_columns.Size();
 	error_handler = make_shared<CSVErrorHandler>(options.ignore_errors);
-	detection_error_handler = make_shared<CSVErrorHandler>(options.ignore_errors);
+	detection_error_handler = make_shared<CSVErrorHandler>(true);
 }
 
 bool SetColumns::IsSet() {
@@ -79,6 +79,10 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	DetectHeader();
 	// 5. Type Replacement
 	ReplaceTypes();
+	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors){
+		auto error = CSVError::SniffingError(options.file_path);
+		error_handler->Error(error);
+	}
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.
 	SetResultOptions();

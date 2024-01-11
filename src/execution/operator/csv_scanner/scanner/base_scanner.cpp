@@ -23,8 +23,8 @@ void ScannerResult::SetEscaped(ScannerResult &result) {
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                          shared_ptr<CSVErrorHandler> error_handler_p, CSVIterator iterator_p)
-    : iterator(iterator_p), buffer_manager(buffer_manager_p), state_machine(state_machine_p),
-      error_handler(error_handler_p) {
+    : error_handler(error_handler_p), iterator(iterator_p), buffer_manager(buffer_manager_p),
+      state_machine(state_machine_p) {
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
 	// Initialize current buffer handle
