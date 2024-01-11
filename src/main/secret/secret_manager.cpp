@@ -168,8 +168,9 @@ optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransacti
 	if (persist_type == SecretPersistType::PERSISTENT) {
 		if (backend->persistent) {
 			if (!config.allow_persistent_secrets) {
-				throw InvalidInputException("Persistent secrets are currently disabled. To enable them, restart duckdb and "
-				                            "run 'SET allow_persistent_secrets=true'");
+				throw InvalidInputException(
+				    "Persistent secrets are currently disabled. To enable them, restart duckdb and "
+				    "run 'SET allow_persistent_secrets=true'");
 			}
 		} else { // backend is temp
 			throw InvalidInputException("Cannot create persistent secrets in a temporary secret storage!");
@@ -496,7 +497,7 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 
 		// load the persistent storage if enabled
 		LoadSecretStorageInternal(
-			make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path));
+		    make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path));
 
 		initialized = true;
 	}
