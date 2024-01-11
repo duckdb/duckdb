@@ -56,7 +56,13 @@ statement ok
 CREATE TABLE varchars2 AS SELECT * FROM varchars
 
 query IIIII
-SELECT MIN(v), MAX(v), COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM varchars
+SELECT
+	MIN(v),
+	MAX(v),
+	COUNT(*),
+	COUNT(v),
+	COUNT(DISTINCT v)
+FROM varchars
 ----
 thisismyvarchar-0	thisismyvarchar-99999	1000000	500000	250000
 

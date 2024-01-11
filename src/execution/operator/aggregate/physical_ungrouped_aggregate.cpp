@@ -408,7 +408,7 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
 private:
-	void AggregateDistinct();
+	TaskExecutionResult AggregateDistinct();
 
 private:
 	shared_ptr<Event> event;
@@ -457,12 +457,15 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 }
 
 TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::ExecuteTask(TaskExecutionMode mode) {
-	AggregateDistinct();
+	auto res = AggregateDistinct();
+	if (res == TaskExecutionResult::TASK_BLOCKED) {
+		return res;
+	}
 	event->FinishTask();
 	return TaskExecutionResult::TASK_FINISHED;
 }
 
-void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
+TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	D_ASSERT(gstate.distinct_state);
 	auto &distinct_state = *gstate.distinct_state;
 	auto &distinct_data = *op.distinct_data;
@@ -497,7 +500,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 		auto lstate = radix_table.GetLocalSourceState(execution_context);
 
 		auto &sink = *distinct_state.radix_states[table_idx];
-		InterruptState interrupt_state;
+		InterruptState interrupt_state(shared_from_this());
 		OperatorSourceInput source_input {*finalize_event.global_source_states[agg_idx], *lstate, interrupt_state};
 
 		DataChunk output_chunk;
@@ -516,8 +519,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 				D_ASSERT(output_chunk.size() == 0);
 				break;
 			} else if (res == SourceResultType::BLOCKED) {
-				throw InternalException(
-				    "Unexpected interrupt from radix table GetData in UngroupedDistinctAggregateFinalizeTask");
+				return TaskExecutionResult::TASK_BLOCKED;
 			}
 
 			// We dont need to resolve the filter, we already did this in Sink
@@ -559,6 +561,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	if (++finalize_event.tasks_done == finalize_event.tasks_scheduled) {
 		gstate.finished = true;
 	}
+	return TaskExecutionResult::TASK_FINISHED;
 }
 
 SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
