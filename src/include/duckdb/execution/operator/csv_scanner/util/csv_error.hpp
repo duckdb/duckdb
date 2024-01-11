@@ -22,11 +22,11 @@ namespace duckdb {
 
 struct BatchInfo {
 	BatchInfo();
-	BatchInfo(idx_t file_idx, idx_t batch_idx);
+	BatchInfo(idx_t file_idx, idx_t boundary_idx);
 	idx_t file_idx;
-	idx_t batch_idx;
+	idx_t boundary_idx;
 	bool operator==(const BatchInfo &other) const {
-		return file_idx == other.file_idx && batch_idx == other.batch_idx;
+		return file_idx == other.file_idx && boundary_idx == other.boundary_idx;
 	}
 };
 
@@ -37,13 +37,12 @@ public:
 
 	BatchInfo batch_info;
 	idx_t lines_in_batch = 0;
-	bool finished;
 };
 
 //! Hash function used in to hash the Lines Per Batch Information
 struct HashCSVBatchInfo {
 	size_t operator()(BatchInfo const &batch_info) const noexcept {
-		return CombineHash(batch_info.file_idx, batch_info.batch_idx);
+		return CombineHash(batch_info.file_idx, batch_info.boundary_idx);
 	}
 };
 
@@ -88,7 +87,7 @@ public:
 	//! Throws the error
 	void Error(CSVError &csv_error);
 	//! Inserts a finished error info
-	void Insert(idx_t file_idx, idx_t batch_idx, idx_t rows);
+	void Insert(idx_t file_idx, idx_t boundary_idx, idx_t rows);
 
 private:
 	//! Return the 1-indexed line number
