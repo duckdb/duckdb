@@ -130,6 +130,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_BIT,
 	// uint64_t (40 bits for int64_t micros, and 24 bits for int32_t offset)
 	DUCKDB_TYPE_TIME_TZ,
+	DUCKDB_TYPE_TIMESTAMP_TZ,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01

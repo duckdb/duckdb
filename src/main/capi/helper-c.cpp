@@ -32,6 +32,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::DOUBLE;
 	case DUCKDB_TYPE_TIMESTAMP:
 		return LogicalTypeId::TIMESTAMP;
+	case DUCKDB_TYPE_TIMESTAMP_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_DATE:
 		return LogicalTypeId::DATE;
 	case DUCKDB_TYPE_TIME:
@@ -87,8 +89,9 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	case LogicalTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		return DUCKDB_TYPE_TIMESTAMP;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return DUCKDB_TYPE_TIMESTAMP_TZ;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return DUCKDB_TYPE_TIMESTAMP_S;
 	case LogicalTypeId::TIMESTAMP_MS:
