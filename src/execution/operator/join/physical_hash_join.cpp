@@ -29,6 +29,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 
+	// Collect condition types, and which conditions are just references (so we won't duplicate them in the payload)
 	unordered_map<idx_t, idx_t> build_columns_in_conditions;
 	for (idx_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
 		auto &condition = conditions[cond_idx];
@@ -38,12 +39,14 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		}
 	}
 
-	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build/rhs types are empty
+	// For ANTI, SEMI and MARK join, we only need to store the keys, so for these the payload/RHS types are empty
 	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI || join_type == JoinType::MARK) {
 		return;
 	}
 
 	auto &rhs_input_types = children[1]->GetTypes();
+
+	// Create a projection map for the RHS (if it was empty), for convenience
 	auto right_projection_map_copy = right_projection_map;
 	if (right_projection_map_copy.empty()) {
 		right_projection_map_copy.reserve(rhs_input_types.size());
@@ -52,17 +55,18 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		}
 	}
 
+	// Now fill payload expressions/types and RHS columns/types
 	for (auto &rhs_col : right_projection_map_copy) {
 		auto &rhs_col_type = rhs_input_types[rhs_col];
 
 		auto it = build_columns_in_conditions.find(rhs_col);
 		if (it == build_columns_in_conditions.end()) {
-			// this rhs column is not a join key
+			// This rhs column is not a join key
 			payload_expressions.push_back(make_uniq<BoundReferenceExpression>(rhs_col_type, rhs_col));
 			payload_types.push_back(rhs_col_type);
 			rhs_output_columns.push_back(condition_types.size() + payload_types.size() - 1);
 		} else {
-			// this rhs column is a join key
+			// This rhs column is a join key
 			rhs_output_columns.push_back(it->second);
 		}
 		rhs_output_types.push_back(rhs_col_type);
