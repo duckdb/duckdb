@@ -82,13 +82,20 @@ jobs:
     - name: Deploy
       shell: bash
       run: |
-        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/include/duckdb.h
+        python3 scripts/amalgamation.py
+        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
+        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
+        zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
+        python3 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
     - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-linux
         path: |
           libduckdb-linux-amd64.zip
+          duckdb_cli-linux-amd64.zip
+          duckdb_odbc-linux-amd64.zip
 
  linux-release-aarch64:
    # Builds binaries for linux_arm64
@@ -134,13 +141,19 @@ jobs:
      - name: Deploy
        shell: bash
        run: |
-         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/include/duckdb.h
+         python3 scripts/amalgamation.py
+         zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
+         zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
+         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+         python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v3
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
            libduckdb-linux-aarch64.zip
+           duckdb_odbc-linux-aarch64.zip
+           duckdb_cli-linux-aarch64.zip
 
  # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
  # note that the linux-release-64 is based on the manylinux-based extensions, which are built in .github/workflows/Python.yml

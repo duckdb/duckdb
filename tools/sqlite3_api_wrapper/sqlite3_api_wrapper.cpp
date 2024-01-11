@@ -111,9 +111,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_UNSIGNED_EXTENSIONS) {
 			config.options.allow_unsigned_extensions = true;
 		}
-		if (flags & DUCKDB_UNREDACTED_SECRETS) {
-			config.options.allow_unredacted_secrets = true;
-		}
+//		if (flags & DUCKDB_UNREDACTED_SECRETS) {
+//			config.options.allow_unredacted_secrets = true;
+//		}
 
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,
