@@ -49,14 +49,13 @@ struct CSVPosition {
 	idx_t file_idx = 0;
 	//! Start Buffer index of the file where we start scanning
 	idx_t buffer_idx = 0;
-
 	//! Start Buffer position of the buffer of the file where we start scanning
 	//! This position moves as we move through the buffer
 	idx_t buffer_pos = 0;
 };
 struct CSVIterator {
 public:
-	CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx);
+	CSVIterator(idx_t file_idx, idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t buffer_size);
 
 	CSVIterator();
 

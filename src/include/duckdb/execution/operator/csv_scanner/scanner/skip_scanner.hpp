@@ -19,7 +19,6 @@ namespace duckdb {
 class SkipResult : public ScannerResult {
 public:
 	SkipResult(CSVStates &states, CSVStateMachine &state_machine, idx_t rows_to_skip);
-	idx_t &operator[](size_t index);
 
 	idx_t row_count = 0;
 	idx_t rows_to_skip;

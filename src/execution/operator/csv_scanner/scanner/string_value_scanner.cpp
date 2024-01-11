@@ -20,12 +20,13 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 
 	// Buffer Information
 	buffer_ptr = buffer_handle.Ptr();
+	buffer_size = buffer_handle.actual_size;
 	last_position = buffer_position;
 
 	// Current Result information
 	result_position = 0;
-	pre_previous_line_start = iterator.pos;
-	previous_line_start = iterator.pos;
+	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle.actual_size};
+	pre_previous_line_start = previous_line_start;
 	// Initialize Parse Chunk
 	parse_chunk.Initialize(buffer_allocator, {number_of_columns, LogicalType::VARCHAR}, result_size);
 }
@@ -58,7 +59,9 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 	if (result.escaped) {
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		string removed_escapes;
-		StringValueScanner::RemoveEscape(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2,result.state_machine.options.GetEscape()[0], removed_escapes);
+		StringValueScanner::RemoveEscape(result.buffer_ptr + result.last_position + 1,
+		                                 buffer_pos - result.last_position - 2,
+		                                 result.state_machine.options.GetEscape()[0], removed_escapes);
 		result.vector_ptr[result.result_position++] =
 		    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 	} else {
@@ -115,12 +118,8 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::AddRowInternal(idx_t buffer_pos) {
-	idx_t current_line_size;
-	if (iterator.pos.buffer_idx == previous_line_start.buffer_idx) {
-		current_line_size = iterator.pos.buffer_pos - previous_line_start.buffer_pos;
-	} else {
-		current_line_size = 0;
-	}
+	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
+	idx_t current_line_size = current_line_start - previous_line_start;
 	if (current_line_size > state_machine.options.maximum_line_size) {
 		auto csv_error = CSVError::LineSizeError(state_machine.options, current_line_size);
 		LinesPerBatch lines_per_batch(iterator.GetFileIdx(), iterator.GetBufferIdx(),
@@ -128,7 +127,7 @@ void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 		error_handler.Error(lines_per_batch, csv_error);
 	}
 	pre_previous_line_start = previous_line_start;
-	previous_line_start = iterator.pos;
+	previous_line_start = current_line_start;
 	// We add the value
 	if (quoted) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
@@ -409,7 +408,8 @@ void StringValueScanner::Initialize() {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
-	result.previous_line_start = iterator.pos;
+	result.previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, cur_buffer_handle->actual_size};
+
 	result.pre_previous_line_start = result.previous_line_start;
 }
 
@@ -450,7 +450,7 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-void StringValueScanner::RemoveEscape(char* str_ptr, idx_t end,char escape, string& removed_escapes){
+void StringValueScanner::RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes) {
 	bool just_escaped = false;
 	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
 		char c = str_ptr[cur_pos];
@@ -485,14 +485,16 @@ void StringValueScanner::ProcessOverbufferValue() {
 
 	if (iterator.pos.buffer_pos == 0 || iterator.pos.buffer_pos == 1) {
 		// Value is only on the first buffer
-		if (escaped){
+		if (escaped) {
 			string removed_escapes;
-			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1,state_machine->options.GetEscape()[0], removed_escapes);
+			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
+			                                 first_buffer_length - 1, state_machine->options.GetEscape()[0],
+			                                 removed_escapes);
 			result.vector_ptr[result.result_position++] =
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
-		} else{
+		} else {
 			result.vector_ptr[cur_value_idx] =
-		    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1);
+			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1);
 		}
 	} else {
 		// Figure out the max string length
@@ -540,6 +542,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 		previous_buffer_handle = std::move(cur_buffer_handle);
 		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
 		if (!cur_buffer_handle) {
+			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || result.added_last_line) {
@@ -564,6 +567,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 		// Handle overbuffer value
 		ProcessOverbufferValue();
 		result.buffer_ptr = buffer_handle_ptr;
+		result.buffer_size = cur_buffer_handle->actual_size;
+
 		return true;
 	}
 	return false;
@@ -589,12 +594,6 @@ void StringValueScanner::SkipCSVRows() {
 	} else {
 		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 1;
 	}
-	//! FIXME: This will get borked if we skip more than one full boundary, we probably need to do the skipping before
-	//! parallelizing
-	if (iterator.pos.buffer_pos >= iterator.GetEndPos()) {
-		throw InvalidInputException("We only support skipping lines up to the first 8 Mb of the file");
-	}
-
 	lines_read += row_skipper.GetLinesRead();
 }
 
@@ -640,7 +639,8 @@ void StringValueScanner::SetStart() {
 			return;
 		}
 	}
-	iterator.pos = scan_finder.result.pre_previous_line_start;
+	iterator.pos.buffer_idx = scan_finder.result.pre_previous_line_start.buffer_idx;
+	iterator.pos.buffer_pos = scan_finder.result.pre_previous_line_start.buffer_pos;
 }
 
 void StringValueScanner::FinalizeChunkProcess() {

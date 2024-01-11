@@ -15,6 +15,26 @@
 
 namespace duckdb {
 
+//! Class that keeps track of line starts, used for line size verification
+class LinePosition {
+public:
+	LinePosition() {
+	}
+	LinePosition(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t buffer_size_p)
+	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
+	}
+
+	idx_t operator-(const LinePosition &other) {
+		if (other.buffer_idx == buffer_idx) {
+			return buffer_pos - other.buffer_pos;
+		}
+		return other.buffer_size - other.buffer_pos + buffer_pos;
+	}
+	idx_t buffer_pos = 0;
+	idx_t buffer_size = 0;
+	idx_t buffer_idx = 0;
+};
+
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
@@ -30,6 +50,7 @@ public:
 	//! Variables to iterate over the CSV buffers
 	idx_t last_position;
 	char *buffer_ptr;
+	idx_t buffer_size;
 
 	//! CSV Options that impact the parsing
 	const idx_t number_of_columns;
@@ -48,8 +69,8 @@ public:
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
 	//! Where the previous line started, used to validate the maximum_line_size option
-	CSVPosition previous_line_start;
-	CSVPosition pre_previous_line_start;
+	LinePosition previous_line_start;
+	LinePosition pre_previous_line_start;
 
 	bool added_last_line = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
@@ -94,7 +115,7 @@ public:
 	bool FinishedIterator();
 
 	//! Creates a new string with all escaped values removed
-	static void RemoveEscape(char* str_ptr, idx_t end, char escape, string& removed_escapes);
+	static void RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes);
 
 private:
 	void Initialize() override;
