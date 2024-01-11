@@ -1,6 +1,5 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/show_statement.hpp"
-#include "duckdb/planner/operator/logical_show.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"

@@ -94,8 +94,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CTE";
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		return "CTE_SCAN";
-	case LogicalOperatorType::LOGICAL_SHOW:
-		return "SHOW";
 	case LogicalOperatorType::LOGICAL_ALTER:
 		return "ALTER";
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:

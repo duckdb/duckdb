@@ -1,0 +1,19 @@
+# name: test/sql/show_select/describe_subquery.test
+# description: Test describe in subquery
+# group: [show_select]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT column_name FROM (DESCRIBE SELECT 42 AS a)
+----
+a
+
+query I
+SELECT t.column_name FROM (DESCRIBE SELECT 42 AS a) t
+----
+a
+
+statement ok
+(DESCRIBE SELECT 42 AS a)

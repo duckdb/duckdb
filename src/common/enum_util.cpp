@@ -2848,8 +2848,6 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_DETACH";
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "LOGICAL_EXPLAIN";
-	case LogicalOperatorType::LOGICAL_SHOW:
-		return "LOGICAL_SHOW";
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return "LOGICAL_PREPARE";
 	case LogicalOperatorType::LOGICAL_EXECUTE:
@@ -3030,9 +3028,6 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_EXPLAIN")) {
 		return LogicalOperatorType::LOGICAL_EXPLAIN;
-	}
-	if (StringUtil::Equals(value, "LOGICAL_SHOW")) {
-		return LogicalOperatorType::LOGICAL_SHOW;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_PREPARE")) {
 		return LogicalOperatorType::LOGICAL_PREPARE;
@@ -5993,6 +5988,8 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 		return "EMPTY";
 	case TableReferenceType::PIVOT:
 		return "PIVOT";
+	case TableReferenceType::SHOW_REF:
+		return "SHOW_REF";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6026,6 +6023,9 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PIVOT")) {
 		return TableReferenceType::PIVOT;
+	}
+	if (StringUtil::Equals(value, "SHOW_REF")) {
+		return TableReferenceType::SHOW_REF;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
