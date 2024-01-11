@@ -37,9 +37,9 @@ public:
 	//! The types of the join keys
 	vector<LogicalType> condition_types;
 
-	//! The expressions for getting the build columns
-	vector<unique_ptr<Expression>> payload_expressions;
-	//! The types of the build columns
+	//! The indices for getting the payload columns
+	vector<idx_t> payload_column_idxs;
+	//! The types of the payload columns
 	vector<LogicalType> payload_types;
 
 	//! Positions of the RHS columns that need to output

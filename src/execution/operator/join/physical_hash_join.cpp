@@ -62,7 +62,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		auto it = build_columns_in_conditions.find(rhs_col);
 		if (it == build_columns_in_conditions.end()) {
 			// This rhs column is not a join key
-			payload_expressions.push_back(make_uniq<BoundReferenceExpression>(rhs_col_type, rhs_col));
+			payload_column_idxs.push_back(rhs_col);
 			payload_types.push_back(rhs_col_type);
 			rhs_output_columns.push_back(condition_types.size() + payload_types.size() - 1);
 		} else {
@@ -132,8 +132,7 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
-	    : join_key_executor(context), payload_executor(context) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : join_key_executor(context) {
 		auto &allocator = BufferAllocator::Get(context);
 
 		for (auto &cond : op.conditions) {
@@ -141,10 +140,7 @@ public:
 		}
 		join_keys.Initialize(allocator, op.condition_types);
 
-		if (!op.payload_expressions.empty()) {
-			for (auto &payload_expr : op.payload_expressions) {
-				payload_executor.AddExpression(*payload_expr);
-			}
+		if (!op.payload_types.empty()) {
 			payload_chunk.Initialize(allocator, op.payload_types);
 		}
 
@@ -158,7 +154,6 @@ public:
 	ExpressionExecutor join_key_executor;
 	DataChunk join_keys;
 
-	ExpressionExecutor payload_executor;
 	DataChunk payload_chunk;
 
 	//! Thread-local HT
@@ -240,7 +235,10 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	} else {
 		// there are payload columns
 		lstate.payload_chunk.Reset();
-		lstate.payload_executor.Execute(chunk, lstate.payload_chunk);
+		lstate.payload_chunk.SetCardinality(chunk);
+		for (idx_t i = 0; i < payload_column_idxs.size(); i++) {
+			lstate.payload_chunk.data[i].Reference(chunk.data[payload_column_idxs[i]]);
+		}
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
