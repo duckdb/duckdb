@@ -90,7 +90,7 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
 end
 
 function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
-    time_tz = duckdb_time_tz_extract(val)
+    time_tz = duckdb_from_time_tz(val)
     # TODO: how to preserve the offset?
     return Dates.Time(Dates.Nanosecond(time_tz.micros * 1000))
 end

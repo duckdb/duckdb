@@ -44,7 +44,7 @@ duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	return result;
 }
 
-duckdb_time_tz_struct duckdb_time_tz_extract(duckdb_time_tz micros) {
+duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz micros) {
 	duckdb::dtime_tz_t time(micros.micros);
 	duckdb_time_tz_struct result;
 	result.time.micros = time.time().micros;

@@ -413,7 +413,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<string>(0, 0) == "-123.45");
 }
 
-TEST_CASE("decompose timetz with duckdb_time_tz_extract", "[capi]") {
+TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
 	CAPITester tester;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -428,7 +428,7 @@ TEST_CASE("decompose timetz with duckdb_time_tz_extract", "[capi]") {
 
 	auto data = (duckdb_time_tz *)chunk->GetData(0);
 
-	auto time_tz = duckdb_time_tz_extract(data[0]);
+	auto time_tz = duckdb_from_time_tz(data[0]);
 
 	auto val = duckdb_from_time(time_tz.time);
 	REQUIRE(val.hour == 11);

@@ -935,7 +935,7 @@ Use `duckdb_from_time` to further decompose the micros into hour, minute, second
 * out_micros: The microsecond component of the time.
 * out_offset: The timezone offset component of the time.
 */
-DUCKDB_API duckdb_time_tz_struct duckdb_time_tz_extract(duckdb_time_tz micros);
+DUCKDB_API duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz micros);
 
 /*!
 Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).

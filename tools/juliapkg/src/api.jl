@@ -788,7 +788,7 @@ Use `duckdb_from_time` to further decompose the micros into hour, minute, second
 * out_offset: The timezone offset component of the time.
 """
 function duckdb_time_tz_extract(val)
-    return ccall((:duckdb_time_tz_extract, libduckdb), duckdb_time_tz, (UInt64,), val)
+    return ccall((:duckdb_from_time_tz, libduckdb), duckdb_time_tz, (UInt64,), val)
 end
 
 #
