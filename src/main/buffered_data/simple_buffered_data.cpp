@@ -88,7 +88,7 @@ void SimpleBufferedData::Append(unique_ptr<DataChunk> chunk, optional_idx batch)
 	D_ASSERT(!batch.IsValid());
 	unique_lock<mutex> lock(glock);
 	buffered_count += chunk->size();
-	//printf("buffered_count: %llu\n", buffered_count.load());
+	printf("buffered_count: %llu\n", buffered_count.load());
 	buffered_chunks.push(std::move(chunk));
 }
 
