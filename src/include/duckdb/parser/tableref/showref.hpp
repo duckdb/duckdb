@@ -16,10 +16,7 @@
 
 namespace duckdb {
 
-enum class ShowType : uint8_t {
-	SUMMARY,
-	DESCRIBE
-};
+enum class ShowType : uint8_t { SUMMARY, DESCRIBE };
 
 //! Represents a SHOW/DESCRIBE/SUMMARIZE statement
 class ShowRef : public TableRef {
@@ -35,7 +32,6 @@ public:
 	unique_ptr<QueryNode> query;
 	//! Whether or not we are requesting a summary or a describe
 	ShowType show_type;
-
 
 public:
 	string ToString() const override;

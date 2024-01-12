@@ -31,7 +31,6 @@ class UpdateStatement;
 class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;
-class ShowStatement;
 class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;

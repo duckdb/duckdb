@@ -14,7 +14,8 @@
 namespace duckdb {
 
 string PragmaTableInfo(ClientContext &context, const FunctionParameters &parameters) {
-	return StringUtil::Format("SELECT * FROM pragma_table_info(%s);", KeywordHelper::WriteQuoted(parameters.values[0].ToString(), '\''));
+	return StringUtil::Format("SELECT * FROM pragma_table_info(%s);",
+	                          KeywordHelper::WriteQuoted(parameters.values[0].ToString(), '\''));
 }
 
 string PragmaShowTables() {

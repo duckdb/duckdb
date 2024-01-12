@@ -253,7 +253,6 @@ private:
 	BoundStatement Bind(ExplainStatement &stmt);
 	BoundStatement Bind(VacuumStatement &stmt);
 	BoundStatement Bind(RelationStatement &stmt);
-	BoundStatement Bind(ShowStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(ExtensionStatement &stmt);
@@ -329,7 +328,6 @@ private:
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
 	                       const vector<idx_t> &expansion_count = {});
 
-	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
@@ -377,6 +375,7 @@ private:
 
 	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
+	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

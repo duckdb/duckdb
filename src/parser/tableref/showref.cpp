@@ -44,4 +44,4 @@ unique_ptr<TableRef> ShowRef::Copy() {
 	return std::move(copy);
 }
 
-}
+} // namespace duckdb

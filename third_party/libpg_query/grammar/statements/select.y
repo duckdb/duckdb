@@ -51,20 +51,9 @@ SelectStmt: select_no_parens			%prec UMINUS
 select_with_parens:
 			'(' select_no_parens ')'				{ $$ = $2; }
 			| '(' select_with_parens ')'			{ $$ = $2; }
-			| '(' describe_or_desc select_no_parens ')'
+			| '(' VariableShowStmt ')'
 		    {
-				PGVariableShowSelectStmt *n = makeNode(PGVariableShowSelectStmt);
-				n->stmt = $3;
-				n->name = (char*) "select";
-				n->is_summary = 0;
-				$$ = (PGNode *) n;
-			}
-			| '(' describe_or_desc table_id ')'
-			{
-				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
-				n->name = $3;
-				n->is_summary = 0;
-				$$ = (PGNode *) n;
+		    	$$ = $2;
 			}
 		;
 

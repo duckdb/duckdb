@@ -16,7 +16,7 @@ unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
 	// construct a column data collection with the result
 	vector<string> return_names = {"column_name", "column_type", "null", "key", "default", "extra"};
 	vector<LogicalType> return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-										LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+	                                    LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	DataChunk output;
 	output.Initialize(Allocator::Get(context), return_types);
 
@@ -73,7 +73,7 @@ unique_ptr<BoundTableRef> Binder::BindShowTable(ShowRef &ref) {
 
 unique_ptr<BoundTableRef> Binder::Bind(ShowRef &ref) {
 	if (ref.show_type == ShowType::SUMMARY) {
-		throw InternalException("FIXME: summarize");
+		return BindSummarize(ref);
 	}
 	if (ref.query) {
 		return BindShowQuery(ref);

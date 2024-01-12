@@ -27,4 +27,4 @@ SELECT t.column_name FROM (DESCRIBE t) t
 a
 
 statement ok
-FROM (DESCRIBE databases) t
+FROM (SHOW databases) t

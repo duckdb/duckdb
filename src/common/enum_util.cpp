@@ -5494,8 +5494,6 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "EXPORT_STATEMENT";
 	case StatementType::PRAGMA_STATEMENT:
 		return "PRAGMA_STATEMENT";
-	case StatementType::SHOW_STATEMENT:
-		return "SHOW_STATEMENT";
 	case StatementType::VACUUM_STATEMENT:
 		return "VACUUM_STATEMENT";
 	case StatementType::CALL_STATEMENT:
@@ -5578,9 +5576,6 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PRAGMA_STATEMENT")) {
 		return StatementType::PRAGMA_STATEMENT;
-	}
-	if (StringUtil::Equals(value, "SHOW_STATEMENT")) {
-		return StatementType::SHOW_STATEMENT;
 	}
 	if (StringUtil::Equals(value, "VACUUM_STATEMENT")) {
 		return StatementType::VACUUM_STATEMENT;

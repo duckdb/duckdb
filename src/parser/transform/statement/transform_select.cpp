@@ -30,7 +30,7 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGSe
 }
 
 unique_ptr<SelectStatement> Transformer::TransformSelect(optional_ptr<duckdb_libpgquery::PGNode> node, bool is_select) {
-	switch(node->type) {
+	switch (node->type) {
 	case duckdb_libpgquery::T_PGVariableShowSelectStmt:
 		return TransformShowSelect(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(*node));
 	case duckdb_libpgquery::T_PGVariableShowStmt:

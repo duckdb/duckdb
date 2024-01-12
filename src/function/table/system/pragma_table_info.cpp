@@ -17,7 +17,8 @@
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
-	explicit PragmaTableFunctionData(CatalogEntry &entry_p, bool is_table_info) : entry(entry_p), is_table_info(is_table_info) {
+	explicit PragmaTableFunctionData(CatalogEntry &entry_p, bool is_table_info)
+	    : entry(entry_p), is_table_info(is_table_info) {
 	}
 
 	CatalogEntry &entry;
@@ -68,7 +69,8 @@ struct PragmaTableInfoHelper {
 		return_types.emplace_back(LogicalType::BOOLEAN);
 	}
 
-	static void GetTableColumns(const ColumnDefinition &column, ColumnConstraintInfo constraint_info, DataChunk &output, idx_t index) {
+	static void GetTableColumns(const ColumnDefinition &column, ColumnConstraintInfo constraint_info, DataChunk &output,
+	                            idx_t index) {
 		// return values:
 		// "cid", PhysicalType::INT32
 		output.SetValue(0, index, Value::INTEGER((int32_t)column.Oid()));
@@ -122,7 +124,8 @@ struct PragmaShowHelper {
 		return_types.emplace_back(LogicalType::VARCHAR);
 	}
 
-	static void GetTableColumns(const ColumnDefinition &column, ColumnConstraintInfo constraint_info, DataChunk &output, idx_t index) {
+	static void GetTableColumns(const ColumnDefinition &column, ColumnConstraintInfo constraint_info, DataChunk &output,
+	                            idx_t index) {
 		// "column_name", PhysicalType::VARCHAR
 		output.SetValue(0, index, Value(column.Name()));
 		// "column_type", PhysicalType::VARCHAR
@@ -157,7 +160,7 @@ struct PragmaShowHelper {
 	}
 };
 
-template<bool IS_PRAGMA_TABLE_INFO>
+template <bool IS_PRAGMA_TABLE_INFO>
 static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	if (IS_PRAGMA_TABLE_INFO) {
@@ -208,7 +211,8 @@ static ColumnConstraintInfo CheckConstraints(TableCatalogEntry &table, const Col
 	return result;
 }
 
-static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output, bool is_table_info) {
+static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output,
+                                 bool is_table_info) {
 	if (data.offset >= table.GetColumns().LogicalColumnCount()) {
 		// finished returning values
 		return;
@@ -233,7 +237,8 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 	data.offset = next;
 }
 
-static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry &view, DataChunk &output, bool is_table_info) {
+static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry &view, DataChunk &output,
+                                bool is_table_info) {
 	if (data.offset >= view.types.size()) {
 		// finished returning values
 		return;
@@ -276,7 +281,7 @@ void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, PragmaTableInfoFunction,
 	                              PragmaTableInfoBind<true>, PragmaTableInfoInit));
 	set.AddFunction(TableFunction("pragma_show", {LogicalType::VARCHAR}, PragmaTableInfoFunction,
-								  PragmaTableInfoBind<false>, PragmaTableInfoInit));
+	                              PragmaTableInfoBind<false>, PragmaTableInfoInit));
 }
 
 } // namespace duckdb
