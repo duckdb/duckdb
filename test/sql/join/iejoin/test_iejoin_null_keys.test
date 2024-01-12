@@ -1,4 +1,4 @@
-# name: test/sql/join/iejoin/iejoin_issue_10122.test
+# name: test/sql/join/iejoin/test_iejoin_null_keys.test
 # description: Issue #10122: wrong result in IEJoin
 # group: [iejoin]
 
