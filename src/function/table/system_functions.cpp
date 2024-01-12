@@ -13,6 +13,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaPlatform::RegisterFunction(*this);
 	PragmaCollations::RegisterFunction(*this);
 	PragmaTableInfo::RegisterFunction(*this);
+	PragmaTableSample::RegisterFunction(*this);
 	PragmaStorageInfo::RegisterFunction(*this);
 	PragmaMetadataInfo::RegisterFunction(*this);
 	PragmaDatabaseSize::RegisterFunction(*this);

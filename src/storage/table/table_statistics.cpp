@@ -2,6 +2,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 
 namespace duckdb {
 
@@ -9,6 +10,9 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	D_ASSERT(Empty());
 
 	column_stats = std::move(data.table_stats.column_stats);
+	auto &allocator = Allocator::DefaultAllocator();
+	idx_t sample_size = STANDARD_VECTOR_SIZE;
+	sample = make_uniq<ReservoirSample>(allocator, sample_size, -1);
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP
@@ -17,6 +21,8 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 
+	auto &allocator = Allocator::DefaultAllocator();
+	sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, -1);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
 	}
@@ -26,6 +32,7 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 	D_ASSERT(Empty());
 
 	lock_guard<mutex> stats_lock(parent.stats_lock);
+	sample = nullptr;
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
 	}
@@ -36,6 +43,7 @@ void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t remo
 	D_ASSERT(Empty());
 
 	lock_guard<mutex> stats_lock(parent.stats_lock);
+	sample = nullptr;
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		if (i != removed_column) {
 			column_stats.push_back(parent.column_stats[i]);
@@ -68,6 +76,14 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
+	// if the sample has been nullified, no need to merge.
+	if (sample) {
+		auto chunk = other.sample->GetChunkAndShrink();
+		while (chunk) {
+			sample->AddToReservoir(*chunk);
+			chunk = other.sample->GetChunkAndShrink();
+		}
+	}
 	for (idx_t i = 0; i < column_stats.size(); i++) {
 		if (column_stats[i]) {
 			D_ASSERT(other.column_stats[i]);

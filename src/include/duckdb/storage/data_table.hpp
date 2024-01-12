@@ -165,6 +165,9 @@ public:
 
 	//! Get statistics of a physical column within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+
+	//! Get table sample
+	optional_ptr<BlockingSample> GetSample();
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
@@ -216,6 +219,8 @@ private:
 	mutex append_lock;
 	//! The row groups of the table
 	shared_ptr<RowGroupCollection> row_groups;
+	//! Sample of the table collected during ingestion
+	unique_ptr<BlockingSample> sample;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	atomic<bool> is_root;

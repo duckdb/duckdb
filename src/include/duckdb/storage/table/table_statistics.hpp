@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
 
@@ -51,6 +52,9 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	void Deserialize(Deserializer &deserializer, ColumnList &columns);
+
+	//! Sample for table
+	unique_ptr<BlockingSample> sample;
 
 private:
 	//! The statistics lock

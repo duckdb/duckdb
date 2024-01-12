@@ -53,6 +53,9 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);
 	}
+	if (data && data->table_stats.sample) {
+		this->sample = std::move(data->table_stats.sample);
+	}
 	row_groups->Verify();
 }
 
@@ -1218,6 +1221,10 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
 	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
 	row_groups->SetDistinct(column_id, std::move(distinct_stats));
+}
+
+optional_ptr<BlockingSample> DataTable::GetSample() {
+		return row_groups->GetSample();
 }
 
 //===--------------------------------------------------------------------===//

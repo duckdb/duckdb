@@ -49,20 +49,40 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<DataChunk> ReservoirSample::GetChunk() {
+unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
+	if (offset >= reservoir_chunk->size()) {
+		return nullptr;
+	}
 	if (!reservoir_chunk || reservoir_chunk->size() == 0) {
 		return nullptr;
 	}
-	auto collected_sample_count = reservoir_chunk->size();
-	if (collected_sample_count > STANDARD_VECTOR_SIZE) {
-		// get from the back to avoid creating two selection vectors
-		// one to return the first STANDARD_VECTOR_SIZE
-		// another to replace the reservoir_chunk with the first STANDARD VECTOR SIZE missing
+	auto ret = make_uniq<DataChunk>();
+	idx_t ret_chunk_size = STANDARD_VECTOR_SIZE;
+	if (offset + STANDARD_VECTOR_SIZE > reservoir_chunk->size()) {
+		ret_chunk_size = reservoir_chunk->size() - offset;
+	}
+	auto reservoir_types = reservoir_chunk->GetTypes();
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	for (idx_t i = offset; i < offset + ret_chunk_size; i++) {
+		sel.set_index(i - offset, i);
+	}
+	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
+	ret->Slice(*reservoir_chunk, sel, STANDARD_VECTOR_SIZE);
+	ret->SetCardinality(STANDARD_VECTOR_SIZE);
+	return ret;
+}
+
+unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
+	if (!reservoir_chunk || reservoir_chunk->size() == 0) {
+		return nullptr;
+	}
+	if (reservoir_chunk->size() > STANDARD_VECTOR_SIZE) {
+		// get from the back
 		auto ret = make_uniq<DataChunk>();
-		auto samples_remaining = collected_sample_count - STANDARD_VECTOR_SIZE;
+		auto samples_remaining = reservoir_chunk->size() - STANDARD_VECTOR_SIZE;
 		auto reservoir_types = reservoir_chunk->GetTypes();
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
-		for (idx_t i = samples_remaining; i < collected_sample_count; i++) {
+		for (idx_t i = samples_remaining; i < reservoir_chunk->size(); i++) {
 			sel.set_index(i - samples_remaining, i);
 		}
 		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
@@ -72,6 +92,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		reservoir_chunk->SetCardinality(samples_remaining);
 		return ret;
 	}
+	// TODO: Why do I need to put another selection vector over this one?
 	return std::move(reservoir_chunk);
 }
 
@@ -119,6 +140,8 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	reservoir_chunk->Append(input, false, nullptr, required_count);
 	base_reservoir_sample.InitializeReservoir(required_count, sample_count);
 
+	num_added_samples += required_count;
+	reservoir_chunk->SetCardinality(num_added_samples);
 	// check if there are still elements remaining in the Input data chunk that should be
 	// randomly sampled and potentially added. This happens if we are on a boundary
 	// for example, input.size() is 1024, but our sample size is 10
@@ -195,13 +218,17 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
-unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
+	throw NotImplementedException("GetChunk() not implemented for reservoir chunks");
+}
+
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAndShrink() {
 	if (!is_finalized) {
 		Finalize();
 	}
 	while (!finished_samples.empty()) {
 		auto &front = finished_samples.front();
-		auto chunk = front->GetChunk();
+		auto chunk = front->GetChunkAndShrink();
 		if (chunk && chunk->size() > 0) {
 			return chunk;
 		}
@@ -227,7 +254,7 @@ void ReservoirSamplePercentage::Finalize() {
 		auto new_sample_size = idx_t(round(sample_percentage * current_count));
 		auto new_sample = make_uniq<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
 		while (true) {
-			auto chunk = current_sample->GetChunk();
+			auto chunk = current_sample->GetChunkAndShrink();
 			if (!chunk || chunk->size() == 0) {
 				break;
 			}
