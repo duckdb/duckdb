@@ -32,7 +32,7 @@ restart
 
 query I
 SELECT SUM(a) FROM test
-----r
+----
 500000500000
 
 statement ok

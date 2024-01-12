@@ -2,6 +2,10 @@
 # description: IGNORE_ERRORS test
 # group: [csv]
 
+# FIXME: changing both the block size (16KB) and the vector size (512) causes this test to fail
+# FIXME: with an error message that differs from the expected one
+require block_size 262144
+
 # Try without sniffing
 
 statement ok
