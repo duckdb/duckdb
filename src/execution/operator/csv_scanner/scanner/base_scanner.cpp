@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
 
 namespace duckdb {
 
@@ -12,13 +13,6 @@ idx_t ScannerResult::Size() {
 
 bool ScannerResult::Empty() {
 	return result_position == 0;
-}
-
-void ScannerResult::SetQuoted(ScannerResult &result) {
-	result.quoted = true;
-}
-void ScannerResult::SetEscaped(ScannerResult &result) {
-	result.escaped = true;
 }
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,

@@ -25,9 +25,13 @@ public:
 	idx_t result_position = 0;
 
 	//! Adds a Value to the result
-	static inline void SetQuoted(ScannerResult &result);
+	static inline void SetQuoted(ScannerResult &result) {
+		result.quoted = true;
+	}
 	//! Adds a Row to the result
-	static inline void SetEscaped(ScannerResult &result);
+	static inline void SetEscaped(ScannerResult &result) {
+		result.escaped = true;
+	}
 	// Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
