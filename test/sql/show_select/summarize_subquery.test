@@ -1,4 +1,4 @@
-# name: test/sql/show_select/test_summarize_quoted.test
+# name: test/sql/show_select/summarize_subquery.test
 # group: [show_select]
 
 statement ok
