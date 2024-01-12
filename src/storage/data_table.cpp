@@ -1224,7 +1224,7 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 }
 
 optional_ptr<BlockingSample> DataTable::GetSample() {
-		return row_groups->GetSample();
+	return row_groups->GetSample();
 }
 
 //===--------------------------------------------------------------------===//
