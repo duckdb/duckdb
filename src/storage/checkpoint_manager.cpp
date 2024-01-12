@@ -7,10 +7,10 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -28,6 +28,8 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/unknown_index.hpp"
 
 namespace duckdb {
 
@@ -400,8 +402,19 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	    deserializer.ReadPropertyWithDefault<BlockPointer>(101, "root_block_pointer", BlockPointer());
 
 	// create the index in the catalog
+
+	// look for the table in the catalog
 	auto &table =
 	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
+
+	// we also need to make sure the index type is loaded
+	// backwards compatability:
+	// if the index type is not specified, we default to ART
+	if (info.index_type.empty()) {
+		info.index_type = ART::TYPE_NAME;
+	}
+
+	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
 	index.info = table.GetStorage().info;
 
@@ -456,9 +469,20 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
-	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
-	                          std::move(unbound_expressions), data_table.db, nullptr, index_storage_info);
-	data_table.info->indexes.AddIndex(std::move(art));
+
+	// This is executed before any extensions can be loaded, which is why we must treat any index type that is not
+	// built-in (ART) as unknown
+	if (info.index_type == ART::TYPE_NAME) {
+		data_table.info->indexes.AddIndex(make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids,
+		                                                 TableIOManager::Get(data_table), unbound_expressions,
+		                                                 data_table.db, nullptr, index_storage_info));
+	} else {
+		auto unknown_index = make_uniq<UnknownIndex>(info.index_name, info.index_type, info.constraint_type,
+		                                             info.column_ids, TableIOManager::Get(data_table),
+		                                             unbound_expressions, data_table.db, info, index_storage_info);
+
+		data_table.info->indexes.AddIndex(std::move(unknown_index));
+	}
 }
 
 //===--------------------------------------------------------------------===//

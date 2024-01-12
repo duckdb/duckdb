@@ -15,6 +15,7 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
-    : Index(name, "ART", index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
+    : Index(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
 
 	// initialize all allocators
@@ -96,8 +97,9 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 // Initialize Predicate Scans
 //===--------------------------------------------------------------------===//
 
-unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-                                                              const ExpressionType expression_type) {
+//! Initialize a single predicate scan on the index with the given expression and column IDs
+static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
+                                                                const ExpressionType expression_type) {
 	// initialize point lookup
 	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
@@ -105,10 +107,11 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction 
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
-                                                            const ExpressionType low_expression_type,
-                                                            const Value &high_value,
-                                                            const ExpressionType high_expression_type) {
+//! Initialize a two predicate scan on the index with the given expression and column IDs
+static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
+                                                              const ExpressionType low_expression_type,
+                                                              const Value &high_value,
+                                                              const ExpressionType high_expression_type) {
 	// initialize range lookup
 	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
@@ -116,6 +119,93 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &t
 	result->values[1] = high_value;
 	result->expressions[1] = high_expression_type;
 	return std::move(result);
+}
+
+unique_ptr<IndexScanState> ART::TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+                                                  const Expression &filter_expr) {
+
+	Value low_value, high_value, equal_value;
+	ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
+	// try to find a matching index for any of the filter expressions
+
+	// create a matcher for a comparison with a constant
+	ComparisonExpressionMatcher matcher;
+	// match on a comparison type
+	matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
+	// match on a constant comparison with the indexed expression
+	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(const_cast<Expression &>(index_expr)));
+	matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+
+	matcher.policy = SetMatcher::Policy::UNORDERED;
+
+	vector<reference<Expression>> bindings;
+	if (matcher.Match(const_cast<Expression &>(filter_expr), bindings)) {
+		// range or equality comparison with constant value
+		// we can use our index here
+		// bindings[0] = the expression
+		// bindings[1] = the index expression
+		// bindings[2] = the constant
+		auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
+		auto comparison_type = comparison.type;
+		if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+			// the expression is on the right side, we flip them around
+			comparison_type = FlipComparisonExpression(comparison_type);
+		}
+		if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+			// equality value
+			// equality overrides any other bounds so we just break here
+			equal_value = constant_value;
+		} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			// greater than means this is a lower bound
+			low_value = constant_value;
+			low_comparison_type = comparison_type;
+		} else {
+			// smaller than means this is an upper bound
+			high_value = constant_value;
+			high_comparison_type = comparison_type;
+		}
+	} else if (filter_expr.type == ExpressionType::COMPARE_BETWEEN) {
+		// BETWEEN expression
+		auto &between = filter_expr.Cast<BoundBetweenExpression>();
+		if (!between.input->Equals(index_expr)) {
+			// expression doesn't match the index expression
+			return nullptr;
+		}
+		if (between.lower->type != ExpressionType::VALUE_CONSTANT ||
+		    between.upper->type != ExpressionType::VALUE_CONSTANT) {
+			// not a constant comparison
+			return nullptr;
+		}
+		low_value = (between.lower->Cast<BoundConstantExpression>()).value;
+		low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+		                                              : ExpressionType::COMPARE_GREATERTHAN;
+		high_value = (between.upper->Cast<BoundConstantExpression>()).value;
+		high_comparison_type =
+		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+	}
+
+	if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
+		// we can scan this index using this predicate: try a scan
+		unique_ptr<IndexScanState> index_state;
+		if (!equal_value.IsNull()) {
+			// equality predicate
+			index_state = InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
+		} else if (!low_value.IsNull() && !high_value.IsNull()) {
+			// two-sided predicate
+			index_state = InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
+			                                          high_comparison_type);
+		} else if (!low_value.IsNull()) {
+			// less than predicate
+			index_state = InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
+		} else {
+			D_ASSERT(!high_value.IsNull());
+			index_state = InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
+		}
+		return index_state;
+	}
+	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1179,5 +1269,13 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 	}
 	return "[empty]";
 }
+
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+	auto key_name = GenerateErrorKeyName(input, failed_index);
+	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
+	return exception_msg;
+}
+
+constexpr const char *ART::TYPE_NAME;
 
 } // namespace duckdb
