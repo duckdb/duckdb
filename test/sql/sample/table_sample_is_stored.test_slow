@@ -2,60 +2,77 @@
 # description: Test sampling of larger relations
 # group: [sample]
 
+require vector_size 2048
+
+statement ok
+create table materialized_range as select * from range(5000000);
+
+statement ok
+select * from materialized_range;
+
 statement ok
 set threads=1;
 
 statement ok
-create table integers_1 as (select (range + 5)::VARCHAR a, range b from range(1000000));
+create table integers_1 as (select (range + 5)::VARCHAR a, range b, get_current_time() as time from materialized_range);
 
 query II nosort result_1
-select * from pragma_table_sample('integers_1') order by all limit 20;
+select a::INT, b from pragma_table_sample('integers_1') order by all limit 20;
 ----
 
 statement ok
-create table integers_2 as (select (range + 5)::VARCHAR a, range b from range(1000000));
-
+create table integers_2 as (select (range + 5)::VARCHAR a, range b, get_current_time() as time from materialized_range);
 
 # samples should be the same given the same table and the same contents.
 query II nosort result_1
-select * from pragma_table_sample('integers_2') order by all limit 20;
-----
-
-statement ok
-drop table integers_1;
-
-statement ok
-drop table integers_2;
-
-statement ok
-set threads = 2;
-
-statement ok
-create table integers_1 as (select (range + 5)::VARCHAR a, range b from range(1000000));
-
-statement ok
-create table integers_2 as (select (range + 5)::VARCHAR a, range b from range(1000000));
-
-statement ok
-create table sample_1 as (from pragma_table_sample('integers_1') order by all limit 20);
-
-statement ok
-create table sample_2 as (from pragma_table_sample('integers_2') order by all limit 20);
-
-
-mode output_result
-
-query II
-select * from sample_1;
-----
-
-query II
-select * from sample_2;
+select a::INT, b from pragma_table_sample('integers_2') order by all limit 20;
 ----
 
 mode skip
 
+statement ok
+set threads=8;
+
+statement ok
+create or replace table integers_1 as (select (range + 5)::VARCHAR a, range b from materialized_range);
+
+mode skip
+
+statement ok
+create or replace table integers_2 as (select (range + 5)::VARCHAR a, range b from materialized_range);
+
+statement ok
+create table sample_1 as (from pragma_table_sample('integers_1'));
+
+statement ok
+create table sample_2 as (from pragma_table_sample('integers_2'));
+
+statement ok
+create table intersect_samples as select * from sample_1 intersect (select * from sample_2);
+
 query I
-select num_records < 20 from (select count(*) as num_records from sample_1 intersect (from sample_2));
+select count(*) = 2048 from intersect_samples;
 ----
-1
+0
+
+query I
+select count(*) from (from pragma_table_sample('integers_1') intersect (from integers_1));
+----
+2048
+
+query I
+select count(*) from (from pragma_table_sample('integers_2') intersect (from integers_2));
+----
+2048
+
+# If rows are added, the sample is updated.
+statement ok
+insert into integers_1 (select 100::VARCHAR, 100 from range(3000000));
+
+# check if 100, 100 has been added
+query I
+select count(*) > 0 from (from pragma_table_sample('integers_1') intersect (select * from sample_1)) where a = 100 and b = 100;
+----
+0
+
+# maybe test the average distance between all samples?
