@@ -85,7 +85,7 @@ public:
 	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
-	BaseSecret(BaseSecret &other)
+	BaseSecret(const BaseSecret &other)
 	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name),
 	      serializable(other.serializable) {
 		D_ASSERT(!type.empty());
@@ -147,7 +147,7 @@ public:
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
-	KeyValueSecret(KeyValueSecret &secret)
+	KeyValueSecret(const KeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
@@ -185,7 +185,7 @@ public:
 			result->redact_keys.insert(entry.ToString());
 		}
 
-		return std::move(result);
+		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
 	}
 
 	//! the map of key -> values that make up the secret
