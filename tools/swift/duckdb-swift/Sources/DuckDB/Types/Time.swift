@@ -72,5 +72,5 @@ private extension Time.Components {
 
 public struct TimeTz: Hashable, Equatable, Sendable {
   public var time: Time
-  public var timezone: Int32
+  public var offset: Int32
 }
