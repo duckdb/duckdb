@@ -31,6 +31,8 @@ public:
 	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
 	//! In case it returns a nullptr it means we are done reading these files.
 	unique_ptr<StringValueScanner> Next();
+	//! Maybe replaces the max line size if scan_line_size is higher
+	void NewMaxLineSize(idx_t scan_line_size);
 
 	void FillRejectsTable();
 

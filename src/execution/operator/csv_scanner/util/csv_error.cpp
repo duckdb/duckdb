@@ -47,6 +47,11 @@ void CSVErrorHandler::Insert(idx_t boundary_idx, idx_t rows) {
 	}
 }
 
+void CSVErrorHandler::NewMaxLineSize(idx_t scan_line_size) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	max_line_length = std::max(scan_line_size, max_line_length);
+}
+
 CSVError::CSVError(string error_message_p, CSVErrorType type_p) : error_message(error_message_p), type(type_p) {
 }
 

@@ -39,7 +39,7 @@ class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
 	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
-	                  CSVErrorHandler &error_hander, CSVIterator &iterator);
+	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size);
 
 	//! Information on the vector
 	unique_ptr<Vector> vector;
@@ -71,7 +71,7 @@ public:
 	//! Where the previous line started, used to validate the maximum_line_size option
 	LinePosition previous_line_start;
 	LinePosition pre_previous_line_start;
-
+	bool store_line_size = false;
 	bool added_last_line = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);

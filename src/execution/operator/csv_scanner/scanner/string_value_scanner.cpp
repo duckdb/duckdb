@@ -2,15 +2,19 @@
 #include "duckdb/execution/operator/csv_scanner/util/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner/skip_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
+#include "duckdb/main/client_data.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
                                      Allocator &buffer_allocator, idx_t result_size_p, idx_t buffer_position,
-                                     CSVErrorHandler &error_hander_p, CSVIterator &iterator_p)
+                                     CSVErrorHandler &error_hander_p, CSVIterator &iterator_p, bool store_line_size_p)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
-      result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p) {
+      result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
+      store_line_size(store_line_size_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
 	vector_size = number_of_columns * result_size;
@@ -131,6 +135,9 @@ void StringValueResult::HandleOverLimitRows() {
 void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - previous_line_start;
+	if (store_line_size) {
+		error_handler.NewMaxLineSize(current_line_size);
+	}
 	if (current_line_size > state_machine.options.maximum_line_size) {
 		auto csv_error = CSVError::LineSizeError(state_machine.options, current_line_size);
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), result_position / number_of_columns);
@@ -286,7 +293,8 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, shared_ptr<CSVBuffer
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, boundary), scanner_idx(scanner_idx_p),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             iterator.pos.buffer_pos, *error_handler, iterator) {
+             iterator.pos.buffer_pos, *error_handler, iterator,
+             buffer_manager->context.client_data->debug_set_max_line_length) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {

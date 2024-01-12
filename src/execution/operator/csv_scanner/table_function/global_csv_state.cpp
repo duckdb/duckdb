@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
-
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
@@ -103,6 +103,9 @@ void CSVGlobalState::DecrementThread() {
 	running_threads--;
 	if (running_threads == 0) {
 		FillRejectsTable();
+		if (context.client_data->debug_set_max_line_length) {
+			context.client_data->debug_max_line_length = file_scans[0]->error_handler->GetMaxLineLength();
+		}
 	}
 }
 

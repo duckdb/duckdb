@@ -79,6 +79,10 @@ public:
 	vector<pair<LinesPerBoundary, CSVError>> errors;
 	//! Return the 1-indexed line number
 	idx_t GetLine(LinesPerBoundary &error_info);
+	void NewMaxLineSize(idx_t scan_line_size);
+	idx_t GetMaxLineLength() {
+		return max_line_length;
+	}
 
 private:
 	//! If we should print the line of an error
@@ -87,7 +91,7 @@ private:
 	mutex main_mutex;
 	//! Map of <file,batch> -> lines
 	unordered_map<idx_t, LinesPerBoundary> lines_per_batch_map;
-
+	idx_t max_line_length = 0;
 	bool ignore_errors = false;
 };
 
