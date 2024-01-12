@@ -117,7 +117,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
 		if (kv.second.IsNull()) {
-			throw BinderException("read_json \"%s\" parameter cannot be NULL.", loption);
+			throw BinderException("read_json parameter \"%s\" cannot be NULL.", loption);
 		}
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
@@ -222,8 +222,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	if (!bind_data->auto_detect) {
 		// Need to specify columns if RECORDS and not auto-detecting
 		if (return_types.empty()) {
-			throw BinderException("read_json requires columns to be specified through the \"columns\" parameter."
-			                      "\n Use read_json_auto or set auto_detect=true to automatically guess columns.");
+			throw BinderException("When auto_detect=false, read_json requires columns to be specified through the "
+			                      "\"columns\" parameter.");
 		}
 		// If we are reading VALUES, we can only have one column
 		if (bind_data->options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
@@ -335,37 +335,36 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	return table_function;
 }
 
-TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info, bool auto_function = false) {
+TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info) {
 	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
 	table_function.name = std::move(name);
-	if (auto_function) {
-		table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
-		table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
-	}
+	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
+	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	return MultiFileReader::CreateFunctionSet(table_function);
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::ARRAY, JSONRecordType::RECORDS);
+	auto info =
+	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_json", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS);
+	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                      JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
 	auto info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_json_auto", std::move(info), true);
+	return CreateJSONFunctionInfo("read_json_auto", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
 	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
 	                                      JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info), true);
+	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info));
 }
 
 } // namespace duckdb

@@ -8,13 +8,13 @@ statement ok
 pragma enable_verification
 
 statement error
-SELECT * FROM read_json('data/json/example_n.ndjson')
+SELECT * FROM read_json('data/json/example_n.ndjson', auto_detect=false)
 ----
 Binder Error
 
-# read_json assumes array of obj
+# can't read ndjson with array
 statement error
-SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='array')
 ----
 Invalid Input Error: Expected top-level JSON array
 
@@ -237,9 +237,9 @@ select * from read_json('data/json/top_level_array.json', auto_detect=true)
 cancelled
 cancelled
 
-# if we try to read it with 'unstructured', we get an error
+# if we try to read it as 'unstructured' records
 statement error
-select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, format='unstructured')
+select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, format='unstructured', records=true)
 ----
 Invalid Input Error: JSON transform error in file "data/json/top_level_array.json", in record/value 1: Expected OBJECT, but got ARRAY
 
@@ -294,18 +294,18 @@ select * from '__TEST_DIR__/my_file.json'
 
 # fails because it's not records
 statement error
-select * from read_json('__TEST_DIR__/my_file.json', format='array', columns={range: 'INTEGER'})
+select * from read_json('__TEST_DIR__/my_file.json', format='array', columns={range: 'INTEGER'}, records=true)
 ----
 Invalid Input Error: JSON transform error
 
 # fails because it's not records
 statement error
-select * from read_json_auto('__TEST_DIR__/my_file.json', format='array', records='true')
+select * from read_json_auto('__TEST_DIR__/my_file.json', format='array', records=true)
 ----
 Binder Error: json_read expected records
 
 query T
-select * from read_json('__TEST_DIR__/my_file.json', format='auto', records='false', auto_detect=true)
+select * from read_json('__TEST_DIR__/my_file.json', format='auto', records=false, auto_detect=true)
 ----
 0
 1
@@ -392,7 +392,7 @@ statement ok
 pragma disable_verification
 
 # test that we can read a JSON list that spans more than one buffer size
-# the JSON is 55 bytes, and the minimum buffer size is 2097152
+# the JSON is 55 bytes, and the minimum buffer size is 32MB
 # let's do 50k to be safe
 statement ok
 copy (select list(to_json({this_is_a_very_long_field_name_yes_very_much_so:42})) from range(50000)) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
