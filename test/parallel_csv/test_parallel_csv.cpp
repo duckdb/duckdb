@@ -27,47 +27,43 @@ const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
 const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
 
-bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool set_temp_dir,
-                 ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
+bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
+                       ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection multi_conn(db);
-
-	multi_conn.Query("PRAGMA verify_parallelism");
 	if (set_temp_dir) {
 		multi_conn.Query("PRAGMA temp_directory='offload.tmp'");
 	}
 	multi_conn.Query("SET preserve_insertion_order=false;");
-	multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
-	duckdb::unique_ptr<MaterializedQueryResult> multi_threaded_result =
+	duckdb::unique_ptr<MaterializedQueryResult> variable_buffer_size_result =
 	    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters +
 	                     ", buffer_size = " + to_string(buffer_size) + ") ORDER BY ALL");
-	bool multi_threaded_passed;
+	bool variable_buffer_size_passed;
 	ColumnDataCollection *result = nullptr;
-	if (multi_threaded_result->HasError()) {
-		multi_threaded_passed = false;
+	if (variable_buffer_size_result->HasError()) {
+		variable_buffer_size_passed = false;
 	} else {
-		multi_threaded_passed = true;
-		result = &multi_threaded_result->Collection();
+		variable_buffer_size_passed = true;
+		result = &variable_buffer_size_result->Collection();
 	}
-	if (!ground_truth && !multi_threaded_passed) {
+	if (!ground_truth && !variable_buffer_size_passed) {
 		// Two wrongs can make a right
 		return true;
 	}
 	if (!ground_truth) {
 		//! oh oh, this should not pass
-		std::cout << path << " Failed on single threaded but succeeded on parallel reading" << '\n';
+		std::cout << path << " Failed on max buffer but succeeded on variable buffer reading" << '\n';
 		return false;
 	}
-	if (!multi_threaded_passed) {
-		std::cout << path << " Multithreaded failed" << '\n';
-		std::cout << multi_threaded_result->GetError() << '\n';
+	if (!variable_buffer_size_passed) {
+		std::cout << path << " Variable Buffer failed" << '\n';
+		std::cout << variable_buffer_size_result->GetError() << '\n';
 		return false;
 	}
 	// Results do not match
 	string error_message;
 	if (!ColumnDataCollection::ResultEquals(*ground_truth, *result, error_message, false)) {
-		std::cout << path << " Thread count: " << to_string(thread_count) << " Buffer Size: " << to_string(buffer_size)
-		          << '\n';
+		std::cout << path << " Buffer Size: " << to_string(buffer_size) << '\n';
 		std::cout << error_message << '\n';
 		return false;
 	}
@@ -81,8 +77,8 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 	if (!run) {
 		return true;
 	}
-	// Here we run the csv file first with the single thread reader.
-	// Then the parallel csv reader with a combination of multiple threads and buffer sizes.
+	// Here we run the csv file first with the full buffer.
+	// Then a combination of multiple buffers.
 	if (skip) {
 		if (skip->find(path) != skip->end()) {
 			// Gotta skip this
@@ -92,12 +88,11 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 	// Set max line length to 0 when starting a ST CSV Read
 	conn.context->client_data->debug_set_max_line_length = true;
 	conn.context->client_data->debug_max_line_length = 0;
-	duckdb::unique_ptr<MaterializedQueryResult> single_threaded_res;
+	duckdb::unique_ptr<MaterializedQueryResult> full_buffer_res;
 	ColumnDataCollection *ground_truth = nullptr;
-	single_threaded_res =
-	    conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters + ", parallel = 0) ORDER BY ALL");
-	if (!single_threaded_res->HasError()) {
-		ground_truth = &single_threaded_res->Collection();
+	full_buffer_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters + ") ORDER BY ALL");
+	if (!full_buffer_res->HasError()) {
+		ground_truth = &full_buffer_res->Collection();
 	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
 	idx_t min_buffer_size = conn.context->client_data->debug_max_line_length + 2;
@@ -105,11 +100,10 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 	idx_t max_buffer_size = min_buffer_size + 5;
 	// Let's go from 1 to 8 threads.
 	bool all_tests_passed = true;
-	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
-		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
-			all_tests_passed = all_tests_passed &&
-			                   RunParallel(path, thread_count, buffer_size, set_temp_dir, ground_truth, add_parameters);
-		}
+
+	for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
+		all_tests_passed =
+		    all_tests_passed && RunVariableBuffer(path, buffer_size, set_temp_dir, ground_truth, add_parameters);
 	}
 
 	return all_tests_passed;
@@ -128,6 +122,11 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 		}
 	}
 	REQUIRE(all_tests_passed);
+}
+
+TEST_CASE("Test File Full", "[parallel-csv][.]") {
+	string path = "test/sql/copy/csv/data/people.csv";
+	RunFull(path);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
