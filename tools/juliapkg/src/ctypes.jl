@@ -96,6 +96,11 @@ struct duckdb_time_struct
     micros::Int32
 end
 
+struct duckdb_time_tz
+    micros::Int64
+    offset::Int32
+end
+
 """
 Timestamps are stored as microseconds since 1970-01-01\n
 Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information

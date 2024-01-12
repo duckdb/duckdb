@@ -428,17 +428,15 @@ TEST_CASE("decompose timetz with duckdb_time_tz_extract", "[capi]") {
 
 	auto data = (duckdb_time_tz *)chunk->GetData(0);
 
-	duckdb_time time;
-	int32_t offset;
-	duckdb_time_tz_extract(data[0], &time.micros, &offset);
+	auto time_tz = duckdb_time_tz_extract(data[0]);
 
-	auto val = duckdb_from_time(time);
+	auto val = duckdb_from_time(time_tz.time);
 	REQUIRE(val.hour == 11);
 	REQUIRE(val.min == 30);
 	REQUIRE(val.sec == 0);
 	REQUIRE(val.micros == 123456);
 
-	REQUIRE(offset == -7200);
+	REQUIRE(time_tz.offset == -7200);
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {

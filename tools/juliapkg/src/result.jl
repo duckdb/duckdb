@@ -90,11 +90,9 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
 end
 
 function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
-    micros = [Int64(0)]
-    tz = [Int32(0)]
-    duckdb_time_tz_extract(val, pointer(micros), pointer(tz))
+    time_tz = duckdb_time_tz_extract(val)
     # TODO: how to preserve the offset?
-    return Dates.Time(Dates.Nanosecond(micros[1] * 1000))
+    return Dates.Time(Dates.Nanosecond(time_tz.micros * 1000))
 end
 
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime

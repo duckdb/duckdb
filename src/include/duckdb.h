@@ -164,6 +164,11 @@ typedef struct {
 	uint64_t micros;
 } duckdb_time_tz;
 
+typedef struct {
+	duckdb_time time;
+	int32_t offset;
+} duckdb_time_tz_struct;
+
 //! Timestamps are stored as microseconds since 1970-01-01
 //! Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
 typedef struct {
@@ -930,7 +935,7 @@ Use `duckdb_from_time` to further decompose the micros into hour, minute, second
 * out_micros: The microsecond component of the time.
 * out_offset: The timezone offset component of the time.
 */
-DUCKDB_API void duckdb_time_tz_extract(duckdb_time_tz micros, int64_t *out_micros, int32_t *out_offset);
+DUCKDB_API duckdb_time_tz_struct duckdb_time_tz_extract(duckdb_time_tz micros);
 
 /*!
 Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).
