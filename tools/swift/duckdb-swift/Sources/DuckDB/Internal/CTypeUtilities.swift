@@ -149,7 +149,7 @@ extension duckdb_time_struct {
 
 extension duckdb_time_tz {
   var asTime: TimeTz {
-    let res = duckdb_time_tz_extract(self)
+    let res = duckdb_from_time_tz(self)
     return TimeTz(time: Time(microseconds: res.time.micros), offset: res.offset)
   }
 }
