@@ -538,7 +538,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 		} else {
 			result.vector_ptr[cur_value_idx] =
-			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - 1);
+			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - states.NewValue());
 		}
 	} else {
 		// Figure out the max string length
