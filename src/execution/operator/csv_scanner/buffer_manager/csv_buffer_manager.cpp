@@ -31,12 +31,8 @@ void CSVBufferManager::Initialize() {
 		    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
 		last_buffer = cached_buffers.front();
 	}
-	start_pos = last_buffer->GetStart();
 }
 
-idx_t CSVBufferManager::GetStartPos() {
-	return start_pos;
-}
 
 bool CSVBufferManager::ReadNextAndCacheIt() {
 	D_ASSERT(last_buffer);

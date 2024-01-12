@@ -26,8 +26,6 @@ public:
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
 	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t buffer_idx);
-	//! Returns the starting position of the first buffer
-	idx_t GetStartPos();
 	//! unique_ptr to the file handle, gets stolen after sniffing
 	unique_ptr<CSVFileHandle> file_handle;
 	//! Initializes the buffer manager, during it's construction/reset
@@ -61,8 +59,6 @@ private:
 	idx_t global_csv_pos = 0;
 	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
 	idx_t buffer_size;
-	//! Starting position of first buffer
-	idx_t start_pos = 0;
 	//! If this buffer manager is done (i.e., no more buffers to read beyond the ones that were cached
 	bool done = false;
 	//! Because the buffer manager can be accessed in Parallel we need a mutex.

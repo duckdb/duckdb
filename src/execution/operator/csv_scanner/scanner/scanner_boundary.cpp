@@ -57,7 +57,7 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 		// 2) We still have data to scan in this file, we set the iterator accordingly.
 		// We must move the buffer
 		boundary.buffer_idx++;
-		boundary.buffer_pos = buffer_manager.GetStartPos();
+		boundary.buffer_pos = 0;
 		// Verify this buffer really exists
 		auto next_buffer = buffer_manager.GetBuffer(boundary.buffer_idx);
 		if (!next_buffer) {

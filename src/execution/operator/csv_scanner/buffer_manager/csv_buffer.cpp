@@ -14,10 +14,6 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 		actual_buffer_size += file_handle.Read(&buffer[actual_buffer_size], buffer_size_p - actual_buffer_size);
 	}
 	global_csv_start = global_csv_current_position;
-	// BOM check (https://en.wikipedia.org/wiki/Byte_order_mark)
-	if (actual_buffer_size >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
-		start_position += 3;
-	}
 	last_buffer = file_handle.FinishedReading();
 }
 
@@ -68,8 +64,8 @@ unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 		block = nullptr;
 		Reload(file_handle);
 	}
-	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, first_buffer, last_buffer,
-	                                  global_csv_start, start_position, file_number, buffer_idx);
+	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, last_buffer,
+	                                   file_number, buffer_idx);
 }
 
 void CSVBuffer::Unpin() {
@@ -78,9 +74,6 @@ void CSVBuffer::Unpin() {
 	}
 }
 
-idx_t CSVBuffer::GetStart() {
-	return start_position;
-}
 
 bool CSVBuffer::IsCSVFileLastBuffer() {
 	return last_buffer;

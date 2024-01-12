@@ -663,7 +663,7 @@ void StringValueScanner::SkipUntilNewLine() {
 }
 
 void StringValueScanner::SetStart() {
-	if (iterator.pos.buffer_idx == 0 && iterator.pos.buffer_pos <= buffer_manager->GetStartPos()) {
+	if (iterator.pos.buffer_idx == 0 && iterator.pos.buffer_pos == 0) {
 		// This means this is the very first buffer
 		// This CSV is not from auto-detect, so we don't know where exactly it starts
 		// Hence we potentially have to skip empty lines and headers.

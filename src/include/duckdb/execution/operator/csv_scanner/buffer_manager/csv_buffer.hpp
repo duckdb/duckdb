@@ -18,14 +18,14 @@ namespace duckdb {
 
 class CSVBufferHandle {
 public:
-	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p, const bool is_first_buffer_p,
-	                const bool is_final_buffer_p, idx_t csv_global_state_p, idx_t start_position_p, idx_t file_idx_p,
+	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p,
+	                const bool is_final_buffer_p, idx_t file_idx_p,
 	                idx_t buffer_index_p)
-	    : handle(std::move(handle_p)), actual_size(actual_size_p), is_first_buffer(is_first_buffer_p),
-	      is_last_buffer(is_final_buffer_p), csv_global_start(csv_global_state_p), file_idx(file_idx_p),
+	    : handle(std::move(handle_p)), actual_size(actual_size_p),
+	      is_last_buffer(is_final_buffer_p),  file_idx(file_idx_p),
 	      buffer_idx(buffer_index_p) {};
 	CSVBufferHandle()
-	    : actual_size(0), is_first_buffer(false), is_last_buffer(false), csv_global_start(0), file_idx(0),
+	    : actual_size(0),  is_last_buffer(false),  file_idx(0),
 	      buffer_idx(0) {};
 	~CSVBufferHandle() {
 		// unpinning the buffer should be magically done, i dont want to deal with this outside here
@@ -36,10 +36,7 @@ public:
 	//! Handle created during allocation
 	BufferHandle handle;
 	const idx_t actual_size;
-	const bool is_first_buffer;
 	const bool is_last_buffer;
-	const idx_t csv_global_start;
-	//	const idx_t start_position;
 	const idx_t file_idx;
 	const idx_t buffer_idx;
 	inline char *Ptr() {
@@ -67,8 +64,6 @@ public:
 	//! Gets the buffer actual size
 	idx_t GetBufferSize();
 
-	//! Gets the start position of the buffer, only relevant for the first time it's scanned
-	idx_t GetStart();
 
 	//! If this buffer is the last buffer of the CSV File
 	bool IsCSVFileLastBuffer();
@@ -100,9 +95,6 @@ private:
 	ClientContext &context;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_buffer_size;
-	//! We need to check for Byte Order Mark, to define the start position of this buffer
-	//! https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8
-	idx_t start_position = 0;
 	//! If this is the first buffer of the CSV File
 	bool first_buffer = false;
 	//! Global position from the CSV File where this buffer starts
