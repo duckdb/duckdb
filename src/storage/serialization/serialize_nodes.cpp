@@ -128,7 +128,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
 	serializer.WriteProperty<CSVOption<bool>>(124, "dialect_options.header", dialect_options.header);
 	serializer.WritePropertyWithDefault<idx_t>(125, "dialect_options.num_cols", dialect_options.num_cols);
-//	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.new_line", dialect_options.new_line);
+	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.state_machine_options.new_line", dialect_options.state_machine_options.new_line);
 	serializer.WriteProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", dialect_options.skip_rows);
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
 	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
@@ -162,7 +162,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
 	deserializer.ReadProperty<CSVOption<bool>>(124, "dialect_options.header", result.dialect_options.header);
 	deserializer.ReadPropertyWithDefault<idx_t>(125, "dialect_options.num_cols", result.dialect_options.num_cols);
-//	deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.new_line", result.dialect_options.new_line);
+	deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.state_machine_options.new_line", result.dialect_options.state_machine_options.new_line);
 	deserializer.ReadProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", result.dialect_options.skip_rows);
 	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", result.dialect_options.date_format);
 	deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);

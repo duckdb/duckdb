@@ -606,7 +606,7 @@
         "type": "idx_t"
       },
       {"id": 126,
-        "name": "dialect_options.new_line",
+        "name": "dialect_options.state_machine_options.new_line",
         "type": "CSVOption<NewLineIdentifier>"
       },
       {"id": 127,

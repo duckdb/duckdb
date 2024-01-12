@@ -190,8 +190,6 @@ enum class ParseInfoType : uint8_t;
 
 enum class ParserExtensionResultType : uint8_t;
 
-enum class ParserMode : uint8_t;
-
 enum class PartitionSortStage : uint8_t;
 
 enum class PartitionedColumnDataType : uint8_t;
@@ -541,9 +539,6 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
-
-template<>
-const char* EnumUtil::ToChars<ParserMode>(ParserMode value);
 
 template<>
 const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value);
@@ -950,9 +945,6 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
 
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);
-
-template<>
-ParserMode EnumUtil::FromString<ParserMode>(const char *value);
 
 template<>
 PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value);
