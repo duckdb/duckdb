@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/chimp/chimp_stress_test.test_slow
 # group: [chimp]
 
-# FIXME: TODO
+# FIXME: for small block sizes (16KB), this test returns a Constant segment in Line 62
 require block_size 262144
 
 # load the DB from disk

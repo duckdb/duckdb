@@ -2,9 +2,8 @@
 # description: test FILE_SIZE_BYTES parameter for COPY (slow test)
 # group: [copy]
 
-# FIXME: changing both the block size (16KB) and the vector size (512) causes this test to fail
-# FIXME: on the first COUNT(*) BETWEEN 550 AND 650: result is 0
-require block_size 262144
+# FIXME: see internal issue #1040
+require vector_size 2048
 
 statement ok
 CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0, 10000000) tbl(i);

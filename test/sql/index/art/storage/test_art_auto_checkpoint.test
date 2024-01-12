@@ -15,7 +15,8 @@ PRAGMA disable_checkpoint_on_shutdown;
 statement ok
 PRAGMA wal_autocheckpoint='400KB';
 
-# inserts approximately 338.0 KiB of data, i.e., the WAL has to exceed that (barely)
+# inserts approximately 786.0 KiB (256KB block size) or 338.0 KiB (16KB block size) of in-memory data,
+# i.e., the WAL has to exceed that (barely)
 
 statement ok
 CREATE TABLE tbl AS SELECT range AS i FROM range(40000);
@@ -48,7 +49,7 @@ PRAGMA disable_checkpoint_on_shutdown;
 statement ok
 PRAGMA wal_autocheckpoint='400KB';
 
-# inserts approximately 100 bytes (catalog entries), i.e., the WAL has to exceed that, we'll go a bit higher here
+# inserts just a few bytes (catalog entries), i.e., the WAL has to exceed that
 
 statement ok
 CREATE TABLE tbl (i INTEGER PRIMARY KEY);

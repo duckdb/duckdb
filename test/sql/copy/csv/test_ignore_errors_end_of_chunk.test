@@ -2,9 +2,9 @@
 # description: IGNORE_ERRORS test
 # group: [csv]
 
-# FIXME: changing both the block size (16KB) and the vector size (512) causes this test to fail
-# FIXME: with an error message that differs from the expected one
-require block_size 262144
+# IGNORE_ERRORS and NULL_PADDING happens on the first vector during dialect detection, so it is likely that
+# small vector sizes miss certain properties, resulting in different errors
+require vector_size 2048
 
 # Try without sniffing
 
