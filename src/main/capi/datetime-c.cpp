@@ -50,8 +50,10 @@ void duckdb_time_tz_extract(duckdb_time_tz micros, int64_t *out_micros, int32_t 
 	*out_offset = time.offset();
 }
 
-uint64_t duckdb_create_time_tz(int64_t micros, int32_t offset) {
-	return duckdb::dtime_tz_t(duckdb::dtime_t(micros), offset).bits;
+duckdb_time_tz duckdb_create_time_tz(int64_t micros, int32_t offset) {
+	duckdb_time_tz time;
+	time.micros = duckdb::dtime_tz_t(duckdb::dtime_t(micros), offset).bits;
+	return time;
 }
 
 duckdb_time duckdb_to_time(duckdb_time_struct time) {
