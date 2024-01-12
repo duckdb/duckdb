@@ -21,6 +21,9 @@ struct PragmaFunctions {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-string PragmaShow(ClientContext &context, const string &table_name);
+string PragmaShowTables();
+string PragmaShowTablesExpanded();
+string PragmaShowDatabases();
+string PragmaShow(const string &table_name);
 
 } // namespace duckdb

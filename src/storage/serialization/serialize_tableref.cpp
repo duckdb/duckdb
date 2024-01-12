@@ -143,14 +143,16 @@ unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
 
 void ShowRef::Serialize(Serializer &serializer) const {
 	TableRef::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(200, "query", query);
-	serializer.WritePropertyWithDefault<bool>(201, "is_summary", is_summary);
+	serializer.WritePropertyWithDefault<string>(200, "table_name", table_name);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
+	serializer.WriteProperty<ShowType>(202, "show_type", show_type);
 }
 
 unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ShowRef>(new ShowRef());
-	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(200, "query", result->query);
-	deserializer.ReadPropertyWithDefault<bool>(201, "is_summary", result->is_summary);
+	deserializer.ReadPropertyWithDefault<string>(200, "table_name", result->table_name);
+	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "query", result->query);
+	deserializer.ReadProperty<ShowType>(202, "show_type", result->show_type);
 	return std::move(result);
 }
 

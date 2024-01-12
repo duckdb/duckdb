@@ -17,7 +17,7 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 	return StringUtil::Format("SELECT * FROM pragma_table_info(%s);", KeywordHelper::WriteQuoted(parameters.values[0].ToString(), '\''));
 }
 
-string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
+string PragmaShowTables() {
 	// clang-format off
 	return R"EOF(
 	with "tables" as
@@ -41,8 +41,11 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	ORDER BY "name";)EOF";
 	// clang-format on
 }
+string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
+	return PragmaShowTables();
+}
 
-string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
+string PragmaShowTablesExpanded() {
 	return R"(
 	SELECT
 		t.database_name AS database,
@@ -74,8 +77,16 @@ string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters
 	)";
 }
 
-string PragmaShowDatabases(ClientContext &context, const FunctionParameters &parameters) {
+string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
+	return PragmaShowTablesExpanded();
+}
+
+string PragmaShowDatabases() {
 	return "SELECT database_name FROM duckdb_databases() WHERE NOT internal ORDER BY database_name;";
+}
+
+string PragmaShowDatabases(ClientContext &context, const FunctionParameters &parameters) {
+	return PragmaShowDatabases();
 }
 
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
@@ -99,12 +110,12 @@ string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &pa
 	       " ORDER BY 1;";
 }
 
-string PragmaShow(ClientContext &context, const string &table_name) {
+string PragmaShow(const string &table_name) {
 	return StringUtil::Format("SELECT * FROM pragma_show(%s);", KeywordHelper::WriteQuoted(table_name, '\''));
 }
 
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
-	return PragmaShow(context, parameters.values[0].ToString());
+	return PragmaShow(parameters.values[0].ToString());
 }
 
 string PragmaVersion(ClientContext &context, const FunctionParameters &parameters) {

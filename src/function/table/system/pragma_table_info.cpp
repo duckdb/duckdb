@@ -193,13 +193,11 @@ static ColumnConstraintInfo CheckConstraints(TableCatalogEntry &table, const Col
 		case ConstraintType::UNIQUE: {
 			auto &unique = constraint->Cast<UniqueConstraint>();
 			bool &constraint_info = unique.is_primary_key ? result.pk : result.unique;
-			if (unique.is_primary_key) {
-				if (unique.index == column.Logical()) {
-					constraint_info = true;
-				}
-				if (std::find(unique.columns.begin(), unique.columns.end(), column.GetName()) != unique.columns.end()) {
-					constraint_info = true;
-				}
+			if (unique.index == column.Logical()) {
+				constraint_info = true;
+			}
+			if (std::find(unique.columns.begin(), unique.columns.end(), column.GetName()) != unique.columns.end()) {
+				constraint_info = true;
 			}
 			break;
 		}

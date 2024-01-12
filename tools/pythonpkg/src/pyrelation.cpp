@@ -1180,7 +1180,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		    make_shared<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
 		return make_uniq<DuckDBPyRelation>(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
-		auto query = PragmaShow(*rel->context.GetContext(), view_name);
+		auto query = PragmaShow(view_name);
 		return Query(view_name, query);
 	}
 	{

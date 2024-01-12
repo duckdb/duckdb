@@ -28,4 +28,3 @@ a
 
 statement ok
 FROM (DESCRIBE databases) t
-

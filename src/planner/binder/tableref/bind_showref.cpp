@@ -2,13 +2,13 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
+#include "duckdb/function/pragma/pragma_functions.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
 
-unique_ptr<BoundTableRef> Binder::Bind(ShowRef &ref) {
-	if (ref.is_summary) {
-		throw InternalException("FIXME: summarize");
-	}
+unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
 	// bind the child plan of the DESCRIBE statement
 	auto child_binder = Binder::CreateBinder(context);
 	auto plan = child_binder->Bind(*ref.query);
@@ -16,7 +16,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ShowRef &ref) {
 	// construct a column data collection with the result
 	vector<string> return_names = {"column_name", "column_type", "null", "key", "default", "extra"};
 	vector<LogicalType> return_types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-								 LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+										LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	DataChunk output;
 	output.Initialize(Allocator::Get(context), return_types);
 
@@ -51,6 +51,35 @@ unique_ptr<BoundTableRef> Binder::Bind(ShowRef &ref) {
 	auto show = make_uniq<LogicalColumnDataGet>(GenerateTableIndex(), return_types, std::move(collection));
 	bind_context.AddGenericBinding(show->table_index, "__show_select", return_names, return_types);
 	return make_uniq<BoundTableFunction>(std::move(show));
+}
+
+unique_ptr<BoundTableRef> Binder::BindShowTable(ShowRef &ref) {
+	auto lname = StringUtil::Lower(ref.table_name);
+
+	string sql;
+	if (lname == "\"databases\"") {
+		sql = PragmaShowDatabases();
+	} else if (lname == "\"tables\"") {
+		sql = PragmaShowTables();
+	} else if (lname == "__show_tables_expanded") {
+		sql = PragmaShowTablesExpanded();
+	} else {
+		sql = PragmaShow(ref.table_name);
+	}
+	auto select = CreateViewInfo::ParseSelect(sql);
+	auto subquery = make_uniq<SubqueryRef>(std::move(select));
+	return Bind(*subquery);
+}
+
+unique_ptr<BoundTableRef> Binder::Bind(ShowRef &ref) {
+	if (ref.show_type == ShowType::SUMMARY) {
+		throw InternalException("FIXME: summarize");
+	}
+	if (ref.query) {
+		return BindShowQuery(ref);
+	} else {
+		return BindShowTable(ref);
+	}
 }
 
 } // namespace duckdb

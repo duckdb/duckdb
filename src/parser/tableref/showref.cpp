@@ -2,17 +2,21 @@
 
 namespace duckdb {
 
-ShowRef::ShowRef() : TableRef(TableReferenceType::SHOW_REF) {
+ShowRef::ShowRef() : TableRef(TableReferenceType::SHOW_REF), show_type(ShowType::DESCRIBE) {
 }
 
 string ShowRef::ToString() const {
 	string result;
-	if (is_summary) {
+	if (show_type == ShowType::SUMMARY) {
 		result += "SUMMARIZE ";
 	} else {
 		result += "DESCRIBE ";
 	}
-	result += query->ToString();
+	if (query) {
+		result += query->ToString();
+	} else {
+		result += table_name;
+	}
 	return result;
 }
 
@@ -21,14 +25,20 @@ bool ShowRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<ShowRef>();
-	return other.query->Equals(query.get()) && is_summary == other.is_summary;
+	if (other.query.get() != query.get()) {
+		if (!other.query->Equals(query.get())) {
+			return false;
+		}
+	}
+	return table_name == other.table_name && show_type == other.show_type;
 }
 
 unique_ptr<TableRef> ShowRef::Copy() {
 	auto copy = make_uniq<ShowRef>();
 
-	copy->query = query->Copy();
-	copy->is_summary = is_summary;
+	copy->table_name = table_name;
+	copy->query = query ? query->Copy() : nullptr;
+	copy->show_type = show_type;
 	CopyProperties(*copy);
 
 	return std::move(copy);

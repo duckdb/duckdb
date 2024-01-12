@@ -16,7 +16,7 @@ unique_ptr<SelectStatement> Transformer::TransformShowSelect(duckdb_libpgquery::
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 
 	auto show_ref = make_uniq<ShowRef>();
-	show_ref->is_summary = stmt.is_summary;
+	show_ref->show_type = stmt.is_summary ? ShowType::SUMMARY : ShowType::DESCRIBE;
 	show_ref->query = TransformSelectNode(*select_stmt);
 	select_node->from_table = std::move(show_ref);
 
