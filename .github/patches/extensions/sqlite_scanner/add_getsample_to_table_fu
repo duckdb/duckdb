@@ -1,0 +1,36 @@
+diff --git a/src/include/storage/sqlite_table_entry.hpp b/src/include/storage/sqlite_table_entry.hpp
+index 6e64d55..b7cbdd9 100644
+--- a/src/include/storage/sqlite_table_entry.hpp
++++ b/src/include/storage/sqlite_table_entry.hpp
+@@ -21,6 +21,8 @@ public:
+ public:
+ 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
+ 
++	optional_ptr<BlockingSample> GetSample() override;
++
+ 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
+ 
+ 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+diff --git a/src/storage/sqlite_table_entry.cpp b/src/storage/sqlite_table_entry.cpp
+index 9d83f00..506a4d6 100644
+--- a/src/storage/sqlite_table_entry.cpp
++++ b/src/storage/sqlite_table_entry.cpp
+@@ -2,6 +2,7 @@
+ #include "storage/sqlite_table_entry.hpp"
+ #include "storage/sqlite_transaction.hpp"
+ #include "duckdb/storage/statistics/base_statistics.hpp"
++#include "duckdb/execution/reservoir_sample.hpp"
+ #include "sqlite_scanner.hpp"
+ #include "duckdb/storage/table_storage_info.hpp"
+ 
+@@ -16,6 +17,10 @@ unique_ptr<BaseStatistics> SQLiteTableEntry::GetStatistics(ClientContext &contex
+ 	return nullptr;
+ }
+ 
++optional_ptr<BlockingSample> PostgresTableEntry::GetSample() {
++	return nullptr;
++}
++
+ void SQLiteTableEntry::BindUpdateConstraints(LogicalGet &, LogicalProjection &, LogicalUpdate &, ClientContext &) {
+ }
+ 

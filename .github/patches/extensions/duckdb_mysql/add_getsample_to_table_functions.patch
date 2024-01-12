@@ -1,0 +1,36 @@
+diff --git a/src/include/storage/mysql_table_entry.hpp b/src/include/storage/mysql_table_entry.hpp
+index dbbed8a..dfd6779 100644
+--- a/src/include/storage/mysql_table_entry.hpp
++++ b/src/include/storage/mysql_table_entry.hpp
+@@ -40,6 +40,8 @@ public:
+ public:
+ 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
+ 
++	optional_ptr<BlockingSample> GetSample() override;
++
+ 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
+ 
+ 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+diff --git a/src/storage/mysql_table_entry.cpp b/src/storage/mysql_table_entry.cpp
+index 796291b..aba465d 100644
+--- a/src/storage/mysql_table_entry.cpp
++++ b/src/storage/mysql_table_entry.cpp
+@@ -3,6 +3,7 @@
+ #include "storage/mysql_transaction.hpp"
+ #include "duckdb/storage/statistics/base_statistics.hpp"
+ #include "duckdb/storage/table_storage_info.hpp"
++#include "duckdb/execution/reservoir_sample.hpp"
+ #include "mysql_scanner.hpp"
+ 
+ namespace duckdb {
+@@ -19,6 +20,10 @@ unique_ptr<BaseStatistics> MySQLTableEntry::GetStatistics(ClientContext &context
+ 	return nullptr;
+ }
+ 
++optional_ptr<BlockingSample> MySQLTableEntry::GetSample() {
++	return nullptr;
++}
++
+ void MySQLTableEntry::BindUpdateConstraints(LogicalGet &, LogicalProjection &, LogicalUpdate &, ClientContext &) {
+ }
+ 

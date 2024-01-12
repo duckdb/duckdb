@@ -1,18 +1,18 @@
 diff --git a/src/include/storage/postgres_table_entry.hpp b/src/include/storage/postgres_table_entry.hpp
-index d96dfad..ea1ba19 100644
+index d96dfad..6279076 100644
 --- a/src/include/storage/postgres_table_entry.hpp
 +++ b/src/include/storage/postgres_table_entry.hpp
-@@ -50,6 +50,8 @@ public:
- 
- 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+@@ -46,6 +46,8 @@ public:
+ public:
+ 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
  
 +	optional_ptr<BlockingSample> GetSample() override;
 +
- 	void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
- 	                           ClientContext &context) override;
+ 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
  
+ 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 diff --git a/src/storage/postgres_table_entry.cpp b/src/storage/postgres_table_entry.cpp
-index d791678..eb88b83 100644
+index d791678..93caa7b 100644
 --- a/src/storage/postgres_table_entry.cpp
 +++ b/src/storage/postgres_table_entry.cpp
 @@ -3,6 +3,7 @@
@@ -23,13 +23,21 @@ index d791678..eb88b83 100644
  #include "postgres_scanner.hpp"
  
  namespace duckdb {
-@@ -61,6 +62,10 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
- 	return function;
+@@ -31,6 +32,10 @@ unique_ptr<BaseStatistics> PostgresTableEntry::GetStatistics(ClientContext &cont
+ 	return nullptr;
  }
  
 +optional_ptr<BlockingSample> PostgresTableEntry::GetSample() {
 +	return nullptr;
 +}
++
+ void PostgresTableEntry::BindUpdateConstraints(LogicalGet &, LogicalProjection &, LogicalUpdate &, ClientContext &) {
+ }
+ 
+@@ -61,6 +66,7 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
+ 	return function;
+ }
+ 
 +
  TableStorageInfo PostgresTableEntry::GetStorageInfo(ClientContext &context) {
  	auto &transaction = Transaction::Get(context, catalog).Cast<PostgresTransaction>();
