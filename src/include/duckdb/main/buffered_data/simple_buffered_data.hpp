@@ -28,9 +28,9 @@ public:
 	SimpleBufferedData(shared_ptr<ClientContext> context);
 
 public:
-	void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) override;
+	void Append(unique_ptr<DataChunk> chunk, LocalSinkState &state) override;
 	void AddToBacklog(BlockedSink blocked_sink) override;
-	bool BufferIsFull() const override;
+	bool BufferIsFull() override;
 	void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 

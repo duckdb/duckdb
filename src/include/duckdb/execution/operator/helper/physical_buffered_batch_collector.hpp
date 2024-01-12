@@ -1,0 +1,54 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/common/queue.hpp"
+
+namespace duckdb {
+
+class BufferedBatchCollectorLocalState : public LocalSinkState {
+public:
+	BufferedBatchCollectorLocalState(Pipeline &pipeline);
+
+public:
+	void BufferChunk(unique_ptr<DataChunk> chunk);
+
+public:
+	Pipeline &pipeline;
+	bool blocked = false;
+	queue<unique_ptr<DataChunk>> buffered_chunks;
+};
+
+class PhysicalBufferedBatchCollector : public PhysicalResultCollector {
+public:
+	PhysicalBufferedBatchCollector(PreparedStatementData &data);
+
+public:
+	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+
+public:
+	// Sink interface
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
+
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	bool RequiresBatchIndex() const override {
+		return true;
+	}
+
+	bool ParallelSink() const override {
+		return true;
+	}
+};
+
+} // namespace duckdb

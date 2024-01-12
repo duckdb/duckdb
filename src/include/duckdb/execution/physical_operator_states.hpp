@@ -113,6 +113,14 @@ public:
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+public:
+	idx_t GetMinimumBatchIndex() const {
+		return partition_info.min_batch_index.GetIndex();
+	}
+	idx_t BatchIndex() const {
+		return partition_info.batch_index.GetIndex();
+	}
 };
 
 class GlobalSourceState {

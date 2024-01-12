@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
 
 namespace duckdb {
 
@@ -46,9 +47,9 @@ public:
 	}
 
 public:
-	virtual void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) = 0;
+	virtual void Append(unique_ptr<DataChunk> chunk, LocalSinkState &state) = 0;
 	virtual void AddToBacklog(BlockedSink blocked_sink) = 0;
-	virtual bool BufferIsFull() const = 0;
+	virtual bool BufferIsFull() = 0;
 	virtual void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	shared_ptr<ClientContext> GetContext() {
