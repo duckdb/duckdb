@@ -6,7 +6,6 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"

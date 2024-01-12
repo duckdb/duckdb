@@ -17,6 +17,7 @@ add_library_unity(
   pad.cpp
   parse_path.cpp
   printf.cpp
+  regexp_escape.cpp
   repeat.cpp
   replace.cpp
   reverse.cpp

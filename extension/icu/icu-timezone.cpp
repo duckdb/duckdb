@@ -10,6 +10,16 @@
 
 namespace duckdb {
 
+template <typename T>
+static bool ICUIsFinite(const T &t) {
+	return true;
+}
+
+template <>
+bool ICUIsFinite(const timestamp_t &t) {
+	return Timestamp::IsFinite(t);
+}
+
 struct ICUTimeZoneData : public GlobalTableFunctionState {
 	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
 		UErrorCode status = U_ZERO_ERROR;
@@ -93,7 +103,7 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 
 struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_t naive) {
-		if (!Timestamp::IsFinite(naive)) {
+		if (!ICUIsFinite(naive)) {
 			return naive;
 		}
 
@@ -157,7 +167,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 
 struct ICUToNaiveTimestamp : public ICUDateFunc {
 	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_t instant) {
-		if (!Timestamp::IsFinite(instant)) {
+		if (!ICUIsFinite(instant)) {
 			return instant;
 		}
 
@@ -289,8 +299,23 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 	}
 };
 
+struct ICUToTimeTZ : public ICUDateFunc {
+	static inline dtime_tz_t Operation(icu::Calendar *calendar, dtime_tz_t timetz) {
+		// Normalise to +00:00, add TZ offset, then set offset to TZ
+		auto time = Time::NormalizeTimeTZ(timetz);
+
+		auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
+		offset += ExtractField(calendar, UCAL_DST_OFFSET);
+		offset /= Interval::MSECS_PER_SEC;
+
+		date_t date(0);
+		time = Interval::Add(time, {0, 0, offset * Interval::MICROS_PER_SEC}, date);
+		return dtime_tz_t(time, offset);
+	}
+};
+
 struct ICUTimeZoneFunc : public ICUDateFunc {
-	template <typename OP>
+	template <typename OP, typename T>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
@@ -307,28 +332,29 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 				ConstantVector::SetNull(result, true);
 			} else {
 				SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-				UnaryExecutor::Execute<timestamp_t, timestamp_t>(
-				    ts_vec, result, input.size(), [&](timestamp_t ts) { return OP::Operation(calendar, ts); });
+				UnaryExecutor::Execute<T, T>(ts_vec, result, input.size(),
+				                             [&](T ts) { return OP::Operation(calendar, ts); });
 			}
 		} else {
-			BinaryExecutor::Execute<string_t, timestamp_t, timestamp_t>(tz_vec, ts_vec, result, input.size(),
-			                                                            [&](string_t tz_id, timestamp_t ts) {
-				                                                            if (Timestamp::IsFinite(ts)) {
-					                                                            SetTimeZone(calendar, tz_id);
-					                                                            return OP::Operation(calendar, ts);
-				                                                            } else {
-					                                                            return ts;
-				                                                            }
-			                                                            });
+			BinaryExecutor::Execute<string_t, T, T>(tz_vec, ts_vec, result, input.size(), [&](string_t tz_id, T ts) {
+				if (ICUIsFinite(ts)) {
+					SetTimeZone(calendar, tz_id);
+					return OP::Operation(calendar, ts);
+				} else {
+					return ts;
+				}
+			});
 		}
 	}
 
 	static void AddFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP_TZ,
-		                               Execute<ICUFromNaiveTimestamp>, Bind));
+		                               Execute<ICUFromNaiveTimestamp, timestamp_t>, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP,
-		                               Execute<ICUToNaiveTimestamp>, Bind));
+		                               Execute<ICUToNaiveTimestamp, timestamp_t>, Bind));
+		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
+		                               Execute<ICUToTimeTZ, dtime_tz_t>, Bind));
 		ExtensionUtil::AddFunctionOverload(db, set);
 	}
 };

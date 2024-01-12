@@ -2010,7 +2010,7 @@ struct HugeIntCastData {
 				return false;
 			}
 		}
-		if (!OP::AddInPlace(result, ResultType(intermediate))) {
+		if (!OP::TryAddInPlace(result, ResultType(intermediate))) {
 			return false;
 		}
 		digits = 0;
@@ -2030,7 +2030,7 @@ struct HugeIntCastData {
 				return false;
 			}
 		}
-		if (!OP::AddInPlace(decimal, ResultType(decimal_intermediate))) {
+		if (!OP::TryAddInPlace(decimal, ResultType(decimal_intermediate))) {
 			return false;
 		}
 		decimal_total_digits += decimal_intermediate_digits;

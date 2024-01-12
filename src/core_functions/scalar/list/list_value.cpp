@@ -45,9 +45,7 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 			                      child_type.ToString(), arg_type.ToString());
 		}
 	}
-	if (child_type.id() == LogicalTypeId::STRING_LITERAL) {
-		child_type = LogicalType::VARCHAR;
-	}
+	child_type = LogicalType::NormalizeType(child_type);
 
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;

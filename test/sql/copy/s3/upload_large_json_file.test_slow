@@ -1,0 +1,87 @@
+# name: test/sql/copy/s3/upload_large_json_file.test_slow
+# description: Copy large json files from and to S3.
+# group: [s3]
+
+require tpch
+
+require json
+
+require parquet
+
+require httpfs
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# Require that these environment variables are also set
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+statement ok
+set http_timeout=120000;
+
+# More retries (longest wait will be 25600ms)
+statement ok
+set http_retries=6;
+
+statement ok
+CALL DBGEN(sf=0.1)
+
+query I
+SELECT
+    sum(l_extendedprice * l_discount) AS revenue
+FROM
+    lineitem
+WHERE
+    l_shipdate >= CAST('1994-01-01' AS date)
+    AND l_shipdate < CAST('1995-01-01' AS date)
+    AND l_discount BETWEEN 0.05
+    AND 0.07
+    AND l_quantity < 24;
+----
+11803420.2534
+
+statement ok
+COPY lineitem TO 's3://test-bucket/multipart/export_large.json' (FORMAT 'json');
+
+query I
+SELECT
+    sum(l_extendedprice * l_discount) AS revenue
+FROM
+    "s3://test-bucket/multipart/export_large.json"
+WHERE
+    l_shipdate >= CAST('1994-01-01' AS date)
+    AND l_shipdate < CAST('1995-01-01' AS date)
+    AND l_discount BETWEEN 0.05
+    AND 0.07
+    AND l_quantity < 24;
+----
+11803420.2534
+
+# This query triggers an edge case where we apply an S3-specific optimization using multiple cached filehandles
+query I
+SELECT
+    sum(l_extendedprice * l_discount)/3 AS revenue
+FROM
+    read_json_auto([
+        's3://test-bucket/multipart/export_large.json',
+        's3://test-bucket/multipart/export_large.json',
+        's3://test-bucket/multipart/export_large.json',])
+WHERE
+    l_shipdate >= CAST('1994-01-01' AS date)
+    AND l_shipdate < CAST('1995-01-01' AS date)
+    AND l_discount BETWEEN 0.05
+    AND 0.07
+    AND l_quantity < 24;
+----
+11803420.2534

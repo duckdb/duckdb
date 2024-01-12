@@ -52,6 +52,10 @@ vector<string> GetUniqueNames(const vector<string> &original_names) {
 	return unique_names;
 }
 
+static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
+	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+}
+
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
@@ -79,8 +83,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	bool use_tmp_file = true;
 	bool overwrite_or_ignore = false;
 	FilenamePattern filename_pattern;
+	string file_extension = copy_function.function.extension;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
+	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
 
 	auto original_options = stmt.info->options;
@@ -89,45 +95,56 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	for (auto &option : original_options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "use_tmp_file") {
-			use_tmp_file =
-			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			use_tmp_file = GetBooleanArg(context, option.second);
 			user_set_use_tmp_file = true;
-			continue;
-		}
-		if (loption == "overwrite_or_ignore") {
-			overwrite_or_ignore =
-			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
-			continue;
-		}
-		if (loption == "filename_pattern") {
+		} else if (loption == "overwrite_or_ignore") {
+			overwrite_or_ignore = GetBooleanArg(context, option.second);
+		} else if (loption == "filename_pattern") {
 			if (option.second.empty()) {
 				throw IOException("FILENAME_PATTERN cannot be empty");
 			}
 			filename_pattern.SetFilenamePattern(
 			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
-			continue;
-		}
-
-		if (loption == "per_thread_output") {
-			per_thread_output =
-			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
-			continue;
-		}
-		if (loption == "partition_by") {
+		} else if (loption == "file_extension") {
+			if (option.second.empty()) {
+				throw IOException("FILE_EXTENSION cannot be empty");
+			}
+			file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+		} else if (loption == "per_thread_output") {
+			per_thread_output = GetBooleanArg(context, option.second);
+		} else if (loption == "file_size_bytes") {
+			if (option.second.empty()) {
+				throw BinderException("FILE_SIZE_BYTES cannot be empty");
+			}
+			if (!copy_function.function.file_size_bytes) {
+				throw NotImplementedException("FILE_SIZE_BYTES not implemented for FORMAT \"%s\"", stmt.info->format);
+			}
+			if (option.second[0].GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
+				file_size_bytes = DBConfig::ParseMemoryLimit(option.second[0].ToString());
+			} else {
+				file_size_bytes = option.second[0].GetValue<uint64_t>();
+			}
+		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
-			continue;
+		} else {
+			stmt.info->options[option.first] = option.second;
 		}
-		stmt.info->options[option.first] = option.second;
 	}
 	if (user_set_use_tmp_file && per_thread_output) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY");
+	}
+	if (user_set_use_tmp_file && file_size_bytes.IsValid()) {
+		throw NotImplementedException("Can't combine USE_TMP_FILE and FILE_SIZE_BYTES for COPY");
 	}
 	if (user_set_use_tmp_file && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine USE_TMP_FILE and PARTITION_BY for COPY");
 	}
 	if (per_thread_output && !partition_cols.empty()) {
 		throw NotImplementedException("Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY");
+	}
+	if (file_size_bytes.IsValid() && !partition_cols.empty()) {
+		throw NotImplementedException("Can't combine FILE_SIZE_BYTES and PARTITION_BY for COPY");
 	}
 	bool is_remote_file = config.file_system->IsRemoteFile(stmt.info->file_path);
 	if (is_remote_file) {
@@ -151,7 +168,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
 	copy->filename_pattern = filename_pattern;
+	copy->file_extension = file_extension;
 	copy->per_thread_output = per_thread_output;
+	if (file_size_bytes.IsValid()) {
+		copy->file_size_bytes = file_size_bytes;
+	}
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
 
