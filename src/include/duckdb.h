@@ -128,8 +128,9 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_UNION,
 	// duckdb_bit
 	DUCKDB_TYPE_BIT,
-	// uint64_t (40 bits for int64_t micros, and 24 bits for int32_t offset)
+	// duckdb_time_tz
 	DUCKDB_TYPE_TIME_TZ,
+	// duckdb_timestamp
 	DUCKDB_TYPE_TIMESTAMP_TZ,
 } duckdb_type;
 
