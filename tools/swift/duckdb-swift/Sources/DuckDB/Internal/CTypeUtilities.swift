@@ -148,12 +148,11 @@ extension duckdb_time_struct {
 }
 
 extension duckdb_time_tz {
-  var asTime: Time {
+  var asTime: TimeTz {
     let out_micros = UnsafeMutablePointer<Int64>.allocate(capacity: 1);
     let out_offset = UnsafeMutablePointer<Int32>.allocate(capacity: 1);
     duckdb_time_tz_extract(self, out_micros, out_offset)
-    // TODO: use offset
-    return Time(microseconds: out_micros.pointee)
+    return TimeTz(time: Time(microseconds: out_micros.pointee), timezone: out_offset.pointee)
   }
 }
 

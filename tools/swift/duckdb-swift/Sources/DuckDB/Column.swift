@@ -350,6 +350,11 @@ public extension Column {
     let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
+
+  func cast(to type: TimeTz.Type) -> Column<TimeTz> {
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
   
   /// Casts the column to the given type
   ///

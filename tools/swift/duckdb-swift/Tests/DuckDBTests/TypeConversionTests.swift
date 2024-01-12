@@ -119,11 +119,11 @@ final class TypeConversionTests: XCTestCase {
 
   func test_extract_from_time_tz() throws {
     let expected = [
-      Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)),
-      Time(components: .init(hour: 24, minute: 0, second: 0, microsecond: 0)),
+      TimeTz(time: Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)), timezone: 57599),
+      TimeTz(time: Time(components: .init(hour: 24, minute: 0, second: 0, microsecond: 0)), timezone: -57599),
       nil
     ]
-    try extractTest(testColumnName: "time_tz", expected: expected) { $0.cast(to: Time.self) }
+    try extractTest(testColumnName: "time_tz", expected: expected) { $0.cast(to: TimeTz.self) }
   }
 
   func test_extract_from_date() throws {

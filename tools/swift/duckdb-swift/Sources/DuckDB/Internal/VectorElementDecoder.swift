@@ -209,7 +209,7 @@ extension VectorElementDataDecoder {
       try attemptDecode { try element.unwrap(type) }
     }
     
-    func decode(_ type: TimeTz.Type) throws -> Time {
+    func decode(_ type: TimeTz.Type) throws -> TimeTz {
       try attemptDecode { try element.unwrap(type) }
     }
 
