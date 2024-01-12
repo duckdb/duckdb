@@ -8,7 +8,6 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
@@ -24,6 +23,8 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -565,6 +566,16 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	}
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
+	// Ensure the index type exists
+	if (info.index_type.empty()) {
+		info.index_type = ART::TYPE_NAME;
+	}
+
+	auto index_type = context.db->config.GetIndexTypes().FindByName(info.index_type);
+	if (!index_type) {
+		throw InternalException("Index type \"%s\" not recognized", info.index_type);
+	}
+
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
@@ -604,9 +615,10 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
-	                          std::move(unbound_expressions), data_table.db, nullptr, index_info);
-	data_table.info->indexes.AddIndex(std::move(art));
+	auto index_instance =
+	    index_type->create_instance(info.index_name, info.constraint_type, info.column_ids, unbound_expressions,
+	                                TableIOManager::Get(data_table), data_table.db, index_info);
+	data_table.info->indexes.AddIndex(std::move(index_instance));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

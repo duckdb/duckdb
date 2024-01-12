@@ -21,6 +21,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -31,6 +32,7 @@ namespace duckdb {
 DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	cast_functions = make_uniq<CastFunctionSet>(*this);
+	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }

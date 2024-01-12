@@ -33,7 +33,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// if we get here and the index type is not ART, we throw an exception
 	// because we don't support any other index type yet. However, an operator extension could have
 	// replaced this part of the plan with a different index creation operator.
-	if (op.info->index_type != "ART") {
+	if (op.info->index_type != ART::TYPE_NAME) {
 		throw BinderException("Unknown index type: " + op.info->index_type);
 	}
 

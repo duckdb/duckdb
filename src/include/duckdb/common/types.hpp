@@ -213,6 +213,7 @@ enum class LogicalTypeId : uint8_t {
 	TIME_TZ = 34,
 	BIT = 36,
 	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
+	INTEGER_LITERAL = 38,/* integer literals, used for constant integers - only exists while binding */
 
 	UHUGEINT = 49,
 	HUGEINT = 50,
@@ -307,6 +308,8 @@ struct LogicalType {
 	DUCKDB_API static bool TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right, LogicalType &result);
 	//! Forcibly returns a maximum logical type - similar to MaxLogicalType but never throws. As a fallback either left or right are returned.
 	DUCKDB_API static LogicalType ForceMaxLogicalType(const LogicalType &left, const LogicalType &right);
+	//! Normalize a type - removing literals
+	DUCKDB_API static LogicalType NormalizeType(const LogicalType &type);
 
 
 		//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
@@ -374,6 +377,10 @@ public:
 	// an array of unknown size (only used for binding)
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);        // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
+	// ANY but with special rules (default is LogicalType::ANY, 5)
+	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
+	//! Integer literal of the specified value
+	DUCKDB_API static LogicalType INTEGER_LITERAL(const Value &constant);               // NOLINT
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
@@ -454,6 +461,18 @@ struct ArrayType {
 struct AggregateStateType {
 	DUCKDB_API static const string GetTypeName(const LogicalType &type);
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
+};
+
+struct AnyType {
+	DUCKDB_API static LogicalType GetTargetType(const LogicalType &type);
+	DUCKDB_API static idx_t GetCastScore(const LogicalType &type);
+};
+
+struct IntegerLiteral {
+	//! Returns the type that this integer literal "prefers"
+	DUCKDB_API static LogicalType GetType(const LogicalType &type);
+	//! Whether or not the integer literal fits into the target numeric type
+	DUCKDB_API static bool FitsInType(const LogicalType &type, const LogicalType &target);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.

@@ -565,11 +565,10 @@ class TestExpression(object):
     def test_numeric_overflow(self):
         con = duckdb.connect()
         rel = con.sql('select 3000::SHORT salary')
-        # If 100 is implicitly cast to TINYINT, the execution fails in an OverflowError
-        expr = ColumnExpression("salary") * 100
-        rel2 = rel.select(expr)
-        res = rel2.fetchall()
-        assert res == [(300_000,)]
+        with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
+            expr = ColumnExpression("salary") * 100
+            rel2 = rel.select(expr)
+            res = rel2.fetchall()
 
         with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
             val = duckdb.Value(100, duckdb.typing.TINYINT)
