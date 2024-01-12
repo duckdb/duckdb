@@ -81,11 +81,12 @@ SELECT parse_path('', '');
 statement error
 SELECT parse_path();
 ----
+Binder Error: No function matches the given name and argument types 'parse_path()'. You might need to add explicit type casts.
 
 statement error
 SELECT parse_path('/home/docs', true, 'system');
 ----
-
+Binder Error: No function matches the given name and argument types 'parse_path(STRING_LITERAL, BOOLEAN, STRING_LITERAL)'.
 
 # test parse_dirname
 # all separators option
@@ -167,10 +168,12 @@ SELECT parse_dirname('', '');
 statement error
 SELECT parse_dirname();
 ----
+Binder Error: No function matches the given name and argument types 'parse_dirname()'.
 
 statement error
 SELECT parse_dirname('/home/docs', true, 'system');
 ----
+Binder Error: No function matches the given name and argument types 'parse_dirname(STRING_LITERAL, BOOLEAN, STRING_LITERAL)'.
 
 
 # test parse_filename
@@ -305,7 +308,6 @@ SELECT parse_filename(NULL, '');
 ----
 NULL
 
-
 query T
 SELECT parse_filename('', '');
 ----
@@ -320,16 +322,20 @@ SELECT parse_filename('');
 statement error
 SELECT parse_filename(true);
 ----
+Binder Error: No function matches the given name and argument types 'parse_filename(BOOLEAN)'.
 
 statement error
 SELECT parse_filename('home/user/documents/file.csv', 'system', true);
 ----
+Binder Error: No function matches the given name and argument types 'parse_filename(STRING_LITERAL, STRING_LITERAL, BOOLEAN)'.
 
 statement error
 SELECT parse_filename('home/user/documents/file.csv', 'system', 'true');
 ----
+Conversion Error: Could not convert string 'system' to BOOL
 
 statement error
 SELECT parse_filename();
 ----
+Binder Error: No function matches the given name and argument types 'parse_filename()'.
 

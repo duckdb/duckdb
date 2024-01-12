@@ -36,6 +36,7 @@ SELECT parse_path('');
 statement error
 SELECT parse_path();
 ----
+Binder Error: No function matches the given name and argument types 'parse_path()'. You might need to add explicit type casts.
 
 
 # test parse_dirname
@@ -63,7 +64,7 @@ SELECT parse_dirname('');
 statement error
 SELECT parse_dirname();
 ----
-
+Binder Error: No function matches the given name and argument types 'parse_dirname()'.
 
 # test parse_filename
 # all separators option
@@ -97,3 +98,4 @@ SELECT parse_filename('');
 statement error
 SELECT parse_filename();
 ----
+Binder Error: No function matches the given name and argument types 'parse_filename()'.
