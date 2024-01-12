@@ -778,10 +778,18 @@ end
 # end
 #
 
+"""
+Decompose a TIME_TZ objects into micros and a timezone offset.
+
+Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
+
+* micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+* out_micros: The microsecond component of the time.
+* out_offset: The timezone offset component of the time.
+"""
 function duckdb_time_tz_extract(val, micros, tz)
     return ccall((:duckdb_time_tz_extract, libduckdb), Cvoid, (UInt64, Ref{Int64}, Ref{Int32}), val, micros, tz)
 end
-
 
 #
 # """
