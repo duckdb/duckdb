@@ -80,8 +80,9 @@ static idx_t FindLast(const char *data_ptr, idx_t input_size, const string &sep_
 		data_ptr += (pos + 1);
 		input_size -= (pos + 1);
 	}
-	if (start < 1)
+	if (start < 1) {
 		return DConstants::INVALID_INDEX;
+	}
 	return start - 1;
 }
 
@@ -267,7 +268,11 @@ ScalarFunctionSet ParseFilenameFun::GetFunctions() {
 	parse_filename.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr, nullptr,
 	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
-	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::ANY}, LogicalType::VARCHAR,
+	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                          TrimPathFunction<false>, nullptr, nullptr, nullptr, nullptr,
+	                                          LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS,
+	                                          FunctionNullHandling::SPECIAL_HANDLING));
+	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::VARCHAR,
 	                                          TrimPathFunction<false>, nullptr, nullptr, nullptr, nullptr,
 	                                          LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS,
 	                                          FunctionNullHandling::SPECIAL_HANDLING));

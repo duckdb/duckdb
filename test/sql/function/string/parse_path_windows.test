@@ -61,7 +61,7 @@ SELECT parse_dirname('');
 
 # test incorrect usage
 statement error
-SELECT parse_dirname('file.csv');
+SELECT parse_dirname();
 ----
 
 
@@ -95,5 +95,5 @@ SELECT parse_filename('');
 
 # test incorrect usage
 statement error
-SELECT parse_filename('file.csv');
+SELECT parse_filename();
 ----
