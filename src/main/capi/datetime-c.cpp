@@ -44,8 +44,8 @@ duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	return result;
 }
 
-void duckdb_time_tz_extract(uint64_t micros, int64_t *out_micros, int32_t *out_offset) {
-	duckdb::dtime_tz_t time(micros);
+void duckdb_time_tz_extract(duckdb_time_tz micros, int64_t *out_micros, int32_t *out_offset) {
+	duckdb::dtime_tz_t time(micros.micros);
 	*out_micros = int64_t(time.time());
 	*out_offset = time.offset();
 }

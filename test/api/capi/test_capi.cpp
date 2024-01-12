@@ -426,7 +426,7 @@ TEST_CASE("decompose timetz with duckdb_time_tz_extract", "[capi]") {
 	REQUIRE(chunk->ColumnCount() == 1);
 	REQUIRE(res->ColumnType(0) == DUCKDB_TYPE_TIME_TZ);
 
-	auto data = (uint64_t *)chunk->GetData(0);
+	auto data = (duckdb_time_tz *)chunk->GetData(0);
 
 	duckdb_time time;
 	int32_t offset;
