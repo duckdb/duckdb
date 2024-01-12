@@ -6,20 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// whats the issue with sotring percentage samples in local state?
-// mostly with merging
-// if you have multiple unfinished samples during merging, then each unfinished sample needs to be merged
-// The problem is if you have two samples that have seen below the reservoir threashold, but they have
-// weights etc.
-// I.e
-// Sample 1 has 40,000 tuples after seeing 68640 rows.
-// Sample 2 has 40,000 tuples after seeing 85600 rows.
-//
-// Desired result after merging is
-// Sample (1+2) has 40,000 tuples after seeing 100,000 rows
-// Sample 3 has 8640 tuples after seeing 54,240 rows
-//           - all samples in sample 3 have the weights from when they were in sample 2.
-
 #pragma once
 
 #include "duckdb/common/allocator.hpp"

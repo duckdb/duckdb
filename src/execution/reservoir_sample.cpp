@@ -219,7 +219,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
-	throw NotImplementedException("GetChunk() not implemented for reservoir chunks");
+	throw NotImplementedException("GetChunk() not implemented for reservoir sample chunks");
 }
 
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAndShrink() {

@@ -109,7 +109,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
 	auto &storage = table->GetStorage();
 	storage.info->cardinality = storage.GetTotalRows();
-
 	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
 	if (!entry) {
 		return nullptr;

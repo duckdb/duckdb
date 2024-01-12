@@ -1,0 +1,61 @@
+# name: test/sql/sample/table_sample_is_stored.test_slow
+# description: Test sampling of larger relations
+# group: [sample]
+
+statement ok
+set threads=1;
+
+statement ok
+create table integers_1 as (select (range + 5)::VARCHAR a, range b from range(1000000));
+
+query II nosort result_1
+select * from pragma_table_sample('integers_1') order by all limit 20;
+----
+
+statement ok
+create table integers_2 as (select (range + 5)::VARCHAR a, range b from range(1000000));
+
+
+# samples should be the same given the same table and the same contents.
+query II nosort result_1
+select * from pragma_table_sample('integers_2') order by all limit 20;
+----
+
+statement ok
+drop table integers_1;
+
+statement ok
+drop table integers_2;
+
+statement ok
+set threads = 2;
+
+statement ok
+create table integers_1 as (select (range + 5)::VARCHAR a, range b from range(1000000));
+
+statement ok
+create table integers_2 as (select (range + 5)::VARCHAR a, range b from range(1000000));
+
+statement ok
+create table sample_1 as (from pragma_table_sample('integers_1') order by all limit 20);
+
+statement ok
+create table sample_2 as (from pragma_table_sample('integers_2') order by all limit 20);
+
+
+mode output_result
+
+query II
+select * from sample_1;
+----
+
+query II
+select * from sample_2;
+----
+
+mode skip
+
+query I
+select num_records < 20 from (select count(*) as num_records from sample_1 intersect (from sample_2));
+----
+1

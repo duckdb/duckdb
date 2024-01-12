@@ -12,7 +12,7 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	column_stats = std::move(data.table_stats.column_stats);
 	auto &allocator = Allocator::DefaultAllocator();
 	idx_t sample_size = STANDARD_VECTOR_SIZE;
-	sample = make_uniq<ReservoirSample>(allocator, sample_size, -1);
+	sample = make_uniq<ReservoirSample>(allocator, sample_size, 1);
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP
@@ -22,7 +22,7 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 
 	auto &allocator = Allocator::DefaultAllocator();
-	sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, -1);
+	sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, 1);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
 	}

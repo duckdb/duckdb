@@ -1227,6 +1227,10 @@ optional_ptr<BlockingSample> DataTable::GetSample() {
 	return row_groups->GetSample();
 }
 
+//void DataTable::SetSampleSeed(idx_t seed) {
+//	row_groups->stats
+//}
+
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
