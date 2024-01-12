@@ -1,0 +1,36 @@
+diff --git a/src/include/storage/postgres_table_entry.hpp b/src/include/storage/postgres_table_entry.hpp
+index d96dfad..ea1ba19 100644
+--- a/src/include/storage/postgres_table_entry.hpp
++++ b/src/include/storage/postgres_table_entry.hpp
+@@ -50,6 +50,8 @@ public:
+ 
+ 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+ 
++	optional_ptr<BlockingSample> GetSample() override;
++
+ 	void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+ 	                           ClientContext &context) override;
+ 
+diff --git a/src/storage/postgres_table_entry.cpp b/src/storage/postgres_table_entry.cpp
+index d791678..eb88b83 100644
+--- a/src/storage/postgres_table_entry.cpp
++++ b/src/storage/postgres_table_entry.cpp
+@@ -3,6 +3,7 @@
+ #include "storage/postgres_transaction.hpp"
+ #include "duckdb/storage/statistics/base_statistics.hpp"
+ #include "duckdb/storage/table_storage_info.hpp"
++#include "duckdb/execution/reservoir_sample.hpp"
+ #include "postgres_scanner.hpp"
+ 
+ namespace duckdb {
+@@ -61,6 +62,10 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
+ 	return function;
+ }
+ 
++optional_ptr<BlockingSample> PostgresTableEntry::GetSample() {
++	return nullptr;
++}
++
+ TableStorageInfo PostgresTableEntry::GetStorageInfo(ClientContext &context) {
+ 	auto &transaction = Transaction::Get(context, catalog).Cast<PostgresTransaction>();
+ 	auto &db = transaction.GetConnection();
