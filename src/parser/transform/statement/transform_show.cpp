@@ -1,6 +1,5 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/statement/show_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"

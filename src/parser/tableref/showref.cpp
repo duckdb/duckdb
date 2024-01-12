@@ -14,7 +14,7 @@ string ShowRef::ToString() const {
 	}
 	if (query) {
 		result += query->ToString();
-	} else {
+	} else if (table_name != "__show_tables_expanded") {
 		result += table_name;
 	}
 	return result;

@@ -1,4 +1,3 @@
-#include "duckdb/parser/statement/show_statement.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
