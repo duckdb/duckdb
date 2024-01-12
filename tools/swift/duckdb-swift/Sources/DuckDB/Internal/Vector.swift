@@ -122,7 +122,7 @@ private extension Vector {
   
   func unwrap(_ type: TimeTz.Type, at index: Int) throws -> Time {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .timeTz)
-    return unsafelyUnwrapElement(as: UInt64.self, at: index) { $0.asTime }
+    return unsafelyUnwrapElement(as: duckdb_time_tz.self, at: index) { $0.asTime }
   }
 
   func unwrap(_ type: Date.Type, at index: Int) throws -> Date {

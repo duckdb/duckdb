@@ -147,7 +147,7 @@ extension duckdb_time_struct {
   }
 }
 
-extension UInt64 {
+extension duckdb_time_tz {
   var asTime: Time {
     let out_micros = UnsafeMutablePointer<Int64>.allocate(capacity: 1);
     let out_offset = UnsafeMutablePointer<Int32>.allocate(capacity: 1);
