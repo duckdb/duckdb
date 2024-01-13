@@ -13,11 +13,12 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info)
+                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
+                                     idx_t ordinality_column_idx)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
-      table_filters(std::move(table_filters_p)), extra_info(extra_info) {
+      table_filters(std::move(table_filters_p)), extra_info(extra_info), ordinality_column_idx(ordinality_column_idx) {
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -53,6 +54,7 @@ public:
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
+	idx_t ordinal = 1;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
@@ -72,6 +74,10 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	function.function(context.client, data, chunk);
+	if (ordinality_column_idx) {
+		chunk.data[ordinality_column_idx].Sequence(state.ordinal, 1, chunk.size());
+		state.ordinal += chunk.size();
+	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }

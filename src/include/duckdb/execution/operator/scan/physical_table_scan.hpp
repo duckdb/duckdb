@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
@@ -26,7 +26,7 @@ public:
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
 	                  vector<LogicalType> returned_types, vector<column_t> column_ids, vector<idx_t> projection_ids,
 	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,
-	                  ExtraOperatorInfo extra_info);
+	                  ExtraOperatorInfo extra_info, idx_t ordinality_column_idx);
 
 	//! The table function
 	TableFunction function;
@@ -44,6 +44,8 @@ public:
 	unique_ptr<TableFilterSet> table_filters;
 	//! Currently stores any filters applied to file names (as strings)
 	ExtraOperatorInfo extra_info;
+	//! The index where to store the ordinality column, 0 if no ordinality column is requested
+	idx_t ordinality_column_idx;
 
 public:
 	string GetName() const override;

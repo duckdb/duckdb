@@ -21,7 +21,8 @@ public:
 public:
 	PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
 	                           unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-	                           idx_t estimated_cardinality, vector<column_t> projected_input);
+	                           idx_t estimated_cardinality, vector<column_t> projected_input,
+	                           idx_t ordinality_column_idx);
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
@@ -48,6 +49,8 @@ private:
 	vector<column_t> column_ids;
 	//! The set of input columns to project out
 	vector<column_t> projected_input;
+	//! The index where to store the ordinality column, 0 if no ordinality column is requested
+	idx_t ordinality_column_idx;
 };
 
 } // namespace duckdb

@@ -11,6 +11,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
@@ -20,9 +21,8 @@
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/joinside.hpp"
-#include "duckdb/common/reference_map.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -310,7 +310,7 @@ private:
 	BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
 	                          named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
 	                          vector<string> input_table_names, const vector<string> &column_name_alias,
-	                          unique_ptr<ExternalDependency> external_dependency);
+	                          unique_ptr<ExternalDependency> external_dependency, bool with_ordinality);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);

@@ -5,9 +5,6 @@
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRangeFunction &root) {
-	if (root.ordinality) {
-		throw NotImplementedException("WITH ORDINALITY not implemented");
-	}
 	if (root.is_rowsfrom) {
 		throw NotImplementedException("ROWS FROM() not implemented");
 	}
@@ -24,6 +21,8 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 	}
 	// transform the function call
 	auto result = make_uniq<TableFunctionRef>();
+	result->with_ordinality = root.ordinality;
+
 	switch (call_tree->type) {
 	case duckdb_libpgquery::T_PGFuncCall: {
 		auto func_call = PGPointerCast<duckdb_libpgquery::PGFuncCall>(call_tree.get());
@@ -32,6 +31,9 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 		break;
 	}
 	case duckdb_libpgquery::T_PGSQLValueFunction:
+		if (root.ordinality) {
+			throw NotImplementedException("WITH ORDINALITY not implemented for value functions");
+		}
 		result->function =
 		    TransformSQLValueFunction(*PGPointerCast<duckdb_libpgquery::PGSQLValueFunction>(call_tree.get()));
 		break;

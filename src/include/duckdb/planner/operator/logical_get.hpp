@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
@@ -53,6 +53,8 @@ public:
 	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
 	//! Stored so the can be included in explain output
 	ExtraOperatorInfo extra_info;
+	//! The index where to store the ordinality column, 0 if no ordinality column is requested
+	idx_t ordinality_column_idx = 0;
 
 	string GetName() const override;
 	string ParamsToString() const override;

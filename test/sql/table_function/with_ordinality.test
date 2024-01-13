@@ -1,0 +1,52 @@
+# name: test/sql/table_function/with_ordinality.test
+# description: Test duckdb table function with ordinality
+# group: [table_function]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT * FROM unnest([2, 3, 4, NULL]) WITH ORDINALITY
+----
+2	1
+3	2
+4	3
+NULL	4
+
+query II
+SELECT x, ord FROM unnest([2, 3, 4, NULL]) WITH ORDINALITY AS t(x, ord)
+----
+2	1
+3	2
+4	3
+NULL	4
+
+query II
+SELECT * FROM repeat(42, 0) WITH ORDINALITY
+----
+
+query II
+SELECT * FROM repeat(42, 1) WITH ORDINALITY
+----
+42	1
+
+query II
+SELECT * FROM repeat(42, 3) WITH ORDINALITY WHERE ordinality > 1
+----
+42	2
+42	3
+
+query II
+SELECT * FROM range(0, 3) WITH ORDINALITY
+----
+0	1
+1	2
+2	3
+
+# tests the long path of `PhysicalTableInOutFunction::Execute`
+query III
+SELECT * FROM (SELECT [2, 3, 4]) t(l), UNNEST(l) WITH ORDINALITY t2(k, ord) ORDER BY k;
+----
+[2, 3, 4]	2	1
+[2, 3, 4]	3	2
+[2, 3, 4]	4	3

@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 //! Represents a Table producing function
@@ -25,6 +25,8 @@ public:
 
 	unique_ptr<ParsedExpression> function;
 	vector<string> column_name_alias;
+	// whether or not the function is called with the WITH ORDINALITY clause
+	bool with_ordinality = false;
 
 	// if the function takes a subquery as argument its in here
 	unique_ptr<SelectStatement> subquery;

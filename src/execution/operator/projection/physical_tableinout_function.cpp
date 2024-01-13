@@ -4,13 +4,14 @@ namespace duckdb {
 
 class TableInOutLocalState : public OperatorState {
 public:
-	TableInOutLocalState() : row_index(0), new_row(true) {
+	TableInOutLocalState() : row_index(0), new_row(true), ordinal(1) {
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
 	idx_t row_index;
 	bool new_row;
 	DataChunk input_chunk;
+	idx_t ordinal;
 };
 
 class TableInOutGlobalState : public GlobalOperatorState {
@@ -24,10 +25,10 @@ public:
 PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
                                                        unique_ptr<FunctionData> bind_data_p,
                                                        vector<column_t> column_ids_p, idx_t estimated_cardinality,
-                                                       vector<column_t> project_input_p)
+                                                       vector<column_t> project_input_p, idx_t ordinality_column_idx)
     : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
-      projected_input(std::move(project_input_p)) {
+      projected_input(std::move(project_input_p)), ordinality_column_idx(ordinality_column_idx) {
 }
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
@@ -59,7 +60,12 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	if (projected_input.empty()) {
 		// straightforward case - no need to project input
-		return function.in_out_function(context, data, input, chunk);
+		auto result = function.in_out_function(context, data, input, chunk);
+		if (ordinality_column_idx) {
+			chunk.data[ordinality_column_idx].Sequence(state.ordinal, 1, chunk.size());
+			state.ordinal += chunk.size();
+		}
+		return result;
 	}
 	// when project_input is set we execute the input function row-by-row
 	if (state.new_row) {
@@ -90,6 +96,10 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
+	if (ordinality_column_idx) {
+		chunk.data[ordinality_column_idx].Sequence(state.ordinal, 1, chunk.size());
+		state.ordinal += chunk.size();
+	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;
 	}

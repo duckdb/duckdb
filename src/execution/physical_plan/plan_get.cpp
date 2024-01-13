@@ -34,7 +34,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		// this is for table producing functions that consume subquery results
 		D_ASSERT(op.children.size() == 1);
 		auto node = make_uniq<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
-		                                                  op.estimated_cardinality, std::move(op.projected_input));
+		                                                  op.estimated_cardinality, std::move(op.projected_input),
+		                                                  op.ordinality_column_idx);
+
 		node->children.push_back(CreatePlan(std::move(op.children[0])));
 		return std::move(node);
 	}
@@ -53,9 +55,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node = make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
-		                                         op.returned_types, op.column_ids, vector<column_t>(), op.names,
-		                                         std::move(table_filters), op.estimated_cardinality, op.extra_info);
+		auto node =
+		    make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data), op.returned_types,
+		                                 op.column_ids, vector<column_t>(), op.names, std::move(table_filters),
+		                                 op.estimated_cardinality, op.extra_info, op.ordinality_column_idx);
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -93,7 +96,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	} else {
 		return make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
 		                                    op.column_ids, op.projection_ids, op.names, std::move(table_filters),
-		                                    op.estimated_cardinality, op.extra_info);
+		                                    op.estimated_cardinality, op.extra_info, op.ordinality_column_idx);
 	}
 }
 

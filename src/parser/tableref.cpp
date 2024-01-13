@@ -1,10 +1,10 @@
 #include "duckdb/parser/tableref.hpp"
 
 #include "duckdb/common/printer.hpp"
-#include "duckdb/parser/tableref/list.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
 
@@ -13,10 +13,15 @@ string TableRef::BaseToString(string result) const {
 	return BaseToString(std::move(result), column_name_alias);
 }
 
-string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
+string TableRef::BaseToString(string result, const vector<string> &column_name_alias, bool with_ordinality) const {
+	if (with_ordinality) {
+		result += " WITH ORDINALITY";
+	}
+
 	if (!alias.empty()) {
 		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
 	}
+
 	if (!column_name_alias.empty()) {
 		D_ASSERT(!alias.empty());
 		result += "(";

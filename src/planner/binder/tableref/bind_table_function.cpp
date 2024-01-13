@@ -1,7 +1,12 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -10,16 +15,12 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -132,7 +133,7 @@ unique_ptr<LogicalOperator>
 Binder::BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,
                                   named_parameter_map_t named_parameters, vector<LogicalType> input_table_types,
                                   vector<string> input_table_names, const vector<string> &column_name_alias,
-                                  unique_ptr<ExternalDependency> external_dependency) {
+                                  unique_ptr<ExternalDependency> external_dependency, bool with_ordinality) {
 	auto bind_index = GenerateTableIndex();
 	// perform the binding
 	unique_ptr<FunctionData> bind_data;
@@ -144,6 +145,11 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan != nullptr) {
+				if (with_ordinality) {
+					throw NotImplementedException(
+					    "Failed to bind \"%s\": bind_replace with WITH ORDINALITY is not implemented",
+					    table_function.name);
+				}
 				return CreatePlan(*Bind(*new_plan));
 			} else if (!table_function.bind) {
 				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
@@ -174,6 +180,14 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
 		                        table_function.name);
 	}
+
+	auto ordinality_idx = 0;
+	if (with_ordinality) {
+		ordinality_idx = return_types.size();
+		return_types.push_back(LogicalType::BIGINT);
+		return_names.push_back("ordinality");
+	}
+
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = column_name_alias[i];
@@ -189,6 +203,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
 	get->input_table_names = input_table_names;
+	get->ordinality_column_idx = ordinality_idx;
 	if (table_function.in_out_function && !table_function.projection_pushdown) {
 		get->column_ids.reserve(return_types.size());
 		for (idx_t i = 0; i < return_types.size(); i++) {
@@ -208,7 +223,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 	vector<string> column_name_aliases;
 	return BindTableFunctionInternal(function, function.name, std::move(parameters), std::move(named_parameters),
 	                                 std::move(input_table_types), std::move(input_table_names), column_name_aliases,
-	                                 nullptr);
+	                                 nullptr, false);
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
@@ -284,10 +299,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		input_table_types = subquery->subquery->types;
 		input_table_names = subquery->subquery->names;
 	}
-	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr.function_name : ref.alias,
-	                                     std::move(parameters), std::move(named_parameters),
-	                                     std::move(input_table_types), std::move(input_table_names),
-	                                     ref.column_name_alias, std::move(ref.external_dependency));
+
+	auto get = BindTableFunctionInternal(
+	    table_function, ref.alias.empty() ? fexpr.function_name : ref.alias, std::move(parameters),
+	    std::move(named_parameters), std::move(input_table_types), std::move(input_table_names), ref.column_name_alias,
+	    std::move(ref.external_dependency), ref.with_ordinality);
 	if (subquery) {
 		get->children.push_back(Binder::CreatePlan(*subquery));
 	}

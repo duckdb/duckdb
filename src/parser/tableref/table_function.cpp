@@ -1,7 +1,7 @@
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -9,7 +9,7 @@ TableFunctionRef::TableFunctionRef() : TableRef(TableReferenceType::TABLE_FUNCTI
 }
 
 string TableFunctionRef::ToString() const {
-	return BaseToString(function->ToString(), column_name_alias);
+	return BaseToString(function->ToString(), column_name_alias, with_ordinality);
 }
 
 bool TableFunctionRef::Equals(const TableRef &other_p) const {
@@ -24,6 +24,7 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 	auto copy = make_uniq<TableFunctionRef>();
 
 	copy->function = function->Copy();
+	copy->with_ordinality = with_ordinality;
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
 
