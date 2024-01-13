@@ -196,7 +196,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		}
 		// Maybe we have too few columns:
 		// 1) if null_padding is on we null pad it
-		if (result.null_padding) {
+		else if (result.null_padding) {
 			while (result.result_position % result.number_of_columns != 0) {
 				bool empty = false;
 				idx_t cur_pos = result.result_position % result.number_of_columns;
@@ -382,7 +382,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-
 			{
 				vector<Value> row;
 				for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
@@ -495,7 +494,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		iterator.pos.buffer_pos++;
-		if (states.NewRow() || states.NewValue()) {
+		if (states.NewRow() || states.NewValue()|| states.EmptyLine()) {
 			break;
 		}
 		if (states.IsQuoted()) {
@@ -511,7 +510,10 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
 	}
-	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos - result.quoted;
+	idx_t first_buffer_length = 0;
+	if (previous_buffer_handle->actual_size > first_buffer_pos){
+		first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos - result.quoted;
+	}
 	if (states.EmptyValue()) {
 		auto value = string_t();
 		result.AddValueToVector(value);
@@ -696,7 +698,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 			return;
 		}
 		auto moved = MoveToNextBuffer();
-		if (moved && result.result_position % result.number_of_columns == 0 && iterator.pos.buffer_pos != 0) {
+		if (moved && result.result_position % result.number_of_columns == 0 && result.iterator.pos.buffer_pos != 0) {
 			// nothing more to process
 			return;
 		}
