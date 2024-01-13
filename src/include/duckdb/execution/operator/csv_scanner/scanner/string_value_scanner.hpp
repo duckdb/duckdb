@@ -87,6 +87,8 @@ public:
 	inline void AddRowInternal(idx_t buffer_pos);
 
 	void HandleOverLimitRows();
+	void AddValueToVector(string_t &value);
+
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();

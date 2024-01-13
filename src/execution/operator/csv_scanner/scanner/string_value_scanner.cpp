@@ -69,54 +69,29 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		result.vector_ptr[result.result_position++] =
 		    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 	} else {
-		bool empty = false;
-		idx_t cur_pos = result.result_position % result.number_of_columns;
-		if (cur_pos < result.state_machine.options.force_not_null.size()) {
-			empty = result.state_machine.options.force_not_null[cur_pos];
-		}
-
-		if (result.state_machine.options.allow_quoted_nulls && !empty) {
-			auto value = string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
-			if (value == result.state_machine.options.null_str) {
-				result.validity_mask->SetInvalid(result.result_position++);
-			} else {
-				result.vector_ptr[result.result_position++] = value;
-			}
-		} else {
-			result.vector_ptr[result.result_position++] =
-			    string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
-		}
+		auto value = string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
+		result.AddValueToVector(value);
 	}
 	result.quoted = false;
 	result.escaped = false;
 }
 
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
+	if (result.last_position > buffer_pos) {
+		return;
+	}
+
 	D_ASSERT(result.result_position < result.vector_size);
 	if (result.result_position == result.vector_size) {
 		result.HandleOverLimitRows();
 	}
 	if (result.quoted) {
-		StringValueResult::AddQuotedValue(result, buffer_pos - 1);
+		StringValueResult::AddQuotedValue(result, buffer_pos);
 	} else {
-		// Test against null value first
-		auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position - 1);
-		if (value == result.state_machine.options.null_str) {
-			bool empty = false;
-			idx_t cur_pos = result.result_position % result.number_of_columns;
-			if (cur_pos < result.state_machine.options.force_not_null.size()) {
-				empty = result.state_machine.options.force_not_null[cur_pos];
-			}
-			if (empty) {
-				result.vector_ptr[result.result_position++] = string_t();
-			} else {
-				result.validity_mask->SetInvalid(result.result_position++);
-			}
-		} else {
-			result.vector_ptr[result.result_position++] = value;
-		}
+		auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
+		result.AddValueToVector(value);
 	}
-	result.last_position = buffer_pos;
+	result.last_position = buffer_pos + 1;
 	if (result.result_position % result.number_of_columns == 0) {
 		// This means this value reached the number of columns in a line. This is fine, if this is the last buffer, and
 		// the last buffer position However, if that's not the case, this means we might be reading too many columns.
@@ -132,7 +107,27 @@ void StringValueResult::HandleOverLimitRows() {
 	result_position -= result_position % number_of_columns + number_of_columns;
 }
 
+void StringValueResult::AddValueToVector(string_t &value) {
+	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == state_machine.options.null_str) {
+		bool empty = false;
+		idx_t cur_pos = result_position % number_of_columns;
+		if (cur_pos < state_machine.options.force_not_null.size()) {
+			empty = state_machine.options.force_not_null[cur_pos];
+		}
+		if (empty) {
+			vector_ptr[result_position++] = string_t();
+		} else {
+			validity_mask->SetInvalid(result_position++);
+		}
+	} else {
+		vector_ptr[result_position++] = value;
+	}
+}
+
 void StringValueResult::AddRowInternal(idx_t buffer_pos) {
+	if (last_position > buffer_pos) {
+		return;
+	}
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - previous_line_start;
 	if (store_line_size) {
@@ -153,20 +148,7 @@ void StringValueResult::AddRowInternal(idx_t buffer_pos) {
 		StringValueResult::AddQuotedValue(*this, buffer_pos);
 	} else {
 		auto value = string_t(buffer_ptr + last_position, buffer_pos - last_position);
-		if (value == state_machine.options.null_str) {
-			bool empty = false;
-			idx_t cur_pos = result_position % number_of_columns;
-			if (cur_pos < state_machine.options.force_not_null.size()) {
-				empty = state_machine.options.force_not_null[cur_pos];
-			}
-			if (empty) {
-				vector_ptr[result_position++] = string_t();
-			} else {
-				validity_mask->SetInvalid(result_position++);
-			}
-		} else {
-			vector_ptr[result_position++] = value;
-		}
+		AddValueToVector(value);
 	}
 	if (state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		if (states.current_state == CSVState::RECORD_SEPARATOR) {
@@ -316,6 +298,7 @@ bool StringValueScanner::FinishedIterator() {
 
 StringValueResult *StringValueScanner::ParseChunk() {
 	result.result_position = 0;
+	result.validity_mask->SetAllValid(result.vector_size);
 	ParseChunkInternal();
 	return &result;
 }
@@ -458,7 +441,6 @@ void StringValueScanner::Initialize() {
 }
 
 void StringValueScanner::Process() {
-	result.validity_mask->SetAllValid(result.vector_size);
 	idx_t to_pos;
 	if (iterator.IsSet()) {
 		to_pos = iterator.GetEndPos();
@@ -510,49 +492,56 @@ void StringValueScanner::RemoveEscape(char *str_ptr, idx_t end, char escape, str
 void StringValueScanner::ProcessOverbufferValue() {
 	// Process the next value
 	idx_t first_buffer_pos = result.last_position;
-	idx_t cur_value_idx = result.result_position;
-	bool quoted = false;
-	bool escaped = false;
-	while (cur_value_idx == result.result_position && iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
-		ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result);
-		quoted = quoted || result.quoted;
-		escaped = escaped || result.escaped;
+	while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
+		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		iterator.pos.buffer_pos++;
+		if (states.NewRow() || states.NewValue()) {
+			break;
+		}
+		if (states.IsQuoted()) {
+			result.quoted = true;
+		}
+		if (states.IsEscaped()) {
+			result.escaped = true;
+		}
+	}
+	if (states.NewRow()) {
+		lines_read++;
 	}
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
 	}
-	result.result_position = cur_value_idx + 1;
-	D_ASSERT(!escaped);
-
-	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos - quoted;
-
-	if (iterator.pos.buffer_pos == 0 || iterator.pos.buffer_pos == 1) {
+	idx_t first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos - result.quoted;
+	if (states.EmptyValue()) {
+		auto value = string_t();
+		result.AddValueToVector(value);
+	} else if (iterator.pos.buffer_pos == 0 || iterator.pos.buffer_pos == 1) {
 		// Value is only on the first buffer
-		if (escaped) {
+		if (result.escaped) {
 			string removed_escapes;
-			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
+			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted,
 			                                 first_buffer_length - 1, state_machine->options.GetEscape()[0],
 			                                 removed_escapes);
 			result.vector_ptr[result.result_position++] =
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 		} else {
-			result.vector_ptr[cur_value_idx] =
-			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + quoted, first_buffer_length - states.NewValue());
+			auto value =
+			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted, first_buffer_length);
+			result.AddValueToVector(value);
 		}
 	} else {
 		// Figure out the max string length
 		idx_t string_length;
-		if (states.IsCurrentNewRow() || states.IsCurrentDelimiter()) {
-			string_length = first_buffer_length + iterator.pos.buffer_pos - 1 - quoted;
+		if (states.NewRow() || states.NewValue()) {
+			string_length = first_buffer_length + iterator.pos.buffer_pos - 1 - result.quoted;
 		} else {
-			string_length = first_buffer_length + iterator.pos.buffer_pos - 2 - quoted;
+			string_length = first_buffer_length + iterator.pos.buffer_pos - 2 - result.quoted;
 		}
 		// Our value is actually over two buffers, we must do copying of the proper parts os the value
-		if (escaped) {
+		if (result.escaped) {
 			string removed_escapes;
 			// First Buffer
-			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
+			StringValueScanner::RemoveEscape(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted,
 			                                 first_buffer_length, state_machine->options.GetEscape()[0],
 			                                 removed_escapes);
 			// Second Buffer
@@ -563,10 +552,10 @@ void StringValueScanner::ProcessOverbufferValue() {
 			result.vector_ptr[result.result_position++] =
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 		} else {
-			auto &result_str = result.vector_ptr[cur_value_idx];
+			auto &result_str = result.vector_ptr[result.result_position];
 			result_str = StringVector::EmptyString(*result.vector, string_length);
 			// Copy the first buffer
-			FastMemcpy(result_str.GetDataWriteable(), previous_buffer_handle->Ptr() + first_buffer_pos + quoted,
+			FastMemcpy(result_str.GetDataWriteable(), previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted,
 			           first_buffer_length);
 			// Copy the second buffer
 			if (string_length > first_buffer_length) {
@@ -574,8 +563,10 @@ void StringValueScanner::ProcessOverbufferValue() {
 				           string_length - first_buffer_length);
 			}
 			result_str.Finalize();
+			result.AddValueToVector(result_str);
 		}
 	}
+	result.last_position = iterator.pos.buffer_pos;
 	// Be sure to reset the quoted and escaped variables
 	result.quoted = false;
 	result.escaped = false;
@@ -589,9 +580,9 @@ bool StringValueScanner::MoveToNextBuffer() {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
-			if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || result.added_last_line) {
+			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow()) {
 				return false;
-			} else if (states.IsCurrentDelimiter()) {
+			} else if (states.NewValue()) {
 				lines_read++;
 				// we add the value
 				result.AddValue(result, previous_buffer_handle->actual_size);
@@ -609,10 +600,13 @@ bool StringValueScanner::MoveToNextBuffer() {
 		iterator.pos.buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
-		ProcessOverbufferValue();
+		if (previous_buffer_handle->actual_size != result.last_position) {
+			ProcessOverbufferValue();
+		} else {
+			result.last_position = 0;
+		}
 		result.buffer_ptr = buffer_handle_ptr;
 		result.buffer_size = cur_buffer_handle->actual_size;
-
 		return true;
 	}
 	return false;
@@ -702,7 +696,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 			return;
 		}
 		auto moved = MoveToNextBuffer();
-		if (moved && result.result_position % result.number_of_columns == 0) {
+		if (moved && result.result_position % result.number_of_columns == 0 && iterator.pos.buffer_pos != 0) {
 			// nothing more to process
 			return;
 		}

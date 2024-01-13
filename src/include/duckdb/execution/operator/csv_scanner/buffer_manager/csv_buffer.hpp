@@ -18,15 +18,11 @@ namespace duckdb {
 
 class CSVBufferHandle {
 public:
-	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p,
-	                const bool is_final_buffer_p, idx_t file_idx_p,
+	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p, const bool is_final_buffer_p, idx_t file_idx_p,
 	                idx_t buffer_index_p)
-	    : handle(std::move(handle_p)), actual_size(actual_size_p),
-	      is_last_buffer(is_final_buffer_p),  file_idx(file_idx_p),
-	      buffer_idx(buffer_index_p) {};
-	CSVBufferHandle()
-	    : actual_size(0),  is_last_buffer(false),  file_idx(0),
-	      buffer_idx(0) {};
+	    : handle(std::move(handle_p)), actual_size(actual_size_p), is_last_buffer(is_final_buffer_p),
+	      file_idx(file_idx_p), buffer_idx(buffer_index_p) {};
+	CSVBufferHandle() : actual_size(0), is_last_buffer(false), file_idx(0), buffer_idx(0) {};
 	~CSVBufferHandle() {
 		// unpinning the buffer should be magically done, i dont want to deal with this outside here
 		//		if (cur_buffer_idx > 0) {
@@ -64,7 +60,6 @@ public:
 	//! Gets the buffer actual size
 	idx_t GetBufferSize();
 
-
 	//! If this buffer is the last buffer of the CSV File
 	bool IsCSVFileLastBuffer();
 
@@ -95,8 +90,6 @@ private:
 	ClientContext &context;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_buffer_size;
-	//! If this is the first buffer of the CSV File
-	bool first_buffer = false;
 	//! Global position from the CSV File where this buffer starts
 	idx_t global_csv_start = 0;
 	//! Number of the file that is in this buffer

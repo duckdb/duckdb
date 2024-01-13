@@ -23,7 +23,7 @@ struct CSVStates {
 		pre_previous_state = initial_state;
 	}
 	inline bool NewValue() {
-		return previous_state == CSVState::DELIMITER;
+		return current_state == CSVState::DELIMITER;
 	}
 
 	inline bool NewRow() {
@@ -43,12 +43,14 @@ struct CSVStates {
 		       previous_state == CSVState::RECORD_SEPARATOR;
 	}
 
-	inline bool IsCurrentNewRow() {
-		return current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN;
+	inline bool EmptyValue() {
+		return (current_state == CSVState::CARRIAGE_RETURN || current_state == CSVState::RECORD_SEPARATOR ||
+		        current_state == CSVState::DELIMITER) &&
+		       previous_state == CSVState::DELIMITER;
 	}
 
-	inline bool IsCurrentDelimiter() {
-		return current_state == CSVState::DELIMITER;
+	inline bool IsCurrentNewRow() {
+		return current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN;
 	}
 
 	inline bool IsInvalid() {

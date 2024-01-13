@@ -5,7 +5,7 @@ namespace duckdb {
 
 CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
                      idx_t &global_csv_current_position, idx_t file_number_p)
-    : context(context), first_buffer(true), file_number(file_number_p), can_seek(file_handle.CanSeek()) {
+    : context(context), file_number(file_number_p), can_seek(file_handle.CanSeek()) {
 	AllocateBuffer(buffer_size_p);
 	auto buffer = Ptr();
 	actual_buffer_size = file_handle.Read(buffer, buffer_size_p);
@@ -64,8 +64,8 @@ unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 		block = nullptr;
 		Reload(file_handle);
 	}
-	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, last_buffer,
-	                                   file_number, buffer_idx);
+	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, last_buffer, file_number,
+	                                  buffer_idx);
 }
 
 void CSVBuffer::Unpin() {
@@ -73,7 +73,6 @@ void CSVBuffer::Unpin() {
 		handle.Destroy();
 	}
 }
-
 
 bool CSVBuffer::IsCSVFileLastBuffer() {
 	return last_buffer;
