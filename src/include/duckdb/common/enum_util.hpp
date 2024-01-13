@@ -100,6 +100,8 @@ enum class DefaultOrderByNullType : uint8_t;
 
 enum class DependencyEntryType : uint8_t;
 
+enum class DeprecatedIndexType : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -137,8 +139,6 @@ enum class FunctionSideEffects : uint8_t;
 enum class HLLStorageType : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
-
-enum class IndexType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
 
@@ -406,6 +406,9 @@ template<>
 const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
+const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
+
+template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
 
 template<>
@@ -461,9 +464,6 @@ const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
-
-template<>
-const char* EnumUtil::ToChars<IndexType>(IndexType value);
 
 template<>
 const char* EnumUtil::ToChars<InsertColumnOrder>(InsertColumnOrder value);
@@ -812,6 +812,9 @@ template<>
 DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value);
 
 template<>
+DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
+
+template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
 
 template<>
@@ -867,9 +870,6 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
-
-template<>
-IndexType EnumUtil::FromString<IndexType>(const char *value);
 
 template<>
 InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value);

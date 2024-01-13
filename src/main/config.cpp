@@ -92,6 +92,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
+                                                 DUCKDB_GLOBAL(OldImplicitCasting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(OrderedAggregateThreshold),
@@ -244,6 +245,10 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
+}
+
+IndexTypeSet &DBConfig::GetIndexTypes() {
+	return *index_types;
 }
 
 void DBConfig::SetDefaultMaxMemory() {

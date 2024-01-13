@@ -6,7 +6,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -907,7 +907,8 @@ struct QuantileOperation {
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 static AggregateFunction QuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) { // NOLINT
-	LogicalType result_type = LogicalType::LIST(child_type);
+	LogicalType result_type =
+	    LogicalType::LIST(child_type.id() == LogicalTypeId::ANY ? LogicalType::VARCHAR : child_type);
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
@@ -969,7 +970,8 @@ template <typename INPUT_TYPE, typename SAVED_TYPE>
 AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
 	using STATE = QuantileState<INPUT_TYPE, SAVED_TYPE>;
 	using OP = QuantileScalarOperation<true>;
-	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
+	auto return_type = type.id() == LogicalTypeId::ANY ? LogicalType::VARCHAR : type;
+	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, return_type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	fun.window_init = OP::WindowInit<STATE, INPUT_TYPE>;
 	return fun;
@@ -1014,8 +1016,7 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 		return GetTypedDiscreteQuantileAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetTypedDiscreteQuantileAggregateFunction<interval_t, interval_t>(type);
-
-	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::ANY:
 		return GetTypedDiscreteQuantileAggregateFunction<string_t, std::string>(type);
 
 	default:
@@ -1137,7 +1138,7 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 		return GetTypedDiscreteQuantileListAggregateFunction<dtime_t, dtime_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetTypedDiscreteQuantileListAggregateFunction<interval_t, interval_t>(type);
-	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::ANY:
 		return GetTypedDiscreteQuantileListAggregateFunction<string_t, std::string>(type);
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
@@ -1223,7 +1224,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 		return GetTypedContinuousQuantileListAggregateFunction<int64_t, double>(type, LogicalType::DOUBLE);
 	case LogicalTypeId::HUGEINT:
 		return GetTypedContinuousQuantileListAggregateFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
-
 	case LogicalTypeId::FLOAT:
 		return GetTypedContinuousQuantileListAggregateFunction<float, float>(type, type);
 	case LogicalTypeId::DOUBLE:
@@ -1241,8 +1241,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 		default:
 			throw NotImplementedException("Unimplemented discrete quantile DECIMAL list aggregate");
 		}
-		break;
-
 	case LogicalTypeId::DATE:
 		return GetTypedContinuousQuantileListAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
 	case LogicalTypeId::TIMESTAMP:
@@ -1251,7 +1249,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 		return GetTypedContinuousQuantileListAggregateFunction<dtime_t, dtime_t>(type, type);
-
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 	}
@@ -1585,6 +1582,7 @@ static bool CanInterpolate(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::ANY:
 		return false;
 	default:
 		return true;
@@ -1657,10 +1655,13 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
 }
 
 vector<LogicalType> GetQuantileTypes() {
-	return {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,      LogicalType::BIGINT,
-	        LogicalType::HUGEINT,   LogicalType::FLOAT,    LogicalType::DOUBLE,       LogicalType::DATE,
-	        LogicalType::TIMESTAMP, LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
-	        LogicalType::INTERVAL,  LogicalType::VARCHAR};
+	return {LogicalType::TINYINT,      LogicalType::SMALLINT,
+	        LogicalType::INTEGER,      LogicalType::BIGINT,
+	        LogicalType::HUGEINT,      LogicalType::FLOAT,
+	        LogicalType::DOUBLE,       LogicalType::DATE,
+	        LogicalType::TIMESTAMP,    LogicalType::TIME,
+	        LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+	        LogicalType::INTERVAL,     LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150)};
 }
 
 AggregateFunctionSet MedianFun::GetFunctions() {

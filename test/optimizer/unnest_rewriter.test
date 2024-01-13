@@ -35,7 +35,7 @@ SELECT UNNEST(j) FROM (VALUES ([[1, 2, 3]]), ([[4, 5]])) t(i), (SELECT UNNEST(i)
 
 query I
 with stage1 as (
-  SELECT r, md5(r) as h, gen_random_uuid() as id
+  SELECT r, md5(r::varchar) as h, gen_random_uuid() as id
   FROM (SELECT UNNEST(GENERATE_SERIES(1,10,1)) r ))
 , stage2 as (
   SELECT a.*, list({r:b.r, h:b.h, id: gen_random_uuid()}) as sub
@@ -99,7 +99,7 @@ logical_opt	<!REGEX>:.*DELIM_JOIN.*
 
 query II
 EXPLAIN with stage1 as (
-  SELECT r, md5(r) as h, gen_random_uuid() as id
+  SELECT r, md5(r::VARCHAR) as h, gen_random_uuid() as id
   FROM (SELECT UNNEST(GENERATE_SERIES(1,10,1)) r ))
 , stage2 as (
   SELECT a.*, list({r:b.r, h:b.h, id: gen_random_uuid()}) as sub

@@ -62,3 +62,17 @@ query II
 EXPLAIN FROM cse;
 ----
 physical_plan	<!REGEX>:.*sum\(cnt_trace\).*sum\(cnt_trace\).*sum\(cnt_trace\).*
+
+
+statement ok
+CREATE VIEW noncse AS
+SELECT
+    quantile(x, 0.3) over() as q3,
+    quantile(x, 0.7) over() as q7
+FROM generate_series(1, 10) as tbl(x);
+
+# Non-CSE should not eliminate the 2nd quantile computation
+query II
+EXPLAIN FROM noncse;
+----
+physical_plan	<REGEX>:.*quantile\(x\).*quantile\(x\).*

@@ -433,6 +433,12 @@
         "id": 206,
         "name": "duplicate_eliminated_columns",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "delim_flipped",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["join_type", "type"]

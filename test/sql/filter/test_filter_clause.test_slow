@@ -434,7 +434,7 @@ endloop
 
 #Query with many different filter clauses (e.g. 5 aggregates, 5 different filters)
 statement ok
-create temporary table t_2 as select range a, length(range) b, mod(range,100) c, 5 d, 10000 e from range(1000);
+create temporary table t_2 as select range a, length(range::varchar) b, mod(range,100) c, 5 d, 10000 e from range(1000);
 
 query IIIII
 select count (a) filter (where a>10 and a < 15), count (b) filter (where b between 1 and 3),

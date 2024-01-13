@@ -119,7 +119,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				error = "Unnamed parameters cannot come after named parameters";
 				return false;
 			}
-			arguments.emplace_back(sql_type);
+			arguments.emplace_back(constant.IsNull() ? LogicalType::SQLNULL : sql_type);
 			parameters.emplace_back(std::move(constant));
 		} else {
 			named_parameters[parameter_name] = std::move(constant);

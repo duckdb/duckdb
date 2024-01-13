@@ -1,7 +1,8 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -12,6 +13,11 @@ PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, Physic
                                                unique_ptr<ColumnDataCollection> owned_collection_p)
     : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(owned_collection_p.get()),
       owned_collection(std::move(owned_collection_p)) {
+}
+
+PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
+                                               idx_t estimated_cardinality, idx_t cte_index)
+    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr), cte_index(cte_index) {
 }
 
 class PhysicalColumnDataScanState : public GlobalSourceState {
@@ -58,7 +64,8 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		auto delim_dependency = entry->second.get().shared_from_this();
 		auto delim_sink = state.GetPipelineSink(*delim_dependency);
 		D_ASSERT(delim_sink);
-		D_ASSERT(delim_sink->type == PhysicalOperatorType::DELIM_JOIN);
+		D_ASSERT(delim_sink->type == PhysicalOperatorType::LEFT_DELIM_JOIN ||
+		         delim_sink->type == PhysicalOperatorType::RIGHT_DELIM_JOIN);
 		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
 		state.SetPipelineSource(current, delim_join.distinct->Cast<PhysicalOperator>());

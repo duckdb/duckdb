@@ -7,7 +7,6 @@
 # different on Windows and other systems
 
 # test null or empty
-
 query I
 SELECT list_distinct(NULL)
 ----
@@ -278,20 +277,16 @@ select list_distinct(["${colname}"]) FROM all_types;
 
 endloop
 
-# we don't support histogram for the min/max values of these types (casting errors)
+# we support histogram for the min/max values of these types
 foreach colname hugeint dec_18_6 dec38_10
 
-statement error
+statement ok
 select list_distinct(["${colname}"]) FROM all_types;
-----
-Invalid Input Error
 
 endloop
 
-statement error
+statement ok
 select list_distinct(["blob"]) FROM all_types;
-----
-No matching aggregate function
 
 # we don't support histogram for nested types
 foreach colname int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map

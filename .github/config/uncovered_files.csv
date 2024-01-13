@@ -72,7 +72,6 @@ common/types/batched_data_collection.cpp	11
 common/types/bit.cpp	9
 common/types/blob.cpp	3
 common/types/cast_helpers.cpp	2
-common/types/chunk_collection.cpp	94
 common/types/column/column_data_allocator.cpp	13
 common/types/column/column_data_collection.cpp	55
 common/types/column/partitioned_column_data.cpp	8
@@ -385,7 +384,6 @@ include/duckdb/common/sort/sorted_block.hpp	1
 include/duckdb/common/string_util.hpp	9
 include/duckdb/common/type_util.hpp	2
 include/duckdb/common/types.hpp	5
-include/duckdb/common/types/chunk_collection.hpp	6
 include/duckdb/common/types/column/column_data_allocator.hpp	3
 include/duckdb/common/types/column/partitioned_column_data.hpp	2
 include/duckdb/common/types/datetime.hpp	13
