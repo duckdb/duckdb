@@ -11,7 +11,7 @@
             con,
             """SELECT * EXCLUDE(time, time_tz)
                 , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
-                , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS time_tz
+                , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz
             FROM test_all_types()
             """
         )
