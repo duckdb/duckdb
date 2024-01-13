@@ -634,6 +634,9 @@ void StringValueScanner::SkipCSVRows() {
 	} else {
 		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 1;
 	}
+	if (result.store_line_size) {
+		result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
+	}
 	lines_read += row_skipper.GetLinesRead();
 }
 
@@ -713,6 +716,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 		// We read until the chunk is complete, or we have nothing else to read.
 		while (!FinishedFile() && result.result_position < result.vector_size) {
 			MoveToNextBuffer();
+			if (result.result_position >= result.vector_size){
+				return;
+			}
 			if (cur_buffer_handle) {
 				Process();
 			}
