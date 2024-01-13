@@ -161,7 +161,7 @@ typedef struct {
 
 //! TIME_TZ is stored as 40 bits for int64_t micros, and 24 bits for int32_t offset
 typedef struct {
-	uint64_t micros;
+	uint64_t bits;
 } duckdb_time_tz;
 
 typedef struct {
