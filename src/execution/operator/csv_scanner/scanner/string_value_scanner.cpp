@@ -460,10 +460,7 @@ void StringValueScanner::Process() {
 void StringValueScanner::ProcessExtraRow() {
 	idx_t to_pos = cur_buffer_handle->actual_size;
 	idx_t cur_result_pos = result.result_position;
-	if (result.last_position != iterator.pos.buffer_pos - 1) {
-		cur_result_pos++;
-	}
-	if (states.IsCurrentNewRow()) {
+	if (result.last_position != iterator.pos.buffer_pos - 1 || states.IsCurrentNewRow()) {
 		cur_result_pos++;
 	}
 	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
@@ -517,7 +514,8 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (states.EmptyValue()) {
 		auto value = string_t();
 		result.AddValueToVector(value);
-	} else if (iterator.pos.buffer_pos == 0 || iterator.pos.buffer_pos == 1) {
+	} else if (iterator.pos.buffer_pos == 0) {
+		first_buffer_length -= result.quoted;
 		// Value is only on the first buffer
 		if (result.escaped) {
 			string removed_escapes;
@@ -528,7 +526,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 		} else {
 			auto value = string_t(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted,
-			                      first_buffer_length - result.quoted);
+			                      first_buffer_length-1);
 			result.AddValueToVector(value);
 		}
 	} else {
@@ -644,10 +642,16 @@ void StringValueScanner::SkipUntilNewLine() {
 	// Now skip until next newline
 	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
 	    NewLineIdentifier::CARRY_ON) {
+		bool carriage_return = false;
 		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
+				carriage_return = true;
+			}
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
-				iterator.pos.buffer_pos++;
-				return;
+				if (carriage_return){
+					iterator.pos.buffer_pos++;
+					return;
+				}
 			}
 		}
 	} else {
