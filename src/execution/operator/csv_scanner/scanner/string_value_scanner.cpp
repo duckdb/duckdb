@@ -528,7 +528,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 		} else {
 			auto value =
-			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted, first_buffer_length);
+			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted, first_buffer_length - result.quoted);
 			result.AddValueToVector(value);
 		}
 	} else {
@@ -537,7 +537,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		if (states.NewRow() || states.NewValue()) {
 			string_length = first_buffer_length + iterator.pos.buffer_pos - 1 - result.quoted;
 		} else {
-			string_length = first_buffer_length + iterator.pos.buffer_pos - 2 - result.quoted;
+			string_length = first_buffer_length + iterator.pos.buffer_pos - result.quoted;
 		}
 		// Our value is actually over two buffers, we must do copying of the proper parts os the value
 		if (result.escaped) {

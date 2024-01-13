@@ -25,7 +25,7 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-const char *run = "";
+const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
 
 bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
                        ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
@@ -57,6 +57,7 @@ bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
 	}
 	if (!variable_buffer_size_passed) {
 		std::cout << path << " Variable Buffer failed" << '\n';
+		std::cout << path << " Buffer Size: " << to_string(buffer_size) << '\n';
 		std::cout << variable_buffer_size_result->GetError() << '\n';
 		return false;
 	}
@@ -95,7 +96,7 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 		ground_truth = &full_buffer_res->Collection();
 	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
-	idx_t min_buffer_size = conn.context->client_data->debug_max_line_length + 2;
+	idx_t min_buffer_size = conn.context->client_data->debug_max_line_length + 3;
 	// So our tests don't take infinite time, we will go till a max buffer size of 5 positions higher than the minimum.
 	idx_t max_buffer_size = min_buffer_size + 5;
 	// Let's go from 1 to 8 threads.
@@ -125,7 +126,7 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 }
 
 TEST_CASE("Test File Full", "[parallel-csv][.]") {
-	string path = "test/sql/copy/csv/data/null_comparison.csv";
+	string path = "test/sql/copy/csv/data/auto/issue_1254_rn.csv";
 	RunFull(path);
 }
 
