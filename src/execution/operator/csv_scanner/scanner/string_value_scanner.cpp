@@ -494,7 +494,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		iterator.pos.buffer_pos++;
-		if (states.NewRow() || states.NewValue()|| states.EmptyLine()) {
+		if (states.NewRow() || states.NewValue() || states.EmptyLine()) {
 			break;
 		}
 		if (states.IsQuoted()) {
@@ -511,7 +511,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		result.added_last_line = true;
 	}
 	idx_t first_buffer_length = 0;
-	if (previous_buffer_handle->actual_size > first_buffer_pos){
+	if (previous_buffer_handle->actual_size > first_buffer_pos) {
 		first_buffer_length = previous_buffer_handle->actual_size - first_buffer_pos - result.quoted;
 	}
 	if (states.EmptyValue()) {
@@ -527,8 +527,8 @@ void StringValueScanner::ProcessOverbufferValue() {
 			result.vector_ptr[result.result_position++] =
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
 		} else {
-			auto value =
-			    string_t(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted, first_buffer_length - result.quoted);
+			auto value = string_t(previous_buffer_handle->Ptr() + first_buffer_pos + result.quoted,
+			                      first_buffer_length - result.quoted);
 			result.AddValueToVector(value);
 		}
 	} else {
