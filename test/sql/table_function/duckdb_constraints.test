@@ -57,5 +57,5 @@ fk_integers_j_fkey	fk_integers	FOREIGN KEY
 integers_i_check	integers	CHECK
 integers_i_not_null	integers	CHECK
 integers_i_pkey	integers	PRIMARY KEY
+test_check	test	CHECK
 test_i_key	test	UNIQUE
-test_k_check	test	CHECK
