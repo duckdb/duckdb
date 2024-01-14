@@ -470,9 +470,7 @@ void StringValueScanner::Process() {
 void StringValueScanner::ProcessExtraRow() {
 	idx_t to_pos = cur_buffer_handle->actual_size;
 	idx_t cur_result_pos = result.result_position;
-	//	if (result.last_position != iterator.pos.buffer_pos - 1 || states.NewRow()) {
 	cur_result_pos++;
-	//	}
 	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
 		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result) ||
 		    (result.result_position >= cur_result_pos &&
@@ -717,9 +715,11 @@ void StringValueScanner::FinalizeChunkProcess() {
 		if (!cur_buffer_handle) {
 			return;
 		}
-		MoveToNextBuffer();
+		bool moved = MoveToNextBuffer();
 		if (cur_buffer_handle) {
-			if (result.result_position % result.number_of_columns != 0) {
+			if (moved && result.result_position % result.number_of_columns != 0) {
+				ProcessExtraRow();
+			} else if (!moved) {
 				ProcessExtraRow();
 			}
 			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {

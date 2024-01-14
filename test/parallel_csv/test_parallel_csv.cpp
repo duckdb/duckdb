@@ -78,9 +78,9 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
              bool set_temp_dir = false) {
 	DuckDB db(nullptr);
 	Connection conn(db);
-	//	if (!run) {
-	//		return true;
-	//	}
+	if (!run) {
+		return true;
+	}
 	// Here we run the csv file first with the full buffer.
 	// Then a combination of multiple buffers.
 	if (skip) {

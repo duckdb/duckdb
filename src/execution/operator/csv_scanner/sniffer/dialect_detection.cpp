@@ -185,7 +185,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// no additional padding is required, and there is no invalid padding, and there is not yet a candidate
 	// with the same quote, we add this state_machine as a suitable candidate.
 	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
-	    !invalid_padding) {
+	    !invalid_padding && num_cols == max_columns_found) {
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
 		bool same_quote_is_candidate = false;

@@ -234,6 +234,10 @@ void CSVSniffer::DetectTypes() {
 						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator, dummy_val);
 					}
 					// try cast from string to sql_type
+					if (sql_type == LogicalType::VARCHAR) {
+						// Nothing to convert it to
+						continue;
+					}
 					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {
 						break;
 					} else {
