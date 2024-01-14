@@ -501,6 +501,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 	states.Initialize(CSVState::RECORD_SEPARATOR);
 	string overbuffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
+	if (result.last_position == previous_buffer_handle->actual_size){
+		state_machine->Transition(states, previous_buffer[result.last_position-1]);
+	}
 	for (idx_t i = result.last_position; i < previous_buffer_handle->actual_size; i++) {
 		state_machine->Transition(states, previous_buffer[i]);
 		if (states.EmptyLine() || states.IsCurrentNewRow()) {
@@ -522,7 +525,11 @@ void StringValueScanner::ProcessOverbufferValue() {
 	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		if (states.EmptyLine()) {
-			continue;
+			if (state_machine->dialect_options.num_cols == 1){
+				break;
+			} else{
+				continue;
+			}
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
