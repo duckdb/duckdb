@@ -48,12 +48,13 @@ TEST_CASE("Test user_agent", "[api]") {
 		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
 	}
 	{
-		// Provided duckdb_api is used
+		// The latest provided duckdb_api is used
 		DBConfig config;
-		config.SetOptionByName("duckdb_api", "something_different");
+		config.SetOptionByName("duckdb_api", "capi");
+		config.SetOptionByName("duckdb_api", "go");
 		DuckDB db("", &config);
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
-		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) something_different"));
+		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
 	}
 }

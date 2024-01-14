@@ -29,7 +29,7 @@
 
 namespace duckdb {
 
-static const string DEFAULT_USER_AGENT =
+extern const string DEFAULT_USER_AGENT =
     StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 
 DBConfig::DBConfig() {
@@ -37,7 +37,6 @@ DBConfig::DBConfig() {
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
-	options.duckdb_api = DEFAULT_USER_AGENT;
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
@@ -188,7 +187,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr = user_config;
 	}
 
-	if (config_ptr->options.duckdb_api == DEFAULT_USER_AGENT) {
+	if (config_ptr->options.duckdb_api.empty()) {
 		config_ptr->SetOptionByName("duckdb_api", "cpp");
 	}
 
