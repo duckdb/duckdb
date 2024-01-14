@@ -87,7 +87,7 @@ public:
 	inline void AddRowInternal(idx_t buffer_pos);
 
 	void HandleOverLimitRows();
-	void AddValueToVector(string_t &value);
+	void AddValueToVector(string_t &value, bool allocate = false);
 
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
@@ -119,7 +119,8 @@ public:
 	bool FinishedIterator();
 
 	//! Creates a new string with all escaped values removed
-	static void RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes, bool previous_quote = false);
+	static void RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes,
+	                         bool previous_quote = false);
 
 	const idx_t scanner_idx;
 

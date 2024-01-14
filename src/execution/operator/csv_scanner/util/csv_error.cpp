@@ -145,7 +145,7 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	// What is the problematic CSV Line
 	error << "Problematic CSV Line:" << std::endl;
 	for (; vector_line_start < actual_columns; vector_line_start++) {
-		error << vector_ptr[vector_line_start].GetString();
+		//		error << vector_ptr[vector_line_start].GetString();
 		if (vector_line_start < actual_columns - 1) {
 			// we are not in the last line, add the delimiter
 			error << options.dialect_options.state_machine_options.delimiter.GetValue();

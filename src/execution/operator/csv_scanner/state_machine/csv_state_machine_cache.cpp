@@ -68,7 +68,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	// 4) Carriage Return State
 	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>('\n')] = CSVState::RECORD_SEPARATOR;
 	transition_array[CSVState::CARRIAGE_RETURN][static_cast<uint8_t>('\r')] = CSVState::RECORD_SEPARATOR;
-	transition_array[CSVState::CARRIAGE_RETURN][escape] = CSVState::ESCAPE;
+	transition_array[CSVState::CARRIAGE_RETURN][quote] = CSVState::QUOTED;
 	// 5) Quoted State
 	transition_array[CSVState::QUOTED][quote] = CSVState::UNQUOTED;
 	if (state_machine_options.quote != state_machine_options.escape) {
