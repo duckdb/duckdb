@@ -501,8 +501,8 @@ void StringValueScanner::ProcessOverbufferValue() {
 	states.Initialize(CSVState::RECORD_SEPARATOR);
 	string overbuffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
-	if (result.last_position == previous_buffer_handle->actual_size){
-		state_machine->Transition(states, previous_buffer[result.last_position-1]);
+	if (result.last_position == previous_buffer_handle->actual_size) {
+		state_machine->Transition(states, previous_buffer[result.last_position - 1]);
 	}
 	for (idx_t i = result.last_position; i < previous_buffer_handle->actual_size; i++) {
 		state_machine->Transition(states, previous_buffer[i]);
@@ -521,13 +521,19 @@ void StringValueScanner::ProcessOverbufferValue() {
 			result.escaped = true;
 		}
 	}
+	if (overbuffer_string.empty() &&
+	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+		if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+			iterator.pos.buffer_pos++;
+		}
+	}
 	// second buffer
 	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		if (states.EmptyLine()) {
-			if (state_machine->dialect_options.num_cols == 1){
+			if (state_machine->dialect_options.num_cols == 1) {
 				break;
-			} else{
+			} else {
 				continue;
 			}
 		}
