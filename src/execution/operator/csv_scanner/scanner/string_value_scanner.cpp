@@ -472,8 +472,8 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-void StringValueScanner::RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes) {
-	bool just_escaped = false;
+void StringValueScanner::RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes, bool previous_quote) {
+	bool just_escaped = previous_quote;
 	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
 		char c = str_ptr[cur_pos];
 		if (c == escape && !just_escaped) {
@@ -546,8 +546,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 			                                 removed_escapes);
 			// Second Buffer
 			if (string_length > first_buffer_length) {
+				bool previously_quoted = previous_buffer_handle->Ptr()[previous_buffer_handle->actual_size-1] == state_machine->options.GetQuote()[0];
 				StringValueScanner::RemoveEscape(cur_buffer_handle->Ptr(), string_length - first_buffer_length,
-				                                 state_machine->options.GetEscape()[0], removed_escapes);
+				                                 state_machine->options.GetEscape()[0], removed_escapes,previously_quoted);
 			}
 			result.vector_ptr[result.result_position++] =
 			    StringVector::AddStringOrBlob(*result.vector, string_t(removed_escapes));
