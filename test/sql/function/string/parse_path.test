@@ -9,7 +9,7 @@ require notwindows
 
 # all separators option
 query T
-SELECT * FROM (VALUES (parse_path('home/user/documents/file.csv', 'system')), (parse_path('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_path('home/user/documents/file.csv', 'forward_slash')), (parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i)
+SELECT * FROM (VALUES (parse_path('home/user/documents/file.csv', 'system')), (parse_path('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_path('home/user/documents/file.csv', 'forward_slash')), (parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i);
 ----
 [home, user, documents, file.csv]
 [home, user, documents, file.csv, file2.csv]
@@ -91,7 +91,7 @@ Binder Error: No function matches the given name and argument types 'parse_path(
 # test parse_dirname
 # all separators option
 query T
-SELECT * FROM (VALUES (parse_dirname('home/user/documents/file.csv', 'system')), (parse_dirname('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_dirname('home/user/documents/file.csv', 'forward_slash')), (parse_dirname('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i)
+SELECT * FROM (VALUES (parse_dirname('home/user/documents/file.csv', 'system')), (parse_dirname('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_dirname('home/user/documents/file.csv', 'forward_slash')), (parse_dirname('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i);
 ----
 home
 home
@@ -179,7 +179,7 @@ Binder Error: No function matches the given name and argument types 'parse_dirna
 # test parse_filename
 # all separators option, default trim_extension
 query T
-SELECT * FROM (VALUES (parse_filename('home/user/documents/file.csv', 'system')), (parse_filename('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_filename('home/user/documents/file.csv', 'forward_slash')), (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i)
+SELECT * FROM (VALUES (parse_filename('home/user/documents/file.csv', 'system')), (parse_filename('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_filename('home/user/documents/file.csv', 'forward_slash')), (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i);
 ----
 file.csv
 file2.csv
@@ -204,7 +204,7 @@ file2.csv
 
 # trim extension
 query T
-SELECT * FROM (VALUES (parse_filename('home/user/documents/file.csv', true, 'system')), (parse_filename('home/user/documents/file.csv\file2.csv', true, 'both_slash')), (parse_filename('home/user/documents/file.csv', true, 'forward_slash')), (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', true, 'backslash'))) tbl(i)
+SELECT * FROM (VALUES (parse_filename('home/user/documents/file.csv', true, 'system')), (parse_filename('home/user/documents/file.csv\file2.csv', true, 'both_slash')), (parse_filename('home/user/documents/file.csv', true, 'forward_slash')), (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', true, 'backslash'))) tbl(i);
 ----
 file
 file2

@@ -53,7 +53,7 @@ static bool IsIdxValid(const idx_t &i, const idx_t &sentence_size) {
 }
 
 static idx_t Find(const char *input_data, idx_t input_size, const string &sep_data) {
-	if (sep_data.size() == 0) {
+	if (sep_data.empty()) {
 		return 0;
 	}
 	auto pos = ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(&sep_data[0]), 1);
@@ -149,7 +149,7 @@ static void ReadOptionalArgs(DataChunk &args, Vector &sep, Vector &trim, const b
 				sep.Reinterpret(args.data[2]);
 			}
 		} else {
-			InvalidInputException("Invalid number of arguments");
+			throw InvalidInputException("Invalid number of arguments");
 		}
 		break;
 	}
