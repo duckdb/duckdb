@@ -17,6 +17,14 @@
 
 namespace duckdb {
 
+enum class SampleType : uint8_t {
+	BLOCKING_SAMPLE = 0,
+	RESERVOIR_SAMPLE = 1,
+	RESERVOIR_PERCENTAGE_SAMPLE = 2
+};
+
+//! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
+
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -43,11 +51,14 @@ public:
 	//! when collecting a sample in parallel, we want to know how many values each thread has seen
 	//! so we can collect the samples from the thread local states in a uniform manner
 	idx_t num_entries_seen_total;
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
 };
 
 class BlockingSample {
 public:
-	explicit BlockingSample(int64_t seed) : base_reservoir_sample(seed), random(base_reservoir_sample.random) {
+	explicit BlockingSample(int64_t seed = -1) : random(base_reservoir_sample->random), type(SampleType::BLOCKING_SAMPLE) {
+		base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
 	}
 	virtual ~BlockingSample() {
 	}
@@ -61,17 +72,23 @@ public:
 	//! querying from a live sample and not a table collected sample.
 	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
 	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
-	BaseReservoirSampling base_reservoir_sample;
+	unique_ptr<BaseReservoirSampling> base_reservoir_sample;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
 protected:
 	//! The reservoir sampling
 	RandomEngine &random;
+	//! The sample type
+	SampleType type;
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:
-	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed);
+	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
+	ReservoirSample(idx_t sample_count, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -81,6 +98,9 @@ public:
 	unique_ptr<DataChunk> GetChunkAndShrink() override;
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
+
 
 private:
 	//! Replace a single element of the input
@@ -105,7 +125,8 @@ class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
 public:
-	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
+	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
+	ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -116,6 +137,8 @@ public:
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
 
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 private:
 	Allocator &allocator;
 	//! The sample_size to sample

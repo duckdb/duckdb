@@ -155,12 +155,8 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	    arguments[0]->return_type.id() == LogicalTypeId::MAP) {
 		throw NotImplementedException("Unimplemented type for histogram %s", arguments[0]->return_type.ToString());
 	}
-	if (function.arguments[0].id() == LogicalTypeId::ANY) {
-		// add varchar cast for ANY
-		function.arguments[0] = LogicalType::VARCHAR;
-	}
-
-	auto struct_type = LogicalType::MAP(arguments[0]->return_type, LogicalType::UBIGINT);
+	auto child_type = function.arguments[0].id() == LogicalTypeId::ANY ? LogicalType::VARCHAR : function.arguments[0];
+	auto struct_type = LogicalType::MAP(child_type, LogicalType::UBIGINT);
 
 	function.return_type = struct_type;
 	return make_uniq<VariableReturnBindData>(function.return_type);
@@ -188,47 +184,46 @@ AggregateFunction GetMapType(const LogicalType &type) {
 
 template <bool IS_ORDERED = true>
 AggregateFunction GetHistogramFunction(const LogicalType &type) {
-
 	switch (type.id()) {
-	case LogicalType::BOOLEAN:
+	case LogicalTypeId::BOOLEAN:
 		return GetMapType<HistogramFunctor, bool, IS_ORDERED>(type);
-	case LogicalType::UTINYINT:
+	case LogicalTypeId::UTINYINT:
 		return GetMapType<HistogramFunctor, uint8_t, IS_ORDERED>(type);
-	case LogicalType::USMALLINT:
+	case LogicalTypeId::USMALLINT:
 		return GetMapType<HistogramFunctor, uint16_t, IS_ORDERED>(type);
-	case LogicalType::UINTEGER:
+	case LogicalTypeId::UINTEGER:
 		return GetMapType<HistogramFunctor, uint32_t, IS_ORDERED>(type);
-	case LogicalType::UBIGINT:
+	case LogicalTypeId::UBIGINT:
 		return GetMapType<HistogramFunctor, uint64_t, IS_ORDERED>(type);
-	case LogicalType::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return GetMapType<HistogramFunctor, int8_t, IS_ORDERED>(type);
-	case LogicalType::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return GetMapType<HistogramFunctor, int16_t, IS_ORDERED>(type);
-	case LogicalType::INTEGER:
+	case LogicalTypeId::INTEGER:
 		return GetMapType<HistogramFunctor, int32_t, IS_ORDERED>(type);
-	case LogicalType::BIGINT:
+	case LogicalTypeId::BIGINT:
 		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
-	case LogicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return GetMapType<HistogramFunctor, float, IS_ORDERED>(type);
-	case LogicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return GetMapType<HistogramFunctor, double, IS_ORDERED>(type);
-	case LogicalType::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP:
 		return GetMapType<HistogramFunctor, timestamp_t, IS_ORDERED>(type);
-	case LogicalType::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetMapType<HistogramFunctor, timestamp_tz_t, IS_ORDERED>(type);
-	case LogicalType::TIMESTAMP_S:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		return GetMapType<HistogramFunctor, timestamp_sec_t, IS_ORDERED>(type);
-	case LogicalType::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_MS:
 		return GetMapType<HistogramFunctor, timestamp_ms_t, IS_ORDERED>(type);
-	case LogicalType::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_NS:
 		return GetMapType<HistogramFunctor, timestamp_ns_t, IS_ORDERED>(type);
-	case LogicalType::TIME:
+	case LogicalTypeId::TIME:
 		return GetMapType<HistogramFunctor, dtime_t, IS_ORDERED>(type);
-	case LogicalType::TIME_TZ:
+	case LogicalTypeId::TIME_TZ:
 		return GetMapType<HistogramFunctor, dtime_tz_t, IS_ORDERED>(type);
-	case LogicalType::DATE:
+	case LogicalTypeId::DATE:
 		return GetMapType<HistogramFunctor, date_t, IS_ORDERED>(type);
-	case LogicalType::ANY:
+	case LogicalTypeId::ANY:
 		return GetMapType<HistogramStringFunctor, string, IS_ORDERED>(type);
 	default:
 		throw InternalException("Unimplemented histogram aggregate");
@@ -256,7 +251,7 @@ AggregateFunctionSet HistogramFun::GetFunctions() {
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME_TZ));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::DATE));
-	fun.AddFunction(GetHistogramFunction<>(LogicalType::ANY));
+	fun.AddFunction(GetHistogramFunction<>(LogicalType::ANY_PARAMS(LogicalType::VARCHAR)));
 	return fun;
 }
 

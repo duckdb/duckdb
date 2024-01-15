@@ -22,6 +22,7 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 
 	auto &allocator = Allocator::DefaultAllocator();
+//	std::cout << "initialize empty sample" << std::endl;
 	sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, 1);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));

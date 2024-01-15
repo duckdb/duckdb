@@ -15,19 +15,23 @@ if (NOT WIN32)
             )
 endif()
 
-################# AWS
-duckdb_extension_load(aws
-        LOAD_TESTS
-        GIT_URL https://github.com/duckdb/duckdb_aws
-        GIT_TAG af729d027e57175c5496a2d7dfef68833e6d6cd3
-        )
+################## AWS
+if (NOT MINGW)
+    duckdb_extension_load(aws
+            LOAD_TESTS
+            GIT_URL https://github.com/duckdb/duckdb_aws
+            GIT_TAG af729d027e57175c5496a2d7dfef68833e6d6cd3
+            )
+endif()
 
 ################# AZURE
-duckdb_extension_load(azure
-        LOAD_TESTS
-        GIT_URL https://github.com/duckdb/duckdb_azure
-        GIT_TAG 10d4cf6a0ed00ea8aecb9bf1433fdfff166e6c44
-        )
+if (NOT MINGW)
+    duckdb_extension_load(azure
+            LOAD_TESTS
+            GIT_URL https://github.com/duckdb/duckdb_azure
+            GIT_TAG 10d4cf6a0ed00ea8aecb9bf1433fdfff166e6c44
+            )
+endif()
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
@@ -37,31 +41,37 @@ else ()
     set(LOAD_ICEBERG_TESTS "")
 endif()
 
-duckdb_extension_load(iceberg
-        ${LOAD_ICEBERG_TESTS}
-        GIT_URL https://github.com/duckdb/duckdb_iceberg
-        GIT_TAG 7aa3d8e4cb7b513d35fdacfa28dc328771bc4047
-        )
+if (NOT MINGW)
+    duckdb_extension_load(iceberg
+            ${LOAD_ICEBERG_TESTS}
+            GIT_URL https://github.com/duckdb/duckdb_iceberg
+            GIT_TAG 7aa3d8e4cb7b513d35fdacfa28dc328771bc4047
+            )
+endif()
 
 ################# POSTGRES_SCANNER
 # Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test
 #       uses a remote rds server but that's not something we want to run here.
-duckdb_extension_load(postgres_scanner
-        DONT_LINK
-        GIT_URL https://github.com/duckdb/postgres_scanner
-        GIT_TAG 8c3e9624ee1d32f317e18136056dfca9fb97ee67
-        APPLY_PATCHES
-        )
+if (NOT MINGW)
+    duckdb_extension_load(postgres_scanner
+            DONT_LINK
+            GIT_URL https://github.com/duckdb/postgres_scanner
+            GIT_TAG 8c3e9624ee1d32f317e18136056dfca9fb97ee67
+            APPLY_PATCHES
+            )
+endif()
 
 ################# SPATIAL
-duckdb_extension_load(spatial
-        DONT_LINK LOAD_TESTS
-        GIT_URL https://github.com/duckdb/duckdb_spatial.git
-        GIT_TAG a86c504d60e0f4400564c0f2d633547f39feef2c
-        INCLUDE_DIR spatial/include
-        TEST_DIR test/sql
-        APPLY_PATCHES
-        )
+if (NOT MINGW)
+    duckdb_extension_load(spatial
+            DONT_LINK LOAD_TESTS
+            GIT_URL https://github.com/duckdb/duckdb_spatial.git
+            GIT_TAG a86c504d60e0f4400564c0f2d633547f39feef2c
+            INCLUDE_DIR spatial/include
+            TEST_DIR test/sql
+            APPLY_PATCHES
+            )
+endif()
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision

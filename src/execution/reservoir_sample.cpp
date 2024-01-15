@@ -6,6 +6,10 @@ namespace duckdb {
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_count(sample_count), reservoir_initialized(false) {
+	type = SampleType::RESERVOIR_SAMPLE;
+}
+
+ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed) : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
@@ -13,7 +17,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 		// sample count is 0, means no samples were requested
 		return;
 	}
-	base_reservoir_sample.num_entries_seen_total += input.size();
+	base_reservoir_sample->num_entries_seen_total += input.size();
 	// Input: A population V of n weighted items
 	// Output: A reservoir R with a size m
 	// 1: The first m items of V are inserted into R
@@ -27,18 +31,18 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	D_ASSERT(reservoir_chunk);
 	D_ASSERT(reservoir_chunk->size() == sample_count);
 	// Initialize the weights if they have not been already
-	if (base_reservoir_sample.reservoir_weights.empty()) {
-		base_reservoir_sample.InitializeReservoir(reservoir_chunk->size(), sample_count);
+	if (base_reservoir_sample->reservoir_weights.empty()) {
+		base_reservoir_sample->InitializeReservoir(reservoir_chunk->size(), sample_count);
 	}
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
 		idx_t offset =
-		    base_reservoir_sample.next_index_to_sample - base_reservoir_sample.num_entries_to_skip_b4_next_sample;
+		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
-			base_reservoir_sample.num_entries_to_skip_b4_next_sample += remaining;
+			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
 			return;
 		}
 		// in this chunk! replace the element
@@ -101,10 +105,10 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 	// 8. The item in R with the minimum key is replaced by item vi
 	D_ASSERT(input.ColumnCount() == reservoir_chunk->ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
+		reservoir_chunk->SetValue(col_idx, base_reservoir_sample->min_weighted_entry_index,
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
-	base_reservoir_sample.ReplaceElement(with_weight);
+	base_reservoir_sample->ReplaceElement(with_weight);
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
@@ -138,7 +142,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 		InitializeReservoir(input);
 	}
 	reservoir_chunk->Append(input, false, nullptr, required_count);
-	base_reservoir_sample.InitializeReservoir(required_count, sample_count);
+	base_reservoir_sample->InitializeReservoir(required_count, sample_count);
 
 	num_added_samples += required_count;
 	reservoir_chunk->SetCardinality(num_added_samples);
@@ -169,10 +173,15 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
       is_finalized(false) {
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
 	current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
+	type = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
+}
+
+ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed)
+    : ReservoirSamplePercentage(Allocator::DefaultAllocator(), percentage, seed) {
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
-	base_reservoir_sample.num_entries_seen_total += input.size();
+	base_reservoir_sample->num_entries_seen_total += input.size();
 	if (current_count + input.size() > RESERVOIR_THRESHOLD) {
 		// we don't have enough space in our current reservoir
 		// first check what we still need to append to the current sample

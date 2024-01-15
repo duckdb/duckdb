@@ -890,3 +890,14 @@ query II
 SELECT '2022-10-30 03:00:00-07'::TIMESTAMPTZ, '2023-10-30 02:00:00-07'::TIMESTAMPTZ;
 ----
 2022-10-30 07:00:00-03	2023-10-30 07:00:00-02
+
+# 2023d
+# Ittoqqortoormiit, Greenland changes time zones on 2024-03-31
+# from -01/+00 to -02/-01 at the same moment as the spring-forward transition.
+statement ok
+SET TimeZone = 'America/Scoresbysund';
+
+query II
+SELECT '2024-03-31 00:59:00-01'::TIMESTAMPTZ, '2024-03-31 01:00:00-01'::TIMESTAMPTZ;
+----
+2024-03-31 00:59:00-01	2024-03-31 01:00:00-01

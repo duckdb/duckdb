@@ -247,6 +247,10 @@ CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
 }
 
+IndexTypeSet &DBConfig::GetIndexTypes() {
+	return *index_types;
+}
+
 void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
 	if (memory != DConstants::INVALID_INDEX) {

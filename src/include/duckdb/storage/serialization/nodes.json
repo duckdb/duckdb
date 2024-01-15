@@ -176,6 +176,123 @@
     ]
   },
   {
+    "class": "BaseReservoirSampling",
+    "includes": [
+      "duckdb/execution/reservoir_sample.hpp"
+    ],
+    "members": [
+      {
+        "id": 102,
+        "name": "next_index_to_sample",
+        "type": "idx_t"
+      },
+      {
+        "id": 103,
+        "name": "min_weight_threshold",
+        "type": "double"
+      },
+      {
+        "id": 104,
+        "name": "min_weighted_entry_index",
+        "type": "idx_t"
+      },
+      {
+        "id": 105,
+        "name": "num_entries_to_skip_b4_next_sample",
+        "type": "idx_t"
+      },
+      {
+        "id": 106,
+        "name": "num_entries_seen_total",
+        "type": "idx_t"
+      }
+    ],
+    "pointer_type": "unique_ptr"
+  },
+  {
+    "class": "BlockingSample",
+    "class_type": "type",
+    "includes": [],
+    "members": [
+      {
+        "id" : 100,
+        "name" : "base_reservoir_sample",
+        "type" : "unique_ptr<BaseReservoirSampling>"
+      },
+      {
+        "id" : 102,
+        "name": "type",
+        "type": "SampleType"
+      }
+    ],
+    "constructor": []
+  },
+  {
+    "class": "ReservoirSample",
+    "base": "BlockingSample",
+    "enum": "RESERVOIR_SAMPLE",
+    "includes": [],
+    "members": [
+      {
+        "id": 201,
+        "name": "sample_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 202,
+        "name": "reservoir_initialized",
+        "type": "bool"
+      },
+      {
+        "id": 203,
+        "name": "reservoir_chunk",
+        "type": "unique_ptr<DataChunk>",
+        "default": "nullptr"
+      }
+    ],
+    "constructor": ["sample_count"]
+  },
+  {
+    "class": "ReservoirSamplePercentage",
+    "base": "BlockingSample",
+    "enum": "RESERVOIR_PERCENTAGE_SAMPLE",
+    "includes": [],
+    "members": [
+      {
+        "id": 201,
+        "name": "sample_percentage",
+        "type": "double"
+      },
+      {
+        "id": 202,
+        "name": "reservoir_sample_size",
+        "type": "idx_t"
+      },
+      {
+        "id": 203,
+        "name": "current_sample",
+        "type": "unique_ptr<ReservoirSample>",
+        "default": "nullptr"
+      },
+      {
+        "id": 204,
+        "name": "finished_samples",
+        "type": "vector<unique_ptr<ReservoirSample>>"
+      },
+      {
+        "id": 205,
+        "name": "current_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 206,
+        "name": "is_finalized",
+        "type": "bool"
+      }
+    ],
+    "constructor": ["sample_percentage"]
+  },
+  {
     "class": "PivotColumn",
     "includes": [
       "duckdb/parser/tableref/pivotref.hpp"
@@ -204,7 +321,6 @@
     ],
     "pointer_type": "none"
   },
-
   {
     "class": "PivotColumnEntry",
     "members": [

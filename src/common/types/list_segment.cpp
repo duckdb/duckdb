@@ -521,10 +521,8 @@ static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, cons
 	functions.child_functions[0].BuildListVector(linked_child_list, child_vector, child_size);
 }
 
-void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result,
-                                           idx_t &initial_total_count) const {
+void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const {
 	auto &read_data_from_segment = *this;
-	idx_t total_count = initial_total_count;
 	auto segment = linked_list.first_segment;
 	while (segment) {
 		read_data_from_segment.read_data(read_data_from_segment, segment, result, total_count);

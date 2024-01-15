@@ -59,19 +59,10 @@ public:
 	AttachedDatabase &db;
 
 public:
-	//! Initialize a single predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                                 const ExpressionType expression_type) = 0;
-	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction,
-	                                                               const Value &low_value,
-	                                                               const ExpressionType low_expression_type,
-	                                                               const Value &high_value,
-	                                                               const ExpressionType high_expression_type) = 0;
-	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
-	//! and false otherwise
-	virtual bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state,
-	                  const idx_t max_count, vector<row_t> &result_ids) = 0;
+	//! Returns true if the index is a unknown index, and false otherwise
+	virtual bool IsUnknown() {
+		return false;
+	}
 
 	//! Obtain a lock on the index
 	void InitializeLock(IndexLock &state);
@@ -142,6 +133,10 @@ public:
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
 	static string AppendRowError(DataChunk &input, idx_t index);
+
+	//! Throw a constraint violation exception
+	virtual string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+	                                             DataChunk &input) = 0;
 
 protected:
 	//! Lock used for any changes to the index

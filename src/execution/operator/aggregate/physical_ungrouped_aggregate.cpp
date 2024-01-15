@@ -354,7 +354,8 @@ SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &cont
 		Vector source_state(Value::POINTER(CastPointerToValue(lstate.state.aggregates[aggr_idx].get())));
 		Vector dest_state(Value::POINTER(CastPointerToValue(gstate.state.aggregates[aggr_idx].get())));
 
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
 #ifdef DEBUG
 		gstate.state.counts[aggr_idx] += lstate.state.counts[aggr_idx];
@@ -548,7 +549,8 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 		}
 
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(state.aggregates[agg_idx].get())));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(gstate.state.aggregates[agg_idx].get())));

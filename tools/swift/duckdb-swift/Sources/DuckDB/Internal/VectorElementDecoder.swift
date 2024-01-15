@@ -209,6 +209,10 @@ extension VectorElementDataDecoder {
       try attemptDecode { try element.unwrap(type) }
     }
     
+    func decode(_ type: TimeTz.Type) throws -> TimeTz {
+      try attemptDecode { try element.unwrap(type) }
+    }
+
     func decode(_ type: Timestamp.Type) throws -> Timestamp {
       try attemptDecode { try element.unwrap(type) }
     }
@@ -239,6 +243,8 @@ extension VectorElementDataDecoder {
         return try decode(Timestamp.self) as! T
       case is Interval.Type:
         return try decode(Interval.self) as! T
+      case is TimeTz.Type:
+        return try decode(TimeTz.self) as! T
       default:
         return try T(from: decoder)
       }

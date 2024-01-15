@@ -413,6 +413,56 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<string>(0, 0) == "-123.45");
 }
 
+TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
+	CAPITester tester;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto res = tester.Query("SELECT TIMETZ '11:30:00.123456-02:00'");
+	REQUIRE(res->success);
+
+	auto chunk = res->FetchChunk(0);
+
+	REQUIRE(chunk->ColumnCount() == 1);
+	REQUIRE(res->ColumnType(0) == DUCKDB_TYPE_TIME_TZ);
+
+	auto data = (duckdb_time_tz *)chunk->GetData(0);
+
+	auto time_tz = duckdb_from_time_tz(data[0]);
+
+	auto val = duckdb_from_time(time_tz.time);
+	REQUIRE(val.hour == 11);
+	REQUIRE(val.min == 30);
+	REQUIRE(val.sec == 0);
+	REQUIRE(val.micros == 123456);
+
+	REQUIRE(time_tz.offset == -7200);
+}
+
+TEST_CASE("create time_tz value") {
+	duckdb_time_struct time;
+	time.hour = 4;
+	time.min = 2;
+	time.sec = 6;
+	time.micros = 9;
+	int offset = 8000;
+
+	auto micros = duckdb_to_time(time);
+	auto res = duckdb_create_time_tz(micros.micros, offset);
+
+	// and back again
+
+	auto inverse = duckdb_from_time_tz(res);
+	REQUIRE(micros.micros == inverse.time.micros);
+	REQUIRE(offset == inverse.offset);
+
+	time = duckdb_from_time(inverse.time);
+	REQUIRE(time.hour == 4);
+	REQUIRE(time.min == 2);
+	REQUIRE(time.sec == 6);
+	REQUIRE(time.micros == 9);
+}
+
 TEST_CASE("Test errors in C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
