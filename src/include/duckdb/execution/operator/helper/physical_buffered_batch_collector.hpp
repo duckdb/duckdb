@@ -19,6 +19,7 @@ public:
 
 public:
 	bool blocked = false;
+	idx_t current_batch = 0;
 };
 
 class PhysicalBufferedBatchCollector : public PhysicalResultCollector {

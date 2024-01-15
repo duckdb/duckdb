@@ -19,6 +19,12 @@ namespace duckdb {
 
 class StreamQueryResult;
 
+class BufferedChunks {
+public:
+	deque<unique_ptr<DataChunk>> chunks;
+	bool completed = false;
+};
+
 class BatchedBufferedData : public BufferedData {
 private:
 	//! (roughly) The max amount of tuples we'll keep buffered at a time
@@ -38,6 +44,7 @@ public:
 	void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	void UpdateMinBatchIndex(idx_t min_batch_index);
+	void CompleteBatch(idx_t batch);
 
 private:
 	bool IsMinBatch(lock_guard<mutex> &guard, idx_t batch);
@@ -49,14 +56,14 @@ private:
 
 	//! The queue of chunks
 	deque<unique_ptr<DataChunk>> batches;
-	map<idx_t, deque<unique_ptr<DataChunk>>> in_progress_batches;
+	map<idx_t, BufferedChunks> in_progress_batches;
 
 	//! The amount of tuples buffered for the other batches
 	atomic<idx_t> other_batches_tuple_count;
 	//! The amount of tuples buffered for the current batch
 	atomic<idx_t> current_batch_tuple_count;
 
-	atomic<idx_t> min_batch;
+	idx_t min_batch;
 };
 
 } // namespace duckdb

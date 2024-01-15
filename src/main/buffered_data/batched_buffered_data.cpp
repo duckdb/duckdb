@@ -53,9 +53,6 @@ bool BatchedBufferedData::BufferIsFull() {
 }
 
 bool BatchedBufferedData::IsMinBatch(lock_guard<mutex> &guard, idx_t batch) {
-	if (min_batch == 0) {
-		return false;
-	}
 	return min_batch == batch;
 }
 
@@ -86,10 +83,6 @@ void BatchedBufferedData::UnblockSinks() {
 }
 
 void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
-	if (min_batch_index == 0) {
-		// Not a valid minimum batch index
-		return;
-	}
 	lock_guard<mutex> lock(glock);
 	if (min_batch_index <= min_batch) {
 		// This batch index is outdated or already processed
@@ -98,21 +91,34 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 		return;
 	}
 	min_batch = min_batch_index;
-	auto existing_chunks_it = in_progress_batches.find(min_batch_index);
-	if (existing_chunks_it == in_progress_batches.end()) {
-		// No chunks have been created for this batch index yet
-		return;
+	printf("UPDATE MIN BATCH: min_batch: %llu\n", min_batch);
+	printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
+
+	stack<idx_t> to_remove;
+	for (auto &it : in_progress_batches) {
+		auto batch = it.first;
+		auto &buffered_chunks = it.second;
+		D_ASSERT(buffered_chunks.completed || batch == min_batch);
+
+		// We have already materialized chunks, have to move them to `batches` so they can be scanned
+		auto &chunks = buffered_chunks.chunks;
+
+		idx_t tuple_count = 0;
+		for (auto it = chunks.begin(); it != chunks.end(); it++) {
+			auto chunk = std::move(*it);
+			tuple_count += chunk->size();
+			batches.push_back(std::move(chunk));
+		}
+		other_batches_tuple_count -= tuple_count;
+		current_batch_tuple_count += tuple_count;
+		to_remove.push(batch);
 	}
-	// We have already materialized chunks, have to move them to `batches` so they can be scanned
-	auto &existing_chunks = existing_chunks_it->second;
-	idx_t tuple_count = 0;
-	for (auto it = existing_chunks.begin(); it != existing_chunks.end(); it++) {
-		auto chunk = std::move(*it);
-		tuple_count += chunk->size();
-		batches.push_back(std::move(chunk));
+	while (!to_remove.empty()) {
+		auto batch = to_remove.top();
+		to_remove.pop();
+		in_progress_batches.erase(batch);
 	}
-	other_batches_tuple_count -= tuple_count;
-	current_batch_tuple_count += tuple_count;
 }
 
 void BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
@@ -132,36 +138,91 @@ void BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientConte
 		// Check if we need to unblock more sinks to reach the buffer size
 		UnblockSinks();
 	}
+	printf("IS_FINISHED\n");
+}
+
+void BatchedBufferedData::CompleteBatch(idx_t batch) {
+	printf("COMPLETE BATCH: batch: %llu\n", batch);
+	printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
+
+	auto it = in_progress_batches.find(batch);
+	if (it == in_progress_batches.end()) {
+		return;
+	}
+
+	auto &buffered_chunks = it->second;
+	buffered_chunks.completed = true;
 }
 
 unique_ptr<DataChunk> BatchedBufferedData::Scan() {
-	lock_guard<mutex> lock(glock);
 	unique_ptr<DataChunk> chunk;
-	if (!batches.empty()) {
-		chunk = std::move(batches.front());
-		batches.pop_front();
+	bool empty = false;
+	{
+		lock_guard<mutex> lock(glock);
+		if (!batches.empty()) {
+			chunk = std::move(batches.front());
+			batches.pop_front();
+		} else {
+			empty = true;
+		}
+	}
+	if (empty) {
+		D_ASSERT(!chunk);
+		// Increase the min batch index to see if there are still completed batches
+		// waiting to be processed
+		auto it = in_progress_batches.begin();
+		if (it != in_progress_batches.end()) {
+			auto batch = it->first;
+			auto &chunks = it->second;
+			if (chunks.completed) {
+				// By updating the min batch index, we'll move the chunks to 'batches';
+				UpdateMinBatchIndex(batch);
+			}
+			lock_guard<mutex> lock(glock);
+			if (!batches.empty()) {
+				chunk = std::move(batches.front());
+				batches.pop_front();
+			} else {
+				empty = true;
+			}
+		}
 	}
 
 	if (!chunk) {
 		context.reset();
 		D_ASSERT(blocked_sinks.empty());
+		D_ASSERT(in_progress_batches.empty());
 		return nullptr;
 	}
 
 	current_batch_tuple_count -= chunk->size();
+
+	printf("SCAN: min_batch: %llu\n", min_batch);
+	printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
+
 	return chunk;
 }
 
 void BatchedBufferedData::Append(unique_ptr<DataChunk> chunk, idx_t batch) {
+	// We should never find any chunks with a smaller batch index than the minimum
+	D_ASSERT(batch >= min_batch);
 	lock_guard<mutex> lock(glock);
 	if (batch == min_batch) {
 		current_batch_tuple_count += chunk->size();
 		batches.push_back(std::move(chunk));
 	} else {
-		auto &chunks = in_progress_batches[batch];
+		auto &buffered_chunks = in_progress_batches[batch];
+		auto &chunks = buffered_chunks.chunks;
+		buffered_chunks.completed = false;
+
 		other_batches_tuple_count += chunk->size();
 		chunks.push_back(std::move(chunk));
 	}
+	printf("APPEND: batch: %llu | min_batch: %llu\n", batch, min_batch);
+	printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
 }
 
 } // namespace duckdb
