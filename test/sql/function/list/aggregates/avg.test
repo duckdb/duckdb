@@ -5,19 +5,19 @@
 require skip_reload
 
 
-## list_avg on a sequence
-#statement ok
-#CREATE SEQUENCE seq;
-#
-#query I
-#SELECT list_avg([nextval('seq')]);
-#----
-#1
-#
-#query I
-#SELECT list_avg([nextval('seq')]);
-#----
-#2
+# list_avg on a sequence
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT list_avg([nextval('seq')]);
+----
+1
+
+query I
+SELECT list_avg([nextval('seq')]);
+----
+2
 
 # multiple list entries
 statement ok
