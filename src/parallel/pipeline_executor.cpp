@@ -163,7 +163,6 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 	}
 
 	partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_batch_index);
-	// printf("partition_info.min_batch_index: %llu\n", partition_info.min_batch_index.GetIndex());
 
 	return SinkNextBatchType::READY;
 }

@@ -36,6 +36,9 @@ bool BatchedBufferedData::BufferIsFull() {
 		// After a Sink has been blocked once, the second time around it'll reach this method
 
 		// TODO: maybe check the `other_batches_tuple_count` to make sure we're not flooding it
+		// Actually, no we can't do that
+		// If this returns true, and we reach Scan with an empty 'batches' queue, we will mark the result as finished
+		// Which should never happen if the min_batch is still 0
 		return false;
 	}
 
@@ -100,7 +103,7 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 		// No chunks have been created for this batch index yet
 		return;
 	}
-	// We have already materialized chunks, have to move them to `batches` so they be scanned
+	// We have already materialized chunks, have to move them to `batches` so they can be scanned
 	auto &existing_chunks = existing_chunks_it->second;
 	idx_t tuple_count = 0;
 	for (auto it = existing_chunks.begin(); it != existing_chunks.end(); it++) {

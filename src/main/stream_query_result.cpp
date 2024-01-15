@@ -13,7 +13,6 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
                   std::move(names), std::move(client_properties)),
       buffered_data(buffered_data) {
 	context = buffered_data->GetContext();
-	buffered_data->SetCreatedFlag();
 }
 
 StreamQueryResult::~StreamQueryResult() {

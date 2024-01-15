@@ -56,19 +56,9 @@ public:
 	void Close() {
 		context = nullptr;
 	}
-	void SetCreatedFlag() {
-		lock_guard<mutex> lock(glock);
-		created = true;
-	}
-	bool IsCreated() {
-		lock_guard<mutex> lock(glock);
-		return created;
-	}
 
 protected:
 	shared_ptr<ClientContext> context;
-	//! Whether the result is created yet
-	bool created = false;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 };
