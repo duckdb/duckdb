@@ -11,7 +11,7 @@
             con,
             """SELECT * EXCLUDE(time, time_tz)
                 , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
-                , CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS time_tz
+                , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz
             FROM test_all_types()
             """
         )
@@ -56,8 +56,7 @@
     @test isequal(df.large_enum, ["enum_0", "enum_69999", missing])
     @test isequal(df.date, [Dates.Date(-5877641, 6, 25), Dates.Date(5881580, 7, 10), missing])
     @test isequal(df.time, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
-    # FIXME: TIMETZ <> TIME
-    # @test isequal(df.time_tz, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
+    @test isequal(df.time_tz, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
     @test isequal(
         df.timestamp,
         [Dates.DateTime(-290308, 12, 22, 0, 0, 0), Dates.DateTime(294247, 1, 10, 4, 0, 54, 775), missing]
