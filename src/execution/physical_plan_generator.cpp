@@ -159,9 +159,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		plan = CreatePlan(op.Cast<LogicalExplain>());
 		break;
-	case LogicalOperatorType::LOGICAL_SHOW:
-		plan = CreatePlan(op.Cast<LogicalShow>());
-		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		plan = CreatePlan(op.Cast<LogicalDistinct>());
 		break;
