@@ -49,7 +49,6 @@ class LogicalRecursiveCTE;
 class LogicalMaterializedCTE;
 class LogicalSetOperation;
 class LogicalSample;
-class LogicalShow;
 class LogicalSimple;
 class LogicalSet;
 class LogicalReset;

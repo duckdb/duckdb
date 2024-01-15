@@ -34,6 +34,8 @@ struct EnumUtil {
 
 enum class AccessMode : uint8_t;
 
+enum class AggregateCombineType : uint8_t;
+
 enum class AggregateHandling : uint8_t;
 
 enum class AggregateOrderDependent : uint8_t;
@@ -238,6 +240,8 @@ enum class SetScope : uint8_t;
 
 enum class SetType : uint8_t;
 
+enum class ShowType : uint8_t;
+
 enum class SimplifiedTokenType : uint8_t;
 
 enum class SinkCombineResultType : uint8_t;
@@ -307,6 +311,9 @@ enum class WithinCollection : uint8_t;
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateHandling>(AggregateHandling value);
@@ -615,6 +622,9 @@ template<>
 const char* EnumUtil::ToChars<SetType>(SetType value);
 
 template<>
+const char* EnumUtil::ToChars<ShowType>(ShowType value);
+
+template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value);
 
 template<>
@@ -716,6 +726,9 @@ const char* EnumUtil::ToChars<WithinCollection>(WithinCollection value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
+
+template<>
+AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
 
 template<>
 AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value);
@@ -1022,6 +1035,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value);
 
 template<>
 SetType EnumUtil::FromString<SetType>(const char *value);
+
+template<>
+ShowType EnumUtil::FromString<ShowType>(const char *value);
 
 template<>
 SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value);

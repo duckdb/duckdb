@@ -216,8 +216,6 @@ duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
 		return DUCKDB_STATEMENT_TYPE_EXPORT;
 	case duckdb::StatementType::PRAGMA_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_PRAGMA;
-	case duckdb::StatementType::SHOW_STATEMENT:
-		return DUCKDB_STATEMENT_TYPE_SHOW;
 	case duckdb::StatementType::VACUUM_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_VACUUM;
 	case duckdb::StatementType::CALL_STATEMENT:

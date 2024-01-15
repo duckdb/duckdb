@@ -198,5 +198,27 @@
         "type": "bool"
       }
     ]
+  },
+  {
+    "class": "ShowRef",
+    "base": "TableRef",
+    "enum": "SHOW_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "table_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "query",
+        "type": "QueryNode*"
+      },
+      {
+        "id": 202,
+        "name": "show_type",
+        "type": "ShowType"
+      }
+    ]
   }
 ]

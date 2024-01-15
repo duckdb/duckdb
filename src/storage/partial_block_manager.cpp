@@ -119,7 +119,7 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 		// Free the page with the least space free.
 		auto itr = partially_filled_blocks.begin();
 		block_to_free = std::move(itr->second);
-		free_space = state.block_size - itr->first;
+		free_space = itr->first;
 		partially_filled_blocks.erase(itr);
 	}
 	// Flush any block that we're not going to reuse.

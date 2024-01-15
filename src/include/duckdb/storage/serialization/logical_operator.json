@@ -801,23 +801,6 @@
     "constructor": ["explain_type"]
   },
   {
-    "class": "LogicalShow",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_SHOW",
-    "members": [
-      {
-        "id": 200,
-        "name": "types_select",
-        "type": "vector<LogicalType>"
-      },
-      {
-        "id": 201,
-        "name": "aliases",
-        "type": "vector<string>"
-      }
-    ]
-  },
-  {
     "class": "LogicalSet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_SET",

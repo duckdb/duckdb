@@ -131,7 +131,7 @@ void ColumnSegment::Resize(idx_t new_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	shared_ptr<BlockHandle> new_block;
-	auto new_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
+	auto new_handle = buffer_manager.Allocate(new_size, false, &new_block);
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);
