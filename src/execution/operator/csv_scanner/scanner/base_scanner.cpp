@@ -55,11 +55,11 @@ CSVIterator &BaseScanner::GetIterator() {
 	return iterator;
 }
 
-ScannerResult *BaseScanner::ParseChunk() {
+ScannerResult &BaseScanner::ParseChunk() {
 	throw InternalException("ParseChunk() from CSV Base Scanner is mot implemented");
 }
 
-ScannerResult *BaseScanner::GetResult() {
+ScannerResult &BaseScanner::GetResult() {
 	throw InternalException("GetResult() from CSV Base Scanner is mot implemented");
 }
 

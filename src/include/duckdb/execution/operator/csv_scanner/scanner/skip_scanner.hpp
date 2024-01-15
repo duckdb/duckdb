@@ -43,9 +43,9 @@ public:
 	~SkipScanner() {
 	}
 
-	SkipResult *ParseChunk() override;
+	SkipResult &ParseChunk() override;
 
-	SkipResult *GetResult() override;
+	SkipResult &GetResult() override;
 
 private:
 	void Initialize() override;

@@ -24,10 +24,6 @@ public:
 	      file_idx(file_idx_p), buffer_idx(buffer_index_p) {};
 	CSVBufferHandle() : actual_size(0), is_last_buffer(false), file_idx(0), buffer_idx(0) {};
 	~CSVBufferHandle() {
-		// unpinning the buffer should be magically done, i dont want to deal with this outside here
-		//		if (cur_buffer_idx > 0) {
-		//		buffer_manager->UnpinBuffer(cur_file_idx, cur_buffer_idx - 1);
-		//	}
 	}
 	//! Handle created during allocation
 	BufferHandle handle;

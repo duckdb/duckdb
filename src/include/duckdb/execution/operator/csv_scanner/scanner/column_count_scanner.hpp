@@ -19,7 +19,9 @@ namespace duckdb {
 class ColumnCountResult : public ScannerResult {
 public:
 	ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine);
-	idx_t &operator[](size_t index);
+	inline idx_t &operator[](size_t index) {
+		return column_counts[index];
+	}
 
 	idx_t column_counts[STANDARD_VECTOR_SIZE];
 	idx_t current_column_count = 0;
@@ -46,9 +48,9 @@ public:
 	~ColumnCountScanner() {
 	}
 
-	ColumnCountResult *ParseChunk() override;
+	ColumnCountResult &ParseChunk() override;
 
-	ColumnCountResult *GetResult() override;
+	ColumnCountResult &GetResult() override;
 
 	unique_ptr<StringValueScanner> UpgradeToStringValueScanner();
 

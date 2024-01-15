@@ -79,7 +79,7 @@ struct CSVStates {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
-	mutex main_mutex;
+	std::once_flag call_once_flag;
 
 	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
@@ -105,6 +105,8 @@ public:
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
 
+private:
+	static void InitializeSelectionVector(vector<SelectionVector> &selection_vector, idx_t num_cols);
 	vector<SelectionVector> selection_vector;
 };
 

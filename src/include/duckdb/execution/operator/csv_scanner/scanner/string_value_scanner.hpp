@@ -56,6 +56,7 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
+	const string_t null_str;
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
@@ -109,7 +110,7 @@ public:
 	~StringValueScanner() {
 	}
 
-	StringValueResult *ParseChunk() override;
+	StringValueResult &ParseChunk() override;
 
 	//! Flushes the result to the insert_chunk
 	void Flush(DataChunk &insert_chunk);
@@ -120,8 +121,7 @@ public:
 	bool FinishedIterator();
 
 	//! Creates a new string with all escaped values removed
-	static void RemoveEscape(const char *str_ptr, idx_t end, char escape, string &removed_escapes,
-	                         bool previous_quote = false);
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
 
 	const idx_t scanner_idx;
 

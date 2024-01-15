@@ -40,13 +40,13 @@ SkipScanner::SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, const shar
       result(states, *state_machine, rows_to_skip) {
 }
 
-SkipResult *SkipScanner::ParseChunk() {
+SkipResult &SkipScanner::ParseChunk() {
 	ParseChunkInternal();
-	return &result;
+	return result;
 }
 
-SkipResult *SkipScanner::GetResult() {
-	return &result;
+SkipResult &SkipScanner::GetResult() {
+	return result;
 }
 
 void SkipScanner::Initialize() {

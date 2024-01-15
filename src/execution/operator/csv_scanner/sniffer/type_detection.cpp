@@ -202,7 +202,7 @@ void CSVSniffer::DetectTypes() {
 		auto candidate = candidate_cc->UpgradeToStringValueScanner();
 
 		// Parse chunk and read csv with info candidate
-		auto &tuples = *candidate->ParseChunk();
+		auto &tuples = candidate->ParseChunk();
 		idx_t row_idx = 0;
 		if (tuples.NumberOfRows() > 1 &&
 		    (!options.dialect_options.header.IsSetByUser() ||

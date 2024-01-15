@@ -15,10 +15,6 @@ inline void ColumnCountResult::InternalAddRow() {
 	current_column_count = 0;
 }
 
-idx_t &ColumnCountResult::operator[](size_t index) {
-	return column_counts[index];
-}
-
 bool ColumnCountResult::AddRow(ColumnCountResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (!result.states.EmptyLastValue()) {
@@ -55,15 +51,15 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 	return scanner;
 }
 
-ColumnCountResult *ColumnCountScanner::ParseChunk() {
+ColumnCountResult &ColumnCountScanner::ParseChunk() {
 	result.result_position = 0;
 	column_count = 1;
 	ParseChunkInternal();
-	return &result;
+	return result;
 }
 
-ColumnCountResult *ColumnCountScanner::GetResult() {
-	return &result;
+ColumnCountResult &ColumnCountScanner::GetResult() {
+	return result;
 }
 
 void ColumnCountScanner::Initialize() {

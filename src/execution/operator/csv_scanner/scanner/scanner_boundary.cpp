@@ -73,7 +73,7 @@ bool CSVIterator::Next(CSVBufferManager &buffer_manager) {
 	return true;
 }
 
-bool CSVIterator::IsSet() const {
+bool CSVIterator::IsBoundarySet() const {
 	return is_set;
 }
 idx_t CSVIterator::GetEndPos() const {

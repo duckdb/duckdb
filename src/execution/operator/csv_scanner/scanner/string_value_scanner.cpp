@@ -13,8 +13,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
                                      CSVErrorHandler &error_hander_p, CSVIterator &iterator_p, bool store_line_size_p)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
-      result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
-      store_line_size(store_line_size_p) {
+      null_str(state_machine.options.null_str), result_size(result_size_p), error_handler(error_hander_p),
+      iterator(iterator_p), store_line_size(store_line_size_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
 	vector_size = number_of_columns * result_size;
@@ -52,7 +52,6 @@ DataChunk &StringValueResult::ToChunk() {
 	parse_chunk.Reset();
 	const auto &selection_vectors = state_machine.GetSelectionVector();
 	for (idx_t col_idx = 0; col_idx < parse_chunk.ColumnCount(); col_idx++) {
-		// fixme: has to do some extra checks for null padding
 		parse_chunk.data[col_idx].Slice(*vector, selection_vectors[col_idx], number_of_rows);
 	}
 	parse_chunk.SetCardinality(number_of_rows);
@@ -62,12 +61,11 @@ DataChunk &StringValueResult::ToChunk() {
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.escaped) {
 		// If it's an escaped value we have to remove all the escapes, this is not really great
-		string removed_escapes;
-		StringValueScanner::RemoveEscape(result.buffer_ptr + result.last_position + 1,
-		                                 buffer_pos - result.last_position - 2,
-		                                 result.state_machine.options.GetEscape()[0], removed_escapes);
-		auto value = string_t(removed_escapes);
-		result.AddValueToVector(value, true);
+		auto value = StringValueScanner::RemoveEscape(result.buffer_ptr + result.last_position + 1,
+		                                              buffer_pos - result.last_position - 2,
+		                                              result.state_machine.options.GetEscape()[0], *result.vector);
+
+		result.AddValueToVector(value);
 	} else {
 		if (buffer_pos < result.last_position + 2) {
 			// empty value
@@ -114,7 +112,7 @@ void StringValueResult::HandleOverLimitRows() {
 }
 
 void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
-	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == state_machine.options.null_str) {
+	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == null_str) {
 		bool empty = false;
 		idx_t cur_pos = result_position % number_of_columns;
 		if (cur_pos < state_machine.options.force_not_null.size()) {
@@ -252,7 +250,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 	// We care about empty lines if this is a single column csv file
 	result.last_position = buffer_pos + 1;
 	if (result.parse_chunk.ColumnCount() == 1) {
-		if (result.state_machine.options.null_str.empty()) {
+		if (result.null_str.Empty()) {
 			bool empty = false;
 			if (!result.state_machine.options.force_not_null.empty()) {
 				empty = result.state_machine.options.force_not_null[result.result_position % result.number_of_columns];
@@ -291,7 +289,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options,
-	                                                  *CSVStateMachineCache::Get(context));
+	                                                  CSVStateMachineCache::Get(context));
 
 	state_machine->dialect_options.num_cols = options.dialect_options.num_cols;
 	state_machine->dialect_options.header = options.dialect_options.header;
@@ -306,17 +304,17 @@ bool StringValueScanner::FinishedIterator() {
 	return iterator.done;
 }
 
-StringValueResult *StringValueScanner::ParseChunk() {
+StringValueResult &StringValueScanner::ParseChunk() {
 	result.result_position = 0;
 	result.validity_mask->SetAllValid(result.vector_size);
 	ParseChunkInternal();
-	return &result;
+	return result;
 }
 
 void StringValueScanner::Flush(DataChunk &insert_chunk) {
-	auto process_result = ParseChunk();
+	auto &process_result = ParseChunk();
 	// First Get Parsed Chunk
-	auto &parse_chunk = process_result->ToChunk();
+	auto &parse_chunk = process_result.ToChunk();
 
 	if (parse_chunk.size() == 0) {
 		return;
@@ -451,7 +449,7 @@ void StringValueScanner::Initialize() {
 
 void StringValueScanner::Process() {
 	idx_t to_pos;
-	if (iterator.IsSet()) {
+	if (iterator.IsBoundarySet()) {
 		to_pos = iterator.GetEndPos();
 		if (to_pos > cur_buffer_handle->actual_size) {
 			to_pos = cur_buffer_handle->actual_size;
@@ -480,18 +478,34 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-void StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, string &removed_escapes,
-                                      bool previous_quote) {
-	bool just_escaped = previous_quote;
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector) {
+	// Figure out the exact size
+	idx_t str_pos = 0;
+	bool just_escaped = false;
+	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
+		if (str_ptr[cur_pos] == escape && !just_escaped) {
+			just_escaped = true;
+		} else {
+			just_escaped = false;
+			str_pos++;
+		}
+	}
+
+	auto removed_escapes = StringVector::EmptyString(vector, str_pos);
+	auto removed_escapes_ptr = removed_escapes.GetDataWriteable();
+	// Allocate string and copy it
+	str_pos = 0;
+	just_escaped = false;
 	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
 		char c = str_ptr[cur_pos];
 		if (c == escape && !just_escaped) {
 			just_escaped = true;
 		} else {
 			just_escaped = false;
-			removed_escapes += c;
+			removed_escapes_ptr[str_pos++] = c;
 		}
 	}
+	return removed_escapes;
 }
 
 void StringValueScanner::ProcessOverbufferValue() {
@@ -548,15 +562,13 @@ void StringValueScanner::ProcessOverbufferValue() {
 		}
 	}
 	string_t value;
-	string removed_escapes;
 	if (result.quoted) {
 		value = string_t(overbuffer_string.c_str() + result.quoted, overbuffer_string.size() - 2);
 		if (result.escaped) {
 			const auto str_ptr = static_cast<const char *>(overbuffer_string.c_str() + result.quoted);
-			StringValueScanner::RemoveEscape(str_ptr, overbuffer_string.size() - 2,
-			                                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-			                                 removed_escapes);
-			value = string_t(removed_escapes.c_str(), removed_escapes.size());
+			value = StringValueScanner::RemoveEscape(
+			    str_ptr, overbuffer_string.size() - 2,
+			    state_machine->dialect_options.state_machine_options.escape.GetValue(), *result.vector);
 		}
 	} else {
 		value = string_t(overbuffer_string.c_str(), overbuffer_string.size());
@@ -684,7 +696,7 @@ void StringValueScanner::SetStart() {
 	// 1. We walk until the next new line
 	SkipUntilNewLine();
 	StringValueScanner scan_finder(0, buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), iterator, 1);
-	auto &tuples = *scan_finder.ParseChunk();
+	auto &tuples = scan_finder.ParseChunk();
 	if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
 		// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 		// Or if columns don't match, this is not the correct start, we need to skip until the next new line
@@ -708,7 +720,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 	}
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
-	if (iterator.IsSet()) {
+	if (iterator.IsBoundarySet()) {
 		iterator.done = true;
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer

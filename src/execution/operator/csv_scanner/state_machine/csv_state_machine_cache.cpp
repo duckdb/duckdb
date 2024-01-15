@@ -115,10 +115,10 @@ const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &stat
 	return transition_array;
 }
 
-shared_ptr<CSVStateMachineCache> CSVStateMachineCache::Get(ClientContext &context) {
+CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
 
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::STATE_KEY);
+	return *cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::STATE_KEY);
 }
 
 } // namespace duckdb

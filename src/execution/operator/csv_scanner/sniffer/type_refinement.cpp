@@ -51,7 +51,7 @@ void CSVSniffer::RefineTypes() {
 			}
 			return;
 		}
-		auto &parse_chunk = best_candidate->ParseChunk()->ToChunk();
+		auto &parse_chunk = best_candidate->ParseChunk().ToChunk();
 
 		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			vector<LogicalType> &col_type_candidates = best_sql_types_candidates_per_column_idx[col];

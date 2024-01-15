@@ -54,10 +54,10 @@ public:
 	//! Resets the scanner
 	void Reset();
 	//! Parses data into a output_chunk
-	virtual ScannerResult *ParseChunk();
+	virtual ScannerResult &ParseChunk();
 
 	//! Returns the result from the last Parse call. Shouts at you if you call it wrong
-	virtual ScannerResult *GetResult();
+	virtual ScannerResult &GetResult();
 
 	CSVIterator &GetIterator();
 

@@ -42,7 +42,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
       error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)), options(options_p) {
 	if (file_idx < bind_data.union_readers.size()) {
 		// we are doing UNION BY NAME - fetch the options from the union reader for this file
-		CSVFileScan *union_reader_ptr = nullptr;
+		optional_ptr<CSVFileScan> union_reader_ptr;
 		if (file_idx == 0) {
 			union_reader_ptr = bind_data.initial_reader.get();
 		} else {
@@ -72,7 +72,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
 	// Initialize State Machine
-	auto &state_machine_cache = *CSVStateMachineCache::Get(context);
+	auto &state_machine_cache = CSVStateMachineCache::Get(context);
 
 	if (file_idx < bind_data.column_info.size()) {
 		// Serialized Union By name
@@ -123,7 +123,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 	file_size = buffer_manager->file_handle->FileSize();
 	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
 	// error out during scanning)
-	auto &state_machine_cache = *CSVStateMachineCache::Get(context);
+	auto &state_machine_cache = CSVStateMachineCache::Get(context);
 	if (options.auto_detect && options.dialect_options.num_cols == 0) {
 		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 		auto sniffer_result = sniffer.SniffCSV();

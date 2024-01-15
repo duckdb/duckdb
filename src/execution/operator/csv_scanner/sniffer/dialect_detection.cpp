@@ -88,7 +88,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner, idx_t &rows_read,
                                          idx_t &best_consistent_rows, idx_t &prev_padding_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
-	auto &sniffed_column_counts = *scanner->ParseChunk();
+	auto &sniffed_column_counts = scanner->ParseChunk();
 	idx_t start_row = options.dialect_options.skip_rows.GetValue();
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.Empty() ? 1 : sniffed_column_counts[start_row];
@@ -204,7 +204,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 }
 
 bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
-	auto &sniffed_column_counts = *candidate.ParseChunk();
+	auto &sniffed_column_counts = candidate.ParseChunk();
 	for (idx_t i = 0; i < sniffed_column_counts.Size(); i++) {
 		if (set_columns.IsSet()) {
 			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
@@ -240,7 +240,7 @@ void CSVSniffer::RefineCandidates() {
 				candidates.emplace_back(std::move(successful_candidate));
 				return;
 			}
-			if (!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult()->error) {
+			if (!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult().error) {
 				// This candidate failed, move to the next one
 				break;
 			}

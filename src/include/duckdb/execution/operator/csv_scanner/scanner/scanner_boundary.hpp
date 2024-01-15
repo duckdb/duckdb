@@ -64,7 +64,7 @@ public:
 	//! Otherwise, if there are boundaries, it returns True
 	bool Next(CSVBufferManager &buffer_manager);
 	//! If boundary is set
-	bool IsSet() const;
+	bool IsBoundarySet() const;
 
 	//! Getters
 	idx_t GetEndPos() const;

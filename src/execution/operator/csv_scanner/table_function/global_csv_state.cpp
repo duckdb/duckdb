@@ -15,7 +15,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 
 	if (buffer_manager && buffer_manager->GetFilePath() == files[0]) {
 		auto state_machine = make_shared<CSVStateMachine>(
-		    CSVStateMachineCache::Get(context)->Get(options.dialect_options.state_machine_options), options);
+		    CSVStateMachineCache::Get(context).Get(options.dialect_options.state_machine_options), options);
 		// If we already have a buffer manager, we don't need to reconstruct it to the first file
 		file_scans.emplace_back(make_uniq<CSVFileScan>(context, buffer_manager, state_machine, options, bind_data,
 		                                               column_ids, file_schema));
