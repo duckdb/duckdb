@@ -9,12 +9,12 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv42' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv42/*.csv', header = 1)
 ----
 10000000
 
 query I
-SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv42/*.csv')
+SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv42/*.csv', header = 1)
 ----
 1
 
@@ -27,6 +27,6 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv43/*.csv', h
 10000000
 
 query I
-SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv43/*.csv')
+SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv43/*.csv', header = 1)
 ----
 1
