@@ -279,9 +279,9 @@ idx_t StringValueResult::NumberOfRows() {
 	return result_position / number_of_columns;
 }
 
-StringValueScanner::StringValueScanner(idx_t scanner_idx_p, shared_ptr<CSVBufferManager> buffer_manager,
-                                       shared_ptr<CSVStateMachine> state_machine,
-                                       shared_ptr<CSVErrorHandler> error_handler, CSVIterator boundary,
+StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSVBufferManager> &buffer_manager,
+                                       const shared_ptr<CSVStateMachine> &state_machine,
+                                       const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary,
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, boundary), scanner_idx(scanner_idx_p),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
@@ -480,7 +480,7 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-void StringValueScanner::RemoveEscape(char *str_ptr, idx_t end, char escape, string &removed_escapes,
+void StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, string &removed_escapes,
                                       bool previous_quote) {
 	bool just_escaped = previous_quote;
 	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
@@ -552,7 +552,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (result.quoted) {
 		value = string_t(overbuffer_string.c_str() + result.quoted, overbuffer_string.size() - 2);
 		if (result.escaped) {
-			auto str_ptr = (char *)(overbuffer_string.c_str() + result.quoted);
+			const auto str_ptr = static_cast<const char *>(overbuffer_string.c_str() + result.quoted);
 			StringValueScanner::RemoveEscape(str_ptr, overbuffer_string.size() - 2,
 			                                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
 			                                 removed_escapes);

@@ -6,10 +6,10 @@ namespace duckdb {
 
 CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
                          shared_ptr<CSVStateMachine> state_machine_p, const CSVReaderOptions &options_p,
-                         const ReadCSVData &bind_data, const vector<column_t> column_ids,
+                         const ReadCSVData &bind_data, const vector<column_t> &column_ids,
                          vector<LogicalType> &file_schema)
-    : file_path(options_p.file_path), file_idx(0), buffer_manager(buffer_manager_p), state_machine(state_machine_p),
-      file_size(buffer_manager->file_handle->FileSize()),
+    : file_path(options_p.file_path), file_idx(0), buffer_manager(std::move(buffer_manager_p)),
+      state_machine(std::move(state_machine_p)), file_size(buffer_manager->file_handle->FileSize()),
       error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)),
       on_disk_file(buffer_manager->file_handle->OnDiskFile()), options(options_p) {
 	if (bind_data.initial_reader.get()) {
@@ -20,7 +20,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 		MultiFileReader::InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 		                                  bind_data.return_names, column_ids, nullptr, file_path, context);
 		return;
-	} else if (bind_data.column_info.size() > 0) {
+	} else if (!bind_data.column_info.empty()) {
 		// Serialized Union By name
 		names = bind_data.column_info[0].names;
 		types = bind_data.column_info[0].types;
@@ -36,7 +36,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
-                         idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> column_ids,
+                         idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
                          vector<LogicalType> &file_schema)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)), options(options_p) {

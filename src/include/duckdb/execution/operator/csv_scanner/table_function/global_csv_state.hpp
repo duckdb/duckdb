@@ -21,7 +21,7 @@ namespace duckdb {
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
 public:
-	CSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
+	CSVGlobalState(ClientContext &context, const shared_ptr<CSVBufferManager> &buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
 	               vector<column_t> column_ids_p, const ReadCSVData &bind_data);
 
@@ -31,8 +31,6 @@ public:
 	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
 	//! In case it returns a nullptr it means we are done reading these files.
 	unique_ptr<StringValueScanner> Next();
-	//! Maybe replaces the max line size if scan_line_size is higher
-	void NewMaxLineSize(idx_t scan_line_size);
 
 	void FillRejectsTable();
 

@@ -42,9 +42,10 @@ bool ColumnCountResult::EmptyLine(ColumnCountResult &result, const idx_t buffer_
 }
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
-                                       shared_ptr<CSVStateMachine> state_machine,
+                                       const shared_ptr<CSVStateMachine> &state_machine,
                                        shared_ptr<CSVErrorHandler> error_handler)
-    : BaseScanner(buffer_manager, state_machine, error_handler), result(states, *state_machine), column_count(1) {
+    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler)), result(states, *state_machine),
+      column_count(1) {
 	sniffing = true;
 }
 

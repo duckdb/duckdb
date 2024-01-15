@@ -52,11 +52,12 @@ void CSVErrorHandler::NewMaxLineSize(idx_t scan_line_size) {
 	max_line_length = std::max(scan_line_size, max_line_length);
 }
 
-CSVError::CSVError(string error_message_p, CSVErrorType type_p) : error_message(error_message_p), type(type_p) {
+CSVError::CSVError(string error_message_p, CSVErrorType type_p)
+    : error_message(std::move(error_message_p)), type(type_p) {
 }
 
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p)
-    : error_message(error_message_p), type(type_p), column_idx(column_idx_p), row(row_p) {
+    : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), row(std::move(row_p)) {
 }
 
 CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {

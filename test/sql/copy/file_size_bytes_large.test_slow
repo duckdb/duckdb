@@ -14,7 +14,7 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv42/*.csv', h
 10000000
 
 query I
-SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv42/*.csv', header = 1)
+SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv42/*.csv')
 ----
 1
 
@@ -27,6 +27,6 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv43/*.csv', h
 10000000
 
 query I
-SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv43/*.csv', header = 1)
+SELECT count(*) BETWEEN 550 AND 650 FROM glob('__TEST_DIR__/file_size_bytes_csv43/*.csv')
 ----
 1
