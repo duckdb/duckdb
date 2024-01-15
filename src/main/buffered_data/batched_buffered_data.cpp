@@ -4,66 +4,117 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
+#include "duckdb/common/stack.hpp"
 
 namespace duckdb {
 
 void BatchedBufferedData::AddToBacklog(BlockedSink blocked_sink) {
 	lock_guard<mutex> lock(glock);
-	if (false) {
-		// TODO: figure out if this sink is part of the minimum batch index
-		D_ASSERT(!blocked_min);
-		blocked_min = make_uniq<BlockedSink>(blocked_sink);
-	} else {
-		blocked_sinks.push(blocked_sink);
-	}
+	auto batch = blocked_sink.batch.GetIndex();
+	D_ASSERT(!blocked_sinks.count(batch));
+	blocked_sinks.emplace(std::make_pair(batch, blocked_sink));
 }
 
-BatchedBufferedData::BatchedBufferedData(shared_ptr<ClientContext> context) : BufferedData(std::move(context)) {
+BatchedBufferedData::BatchedBufferedData(shared_ptr<ClientContext> context)
+    : BufferedData(std::move(context)), other_batches_tuple_count(0), current_batch_tuple_count(0), min_batch(0) {
+}
+
+bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
+	lock_guard<mutex> lock(glock);
+	// If a batch index is specified we need to check only one of the two tuple_counts
+	bool is_minimum = IsMinBatch(lock, batch);
+	if (is_minimum) {
+		return current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE;
+	}
+	return other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE;
 }
 
 bool BatchedBufferedData::BufferIsFull() {
-	// TODO: figure this out
+	lock_guard<mutex> lock(glock);
+	if (min_batch == 0) {
+		// This is highly unlikely to happen
+		// But it's possible that a Sink has to be unblocked before a min batch index is assigned
+		// After a Sink has been blocked once, the second time around it'll reach this method
+
+		// TODO: maybe check the `other_batches_tuple_count` to make sure we're not flooding it
+		return false;
+	}
+
+	bool min_filled = current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE;
+	bool others_filled = other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE;
+	if (batches.empty()) {
+		// printf("EMPTY: current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+		// printf("EMPTY: other-batches tuple_count: %llu\n", other_batches_tuple_count.load());
+		return false;
+	}
+	if (min_filled) {
+		return true;
+	}
+	if (others_filled) {
+		return true;
+	}
+	// printf("OTHERS_NOT_FILLED: current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	// printf("OTHERS_NOT_FILLED: other-batches tuple_count: %llu\n", other_batches_tuple_count.load());
 	return false;
+}
+
+bool BatchedBufferedData::IsMinBatch(lock_guard<mutex> &guard, idx_t batch) {
+	if (min_batch == 0) {
+		return false;
+	}
+	return min_batch == batch;
 }
 
 void BatchedBufferedData::UnblockSinks() {
-	auto &estimated_min = replenish_state.estimated_min_tuples;
-	auto &estimated_others = replenish_state.estimated_other_tuples;
-
-	if (blocked_min && current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE) {
-		auto &sink = *blocked_min;
-		estimated_min += sink.chunk_size;
-		sink.state.Callback();
-		blocked_min.reset();
-	}
-
-	while (!blocked_sinks.empty()) {
-		auto &blocked_sink = blocked_sinks.front();
-		if (other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE) {
-			break;
+	lock_guard<mutex> lock(glock);
+	stack<idx_t> to_remove;
+	for (auto it = blocked_sinks.begin(); it != blocked_sinks.end(); it++) {
+		auto batch = it->first;
+		auto &blocked_sink = it->second;
+		const bool is_minimum = IsMinBatch(lock, batch);
+		if (is_minimum) {
+			if (current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE) {
+				continue;
+			}
+		} else {
+			if (other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE) {
+				continue;
+			}
 		}
-		estimated_others += blocked_sink.chunk_size;
 		blocked_sink.state.Callback();
-		blocked_sinks.pop();
+		to_remove.push(batch);
+	}
+	while (!to_remove.empty()) {
+		auto batch = to_remove.top();
+		to_remove.pop();
+		blocked_sinks.erase(batch);
 	}
 }
 
-bool BatchedBufferedData::BuffersAreFull() {
-	auto &estimated_min = replenish_state.estimated_min_tuples;
-	auto &estimated_others = replenish_state.estimated_other_tuples;
-
-	bool min_filled = current_batch_tuple_count + estimated_min >= CURRENT_BATCH_BUFFER_SIZE;
-	bool others_filled = other_batches_tuple_count + estimated_others >= OTHER_BATCHES_BUFFER_SIZE;
-	if (min_filled && others_filled) {
-		// Maybe stop already if only 'min_filled' is true?
-		return true;
+void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
+	if (min_batch_index == 0) {
+		return;
 	}
-	return false;
-}
-
-void BatchedBufferedData::ResetReplenishState() {
-	replenish_state.estimated_min_tuples = 0;
-	replenish_state.estimated_other_tuples = 0;
+	lock_guard<mutex> lock(glock);
+	if (min_batch_index <= min_batch) {
+		return;
+	}
+	min_batch = min_batch_index;
+	auto existing_chunks_it = in_progress_batches.find(min_batch_index);
+	if (existing_chunks_it == in_progress_batches.end()) {
+		// No chunks have been created for this batch index yet
+		return;
+	}
+	// We have already materialized chunks, have to move them to `batches` so they be scanned
+	auto &existing_chunks = existing_chunks_it->second;
+	idx_t tuple_count = 0;
+	for (auto it = existing_chunks.begin(); it != existing_chunks.end(); it++) {
+		auto chunk = std::move(*it);
+		tuple_count += chunk->size();
+		batches.push_back(std::move(chunk));
+	}
+	other_batches_tuple_count -= tuple_count;
+	current_batch_tuple_count += tuple_count;
 }
 
 void BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
@@ -71,14 +122,13 @@ void BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientConte
 		// Result has already been closed
 		return;
 	}
-	ResetReplenishState();
-	if (BuffersAreFull()) {
+	if (BufferIsFull()) {
 		return;
 	}
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
 	while (!PendingQueryResult::IsFinished(context->ExecuteTaskInternal(context_lock, result))) {
-		if (BuffersAreFull()) {
+		if (BufferIsFull()) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
@@ -86,48 +136,19 @@ void BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientConte
 	}
 }
 
-void BatchedBufferedData::FlushChunks(idx_t minimum_batch_index) {
-	lock_guard<mutex> lock(glock);
-	queue<idx_t> to_remove;
-	for (auto it = in_progress_batches.begin(); it != in_progress_batches.end(); it++) {
-		auto batch = it->first;
-		if (batch >= minimum_batch_index) {
-			// These chunks are not ready to be scanned yet
-			break;
-		}
-		auto &chunks = it->second;
-		while (!chunks.empty()) {
-			// TODO: keep track of the amount of tuples in 'batches', so we don't overpopulate the buffer
-			auto chunk = std::move(chunks.front());
-			other_batches_tuple_count -= chunk->size();
-			current_batch_tuple_count += chunk->size();
-			// Add this chunk to the batches that are scanned from
-			batches.push(std::move(chunk));
-			chunks.pop();
-		}
-		to_remove.push(batch);
-	}
-
-	// FIXME: this can be more efficient, we can pass in a range of iterators to erase
-	// Clean up the emptied queues
-	while (!to_remove.empty()) {
-		auto batch = to_remove.front();
-		to_remove.pop();
-		in_progress_batches.erase(batch);
-	}
-}
-
 unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 	lock_guard<mutex> lock(glock);
 	if (batches.empty()) {
 		context.reset();
+		D_ASSERT(blocked_sinks.empty());
 		return nullptr;
 	}
 	auto chunk = std::move(batches.front());
-	batches.pop();
+	batches.pop_front();
 
 	auto count = current_batch_tuple_count.load();
-	Printer::Print(StringUtil::Format("Buffer capacity: %d", count));
+	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	// printf("other-batches tuple_count: %llu\n", other_batches_tuple_count.load());
 
 	if (chunk) {
 		current_batch_tuple_count -= chunk->size();
@@ -138,10 +159,17 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 void BatchedBufferedData::Append(unique_ptr<DataChunk> chunk, LocalSinkState &lstate) {
 	auto &state = lstate.Cast<BufferedBatchCollectorLocalState>();
 	auto batch = lstate.BatchIndex();
-	auto &chunks = in_progress_batches[batch];
-	// Push the chunk into the queue
-	other_batches_tuple_count += chunk->size();
-	chunks.push(std::move(chunk));
+	lock_guard<mutex> lock(glock);
+	if (batch == min_batch) {
+		current_batch_tuple_count += chunk->size();
+		// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+		batches.push_back(std::move(chunk));
+	} else {
+		auto &chunks = in_progress_batches[batch];
+		other_batches_tuple_count += chunk->size();
+		// printf("other-batches tuple_count: %llu\n", other_batches_tuple_count.load());
+		chunks.push_back(std::move(chunk));
+	}
 }
 
 } // namespace duckdb

@@ -38,28 +38,31 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	lock_guard<mutex> l(gstate.glock);
 
 	auto batch = lstate.BatchIndex();
+	auto min_batch_index = lstate.GetMinimumBatchIndex();
+	// printf("SINK: Batch: %llu, Min Batch: %llu\n", batch, min_batch_index);
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
+	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
 	if (!lstate.blocked) {
 		// Always block the first time
 		lstate.blocked = true;
 		auto callback_state = input.interrupt_state;
-		auto blocked_sink = BlockedSink(callback_state, chunk.size());
+		auto blocked_sink = BlockedSink(callback_state, chunk.size(), batch);
 		buffered_data.AddToBacklog(blocked_sink);
 		return SinkResultType::BLOCKED;
 	}
 
-	if (buffered_data.BufferIsFull()) {
+	if (buffered_data.ShouldBlockBatch(batch)) {
 		// Block again when we've already buffered enough chunks
 		auto callback_state = input.interrupt_state;
-		auto blocked_sink = BlockedSink(callback_state, chunk.size());
+		auto blocked_sink = BlockedSink(callback_state, chunk.size(), batch);
 		buffered_data.AddToBacklog(blocked_sink);
 		return SinkResultType::BLOCKED;
 	}
 
 	auto to_append = make_uniq<DataChunk>();
-	to_append->InitializeEmpty(chunk.GetTypes());
-	to_append->Reference(chunk);
+	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+	chunk.Copy(*to_append, 0);
 
 	buffered_data.Append(std::move(to_append), lstate);
 	return SinkResultType::NEED_MORE_INPUT;
@@ -67,18 +70,21 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 
 SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &context,
                                                             OperatorSinkNextBatchInput &input) const {
-	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
-	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
-
-	lock_guard<mutex> l(gstate.glock);
-	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
-
-	buffered_data.FlushChunks(lstate.GetMinimumBatchIndex());
 	return SinkNextBatchType::READY;
 }
 
 SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &context,
                                                               OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
+	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
+
+	lock_guard<mutex> l(gstate.glock);
+
+	auto batch = lstate.BatchIndex();
+	auto min_batch_index = lstate.GetMinimumBatchIndex();
+	// printf("COMBINE: Batch: %llu, Min Batch: %llu\n", batch, min_batch_index);
+	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
+	buffered_data.UpdateMinBatchIndex(min_batch_index);
 	return SinkCombineResultType::FINISHED;
 }
 

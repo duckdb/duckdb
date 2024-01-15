@@ -429,7 +429,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	} else if (stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
 		unique_ptr<PhysicalResultCollector> collector;
 
-		auto &client_config = ClientConfig::GetConfig(*this);
 		auto get_method = PhysicalResultCollector::GetResultCollector;
 		statement.is_streaming = true;
 		collector = get_method(*this, statement);
