@@ -11,53 +11,19 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/operator/add.hpp"
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
 struct CurrentSequenceValueOperator {
 	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq) {
-		lock_guard<mutex> seqlock(seq.lock);
-		int64_t result;
-		if (seq.usage_count == 0u) {
-			throw SequenceException("currval: sequence is not yet defined in this session");
-		}
-		result = seq.last_value;
-		return result;
+		return seq.CurrentValue();
 	}
 };
 
 struct NextSequenceValueOperator {
 	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq) {
-		lock_guard<mutex> seqlock(seq.lock);
-		int64_t result;
-		result = seq.counter;
-		bool overflow = !TryAddOperator::Operation(seq.counter, seq.increment, seq.counter);
-		if (seq.cycle) {
-			if (overflow) {
-				seq.counter = seq.increment < 0 ? seq.max_value : seq.min_value;
-			} else if (seq.counter < seq.min_value) {
-				seq.counter = seq.max_value;
-			} else if (seq.counter > seq.max_value) {
-				seq.counter = seq.min_value;
-			}
-		} else {
-			if (result < seq.min_value || (overflow && seq.increment < 0)) {
-				throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq.name,
-				                        seq.min_value);
-			}
-			if (result > seq.max_value || overflow) {
-				throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq.name,
-				                        seq.max_value);
-			}
-		}
-		seq.last_value = result;
-		seq.usage_count++;
-		if (!seq.temporary) {
-			transaction.sequence_usage[&seq] = SequenceValue(seq.usage_count, seq.counter);
-		}
-		return result;
+		return seq.NextValue(transaction);
 	}
 };
 
