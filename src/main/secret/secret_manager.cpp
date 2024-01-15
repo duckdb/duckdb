@@ -385,16 +385,18 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 		    name, list_of_matches);
 	}
 
-	if (matches.empty() && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-		string storage_str;
-		if (!storage.empty()) {
-			storage_str = " for storage '" + storage + "'";
+	if (matches.empty()) {
+		if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			string storage_str;
+			if (!storage.empty()) {
+				storage_str = " for storage '" + storage + "'";
+			}
+			throw InvalidInputException("Failed to remove non-existent secret with name '%s'%s", name, storage_str);
 		}
-
-		throw InvalidInputException("Failed to remove non-existent secret with name '%s'%s", name, storage_str);
+		// Do nothing on OnEntryNotFound::RETURN_NULL...
+	} else {
+		matches[0].get().DropSecretByName(transaction, name, on_entry_not_found);
 	}
-
-	matches[0].get().DropSecretByName(transaction, name, on_entry_not_found);
 }
 
 SecretType SecretManager::LookupType(CatalogTransaction transaction, const string &type) {
