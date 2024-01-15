@@ -149,6 +149,7 @@ static void TestSettingConfigs() {
 
 // Test input from an ini file
 static void TestIniFile() {
+#if defined ODBC_LINK_ODBCINST || defined WIN32
 	// Create a temporary ini file
 	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
 	std::ofstream out(ini_file);
@@ -178,6 +179,7 @@ static void TestIniFile() {
 
 	// Delete the ini file
 	std::remove(ini_file.c_str());
+#endif
 }
 
 TEST_CASE("Test SQLConnect and SQLDriverConnect", "[odbc]") {
