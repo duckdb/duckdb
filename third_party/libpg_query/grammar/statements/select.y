@@ -51,6 +51,10 @@ SelectStmt: select_no_parens			%prec UMINUS
 select_with_parens:
 			'(' select_no_parens ')'				{ $$ = $2; }
 			| '(' select_with_parens ')'			{ $$ = $2; }
+			| '(' VariableShowStmt ')'
+		    {
+		    	$$ = $2;
+			}
 		;
 
 /*

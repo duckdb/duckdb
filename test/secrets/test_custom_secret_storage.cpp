@@ -21,7 +21,7 @@ public:
 	TestSecretStorage(const string &name_p, DatabaseInstance &db, TestSecretLog &logger_p, int64_t tie_break_offset_p)
 	    : CatalogSetSecretStorage(name_p), tie_break_offset(tie_break_offset_p), logger(logger_p) {
 		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
-		persistent = false;
+		persistent = true;
 		include_in_lookups = true;
 	}
 	bool IncludeInLookups() override {
@@ -65,7 +65,7 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 	auto &storage_ref = *storage_ptr;
 	secret_manager.LoadSecretStorage(std::move(storage_ptr));
 
-	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=false;"));
+	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=true;"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE SECRET s1 IN TEST_STORAGE (TYPE S3, SCOPE 's3://foo')"));
 	REQUIRE_NO_FAIL(con.Query("CREATE PERSISTENT SECRET s2 IN test_storage (TYPE S3, SCOPE 's3://')"));
@@ -128,7 +128,7 @@ TEST_CASE("Test tie-break behaviour for custom secret storage", "[secret][.]") {
 	TestSecretLog log1;
 	TestSecretLog log2;
 
-	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=false;"));
+	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=true;"));
 
 	// Register custom secret storage
 	auto &secret_manager = duckdb::SecretManager::Get(*db.instance);

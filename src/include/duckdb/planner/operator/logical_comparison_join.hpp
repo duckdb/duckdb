@@ -31,6 +31,8 @@ public:
 	vector<LogicalType> mark_types;
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
+	//! If this is a DelimJoin, whether it has been flipped to de-duplicating the RHS instead
+	bool delim_flipped = false;
 
 public:
 	string ParamsToString() const override;

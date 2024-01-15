@@ -16,12 +16,11 @@ BindResult WhereBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, id
 		return result;
 	}
 
-	BindResult alias_result = column_alias_binder->BindAlias(*this, expr, depth, root_expression);
-	// This code path cannot be exercised at thispoint. #1547 might change that.
-	if (!alias_result.HasError()) {
+	BindResult alias_result;
+	auto found_alias = column_alias_binder->BindAlias(*this, expr, depth, root_expression, alias_result);
+	if (found_alias) {
 		return alias_result;
 	}
-
 	return result;
 }
 
