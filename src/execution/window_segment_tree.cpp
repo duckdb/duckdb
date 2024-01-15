@@ -639,6 +639,9 @@ WindowSegmentTree::~WindowSegmentTree() {
 
 class WindowSegmentTreePart {
 public:
+	//! Right side nodes need to be cached and processed in reverse order
+	using RightEntry = std::pair<idx_t, idx_t>;
+
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
 
 	WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, DataChunk &inputs,
@@ -653,7 +656,7 @@ public:
 	void ExtractFrame(idx_t begin, idx_t end, data_ptr_t current_state);
 	void WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
 	                        data_ptr_t current_state);
-	//! optionally writes result and calls destructors
+	//! Writes result and calls destructors
 	void Finalize(Vector &result, idx_t count);
 
 	void Combine(WindowSegmentTreePart &other, idx_t count);
@@ -661,12 +664,23 @@ public:
 	void Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, Vector &result, idx_t count,
 	              idx_t row_idx, FramePart frame_part);
 
+protected:
+	//! Initialises the accumulation state vector (statef)
+	void Initialize(idx_t count);
+	//! Accumulate upper tree levels
+	void EvaluateUpperLevels(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, idx_t count,
+	                         idx_t row_idx, FramePart frame_part);
+	void EvaluateLeaves(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends, idx_t count,
+	                    idx_t row_idx, FramePart frame_part, FramePart leaf_part);
+
 public:
 	//! Allocator for aggregates
 	ArenaAllocator &allocator;
 	//! The aggregate function
 	const AggregateObject &aggr;
-	//! The aggregate function
+	//! Order insensitive aggregate (we can optimise internal combines)
+	const bool order_insensitive;
+	//! The partition arguments
 	DataChunk &inputs;
 	//! The filtered rows in inputs
 	const ValidityMask &filter_mask;
@@ -686,6 +700,8 @@ public:
 	Vector statef;
 	//! Count of buffered values
 	idx_t flush_count;
+	//! Cache of right side tree ranges for ordered aggregates
+	vector<RightEntry> right_stack;
 };
 
 class WindowSegmentTreeState : public WindowAggregatorState {
@@ -708,9 +724,10 @@ public:
 
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr, DataChunk &inputs,
                                              const ValidityMask &filter_mask)
-    : allocator(allocator), aggr(aggr), inputs(inputs), filter_mask(filter_mask),
-      state_size(aggr.function.state_size()), state(state_size * STANDARD_VECTOR_SIZE), statep(LogicalType::POINTER),
-      statel(LogicalType::POINTER), statef(LogicalType::POINTER), flush_count(0) {
+    : allocator(allocator), aggr(aggr),
+      order_insensitive(aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT), inputs(inputs),
+      filter_mask(filter_mask), state_size(aggr.function.state_size()), state(state_size * STANDARD_VECTOR_SIZE),
+      statep(LogicalType::POINTER), statel(LogicalType::POINTER), statef(LogicalType::POINTER), flush_count(0) {
 	if (inputs.ColumnCount() > 0) {
 		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
 		filter_sel.Initialize();
@@ -900,18 +917,43 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk 
 
 void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
                                      Vector &result, idx_t count, idx_t row_idx, FramePart frame_part) {
+	D_ASSERT(aggr.function.combine && tree.UseCombineAPI());
 
-	const auto cant_combine = (!aggr.function.combine || !tree.UseCombineAPI());
+	Initialize(count);
+
+	if (order_insensitive) {
+		//	First pass: aggregate the segment tree nodes with sharing
+		EvaluateUpperLevels(tree, begins, ends, count, row_idx, frame_part);
+
+		//	Second pass: aggregate the ragged leaves
+		EvaluateLeaves(tree, begins, ends, count, row_idx, frame_part, FramePart::FULL);
+	} else {
+		//	Evaluate leaves in order
+		EvaluateLeaves(tree, begins, ends, count, row_idx, frame_part, FramePart::LEFT);
+		EvaluateUpperLevels(tree, begins, ends, count, row_idx, frame_part);
+		EvaluateLeaves(tree, begins, ends, count, row_idx, frame_part, FramePart::RIGHT);
+	}
+}
+
+void WindowSegmentTreePart::Initialize(idx_t count) {
+	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
+	for (idx_t rid = 0; rid < count; ++rid) {
+		auto state_ptr = fdata[rid];
+		aggr.function.initialize(state_ptr);
+	}
+}
+
+void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
+                                                idx_t count, idx_t row_idx, FramePart frame_part) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
 	const auto exclude_mode = tree.exclude_mode;
 	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
-	// with EXCLUDE TIES, in addition to the frame part right of the peer group's end, we also need to consider the
-	// current row
-	const bool add_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::TIES;
 
-	//	First pass: aggregate the segment tree nodes
+	const auto max_level = tree.levels_flat_start.size() + 1;
+	right_stack.resize(max_level, {0, 0});
+
 	//	Share adjacent identical states
 	//  We do this first because we want to share only tree aggregations
 	idx_t prev_begin = 1;
@@ -921,12 +963,6 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 	data_ptr_t prev_state = nullptr;
 	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
 		auto state_ptr = fdata[rid];
-		aggr.function.initialize(state_ptr);
-
-		if (cant_combine) {
-			// Make sure we initialise all states
-			continue;
-		}
 
 		auto begin = begin_on_curr_row ? cur_row + 1 : begins[rid];
 		auto end = end_on_curr_row ? cur_row : ends[rid];
@@ -936,7 +972,8 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 
 		//	Skip level 0
 		idx_t l_idx = 0;
-		for (; l_idx < tree.levels_flat_start.size() + 1; l_idx++) {
+		idx_t right_max = 0;
+		for (; l_idx < max_level; l_idx++) {
 			idx_t parent_begin = begin / tree.TREE_FANOUT;
 			idx_t parent_end = end / tree.TREE_FANOUT;
 			if (prev_state && l_idx == 1 && begin == prev_begin && end == prev_end) {
@@ -949,7 +986,7 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 				break;
 			}
 
-			if (l_idx == 1) {
+			if (order_insensitive && l_idx == 1) {
 				prev_state = state_ptr;
 				prev_begin = begin;
 				prev_end = end;
@@ -971,17 +1008,52 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 			idx_t group_end = parent_end * tree.TREE_FANOUT;
 			if (end != group_end) {
 				if (l_idx) {
-					WindowSegmentValue(tree, l_idx, group_end, end, state_ptr);
+					if (order_insensitive) {
+						WindowSegmentValue(tree, l_idx, group_end, end, state_ptr);
+					} else {
+						right_stack[l_idx] = {group_end, end};
+						right_max = l_idx;
+					}
 				}
 			}
 			begin = parent_begin;
 			end = parent_end;
 		}
+
+		// Flush the right side values from left to right for order_sensitive aggregates
+		// As we go up the tree, the right side ranges move left,
+		// so we just cache them in a fixed size, preallocated array.
+		// Then we can just reverse scan the array and append the cached ranges.
+		for (l_idx = right_max; l_idx > 0; --l_idx) {
+			auto &right_entry = right_stack[l_idx];
+			const auto group_end = right_entry.first;
+			const auto end = right_entry.second;
+			if (end) {
+				WindowSegmentValue(tree, l_idx, group_end, end, state_ptr);
+				right_entry = {0, 0};
+			}
+		}
 	}
 	FlushStates(true);
+}
 
-	//	Second pass: aggregate the ragged leaves
-	//	(or everything if we can't combine)
+void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTree &tree, const idx_t *begins, const idx_t *ends,
+                                           idx_t count, idx_t row_idx, FramePart frame_part, FramePart leaf_part) {
+
+	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
+
+	// For order-sensitive aggregates, we have to process the ragged leaves in two pieces.
+	// The left side have to be added before the main tree followed by the ragged right sides.
+	// The current row is the leftmost value of the right hand side.
+	const bool compute_left = leaf_part != FramePart::RIGHT;
+	const bool compute_right = leaf_part != FramePart::LEFT;
+	const auto exclude_mode = tree.exclude_mode;
+	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
+	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
+	// with EXCLUDE TIES, in addition to the frame part right of the peer group's end, we also need to consider the
+	// current row
+	const bool add_curr_row = compute_left && frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::TIES;
+
 	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
 		auto state_ptr = fdata[rid];
 
@@ -994,21 +1066,21 @@ void WindowSegmentTreePart::Evaluate(const WindowSegmentTree &tree, const idx_t 
 			continue;
 		}
 
-		// Aggregate everything at once if we can't combine states
 		idx_t parent_begin = begin / tree.TREE_FANOUT;
 		idx_t parent_end = end / tree.TREE_FANOUT;
-		if (parent_begin == parent_end || cant_combine) {
-			WindowSegmentValue(tree, 0, begin, end, state_ptr);
+		if (parent_begin == parent_end) {
+			if (compute_left) {
+				WindowSegmentValue(tree, 0, begin, end, state_ptr);
+			}
 			continue;
 		}
 
 		idx_t group_begin = parent_begin * tree.TREE_FANOUT;
-		if (begin != group_begin) {
+		if (begin != group_begin && compute_left) {
 			WindowSegmentValue(tree, 0, begin, group_begin + tree.TREE_FANOUT, state_ptr);
-			parent_begin++;
 		}
 		idx_t group_end = parent_end * tree.TREE_FANOUT;
-		if (end != group_end) {
+		if (end != group_end && compute_right) {
 			WindowSegmentValue(tree, 0, group_end, end, state_ptr);
 		}
 	}
