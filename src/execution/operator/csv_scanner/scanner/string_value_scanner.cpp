@@ -505,6 +505,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 			removed_escapes_ptr[str_pos++] = c;
 		}
 	}
+	removed_escapes.Finalize();
 	return removed_escapes;
 }
 
