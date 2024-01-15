@@ -1,11 +1,13 @@
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/parser/statement/show_statement.hpp"
-#include "duckdb/planner/operator/logical_show.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 namespace duckdb {
 
@@ -65,12 +67,26 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(percentage_x));
 }
 
-BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
-	auto query_copy = stmt.info->query->Copy();
+unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
+	unique_ptr<QueryNode> query;
+	if (ref.query) {
+		query = std::move(ref.query);
+	} else {
+		auto table_name = QualifiedName::Parse(ref.table_name);
+		auto node = make_uniq<SelectNode>();
+		node->select_list.push_back(make_uniq<StarExpression>());
+		auto basetableref = make_uniq<BaseTableRef>();
+		basetableref->catalog_name = table_name.catalog;
+		basetableref->schema_name = table_name.schema;
+		basetableref->table_name = table_name.name;
+		node->from_table = std::move(basetableref);
+		query = std::move(node);
+	}
+	auto query_copy = query->Copy();
 
 	// we bind the plan once in a child-node to figure out the column names and column types
 	auto child_binder = Binder::CreateBinder(context);
-	auto plan = child_binder->Bind(*stmt.info->query);
+	auto plan = child_binder->Bind(*query);
 	D_ASSERT(plan.types.size() == plan.names.size());
 	vector<unique_ptr<ParsedExpression>> name_children;
 	vector<unique_ptr<ParsedExpression>> type_children;
@@ -127,8 +143,10 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	select_node->select_list.push_back(SummarizeWrapUnnest(null_percentage_children, "null_percentage"));
 	select_node->from_table = std::move(subquery_ref);
 
-	properties.return_type = StatementReturnType::QUERY_RESULT;
-	return Bind(*select_node);
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = std::move(select_node);
+	auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt));
+	return Bind(*subquery);
 }
 
 } // namespace duckdb

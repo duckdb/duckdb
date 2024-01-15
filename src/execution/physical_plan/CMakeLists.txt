@@ -37,7 +37,6 @@ add_library_unity(
   plan_set.cpp
   plan_reset.cpp
   plan_sample.cpp
-  plan_show_select.cpp
   plan_simple.cpp
   plan_top_n.cpp
   plan_update.cpp

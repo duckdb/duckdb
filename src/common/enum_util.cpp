@@ -108,6 +108,7 @@
 #include "duckdb/parser/simplified_token.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -2858,8 +2859,6 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_DETACH";
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		return "LOGICAL_EXPLAIN";
-	case LogicalOperatorType::LOGICAL_SHOW:
-		return "LOGICAL_SHOW";
 	case LogicalOperatorType::LOGICAL_PREPARE:
 		return "LOGICAL_PREPARE";
 	case LogicalOperatorType::LOGICAL_EXECUTE:
@@ -3040,9 +3039,6 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_EXPLAIN")) {
 		return LogicalOperatorType::LOGICAL_EXPLAIN;
-	}
-	if (StringUtil::Equals(value, "LOGICAL_SHOW")) {
-		return LogicalOperatorType::LOGICAL_SHOW;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_PREPARE")) {
 		return LogicalOperatorType::LOGICAL_PREPARE;
@@ -5251,6 +5247,29 @@ SetType EnumUtil::FromString<SetType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<ShowType>(ShowType value) {
+	switch(value) {
+	case ShowType::SUMMARY:
+		return "SUMMARY";
+	case ShowType::DESCRIBE:
+		return "DESCRIBE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ShowType EnumUtil::FromString<ShowType>(const char *value) {
+	if (StringUtil::Equals(value, "SUMMARY")) {
+		return ShowType::SUMMARY;
+	}
+	if (StringUtil::Equals(value, "DESCRIBE")) {
+		return ShowType::DESCRIBE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value) {
 	switch(value) {
 	case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
@@ -5490,8 +5509,6 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "EXPORT_STATEMENT";
 	case StatementType::PRAGMA_STATEMENT:
 		return "PRAGMA_STATEMENT";
-	case StatementType::SHOW_STATEMENT:
-		return "SHOW_STATEMENT";
 	case StatementType::VACUUM_STATEMENT:
 		return "VACUUM_STATEMENT";
 	case StatementType::CALL_STATEMENT:
@@ -5574,9 +5591,6 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PRAGMA_STATEMENT")) {
 		return StatementType::PRAGMA_STATEMENT;
-	}
-	if (StringUtil::Equals(value, "SHOW_STATEMENT")) {
-		return StatementType::SHOW_STATEMENT;
 	}
 	if (StringUtil::Equals(value, "VACUUM_STATEMENT")) {
 		return StatementType::VACUUM_STATEMENT;
@@ -6008,6 +6022,8 @@ const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
 		return "EMPTY";
 	case TableReferenceType::PIVOT:
 		return "PIVOT";
+	case TableReferenceType::SHOW_REF:
+		return "SHOW_REF";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6041,6 +6057,9 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PIVOT")) {
 		return TableReferenceType::PIVOT;
+	}
+	if (StringUtil::Equals(value, "SHOW_REF")) {
+		return TableReferenceType::SHOW_REF;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

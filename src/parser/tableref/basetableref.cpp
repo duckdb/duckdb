@@ -34,4 +34,5 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 
 	return std::move(copy);
 }
+
 } // namespace duckdb
