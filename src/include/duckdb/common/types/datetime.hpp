@@ -100,6 +100,8 @@ struct dtime_tz_t { // NOLINT
 	inline dtime_tz_t(dtime_t t, int32_t offset)
 	    : bits((uint64_t(t.micros) << OFFSET_BITS) | uint64_t(MAX_OFFSET - offset)) {
 	}
+	explicit inline dtime_tz_t(uint64_t bits_p) : bits(bits_p) {
+	}
 
 	inline dtime_t time() const { // NOLINT
 		return dtime_t(bits >> OFFSET_BITS);

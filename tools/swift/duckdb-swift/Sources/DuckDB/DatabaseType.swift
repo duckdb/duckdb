@@ -74,10 +74,14 @@ public extension DatabaseType {
   static let double = DatabaseType(rawValue: DUCKDB_TYPE_DOUBLE.rawValue)
   /// Timestamp type castable to `Timestamp`
   static let timestamp = DatabaseType(rawValue: DUCKDB_TYPE_TIMESTAMP.rawValue)
+  /// Timestamp(TZ) type castable to `Timestamp`
+  static let timestampTz = DatabaseType(rawValue: DUCKDB_TYPE_TIMESTAMP_TZ.rawValue)
   /// Date type castable to `Date`
   static let date = DatabaseType(rawValue: DUCKDB_TYPE_DATE.rawValue)
   /// Time type castable to `Time`
   static let time = DatabaseType(rawValue: DUCKDB_TYPE_TIME.rawValue)
+  /// Time(TZ) type castable to `Time`
+  static let timeTz = DatabaseType(rawValue: DUCKDB_TYPE_TIME_TZ.rawValue)
   /// Interval type castable to `Interval`
   static let interval = DatabaseType(rawValue: DUCKDB_TYPE_INTERVAL.rawValue)
   /// String type castable to `String`
@@ -128,8 +132,10 @@ extension DatabaseType: CustomStringConvertible {
     case .float: return "\(Self.self).float"
     case .double: return "\(Self.self).double"
     case .timestamp: return "\(Self.self).timestamp"
+    case .timestampTz: return "\(Self.self).timestampTZ"
     case .date: return "\(Self.self).date"
     case .time: return "\(Self.self).time"
+    case .timeTz: return "\(Self.self).timeTZ"
     case .interval: return "\(Self.self).interval"
     case .hugeint: return "\(Self.self).hugeint"
     case .uhugeint: return "\(Self.self).uhugeint"
