@@ -80,39 +80,41 @@ public:
 	inline static bool ProcessCharacter(BaseScanner &scanner, const char current_char, const idx_t buffer_pos,
 	                                    T &result) {
 		scanner.state_machine->Transition(scanner.states, current_char);
-		switch(scanner.states.current_state) {
-			case CSVState::INVALID:
-				T::InvalidState(result);
-				return true;
-			case CSVState::RECORD_SEPARATOR:
-				scanner.lines_read++;
-			    if (scanner.states.previous_state == CSVState::RECORD_SEPARATOR || (scanner.states.previous_state == CSVState::CARRIAGE_RETURN && scanner.states.pre_previous_state == CSVState::RECORD_SEPARATOR )) {
-				    return T::EmptyLine(result, buffer_pos);
-			    } else if (scanner.states.previous_state != CSVState::CARRIAGE_RETURN){
-				     return T::AddRow(result, buffer_pos);
-			    }
-			    return false;
-		    case CSVState::CARRIAGE_RETURN:
-			    scanner.lines_read++;
-			    if (scanner.states.previous_state != CSVState::RECORD_SEPARATOR){
-				    return T::AddRow(result, buffer_pos);
-			    }
-			    return false;
-			case CSVState::DELIMITER:
-				T::AddValue(result, buffer_pos);
-				return false;
-			case CSVState::QUOTED:
-			    if (scanner.states.previous_state == CSVState::UNQUOTED){
-				    T::SetEscaped(result);
-			    }
-				T::SetQuoted(result);
-				return false;
-			case CSVState::ESCAPE:
-				T::SetEscaped(result);
-				return false;
-			default:
-				return false;
+		switch (scanner.states.current_state) {
+		case CSVState::INVALID:
+			T::InvalidState(result);
+			return true;
+		case CSVState::RECORD_SEPARATOR:
+			scanner.lines_read++;
+			if (scanner.states.previous_state == CSVState::RECORD_SEPARATOR ||
+			    (scanner.states.previous_state == CSVState::CARRIAGE_RETURN &&
+			     scanner.states.pre_previous_state == CSVState::RECORD_SEPARATOR)) {
+				return T::EmptyLine(result, buffer_pos);
+			} else if (scanner.states.previous_state != CSVState::CARRIAGE_RETURN) {
+				return T::AddRow(result, buffer_pos);
 			}
+			return false;
+		case CSVState::CARRIAGE_RETURN:
+			scanner.lines_read++;
+			if (scanner.states.previous_state != CSVState::RECORD_SEPARATOR) {
+				return T::AddRow(result, buffer_pos);
+			}
+			return false;
+		case CSVState::DELIMITER:
+			T::AddValue(result, buffer_pos);
+			return false;
+		case CSVState::QUOTED:
+			if (scanner.states.previous_state == CSVState::UNQUOTED) {
+				T::SetEscaped(result);
+			}
+			T::SetQuoted(result);
+			return false;
+		case CSVState::ESCAPE:
+			T::SetEscaped(result);
+			return false;
+		default:
+			return false;
+		}
 	}
 
 	CSVStateMachine &GetStateMachine();

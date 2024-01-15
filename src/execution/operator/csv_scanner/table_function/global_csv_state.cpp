@@ -72,6 +72,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		// This means we are done scanning the current file
 		auto current_file_idx = current_file.file_idx + 1;
 		if (current_file_idx < bind_data.files.size()) {
+			file_scans.back()->buffer_manager.reset();
 			// If we have a next file we have to construct the file scan for that
 			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[current_file_idx],
 			                                                 bind_data.options, current_file_idx, bind_data, column_ids,
