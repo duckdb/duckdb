@@ -36,7 +36,7 @@ public:
 	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
 
 	//! Lock for getting a value on the sequence
-	mutex lock;
+	mutable mutex lock;
 	//! The amount of times the sequence has been used
 	uint64_t usage_count;
 	//! The sequence counter

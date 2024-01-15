@@ -20,6 +20,7 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry 
 
 unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateSequenceInfo>();
+	lock_guard<mutex> seqlock(lock);
 	result->catalog = catalog.GetName();
 	result->schema = schema.name;
 	result->name = name;
