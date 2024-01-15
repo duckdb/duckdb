@@ -22,8 +22,7 @@ class ClientContextLock;
 
 struct BlockedSink {
 public:
-	BlockedSink(InterruptState state, idx_t chunk_size, optional_idx batch = optional_idx())
-	    : state(state), chunk_size(chunk_size), batch(batch) {
+	BlockedSink(InterruptState state, idx_t chunk_size) : state(state), chunk_size(chunk_size) {
 	}
 
 public:
@@ -31,8 +30,6 @@ public:
 	InterruptState state;
 	//! The amount of tuples this sink would add
 	idx_t chunk_size;
-	//! (optional) The batch index of this sink
-	optional_idx batch;
 };
 
 class BufferedData {
@@ -47,7 +44,6 @@ public:
 	}
 
 public:
-	virtual void AddToBacklog(BlockedSink blocked_sink) = 0;
 	virtual bool BufferIsFull() = 0;
 	virtual void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
@@ -71,7 +67,7 @@ public:
 
 protected:
 	shared_ptr<ClientContext> context;
-	// Whether the result is created yet
+	//! Whether the result is created yet
 	bool created = false;
 	//! Protect against populate/fetch race condition
 	mutex glock;

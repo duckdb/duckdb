@@ -19,21 +19,6 @@ namespace duckdb {
 
 class StreamQueryResult;
 
-// FIXME: should this be a map so we can make a "more accurate" guess as to how many tuples are expected when the min
-// batch index changes? Currently we reset the 'estimated_min_tuples' to 0 if the min batch index changes
-struct ReplenishBufferState {
-public:
-	ReplenishBufferState() {
-	}
-
-public:
-	void Reset();
-
-public:
-	idx_t estimated_min_tuples = 0;
-	idx_t estimated_other_tuples = 0;
-};
-
 class BatchedBufferedData : public BufferedData {
 private:
 	//! (roughly) The max amount of tuples we'll keep buffered at a time
@@ -46,7 +31,8 @@ public:
 
 public:
 	void Append(unique_ptr<DataChunk> chunk, idx_t batch);
-	void AddToBacklog(BlockedSink blocked_sink) override;
+	void BlockSink(BlockedSink blocked_sink, idx_t batch);
+
 	bool BufferIsFull() override;
 	bool ShouldBlockBatch(idx_t batch);
 	void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;

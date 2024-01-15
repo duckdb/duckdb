@@ -8,9 +8,8 @@
 
 namespace duckdb {
 
-void BatchedBufferedData::AddToBacklog(BlockedSink blocked_sink) {
+void BatchedBufferedData::BlockSink(BlockedSink blocked_sink, idx_t batch) {
 	lock_guard<mutex> lock(glock);
-	auto batch = blocked_sink.batch.GetIndex();
 	D_ASSERT(!blocked_sinks.count(batch));
 	blocked_sinks.emplace(std::make_pair(batch, blocked_sink));
 }
