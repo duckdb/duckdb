@@ -39,7 +39,6 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 
 	auto batch = lstate.BatchIndex();
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
-	// printf("SINK: Batch: %llu, Min Batch: %llu\n", batch, min_batch_index);
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
@@ -82,7 +81,6 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 
 	auto batch = lstate.BatchIndex();
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
-	// printf("COMBINE: Batch: %llu, Min Batch: %llu\n", batch, min_batch_index);
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 	return SinkCombineResultType::FINISHED;
