@@ -23,11 +23,7 @@ public:
 	shared_ptr<BufferedData> buffered_data;
 };
 
-BufferedBatchCollectorLocalState::BufferedBatchCollectorLocalState(Pipeline &pipeline) : pipeline(pipeline) {
-}
-
-void BufferedBatchCollectorLocalState::BufferChunk(unique_ptr<DataChunk> chunk) {
-	buffered_chunks.push(std::move(chunk));
+BufferedBatchCollectorLocalState::BufferedBatchCollectorLocalState() {
 }
 
 SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -42,17 +38,8 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
-	if (!lstate.blocked) {
-		// Always block the first time
+	if (!lstate.blocked || buffered_data.ShouldBlockBatch(batch)) {
 		lstate.blocked = true;
-		auto callback_state = input.interrupt_state;
-		auto blocked_sink = BlockedSink(callback_state, chunk.size(), batch);
-		buffered_data.AddToBacklog(blocked_sink);
-		return SinkResultType::BLOCKED;
-	}
-
-	if (buffered_data.ShouldBlockBatch(batch)) {
-		// Block again when we've already buffered enough chunks
 		auto callback_state = input.interrupt_state;
 		auto blocked_sink = BlockedSink(callback_state, chunk.size(), batch);
 		buffered_data.AddToBacklog(blocked_sink);
@@ -82,12 +69,15 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 	auto batch = lstate.BatchIndex();
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
+	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
+	// We might want to block here if 'current_batch_tuple_count' has already reached the threshold
+	// So we don't completely disregard the BUFFER_SIZE we set
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 	return SinkCombineResultType::FINISHED;
 }
 
 unique_ptr<LocalSinkState> PhysicalBufferedBatchCollector::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_uniq<BufferedBatchCollectorLocalState>(*context.pipeline);
+	auto state = make_uniq<BufferedBatchCollectorLocalState>();
 	return std::move(state);
 }
 

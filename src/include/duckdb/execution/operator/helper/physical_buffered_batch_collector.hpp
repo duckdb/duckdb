@@ -15,15 +15,10 @@ namespace duckdb {
 
 class BufferedBatchCollectorLocalState : public LocalSinkState {
 public:
-	BufferedBatchCollectorLocalState(Pipeline &pipeline);
+	BufferedBatchCollectorLocalState();
 
 public:
-	void BufferChunk(unique_ptr<DataChunk> chunk);
-
-public:
-	Pipeline &pipeline;
 	bool blocked = false;
-	queue<unique_ptr<DataChunk>> buffered_chunks;
 };
 
 class PhysicalBufferedBatchCollector : public PhysicalResultCollector {
