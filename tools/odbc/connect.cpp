@@ -132,8 +132,8 @@ SQLRETURN Connect::ParseInputStr() {
 	return SQL_SUCCESS;
 }
 
-#if defined ODBC_LINK_ODBCINST || defined WIN32
 SQLRETURN Connect::ReadFromIniFile() {
+#if defined ODBC_LINK_ODBCINST || defined WIN32
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	std::string home_directory = fs->GetHomeDirectory();
 
@@ -169,9 +169,9 @@ SQLRETURN Connect::ReadFromIniFile() {
 			return ret;
 		}
 	}
+#endif
 	return SQL_SUCCESS;
 }
-#endif
 
 SQLRETURN Connect::HandleDsn(const string &val) {
 	dbc->dsn = val;
