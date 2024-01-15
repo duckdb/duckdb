@@ -1,0 +1,6 @@
+# name: benchmark/ingestion/tpch/ingest_partsupp.benchmark
+# description: benchmark ingestion of partsupp
+# group: [ingestion]
+
+template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
+table_name=partsupp
