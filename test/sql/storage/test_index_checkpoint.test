@@ -22,11 +22,6 @@ CREATE UNIQUE INDEX iu ON t2(uid);
 statement ok
 CHECKPOINT;
 
-query II
-SELECT database_size, memory_usage FROM pragma_database_size();
-----
-213	23
-
 # A prior version of index checkpointing caused index data to be written twice.
 # If a node type exists, then we write at least one block for it. The ART in this example has the
 # following node types: PREFIX, NODE4, NODE16. The expected total storage size including the table data

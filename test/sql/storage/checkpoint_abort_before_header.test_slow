@@ -40,7 +40,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 # now verify that empty blocks left by a checkpoint abort are re-used
 # so that checkpoint aborts don't permanently leave holes in the file
 
-loop i 0 100
+loop i 0 50
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown;

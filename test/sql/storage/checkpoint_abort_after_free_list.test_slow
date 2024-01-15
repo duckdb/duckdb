@@ -39,10 +39,6 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 # now verify that empty blocks left by a checkpoint aborts are re-used
 # so that checkpoint aborts don't permanently leave holes in the file
 
-# get the current database size
-statement ok
-CREATE TABLE start AS SELECT database_size FROM pragma_database_size();
-
 loop i 0 10
 
 statement ok
@@ -69,11 +65,9 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 ----
 0	199999	200000
 
-# ensure that the expected total storage size is around the same as before the loop
+# ensure that the expected total storage size is the same as in the first iteration of the loop
 
-query I
-SELECT current.database_size = start.database_size FROM pragma_database_size() AS current, start;
-----
-true
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 endloop
