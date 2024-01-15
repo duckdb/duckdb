@@ -183,7 +183,7 @@
     {
         "name": "parse_dirname",
         "parameters": "string,separator",
-        "description": "Returns the top-level directory name. seperator_option: system, both_slash (default), forward_slash, backslash",
+        "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash",
         "example": "parse_dirname('/home/user/documents/file.csv', 'system');",
         "type": "scalar_function_set",
         "struct": "ParseDirnameFun"
@@ -191,7 +191,7 @@
     {
         "name": "parse_filename",
         "parameters": "string,trim_extension,separator",
-        "description": "Returns the file name. If trim_extension is true, the file extension will be removed (it defaults to false). seperator_option: system, both_slash (default), forward_slash, backslash",
+        "description": "Returns the file name. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash",
         "example": "parse_filename('/home/user/documents/file.csv', true, 'forward_slash')",
         "type": "scalar_function_set",
         "struct": "ParseFilenameFun"
@@ -199,7 +199,7 @@
     {
         "name": "parse_path",
         "parameters": "string,separator",
-        "description": "Returns a list of the components (directories and filename) in the path. seperator_option: system, both_slash (default), forward_slash, backslash",
+        "description": "Returns a list of the components (directories and filename) in the path. separator options: system, both_slash (default), forward_slash, backslash",
         "example": "parse_path('/home/user/documents/file.csv', 'system')",
         "type": "scalar_function_set",
         "struct": "ParsePathFun"

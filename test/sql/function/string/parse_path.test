@@ -22,7 +22,7 @@ SELECT parse_path('home/user/documents/file.csv\file2.csv');
 ----
 [home, user, documents, file.csv, file2.csv]
 
-# no seperator in path
+# no separator in path
 query T
 SELECT parse_path('file.csv', 'both_slash');
 ----
@@ -46,7 +46,7 @@ SELECT parse_path('home\wh@t3ve%\42/12 ch,ars.sth', 'both_slash');
 ----
 [home, wh@t3ve%, 42, 12 ch,ars.sth]
 
-# custom seperator
+# custom separator
 query T
 SELECT parse_path('home/user/documents/file.csv','@');
 ----
@@ -104,7 +104,7 @@ SELECT parse_dirname('home/user/documents/file.csv\file2.csv');
 ----
 home
 
-# no seperator in path
+# no separator in path
 query T
 SELECT parse_dirname('file.csv', 'backslash');
 ----
@@ -133,7 +133,7 @@ SELECT parse_dirname('wh@t3ve%\42/12 ch,ars.sth', 'both_slash');
 ----
 wh@t3ve%
 
-# custom seperator
+# custom separator
 query T
 SELECT parse_dirname('home/user/documents/file.csv','@');
 ----
@@ -222,7 +222,7 @@ SELECT parse_filename('home/user/documents/file.csv', 'false', 'system');
 ----
 file.csv
 
-# no seperators in path
+# no separators in path
 query T
 SELECT parse_filename('file.csv', 'backslash');
 ----
@@ -271,7 +271,7 @@ SELECT parse_filename('wh@t3ve%\42/12 ch,ars.sth', true, 'both_slash');
 ----
 12 ch,ars
 
-# custom seperator
+# custom separator
 query T
 SELECT parse_filename('home/user/documents/file.csv','@');
 ----
