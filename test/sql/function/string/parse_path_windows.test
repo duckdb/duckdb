@@ -9,12 +9,12 @@ require windows
 
 # all separators option
 query T
-SELECT * FROM (VALUES (parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'system')), (parse_path('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_path('/home/user/documents/file.csv', 'forward_slash')), (parse_path('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i);
+SELECT * FROM (VALUES (parse_path('path\to\file.csv/file2.csv', 'system')), (parse_path('path/to/file.csv\file2.csv', 'both_slash')), (parse_path('path/to/file.csv', 'forward_slash')), (parse_path('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
 ----
-[C:, Users, User, Documents, File.csv/File2.csv]
-[home, user, documents, file.csv, file2.csv]
-[, home, user, documents, file.csv]
-[C:, Users, User, Documents, File.csv/File2.csv]
+[path, to, file.csv/file2.csv]
+[path, to, file.csv, file2.csv]
+[path, to, file.csv]
+[path, to, file.csv/file2.csv]
 
 # default separator
 query T
@@ -22,11 +22,23 @@ SELECT parse_path('home/user/documents/file.csv\file2.csv');
 ----
 [home, user, documents, file.csv, file2.csv]
 
+# no separators in path
+query T
+SELECT parse_path('file.csv', 'both_slash');
+----
+[file.csv]
+
+# start with & have consecutive separators
+query T
+SELECT parse_path('//path/to///file.csv', 'forward_slash');
+----
+[/, path, to, file.csv]
+
 query T
 SELECT parse_path(NULL, NULL);
 ----
 NULL
-    
+
 query T
 SELECT parse_path('');
 ----
@@ -42,18 +54,29 @@ Binder Error: No function matches the given name and argument types 'parse_path(
 # test parse_dirname
 # all separators option
 query T
-SELECT * FROM (VALUES (parse_dirname('C:\Users\User\Documents\File.csv/File2.csv', 'system')), (parse_dirname('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_dirname('home/user/documents/file.csv', 'forward_slash')), (parse_dirname('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i);
+SELECT * FROM (VALUES (parse_dirname('path\to\file.csv/file2.csv', 'system')), (parse_dirname('path/to/file.csv\file2.csv', 'both_slash')), (parse_dirname('path/to/file.csv', 'forward_slash')), (parse_dirname('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
 ----
-C:
-home
-home
-C:
+path
+path
+path
+path
 
 # default separator
 query T
-SELECT parse_dirname('home/user/documents/file.csv\file2.csv');
+SELECT parse_dirname('path/to/file.csv\file2.csv');
 ----
-home
+path
+
+# start with & have consecutive separators 
+query T
+SELECT parse_dirname('///path/to//file.csv', 'forward_slash');
+----
+/
+
+query T
+select parse_dirname('file.csv');
+----
+(empty)
 
 query T
 SELECT parse_dirname('');
@@ -70,28 +93,34 @@ Binder Error: No function matches the given name and argument types 'parse_dirna
 # test parse_filename
 # all separators option
 query T
-SELECT * FROM (VALUES (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', 'system')), (parse_filename('home/user/documents/file.csv\file2.csv', 'both_slash')), (parse_filename('home/user/documents/file.csv', 'forward_slash')), (parse_filename('C:\Users\User\Documents\File.csv/File2.csv', 'backslash'))) tbl(i);
+SELECT * FROM (VALUES (parse_filename('path\to\file.csv/file2.csv', 'system')), (parse_filename('path/to/file.csv\file2.csv', 'both_slash')), (parse_filename('path/to/file.csv', 'forward_slash')), (parse_filename('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
 ----
-File.csv/File2.csv
+file.csv/file2.csv
 file2.csv
 file.csv
-File.csv/File2.csv
+file.csv/file2.csv
+
+# end with separator
+query T
+parse_filename('file2.csv/', 'forward_slash');
+----
+(empty)
 
 # default args
 query T
-SELECT parse_filename('home/user/documents/file.csv\file2.csv');
+SELECT parse_filename('path/to/file.csv\file2.csv');
 ----
 file2.csv
 
 query T
-SELECT parse_filename('home/user/documents/file.csv\file2.csv', 'backslash');
+SELECT parse_filename('path/to/file.csv\file2', true, 'forward_slash');
 ----
-file2.csv
+file.csv\file2
 
 query T
-SELECT parse_filename('home/user/documents/file.csv\file2.csv', true);
+SELECT parse_filename('/path/to/file.csv\file2.csv', true, 'forward_slash');
 ----
-file2
+file
 
 query T
 SELECT parse_filename('');

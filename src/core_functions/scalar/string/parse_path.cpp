@@ -92,21 +92,33 @@ static idx_t Split(string_t input, const string &sep, SplitInput &state) {
 	if (!input_size) {
 		return 0;
 	}
-
 	idx_t list_idx = 0;
 	while (input_size > 0) {
 		auto pos = Find(input_data, input_size, sep);
 		if (!IsIdxValid(pos, input_size)) {
 			break;
 		}
+
 		D_ASSERT(input_size >= pos);
-		state.AddSplit(input_data, pos, list_idx);
-		list_idx++;
+		if (pos == 0) {
+			if (list_idx == 0) { // first character in path is separator
+				state.AddSplit(input_data, 1, list_idx);
+				list_idx++;
+				if (input_size == 1) { // special case: the only character in path is a separator
+					return list_idx;
+				}
+			} // else: separator is in the path
+		} else {
+			state.AddSplit(input_data, pos, list_idx);
+			list_idx++;
+		}
 		input_data += (pos + 1);
 		input_size -= (pos + 1);
 	}
-	state.AddSplit(input_data, input_size, list_idx);
-	list_idx++;
+	if (input_size > 0) {
+		state.AddSplit(input_data, input_size, list_idx);
+		list_idx++;
+	}
 	return list_idx;
 }
 
@@ -178,19 +190,19 @@ static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &re
 		    idx_t new_size = input_size;
 		    if (FRONT_TRIM) { // left trim
 			    auto pos = Find(data, input_size, sep);
-			    if (!IsIdxValid(pos, input_size)) {
-				    pos = input_size;
+			    if (pos == 0) { // path starts with separator
+				    pos = 1;
 			    }
-			    new_size = pos;
+			    new_size = (IsIdxValid(pos, input_size)) ? pos : 0;
 		    } else { // right trim
 			    auto idx_last_sep = FindLast(data, input_size, sep);
 			    if (IsIdxValid(idx_last_sep, input_size)) {
 				    begin = idx_last_sep + 1;
 			    }
 			    if (trim_extension) {
-				    auto idx_last_sep = FindLast(data, input_size, ".");
-				    if (begin <= idx_last_sep && IsIdxValid(idx_last_sep, input_size)) {
-					    new_size = idx_last_sep;
+				    auto idx_extension_sep = FindLast(data, input_size, ".");
+				    if (begin <= idx_extension_sep && IsIdxValid(idx_extension_sep, input_size)) {
+					    new_size = idx_extension_sep;
 				    }
 			    }
 		    }
