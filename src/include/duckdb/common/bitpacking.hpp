@@ -20,8 +20,8 @@ namespace duckdb {
 using bitpacking_width_t = uint8_t;
 
 struct HugeIntPacker {
-	static void Pack(const hugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width);
-	static void Unpack(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width);
+	static void Pack(const uhugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width);
+	static void Unpack(const uint32_t *__restrict in, uhugeint_t *__restrict out, bitpacking_width_t width);
 };
 
 class BitpackingPrimitives {
@@ -223,8 +223,8 @@ private:
 		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
 			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
 			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, hugeint_t>::value) {
-			HugeIntPacker::Pack(reinterpret_cast<const hugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
+		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
+			HugeIntPacker::Pack(reinterpret_cast<const uhugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
 		} else {
 			throw InternalException("Unsupported type for bitpacking");
 		}
@@ -245,8 +245,8 @@ private:
 		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
 			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, hugeint_t>::value) {
-			HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<hugeint_t *>(dst), width);
+		} else if (std::is_same<T, hugeint_t>::value || std::is_same<T, uhugeint_t>::value) {
+			HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uhugeint_t *>(dst), width);
 		} else {
 			throw InternalException("Unsupported type for bitpacking");
 		}

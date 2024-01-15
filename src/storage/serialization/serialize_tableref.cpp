@@ -38,6 +38,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::PIVOT:
 		result = PivotRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::SHOW_REF:
+		result = ShowRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::SUBQUERY:
 		result = SubqueryRef::Deserialize(deserializer);
 		break;
@@ -135,6 +138,21 @@ unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault<vector<string>>(205, "column_name_alias", result->column_name_alias);
 	deserializer.ReadPropertyWithDefault<bool>(206, "include_nulls", result->include_nulls);
+	return std::move(result);
+}
+
+void ShowRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "table_name", table_name);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(201, "query", query);
+	serializer.WriteProperty<ShowType>(202, "show_type", show_type);
+}
+
+unique_ptr<TableRef> ShowRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ShowRef>(new ShowRef());
+	deserializer.ReadPropertyWithDefault<string>(200, "table_name", result->table_name);
+	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(201, "query", result->query);
+	deserializer.ReadProperty<ShowType>(202, "show_type", result->show_type);
 	return std::move(result);
 }
 
