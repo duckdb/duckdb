@@ -9,7 +9,8 @@ ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64
 	type = SampleType::RESERVOIR_SAMPLE;
 }
 
-ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed) : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
+ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
+    : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {

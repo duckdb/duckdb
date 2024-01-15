@@ -11,13 +11,10 @@ statement ok
 select * from materialized_range;
 
 statement ok
-set threads=1;
-
-statement ok
 create table integers_1 as (select (range + 5)::VARCHAR a, range b, get_current_time() as time from materialized_range);
 
 query II nosort result_1
-select a::INT, b from pragma_table_sample('integers_1') order by all limit 20;
+select a::INT, b from pragma_table_sample('integers_1') order by all limit 10;
 ----
 
 statement ok
@@ -25,18 +22,12 @@ create table integers_2 as (select (range + 5)::VARCHAR a, range b, get_current_
 
 # samples should be the same given the same table and the same contents.
 query II nosort result_1
-select a::INT, b from pragma_table_sample('integers_2') order by all limit 20;
+select a::INT, b from pragma_table_sample('integers_2') order by all limit 10;
 ----
 
-mode skip
-
-statement ok
-set threads=8;
 
 statement ok
 create or replace table integers_1 as (select (range + 5)::VARCHAR a, range b from materialized_range);
-
-mode skip
 
 statement ok
 create or replace table integers_2 as (select (range + 5)::VARCHAR a, range b from materialized_range);
@@ -50,10 +41,12 @@ create table sample_2 as (from pragma_table_sample('integers_2'));
 statement ok
 create table intersect_samples as select * from sample_1 intersect (select * from sample_2);
 
+
+# sample is the block size, and sample is always the same.
 query I
 select count(*) = 2048 from intersect_samples;
 ----
-0
+1
 
 query I
 select count(*) from (from pragma_table_sample('integers_1') intersect (from integers_1));
@@ -65,14 +58,55 @@ select count(*) from (from pragma_table_sample('integers_2') intersect (from int
 ----
 2048
 
-# If rows are added, the sample is updated.
-statement ok
-insert into integers_1 (select 100::VARCHAR, 100 from range(3000000));
 
-# check if 100, 100 has been added
-query I
-select count(*) > 0 from (from pragma_table_sample('integers_1') intersect (select * from sample_1)) where a = 100 and b = 100;
+# checking statistical properties of the sample
+
+query II
+select ceil(avg(next-prev)) avg_diff, avg_diff > 2430 and avg_diff < 2450 from (select b as prev, LEAD(b, 1) OVER (ORDER BY b) AS next from pragma_table_sample('integers_1') order by all) t(prev, next);
 ----
-0
+2443.0	true
 
-# maybe test the average distance between all samples?
+
+query I
+select floor(avg(interval_count))::INT from (
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 1000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 2000000 and b > 1000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 3000000 and b > 2000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 4000000 and b > 3000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 5000000 and b > 4000000
+);
+----
+409
+
+
+# adding another interval should subtract an equal number from the rest of the intervals
+statement ok
+insert into integers_1 (select (range + 5)::VARCHAR a, range b from range(5000000,6000000));
+
+query I
+select floor(avg(interval_count))::INT from (
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 1000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 2000000 and b > 1000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 3000000 and b > 2000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 4000000 and b > 3000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 5000000 and b > 4000000 UNION ALL
+	select count(*) interval_count from pragma_table_sample('integers_1') where b < 6000000 and b > 5000000
+);
+----
+341
+
+
+# If double the table count is appended, around half the sample should account for the new values.
+statement ok
+insert into integers_1 (select '-1', -1 from range(6000000));
+
+query I
+select count(*) from integers_1;
+----
+12000000
+
+query I
+select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
+----
+1000
+

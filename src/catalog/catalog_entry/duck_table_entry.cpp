@@ -84,7 +84,6 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		storage = make_shared<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
 		                                 schema.name, name, std::move(storage_columns), std::move(info.data));
 
-
 		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		idx_t indexes_idx = 0;
 		for (idx_t i = 0; i < bound_constraints.size(); i++) {

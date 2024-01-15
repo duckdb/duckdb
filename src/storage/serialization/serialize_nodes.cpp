@@ -443,37 +443,25 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 
 void ReservoirSample::Serialize(Serializer &serializer) const {
 	BlockingSample::Serialize(serializer);
-	serializer.WritePropertyWithDefault<idx_t>(201, "sample_count", sample_count);
-	serializer.WritePropertyWithDefault<bool>(202, "reservoir_initialized", reservoir_initialized);
-	serializer.WritePropertyWithDefault<unique_ptr<DataChunk>>(203, "reservoir_chunk", reservoir_chunk, nullptr);
+	serializer.WritePropertyWithDefault<idx_t>(200, "sample_count", sample_count);
 }
 
 unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializer) {
-	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(201, "sample_count");
+	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(200, "sample_count");
 	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count));
-	deserializer.ReadPropertyWithDefault<bool>(202, "reservoir_initialized", result->reservoir_initialized);
-	deserializer.ReadPropertyWithDefault<unique_ptr<DataChunk>>(203, "reservoir_chunk", result->reservoir_chunk, nullptr);
 	return std::move(result);
 }
 
 void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
 	BlockingSample::Serialize(serializer);
-	serializer.WriteProperty<double>(201, "sample_percentage", sample_percentage);
-	serializer.WritePropertyWithDefault<idx_t>(202, "reservoir_sample_size", reservoir_sample_size);
-	serializer.WritePropertyWithDefault<unique_ptr<ReservoirSample>>(203, "current_sample", current_sample, nullptr);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ReservoirSample>>>(204, "finished_samples", finished_samples);
-	serializer.WritePropertyWithDefault<idx_t>(205, "current_count", current_count);
-	serializer.WritePropertyWithDefault<bool>(206, "is_finalized", is_finalized);
+	serializer.WriteProperty<double>(200, "sample_percentage", sample_percentage);
+	serializer.WritePropertyWithDefault<idx_t>(201, "reservoir_sample_size", reservoir_sample_size);
 }
 
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &deserializer) {
-	auto sample_percentage = deserializer.ReadProperty<double>(201, "sample_percentage");
+	auto sample_percentage = deserializer.ReadProperty<double>(200, "sample_percentage");
 	auto result = duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
-	deserializer.ReadPropertyWithDefault<idx_t>(202, "reservoir_sample_size", result->reservoir_sample_size);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirSample>>(203, "current_sample", result->current_sample, nullptr);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ReservoirSample>>>(204, "finished_samples", result->finished_samples);
-	deserializer.ReadPropertyWithDefault<idx_t>(205, "current_count", result->current_count);
-	deserializer.ReadPropertyWithDefault<bool>(206, "is_finalized", result->is_finalized);
+	deserializer.ReadPropertyWithDefault<idx_t>(201, "reservoir_sample_size", result->reservoir_sample_size);
 	return std::move(result);
 }
 

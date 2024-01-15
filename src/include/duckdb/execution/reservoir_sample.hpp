@@ -17,11 +17,7 @@
 
 namespace duckdb {
 
-enum class SampleType : uint8_t {
-	BLOCKING_SAMPLE = 0,
-	RESERVOIR_SAMPLE = 1,
-	RESERVOIR_PERCENTAGE_SAMPLE = 2
-};
+enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
 
@@ -57,8 +53,9 @@ public:
 
 class BlockingSample {
 public:
-	explicit BlockingSample(int64_t seed = -1) : random(base_reservoir_sample->random), type(SampleType::BLOCKING_SAMPLE) {
-		base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
+	explicit BlockingSample(int64_t seed = -1)
+	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), random(base_reservoir_sample->random),
+	      type(SampleType::BLOCKING_SAMPLE) {
 	}
 	virtual ~BlockingSample() {
 	}
@@ -101,7 +98,6 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
-
 private:
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
@@ -139,6 +135,7 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
+
 private:
 	Allocator &allocator;
 	//! The sample_size to sample
