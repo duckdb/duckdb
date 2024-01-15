@@ -45,7 +45,7 @@ public:
 	BatchedBufferedData(shared_ptr<ClientContext> context);
 
 public:
-	void Append(unique_ptr<DataChunk> chunk, LocalSinkState &state) override;
+	void Append(unique_ptr<DataChunk> chunk, idx_t batch);
 	void AddToBacklog(BlockedSink blocked_sink) override;
 	bool BufferIsFull() override;
 	bool ShouldBlockBatch(idx_t batch);

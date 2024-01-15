@@ -150,9 +150,7 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 	return chunk;
 }
 
-void BatchedBufferedData::Append(unique_ptr<DataChunk> chunk, LocalSinkState &lstate) {
-	auto &state = lstate.Cast<BufferedBatchCollectorLocalState>();
-	auto batch = lstate.BatchIndex();
+void BatchedBufferedData::Append(unique_ptr<DataChunk> chunk, idx_t batch) {
 	lock_guard<mutex> lock(glock);
 	if (batch == min_batch) {
 		current_batch_tuple_count += chunk->size();

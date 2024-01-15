@@ -50,7 +50,7 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 	chunk.Copy(*to_append, 0);
 
-	buffered_data.Append(std::move(to_append), lstate);
+	buffered_data.Append(std::move(to_append), batch);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

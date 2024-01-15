@@ -29,7 +29,7 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	auto &lstate = input.local_state.Cast<BufferedCollectorLocalState>();
 
 	lock_guard<mutex> l(gstate.glock);
-	auto &buffered_data = *gstate.buffered_data;
+	auto &buffered_data = dynamic_cast<SimpleBufferedData &>(*gstate.buffered_data);
 
 	if (!lstate.blocked) {
 		// Always block the first time
@@ -50,7 +50,7 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	auto to_append = make_uniq<DataChunk>();
 	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 	chunk.Copy(*to_append, 0);
-	buffered_data.Append(std::move(to_append), lstate);
+	buffered_data.Append(std::move(to_append));
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

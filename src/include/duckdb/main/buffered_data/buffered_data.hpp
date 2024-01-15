@@ -47,7 +47,6 @@ public:
 	}
 
 public:
-	virtual void Append(unique_ptr<DataChunk> chunk, LocalSinkState &state) = 0;
 	virtual void AddToBacklog(BlockedSink blocked_sink) = 0;
 	virtual bool BufferIsFull() = 0;
 	virtual void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
