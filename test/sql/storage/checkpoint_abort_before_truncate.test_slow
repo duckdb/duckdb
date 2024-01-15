@@ -7,19 +7,6 @@ require skip_reload
 load __TEST_DIR__/checkpoint_abort.db
 
 statement ok
-CREATE FUNCTION mem_to_bytes(x) AS CASE
-    WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
-    WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
-    WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
-    WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
-    WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0
-    WHEN CONTAINS(x, 'MiB') THEN REPLACE(x, 'MiB', '')::INT * 1024.0 * 1024
-    WHEN CONTAINS(x, 'GiB') THEN REPLACE(x, 'GiB', '')::INT * 1024.0 * 1024 * 1024
-    WHEN CONTAINS(x, 'TiB') THEN REPLACE(x, 'TiB', '')::INT * 1024.0 * 1024 * 1024 * 1024
-    WHEN x = '0 bytes' THEN 0
-    ELSE x::INT END;
-
-statement ok
 CREATE TABLE integers AS SELECT * FROM range(100000) tbl(i);
 
 statement ok
@@ -52,10 +39,6 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 # now verify that empty blocks left by a checkpoint aborts are re-used
 # so that checkpoint aborts don't permanently leave holes in the file
 
-# get the current database size
-statement ok
-CREATE TABLE start AS SELECT database_size FROM pragma_database_size();
-
 loop i 0 100
 
 statement ok
@@ -82,21 +65,9 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 ----
 0	199999	200000
 
-# ensure that the expected total storage size is around the same as in the first iteration of the loop
+# ensure that the expected total storage size is the same as in the first iteration of the loop
 
-query I
-SELECT CASE WHEN ${i} = 0 THEN True
-	WHEN current.database_size = start.database_size THEN True
-	ELSE False END
-FROM pragma_database_size() AS current, start;
-----
-1
-
-# adjust it once to the size after the first iteration
-
-statement ok
-UPDATE start SET database_size = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.database_size FROM pragma_database_size() AS current)
-		ELSE (database_size) END);
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 endloop

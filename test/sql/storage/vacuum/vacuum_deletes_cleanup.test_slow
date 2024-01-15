@@ -8,6 +8,7 @@ statement ok
 CREATE TABLE integers(i INTEGER);
 
 # verify that deleting an entire table in a loop doesn't increase database size (i.e. deletes are vacuumed correctly)
+
 loop i 0 10
 
 statement ok
@@ -26,15 +27,15 @@ SELECT SUM(i) FROM integers;
 ----
 NULL
 
-# the expected total storage size is around 3.8 MiB (4194304 bytes), and we allow a variation of 20% in storage size
-query I
-SELECT total_blocks < 4194304 / get_block_size('vacuum_deletes_cleanup') * 1.2 FROM pragma_database_size();
-----
-true
+# ensure that the expected total storage size is the same as in the first iteration of the loop
+
+query I nosort expected_blocks_delete_table
+SELECT total_blocks FROM pragma_database_size();
 
 endloop
 
 # do the same but delete in segments
+
 loop i 0 10
 
 statement ok
@@ -85,10 +86,9 @@ SELECT SUM(i) FROM integers;
 ----
 NULL
 
-# the expected total storage size is around 3.8 MiB (4194304 bytes), and we allow a variation of 20% in storage size
-query I
-SELECT total_blocks < 4194304 / get_block_size('vacuum_deletes_cleanup') * 1.2 FROM pragma_database_size();
-----
-true
+# ensure that the expected total storage size is the same as in the first iteration of the loop
+
+query I nosort expected_blocks_delete_segments
+SELECT total_blocks FROM pragma_database_size();
 
 endloop

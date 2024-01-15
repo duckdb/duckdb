@@ -18,12 +18,6 @@ INSERT INTO uuids SELECT uuid()::varchar FROM range(1000000);
 statement ok
 CHECKPOINT;
 
-# the expected total storage size is around 20.4 MiB (20971520 bytes), and we allow a variation of 20% in storage size
-query I
-SELECT total_blocks < 20971520 / get_block_size('truncate_after_delete') * 1.2 FROM pragma_database_size();
-----
-true
-
 # note that just deleting does not free the space yet
 # that is because deleting + checkpointing causes the metadata to be written at the END of the file
 # as we cannot override the deleted data yet
@@ -44,11 +38,8 @@ INSERT INTO integers VALUES (1), (2), (3);
 statement ok
 CHECKPOINT;
 
-# the expected total storage size is around 20.4 MiB (20971520 bytes), and we allow a variation of 20% in storage size
-query I
-SELECT total_blocks < 20971520 / get_block_size('truncate_after_delete') * 1.2 FROM pragma_database_size();
-----
-true
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 endloop
 

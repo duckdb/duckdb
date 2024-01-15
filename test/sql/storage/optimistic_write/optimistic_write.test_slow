@@ -5,19 +5,6 @@
 load __TEST_DIR__/optimistic_write.db
 
 statement ok
-CREATE FUNCTION mem_to_bytes(x) AS CASE
-    WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
-    WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
-    WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
-    WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
-    WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0
-    WHEN CONTAINS(x, 'MiB') THEN REPLACE(x, 'MiB', '')::INT * 1024.0 * 1024
-    WHEN CONTAINS(x, 'GiB') THEN REPLACE(x, 'GiB', '')::INT * 1024.0 * 1024 * 1024
-    WHEN CONTAINS(x, 'TiB') THEN REPLACE(x, 'TiB', '')::INT * 1024.0 * 1024 * 1024 * 1024
-    WHEN x = '0 bytes' THEN 0
-    ELSE x::INT END;
-
-statement ok
 CREATE TABLE test (a INTEGER);
 
 statement ok
@@ -38,15 +25,7 @@ SELECT SUM(a) FROM test
 ----
 999999000000
 
-# temp table
 require skip_reload
-
-statement ok
-CREATE TEMPORARY TABLE blocks AS SELECT total_blocks FROM pragma_database_size();
-
-# get the current database size
-statement ok
-CREATE TABLE start AS SELECT database_size FROM pragma_database_size();
 
 # verify in a loop that the size of the system does not increase in case of rollbacks
 loop i 0 10
@@ -63,22 +42,10 @@ INSERT INTO test SELECT * FROM range(1000000);
 statement ok
 ROLLBACK;
 
-# ensure that the expected total storage size is around the same as in the first iteration of the loop
+# ensure that the expected total storage size is the same as in the first iteration of the loop
 
-query I
-SELECT CASE WHEN ${i} = 0 THEN True
-	WHEN mem_to_bytes(current.database_size) <= mem_to_bytes(start.database_size) * 1.2 THEN True
-	ELSE False END
-FROM pragma_database_size() AS current, start;
-----
-1
-
-# adjust it once to the size after the first iteration
-
-statement ok
-UPDATE start SET database_size = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.database_size FROM pragma_database_size() AS current)
-		ELSE (database_size) END);
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 statement ok
 CHECKPOINT;
@@ -91,9 +58,7 @@ INSERT INTO test VALUES (42);
 statement ok
 CHECKPOINT;
 
-# ensure that the expected total storage size is around the same as before the loop
+# ensure that the expected total storage size is the same as in the first iteration of the loop
 
-query I
-SELECT mem_to_bytes(current.database_size) <= mem_to_bytes(start.database_size) FROM pragma_database_size() AS current, start;
-----
-true
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();

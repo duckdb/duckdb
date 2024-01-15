@@ -25,13 +25,10 @@ SELECT EXISTS (SELECT * FROM pragma_storage_info('strings') WHERE contains(segme
 ----
 1
 
-# we expect a storage size of approximately 14 MiB (14680064 bytes),
-# and we allow a variation of 20% in storage size
+# ensure that the expected total storage size is the same as in the first iteration of the loop
 
-query I
-SELECT total_blocks < (14680064 / get_block_size('overflow_strings') * 1.2) FROM pragma_database_size();
-----
-1
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 statement ok
 DROP TABLE strings;
