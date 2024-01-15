@@ -70,6 +70,7 @@ void ColumnCountScanner::Process() {
 	// Run on this buffer
 	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
+			iterator.pos.buffer_pos++;
 			return;
 		}
 	}

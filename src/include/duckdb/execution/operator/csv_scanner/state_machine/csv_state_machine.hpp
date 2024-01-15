@@ -43,19 +43,10 @@ struct CSVStates {
 		       previous_state == CSVState::RECORD_SEPARATOR;
 	}
 
-	inline bool EmptyValue() {
-		return (current_state == CSVState::CARRIAGE_RETURN || current_state == CSVState::RECORD_SEPARATOR ||
-		        current_state == CSVState::DELIMITER) &&
-		       previous_state == CSVState::DELIMITER;
-	}
-
 	inline bool IsCurrentNewRow() {
 		return current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN;
 	}
 
-	inline bool IsInvalid() {
-		return current_state == CSVState::INVALID;
-	}
 	inline bool IsQuoted() {
 		return previous_state == CSVState::QUOTED;
 	}
