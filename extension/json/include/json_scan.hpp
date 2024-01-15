@@ -126,6 +126,8 @@ public:
 	//! If the average over the fields of an object is less than this threshold,
 	//! we default to the JSON type for this object rather than the shredded type
 	double field_appearance_threshold = 0.1;
+	//! The maximum number of files we sample to sample sample_size rows
+	idx_t maximum_sample_files = 32;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -235,6 +237,7 @@ private:
 	void ThrowObjectSizeError(const idx_t object_size);
 	void ThrowInvalidAtEndError();
 
+	//! Must hold the lock
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
