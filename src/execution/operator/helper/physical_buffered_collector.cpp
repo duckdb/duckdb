@@ -31,7 +31,7 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	lock_guard<mutex> l(gstate.glock);
 	auto &buffered_data = dynamic_cast<SimpleBufferedData &>(*gstate.buffered_data);
 
-	if (!lstate.blocked) {
+	if (!lstate.blocked || buffered_data.BufferIsFull()) {
 		// Always block the first time
 		lstate.blocked = true;
 		auto callback_state = input.interrupt_state;
@@ -40,13 +40,6 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 		return SinkResultType::BLOCKED;
 	}
 
-	if (buffered_data.BufferIsFull()) {
-		// Block again when we've already buffered enough chunks
-		auto callback_state = input.interrupt_state;
-		auto blocked_sink = BlockedSink(callback_state, chunk.size());
-		buffered_data.AddToBacklog(blocked_sink);
-		return SinkResultType::BLOCKED;
-	}
 	auto to_append = make_uniq<DataChunk>();
 	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 	chunk.Copy(*to_append, 0);
