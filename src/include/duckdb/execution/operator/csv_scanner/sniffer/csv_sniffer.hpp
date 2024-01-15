@@ -89,6 +89,8 @@ public:
 	//! 5. Type Replacement: Replaces the types of the columns if the user specified them
 	SnifferResult SniffCSV(bool force_match = false);
 
+	static NewLineIdentifier DetectNewLineDelimiter(CSVBufferManager &buffer_manager);
+
 private:
 	//! CSV State Machine Cache
 	CSVStateMachineCache &state_machine_cache;
@@ -129,7 +131,6 @@ private:
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
 
-	NewLineIdentifier DetectNewLineDelimiter();
 	//! Checks if candidate still produces good values for the next chunk
 	bool RefineCandidateNextChunk(ColumnCountScanner &candidate);
 

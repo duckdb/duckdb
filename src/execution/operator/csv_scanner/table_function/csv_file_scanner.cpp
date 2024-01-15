@@ -105,6 +105,10 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		options.dialect_options.num_cols = options.sql_type_list.size();
 	}
 
+	if (options.dialect_options.state_machine_options.new_line == NewLineIdentifier::NOT_SET) {
+		options.dialect_options.state_machine_options.new_line = CSVSniffer::DetectNewLineDelimiter(*buffer_manager);
+	}
+
 	names = bind_data.return_names;
 	types = bind_data.return_types;
 	state_machine =

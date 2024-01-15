@@ -65,7 +65,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	if (options.dialect_options.state_machine_options.new_line.IsSetByUser()) {
 		new_line_id = options.dialect_options.state_machine_options.new_line.GetValue();
 	} else {
-		new_line_id = DetectNewLineDelimiter();
+		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
 	for (const auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
@@ -250,9 +250,9 @@ void CSVSniffer::RefineCandidates() {
 	return;
 }
 
-NewLineIdentifier CSVSniffer::DetectNewLineDelimiter() {
+NewLineIdentifier CSVSniffer::DetectNewLineDelimiter(CSVBufferManager &buffer_manager) {
 	// Get first buffer
-	auto buffer = buffer_manager->GetBuffer(0);
+	auto buffer = buffer_manager.GetBuffer(0);
 	auto buffer_ptr = buffer->Ptr();
 	bool carriage_return = false;
 	bool n = false;
