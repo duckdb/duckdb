@@ -175,7 +175,6 @@ idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
 	for (idx_t boundary_idx = 0; boundary_idx < error_info.boundary_idx; boundary_idx++) {
 		bool batch_done = false;
 		while (!batch_done) {
-			unique_ptr<lock_guard<mutex>> parallel_lock;
 			if (lines_per_batch_map.find(boundary_idx) != lines_per_batch_map.end()) {
 				batch_done = true;
 				current_line += lines_per_batch_map[boundary_idx].lines_in_batch;
