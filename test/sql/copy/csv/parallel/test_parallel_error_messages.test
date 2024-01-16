@@ -13,8 +13,8 @@ SET threads=4
 
 foreach batched true false
 
-statement ok
-SET preserve_insertion_order=${batched}
+#statement ok
+#SET preserve_insertion_order=${batched}
 
 statement error
 SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)

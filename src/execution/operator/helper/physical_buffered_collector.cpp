@@ -32,7 +32,6 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	auto &buffered_data = dynamic_cast<SimpleBufferedData &>(*gstate.buffered_data);
 
 	if (!lstate.blocked || buffered_data.BufferIsFull()) {
-		// Always block the first time
 		lstate.blocked = true;
 		auto callback_state = input.interrupt_state;
 		auto blocked_sink = BlockedSink(callback_state, chunk.size());
