@@ -40,11 +40,11 @@ public:
 	static CompressionFunction GetFunction(PhysicalType data_type);
 
 public:
-	//! The default maximum string size
-	static constexpr uint16_t DEFAULT_STRING_SIZE = 4096;
+	//! The default maximum string size for sufficiently big block sizes
+	static constexpr uint16_t DEFAULT_STRING_BLOCK_LIMIT = 4096;
 	//! The maximum string size within a block. We offload bigger strings to overflow blocks
 	static constexpr uint16_t STRING_BLOCK_LIMIT =
-	    MinValue(AlignValueFloor(Storage::BLOCK_SIZE / 4), idx_t(DEFAULT_STRING_SIZE));
+	    MinValue(AlignValueFloor(Storage::BLOCK_SIZE / 4), idx_t(DEFAULT_STRING_BLOCK_LIMIT));
 };
 
 //! Detect mismatching constant values
