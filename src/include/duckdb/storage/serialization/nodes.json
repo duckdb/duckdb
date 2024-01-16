@@ -237,6 +237,11 @@
         "id": 200,
         "name": "sample_count",
         "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "reservoir_chunk",
+        "type": "unique_ptr<ReservoirChunk>"
       }
     ],
     "constructor": ["sample_count"]

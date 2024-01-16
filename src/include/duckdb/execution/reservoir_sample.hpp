@@ -81,6 +81,15 @@ protected:
 	SampleType type;
 };
 
+struct ReservoirChunk {
+	ReservoirChunk() {
+	}
+
+	DataChunk chunk;
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<ReservoirChunk> Deserialize(Deserializer &deserializer);
+};
+
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:
@@ -105,6 +114,8 @@ private:
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
 
+	DataChunk &Chunk();
+
 public:
 	Allocator &allocator;
 	//! The size of the reservoir sample.
@@ -113,7 +124,7 @@ public:
 	idx_t sample_count;
 	bool reservoir_initialized;
 	//! The current reservoir
-	unique_ptr<DataChunk> reservoir_chunk;
+	unique_ptr<ReservoirChunk> reservoir_chunk;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
