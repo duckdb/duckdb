@@ -1,5 +1,6 @@
 #include "../common.h"
 #include <fstream>
+#include <iostream>
 
 using namespace odbc_test;
 
@@ -159,6 +160,11 @@ static void TestIniFile() {
 	out << "access_mode = read_only\n";
 	out << "allow_unsigned_extensions = true\n";
 	out.close();
+
+	std::cout << "ini_file: " << ini_file << std::endl;
+	if (!std::ifstream(ini_file)) {
+        FAIL("Failed to create ini file");
+    }
 
 	// Connect to the database using the ini file
 	SQLHANDLE env;
