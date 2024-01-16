@@ -38,12 +38,12 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 	for (idx_t i = 0; i < 2; i++) {
 		if (!last_buffer->IsCSVFileLastBuffer()) {
 			auto cur_buffer_size = buffer_size;
-			if (file_handle->uncompressed){
-				if (file_handle->FileSize() - bytes_read){
+			if (file_handle->uncompressed) {
+				if (file_handle->FileSize() - bytes_read) {
 					cur_buffer_size = file_handle->FileSize() - bytes_read;
 				}
 			}
-			if (cur_buffer_size == 0){
+			if (cur_buffer_size == 0) {
 				last_buffer->last_buffer = true;
 				return false;
 			}

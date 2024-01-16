@@ -646,11 +646,7 @@ void StringValueScanner::SkipCSVRows() {
 	}
 	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
-	if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 2;
-	} else {
-		iterator.pos.buffer_pos = row_skipper.GetIteratorPosition() + 1;
-	}
+	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
 	if (result.store_line_size) {
 		result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
 	}
