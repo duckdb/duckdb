@@ -63,9 +63,6 @@ public:
 
 	idx_t result_size;
 
-	//! If this line might have too many columns
-	bool maybe_too_many_columns = false;
-
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
@@ -74,6 +71,8 @@ public:
 	LinePosition pre_previous_line_start;
 	bool store_line_size = false;
 	bool added_last_line = false;
+	//! Last result position where a new row started
+	idx_t last_row_pos = 0;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -85,7 +84,7 @@ public:
 
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
-	inline void AddRowInternal(idx_t buffer_pos);
+	inline bool AddRowInternal();
 
 	void HandleOverLimitRows();
 	void AddValueToVector(string_t &value, bool allocate = false);

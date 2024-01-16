@@ -28,12 +28,17 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	//! There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() * 2 >= system_threads;
 	single_threaded = options.null_padding || many_csv_files;
-
+	last_file_idx = 0;
+	scanner_idx = 0;
 	if (!single_threaded) {
 		running_threads = MaxThreads();
 	}
-	auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
-	current_boundary = CSVIterator(0, 0, 0, 0, buffer_size);
+	if (single_threaded) {
+		current_boundary = CSVIterator();
+	} else {
+		auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
+		current_boundary = CSVIterator(0, 0, 0, 0, buffer_size);
+	}
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
@@ -54,15 +59,34 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 }
 
 unique_ptr<StringValueScanner> CSVGlobalState::Next() {
+	//	if (single_threaded) {
+	//		idx_t cur_idx = last_file_idx++;
+	//		if (cur_idx >= bind_data.files.size()) {
+	//			return nullptr;
+	//		}
+	//		shared_ptr<CSVFileScan> current_file;
+	//		if (cur_idx == 0){
+	//			current_file = file_scans.back();
+	//		} else{
+	//			current_file = make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
+	//		                                             bind_data, column_ids, file_schema);
+	//		}
+	//		auto csv_scanner =
+	//		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
+	//		                                  current_file->error_handler, current_boundary);
+	//		csv_scanner->csv_file_scan = current_file;
+	//		return csv_scanner;
+	//	}
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (finished) {
 		return nullptr;
 	}
-	// We first create the scanner for the current boundary
-	auto &current_file = *file_scans.back();
+
 	if (single_threaded) {
 		current_boundary = CSVIterator();
 	}
+	// We first create the scanner for the current boundary
+	auto &current_file = *file_scans.back();
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, current_boundary);
@@ -91,7 +115,13 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 
 idx_t CSVGlobalState::MaxThreads() const {
 	// We initialize max one thread per our set bytes per thread limit
+	//	if (single_threaded) {
+	//		return bind_data.files.size() < system_threads ? bind_data.files.size() : system_threads;
+	//	}
 	idx_t total_threads = file_scans.back()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
+	//	std::cout << total_threads << std::endl;
+	//	std::cout << system_threads << std::endl;
+
 	if (total_threads < system_threads) {
 		return total_threads;
 	}

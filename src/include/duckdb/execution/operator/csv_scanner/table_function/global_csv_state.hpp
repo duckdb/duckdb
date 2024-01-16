@@ -71,7 +71,9 @@ private:
 
 	bool single_threaded = false;
 
-	idx_t scanner_idx = 0;
+	atomic<idx_t> scanner_idx;
+
+	atomic<idx_t> last_file_idx;
 };
 
 } // namespace duckdb
