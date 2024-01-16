@@ -43,7 +43,7 @@ public:
 	                                             FileCompressionType compression);
 	static unique_ptr<CSVFileHandle> OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
 	                                          FileCompressionType compression);
-
+	bool uncompressed = false;
 private:
 	unique_ptr<FileHandle> file_handle;
 	string path;

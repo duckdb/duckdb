@@ -8,6 +8,7 @@ CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<Fi
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
+	uncompressed = compression == FileCompressionType::UNCOMPRESSED;
 }
 
 unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,

@@ -61,6 +61,7 @@ private:
 	idx_t buffer_size;
 	//! If this buffer manager is done (i.e., no more buffers to read beyond the ones that were cached
 	bool done = false;
+	idx_t bytes_read = 0;
 	//! Because the buffer manager can be accessed in Parallel we need a mutex.
 	mutex main_mutex;
 };
