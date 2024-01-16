@@ -116,7 +116,7 @@ public:
 
 public:
 	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type);
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -165,6 +165,8 @@ public:
 	vector<LogicalType> condition_types;
 	//! The types of all conditions
 	vector<LogicalType> build_types;
+	//! Positions of the columns that need to output
+	const vector<idx_t> &output_columns;
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
 	//! Data column layout
