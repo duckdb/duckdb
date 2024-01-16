@@ -146,16 +146,26 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                idx_t result_idx) {
 
-	// Create state for child column
-	state.child_states.push_back(make_uniq<ColumnFetchState>());
+	// Create state for validity & child column
+	if (state.child_states.empty()) {
+		state.child_states.push_back(make_uniq<ColumnFetchState>());
+	}
 
 	// Fetch validity
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetEntry(result);
+	auto &child_type = ArrayType::GetChildType(type);
 	auto array_size = ArrayType::GetSize(type);
-	child_column->FetchRow(transaction, *state.child_states[1], row_id * array_size, child_vec, result_idx);
+
+	// We need to fetch between [row_id * array_size, (row_id + 1) * array_size)
+	auto child_state = make_uniq<ColumnScanState>();
+	child_state->Initialize(child_type);
+	child_column->InitializeScanWithOffset(*child_state, row_id * array_size);
+	Vector child_scan(child_type, array_size);
+	child_column->ScanCount(*child_state, child_scan, array_size);
+	VectorOperations::Copy(child_scan, child_vec, array_size, 0, result_idx * array_size);
 }
 
 void ArrayColumnData::CommitDropColumn() {

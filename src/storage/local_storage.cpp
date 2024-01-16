@@ -23,7 +23,11 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups->InitializeEmpty();
 
 	table.info->indexes.Scan([&](Index &index) {
-		D_ASSERT(index.index_type == "ART");
+		if (index.index_type != ART::TYPE_NAME) {
+			return false;
+		}
+		D_ASSERT(index.index_type == ART::TYPE_NAME);
+
 		auto &art = index.Cast<ART>();
 		if (art.index_constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
@@ -466,6 +470,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
 
+	// try to initialize any unknown indexes
+	table.info->InitializeIndexes(context);
+
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {
 		index.Vacuum();
@@ -568,6 +575,7 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 	if (!storage) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
+	table.info->InitializeIndexes(context);
 	return storage->indexes;
 }
 

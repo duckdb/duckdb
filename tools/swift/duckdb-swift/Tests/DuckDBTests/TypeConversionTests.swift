@@ -116,17 +116,16 @@ final class TypeConversionTests: XCTestCase {
     ]
     try extractTest(testColumnName: "time", expected: expected) { $0.cast(to: Time.self) }
   }
-/*
-  FIXME: TIMETZ <> TIME
+
   func test_extract_from_time_tz() throws {
     let expected = [
-      Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)),
-      Time(components: .init(hour: 23, minute: 59, second: 59, microsecond: 999_999)),
+      TimeTz(time: Time(components: .init(hour: 0, minute: 0, second: 0, microsecond: 0)), offset: 57599),
+      TimeTz(time: Time(components: .init(hour: 24, minute: 0, second: 0, microsecond: 0)), offset: -57599),
       nil
     ]
-    try extractTest(testColumnName: "time_tz", expected: expected) { $0.cast(to: Time.self) }
+    try extractTest(testColumnName: "time_tz", expected: expected) { $0.cast(to: TimeTz.self) }
   }
-*/
+
   func test_extract_from_date() throws {
     let expected = [
       Date(components: .init(year: -5_877_641, month: 06, day: 25)),

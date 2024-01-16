@@ -437,7 +437,6 @@ void JSONScanLocalState::ThrowInvalidAtEndError() {
 }
 
 void JSONScanLocalState::TryIncrementFileIndex(JSONScanGlobalState &gstate) const {
-	lock_guard<mutex> guard(gstate.lock);
 	if (gstate.file_index < gstate.json_readers.size() &&
 	    current_reader.get() == gstate.json_readers[gstate.file_index].get()) {
 		gstate.file_index++;
@@ -564,6 +563,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		if (current_reader) {
 			// If we performed the final read of this reader in the previous iteration, close it now
 			if (is_last) {
+				lock_guard<mutex> guard(gstate.lock);
 				TryIncrementFileIndex(gstate);
 				current_reader->CloseJSONFile();
 				current_reader = nullptr;
@@ -572,57 +572,57 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 
 			// Try to read
 			ReadNextBufferInternal(gstate, buffer_index);
+			if (buffer_index.GetIndex() == 0 && current_reader->GetFormat() == JSONFormat::ARRAY) {
+				SkipOverArrayStart();
+			}
 
 			// If this is the last read, end the parallel scan now so threads can move on
 			if (is_last && IsParallel(gstate)) {
+				lock_guard<mutex> guard(gstate.lock);
 				TryIncrementFileIndex(gstate);
 			}
 
 			if (buffer_size == 0) {
 				// We didn't read anything, re-enter the loop
 				continue;
-			} else {
-				// We read something!
-				break;
 			}
+			// We read something!
+			break;
 		}
 
 		// If we got here, we don't have a reader (anymore). Try to get one
 		is_last = false;
-		{
-			lock_guard<mutex> guard(gstate.lock);
-			if (gstate.file_index == gstate.json_readers.size()) {
-				return false; // No more files left
-			}
-
-			// Assign the next reader to this thread
-			current_reader = gstate.json_readers[gstate.file_index].get();
-
-			// Open the file if it is not yet open
-			if (!current_reader->IsOpen()) {
-				current_reader->OpenJSONFile();
-			}
-			batch_index = gstate.batch_index++;
-
-			// Auto-detect format / record type
-			if (gstate.enable_parallel_scans) {
-				// Auto-detect within the lock, so threads may join a parallel NDJSON scan
-				if (current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
-					ReadAndAutoDetect(gstate, buffer_index);
-				}
-			} else {
-				gstate.file_index++; // Increment the file index before dropping lock so other threads move on
-			}
+		unique_lock<mutex> guard(gstate.lock);
+		if (gstate.file_index == gstate.json_readers.size()) {
+			return false; // No more files left
 		}
 
-		// If we didn't auto-detect within the lock, do it now
-		if (current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
+		// Assign the next reader to this thread
+		current_reader = gstate.json_readers[gstate.file_index].get();
+
+		batch_index = gstate.batch_index++;
+		if (!gstate.enable_parallel_scans) {
+			// Non-parallel scans, increment file index and unlock
+			gstate.file_index++;
+			guard.unlock();
+		}
+
+		// Open the file if it is not yet open
+		if (!current_reader->IsOpen()) {
+			current_reader->OpenJSONFile();
+		}
+
+		// Auto-detect if we haven't yet done this during the bind
+		if (gstate.bind_data.options.record_type == JSONRecordType::AUTO_DETECT ||
+		    current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
 			ReadAndAutoDetect(gstate, buffer_index);
 		}
 
-		// If we haven't already, increment the file index if non-parallel scan
-		if (gstate.enable_parallel_scans && !IsParallel(gstate)) {
-			TryIncrementFileIndex(gstate);
+		if (gstate.enable_parallel_scans) {
+			if (!IsParallel(gstate)) {
+				// We still have the lock here if parallel scans are enabled
+				TryIncrementFileIndex(gstate);
+			}
 		}
 
 		if (!buffer_index.IsValid() || buffer_size == 0) {
@@ -663,7 +663,9 @@ void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, optional
 	}
 
 	auto format_and_record_type = DetectFormatAndRecordType(buffer_ptr, buffer_size, allocator.GetYYAlc());
-	current_reader->SetFormat(format_and_record_type.first);
+	if (current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
+		current_reader->SetFormat(format_and_record_type.first);
+	}
 	if (current_reader->GetRecordType() == JSONRecordType::AUTO_DETECT) {
 		current_reader->SetRecordType(format_and_record_type.second);
 	}
@@ -686,9 +688,6 @@ void JSONScanLocalState::ReadNextBufferInternal(JSONScanGlobalState &gstate, opt
 	}
 
 	buffer_offset = 0;
-	if (buffer_index.GetIndex() == 0 && current_reader->GetFormat() == JSONFormat::ARRAY) {
-		SkipOverArrayStart();
-	}
 }
 
 void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index) {

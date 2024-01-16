@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -71,11 +72,11 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (function.function_name == "unnest" || function.function_name == "unlist") {
+		if (IsUnnestFunction(function.function_name)) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}
-		// binding function expression has extra parameter needed for macro's
+		// binding a function expression requires an extra parameter for macros
 		return BindExpression(function, depth, expr);
 	}
 	case ExpressionClass::LAMBDA:
@@ -273,6 +274,22 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, b
 		be.expr->alias = alias;
 	}
 	return string();
+}
+
+bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
+	return function_name == "unnest" || function_name == "unlist";
+}
+
+bool ExpressionBinder::IsLambdaFunction(const FunctionExpression &function) {
+	// check for lambda parameters, ignore ->> operator (JSON extension)
+	if (function.function_name != "->>") {
+		for (auto &child : function.children) {
+			if (child->expression_class == ExpressionClass::LAMBDA) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb
