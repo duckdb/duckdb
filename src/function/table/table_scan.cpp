@@ -31,8 +31,6 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	TableScanState scan_state;
 	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
 	DataChunk all_columns;
-	//! (Debug) settings on how to perform the scan
-	TableScanOptions scan_options;
 };
 
 static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
@@ -81,7 +79,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		result->all_columns.Initialize(context.client, tsgs.scanned_types);
 	}
 
-	result->scan_options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+	result->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
 
 	return std::move(result);
 }

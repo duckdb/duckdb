@@ -40,13 +40,11 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 	return state;
 }
 
-void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback,
-                                          TableScanOptions &options) {
+void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto &segment = *nodes[segment_idx].node;
 		ColumnScanState scan_state;
-		scan_state.scan_options = &options;
 		scan_state.current = &segment;
 		segment.InitializeScan(scan_state);
 
@@ -117,23 +115,20 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	}
 
 	// scan over all the segments and run the analyze step
-	TableScanOptions scan_options;
-	ScanSegments(
-	    [&](Vector &scan_vector, idx_t count) {
-		    for (idx_t i = 0; i < compression_functions.size(); i++) {
-			    if (!compression_functions[i]) {
-				    continue;
-			    }
-			    auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
-			    if (!success) {
-				    // could not use this compression function on this data set
-				    // erase it
-				    compression_functions[i] = nullptr;
-				    analyze_states[i].reset();
-			    }
-		    }
-	    },
-	    scan_options);
+	ScanSegments([&](Vector &scan_vector, idx_t count) {
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (!compression_functions[i]) {
+				continue;
+			}
+			auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			if (!success) {
+				// could not use this compression function on this data set
+				// erase it
+				compression_functions[i] = nullptr;
+				analyze_states[i].reset();
+			}
+		}
+	});
 
 	// now that we have passed over all the data, we need to figure out the best method
 	// we do this using the final_analyze method
@@ -191,10 +186,8 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	auto best_function = compression_functions[compression_idx];
 	auto compress_state = best_function->init_compression(*this, std::move(analyze_state));
 
-	TableScanOptions options;
 	ScanSegments(
-	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); },
-	    options);
+	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
 
 	nodes.clear();

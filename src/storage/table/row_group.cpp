@@ -140,17 +140,21 @@ void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScan
 		for (idx_t i = 0; i < struct_children.size(); i++) {
 			child_states[i + 1].Initialize(struct_children[i].second, options);
 		}
+		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
 		child_states.resize(2);
 		child_states[1].Initialize(ListType::GetChildType(type), options);
+		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
 		child_states.resize(2);
+		child_states[0].scan_options = options;
 		child_states[1].Initialize(ArrayType::GetChildType(type), options);
 	} else {
 		// validity
 		child_states.resize(1);
+		child_states[0].scan_options = options;
 	}
 }
 
@@ -184,6 +188,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
+			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
@@ -212,6 +217,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state) {
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScan(state.column_scans[i]);
+			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
@@ -443,7 +449,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				} else {
 					auto &col_data = GetColumn(column);
 					if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
-						col_data.ScanCommitted(state.vector_index, state.column_scans[i], result.data[i], ALLOW_UPDATES);
+						col_data.ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+						                       ALLOW_UPDATES);
 					} else {
 						col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 					}

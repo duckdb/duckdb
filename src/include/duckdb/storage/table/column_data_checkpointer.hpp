@@ -31,7 +31,7 @@ public:
 	CompressionFunction &GetCompressionFunction(CompressionType type);
 
 private:
-	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback, TableScanOptions &options);
+	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
 	unique_ptr<AnalyzeState> DetectBestCompressionMethod(idx_t &compression_idx);
 	void WriteToDisk();
 	bool HasChanges();

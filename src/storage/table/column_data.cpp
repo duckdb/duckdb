@@ -351,7 +351,6 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	state.row_index = start + ((row_id - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = data.GetSegment(state.row_index);
 	state.internal_index = state.current->start;
-	TableScanOptions options;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE, false);
 }
 
