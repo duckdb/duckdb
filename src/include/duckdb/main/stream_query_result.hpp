@@ -53,7 +53,7 @@ public:
 	shared_ptr<ClientContext> context;
 
 private:
-	unique_ptr<DataChunk> FetchInternal();
+	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock);
 	unique_ptr<ClientContextLock> LockContext();
 	void CheckExecutableInternal(ClientContextLock &lock);
 	bool IsOpenInternal(ClientContextLock &lock);

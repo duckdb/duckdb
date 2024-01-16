@@ -40,17 +40,15 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	return context->LockContext();
 }
 
-unique_ptr<DataChunk> StreamQueryResult::FetchInternal() {
+unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) {
 	bool invalidate_query = true;
-	auto lock = LockContext();
 	unique_ptr<DataChunk> chunk;
 	try {
 		// fetch the chunk and return it
-		CheckExecutableInternal(*lock);
-		buffered_data->ReplenishBuffer(*this, *lock);
+		buffered_data->ReplenishBuffer(*this, lock);
 		chunk = buffered_data->Scan();
 		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
-			context->CleanupInternal(*lock, this);
+			context->CleanupInternal(lock, this);
 			chunk = nullptr;
 		}
 		return chunk;
@@ -70,15 +68,20 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal() {
 	} catch (...) { // LCOV_EXCL_START
 		SetError(PreservedError("Unhandled exception in FetchInternal"));
 	} // LCOV_EXCL_STOP
-	context->CleanupInternal(*lock, this, invalidate_query);
+	context->CleanupInternal(lock, this, invalidate_query);
 	return nullptr;
 }
 
 unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
-	auto chunk = FetchInternal();
-	if (!chunk) {
-		// This will grab the ClientContextLock so it's done outside of the block above
+	unique_ptr<DataChunk> chunk;
+	{
+		auto lock = LockContext();
+		CheckExecutableInternal(*lock);
+		chunk = FetchInternal(*lock);
+	}
+	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
+		return nullptr;
 	}
 	return chunk;
 }
