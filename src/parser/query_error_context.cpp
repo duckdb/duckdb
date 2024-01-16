@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-string QueryErrorContext::Format(const string &query, const string &error_message, int error_loc, bool add_line_indicator) {
+string QueryErrorContext::Format(const string &query, const string &error_message, int error_loc,
+                                 bool add_line_indicator) {
 	if (error_loc < 0 || size_t(error_loc) >= query.size()) {
 		// no location in query provided
 		return error_message;
