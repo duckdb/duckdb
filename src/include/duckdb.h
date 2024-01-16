@@ -291,21 +291,23 @@ typedef struct _duckdb_pending_result {
 typedef struct _duckdb_appender {
 	void *__appn;
 } * duckdb_appender;
-typedef struct _duckdb_arrow {
-	void *__arrw;
-} * duckdb_arrow;
-typedef struct _duckdb_arrow_stream {
-	void *__arrwstr;
-} * duckdb_arrow_stream;
 typedef struct _duckdb_config {
 	void *__cnfg;
 } * duckdb_config;
+typedef struct _duckdb_arrow_stream {
+	void *__arrwstr;
+} * duckdb_arrow_stream;
+#if DUCKDB_API_VERSION < DUCKDB_API_1_0_0
+typedef struct _duckdb_arrow {
+	void *__arrw;
+} * duckdb_arrow;
 typedef struct _duckdb_arrow_schema {
 	void *__arrs;
 } * duckdb_arrow_schema;
 typedef struct _duckdb_arrow_array {
 	void *__arra;
 } * duckdb_arrow_array;
+#endif
 typedef struct _duckdb_logical_type {
 	void *__lglt;
 } * duckdb_logical_type;
@@ -581,6 +583,8 @@ DUCKDB_API idx_t duckdb_column_count(duckdb_result *result);
 
 #if DUCKDB_API_VERSION < DUCKDB_API_1_0_0
 /*!
+**DEPRECATED**: A result row count is no longer available since it forces materialization.
+
 Returns the number of rows present in a the result object.
 
 * result: The result object.
