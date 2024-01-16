@@ -70,7 +70,7 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 	auto batch = lstate.current_batch;
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
 
-	printf("BATCH COMPLETED: current: %llu\n", batch);
+	//printf("BATCH COMPLETED: current: %llu\n", batch);
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.CompleteBatch(batch);
 	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
