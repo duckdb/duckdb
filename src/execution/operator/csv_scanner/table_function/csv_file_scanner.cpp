@@ -36,8 +36,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
-                         idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
-                         vector<LogicalType> &file_schema)
+                         const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
+                         const vector<LogicalType> &file_schema)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared<CSVErrorHandler>(options_p.ignore_errors)), options(options_p) {
 	if (file_idx < bind_data.union_readers.size()) {
@@ -91,9 +91,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	if (options.auto_detect && file_idx > 0) {
 		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 		auto result = sniffer.SniffCSV();
-		if (file_schema.empty()) {
-			file_schema = result.return_types;
-		} else {
+		if (!file_schema.empty()) {
 			if (!options.file_options.filename && !options.file_options.hive_partitioning &&
 			    file_schema.size() != result.return_types.size()) {
 				throw InvalidInputException("Mismatch between the schema of different files");
