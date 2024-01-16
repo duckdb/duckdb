@@ -232,6 +232,7 @@ copy_file_name:
 			| STDIN									{ $$ = NULL; }
 			| STDOUT								{ $$ = NULL; }
 			| IDENT '.' ColId						{ $$ = psprintf("%s.%s", $1, $3); }
+			| IDENT									{ $$ = $1; }
 
 		;
 
