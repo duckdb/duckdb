@@ -59,6 +59,8 @@ const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
     DUCKDB_TYPE_UUID
     DUCKDB_TYPE_UNION
     DUCKDB_TYPE_BIT
+    DUCKDB_TYPE_TIME_TZ
+    DUCKDB_TYPE_TIMESTAMP_TZ
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -92,6 +94,11 @@ struct duckdb_time_struct
     min::Int8
     sec::Int8
     micros::Int32
+end
+
+struct duckdb_time_tz
+    micros::Int64
+    offset::Int32
 end
 
 """
@@ -175,8 +182,10 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIMESTAMP_S => Int64,
     DUCKDB_TYPE_TIMESTAMP_MS => Int64,
     DUCKDB_TYPE_TIMESTAMP_NS => Int64,
+    DUCKDB_TYPE_TIMESTAMP_TZ => Int64,
     DUCKDB_TYPE_DATE => Int32,
     DUCKDB_TYPE_TIME => Int64,
+    DUCKDB_TYPE_TIME_TZ => UInt64,
     DUCKDB_TYPE_INTERVAL => duckdb_interval,
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
     DUCKDB_TYPE_UHUGEINT => duckdb_uhugeint,
@@ -208,7 +217,9 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_DOUBLE => Float64,
     DUCKDB_TYPE_DATE => Date,
     DUCKDB_TYPE_TIME => Time,
+    DUCKDB_TYPE_TIME_TZ => Time,
     DUCKDB_TYPE_TIMESTAMP => DateTime,
+    DUCKDB_TYPE_TIMESTAMP_TZ => DateTime,
     DUCKDB_TYPE_TIMESTAMP_S => DateTime,
     DUCKDB_TYPE_TIMESTAMP_MS => DateTime,
     DUCKDB_TYPE_TIMESTAMP_NS => DateTime,

@@ -34,3 +34,28 @@ integers	2	NOT NULL	i
 test	3	UNIQUE	i
 test	4	CHECK	i
 test	4	CHECK	k
+
+query II
+SELECT constraint_name, unique_constraint_name FROM information_schema.referential_constraints ORDER BY constraint_name
+----
+j_integers_i_fkey	integers_i_pkey
+k_integers_i_fkey	integers_i_pkey
+
+query IIII
+SELECT column_name, constraint_name, table_name, position_in_unique_constraint FROM information_schema.key_column_usage ORDER BY constraint_name
+----
+k	fk_integers_2_k_fkey	fk_integers_2	1
+j	fk_integers_j_fkey	fk_integers	1
+i	integers_i_pkey	integers	NULL
+i	test_i_key	test	NULL
+
+query III
+SELECT constraint_name, table_name, constraint_type FROM information_schema.table_constraints ORDER BY constraint_name;
+----
+fk_integers_2_k_fkey	fk_integers_2	FOREIGN KEY
+fk_integers_j_fkey	fk_integers	FOREIGN KEY
+integers_i_check	integers	CHECK
+integers_i_not_null	integers	CHECK
+integers_i_pkey	integers	PRIMARY KEY
+test_check	test	CHECK
+test_i_key	test	UNIQUE

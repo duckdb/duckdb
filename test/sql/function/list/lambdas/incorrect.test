@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification;
 
 statement ok
-CREATE TABLE incorrect_test (i integer);
+CREATE TABLE incorrect_test (i INTEGER);
 
 foreach func_name list_transform list_filter list_reduce
 
@@ -35,11 +35,12 @@ Binder Error: Referenced column "x" not found in FROM clause!
 statement error
 SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1);
 ----
-Binder Error: Invalid parameter list! Parameters must be comma-separated column names, e.g. x or (x, y).
+Invalid lambda parameters
 
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test;
 ----
+No function matches
 
 statement error
 SELECT ${func_name}(NULL, x -> y);
@@ -49,6 +50,7 @@ Binder Error: Referenced column "y" not found in FROM clause!
 statement error
 SELECT ${func_name}([1]);
 ----
+No function matches
 
 statement error
 SELECT ${func_name}([1], NULL);
@@ -82,23 +84,13 @@ Invalid LIST argument during lambda function binding!
 
 endloop
 
-# list_transform specific test
+# list_transform specific tests
 
 statement error
 SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
 ----
 Binder Error: failed to bind function, either: This scalar function does not support lambdas!
  or: Referenced column "x" not found in FROM clause!
-
-# lambda parameter has the same name as a column
-
-statement ok
-CREATE TABLE l_test (l integer[]);
-
-statement error
-SELECT l, list_transform(l, l -> l + 1) FROM l_test;
-----
-Binder Error: Invalid lambda parameter name 'l_test.l': must be unqualified
 
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
@@ -117,12 +109,12 @@ Candidate bindings: "tbl.i"
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 ----
-Binder Error: Lambda parameter must be a column name.
+Invalid lambda parameters
 
 statement error
-select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+SELECT list_apply(i, a.x -> x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
 ----
-Binder Error: Invalid lambda parameter name 'a.x': must be unqualified
+Invalid lambda parameters
 
 statement error
 select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
@@ -132,11 +124,6 @@ Candidate bindings: "tbl.i"
 
 statement ok
 CREATE TABLE l_filter_test (l integer[]);
-
-statement error
-SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test;
-----
-Binder Error: Invalid lambda parameter name 'l_filter_test.l': must be unqualified
 
 statement error
 SELECT list_transform([1, 2], (x, y, z) -> x + y + z);
@@ -171,14 +158,14 @@ create table lambda_check (i BIGINT[],
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
 statement error
-create table lambda_check (i BIGINT[],
+CREATE TABLE lambda_check (i BIGINT[],
     CHECK (list_transform(i, x -> x % 2) == []));
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
 statement error
-create table lambda_check (i BIGINT[],
-    CHECK ([x + 1 for x in i if i > 0] == []));
+CREATE TABLE lambda_check (i BIGINT[],
+    CHECK ([x + 1 FOR x IN i IF x > 0] == []));
 ----
 Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
 
@@ -209,84 +196,3 @@ statement error
 SELECT list_transform(UNNEST(s), x -> UNNEST(x)) FROM tbl;
 ----
 failed to bind function
-
-# issue #9970
-
-# ambiguous parameter names
-
-statement error
-SELECT list_transform([1,2], x -> list_transform([3,4], x -> x));
-----
-Ambiguous lambda parameter name
-
-statement error
-SELECT list_has_all([variable_has_all FOR variable_has_all IN ['a']], ['b']) AS list_comp_result;
-----
-Ambiguous lambda parameter name
-
-statement error
-SELECT list_has_all(list_transform(['a'], variable_has_all -> variable_has_all), ['b']) AS list_transform_result;
-----
-Ambiguous lambda parameter name
-
-statement error
-SELECT list_has_any(['b'], list_transform(['a'], variable_has_any -> variable_has_any)) AS list_transform_result;
-----
-Ambiguous lambda parameter name
-
-# implicit nesting creates ambiguous parameter names
-
-# first input parameter can be nested
-query I
-SELECT list_intersect(list_intersect([1], [1]), [1])
-----
-[1]
-
-# second input parameter CANNOT be nested
-statement error
-SELECT list_intersect([1], list_intersect([1], [1]))
-----
-function cannot be nested
-
-# first input parameter can be nested
-query I
-SELECT list_has_any(LIST_VALUE(list_has_any([1], [1])), [1])
-----
-true
-
-# second input parameter CANNOT be nested
-statement error
-SELECT list_has_any([1], LIST_VALUE(list_has_any([1], [1])))
-----
-function cannot be nested
-
-# first input parameter CANNOT be nested
-
-statement error
-SELECT list_has_all(LIST_VALUE(list_has_all([1], [1])), [1])
-----
-function cannot be nested
-
-# second input parameter can be nested
-
-query I
-SELECT list_has_all([1], LIST_VALUE(list_has_all([1], [1])))
-----
-true
-
-# nest different helper functions/rewrites
-
-query I
-SELECT list_has_any(LIST_VALUE(list_has_all(list_intersect([1], [1]), [1])), [1]);
-----
-true
-
-query I
-SELECT list_has_all(LIST_VALUE(list_has_any(list_intersect([1], [1]), [1])), [1]);
-----
-true
-
-query I
-SELECT list_intersect(LIST_VALUE(list_has_all(LIST_VALUE(list_has_any([1], [1])), [1])), [1])
-----
-[true]

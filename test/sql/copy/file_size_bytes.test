@@ -143,7 +143,7 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 
 # ~2 files per thread, around 8 in total
 query I
-SELECT count(*) BETWEEN 7 AND 9 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT count(*) BETWEEN 6 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 1
 

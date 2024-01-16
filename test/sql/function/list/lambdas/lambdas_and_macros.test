@@ -30,11 +30,6 @@ SELECT list_filter([[1, 2], NULL, [3], [4, NULL]], f -> list_count(macro_with_la
 ----
 [[1, 2]]
 
-statement error
-CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, x -> x + y + z));
-----
-Binder Error: Invalid lambda parameter name '"0_macro_parameterssome_macro".x': must be unqualified
-
 # this is a bit more tricky, because the operator mismatch is only detected when using the macro
 statement ok
 CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, a -> x + y + z))
@@ -57,3 +52,14 @@ CREATE MACRO other_reduce_macro(list, num, bla) AS (SELECT list_reduce(list, (x,
 statement error
 SELECT other_reduce_macro([1, 2, 3, 4], 5, 6);
 ----
+
+# lambda scoping
+
+statement ok
+CREATE MACRO scoping_macro(x, y, z) AS (SELECT list_transform(x, x -> x + y + z));
+
+query I
+SELECT scoping_macro([11, 22], 3, 4);
+----
+[18, 29]
+
