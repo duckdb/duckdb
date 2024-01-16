@@ -158,7 +158,6 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 		min_weight_threshold_other = reservoir_other->GetMinWeightThreshold();
 	}
 
-	std::cout << "replaceable indexes size = " << replaceable_indexes.size() << std::endl;
 	while (replaceable_indexes.size() > 0) {
 		auto top_other = reservoir_other->PopFromWeightQueue();
 		auto index_to_replace = replaceable_indexes.back();
