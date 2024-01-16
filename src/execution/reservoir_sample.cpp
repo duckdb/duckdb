@@ -4,9 +4,6 @@
 
 namespace duckdb {
 
-
-
-
 void ReservoirChunk::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<DataChunk>(100, "chunk", chunk);
 }

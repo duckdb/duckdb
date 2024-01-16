@@ -73,7 +73,6 @@ public:
 	double GetMinWeightThreshold();
 	idx_t GetPriorityQueueSize();
 
-
 	virtual void Finalize() = 0;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
@@ -86,6 +85,7 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
+
 protected:
 	//! The reservoir sampling
 	RandomEngine &random;
