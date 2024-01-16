@@ -40,23 +40,48 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	return context->LockContext();
 }
 
+unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) {
+	bool invalidate_query = true;
+	unique_ptr<DataChunk> chunk;
+	try {
+		// fetch the chunk and return it
+		buffered_data->ReplenishBuffer(*this, lock);
+		chunk = buffered_data->Scan();
+		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
+			context->CleanupInternal(lock, this);
+			chunk = nullptr;
+		}
+		return chunk;
+	} catch (StandardException &ex) {
+		// standard exceptions do not invalidate the current transaction
+		SetError(PreservedError(ex));
+		invalidate_query = false;
+	} catch (FatalException &ex) {
+		// fatal exceptions invalidate the entire database
+		SetError(PreservedError(ex));
+		auto &db_inst = DatabaseInstance::GetDatabase(*context);
+		ValidChecker::Invalidate(db_inst, ex.what());
+	} catch (const Exception &ex) {
+		SetError(PreservedError(ex));
+	} catch (std::exception &ex) {
+		SetError(PreservedError(ex));
+	} catch (...) { // LCOV_EXCL_START
+		SetError(PreservedError("Unhandled exception in FetchInternal"));
+	} // LCOV_EXCL_STOP
+	context->CleanupInternal(lock, this, invalidate_query);
+	return nullptr;
+}
+
 unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
-	bool last_chunk = false;
 	unique_ptr<DataChunk> chunk;
 	{
 		auto lock = LockContext();
 		CheckExecutableInternal(*lock);
-		buffered_data->ReplenishBuffer(*this, *lock);
-		chunk = buffered_data->Scan();
-		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
-			context->CleanupInternal(*lock, this);
-			chunk = nullptr;
-			last_chunk = true;
-		}
+		chunk = FetchInternal(*lock);
 	}
-	if (last_chunk) {
-		// This will grab the ClientContextLock so it's done outside of the block above
+	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
+		return nullptr;
 	}
 	return chunk;
 }
