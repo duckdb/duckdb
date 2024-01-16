@@ -28,10 +28,10 @@ public:
 	SimpleBufferedData(shared_ptr<ClientContext> context);
 
 public:
-	void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) override;
-	void AddToBacklog(BlockedSink blocked_sink) override;
-	bool BufferIsFull() const override;
-	void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	void Append(unique_ptr<DataChunk> chunk);
+	void BlockSink(BlockedSink blocked_sink);
+	bool BufferIsFull() override;
+	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 
 private:

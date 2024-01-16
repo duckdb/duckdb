@@ -13,6 +13,8 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/common/enums/pending_execution_result.hpp"
 
 namespace duckdb {
 
@@ -21,8 +23,7 @@ class ClientContextLock;
 
 struct BlockedSink {
 public:
-	BlockedSink(InterruptState state, idx_t chunk_size, optional_idx batch = optional_idx())
-	    : state(state), chunk_size(chunk_size), batch(batch) {
+	BlockedSink(InterruptState state, idx_t chunk_size) : state(state), chunk_size(chunk_size) {
 	}
 
 public:
@@ -30,8 +31,6 @@ public:
 	InterruptState state;
 	//! The amount of tuples this sink would add
 	idx_t chunk_size;
-	//! (optional) The batch index of this sink
-	optional_idx batch;
 };
 
 class BufferedData {
@@ -46,10 +45,8 @@ public:
 	}
 
 public:
-	virtual void Append(unique_ptr<DataChunk> chunk, optional_idx batch = optional_idx()) = 0;
-	virtual void AddToBacklog(BlockedSink blocked_sink) = 0;
-	virtual bool BufferIsFull() const = 0;
-	virtual void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
+	virtual bool BufferIsFull() = 0;
+	virtual PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	shared_ptr<ClientContext> GetContext() {
 		return context;
