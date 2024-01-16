@@ -1,6 +1,6 @@
-# name: benchmark/ingestion/tpch/ingest_lineitem.benchmark
+# name: benchmark/micro/ingestion/tpch/ingest_lineitem.benchmark
 # description: benchmark ingestion of lineitem
-# group: [ingestion]
+# group: [tpch]
 
 template benchmark/micro/ingestion/tpch/tpch_ingestion.benchmark.in
 table_name=lineitem

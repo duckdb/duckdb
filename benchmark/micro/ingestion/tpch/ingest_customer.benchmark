@@ -1,6 +1,6 @@
-# name: benchmark/ingestion/tpch/ingest_customer.benchmark
+# name: benchmark/micro/ingestion/tpch/ingest_customer.benchmark
 # description: benchmark ingestion of customer
-# group: [ingestion]
+# group: [tpch]
 
 template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
 table_name=customer

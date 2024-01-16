@@ -1,6 +1,6 @@
-# name: benchmark/ingestion/tpch/ingest_part.benchmark
+# name: benchmark/micro/ingestion/tpch/ingest_part.benchmark
 # description: benchmark ingestion of part
-# group: [ingestion]
+# group: [tpch]
 
 template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
 table_name=part
