@@ -283,4 +283,6 @@ private:
 	unique_ptr<IndexTypeSet> index_types;
 };
 
+extern const string DEFAULT_USER_AGENT;
+
 } // namespace duckdb

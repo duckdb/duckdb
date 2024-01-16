@@ -24,7 +24,6 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
-extern const string DEFAULT_USER_AGENT;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
