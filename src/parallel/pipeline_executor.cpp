@@ -118,7 +118,6 @@ SinkNextBatchType PipelineExecutor::NextBatch(duckdb::DataChunk &source_chunk) {
 		    pipeline.source->GetBatchIndex(context, source_chunk, *pipeline.source_state, *local_source_state);
 		// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
 		next_batch_index = pipeline.base_batch_index + batch_index + 1;
-
 		if (next_batch_index >= max_batch_index) {
 			throw InternalException("Pipeline batch index - invalid batch index %llu returned by source operator",
 			                        batch_index);
@@ -295,7 +294,6 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			D_ASSERT(pipeline.sink->sink_state);
 			OperatorSinkInput sink_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 
-			// local_sink_state->partition_info.min_batch_index = pipeline.RegisterNewBatchIndex();
 			auto sink_result = Sink(sink_chunk, sink_input);
 
 			EndOperator(*pipeline.sink, nullptr);
