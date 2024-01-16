@@ -297,7 +297,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			D_ASSERT(pipeline.sink->sink_state);
 			OperatorSinkInput sink_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 
-			//local_sink_state->partition_info.min_batch_index = pipeline.RegisterNewBatchIndex();
+			// local_sink_state->partition_info.min_batch_index = pipeline.RegisterNewBatchIndex();
 			auto sink_result = Sink(sink_chunk, sink_input);
 
 			EndOperator(*pipeline.sink, nullptr);

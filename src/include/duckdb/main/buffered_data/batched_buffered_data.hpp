@@ -41,7 +41,7 @@ public:
 
 	bool BufferIsFull() override;
 	bool ShouldBlockBatch(idx_t batch);
-	void ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
 	void UpdateMinBatchIndex(idx_t min_batch_index);
 	void CompleteBatch(idx_t batch);

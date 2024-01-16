@@ -40,27 +40,30 @@ void SimpleBufferedData::UnblockSinks(idx_t &estimated_tuples) {
 	}
 }
 
-void SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
+PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
 	if (Closed()) {
-		return;
+		return PendingExecutionResult::EXECUTION_ERROR;
 	}
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
-		return;
+		return PendingExecutionResult::RESULT_READY;
 	}
 	idx_t estimated_tuples = 0;
 	UnblockSinks(estimated_tuples);
 	// Let the executor run until the buffer is no longer empty
-	while (!PendingQueryResult::IsFinished(context->ExecuteTaskInternal(context_lock, result))) {
+	auto res = context->ExecuteTaskInternal(context_lock, result);
+	while (!PendingQueryResult::IsFinished(res)) {
 		if (buffered_count >= BUFFER_SIZE) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
 		UnblockSinks(estimated_tuples);
+		res = context->ExecuteTaskInternal(context_lock, result);
 	}
 	if (result.HasError()) {
 		Close();
 	}
+	return res;
 }
 
 unique_ptr<DataChunk> SimpleBufferedData::Scan() {

@@ -91,9 +91,9 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 		return;
 	}
 	min_batch = min_batch_index;
-	//printf("UPDATE MIN BATCH: min_batch: %llu\n", min_batch);
-	//printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	//printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
+	// printf("UPDATE MIN BATCH: min_batch: %llu\n", min_batch);
+	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
 
 	stack<idx_t> to_remove;
 	for (auto &it : in_progress_batches) {
@@ -124,30 +124,34 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	}
 }
 
-void BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
-	if (!context) {
-		// Result has already been closed
-		return;
+PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &result,
+                                                            ClientContextLock &context_lock) {
+	if (Closed()) {
+		return PendingExecutionResult::EXECUTION_ERROR;
 	}
 	if (BufferIsFull()) {
-		return;
+		// The buffer isn't empty yet, just return
+		return PendingExecutionResult::RESULT_READY;
 	}
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
-	while (!PendingQueryResult::IsFinished(context->ExecuteTaskInternal(context_lock, result))) {
+	auto res = context->ExecuteTaskInternal(context_lock, result);
+	while (!PendingQueryResult::IsFinished(res)) {
 		if (BufferIsFull()) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
 		UnblockSinks();
+		res = context->ExecuteTaskInternal(context_lock, result);
 	}
-	//printf("IS_FINISHED\n");
+	// printf("IS_FINISHED\n");
+	return res;
 }
 
 void BatchedBufferedData::CompleteBatch(idx_t batch) {
-	//printf("COMPLETE BATCH: batch: %llu\n", batch);
-	//printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	//printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
+	// printf("COMPLETE BATCH: batch: %llu\n", batch);
+	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
 
 	auto it = in_progress_batches.find(batch);
 	if (it == in_progress_batches.end()) {
@@ -201,9 +205,9 @@ unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 
 	current_batch_tuple_count -= chunk->size();
 
-	//printf("SCAN: min_batch: %llu\n", min_batch);
-	//printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	//printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
+	// printf("SCAN: min_batch: %llu\n", min_batch);
+	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
 
 	return chunk;
 }
@@ -223,9 +227,9 @@ void BatchedBufferedData::Append(unique_ptr<DataChunk> chunk, idx_t batch) {
 		other_batches_tuple_count += chunk->size();
 		chunks.push_back(std::move(chunk));
 	}
-	//printf("APPEND: batch: %llu | min_batch: %llu\n", batch, min_batch);
-	//printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	//printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
+	// printf("APPEND: batch: %llu | min_batch: %llu\n", batch, min_batch);
+	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
+	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
 }
 
 } // namespace duckdb
