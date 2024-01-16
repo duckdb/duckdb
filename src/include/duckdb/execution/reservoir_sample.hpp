@@ -30,6 +30,7 @@ public:
 
 	void SetNextEntry();
 
+	void ReplaceElementWithIndex(idx_t entry_index, double with_weight);
 	void ReplaceElement(double with_weight = -1);
 	//! The random generator
 	RandomEngine random;
@@ -53,15 +54,25 @@ public:
 
 class BlockingSample {
 public:
+	static constexpr const SampleType TYPE = SampleType::BLOCKING_SAMPLE;
+
+public:
 	explicit BlockingSample(int64_t seed = -1)
-	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), random(base_reservoir_sample->random),
-	      type(SampleType::BLOCKING_SAMPLE) {
+	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), type(SampleType::BLOCKING_SAMPLE),
+	      random(base_reservoir_sample->random) {
 	}
 	virtual ~BlockingSample() {
 	}
 
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
+
+	virtual void Merge(unique_ptr<BlockingSample> other) = 0;
+
+	std::pair<double, idx_t> PopFromWeightQueue();
+	double GetMinWeightThreshold();
+	idx_t GetPriorityQueueSize();
+
 
 	virtual void Finalize() = 0;
 
@@ -70,15 +81,31 @@ public:
 	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
 	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
 	unique_ptr<BaseReservoirSampling> base_reservoir_sample;
+	//! The sample type
+	SampleType type;
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
-
 protected:
 	//! The reservoir sampling
 	RandomEngine &random;
-	//! The sample type
-	SampleType type;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE && TARGET::TYPE != SampleType::BLOCKING_SAMPLE) {
+			throw InternalException("Failed to cast sample to type - sample type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE && TARGET::TYPE != SampleType::BLOCKING_SAMPLE) {
+			throw InternalException("Failed to cast sample to type - sample type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct ReservoirChunk {
@@ -90,14 +117,25 @@ struct ReservoirChunk {
 	static unique_ptr<ReservoirChunk> Deserialize(Deserializer &deserializer);
 };
 
+struct SampleMergeHelper {
+	idx_t index_to_replace;
+	idx_t index_with_new_value;
+	double new_weight;
+};
+
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
+public:
+	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
+
 public:
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
 	ReservoirSample(idx_t sample_count, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
+
+	void Merge(unique_ptr<BlockingSample> other) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -110,6 +148,8 @@ public:
 private:
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
+	void ReplaceElement(idx_t index, DataChunk &input, idx_t index_in_chunk, double with_weight);
+
 	void InitializeReservoir(DataChunk &input);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
@@ -132,11 +172,16 @@ class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
 public:
+	static constexpr const SampleType TYPE = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
+
+public:
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
 	ReservoirSamplePercentage(double percentage, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
+
+	void Merge(unique_ptr<BlockingSample> other) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.

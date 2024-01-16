@@ -58,9 +58,7 @@ select count(*) from (from pragma_table_sample('integers_2') intersect (from int
 ----
 2048
 
-
 # checking statistical properties of the sample
-
 query II
 select ceil(avg(next-prev)) avg_diff, avg_diff > 2430 and avg_diff < 2450 from (select b as prev, LEAD(b, 1) OVER (ORDER BY b) AS next from pragma_table_sample('integers_1') order by all) t(prev, next);
 ----
@@ -105,8 +103,11 @@ select count(*) from integers_1;
 ----
 12000000
 
+# about half of the samples should have the pair '-1', 1
+# vec_size = 2048, so 1024, 1035 is nice.
+
 query I
 select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
 ----
-1000
+1035
 

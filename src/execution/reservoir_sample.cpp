@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+
+
+
 void ReservoirChunk::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<DataChunk>(100, "chunk", chunk);
 }
@@ -64,6 +67,108 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	}
 }
 
+void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
+	D_ASSERT(other->type == SampleType::RESERVOIR_SAMPLE);
+	auto reservoir_other = &other->Cast<ReservoirSample>();
+	// three ways to merge samples
+	if (sample_count != reservoir_other->sample_count) {
+		throw NotImplementedException("attempting to merge samples with different sample counts");
+	}
+
+	// There are four combinations for reservoir state
+
+	// 1. This reservoir chunk has not yet been initialized.
+	if (reservoir_chunk == nullptr) {
+		// take ownership of the reservoir_others sample
+		reservoir_initialized = true;
+		base_reservoir_sample = std::move(other->base_reservoir_sample);
+		reservoir_chunk = std::move(reservoir_other->reservoir_chunk);
+		return;
+	}
+
+	if (reservoir_other->reservoir_chunk == nullptr) {
+		return;
+	}
+
+	// 2. Both do not have full reservoir chunks
+	if (Chunk().size() + reservoir_other->Chunk().size() < sample_count) {
+		// the sum of both reservoir chunk sizes is less than sample count.
+		// both samples have not yet thrown away tuples or assigned weights to tuples in the sample
+		// Therefore we can just grab chunks from other and add them to this sample.
+		// all logic to assign weights will automatically be handled in AddReservoir.
+		auto chunk = reservoir_other->GetChunkAndShrink();
+		while (chunk) {
+			AddToReservoir(*chunk);
+			chunk = reservoir_other->GetChunkAndShrink();
+		}
+		return;
+	}
+
+	// 3. Only one has a full reservoir chunk
+	// merge the one that has not yet been filled into the full one.
+	// The one not yet filled has not skipped any tuples yet, so we are not biased to it's sample when
+	// using AddToReservoir.
+	if (Chunk().size() + reservoir_other->Chunk().size() < (sample_count * 2)) {
+		// one of the samples is full, but not the other.
+		if (GetPriorityQueueSize() == sample_count) {
+			auto chunk = reservoir_other->GetChunkAndShrink();
+			while (chunk) {
+				AddToReservoir(*chunk);
+				chunk = reservoir_other->GetChunkAndShrink();
+			}
+		} else {
+			// other is full
+			// grab chunks from this to fill other
+			D_ASSERT(reservoir_other->GetPriorityQueueSize() == sample_count);
+			auto chunk = GetChunkAndShrink();
+			while (chunk) {
+				reservoir_other->AddToReservoir(*chunk);
+				chunk = GetChunkAndShrink();
+			}
+			// now take ownership of the sample of other.
+			reservoir_initialized = true;
+			base_reservoir_sample = std::move(other->base_reservoir_sample);
+			reservoir_chunk = std::move(reservoir_other->reservoir_chunk);
+		}
+		return;
+	}
+
+	//  4. this and other both have full reservoirs where each index in the sample has a weight
+	//  Each reservoir has sample_count rows/tuples. We only want to keep the highest weighted samples
+	//	so we remove sample_count tuples/rows from the reservoirs that have the lowest weights
+	//	Then push the rest of the samples from other into this, using the weights the tuples had in other
+	idx_t pop_count = Chunk().size() + reservoir_other->Chunk().size() - sample_count;
+	D_ASSERT(pop_count == sample_count);
+
+	// store indexes that need to be replaced in this
+	// store weights for new values that will be replacing old values
+	vector<idx_t> replaceable_indexes;
+	auto min_weight_threshold_this = GetMinWeightThreshold();
+	auto min_weight_threshold_other = reservoir_other->GetMinWeightThreshold();
+	for (idx_t i = 0; i < pop_count; i++) {
+		D_ASSERT(GetPriorityQueueSize() + reservoir_other->GetPriorityQueueSize() >= sample_count);
+		if (min_weight_threshold_this < min_weight_threshold_other) {
+			auto top = PopFromWeightQueue();
+			// top.second holds the index of the replaceable tuple
+			replaceable_indexes.push_back(top.second);
+		} else {
+			reservoir_other->PopFromWeightQueue();
+		}
+		min_weight_threshold_this = GetMinWeightThreshold();
+		min_weight_threshold_other = reservoir_other->GetMinWeightThreshold();
+	}
+
+	std::cout << "replaceable indexes size = " << replaceable_indexes.size() << std::endl;
+	while (replaceable_indexes.size() > 0) {
+		auto top_other = reservoir_other->PopFromWeightQueue();
+		auto index_to_replace = replaceable_indexes.back();
+		ReplaceElement(index_to_replace, reservoir_other->Chunk(), top_other.second, -top_other.first);
+		replaceable_indexes.pop_back();
+	}
+
+	D_ASSERT(GetPriorityQueueSize() == sample_count);
+}
+
 unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	if (offset >= Chunk().size()) {
 		return nullptr;
@@ -83,7 +188,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	}
 	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
 	ret->Slice(Chunk(), sel, STANDARD_VECTOR_SIZE);
-	ret->SetCardinality(STANDARD_VECTOR_SIZE);
+	ret->SetCardinality(ret_chunk_size);
 	return ret;
 }
 
@@ -108,22 +213,15 @@ unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 		return ret;
 	}
 	auto ret = make_uniq<DataChunk>();
-	auto samples_remaining = 0;
-	auto reservoir_types = Chunk().GetTypes();
-	SelectionVector sel(Chunk().size());
-	for (idx_t i = samples_remaining; i < Chunk().size(); i++) {
-		sel.set_index(i - samples_remaining, i);
-	}
-	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
-	ret->Slice(Chunk(), sel, Chunk().size());
-	ret->SetCardinality(Chunk().size());
-	// reduce capacity and cardinality of the sample data chunk
+	ret->Initialize(allocator, Chunk().GetTypes());
+	Chunk().Copy(*ret);
 	reservoir_chunk = nullptr;
 	return ret;
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
-	// replace the entry in the reservoir
+	// replace the entry in the reservoir with Input[index_in_chunk]
+	// If index_in_self_chunk is provided, then the
 	// 8. The item in R with the minimum key is replaced by item vi
 	D_ASSERT(input.ColumnCount() == Chunk().ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
@@ -131,6 +229,17 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, dou
 		                 input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample->ReplaceElement(with_weight);
+}
+
+void ReservoirSample::ReplaceElement(idx_t index, DataChunk &input, idx_t index_in_chunk, double with_weight) {
+	// replace the entry in the reservoir with Input[index_in_chunk]
+	// If index_in_self_chunk is provided, then the
+	// 8. The item in R with the minimum key is replaced by item vi
+	D_ASSERT(input.ColumnCount() == Chunk().ColumnCount());
+	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+		Chunk().SetValue(col_idx, index, input.GetValue(col_idx, index_in_chunk));
+	}
+	base_reservoir_sample->ReplaceElementWithIndex(index, with_weight);
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
@@ -254,6 +363,10 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 	}
 }
 
+void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
+	throw NotImplementedException("Merging Percentage samples is not yet supported");
+}
+
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 	throw NotImplementedException("GetChunk() not implemented for reservoir sample chunks");
 }
@@ -346,6 +459,15 @@ void BaseReservoirSampling::SetNextEntry() {
 	num_entries_to_skip_b4_next_sample = 0;
 }
 
+void BaseReservoirSampling::ReplaceElementWithIndex(duckdb::idx_t entry_index, double with_weight) {
+
+	double r2 = with_weight;
+	//! now we insert the new weight into the reservoir
+	reservoir_weights.push(std::make_pair(-r2, entry_index));
+	//! we update the min entry with the new min entry in the reservoir
+	SetNextEntry();
+}
+
 void BaseReservoirSampling::ReplaceElement(double with_weight) {
 	//! replace the entry in the reservoir
 	//! pop the minimum entry
@@ -364,6 +486,28 @@ void BaseReservoirSampling::ReplaceElement(double with_weight) {
 	reservoir_weights.push(std::make_pair(-r2, min_weighted_entry_index));
 	//! we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
+}
+
+std::pair<double, idx_t> BlockingSample::PopFromWeightQueue() {
+	auto ret = base_reservoir_sample->reservoir_weights.top();
+	base_reservoir_sample->reservoir_weights.pop();
+
+	if (base_reservoir_sample->reservoir_weights.empty()) {
+		// 1 is maximum weight
+		base_reservoir_sample->min_weight_threshold = 1;
+		return ret;
+	}
+	auto &min_key = base_reservoir_sample->reservoir_weights.top();
+	base_reservoir_sample->min_weight_threshold = -min_key.first;
+	return ret;
+}
+
+double BlockingSample::GetMinWeightThreshold() {
+	return base_reservoir_sample->min_weight_threshold;
+}
+
+idx_t BlockingSample::GetPriorityQueueSize() {
+	return base_reservoir_sample->reservoir_weights.size();
 }
 
 } // namespace duckdb
