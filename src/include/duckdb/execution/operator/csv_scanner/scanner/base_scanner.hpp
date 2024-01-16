@@ -85,12 +85,13 @@ public:
 			T::InvalidState(result);
 			return true;
 		case CSVState::RECORD_SEPARATOR:
-			scanner.lines_read++;
 			if (scanner.states.previous_state == CSVState::RECORD_SEPARATOR ||
 			    (scanner.states.previous_state == CSVState::CARRIAGE_RETURN &&
 			     scanner.states.pre_previous_state == CSVState::RECORD_SEPARATOR)) {
+				scanner.lines_read++;
 				return T::EmptyLine(result, buffer_pos);
 			} else if (scanner.states.previous_state != CSVState::CARRIAGE_RETURN) {
+				scanner.lines_read++;
 				return T::AddRow(result, buffer_pos);
 			}
 			return false;
