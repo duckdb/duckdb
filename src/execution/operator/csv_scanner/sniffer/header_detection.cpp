@@ -106,6 +106,7 @@ void CSVSniffer::DetectHeader() {
 		auto error = CSVError::SniffingError(options.file_path);
 		error_handler->Error(error);
 	}
+	bool all_varchar = true;
 	for (idx_t col = 0; col < best_header_row.size(); col++) {
 		auto dummy_val = best_header_row[col];
 		if (!dummy_val.IsNull()) {
@@ -115,6 +116,7 @@ void CSVSniffer::DetectHeader() {
 		// try cast to sql_type of column
 		const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 		if (sql_type != LogicalType::VARCHAR) {
+			all_varchar = false;
 			if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
 				first_row_consistent = false;
 			}
@@ -122,7 +124,7 @@ void CSVSniffer::DetectHeader() {
 	}
 	bool has_header;
 	if (!sniffer_state_machine.options.dialect_options.header.IsSetByUser()) {
-		has_header = !first_row_consistent || first_row_nulls;
+		has_header = (!first_row_consistent || first_row_nulls) && !all_varchar;
 	} else {
 		has_header = sniffer_state_machine.options.dialect_options.header.GetValue();
 	}
