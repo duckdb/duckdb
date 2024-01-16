@@ -26,7 +26,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	};
 
 	//! There are situations where we only support single threaded scanning
-	bool many_csv_files = files.size() > 1 && files.size() * 5 > system_threads;
+	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
 	single_threaded = options.null_padding || many_csv_files;
 	last_file_idx = 0;
 	scanner_idx = 0;
@@ -111,7 +111,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 idx_t CSVGlobalState::MaxThreads() const {
 	// We initialize max one thread per our set bytes per thread limit
 	if (single_threaded) {
-		return bind_data.files.size() < system_threads ? bind_data.files.size() : system_threads;
+		return system_threads;
 	}
 	idx_t total_threads = file_scans.back()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
 
