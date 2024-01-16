@@ -231,6 +231,8 @@ copy_file_name:
 			Sconst									{ $$ = $1; }
 			| STDIN									{ $$ = NULL; }
 			| STDOUT								{ $$ = NULL; }
+			| IDENT '.' ColId						{ $$ = psprintf("%s.%s", $1, $3); }
+
 		;
 
 
