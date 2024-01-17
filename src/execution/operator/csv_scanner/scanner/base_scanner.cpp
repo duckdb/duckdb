@@ -79,10 +79,14 @@ void BaseScanner::Process(T &result) {
 		to_pos = cur_buffer_handle->actual_size;
 	}
 	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
+		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+		if (*reinterpret_cast<int64_t*>(&states.states[0]) != 0){
+			if (ProcessCharacter(*this, iterator.pos.buffer_pos, result)) {
 			iterator.pos.buffer_pos++;
 			return;
 		}
+		}
+
 	}
 }
 

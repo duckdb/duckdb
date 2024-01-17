@@ -77,25 +77,23 @@ public:
 	//! OP = Operation used to alter the result of the parser
 	//! T = Type of the result
 	template <class T>
-	inline static bool ProcessCharacter(BaseScanner &scanner, const char current_char, const idx_t buffer_pos,
+	inline static bool ProcessCharacter(BaseScanner &scanner,  const idx_t buffer_pos,
 	                                    T &result) {
-		scanner.state_machine->Transition(scanner.states, current_char);
-		switch (scanner.states.current_state) {
+		switch (scanner.states.states[1]) {
 		case CSVState::INVALID:
 			T::InvalidState(result);
 			return true;
 		case CSVState::RECORD_SEPARATOR:
-			if (scanner.states.previous_state == CSVState::RECORD_SEPARATOR) {
+			if (scanner.states.states[0] == CSVState::RECORD_SEPARATOR) {
 				scanner.lines_read++;
 				return T::EmptyLine(result, buffer_pos);
-			} else if (scanner.states.previous_state != CSVState::CARRIAGE_RETURN) {
+			} else if (scanner.states.states[0] != CSVState::CARRIAGE_RETURN) {
 				scanner.lines_read++;
 				return T::AddRow(result, buffer_pos);
 			}
-			return false;
 		case CSVState::CARRIAGE_RETURN:
 			scanner.lines_read++;
-			if (scanner.states.previous_state != CSVState::RECORD_SEPARATOR) {
+			if (scanner.states.states[0] != CSVState::RECORD_SEPARATOR) {
 				return T::AddRow(result, buffer_pos);
 			} else {
 				return T::EmptyLine(result, buffer_pos);
@@ -104,7 +102,7 @@ public:
 			T::AddValue(result, buffer_pos);
 			return false;
 		case CSVState::QUOTED:
-			if (scanner.states.previous_state == CSVState::UNQUOTED) {
+			if (scanner.states.states[0] == CSVState::UNQUOTED) {
 				T::SetEscaped(result);
 			}
 			T::SetQuoted(result);
