@@ -18,8 +18,9 @@
 
 namespace duckdb {
 
-extern const string DEFAULT_USER_AGENT =
-    StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
+const string get_default_user_agent() {
+	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
+}
 
 //===--------------------------------------------------------------------===//
 // Access Mode
@@ -1292,7 +1293,7 @@ void DuckDBApiSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
-	config.options.duckdb_api = DEFAULT_USER_AGENT;
+	config.options.duckdb_api = get_default_user_agent();
 }
 
 Value DuckDBApiSetting::GetSetting(ClientContext &context) {

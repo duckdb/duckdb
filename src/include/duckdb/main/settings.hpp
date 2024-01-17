@@ -16,7 +16,7 @@ class ClientContext;
 class DatabaseInstance;
 struct DBConfig;
 
-extern const string DEFAULT_USER_AGENT;
+const string get_default_user_agent();
 
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
