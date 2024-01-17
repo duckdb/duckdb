@@ -418,22 +418,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		query_progress.Restart();
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
-	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
-		unique_ptr<PhysicalResultCollector> collector;
-
+	if (statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
+		get_result_collector_t get_method = PhysicalResultCollector::GetResultCollector;
 		auto &client_config = ClientConfig::GetConfig(*this);
-		auto get_method = client_config.result_collector ? client_config.result_collector
-		                                                 : PhysicalResultCollector::GetResultCollector;
-		collector = get_method(*this, statement);
-		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
-		executor.Initialize(std::move(collector));
-	} else if (stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
-		unique_ptr<PhysicalResultCollector> collector;
-
-		auto &client_config = ClientConfig::GetConfig(*this);
-		auto get_method = PhysicalResultCollector::GetResultCollector;
-		statement.is_streaming = true;
-		collector = get_method(*this, statement);
+		if (!stream_result && client_config.result_collector) {
+			get_method = client_config.result_collector;
+		}
+		statement.is_streaming = stream_result;
+		auto collector = get_method(*this, statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));
 	} else {
