@@ -392,17 +392,17 @@ public:
 
 unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
-	auto analyze_state = static_cast<FSSTAnalyzeState *>(analyze_state_p.get());
+	auto &analyze_state = analyze_state_p->Cast<FSSTAnalyzeState>();
 	auto compression_state = make_uniq<FSSTCompressionState>(checkpointer);
 
-	if (analyze_state->fsst_encoder == nullptr) {
+	if (analyze_state.fsst_encoder == nullptr) {
 		throw InternalException("No encoder found during FSST compression");
 	}
 
-	compression_state->fsst_encoder = analyze_state->fsst_encoder;
+	compression_state->fsst_encoder = analyze_state.fsst_encoder;
 	compression_state->fsst_serialized_symbol_table_size =
 	    duckdb_fsst_export(compression_state->fsst_encoder, &compression_state->fsst_serialized_symbol_table[0]);
-	analyze_state->fsst_encoder = nullptr;
+	analyze_state.fsst_encoder = nullptr;
 
 	return std::move(compression_state);
 }
