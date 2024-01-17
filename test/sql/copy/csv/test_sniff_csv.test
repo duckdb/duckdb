@@ -39,7 +39,7 @@ FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=
 statement error
 FROM read_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
 ----
-Could not convert string 'B' to INT64 at line 2176 in column "column0"
+Conversion Error: CSV Error on Line: 2176
 
 query IIIIIIIIIII
 FROM sniff_csv('test/sql/copy/csv/data/error/mismatch/big_bad.csv', sample_size=10000);
@@ -79,10 +79,10 @@ FROM read_csv('test/sql/copy/csv/data/auto/time_date_timestamp_yyyy.mm.dd.csv', 
 query IIIIIIIIIII
 FROM sniff_csv('data/csv/inconsistent_cells.csv')
 ----
-,	"	"	\n	5	false	{'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'}	NULL	NULL	NULL	FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=5, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+,	"	"	\n	3	0	{'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'}	NULL	NULL	NULL	FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=3, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 
 query IIIII
-FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=5, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
+FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=3, header=false, columns={'column0': 'BIGINT', 'column1': 'BIGINT', 'column2': 'BIGINT', 'column3': 'BIGINT', 'column4': 'BIGINT'});
 ----
 1	2	3	4	5
 1	2	3	4	5
@@ -91,10 +91,10 @@ FROM read_csv('data/csv/inconsistent_cells.csv', auto_detect=false, delim=',', q
 query IIIIIIIIIII
 FROM sniff_csv('data/csv/timings.csv')
 ----
-|	'	\	\n	0	true	{'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}	%Y-%m-%d	NULL	NULL	FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='''', escape='\', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d');
+|	"	"	\n	0	1	{'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}	%Y-%m-%d	NULL	NULL	FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d');
 
 query IIIIIII
-FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='''', escape='\', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d') order by all limit 1;
+FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d') order by all limit 1;
 ----
 Umbra	100	2012-11-29	power	1	{"datetime": "2010-02-26T03:51:21.000+00:00"}	0.05473947525024414
 

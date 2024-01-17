@@ -13,7 +13,7 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_c
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0, AUTO_DETECT 0)
 ----
-Error in file "test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv" on line 1027: expected 2 values per row, but got 1.
+Expected Number of Columns: 2 Found: 1
 
 # not enough columns provided
 query II

@@ -7,6 +7,7 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/parser/query_error_context.hpp"
 
 namespace duckdb {
 
@@ -41,8 +42,20 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			throw BinderException("Cannot create a list of types %s and %s - an explicit cast is required",
-			                      child_type.ToString(), arg_type.ToString());
+			string list_arguments = "Full list: ";
+			idx_t error_index = list_arguments.size();
+			for (idx_t k = 0; k < arguments.size(); k++) {
+				if (k > 0) {
+					list_arguments += ", ";
+				}
+				if (k == i) {
+					error_index = list_arguments.size();
+				}
+				list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+			}
+			auto error = StringUtil::Format("Cannot create a list of types %s and %s - an explicit cast is required",
+			                                child_type.ToString(), arg_type.ToString());
+			throw BinderException(QueryErrorContext::Format(list_arguments, error, int(error_index), false));
 		}
 	}
 	child_type = LogicalType::NormalizeType(child_type);

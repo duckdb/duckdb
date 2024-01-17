@@ -196,6 +196,7 @@ public:
 
 struct PythonObject {
 	static void Initialize();
+	static py::object FromStruct(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 	static py::object FromValue(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 };
 

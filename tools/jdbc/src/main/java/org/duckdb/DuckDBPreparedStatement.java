@@ -26,7 +26,10 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.List;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
@@ -47,6 +50,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     boolean closeOnCompletion = false;
     private Object[] params = new Object[0];
     private DuckDBResultSetMetaData meta = null;
+    private final List<Object[]> batchedParams = new ArrayList<>();
+    private final List<String> batchedStatements = new ArrayList<>();
+    private Boolean isBatch = false;
+    private Boolean isPreparedStatement = false;
 
     public DuckDBPreparedStatement(DuckDBConnection conn) throws SQLException {
         if (conn == null) {
@@ -63,6 +70,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException("sql query parameter cannot be null");
         }
         this.conn = conn;
+        this.isPreparedStatement = true;
         prepare(sql);
     }
 
@@ -161,6 +169,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public ResultSet executeQuery() throws SQLException {
+        requireNonBatch();
         execute();
         if (!returnsResultSet) {
             throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
@@ -170,6 +179,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public int executeUpdate() throws SQLException {
+        requireNonBatch();
         execute();
         if (!(returnsChangedRows || returnsNothing)) {
             throw new SQLException(
@@ -180,6 +190,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public boolean execute(String sql) throws SQLException {
+        requireNonBatch();
         prepare(sql);
         return execute();
     }
@@ -445,17 +456,49 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void addBatch(String sql) throws SQLException {
-        throw new SQLFeatureNotSupportedException("addBatch");
+        requireNonPreparedStatement();
+        this.batchedStatements.add(sql);
+        this.isBatch = true;
     }
 
     @Override
     public void clearBatch() throws SQLException {
-        throw new SQLFeatureNotSupportedException("clearBatch");
+        this.batchedParams.clear();
+        this.batchedStatements.clear();
+        this.isBatch = false;
     }
 
     @Override
     public int[] executeBatch() throws SQLException {
-        throw new SQLFeatureNotSupportedException("executeBatch");
+        try {
+            if (this.isPreparedStatement) {
+                return executeBatchedPreparedStatement();
+            } else {
+                return executeBatchedStatements();
+            }
+        } finally {
+            clearBatch();
+        }
+    }
+
+    private int[] executeBatchedPreparedStatement() throws SQLException {
+        int[] updateCounts = new int[this.batchedParams.size()];
+        for (int i = 0; i < this.batchedParams.size(); i++) {
+            params = this.batchedParams.get(i);
+            execute();
+            updateCounts[i] = getUpdateCount();
+        }
+        return updateCounts;
+    }
+
+    private int[] executeBatchedStatements() throws SQLException {
+        int[] updateCounts = new int[this.batchedStatements.size()];
+        for (int i = 0; i < this.batchedStatements.size(); i++) {
+            prepare(this.batchedStatements.get(i));
+            execute();
+            updateCounts[i] = getUpdateCount();
+        }
+        return updateCounts;
     }
 
     @Override
@@ -723,7 +766,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void addBatch() throws SQLException {
-        throw new SQLFeatureNotSupportedException("addBatch");
+        batchedParams.add(params);
+        clearParameters();
+        this.isBatch = true;
     }
 
     @Override
@@ -874,5 +919,17 @@ public class DuckDBPreparedStatement implements PreparedStatement {
     @Override
     public void setNClob(int parameterIndex, Reader reader) throws SQLException {
         throw new SQLFeatureNotSupportedException("setNClob");
+    }
+
+    private void requireNonBatch() throws SQLException {
+        if (this.isBatch) {
+            throw new SQLException("Batched queries must be executed with executeBatch.");
+        }
+    }
+
+    private void requireNonPreparedStatement() throws SQLException {
+        if (this.isPreparedStatement) {
+            throw new SQLException("Cannot add batched SQL statement to PreparedStatement");
+        }
     }
 }

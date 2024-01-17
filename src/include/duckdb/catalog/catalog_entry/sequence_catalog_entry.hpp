@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 namespace duckdb {
+class DuckTransaction;
 
 struct SequenceValue {
 	SequenceValue() : usage_count(0), counter(-1) {
@@ -25,18 +26,9 @@ struct SequenceValue {
 	int64_t counter;
 };
 
-//! A sequence catalog entry
-class SequenceCatalogEntry : public StandardEntry {
-public:
-	static constexpr const CatalogType Type = CatalogType::SEQUENCE_ENTRY;
-	static constexpr const char *Name = "sequence";
+struct SequenceData {
+	explicit SequenceData(CreateSequenceInfo &info);
 
-public:
-	//! Create a real TableCatalogEntry and initialize storage for it
-	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
-
-	//! Lock for getting a value on the sequence
-	mutex lock;
 	//! The amount of times the sequence has been used
 	uint64_t usage_count;
 	//! The sequence counter
@@ -53,10 +45,32 @@ public:
 	int64_t max_value;
 	//! Whether or not the sequence cycles
 	bool cycle;
+};
+
+//! A sequence catalog entry
+class SequenceCatalogEntry : public StandardEntry {
+public:
+	static constexpr const CatalogType Type = CatalogType::SEQUENCE_ENTRY;
+	static constexpr const char *Name = "sequence";
+
+public:
+	//! Create a real TableCatalogEntry and initialize storage for it
+	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 
+	SequenceData GetData() const;
+	int64_t CurrentValue();
+	int64_t NextValue(DuckTransaction &transaction);
+	void ReplayValue(uint64_t usage_count, int64_t counter);
+
 	string ToSQL() const override;
+
+private:
+	//! Lock for getting a value on the sequence
+	mutable mutex lock;
+	//! Sequence data
+	SequenceData data;
 };
 } // namespace duckdb

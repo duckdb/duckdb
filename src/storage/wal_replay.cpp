@@ -473,10 +473,7 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
-	if (usage_count > seq.usage_count) {
-		seq.usage_count = usage_count;
-		seq.counter = counter;
-	}
+	seq.ReplayValue(usage_count, counter);
 }
 
 //===--------------------------------------------------------------------===//
