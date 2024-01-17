@@ -69,3 +69,8 @@ private extension Time.Components {
     self = ctimestruct.asTimeComponents
   }
 }
+
+public struct TimeTz: Hashable, Equatable, Sendable {
+  public var time: Time
+  public var offset: Int32
+}

@@ -10,21 +10,18 @@ TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context)
 
 BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
 	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
-	auto &lambdaref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_idx].Bind(lambdaref, depth);
+	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
+	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
 }
 
 BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, idx_t depth, bool root_expression) {
 
-	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
-	// which we capture and remove later
-	if (lambda_bindings) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
-		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
-			if ((*lambda_bindings)[i].HasMatchingBinding(colref.GetColumnName())) {
-				auto lambdaref = make_uniq<LambdaRefExpression>(i, colref.GetColumnName());
-				return BindLambdaReference(*lambdaref, depth);
-			}
+	// try binding as a lambda parameter
+	auto &col_ref = expr.Cast<ColumnRefExpression>();
+	if (!col_ref.IsQualified()) {
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
+		if (lambda_ref) {
+			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
 	}
 

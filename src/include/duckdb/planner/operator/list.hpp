@@ -38,7 +38,6 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/operator/logical_set.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-#include "duckdb/planner/operator/logical_show.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
