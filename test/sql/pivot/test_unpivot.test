@@ -135,29 +135,12 @@ SELECT empid, dept, april, month, sales FROM monthly_sales
 ----
 referenced in UNPIVOT but no matching entry was found in the table
 
-# what if there are no columns left?
-query II
+# mix of types in pivot
+statement error
 SELECT * FROM monthly_sales
     UNPIVOT(sales FOR month IN (empid, dept, jan, feb, mar, april))
 ----
-empid	1
-dept	electronics
-Jan	100
-Feb	200
-Mar	300
-April	100
-empid	2
-dept	clothes
-Jan	100
-Feb	300
-Mar	150
-April	200
-empid	3
-dept	cars
-Jan	200
-Feb	400
-Mar	100
-April	50
+an explicit cast is required
 
 # unpivot over subquery
 query IIIII

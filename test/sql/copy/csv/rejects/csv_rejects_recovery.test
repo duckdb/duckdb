@@ -44,8 +44,6 @@ SELECT SUM(COL1) + SUM(COL3) FROM read_csv(
 ----
 REJECTS_RECOVERY_COLUMNS: column "NON_EXISTING_COLUMN" not found
 
-foreach PARALLEL true false
-
 # Basic test
 query IIII rowsort
 SELECT * FROM read_csv(
@@ -55,7 +53,6 @@ SELECT * FROM read_csv(
     rejects_table='csv_rejects_table',
     rejects_recovery_columns=['name', 'age'],
     ignore_errors=true,
-    parallel=${PARALLEL},
     auto_detect = false
 );
 ----
@@ -80,7 +77,6 @@ SELECT SUM(COL1) FROM read_csv(
     rejects_table='csv_rejects_table',
     rejects_recovery_columns=['COL2'],
     ignore_errors=true,
-    parallel=${PARALLEL},
     auto_detect = false
 );
 ----
@@ -99,5 +95,3 @@ FROM csv_rejects_table;
 
 statement ok
 DROP TABLE csv_rejects_table;
-
-endloop

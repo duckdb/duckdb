@@ -479,7 +479,7 @@
     {
     "class": "CSVOption<T>",
     "includes": [
-      "duckdb/execution/operator/scan/csv/csv_option.hpp"
+      "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
     ],
     "members": [
       {
@@ -498,7 +498,7 @@
   {
     "class": "CSVReaderOptions",
     "includes": [
-      "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+      "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
     ],
     "members": [
       {"id": 100,
@@ -606,7 +606,7 @@
         "type": "idx_t"
       },
       {"id": 126,
-        "name": "dialect_options.new_line",
+        "name": "dialect_options.state_machine_options.new_line",
         "type": "CSVOption<NewLineIdentifier>"
       },
       {"id": 127,
@@ -682,16 +682,11 @@
       },
       {
         "id": 107,
-        "name": "single_threaded",
-        "type": "bool"
-      },
-      {
-        "id": 108,
         "name": "reader_bind",
         "type": "MultiFileReaderBindData"
       },
       {
-        "id": 109,
+        "id": 108,
         "name": "column_info",
         "type": "vector<ColumnInfo>"
       }
