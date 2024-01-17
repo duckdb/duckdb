@@ -1041,6 +1041,8 @@ if(${EXTENSION_CONFIG_BUILD})
       FILE(APPEND ${CMAKE_BINARY_DIR}/extensions.txt "${EXT_NAME}\r")
     endif()
   endforeach()
+
+  return()
 endif()
 
 if(BUILD_PYTHON)
@@ -1117,7 +1119,6 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
   message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
 endif()
 
-if (NOT EXTENSION_CONFIG_BUILD )
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"
@@ -1151,6 +1152,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     FILES "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
-endif()
-
 endif()
