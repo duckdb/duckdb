@@ -27,7 +27,7 @@ index 9d83f00..506a4d6 100644
  	return nullptr;
  }
  
-+optional_ptr<BlockingSample> PostgresTableEntry::GetSample() {
++optional_ptr<BlockingSample> SQLiteTableEntry::GetSample() {
 +	return nullptr;
 +}
 +
