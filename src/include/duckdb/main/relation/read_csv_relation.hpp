@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"

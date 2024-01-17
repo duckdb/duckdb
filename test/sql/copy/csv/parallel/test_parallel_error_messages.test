@@ -11,31 +11,25 @@ PRAGMA verify_parallelism
 statement ok
 SET threads=4
 
-
 statement error
-SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
+SELECT * FROM read_csv('data/csv/missing_column.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
 ----
-line 7
+Line: 7
 
 statement error
-SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
-----
-Column at position: 0 Set type: INTEGER Sniffed type: VARCHAR
-
-statement error
-SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
-----
-line 8
-
-statement error
-SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=false, sep=',', columns={'h1': int, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/wrongtype.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
 ----
 Column at position: 0 Set type: INTEGER Sniffed type: VARCHAR
 
 statement error
-SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=false, sep=',', columns={'h1': int, 'h2': varchar}, header=True, auto_detect=false)
+SELECT * FROM read_csv('data/csv/wrongtype.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
 ----
-line 8
+Line: 8
+
+statement error
+SELECT * FROM read_csv('data/csv/wrongtype.csv', sep=',', columns={'h1': int, 'h2': varchar}, header=True)
+----
+Column at position: 0 Set type: INTEGER Sniffed type: VARCHAR
 
 # FIXME sporadically a few of these succeed
 mode skip

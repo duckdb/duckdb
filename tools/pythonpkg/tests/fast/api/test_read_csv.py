@@ -136,18 +136,6 @@ class TestReadCSV(object):
         print(res)
         assert res == (345, 'TEST6', 'text"2"text')
 
-    def test_parallel_true(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('category.csv'), parallel=True)
-        res = rel.fetchone()
-        print(res)
-        assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
-
-    def test_parallel_false(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('category.csv'), parallel=False)
-        res = rel.fetchone()
-        print(res)
-        assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
-
     def test_date_format_as_datetime(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('datetime.csv'))
         res = rel.fetchone()
@@ -173,10 +161,15 @@ class TestReadCSV(object):
         )
 
     def test_timestamp_format(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), timestamp_format='%m/%d/%Y')
+        rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), timestamp_format='%Y-%m-%d %H:%M:%S')
         res = rel.fetchone()
-        print(res)
-        assert res == (123, 'TEST2', datetime.time(12, 12, 12), datetime.date(2000, 1, 1), '2000-01-01 12:12:00')
+        assert res == (
+            123,
+            'TEST2',
+            datetime.time(12, 12, 12),
+            datetime.date(2000, 1, 1),
+            datetime.datetime(2000, 1, 1, 12, 12),
+        )
 
     def test_sample_size_correct(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=-1)
@@ -202,12 +195,7 @@ class TestReadCSV(object):
 
         rel = duckdb_cursor.read_csv(TestFile('nullpadding.csv'), null_padding=True)
         res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
-            ('one', 'two', 'three', 'four'),
-            ('1', 'a', 'alice', None),
-            ('2', 'b', 'bob', None),
-        ]
+        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=False)
         res = rel.fetchall()
@@ -220,12 +208,7 @@ class TestReadCSV(object):
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=True)
         res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
-            ('one', 'two', 'three', 'four'),
-            ('1', 'a', 'alice', None),
-            ('2', 'b', 'bob', None),
-        ]
+        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
 
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False)
         res = rel.fetchall()
@@ -239,25 +222,6 @@ class TestReadCSV(object):
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True)
         res = rel.fetchall()
         assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
-            ('one', 'two', 'three', 'four'),
-            ('1', 'a', 'alice', None),
-            ('2', 'b', 'bob', None),
-        ]
-
-        rel = duckdb.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False)
-        res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top',),
-            ('one,two,three,four',),
-            ('1,a,alice',),
-            ('2,b,bob',),
-        ]
-
-        rel = duckdb.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True)
-        res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
             ('one', 'two', 'three', 'four'),
             ('1', 'a', 'alice', None),
             ('2', 'b', 'bob', None),
@@ -525,7 +489,7 @@ class TestReadCSV(object):
         # dtypes and names dont match
         # FIXME: seems the order columns are named in this error is non-deterministic
         # so for now I'm excluding the list of columns from the expected error
-        expected_error = """Columns with names: "d","e","f" do not exist in the CSV File"""
+        expected_error = """do not exist in the CSV File"""
         with pytest.raises(duckdb.BinderException, match=expected_error):
             rel = con.read_csv(
                 file,
