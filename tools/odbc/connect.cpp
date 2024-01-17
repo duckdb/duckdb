@@ -1,5 +1,6 @@
 #include "connect.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
+#include <iostream>
 
 using namespace duckdb;
 
@@ -139,7 +140,10 @@ SQLRETURN Connect::ReadFromIniFile() {
 
 	std::string odbc_file = home_directory + "/.odbc.ini";
 
+	std::cout << "odbc_file: " << odbc_file << std::endl;
+
 	if (!fs->FileExists(odbc_file)) {
+		std::cout << "odbc_file does not exist" << std::endl;
 		return SQL_SUCCESS;
 	}
 
