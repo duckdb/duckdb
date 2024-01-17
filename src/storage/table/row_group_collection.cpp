@@ -14,7 +14,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "iostream"
 
 namespace duckdb {
 

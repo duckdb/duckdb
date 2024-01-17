@@ -36,6 +36,7 @@ namespace duckdb {
 
 void BlockingSample::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
+
 	serializer.WriteProperty<SampleType>(102, "type", type);
 }
 

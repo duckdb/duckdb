@@ -10,9 +10,13 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	D_ASSERT(Empty());
 
 	column_stats = std::move(data.table_stats.column_stats);
-	auto &allocator = Allocator::DefaultAllocator();
-	idx_t sample_size = STANDARD_VECTOR_SIZE;
-	sample = make_uniq<ReservoirSample>(allocator, sample_size, 1);
+	if (data.table_stats.sample) {
+		sample = std::move(data.table_stats.sample);
+	} else {
+		auto &allocator = Allocator::DefaultAllocator();
+		idx_t sample_size = STANDARD_VECTOR_SIZE;
+		sample = make_uniq<ReservoirSample>(allocator, sample_size, 1);
+	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 	} // LCOV_EXCL_STOP
@@ -119,6 +123,7 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 
 void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
+	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample", sample);
 }
 
 void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
@@ -136,6 +141,7 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 
 		deserializer.Unset<LogicalType>();
 	});
+	sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample");
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

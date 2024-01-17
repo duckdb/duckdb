@@ -32,6 +32,8 @@ public:
 
 	void ReplaceElementWithIndex(idx_t entry_index, double with_weight);
 	void ReplaceElement(double with_weight = -1);
+
+	unique_ptr<BaseReservoirSampling> Copy();
 	//! The random generator
 	RandomEngine random;
 	//! Priority queue of [random element, index] for each of the elements in the sample
@@ -69,6 +71,8 @@ public:
 
 	virtual void Merge(unique_ptr<BlockingSample> other) = 0;
 
+	virtual unique_ptr<BlockingSample> Copy() = 0;
+
 	std::pair<double, idx_t> PopFromWeightQueue();
 	double GetMinWeightThreshold();
 	idx_t GetPriorityQueueSize();
@@ -83,13 +87,12 @@ public:
 	//! The sample type
 	SampleType type;
 
-	void Serialize(Serializer &serializer) const;
+	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
 protected:
 	//! The reservoir sampling
 	RandomEngine &random;
-
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -108,13 +111,16 @@ public:
 	}
 };
 
-struct ReservoirChunk {
+class ReservoirChunk {
+public:
 	ReservoirChunk() {
 	}
 
 	DataChunk chunk;
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ReservoirChunk> Deserialize(Deserializer &deserializer);
+
+	unique_ptr<ReservoirChunk> Copy();
 };
 
 struct SampleMergeHelper {
@@ -137,12 +143,14 @@ public:
 
 	void Merge(unique_ptr<BlockingSample> other) override;
 
+	unique_ptr<BlockingSample> Copy() override;
+
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunkAndShrink() override;
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
-	void Serialize(Serializer &serializer) const;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
 private:
@@ -183,13 +191,15 @@ public:
 
 	void Merge(unique_ptr<BlockingSample> other) override;
 
+	unique_ptr<BlockingSample> Copy() override;
+
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunkAndShrink() override;
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;
 
-	void Serialize(Serializer &serializer) const;
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
 private:

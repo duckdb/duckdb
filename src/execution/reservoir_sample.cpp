@@ -5,7 +5,7 @@
 namespace duckdb {
 
 void ReservoirChunk::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<DataChunk>(100, "chunk", chunk);
+	chunk.Serialize(serializer);
 }
 
 unique_ptr<ReservoirChunk> ReservoirChunk::Deserialize(Deserializer &deserializer) {
@@ -63,6 +63,23 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 		base_offset += offset;
 	}
 }
+
+unique_ptr<BlockingSample> ReservoirSample::Copy() {
+	auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
+	ret->base_reservoir_sample = base_reservoir_sample->Copy();
+	ret->reservoir_initialized = reservoir_initialized;
+	ret->reservoir_chunk = reservoir_chunk->Copy();
+	return ret;
+}
+
+
+unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
+	auto copy = make_uniq<ReservoirChunk>();
+	copy->chunk.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+	chunk.Copy(copy->chunk);
+	return copy;
+}
+
 
 void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(other->type == SampleType::RESERVOIR_SAMPLE);
@@ -363,6 +380,10 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	throw NotImplementedException("Merging Percentage samples is not yet supported");
 }
 
+unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
+	throw NotImplementedException("Cannot copy percentage sample");
+}
+
 unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset) {
 	throw NotImplementedException("GetChunk() not implemented for reservoir sample chunks");
 }
@@ -423,6 +444,17 @@ BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
 }
 
 BaseReservoirSampling::BaseReservoirSampling() : BaseReservoirSampling(-1) {
+}
+
+unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
+	auto ret = make_uniq<BaseReservoirSampling>(-1);
+	ret->reservoir_weights = reservoir_weights;
+	ret->next_index_to_sample = next_index_to_sample;
+	ret->min_weight_threshold = min_weight_threshold;
+	ret->min_weighted_entry_index = min_weighted_entry_index;
+	ret->num_entries_to_skip_b4_next_sample = num_entries_to_skip_b4_next_sample;
+	ret->num_entries_seen_total = num_entries_seen_total;
+	return ret;
 }
 
 void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_size) {

@@ -4,6 +4,8 @@
 
 require vector_size 2048
 
+load __TEST_DIR__/test_samples.db
+
 statement ok
 PRAGMA enable_verification
 
@@ -17,7 +19,7 @@ statement ok
 create table integers_1 as (select (range + 5)::VARCHAR a, range b, get_current_time() as time from materialized_range);
 
 query II nosort result_1
-select a::INT, b from pragma_table_sample('integers_1') order by all limit 10;
+select a::INT, b from pragma_table_sample('integers_1') order by all;
 ----
 
 statement ok
@@ -25,7 +27,7 @@ create table integers_2 as (select (range + 5)::VARCHAR a, range b, get_current_
 
 # samples should be the same given the same table and the same contents.
 query II nosort result_1
-select a::INT, b from pragma_table_sample('integers_2') order by all limit 10;
+select a::INT, b from pragma_table_sample('integers_2') order by all;
 ----
 
 
@@ -41,16 +43,7 @@ create table sample_1 as (from pragma_table_sample('integers_1'));
 statement ok
 create table sample_2 as (from pragma_table_sample('integers_2'));
 
-statement ok
-create table intersect_samples as select * from sample_1 intersect (select * from sample_2);
-
-
-# sample is the block size, and sample is always the same.
-query I
-select count(*) = 2048 from intersect_samples;
-----
-1
-
+# sample only has values in the table it was sampled from
 query I
 select count(*) from (from pragma_table_sample('integers_1') intersect (from integers_1));
 ----
@@ -61,12 +54,26 @@ select count(*) from (from pragma_table_sample('integers_2') intersect (from int
 ----
 2048
 
+# sample exists after restart
+restart
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+2048
+
+query I
+select count(*) from pragma_table_sample('integers_2');
+----
+2048
+
+
+
 # checking statistical properties of the sample
 query II
 select ceil(avg(next-prev)) avg_diff, avg_diff > 2430 and avg_diff < 2450 from (select b as prev, LEAD(b, 1) OVER (ORDER BY b) AS next from pragma_table_sample('integers_1') order by all) t(prev, next);
 ----
 2443.0	true
-
 
 query I
 select floor(avg(interval_count))::INT from (
@@ -113,4 +120,25 @@ query I
 select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
 ----
 1035
+
+
+restart
+
+# updated sample is also newly serialized
+query I
+select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
+----
+1035
+
+
+statement ok
+create view sample_view as select * from pragma_table_sample('integers_1');
+
+statement ok
+insert into integers_1 (select '-2', -2 from range(6000000));
+
+query I
+select * from sample_view where a = '-2' and b = -2;
+----
+400
 
