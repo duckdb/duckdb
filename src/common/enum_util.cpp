@@ -6455,6 +6455,8 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
 		return "PREPARED";
 	case VerificationType::EXTERNAL:
 		return "EXTERNAL";
+	case VerificationType::FETCH_ROW_AS_SCAN:
+		return "FETCH_ROW_AS_SCAN";
 	case VerificationType::INVALID:
 		return "INVALID";
 	default:
@@ -6487,6 +6489,9 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTERNAL")) {
 		return VerificationType::EXTERNAL;
+	}
+	if (StringUtil::Equals(value, "FETCH_ROW_AS_SCAN")) {
+		return VerificationType::FETCH_ROW_AS_SCAN;
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return VerificationType::INVALID;
