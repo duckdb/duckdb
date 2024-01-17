@@ -43,8 +43,8 @@ select  sem(v),sem(v2) from aggr
 
 # Window Function
 query I rowsort
-select sem(v) over (partition by k) as v
-    from aggr order by v;
+select sem(v) over (partition by k)
+    from aggr ORDER BY ALL;
 ----
 0.000000
 3.697550
