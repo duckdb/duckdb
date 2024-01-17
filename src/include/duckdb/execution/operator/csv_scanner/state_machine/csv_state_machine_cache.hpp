@@ -21,14 +21,14 @@ class StateMachine {
 public:
 	static constexpr uint32_t NUM_STATES = 8;
 	static constexpr uint32_t NUM_TRANSITIONS = 256;
-	CSVState state_machine[NUM_STATES][NUM_TRANSITIONS];
+	CSVState state_machine[NUM_TRANSITIONS][NUM_STATES];
 
-	const CSVState *operator[](CSVState state) const {
-		return state_machine[static_cast<uint8_t>(state)];
+	const CSVState *operator[](idx_t i) const {
+		return state_machine[i];
 	}
 
-	CSVState *operator[](CSVState state) {
-		return state_machine[static_cast<uint8_t>(state)];
+	CSVState *operator[](idx_t i) {
+		return state_machine[i];
 	}
 };
 

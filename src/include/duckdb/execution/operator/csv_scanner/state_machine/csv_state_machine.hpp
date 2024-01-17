@@ -81,7 +81,8 @@ public:
 	inline void Transition(CSVStates &states, char current_char) const {
 		states.pre_previous_state = states.previous_state;
 		states.previous_state = states.current_state;
-		states.current_state = transition_array[states.current_state][static_cast<uint8_t>(current_char)];
+		states.current_state =
+		    transition_array[static_cast<uint8_t>(current_char)][static_cast<uint8_t>(states.current_state)];
 	}
 
 	const vector<SelectionVector> &GetSelectionVector();
