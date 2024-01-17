@@ -1,12 +1,6 @@
-import os, re
+import os
+import re
 from python_helpers import open_utf8
-
-# we want to test different block sizes with different vector sizes
-block_sizes = [16384]
-vector_sizes = [2048, 512]
-
-current_dir = os.getcwd()
-build_dir = os.path.join(os.getcwd(), 'build', 'release')
 
 
 def execute_system_command(cmd):
@@ -25,22 +19,40 @@ def replace_in_file(fname, regex, replace):
         f.write(contents)
 
 
-for block_size in block_sizes:
-    print("TESTING BLOCK_ALLOC_SIZE=%d" % (block_size,))
-    replace_in_file(
-        'src/include/duckdb/storage/storage_info.hpp',
-        r'constexpr static idx_t BLOCK_ALLOC_SIZE = \d+',
-        'constexpr static idx_t BLOCK_ALLOC_SIZE = %d' % (block_size,),
-    )
+current_dir = os.getcwd()
+build_dir = os.path.join(os.getcwd(), 'build', 'release')
 
-    for vector_size in vector_sizes:
-        print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
-        replace_in_file(
-            'src/include/duckdb/common/vector_size.hpp',
-            r'#define STANDARD_VECTOR_SIZE \d+',
-            '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
-        )
+block_size = 16384
+vector_size = 2048
+print("TESTING BLOCK_ALLOC_SIZE=%d" % (block_size,))
+print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
 
-        execute_system_command('rm -rf build')
-        execute_system_command('make relassert')
-        execute_system_command('python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"')
+replace_in_file(
+    'src/include/duckdb/storage/storage_info.hpp',
+    r'constexpr static idx_t BLOCK_ALLOC_SIZE = \d+',
+    'constexpr static idx_t BLOCK_ALLOC_SIZE = %d' % (block_size,),
+)
+
+replace_in_file(
+    'src/include/duckdb/common/vector_size.hpp',
+    r'#define STANDARD_VECTOR_SIZE \d+',
+    '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
+)
+
+execute_system_command('rm -rf build')
+execute_system_command('make relassert')
+execute_system_command('python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"')
+
+vector_size = 512
+print("TESTING BLOCK_ALLOC_SIZE=%d" % (block_size,))
+print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
+
+replace_in_file(
+    'src/include/duckdb/common/vector_size.hpp',
+    r'#define STANDARD_VECTOR_SIZE \d+',
+    '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
+)
+
+execute_system_command('rm -rf build')
+execute_system_command('make relassert')
+execute_system_command('build/relassert/test/unittest')
