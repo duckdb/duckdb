@@ -301,7 +301,7 @@ StringValueResult &StringValueScanner::ParseChunk() {
 	result.result_position = 0;
 	result.last_row_pos = 0;
 	result.validity_mask->SetAllValid(result.vector_size);
-	ParseChunkInternal();
+	ParseChunkInternal(result);
 	return result;
 }
 
@@ -439,24 +439,6 @@ void StringValueScanner::Initialize() {
 	result.previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, cur_buffer_handle->actual_size};
 
 	result.pre_previous_line_start = result.previous_line_start;
-}
-
-void StringValueScanner::Process() {
-	idx_t to_pos;
-	if (iterator.IsBoundarySet()) {
-		to_pos = iterator.GetEndPos();
-		if (to_pos > cur_buffer_handle->actual_size) {
-			to_pos = cur_buffer_handle->actual_size;
-		}
-	} else {
-		to_pos = cur_buffer_handle->actual_size;
-	}
-	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
-			iterator.pos.buffer_pos++;
-			return;
-		}
-	}
 }
 
 void StringValueScanner::ProcessExtraRow() {
@@ -645,6 +627,11 @@ void StringValueScanner::SkipCSVRows() {
 	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
 	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
+	if (row_skipper.state_machine->options.dialect_options.state_machine_options.new_line ==
+	        NewLineIdentifier::CARRY_ON &&
+	    row_skipper.states.current_state == CSVState::CARRIAGE_RETURN) {
+		iterator.pos.buffer_pos++;
+	}
 	if (result.store_line_size) {
 		result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
 	}
@@ -742,7 +729,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 				return;
 			}
 			if (cur_buffer_handle) {
-				Process();
+				Process(result);
 			}
 		}
 		iterator.done = FinishedFile();

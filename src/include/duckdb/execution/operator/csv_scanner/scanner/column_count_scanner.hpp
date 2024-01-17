@@ -57,8 +57,6 @@ public:
 private:
 	void Initialize() override;
 
-	void Process() override;
-
 	void FinalizeChunkProcess() override;
 
 	ColumnCountResult result;

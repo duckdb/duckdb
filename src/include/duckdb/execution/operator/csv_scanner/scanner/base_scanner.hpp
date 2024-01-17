@@ -126,6 +126,12 @@ public:
 	//! The guy that handles errors
 	shared_ptr<CSVErrorHandler> error_handler;
 
+	//! Shared pointer to the state machine, this is used across multiple scanners
+	shared_ptr<CSVStateMachine> state_machine;
+
+	//! States
+	CSVStates states;
+
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;
@@ -140,27 +146,25 @@ protected:
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
 
-	//! Shared pointer to the state machine, this is used across multiple scanners
-	shared_ptr<CSVStateMachine> state_machine;
 	//! If this scanner has been initialized
 	bool initialized = false;
 	//! How many lines were read by this scanner
 	idx_t lines_read = 0;
-	//! States
-	CSVStates states;
 
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner
 	virtual void Initialize();
 
 	//! Process one chunk
-	virtual void Process();
+	template <class T>
+	void Process(T &result);
 
 	//! Finalizes the process of the chunk
 	virtual void FinalizeChunkProcess();
 
 	//! Internal function for parse chunk
-	void ParseChunkInternal();
+	template <class T>
+	void ParseChunkInternal(T &result);
 };
 
 } // namespace duckdb

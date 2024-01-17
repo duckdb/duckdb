@@ -54,7 +54,7 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 ColumnCountResult &ColumnCountScanner::ParseChunk() {
 	result.result_position = 0;
 	column_count = 1;
-	ParseChunkInternal();
+	ParseChunkInternal(result);
 	return result;
 }
 
@@ -64,16 +64,6 @@ ColumnCountResult &ColumnCountScanner::GetResult() {
 
 void ColumnCountScanner::Initialize() {
 	states.Initialize(CSVState::RECORD_SEPARATOR);
-}
-
-void ColumnCountScanner::Process() {
-	// Run on this buffer
-	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
-			iterator.pos.buffer_pos++;
-			return;
-		}
-	}
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
@@ -98,7 +88,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			iterator.pos.buffer_pos = 0;
 			buffer_handle_ptr = cur_buffer_handle->Ptr();
 		}
-		Process();
+		Process(result);
 	}
 }
 } // namespace duckdb

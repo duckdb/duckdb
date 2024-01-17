@@ -67,20 +67,36 @@ void BaseScanner::Initialize() {
 	throw InternalException("Initialize() from CSV Base Scanner is mot implemented");
 }
 
-void BaseScanner::Process() {
-	throw InternalException("Process() from CSV Base Scanner is mot implemented");
+template <class T>
+void BaseScanner::Process(T &result) {
+	idx_t to_pos;
+	if (iterator.IsBoundarySet()) {
+		to_pos = iterator.GetEndPos();
+		if (to_pos > cur_buffer_handle->actual_size) {
+			to_pos = cur_buffer_handle->actual_size;
+		}
+	} else {
+		to_pos = cur_buffer_handle->actual_size;
+	}
+	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
+		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
+			iterator.pos.buffer_pos++;
+			return;
+		}
+	}
 }
 
 void BaseScanner::FinalizeChunkProcess() {
 	throw InternalException("FinalizeChunkProcess() from CSV Base Scanner is mot implemented");
 }
 
-void BaseScanner::ParseChunkInternal() {
+template <class T>
+void BaseScanner::ParseChunkInternal(T &result) {
 	if (!initialized) {
 		Initialize();
 		initialized = true;
 	}
-	Process();
+	Process(result);
 	FinalizeChunkProcess();
 }
 
