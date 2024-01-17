@@ -75,6 +75,11 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	}
 
 	auto default_extension = function.extension;
+
+	if (function.copy_to_file_extension) {
+		function.copy_to_file_extension(*bind_data, default_extension);
+	}
+
 	auto file_extension =
 	    deserializer.ReadPropertyWithDefault<string>(213, "file_extension", std::move(default_extension));
 

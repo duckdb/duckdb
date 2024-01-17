@@ -101,6 +101,8 @@ typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData 
 
 typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
 
+typedef void (*copy_to_file_extension_t)(FunctionData &bind_data, string &file_extension);
+
 enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
 
 typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
@@ -110,9 +112,9 @@ public:
 	explicit CopyFunction(const string &name)
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
 	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
-	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      desired_batch_size(nullptr), file_size_bytes(nullptr), serialize(nullptr), deserialize(nullptr),
-	      supports_type(nullptr), copy_from_bind(nullptr) {
+	      copy_to_finalize(nullptr), execution_mode(nullptr), copy_to_file_extension(nullptr), prepare_batch(nullptr),
+	      flush_batch(nullptr), desired_batch_size(nullptr), file_size_bytes(nullptr), serialize(nullptr),
+	      deserialize(nullptr), supports_type(nullptr), copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -125,6 +127,7 @@ public:
 	copy_to_combine_t copy_to_combine;
 	copy_to_finalize_t copy_to_finalize;
 	copy_to_execution_mode_t execution_mode;
+	copy_to_file_extension_t copy_to_file_extension;
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;

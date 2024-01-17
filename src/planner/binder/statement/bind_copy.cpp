@@ -161,6 +161,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	auto function_data =
 	    copy_function.function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
+
+	if (copy_function.function.copy_to_file_extension) {
+		copy_function.function.copy_to_file_extension(*function_data, file_extension);
+	}
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
