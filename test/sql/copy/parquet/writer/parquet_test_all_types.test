@@ -16,7 +16,7 @@ SELECT * EXCLUDE (bit, "union") REPLACE (
 FROM test_all_types();
 
 statement ok
-COPY all_types TO '__TEST_DIR__/all_types.parquet' (FORMAT PARQUET);
+COPY all_types TO "__TEST_DIR__/all_types.parquet" (FORMAT PARQUET);
 
 # we have to make some replacements to get result equivalence
 # hugeint/uhugeint is stored as double -> we have to cast
