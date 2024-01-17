@@ -288,6 +288,15 @@ struct ParseDirnameFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ParseDirpathFun {
+	static constexpr const char *Name = "parse_dirpath";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_dirpath('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct ParseFilenameFun {
 	static constexpr const char *Name = "parse_filename";
 	static constexpr const char *Parameters = "string,trim_extension,separator";

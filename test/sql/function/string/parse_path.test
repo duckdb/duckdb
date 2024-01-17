@@ -210,6 +210,106 @@ SELECT parse_dirname('/path/to', true, 'system');
 ----
 Binder Error: No function matches the given name and argument types 'parse_dirname(STRING_LITERAL, BOOLEAN, STRING_LITERAL)'.
 
+# test parse_dirpath
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_dirpath('path/to/file.csv', 'system')), (parse_dirpath('path/to/file.csv\file2.csv', 'both_slash')), (parse_dirpath('path/to/file.csv', 'forward_slash')), (parse_dirpath('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
+----
+path/to
+path/to/file.csv
+path/to
+path\to
+
+# default separator
+query T
+SELECT parse_dirpath('path/to/file.csv\file2.csv');
+----
+path/to/file.csv
+
+# no separator in path
+query T
+SELECT parse_dirpath('file.csv', 'backslash');
+----
+(empty)
+
+# only separators in path
+query T
+SELECT parse_dirpath('\', 'backslash');
+----
+\
+
+# path with only one separator, different from the separator option
+query T
+SELECT parse_dirpath('/', 'backslash');
+----
+(empty)
+
+# start with separator 
+query T
+SELECT parse_dirpath('/path/to/file.csv', 'forward_slash');
+----
+/path/to
+
+# no forward slashes in the path
+query T
+SELECT parse_dirpath('\path\to\file', 'forward_slash');
+----
+(empty)
+
+# have consecutive separators
+query T
+SELECT parse_dirpath('///path/to//file.csv', 'forward_slash');
+----
+///path/to/
+
+# special characters
+query T
+SELECT parse_dirpath('wh@t3ve%\42/12 ch,ars.sth', 'both_slash');
+----
+wh@t3ve%\42
+
+# custom separator
+query T
+SELECT parse_dirpath('path/to/file.csv','@');
+----
+path/to
+
+query T
+SELECT parse_dirpath('path/to/file.csv', NULL);
+----
+path/to
+
+query T
+SELECT parse_dirpath(NULL, NULL);
+----
+NULL
+
+query T
+SELECT parse_dirpath(NULL, '');
+----
+NULL
+
+query T
+SELECT parse_dirpath('');
+----
+(empty)
+
+query T
+SELECT parse_dirpath('', '');
+----
+(empty)
+
+# test incorrect usage
+statement error
+SELECT parse_dirpath();
+----
+Binder Error: No function matches the given name and argument types 'parse_dirpath()'.
+
+statement error
+SELECT parse_dirpath('/path/to', true, 'system');
+----
+Binder Error: No function matches the given name and argument types 'parse_dirpath(STRING_LITERAL, BOOLEAN, STRING_LITERAL)'.
+
 
 # test parse_filename
 # all separators option, default trim_extension

@@ -90,6 +90,45 @@ SELECT parse_dirname();
 Binder Error: No function matches the given name and argument types 'parse_dirname()'.
 
 
+# test parse_dirpath
+# all separators option
+query T
+SELECT * FROM (VALUES (parse_dirpath('path\to\file.csv/file2.csv', 'system')), (parse_dirpath('path/to/file.csv\file2.csv', 'both_slash')), (parse_dirpath('path/to/file.csv', 'forward_slash')), (parse_dirpath('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);
+----
+path\to
+path/to/file.csv
+path/to
+path\to
+
+# default separator
+query T
+SELECT parse_dirpath('path/to/file.csv\file2.csv');
+----
+path/to/file.csv
+
+# start with & have consecutive separators 
+query T
+SELECT parse_dirpath('///path/to//file.csv', 'forward_slash');
+----
+///path/to/
+
+query T
+select parse_dirpath('file.csv');
+----
+(empty)
+
+query T
+SELECT parse_dirpath('');
+----
+(empty)
+
+# test incorrect usage
+statement error
+SELECT parse_dirpath();
+----
+Binder Error: No function matches the given name and argument types 'parse_dirpath()'.
+
+
 # test parse_filename
 # all separators option
 query T

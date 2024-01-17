@@ -86,7 +86,7 @@ static idx_t FindLast(const char *data_ptr, idx_t input_size, const string &sep_
 	return start - 1;
 }
 
-static idx_t Split(string_t input, const string &sep, SplitInput &state) {
+static idx_t SplitPath(string_t input, const string &sep, SplitInput &state) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 	if (!input_size) {
@@ -217,6 +217,33 @@ static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &re
 	    });
 }
 
+static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	// set default values
+	Vector &path = args.data[0];
+	Vector separator(string_t("default"));
+	Vector trim_extension(false);
+	ReadOptionalArgs(args, separator, trim_extension, true);
+
+	BinaryExecutor::Execute<string_t, string_t, string_t>(
+	    path, separator, result, args.size(), [&](string_t input_path, string_t input_sep) {
+		    auto path = input_path.GetData();
+		    auto path_size = input_path.GetSize();
+		    auto sep = GetSeparator(input_sep.GetString());
+
+		    auto last_sep = FindLast(path, path_size, sep);
+		    if (last_sep == 0 && path_size == 1) {
+			    last_sep = 1;
+		    }
+		    idx_t new_size = (IsIdxValid(last_sep, path_size)) ? last_sep : 0;
+
+		    auto target = StringVector::EmptyString(result, new_size);
+		    auto output = target.GetDataWriteable();
+		    memcpy(output, path, new_size);
+		    target.Finalize();
+		    return StringVector::AddString(result, target);
+	    });
+}
+
 static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
 	UnifiedVectorFormat input_data;
@@ -250,7 +277,7 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 			continue;
 		}
 		SplitInput split_input(result, child_entry, total_splits);
-		auto list_length = Split(inputs[input_idx], sep, split_input);
+		auto list_length = SplitPath(inputs[input_idx], sep, split_input);
 		list_data[i].length = list_length;
 		list_data[i].offset = total_splits;
 		total_splits += list_length;
@@ -273,6 +300,18 @@ ScalarFunctionSet ParseDirnameFun::GetFunctions() {
 	func.arguments.emplace_back(LogicalType::VARCHAR);
 	parse_dirname.AddFunction(func);
 	return parse_dirname;
+}
+
+ScalarFunctionSet ParseDirpathFun::GetFunctions() {
+	ScalarFunctionSet parse_dirpath;
+	ScalarFunction func({LogicalType::VARCHAR}, LogicalType::VARCHAR, ParseDirpathFunction, nullptr, nullptr, nullptr,
+	                    nullptr, LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS,
+	                    FunctionNullHandling::SPECIAL_HANDLING);
+	parse_dirpath.AddFunction(func);
+	// separator options
+	func.arguments.emplace_back(LogicalType::VARCHAR);
+	parse_dirpath.AddFunction(func);
+	return parse_dirpath;
 }
 
 ScalarFunctionSet ParseFilenameFun::GetFunctions() {
