@@ -447,10 +447,10 @@ bool Executor::ResultCollectorIsBlocked() {
 		// The result collector is always in the last pipeline
 		return false;
 	}
+	lock_guard<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
 		return false;
 	}
-	lock_guard<mutex> l(executor_lock);
 	for (auto &kv : to_be_rescheduled_tasks) {
 		auto &task = kv.second;
 		if (task->Type() != TaskType::EXECUTOR) {
