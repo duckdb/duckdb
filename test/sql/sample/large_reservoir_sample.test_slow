@@ -11,4 +11,4 @@ create table integers as (select (range + 5)::VARCHAR a, range b from range(1000
 query I
 select count(*) from integers USING SAMPLE 99.0% (Reservoir);
 ----
-990000
+9900

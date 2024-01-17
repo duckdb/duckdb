@@ -5,6 +5,9 @@
 require vector_size 2048
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 create table materialized_range as select * from range(5000000);
 
 statement ok
