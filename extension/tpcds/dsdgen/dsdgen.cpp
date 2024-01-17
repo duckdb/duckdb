@@ -115,6 +115,9 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		assert(builder_func);
 
 		for (ds_key_t i = k_first_row; k_row_count; i++, k_row_count--) {
+			if (k_row_count % 1000 == 0 && context.interrupted) {
+				throw InterruptException();
+			}
 			// append happens directly in builders since they dump child tables
 			// immediately
 			if (builder_func((void *)&append_info, i)) {
