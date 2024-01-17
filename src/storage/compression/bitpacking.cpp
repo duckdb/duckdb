@@ -686,8 +686,6 @@ public:
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
-		//		printf("Skipping %llu\n", skip_count);
-		//		printf(" -> current offset %llu\n", current_group_offset);
 		bool skip_sign_extend = true;
 
 		idx_t skipped = 0;
@@ -720,7 +718,6 @@ public:
 			// to this is because we need that delta to be able to continue scanning from here
 			D_ASSERT(current_group.mode == BitpackingMode::DELTA_FOR);
 
-			//			printf(" -> Starting delta skip loop\n");
 			while (skipped < skip_count) {
 				// Calculate compression group offset and pointer
 				idx_t offset_in_compression_group =
@@ -732,11 +729,6 @@ public:
 				idx_t skipping_this_algorithm_group =
 				    MinValue(remaining_to_skip,
 				             BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
-
-				//				printf("  - this loop %llu\n", skipping_this_algorithm_group);
-				//				printf("   - remaining_to_skip %llu\n", remaining_to_skip);
-				//				printf("   - current_group_offset %llu\n", current_group_offset);
-				//				printf("   - offset_in_compression_group %llu\n", offset_in_compression_group);
 
 				BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(decompression_buffer),
 				                                     decompression_group_start_pointer, current_width,
@@ -769,9 +761,13 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	return std::move(result);
 }
 
+//===--------------------------------------------------------------------===//
+// Scan base data
+//===--------------------------------------------------------------------===//
 template <class T, class T_S = typename MakeSigned<T>::type>
-static void BitpackingScanInternal(ColumnSegment &segment, BitpackingScanState<T> &scan_state, idx_t scan_count,
-                                   Vector &result, idx_t result_offset) {
+void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                           idx_t result_offset) {
+	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -854,17 +850,6 @@ static void BitpackingScanInternal(ColumnSegment &segment, BitpackingScanState<T
 		scanned += to_scan;
 		scan_state.current_group_offset += to_scan;
 	}
-}
-
-//===--------------------------------------------------------------------===//
-// Scan base data
-//===--------------------------------------------------------------------===//
-template <class T, class T_S = typename MakeSigned<T>::type>
-void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                           idx_t result_offset) {
-	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
-	BitpackingScanInternal(segment, scan_state, scan_count, result, result_offset);
-	return;
 }
 
 template <class T>

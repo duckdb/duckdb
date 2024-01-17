@@ -84,6 +84,7 @@ jobs:
       BUILD_JEMALLOC: 1
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
 
     steps:
     - uses: actions/checkout@v3

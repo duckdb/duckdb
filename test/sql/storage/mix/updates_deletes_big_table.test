@@ -6,9 +6,6 @@
 load __TEST_DIR__/updates_deletes_big_table.db
 
 statement ok
-pragma enable_verification
-
-statement ok
 CREATE TABLE test (a INTEGER);
 
 statement ok
@@ -46,9 +43,6 @@ SELECT COUNT(a) FROM test WHERE a=17
 0
 
 restart
-
-statement ok
-pragma enable_verification
 
 query II
 SELECT SUM(a), COUNT(a) FROM test
