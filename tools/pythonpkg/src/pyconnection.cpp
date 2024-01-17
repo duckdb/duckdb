@@ -697,8 +697,12 @@ DuckDBPyConnection::ReadJSON(const py::object &name_or_fh, const Optional<py::ob
 		auto_detect = true;
 	}
 
+	auto &files = input.files;
+	if (files.size() != 1) {
+		throw InvalidInputException("read_json method only accepts single files");
+	}
 	auto read_json_relation =
-	    make_shared<ReadJSONRelation>(connection->context, input.str, std::move(options), auto_detect);
+	    make_shared<ReadJSONRelation>(connection->context, files[0], std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
 		throw BinderException("read_json can only be used when the JSON extension is (statically) loaded");
 	}
