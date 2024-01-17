@@ -7,7 +7,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -150,15 +150,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		options.sql_types_per_column[expected_names[i]] = i;
 	}
 
-	bind_data->FinalizeRead(context);
-
 	if (options.auto_detect) {
-		// We must run the sniffer, but this is a copy csv, hence names and types have already been previsouly defined.
-		auto file_handle = BaseCSVReader::OpenCSV(context, options);
-		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
-		CSVSniffer sniffer(options, buffer_manager, bind_data->state_machine_cache, {&expected_types, &expected_names});
+		auto buffer_manager = make_shared<CSVBufferManager>(context, options, bind_data->files[0], 0);
+		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context),
+		                   {&expected_types, &expected_names});
 		sniffer.SniffCSV();
 	}
+	bind_data->FinalizeRead(context);
+
 	return std::move(bind_data);
 }
 

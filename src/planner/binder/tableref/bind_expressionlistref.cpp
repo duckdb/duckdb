@@ -11,6 +11,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	auto result = make_uniq<BoundExpressionListRef>();
 	result->types = expr.expected_types;
 	result->names = expr.expected_names;
+	auto prev_can_contain_nulls = this->can_contain_nulls;
 	// bind value list
 	InsertBinder binder(*this, context);
 	binder.target_type = LogicalType(LogicalTypeId::INVALID);
@@ -23,16 +24,18 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 			}
 		}
 
+		this->can_contain_nulls = true;
 		vector<unique_ptr<Expression>> list;
 		for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
 			if (!result->types.empty()) {
 				D_ASSERT(result->types.size() == expression_list.size());
 				binder.target_type = result->types[val_idx];
 			}
-			auto expr = binder.Bind(expression_list[val_idx]);
-			list.push_back(std::move(expr));
+			auto bound_expr = binder.Bind(expression_list[val_idx]);
+			list.push_back(std::move(bound_expr));
 		}
 		result->values.push_back(std::move(list));
+		this->can_contain_nulls = prev_can_contain_nulls;
 	}
 	if (result->types.empty() && !expr.values.empty()) {
 		// there are no types specified

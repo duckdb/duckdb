@@ -561,8 +561,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		expressions.reserve(unpivot.entries.size());
 		for (auto &entry : unpivot.entries) {
 			auto colref = make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString());
-			auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(colref));
-			expressions.push_back(std::move(cast));
+			expressions.push_back(std::move(colref));
 		}
 		unpivot_expressions.push_back(std::move(expressions));
 	}

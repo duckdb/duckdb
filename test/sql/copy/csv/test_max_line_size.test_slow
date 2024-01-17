@@ -23,7 +23,7 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 statement error
 COPY test FROM '__TEST_DIR__/test.csv';
 ----
-line 2
+Line: 1
 
 # we can override the max line size
 statement ok
