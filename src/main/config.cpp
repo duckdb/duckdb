@@ -445,9 +445,6 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 	}
 }
 
-extern const string DEFAULT_USER_AGENT =
-    StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
-
 const std::string DBConfig::UserAgent() const {
 	auto user_agent = DEFAULT_USER_AGENT;
 

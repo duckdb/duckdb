@@ -18,6 +18,9 @@
 
 namespace duckdb {
 
+extern const string DEFAULT_USER_AGENT =
+    StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
+
 //===--------------------------------------------------------------------===//
 // Access Mode
 //===--------------------------------------------------------------------===//
