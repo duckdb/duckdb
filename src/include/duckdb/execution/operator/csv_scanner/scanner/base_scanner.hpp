@@ -77,8 +77,7 @@ public:
 	//! OP = Operation used to alter the result of the parser
 	//! T = Type of the result
 	template <class T>
-	inline static bool ProcessCharacter(BaseScanner &scanner,  const idx_t buffer_pos,
-	                                    T &result) {
+	inline static bool ProcessCharacter(BaseScanner &scanner, const idx_t buffer_pos, T &result) {
 		switch (scanner.states.states[1]) {
 		case CSVState::INVALID:
 			T::InvalidState(result);

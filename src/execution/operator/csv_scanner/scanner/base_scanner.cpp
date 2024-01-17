@@ -80,13 +80,58 @@ void BaseScanner::Process(T &result) {
 	}
 	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
-		if (*reinterpret_cast<int64_t*>(&states.states[0]) != 0){
-			if (ProcessCharacter(*this, iterator.pos.buffer_pos, result)) {
-			iterator.pos.buffer_pos++;
-			return;
-		}
-		}
+		switch (states.states[1]) {
+		case CSVState::INVALID:
+			T::InvalidState(result);
+			break;
+		case CSVState::RECORD_SEPARATOR:
+			if (states.states[0] == CSVState::RECORD_SEPARATOR) {
+				lines_read++;
+				if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
+					iterator.pos.buffer_pos++;
 
+					return;
+				}
+			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
+				lines_read++;
+				if (T::AddRow(result, iterator.pos.buffer_pos)) {
+					iterator.pos.buffer_pos++;
+
+					return;
+				}
+			}
+			break;
+		case CSVState::CARRIAGE_RETURN:
+			lines_read++;
+			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
+				if (T::AddRow(result, iterator.pos.buffer_pos)) {
+					iterator.pos.buffer_pos++;
+
+					return;
+				}
+			} else {
+				if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
+					iterator.pos.buffer_pos++;
+
+					return;
+				}
+			}
+			break;
+		case CSVState::DELIMITER:
+			T::AddValue(result, iterator.pos.buffer_pos);
+			break;
+		case CSVState::QUOTED:
+			if (states.states[0] == CSVState::UNQUOTED) {
+				T::SetEscaped(result);
+			}
+			T::SetQuoted(result);
+			break;
+		case CSVState::ESCAPE:
+			T::SetEscaped(result);
+			break;
+		default:
+			break;
+		}
 	}
 }
 

@@ -50,8 +50,7 @@ struct CSVStates {
 		return states[0] == CSVState::QUOTED;
 	}
 	inline bool IsEscaped() {
-		return states[1] == CSVState::ESCAPE ||
-		       (states[0] == CSVState::UNQUOTED && states[1] == CSVState::QUOTED);
+		return states[1] == CSVState::ESCAPE || (states[0] == CSVState::UNQUOTED && states[1] == CSVState::QUOTED);
 	}
 	inline bool IsQuotedCurrent() {
 		return states[1] == CSVState::QUOTED;
@@ -77,8 +76,7 @@ public:
 	//! Transition all states to next state, that depends on the current char
 	inline void Transition(CSVStates &states, char current_char) const {
 		states.states[0] = states.states[1];
-		states.states[1] =
-		    transition_array[static_cast<uint8_t>(current_char)][static_cast<uint8_t>(states.states[1])];
+		states.states[1] = transition_array[static_cast<uint8_t>(current_char)][static_cast<uint8_t>(states.states[1])];
 	}
 
 	const vector<SelectionVector> &GetSelectionVector();
