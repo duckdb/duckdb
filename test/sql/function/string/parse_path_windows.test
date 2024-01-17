@@ -141,7 +141,7 @@ file.csv/file2.csv
 
 # end with separator
 query T
-parse_filename('file2.csv/', 'forward_slash');
+SELECT parse_filename('file2.csv/', 'forward_slash');
 ----
 (empty)
 
@@ -152,14 +152,14 @@ SELECT parse_filename('path/to/file.csv\file2.csv');
 file2.csv
 
 query T
-SELECT parse_filename('path/to/file.csv\file2', true, 'forward_slash');
+SELECT parse_filename('path/to/file.csv\file2', true, 'backslash');
 ----
-file.csv\file2
+file2
 
 query T
 SELECT parse_filename('/path/to/file.csv\file2.csv', true, 'forward_slash');
 ----
-file
+file.csv\file2
 
 query T
 SELECT parse_filename('');
