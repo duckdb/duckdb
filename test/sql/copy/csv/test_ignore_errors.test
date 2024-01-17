@@ -2,6 +2,8 @@
 # description: IGNORE_ERRORS test
 # group: [csv]
 
+require vector_size 512
+
 statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 

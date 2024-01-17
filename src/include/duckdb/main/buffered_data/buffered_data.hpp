@@ -34,10 +34,6 @@ public:
 };
 
 class BufferedData {
-private:
-	//! (roughly) The max amount of tuples we'll keep buffered at a time
-	static constexpr idx_t BUFFER_SIZE = 100000;
-
 public:
 	BufferedData(shared_ptr<ClientContext> context) : context(context) {
 	}

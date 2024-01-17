@@ -70,10 +70,9 @@
 #include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_option.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_state.hpp"
-#include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/quote_rules.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -693,8 +692,6 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "UNQUOTED";
 	case CSVState::ESCAPE:
 		return "ESCAPE";
-	case CSVState::EMPTY_LINE:
-		return "EMPTY_LINE";
 	case CSVState::INVALID:
 		return "INVALID";
 	default:
@@ -724,9 +721,6 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ESCAPE")) {
 		return CSVState::ESCAPE;
-	}
-	if (StringUtil::Equals(value, "EMPTY_LINE")) {
-		return CSVState::EMPTY_LINE;
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return CSVState::INVALID;
@@ -3480,8 +3474,6 @@ const char* EnumUtil::ToChars<NewLineIdentifier>(NewLineIdentifier value) {
 		return "SINGLE";
 	case NewLineIdentifier::CARRY_ON:
 		return "CARRY_ON";
-	case NewLineIdentifier::MIX:
-		return "MIX";
 	case NewLineIdentifier::NOT_SET:
 		return "NOT_SET";
 	default:
@@ -3496,9 +3488,6 @@ NewLineIdentifier EnumUtil::FromString<NewLineIdentifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CARRY_ON")) {
 		return NewLineIdentifier::CARRY_ON;
-	}
-	if (StringUtil::Equals(value, "MIX")) {
-		return NewLineIdentifier::MIX;
 	}
 	if (StringUtil::Equals(value, "NOT_SET")) {
 		return NewLineIdentifier::NOT_SET;
@@ -3978,34 +3967,6 @@ ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const 
 	}
 	if (StringUtil::Equals(value, "DISPLAY_EXTENSION_ERROR")) {
 		return ParserExtensionResultType::DISPLAY_EXTENSION_ERROR;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<ParserMode>(ParserMode value) {
-	switch(value) {
-	case ParserMode::PARSING:
-		return "PARSING";
-	case ParserMode::SNIFFING_DATATYPES:
-		return "SNIFFING_DATATYPES";
-	case ParserMode::PARSING_HEADER:
-		return "PARSING_HEADER";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-ParserMode EnumUtil::FromString<ParserMode>(const char *value) {
-	if (StringUtil::Equals(value, "PARSING")) {
-		return ParserMode::PARSING;
-	}
-	if (StringUtil::Equals(value, "SNIFFING_DATATYPES")) {
-		return ParserMode::SNIFFING_DATATYPES;
-	}
-	if (StringUtil::Equals(value, "PARSING_HEADER")) {
-		return ParserMode::PARSING_HEADER;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
