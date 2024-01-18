@@ -446,7 +446,11 @@ OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType
 }
 
 const std::string DBConfig::UserAgent() const {
-	auto user_agent = options.duckdb_api;
+	auto user_agent = GetDefaultUserAgent();
+
+	if (!options.duckdb_api.empty()) {
+		user_agent += " " + options.duckdb_api;
+	}
 
 	if (!options.custom_user_agent.empty()) {
 		user_agent += " " + options.custom_user_agent;
