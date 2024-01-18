@@ -1,5 +1,5 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/string.hpp"
 
@@ -11,13 +11,6 @@ struct TryCastFloatingOperator {
 		string error_message;
 		return OP::Operation(input, result, &error_message);
 	}
-};
-
-struct TupleSniffing {
-	idx_t line_number;
-	idx_t position;
-	bool set = false;
-	vector<Value> values;
 };
 
 static bool StartsWithNumericDate(string &separator, const string &value) {
@@ -125,83 +118,6 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
-struct SniffValue {
-	inline static void Initialize(CSVStateMachine &machine) {
-		machine.state = CSVState::STANDARD;
-		machine.previous_state = CSVState::STANDARD;
-		machine.pre_previous_state = CSVState::STANDARD;
-		machine.cur_rows = 0;
-		machine.value = "";
-		machine.rows_read = 0;
-	}
-
-	inline static bool Process(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values, char current_char,
-	                           idx_t current_pos) {
-
-		if ((machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
-		     (current_char == '\r' || current_char == '\n')) ||
-		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
-			machine.rows_read++;
-		}
-
-		if ((machine.previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (machine.state != CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::CARRIAGE_RETURN)) {
-			sniffed_values[machine.cur_rows].position = machine.line_start_pos;
-			sniffed_values[machine.cur_rows].set = true;
-			machine.line_start_pos = current_pos;
-		}
-
-		machine.Transition(current_char);
-
-		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
-		if (machine.previous_state == CSVState::DELIMITER || (machine.previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
-			// Started a new value
-			// Check if it's UTF-8
-			machine.VerifyUTF8();
-			if (machine.value.empty() || machine.value == machine.options.null_str) {
-				// We set empty == null value
-				sniffed_values[machine.cur_rows].values.push_back(Value(LogicalType::VARCHAR));
-			} else {
-				sniffed_values[machine.cur_rows].values.push_back(Value(machine.value));
-			}
-			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
-
-			machine.value = "";
-		}
-		if (machine.state == CSVState::STANDARD ||
-		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
-			machine.value += current_char;
-		}
-		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR;
-		// It means our carriage return is actually a record separator
-		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
-		if (machine.cur_rows >= sniffed_values.size()) {
-			// We sniffed enough rows
-			return true;
-		}
-		return false;
-	}
-
-	inline static void Finalize(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values) {
-		if (machine.cur_rows < sniffed_values.size() && machine.state == CSVState::DELIMITER) {
-			// Started a new empty value
-			sniffed_values[machine.cur_rows].values.push_back(Value(machine.value));
-		}
-		if (machine.cur_rows < sniffed_values.size() && machine.state != CSVState::EMPTY_LINE) {
-			machine.VerifyUTF8();
-			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
-			if (!sniffed_values[machine.cur_rows].set) {
-				sniffed_values[machine.cur_rows].position = machine.line_start_pos;
-				sniffed_values[machine.cur_rows].set = true;
-			}
-
-			sniffed_values[machine.cur_rows++].values.push_back(Value(machine.value));
-		}
-		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - machine.cur_rows), sniffed_values.end());
-	}
-};
-
 void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate, const string &separator,
                                                      const LogicalType &sql_type) {
 	auto &format_candidate = format_candidates[sql_type.id()];
@@ -270,103 +186,59 @@ void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
-	for (auto &candidate : candidates) {
+	for (auto &candidate_cc : candidates) {
+		auto &sniffing_state_machine = candidate_cc->GetStateMachine();
 		unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
-		for (idx_t i = 0; i < candidate->dialect_options.num_cols; i++) {
-			info_sql_types_candidates[i] = candidate->options.auto_type_candidates;
+		for (idx_t i = 0; i < max_columns_found; i++) {
+			info_sql_types_candidates[i] = sniffing_state_machine.options.auto_type_candidates;
 		}
-		D_ASSERT(candidate->dialect_options.num_cols > 0);
+		D_ASSERT(max_columns_found > 0);
 
-		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
+		// Set all return_types to VARCHAR, so we can do datatype detection based on VARCHAR values
 		return_types.clear();
-		return_types.assign(candidate->dialect_options.num_cols, LogicalType::VARCHAR);
+		return_types.assign(max_columns_found, LogicalType::VARCHAR);
 
 		// Reset candidate for parsing
-		candidate->Reset();
+		auto candidate = candidate_cc->UpgradeToStringValueScanner();
 
 		// Parse chunk and read csv with info candidate
-		vector<TupleSniffing> tuples;
-		idx_t true_line_start = 0;
-		idx_t true_pos = 0;
-		do {
-			tuples.resize(STANDARD_VECTOR_SIZE);
-			true_line_start = 0;
-			true_pos = 0;
-			candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, tuples);
-			// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
-			// The true line where parsing starts in reference to the csv file
-
-			// The start point of the tuples
-			idx_t tuple_true_start = 0;
-			while (tuple_true_start < tuples.size()) {
-				if (tuples[tuple_true_start].values.empty() ||
-				    (tuples[tuple_true_start].values.size() == 1 && tuples[tuple_true_start].values[0].IsNull())) {
-					true_line_start = tuples[tuple_true_start].line_number;
-					true_pos = tuples[tuple_true_start].position;
-					tuple_true_start++;
-				} else {
-					break;
-				}
-			}
-
-			// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
-			while (tuple_true_start < tuples.size()) {
-				if (tuples[tuple_true_start].values.size() < max_columns_found && !options.null_padding) {
-					true_line_start = tuples[tuple_true_start].line_number;
-					true_pos = tuples[tuple_true_start].position;
-					tuple_true_start++;
-				} else {
-					break;
-				}
-			}
-			if (tuple_true_start < tuples.size()) {
-				true_pos = tuples[tuple_true_start].position;
-			}
-			if (tuple_true_start > 0) {
-				tuples.erase(tuples.begin(), tuples.begin() + tuple_true_start);
-			}
-		} while (tuples.empty() && !candidate->csv_buffer_iterator.Finished());
-
+		auto &tuples = candidate->ParseChunk();
 		idx_t row_idx = 0;
-		if (tuples.size() > 1 &&
+		if (tuples.NumberOfRows() > 1 &&
 		    (!options.dialect_options.header.IsSetByUser() ||
 		     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
-		if (!tuples.empty()) {
-			best_start_without_header = tuples[0].position - true_pos;
-		}
-
 		// First line where we start our type detection
 		const idx_t start_idx_detection = row_idx;
-		for (; row_idx < tuples.size(); row_idx++) {
-			for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
-				if (options.ignore_errors && col >= max_columns_found) {
-					// ignore this, since it's an error.
-					continue;
-				}
-				auto &col_type_candidates = info_sql_types_candidates[col];
+		for (; row_idx < tuples.NumberOfRows(); row_idx++) {
+			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
+				auto &col_type_candidates = info_sql_types_candidates[col_idx];
 				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
 				// and we validate utf-8 compatibility when creating the type
 				D_ASSERT(!col_type_candidates.empty());
 				auto cur_top_candidate = col_type_candidates.back();
-				auto dummy_val = tuples[row_idx].values[col];
+				auto dummy_val = tuples.GetValue(row_idx, col_idx);
 				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
-					//					auto cur_top_candidate = col_type_candidates.back();
 					const auto &sql_type = col_type_candidates.back();
-					// try formatting for date types if the user did not specify one and it starts with numeric values.
+					// try formatting for date types if the user did not specify one and it starts with numeric
+					// values.
 					string separator;
-					// If Value is not Null, Has a numeric date format, and the current investigated candidate is either
-					// a timestamp or a date
+					// If Value is not Null, Has a numeric date format, and the current investigated candidate is
+					// either a timestamp or a date
 					if (!dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val)) &&
 					    (col_type_candidates.back().id() == LogicalTypeId::TIMESTAMP ||
 					     col_type_candidates.back().id() == LogicalTypeId::DATE)) {
-						DetectDateAndTimeStampFormats(*candidate, sql_type, separator, dummy_val);
+						DetectDateAndTimeStampFormats(candidate->GetStateMachine(), sql_type, separator, dummy_val);
 					}
 					// try cast from string to sql_type
-					if (TryCastValue(*candidate, dummy_val, sql_type)) {
+					if (sql_type == LogicalType::VARCHAR) {
+						// Nothing to convert it to
+						continue;
+					}
+					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
@@ -394,23 +266,25 @@ void CSVSniffer::DetectTypes() {
 			}
 		}
 
-		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
+		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
+		// best_num_cols.
 		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
+			best_header_row.clear();
 			// we have a new best_options candidate
-			if (true_line_start > 0) {
-				// Add empty rows to skip_rows
-				candidate->dialect_options.skip_rows.Set(
-				    candidate->dialect_options.skip_rows.GetValue() + true_line_start, false);
-			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
 			for (auto &format_candidate : format_candidates) {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
-			best_header_row = tuples[0].values;
-			best_start_with_header = tuples[0].position - true_pos;
+			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
+				best_header_row.emplace_back(tuples.GetValue(0, col_idx));
+			}
 		}
+	}
+	if (!best_candidate) {
+		auto error = CSVError::SniffingError(options.file_path);
+		error_handler->Error(error);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty() && !best_header_row.empty());

@@ -108,6 +108,43 @@ WINDOW win AS ( ORDER BY a
 statement ok
 DROP VIEW c1;
 
+# Time types will wrap unless we bind the ordering as epoch + time
+statement ok
+CREATE TABLE t_time(t TIME);
+
+statement ok
+INSERT INTO t_time VALUES 
+	('12:30:00'),
+    ('22:30:00'),
+    ('13:30:00'),
+    ('01:30:00'),
+    ('15:30:00'),
+    ('20:30:00'),
+    ('04:30:00'),
+    ('06:30:00'),
+    ('18:30:00'),
+    ('21:30:00'),
+    ('00:30:00'),
+    ('00:31:00');
+
+query II
+SELECT t, FIRST_VALUE(t) OVER w AS fv 
+FROM t_time 
+WINDOW w AS (ORDER BY t RANGE INTERVAL 2 HOUR PRECEDING);
+----
+00:30:00	00:30:00
+00:31:00	00:30:00
+01:30:00	00:30:00
+04:30:00	04:30:00
+06:30:00	04:30:00
+12:30:00	12:30:00
+13:30:00	12:30:00
+15:30:00	13:30:00
+18:30:00	18:30:00
+20:30:00	18:30:00
+21:30:00	20:30:00
+22:30:00	20:30:00
+
 # Invalid type coverage
 foreach type boolean varchar
 

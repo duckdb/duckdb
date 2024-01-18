@@ -51,8 +51,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
 		return "FIXED_BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::DELIM_JOIN:
-		return "DELIM_JOIN";
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+		return "LEFT_DELIM_JOIN";
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+		return "RIGHT_DELIM_JOIN";
 	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
 		return "BLOCKWISE_NL_JOIN";
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:

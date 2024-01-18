@@ -19,14 +19,14 @@ SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_pa
 
 # one line that requires null padding
 query I
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True, parallel = false)
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True)
 ----
 2500
 
 statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True)
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv')
 ----
-Error in file "data/csv/nullpadding_big_mixed.csv"
+Error when sniffing file "data/csv/nullpadding_big_mixed.csv".
 
 statement ok
 CREATE TABLE test2 (a VARCHAR, b INTEGER, c INTEGER, d INTEGER);
@@ -45,11 +45,11 @@ SELECT COUNT(*) FROM read_csv('data/csv/nullpadding_commas.csv', sep=',', header
 require notwindows
 
 statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55)
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55)
 ----
 CSV options could not be auto-detected. Consider setting parser options manually.
 
 statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55, null_padding=False)
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55, null_padding=False)
 ----
 CSV options could not be auto-detected. Consider setting parser options manually.

@@ -63,7 +63,7 @@ typedef struct {
 typedef uint32_t bitpacking_metadata_encoded_t;
 
 static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) {
-	D_ASSERT(metadata.offset <= 16777215); // max uint24_t
+	D_ASSERT(metadata.offset <= 0x00FFFFFF); // max uint24_t
 	bitpacking_metadata_encoded_t encoded_value = metadata.offset;
 	encoded_value |= (uint8_t)metadata.mode << 24;
 	return encoded_value;
@@ -218,8 +218,11 @@ public:
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
 		static_assert(IsIntegral<T_INNER>::value, "Integral type required.");
+
+		using T_U = typename MakeUnsigned<T_INNER>::type;
+
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= static_cast<typename MakeUnsigned<T_INNER>::type>(frame_of_reference);
+			reinterpret_cast<T_U *>(buffer)[i] -= static_cast<T_U>(frame_of_reference);
 		}
 	}
 
@@ -250,10 +253,8 @@ public:
 			}
 
 			// Check if delta has benefit
-			// bitwidth is calculated differently between signed and unsigned values, but considering we do not have
-			// an unsigned version of hugeint, we need to explicitly specify (through boolean) that we wish to calculate
-			// the unsigned minimum bit-width instead of relying on MakeUnsigned and IsSigned
-			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T, false>(min_max_delta_diff);
+			auto delta_required_bitwidth =
+			    BitpackingPrimitives::MinimumBitWidth<T, false>(static_cast<T>(min_max_delta_diff));
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(min_max_diff);
 
 			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
@@ -939,6 +940,8 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<uint64_t>(type);
 	case PhysicalType::INT128:
 		return GetBitpackingFunction<hugeint_t>(type);
+	case PhysicalType::UINT128:
+		return GetBitpackingFunction<uhugeint_t>(type);
 	case PhysicalType::LIST:
 		return GetBitpackingFunction<uint64_t, false>(type);
 	default:
@@ -959,6 +962,7 @@ bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT64:
 	case PhysicalType::LIST:
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 		return true;
 	default:
 		return false;

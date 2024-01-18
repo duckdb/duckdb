@@ -92,11 +92,6 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_EXPLAIN = 150,
 
 	// -----------------------------
-	// Show
-	// -----------------------------
-	LOGICAL_SHOW = 160,
-
-	// -----------------------------
 	// Helpers
 	// -----------------------------
 	LOGICAL_PREPARE = 175,

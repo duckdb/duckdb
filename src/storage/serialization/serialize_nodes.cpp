@@ -25,8 +25,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_option.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -128,7 +128,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
 	serializer.WriteProperty<CSVOption<bool>>(124, "dialect_options.header", dialect_options.header);
 	serializer.WritePropertyWithDefault<idx_t>(125, "dialect_options.num_cols", dialect_options.num_cols);
-	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.new_line", dialect_options.new_line);
+	serializer.WriteProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.state_machine_options.new_line", dialect_options.state_machine_options.new_line);
 	serializer.WriteProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", dialect_options.skip_rows);
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
 	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
@@ -162,7 +162,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
 	deserializer.ReadProperty<CSVOption<bool>>(124, "dialect_options.header", result.dialect_options.header);
 	deserializer.ReadPropertyWithDefault<idx_t>(125, "dialect_options.num_cols", result.dialect_options.num_cols);
-	deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.new_line", result.dialect_options.new_line);
+	deserializer.ReadProperty<CSVOption<NewLineIdentifier>>(126, "dialect_options.state_machine_options.new_line", result.dialect_options.state_machine_options.new_line);
 	deserializer.ReadProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", result.dialect_options.skip_rows);
 	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", result.dialect_options.date_format);
 	deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
@@ -379,9 +379,8 @@ void ReadCSVData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(104, "return_names", return_names);
 	serializer.WritePropertyWithDefault<idx_t>(105, "filename_col_idx", filename_col_idx);
 	serializer.WriteProperty<CSVReaderOptions>(106, "options", options);
-	serializer.WritePropertyWithDefault<bool>(107, "single_threaded", single_threaded);
-	serializer.WriteProperty<MultiFileReaderBindData>(108, "reader_bind", reader_bind);
-	serializer.WritePropertyWithDefault<vector<ColumnInfo>>(109, "column_info", column_info);
+	serializer.WriteProperty<MultiFileReaderBindData>(107, "reader_bind", reader_bind);
+	serializer.WritePropertyWithDefault<vector<ColumnInfo>>(108, "column_info", column_info);
 }
 
 unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
@@ -393,9 +392,8 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(104, "return_names", result->return_names);
 	deserializer.ReadPropertyWithDefault<idx_t>(105, "filename_col_idx", result->filename_col_idx);
 	deserializer.ReadProperty<CSVReaderOptions>(106, "options", result->options);
-	deserializer.ReadPropertyWithDefault<bool>(107, "single_threaded", result->single_threaded);
-	deserializer.ReadProperty<MultiFileReaderBindData>(108, "reader_bind", result->reader_bind);
-	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(109, "column_info", result->column_info);
+	deserializer.ReadProperty<MultiFileReaderBindData>(107, "reader_bind", result->reader_bind);
+	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(108, "column_info", result->column_info);
 	return result;
 }
 

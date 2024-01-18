@@ -89,6 +89,12 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
     return Dates.Time(Dates.Nanosecond(val * 1000))
 end
 
+function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
+    time_tz = duckdb_from_time_tz(val)
+    # TODO: how to preserve the offset?
+    return Dates.Time(Dates.Nanosecond(time_tz.micros * 1000))
+end
+
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
     return Dates.epochms2datetime((val ÷ 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 end
@@ -498,7 +504,9 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_date
     elseif type == DUCKDB_TYPE_TIME
         return convert_time
-    elseif type == DUCKDB_TYPE_TIMESTAMP
+    elseif type == DUCKDB_TYPE_TIME_TZ
+        return convert_time_tz
+    elseif type == DUCKDB_TYPE_TIMESTAMP || type == DUCKDB_TYPE_TIMESTAMP_TZ
         return convert_timestamp
     elseif type == DUCKDB_TYPE_TIMESTAMP_S
         return convert_timestamp_s
