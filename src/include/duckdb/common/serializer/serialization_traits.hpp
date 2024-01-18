@@ -261,11 +261,6 @@ struct SerializationDefaultValue {
 		return T();
 	}
 
-	//	template <typename T = void>
-	//	static inline typename std::enable_if<is_<T>::value, T>::type GetDefault() {
-	//		return T();
-	//	}
-
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_map<T>::value, T>::type &value) {
 		return value.empty();
