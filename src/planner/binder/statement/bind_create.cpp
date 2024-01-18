@@ -247,7 +247,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 			}
 
 			if (type.id() == LogicalTypeId::INVALID) {
-				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+				type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, user_type_name);
 			}
 		} else {
 			string type_catalog = UserType::GetCatalog(type);
