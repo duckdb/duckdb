@@ -320,10 +320,7 @@ TEST_CASE("Test fetch API leak", "[api]") {
 	// now try to fetch a chunk, this should not return a nullptr
 	auto chunk = result->Fetch();
 	REQUIRE(chunk);
-
-	// now close the entire database
-	conn = make_uniq<Connection>(*db);
-	result = conn->SendQuery("SELECT 42");
+	auto chunk = result->Fetch();
 
 	db.reset();
 }
