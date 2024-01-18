@@ -345,15 +345,15 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	// result2 should work
 	REQUIRE(result2->Fetch());
 
-	//// test materialize
-	//result1 = conn->SendQuery("SELECT 42");
-	//REQUIRE(result1->type == QueryResultType::STREAM_RESULT);
-	//auto materialized = ((StreamQueryResult &)*result1).Materialize();
-	//result2 = conn->SendQuery("SELECT 84");
+	// test materialize
+	result1 = conn->SendQuery("SELECT 42");
+	REQUIRE(result1->type == QueryResultType::STREAM_RESULT);
+	auto materialized = ((StreamQueryResult &)*result1).Materialize();
+	result2 = conn->SendQuery("SELECT 84");
 
-	//// we can read materialized still, even after opening a new result
-	//REQUIRE(CHECK_COLUMN(materialized, 0, {42}));
-	//REQUIRE(CHECK_COLUMN(result2, 0, {84}));
+	// we can read materialized still, even after opening a new result
+	REQUIRE(CHECK_COLUMN(materialized, 0, {42}));
+	REQUIRE(CHECK_COLUMN(result2, 0, {84}));
 }
 
 static void VerifyStreamResult(duckdb::unique_ptr<QueryResult> result) {

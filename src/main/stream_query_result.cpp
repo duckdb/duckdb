@@ -20,7 +20,9 @@ StreamQueryResult::~StreamQueryResult() {
 		return;
 	}
 	auto lock = context->LockContext();
-	context->CleanupInternal(*lock, this);
+	if (IsOpenInternal(*lock)) {
+		context->CleanupInternal(*lock, this);
+	}
 }
 
 string StreamQueryResult::ToString() {
