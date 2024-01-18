@@ -97,7 +97,6 @@ struct is_queue<typename std::priority_queue<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 
-
 template <typename T>
 struct is_unique_ptr : std::false_type {};
 template <typename T>
@@ -262,10 +261,10 @@ struct SerializationDefaultValue {
 		return T();
 	}
 
-//	template <typename T = void>
-//	static inline typename std::enable_if<is_<T>::value, T>::type GetDefault() {
-//		return T();
-//	}
+	//	template <typename T = void>
+	//	static inline typename std::enable_if<is_<T>::value, T>::type GetDefault() {
+	//		return T();
+	//	}
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_map<T>::value, T>::type &value) {

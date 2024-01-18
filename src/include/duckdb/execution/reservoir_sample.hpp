@@ -94,7 +94,7 @@ public:
 
 protected:
 	//! The reservoir sampling
-//	RandomEngine &random;
+	//	RandomEngine &random;
 public:
 	template <class TARGET>
 	TARGET &Cast() {

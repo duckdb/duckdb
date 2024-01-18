@@ -244,11 +244,12 @@ protected:
 
 	// priority queue
 	template <typename T>
-	void WriteValue(std::priority_queue<T> &queue) {
+	void WriteValue(const std::priority_queue<T> &queue) {
 		vector<T> placeholder;
-		while(queue.size() > 0) {
-			placeholder.emplace_back(queue.top());
-			queue.pop();
+		auto queue_copy = std::priority_queue<T>(queue);
+		while (queue_copy.size() > 0) {
+			placeholder.emplace_back(queue_copy.top());
+			queue_copy.pop();
 		}
 		WriteValue(placeholder);
 	}

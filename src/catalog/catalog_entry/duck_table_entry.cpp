@@ -75,7 +75,6 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
       bound_constraints(std::move(info.bound_constraints)),
       column_dependency_manager(std::move(info.column_dependency_manager)) {
 
-
 	if (!storage) {
 		// create the physical storage
 		vector<ColumnDefinition> storage_columns;
