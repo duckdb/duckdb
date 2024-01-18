@@ -16,6 +16,8 @@ class ClientContext;
 class DatabaseInstance;
 struct DBConfig;
 
+const string GetDefaultUserAgent();
+
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
