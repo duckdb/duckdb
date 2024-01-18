@@ -79,8 +79,10 @@ void BaseScanner::Process(T &result) {
 		to_pos = cur_buffer_handle->actual_size;
 	}
 	while (iterator.pos.buffer_pos < to_pos) {
-		if (StateMachine::skip_state[static_cast<uint8_t>(states.states[1])]){
-			while (state_machine->transition_array.skip_char_lookup[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] && iterator.pos.buffer_pos < to_pos){
+		if (StateMachine::skip_state[static_cast<uint8_t>(states.states[1])]) {
+			while (state_machine->transition_array
+			           .skip_char_lookup[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
 				iterator.pos.buffer_pos++;
 			}
 		}

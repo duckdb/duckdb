@@ -90,6 +90,7 @@ public:
 				scanner.lines_read++;
 				return T::AddRow(result, buffer_pos);
 			}
+			return false;
 		case CSVState::CARRIAGE_RETURN:
 			scanner.lines_read++;
 			if (scanner.states.states[0] != CSVState::RECORD_SEPARATOR) {

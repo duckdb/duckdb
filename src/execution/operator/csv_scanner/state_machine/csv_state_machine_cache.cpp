@@ -102,7 +102,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
 
 	// Initialize characters we can skip during processing, for Standard and Quoted states
-	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i ++){
+	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
 		transition_array.skip_char_lookup[i] = true;
 	}
 	transition_array.skip_char_lookup[quote] = false;
