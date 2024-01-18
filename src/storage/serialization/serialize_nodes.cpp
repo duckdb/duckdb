@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -36,7 +37,6 @@ namespace duckdb {
 
 void BlockingSample::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
-
 	serializer.WriteProperty<SampleType>(102, "type", type);
 }
 
@@ -64,6 +64,7 @@ void BaseReservoirSampling::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(104, "min_weighted_entry_index", min_weighted_entry_index);
 	serializer.WritePropertyWithDefault<idx_t>(105, "num_entries_to_skip_b4_next_sample", num_entries_to_skip_b4_next_sample);
 	serializer.WritePropertyWithDefault<idx_t>(106, "num_entries_seen_total", num_entries_seen_total);
+	serializer.WritePropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(107, "reservoir_weights", reservoir_weights);
 }
 
 unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserializer &deserializer) {
@@ -73,6 +74,7 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserialize
 	deserializer.ReadPropertyWithDefault<idx_t>(104, "min_weighted_entry_index", result->min_weighted_entry_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(105, "num_entries_to_skip_b4_next_sample", result->num_entries_to_skip_b4_next_sample);
 	deserializer.ReadPropertyWithDefault<idx_t>(106, "num_entries_seen_total", result->num_entries_seen_total);
+	deserializer.ReadPropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(107, "reservoir_weights", result->reservoir_weights);
 	return result;
 }
 

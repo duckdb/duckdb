@@ -60,8 +60,7 @@ public:
 
 public:
 	explicit BlockingSample(int64_t seed = -1)
-	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), type(SampleType::BLOCKING_SAMPLE),
-	      random(base_reservoir_sample->random) {
+	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), type(SampleType::BLOCKING_SAMPLE) {
 	}
 	virtual ~BlockingSample() {
 	}
@@ -76,6 +75,9 @@ public:
 	std::pair<double, idx_t> PopFromWeightQueue();
 	double GetMinWeightThreshold();
 	idx_t GetPriorityQueueSize();
+	//! When deserializing a sample, we don't serialize the weights for each tuple
+	//! Instead we assign new weights to each tuple between min_weight_threshold and 1
+	virtual void PushNewWeightsForSamples() = 0;
 
 	virtual void Finalize() = 0;
 
@@ -92,7 +94,7 @@ public:
 
 protected:
 	//! The reservoir sampling
-	RandomEngine &random;
+//	RandomEngine &random;
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -123,20 +125,14 @@ public:
 	unique_ptr<ReservoirChunk> Copy();
 };
 
-struct SampleMergeHelper {
-	idx_t index_to_replace;
-	idx_t index_with_new_value;
-	double new_weight;
-};
-
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
 
 public:
-	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
-	ReservoirSample(idx_t sample_count, int64_t seed = -1);
+	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
+	ReservoirSample(idx_t sample_count, int64_t seed = 1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -144,6 +140,8 @@ public:
 	void Merge(unique_ptr<BlockingSample> other) override;
 
 	unique_ptr<BlockingSample> Copy() override;
+
+	void PushNewWeightsForSamples() override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -190,6 +188,8 @@ public:
 	void AddToReservoir(DataChunk &input) override;
 
 	void Merge(unique_ptr<BlockingSample> other) override;
+
+	void PushNewWeightsForSamples() override;
 
 	unique_ptr<BlockingSample> Copy() override;
 

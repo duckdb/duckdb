@@ -178,7 +178,8 @@
   {
     "class": "BaseReservoirSampling",
     "includes": [
-      "duckdb/execution/reservoir_sample.hpp"
+      "duckdb/execution/reservoir_sample.hpp",
+      "duckdb/common/queue.hpp"
     ],
     "members": [
       {
@@ -205,14 +206,17 @@
         "id": 106,
         "name": "num_entries_seen_total",
         "type": "idx_t"
+      },
+      {
+        "id": 107,
+        "name": "reservoir_weights",
+        "type": "std::priority_queue<std::pair<double, idx_t>>"
       }
-    ],
-    "pointer_type": "unique_ptr"
+    ]
   },
   {
     "class": "BlockingSample",
     "class_type": "type",
-    "includes": [],
     "members": [
       {
         "id" : 100,
@@ -224,8 +228,7 @@
         "name": "type",
         "type": "SampleType"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "ReservoirSample",
