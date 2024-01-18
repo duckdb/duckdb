@@ -24,7 +24,7 @@ if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell duckdb_utf8proc)
 endif()
 
-if(WIN32)
+if(WIN32 AND NOT MINGW)
   string(TIMESTAMP DUCKDB_COPYRIGHT_YEAR "%Y")
   set(CMAKE_RC_FLAGS
       "${CMAKE_RC_FLAGS} -D DUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
