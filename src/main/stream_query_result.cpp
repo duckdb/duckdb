@@ -16,6 +16,11 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
 }
 
 StreamQueryResult::~StreamQueryResult() {
+	if (!context) {
+		return;
+	}
+	auto lock = context->LockContext();
+	context->CleanupInternal(*lock, this);
 }
 
 string StreamQueryResult::ToString() {
@@ -52,6 +57,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) 
 		chunk = buffered_data->Scan();
 		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 			context->CleanupInternal(lock, this);
+			Close();
 			chunk = nullptr;
 		}
 		return chunk;
