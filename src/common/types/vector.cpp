@@ -116,8 +116,37 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 	Reference(other);
 }
 
+void VerifyReinterpretConstraints(const LogicalType &a, const LogicalType &b) {
+	auto phys_a = a.InternalType();
+	auto phys_b = b.InternalType();
+
+	D_ASSERT(phys_a == phys_b);
+	if (phys_a == PhysicalType::STRUCT) {
+		auto &children_a = StructType::GetChildTypes(a);
+		auto &children_b = StructType::GetChildTypes(b);
+		D_ASSERT(children_a.size() == children_b.size());
+		for (idx_t i = 0; i < children_a.size(); i++) {
+			auto &child_a = children_a[i];
+			auto &child_b = children_b[i];
+			D_ASSERT(StringUtil::CIEquals(child_a.first, child_b.first));
+			VerifyReinterpretConstraints(child_a.second, child_b.second);
+		}
+	} else if (phys_a == PhysicalType::LIST) {
+		auto &child_a = ListType::GetChildType(a);
+		auto &child_b = ListType::GetChildType(b);
+		VerifyReinterpretConstraints(child_a, child_b);
+	} else if (phys_a == PhysicalType::ARRAY) {
+		auto &child_a = ArrayType::GetChildType(a);
+		auto &child_b = ArrayType::GetChildType(b);
+		VerifyReinterpretConstraints(child_a, child_b);
+	}
+}
+
 void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
+#ifdef DEBUG
+	VerifyReinterpretConstraints(GetType(), other.GetType());
+#endif
 	AssignSharedPointer(buffer, other.buffer);
 	AssignSharedPointer(auxiliary, other.auxiliary);
 	data = other.data;
