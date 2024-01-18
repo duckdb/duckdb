@@ -79,17 +79,11 @@ void BaseScanner::Process(T &result) {
 		to_pos = cur_buffer_handle->actual_size;
 	}
 	while (iterator.pos.buffer_pos < to_pos) {
-		if (StateMachine::skip_state[static_cast<uint8_t>(states.states[1])]) {
-			while (state_machine->transition_array
-			           .skip_char_lookup[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
-			       iterator.pos.buffer_pos < to_pos - 1) {
-				iterator.pos.buffer_pos++;
-			}
-		}
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		switch (states.states[1]) {
 		case CSVState::INVALID:
 			T::InvalidState(result);
+			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::RECORD_SEPARATOR:
 			if (states.states[0] == CSVState::RECORD_SEPARATOR) {
@@ -105,6 +99,7 @@ void BaseScanner::Process(T &result) {
 					return;
 				}
 			}
+			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::CARRIAGE_RETURN:
 			lines_read++;
@@ -119,23 +114,40 @@ void BaseScanner::Process(T &result) {
 					return;
 				}
 			}
+			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::DELIMITER:
 			T::AddValue(result, iterator.pos.buffer_pos);
+			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::QUOTED:
 			if (states.states[0] == CSVState::UNQUOTED) {
 				T::SetEscaped(result);
 			}
 			T::SetQuoted(result);
+			iterator.pos.buffer_pos++;
+			while (state_machine->transition_array
+			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
+				iterator.pos.buffer_pos++;
+			}
 			break;
 		case CSVState::ESCAPE:
 			T::SetEscaped(result);
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::STANDARD:
+			iterator.pos.buffer_pos++;
+			while (state_machine->transition_array
+			           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
+				iterator.pos.buffer_pos++;
+			}
 			break;
 		default:
+			iterator.pos.buffer_pos++;
 			break;
 		}
-		iterator.pos.buffer_pos++;
 	}
 }
 

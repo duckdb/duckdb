@@ -103,13 +103,17 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	// Initialize characters we can skip during processing, for Standard and Quoted states
 	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
-		transition_array.skip_char_lookup[i] = true;
+		transition_array.skip_standard[i] = true;
+		transition_array.skip_quoted[i] = true;
 	}
-	transition_array.skip_char_lookup[quote] = false;
-	transition_array.skip_char_lookup[escape] = false;
-	transition_array.skip_char_lookup[delimiter] = false;
-	transition_array.skip_char_lookup[static_cast<uint8_t>('\n')] = false;
-	transition_array.skip_char_lookup[static_cast<uint8_t>('\r')] = false;
+	// For standard states we only care for delimiters \r and \n
+	transition_array.skip_standard[delimiter] = false;
+	transition_array.skip_standard[static_cast<uint8_t>('\n')] = false;
+	transition_array.skip_standard[static_cast<uint8_t>('\r')] = false;
+
+	// For quoted we only care about quote and escape
+	transition_array.skip_quoted[quote] = false;
+	transition_array.skip_quoted[escape] = false;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {

@@ -22,10 +22,11 @@ public:
 	static constexpr uint32_t NUM_STATES = 8;
 	static constexpr uint32_t NUM_TRANSITIONS = 256;
 	CSVState state_machine[NUM_TRANSITIONS][NUM_STATES];
-	//! States where we might skip processing
-	//! STANDARD : 0 and QUOTED:4
-	static constexpr bool skip_state[8] = {true, false, false, false, true, false, false, false};
-	bool skip_char_lookup[256];
+	//! Transitions where we might skip processing
+	//! For the Standard State
+	bool skip_standard[256];
+	//! For the Quoted State
+	bool skip_quoted[256];
 
 	const CSVState *operator[](idx_t i) const {
 		return state_machine[i];
