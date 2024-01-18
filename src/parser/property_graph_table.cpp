@@ -296,7 +296,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	for (auto &key : destination_pk) {
 		result->destination_pk.push_back(key);
 	}
-	return std::move(result);
+	return result;
 }
 
 } // namespace duckdb
