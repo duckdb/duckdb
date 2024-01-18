@@ -78,7 +78,12 @@ void BaseScanner::Process(T &result) {
 	} else {
 		to_pos = cur_buffer_handle->actual_size;
 	}
-	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
+	while (iterator.pos.buffer_pos < to_pos) {
+		if (StateMachine::skip_state[static_cast<uint8_t>(states.states[1])]){
+			while (state_machine->transition_array.skip_char_lookup[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] && iterator.pos.buffer_pos < to_pos){
+				iterator.pos.buffer_pos++;
+			}
+		}
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 		switch (states.states[1]) {
 		case CSVState::INVALID:
@@ -89,14 +94,12 @@ void BaseScanner::Process(T &result) {
 				lines_read++;
 				if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 					iterator.pos.buffer_pos++;
-
 					return;
 				}
 			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 				lines_read++;
 				if (T::AddRow(result, iterator.pos.buffer_pos)) {
 					iterator.pos.buffer_pos++;
-
 					return;
 				}
 			}
@@ -106,13 +109,11 @@ void BaseScanner::Process(T &result) {
 			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
 				if (T::AddRow(result, iterator.pos.buffer_pos)) {
 					iterator.pos.buffer_pos++;
-
 					return;
 				}
 			} else {
 				if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 					iterator.pos.buffer_pos++;
-
 					return;
 				}
 			}
@@ -132,6 +133,7 @@ void BaseScanner::Process(T &result) {
 		default:
 			break;
 		}
+		iterator.pos.buffer_pos++;
 	}
 }
 

@@ -88,16 +88,16 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	}
 	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
 	// error out during scanning)
-	if (options.auto_detect && file_idx > 0) {
-		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
-		auto result = sniffer.SniffCSV();
-		if (!file_schema.empty()) {
-			if (!options.file_options.filename && !options.file_options.hive_partitioning &&
-			    file_schema.size() != result.return_types.size()) {
-				throw InvalidInputException("Mismatch between the schema of different files");
-			}
-		}
-	}
+//	if (options.auto_detect && file_idx > 0) {
+//		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+//		auto result = sniffer.SniffCSV();
+//		if (!file_schema.empty()) {
+//			if (!options.file_options.filename && !options.file_options.hive_partitioning &&
+//			    file_schema.size() != result.return_types.size()) {
+//				throw InvalidInputException("Mismatch between the schema of different files");
+//			}
+//		}
+//	}
 	if (options.dialect_options.num_cols == 0) {
 		// We need to define the number of columns, if the sniffer is not running this must be in the sql_type_list
 		options.dialect_options.num_cols = options.sql_type_list.size();
