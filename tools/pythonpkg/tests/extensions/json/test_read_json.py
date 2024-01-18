@@ -10,8 +10,19 @@ def build_test_file(name: str) -> Path:
     return Path(__file__).absolute().parent / 'data' / name
 
 
+class Unclosable:
+    def __init__(self, file):
+        self.file = file
+
+    def __getattr__(self, attr):
+        return getattr(self.file, attr)
+
+    def close(self):
+        pass
+
+
 def in_memory_file(name: str):
-    return build_test_file(name).open('rb')
+    return Unclosable(build_test_file(name).open('rb'))
 
 
 parametrize = lambda: mark.parametrize('name', [build_test_file('example.json'), in_memory_file('example.json')])
