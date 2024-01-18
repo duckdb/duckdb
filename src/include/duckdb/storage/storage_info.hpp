@@ -23,6 +23,12 @@ struct FileHandle;
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
 
+//! The default block size
+#ifndef DEFAULT_BLOCK_ALLOC_SIZE
+//! We default to 256KB (1 << 18) storage blocks
+#define DEFAULT_BLOCK_ALLOC_SIZE 262144
+#endif
+
 using block_id_t = int64_t;
 
 struct Storage {
@@ -30,9 +36,8 @@ struct Storage {
 	constexpr static idx_t SECTOR_SIZE = 4096;
 	//! Block header size for blocks written to the storage
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
-	//! Size of a memory slot managed by the StorageManager. This is the quantum of allocation for Blocks on DuckDB. We
-	//! default to 256KB. (1 << 18)
-	constexpr static idx_t BLOCK_ALLOC_SIZE = 262144;
+	//! Size of a memory slot managed by the StorageManager. This is the quantum of allocation for Blocks on DuckDB
+	constexpr static idx_t BLOCK_ALLOC_SIZE = DEFAULT_BLOCK_ALLOC_SIZE;
 	//! The actual memory space that is available within the blocks
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
