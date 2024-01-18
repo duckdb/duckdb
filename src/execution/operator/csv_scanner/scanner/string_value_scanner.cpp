@@ -443,14 +443,69 @@ void StringValueScanner::Initialize() {
 
 void StringValueScanner::ProcessExtraRow() {
 	idx_t to_pos = cur_buffer_handle->actual_size;
-	idx_t cur_result_pos = result.result_position;
-	cur_result_pos++;
-	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
+	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
-		if (ProcessCharacter(*this, iterator.pos.buffer_pos, result) ||
-		    (result.result_position >= cur_result_pos &&
-		     result.result_position % state_machine->dialect_options.num_cols == 0)) {
-			return;
+		switch (states.states[1]) {
+		case CSVState::INVALID:
+			result.InvalidState(result);
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::RECORD_SEPARATOR:
+			if (states.states[0] == CSVState::RECORD_SEPARATOR) {
+				lines_read++;
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
+				lines_read++;
+				result.AddRow(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			}
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::CARRIAGE_RETURN:
+			lines_read++;
+			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
+				result.AddRow(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			} else {
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			}
+		case CSVState::DELIMITER:
+			result.AddValue(result, iterator.pos.buffer_pos);
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::QUOTED:
+			if (states.states[0] == CSVState::UNQUOTED) {
+				result.SetEscaped(result);
+			}
+			result.SetQuoted(result);
+			iterator.pos.buffer_pos++;
+			while (state_machine->transition_array
+			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
+				iterator.pos.buffer_pos++;
+			}
+			break;
+		case CSVState::ESCAPE:
+			result.SetEscaped(result);
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::STANDARD:
+			iterator.pos.buffer_pos++;
+			while (state_machine->transition_array
+			           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
+				iterator.pos.buffer_pos++;
+			}
+			break;
+		default:
+			iterator.pos.buffer_pos++;
+			break;
 		}
 	}
 }
