@@ -29,7 +29,7 @@ public:
 
 public:
 	void Append(unique_ptr<DataChunk> chunk);
-	void BlockSink(BlockedSink blocked_sink);
+	void BlockSink(const BlockedSink &blocked_sink);
 	bool BufferIsFull() override;
 	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;

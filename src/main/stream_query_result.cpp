@@ -9,10 +9,10 @@ namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
                                      vector<LogicalType> types, vector<string> names,
-                                     ClientProperties client_properties, shared_ptr<BufferedData> buffered_data)
+                                     ClientProperties client_properties, shared_ptr<BufferedData> data)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
                   std::move(names), std::move(client_properties)),
-      buffered_data(buffered_data) {
+      buffered_data(std::move(data)) {
 	context = buffered_data->GetContext();
 }
 

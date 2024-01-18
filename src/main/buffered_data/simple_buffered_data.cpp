@@ -10,7 +10,7 @@ SimpleBufferedData::SimpleBufferedData(shared_ptr<ClientContext> context) : Buff
 	buffered_count = 0;
 }
 
-void SimpleBufferedData::BlockSink(BlockedSink blocked_sink) {
+void SimpleBufferedData::BlockSink(const BlockedSink &blocked_sink) {
 	lock_guard<mutex> lock(glock);
 	blocked_sinks.push(blocked_sink);
 }
