@@ -342,8 +342,8 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 
 	// result1 should be closed now
 	REQUIRE_THROWS(result1->Fetch());
-	//// result2 should work
-	//REQUIRE(result2->Fetch());
+	// result2 should work
+	REQUIRE(result2->Fetch());
 
 	//// test materialize
 	//result1 = conn->SendQuery("SELECT 42");
