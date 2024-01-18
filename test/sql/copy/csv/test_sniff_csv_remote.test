@@ -2,6 +2,8 @@
 # description: Test sniff_csv function with httpfs
 # group: [csv]
 
+require-env LOCAL_EXTENSION_REPO
+
 require httpfs
 
 require notwindows
