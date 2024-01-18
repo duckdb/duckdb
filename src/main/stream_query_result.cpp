@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
