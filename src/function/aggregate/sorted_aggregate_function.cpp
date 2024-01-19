@@ -102,8 +102,8 @@ struct SortedAggregateState {
 	using LinkedChunkFunctions = vector<ListSegmentFunctions>;
 
 	//! Capacities of the various levels of buffering
-	static const idx_t LIST_CAPACITY = 16;
 	static const idx_t CHUNK_CAPACITY = STANDARD_VECTOR_SIZE;
+	static const idx_t LIST_CAPACITY = MinValue<idx_t>(16, CHUNK_CAPACITY);
 
 	SortedAggregateState() : count(0), nsel(0), offset(0) {
 	}
@@ -189,9 +189,6 @@ struct SortedAggregateState {
 		}
 
 		if (count > CHUNK_CAPACITY && !ordering) {
-			if (CHUNK_CAPACITY < LIST_CAPACITY) {
-				FlushLinkedLists(order_bind);
-			}
 			InitializeCollections(order_bind);
 			FlushChunks(order_bind);
 		}

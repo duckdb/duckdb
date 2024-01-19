@@ -146,13 +146,13 @@ static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
 }
 
 template <typename T>
-T MaxValue(T a, T b) {
-	return a > b ? a : b;
+constexpr T MaxValue(T a, T b) {
+    return a > b ? a : b;
 }
 
 template <typename T>
-T MinValue(T a, T b) {
-	return a < b ? a : b;
+constexpr T MinValue(T a, T b) {
+    return a < b ? a : b;
 }
 
 template <typename T>
