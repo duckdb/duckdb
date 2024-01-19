@@ -11,6 +11,7 @@ parser.add_argument('unittest_program', help='Path to the unittest program')
 parser.add_argument('--no-exit', action='store_true', help='Do not exit after running tests')
 parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
+parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 
 args, extra_args = parser.parse_known_args()
 
@@ -22,6 +23,7 @@ unittest_program = args.unittest_program
 no_exit = args.no_exit
 profile = args.profile
 assertions = args.no_assertions
+time_execution = args.time_execution
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -72,10 +74,14 @@ for test_number, test_case in enumerate(test_cases):
     stdout = res.stdout.decode('utf8')
     stderr = res.stderr.decode('utf8')
     end = time.time()
+
+    additional_data = ""
     if assertions:
-        print(" (" + parse_assertions(stdout) + ")")
-    else:
-        print()
+        additional_data += " (" + parse_assertions(stdout) + ")"
+    if args.time_execution:
+        additional_data += f" (Time: {end - start:.4f} seconds)"
+
+    print(additional_data)
     if profile:
         print(f'{test_case}	{end - start}')
     if res.returncode is not None and res.returncode != 0:
