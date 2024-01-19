@@ -360,9 +360,7 @@ struct AlpCompression {
 	 * Overload without specifying nulls
 	 */
 	static void Compress(const T *input_vector, idx_t n_values, State &state) {
-		uint16_t *vector_null_positions;
-		idx_t nulls_count = 0;
-		Compress(input_vector, n_values, vector_null_positions, nulls_count, state);
+		Compress(input_vector, n_values, nullptr, 0, state);
 	}
 };
 
