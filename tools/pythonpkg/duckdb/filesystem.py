@@ -45,6 +45,12 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
         elif hasattr(filelike, 'size'):
             size = filelike.size
             return size() if callable(size) else size
+        elif hasattr(filelike, 'seek') and hasattr(filelike, 'tell'):
+            pos = filelike.tell()
+            filelike.seek(0, 2)
+            size = filelike.tell()
+            filelike.seek(pos)
+            return size
 
         raise ValueError(f"Could not determine size of file {filelike}")
 
