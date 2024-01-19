@@ -241,6 +241,9 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = buffer_pos + 1;
+	if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+		result.last_position++;
+	}
 	if (result.parse_chunk.ColumnCount() == 1) {
 		if (result.null_str.Empty()) {
 			bool empty = false;
