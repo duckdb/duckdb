@@ -241,9 +241,6 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = buffer_pos + 1;
-	if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		result.last_position++;
-	}
 	if (result.parse_chunk.ColumnCount() == 1) {
 		if (result.null_str.Empty()) {
 			bool empty = false;
@@ -433,7 +430,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 }
 
 void StringValueScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	if (state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+		states.Initialize(CSVState::CARRIAGE_RETURN);
+	} else {
+		states.Initialize(CSVState::RECORD_SEPARATOR);
+	}
 	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
 	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
