@@ -181,14 +181,15 @@ protected:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				break;
-			case CSVState::STANDARD:
+			case CSVState::STANDARD: {
 				iterator.pos.buffer_pos++;
-				while (state_machine->transition_array
-				           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
-				       iterator.pos.buffer_pos < to_pos - 1) {
-					iterator.pos.buffer_pos++;
+				while (iterator.pos.buffer_pos < to_pos - 3 &&
+				       state_machine->transition_array
+				           .skip_standard[*reinterpret_cast<uint16_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos])]) {
+					iterator.pos.buffer_pos += 2;
 				}
 				break;
+			}
 			default:
 				iterator.pos.buffer_pos++;
 				break;

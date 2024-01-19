@@ -103,13 +103,25 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	// Initialize characters we can skip during processing, for Standard and Quoted states
 	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
-		transition_array.skip_standard[i] = true;
 		transition_array.skip_quoted[i] = true;
 	}
+
+	char two_bytes[2];
+	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
+		for (idx_t j = 0; j < StateMachine::NUM_TRANSITIONS; j++) {
+			two_bytes[0] = i;
+			two_bytes[1] = j;
+			if (i == delimiter || i == static_cast<uint8_t>('\n') || i == static_cast<uint8_t>('\r') ||
+			    j == delimiter || j == static_cast<uint8_t>('\n') || j == static_cast<uint8_t>('\r')){
+				transition_array.skip_standard[*reinterpret_cast<uint16_t *>(&two_bytes)] = false;
+			} else{
+				transition_array.skip_standard[*reinterpret_cast<uint16_t *>(&two_bytes)] = true;
+			}
+	}
+		transition_array.skip_quoted[i] = true;
+	}
+
 	// For standard states we only care for delimiters \r and \n
-	transition_array.skip_standard[delimiter] = false;
-	transition_array.skip_standard[static_cast<uint8_t>('\n')] = false;
-	transition_array.skip_standard[static_cast<uint8_t>('\r')] = false;
 
 	// For quoted we only care about quote and escape
 	transition_array.skip_quoted[quote] = false;
