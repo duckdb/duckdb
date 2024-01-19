@@ -1,6 +1,7 @@
 #include "connect.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include <iostream>
+#include <fstream>
 
 using namespace duckdb;
 
@@ -147,6 +148,14 @@ SQLRETURN Connect::ReadFromIniFile() {
 		return SQL_SUCCESS;
 	}
 
+	// print out the contents of the file
+	std::ifstream in(odbc_file, std::ios::in);
+	std::string str;
+	while (std::getline(in, str)) {
+        std::cout << str << std::endl;
+    }
+	in.close();
+
 	if (dbc->dsn.empty()) {
 		return SQL_SUCCESS;
 	}
@@ -162,12 +171,14 @@ SQLRETURN Connect::ReadFromIniFile() {
 		auto converted_key = key_pair.second.c_str();
 		int read_size =
 		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, converted_odbc_file);
+		std::cout << "key: " << converted_key << ", read_size: " << read_size << std::endl;
 		if (read_size == 0) {
 			continue;
 		} else if (read_size < 0) {
 			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLDriverConnect", "Error reading from .odbc.ini",
 			                                   SQLStateType::ST_01S09, "");
 		}
+		std::cout << "key: " << converted_key << ", val: " << char_val << std::endl;
 		SQLRETURN ret = SetVal(key_pair.first, string(char_val));
 		if (ret != SQL_SUCCESS) {
 			return ret;
