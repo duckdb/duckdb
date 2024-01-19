@@ -22,6 +22,7 @@ void TableDataReader::ReadTableData() {
 	BinaryDeserializer stats_deserializer(reader);
 	stats_deserializer.Begin();
 	info.data->table_stats.Deserialize(stats_deserializer, columns);
+//	info.data->table_stats.sample->PushNewWeightsForSamples();
 	stats_deserializer.End();
 
 	// Deserialize the row group pointers (lazily, just set the count and the pointer to them for now)

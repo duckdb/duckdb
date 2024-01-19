@@ -157,6 +157,10 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 	return storage->GetStatistics(context, column.StorageOid());
 }
 
+optional_ptr<BlockingSample> DuckTableEntry::GetSample() {
+	return storage->GetSample();
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
 	if (info.type != AlterType::ALTER_TABLE) {

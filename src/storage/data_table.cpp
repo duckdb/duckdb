@@ -52,6 +52,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	    make_shared<RowGroupCollection>(info, TableIOManager::Get(*this).GetBlockManagerForRowData(), types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
+//		this->sample = std::move(data->table_stats.sample);
 	} else {
 		this->row_groups->InitializeEmpty();
 		D_ASSERT(row_groups->GetTotalRows() == 0);
@@ -1225,6 +1226,10 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 	row_groups->SetDistinct(column_id, std::move(distinct_stats));
 }
 
+optional_ptr<BlockingSample> DataTable::GetSample() {
+	return row_groups->GetSample();
+}
+
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
@@ -1234,8 +1239,12 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	TableStatistics global_stats;
 	row_groups->CopyStats(global_stats);
 	row_groups->Checkpoint(writer, global_stats);
-
+	auto sample_exists = GetSample();
+	if (sample_exists) {
+		global_stats.sample = sample_exists->Copy();
+	}
 	// The row group payload data has been written. Now write:
+	//   sample
 	//   column stats
 	//   row-group pointers
 	//   table pointer

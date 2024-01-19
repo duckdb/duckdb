@@ -15,6 +15,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 
@@ -239,6 +240,18 @@ protected:
 			OnObjectEnd();
 		}
 		OnListEnd();
+	}
+
+	// priority queue
+	template <typename T>
+	void WriteValue(const std::priority_queue<T> &queue) {
+		vector<T> placeholder;
+		auto queue_copy = std::priority_queue<T>(queue);
+		while (queue_copy.size() > 0) {
+			placeholder.emplace_back(queue_copy.top());
+			queue_copy.pop();
+		}
+		WriteValue(placeholder);
 	}
 
 	// class or struct implementing `Serialize(Serializer& Serializer)`;

@@ -165,6 +165,10 @@ public:
 
 	//! Get statistics of a physical column within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+
+	//! Get table sample
+	optional_ptr<BlockingSample> GetSample();
+	void SetSampleSeed(idx_t seed);
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 

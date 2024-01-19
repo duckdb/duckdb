@@ -13,6 +13,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
@@ -82,6 +83,8 @@ public:
 
 	//! Get statistics of a column (physical or virtual) within the table
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
+
+	virtual optional_ptr<BlockingSample> GetSample() = 0;
 
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
