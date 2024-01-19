@@ -42,8 +42,11 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
             return len(filelike.getvalue())
         elif isinstance(filelike, BufferedReader):
             return os.stat(filelike.name).st_size
-        else:
-            return getattr(filelike, 'size', 0)
+        elif hasattr(filelike, 'size'):
+            size = filelike.size
+            return size() if callable(size) else size
+
+        raise ValueError(f"Could not determine size of file {filelike}")
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
