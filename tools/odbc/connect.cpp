@@ -139,7 +139,7 @@ SQLRETURN Connect::ReadFromIniFile() {
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	std::string home_directory = fs->GetHomeDirectory();
 
-	std::string odbc_file = home_directory + "/.odbc.ini";
+	std::string odbc_file = fs->JoinPath(home_directory, ".odbc.ini");
 
 	std::cout << "odbc_file: " << odbc_file << std::endl;
 
@@ -162,6 +162,8 @@ SQLRETURN Connect::ReadFromIniFile() {
 
 	auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
 	auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);
+	std::cout << "converted_odbc_file: " << converted_odbc_file << std::endl;
+	std::cout << "converted_dsn: " << converted_dsn << std::endl;
 	for (auto &key_pair : conn_str_keynames) {
 		if (CheckSet(key_pair.first)) {
 			continue;
