@@ -1,0 +1,17 @@
+# name: benchmark/micro/csv/sniffer_quotes.benchmark
+# description: Run sniffer on quoted lineitem
+# group: [csv]
+
+name CSV Read Benchmark
+group csv
+
+require tpch
+load
+CALL dbgen(sf=1, suffix='_normal');
+COPY lineitem_normal TO 'lineitem_quoted.csv' (FORMAT CSV, DELIMITER '|', HEADER, FORCE_QUOTE *);
+
+run
+SELECT sniff_csv('lineitem_quoted.csv')
+
+result I
+0
