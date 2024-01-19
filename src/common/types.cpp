@@ -157,6 +157,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return PhysicalType::VARCHAR;
+	case LogicalTypeId::SORT_KEY:
+		return PhysicalType::VARCHAR;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -475,6 +477,8 @@ string LogicalType::ToString() const {
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
 	}
+	case LogicalTypeId::SORT_KEY:
+		return SortKeyType::GetTypeName(*this);
 	default:
 		return EnumUtil::ToString(id_);
 	}
@@ -1019,6 +1023,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	// weirdo types
 	case LogicalTypeId::LAMBDA:
 	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::SORT_KEY:
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::USER:
@@ -1201,6 +1206,50 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 }
 
 //===--------------------------------------------------------------------===//
+// Sort Key Type
+//===--------------------------------------------------------------------===//
+string OrderBySpec::ToString() const {
+	auto str = expr_type.ToString();
+	switch (type) {
+	case OrderType::ASCENDING:
+		str += " ASC";
+		break;
+	case OrderType::DESCENDING:
+		str += " DESC";
+		break;
+	default:
+		break;
+	}
+
+	switch (null_order) {
+	case OrderByNullType::NULLS_FIRST:
+		str += " NULLS FIRST";
+		break;
+	case OrderByNullType::NULLS_LAST:
+		str += " NULLS LAST";
+		break;
+	default:
+		break;
+	}
+
+	return str;
+}
+
+const string SortKeyType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::SORT_KEY);
+	auto info = type.AuxInfo();
+	if (!info) {
+		return "SORT_KEY<?>";
+	}
+
+	auto &sort_info = info->Cast<SortKeyTypeInfo>();
+	return "SORT_KEY<" +
+	       StringUtil::Join(sort_info.order_bys, sort_info.order_bys.size(), ", ",
+	                        [](const OrderBySpec &order_by) { return order_by.ToString(); }) +
+	       ">";
+}
+
+//===--------------------------------------------------------------------===//
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
@@ -1242,6 +1291,11 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
 	auto info = make_shared<AggregateStateTypeInfo>(std::move(state_type));
 	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));
+}
+
+LogicalType LogicalType::SORT_KEY(vector<OrderBySpec> order_bys) {
+	auto info = make_shared<SortKeyTypeInfo>(std::move(order_bys));
+	return LogicalType(LogicalTypeId::SORT_KEY, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//

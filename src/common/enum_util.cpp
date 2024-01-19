@@ -2225,6 +2225,8 @@ const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
 		return "ANY_TYPE_INFO";
 	case ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO:
 		return "INTEGER_LITERAL_TYPE_INFO";
+	case ExtraTypeInfoType::SORT_KEY_TYPE_INFO:
+		return "SORT_KEY_TYPE_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2267,6 +2269,9 @@ ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INTEGER_LITERAL_TYPE_INFO")) {
 		return ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO;
+	}
+	if (StringUtil::Equals(value, "SORT_KEY_TYPE_INFO")) {
+		return ExtraTypeInfoType::SORT_KEY_TYPE_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3182,6 +3187,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "UNION";
 	case LogicalTypeId::ARRAY:
 		return "ARRAY";
+	case LogicalTypeId::SORT_KEY:
+		return "SORT_KEY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3326,6 +3333,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ARRAY")) {
 		return LogicalTypeId::ARRAY;
+	}
+	if (StringUtil::Equals(value, "SORT_KEY")) {
+		return LogicalTypeId::SORT_KEY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

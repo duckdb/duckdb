@@ -23,6 +23,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+struct OrderBySpec;
 
 struct string_t;
 
@@ -32,12 +33,12 @@ using child_list_t = vector<std::pair<std::string, T>>;
 template <class T>
 using buffer_ptr = shared_ptr<T>;
 
-template <class T, typename... Args>
-buffer_ptr<T> make_buffer(Args &&...args) {
+template <class T, typename... Args>  // NOLINT
+buffer_ptr<T> make_buffer(Args &&...args) {  // NOLINT
 	return make_shared<T>(std::forward<Args>(args)...);
 }
 
-struct list_entry_t {
+struct list_entry_t {  // NOLINT
 	list_entry_t() = default;
 	list_entry_t(uint64_t offset, uint64_t length) : offset(offset), length(length) {
 	}
@@ -229,7 +230,8 @@ enum class LogicalTypeId : uint8_t {
 	AGGREGATE_STATE = 105,
 	LAMBDA = 106,
 	UNION = 107,
-	ARRAY = 108
+	ARRAY = 108,
+	SORT_KEY = 109
 };
 
 struct ExtraTypeInfo;
@@ -245,7 +247,7 @@ struct LogicalType {
 
 	DUCKDB_API ~LogicalType();
 
-	inline LogicalTypeId id() const {
+	inline LogicalTypeId id() const { // NOLINT
 		return id_;
 	}
 	inline PhysicalType InternalType() const {
@@ -266,9 +268,11 @@ struct LogicalType {
 
 	// copy assignment
 	inline LogicalType &operator=(const LogicalType &other) {
-		id_ = other.id_;
-		physical_type_ = other.physical_type_;
-		type_info_ = other.type_info_;
+		if (this != &other) {
+			id_ = other.id_;
+			physical_type_ = other.physical_type_;
+			type_info_ = other.type_info_;
+		}
 		return *this;
 	}
 	// move assignment
@@ -320,9 +324,9 @@ struct LogicalType {
 	DUCKDB_API bool IsValid() const;
 
 private:
-	LogicalTypeId id_;
-	PhysicalType physical_type_;
-	shared_ptr<ExtraTypeInfo> type_info_;
+	LogicalTypeId id_; // NOLINT
+	PhysicalType physical_type_; // NOLINT
+	shared_ptr<ExtraTypeInfo> type_info_; // NOLINT
 
 private:
 	PhysicalType GetInternalType();
@@ -370,6 +374,7 @@ public:
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type); // NOLINT
+	DUCKDB_API static LogicalType SORT_KEY(vector<OrderBySpec> order_bys); 	 	 // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);       // NOLINT
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
@@ -473,6 +478,10 @@ struct IntegerLiteral {
 	DUCKDB_API static LogicalType GetType(const LogicalType &type);
 	//! Whether or not the integer literal fits into the target numeric type
 	DUCKDB_API static bool FitsInType(const LogicalType &type, const LogicalType &target);
+};
+
+struct SortKeyType {
+	DUCKDB_API static const string GetTypeName(const LogicalType &type);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
@@ -26,7 +27,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	AGGREGATE_STATE_TYPE_INFO = 8,
 	ARRAY_TYPE_INFO = 9,
 	ANY_TYPE_INFO = 10,
-	INTEGER_LITERAL_TYPE_INFO = 11
+	INTEGER_LITERAL_TYPE_INFO = 11,
+	SORT_KEY_TYPE_INFO = 12
 };
 
 struct ExtraTypeInfo {
@@ -219,7 +221,7 @@ private:
 };
 
 struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
-	IntegerLiteralTypeInfo(Value constant_value);
+	explicit IntegerLiteralTypeInfo(Value constant_value);
 
 	Value constant_value;
 
@@ -232,6 +234,48 @@ protected:
 
 private:
 	IntegerLiteralTypeInfo();
+};
+
+struct OrderBySpec {
+	OrderBySpec(OrderType type, OrderByNullType null_order, const LogicalType &expr_type)
+	    : type(type), null_order(null_order), expr_type(expr_type) {
+	}
+
+	bool operator==(const OrderBySpec &other) const {
+		return type == other.type && null_order == other.null_order && expr_type == other.expr_type;
+	}
+	bool operator!=(const OrderBySpec &other) const {
+		return !(*this == other);
+	}
+
+	//! Sort order, ASC or DESC
+	OrderType type;
+	//! The NULL sort order, NULLS_FIRST or NULLS_LAST
+	OrderByNullType null_order;
+	//! Type to order by
+	LogicalType expr_type;
+
+public:
+	string ToString() const;
+
+	void Serialize(Serializer &serializer) const;
+	static OrderBySpec Deserialize(Deserializer &deserializer);
+};
+
+struct SortKeyTypeInfo : public ExtraTypeInfo {
+	explicit SortKeyTypeInfo(vector<OrderBySpec> orders);
+
+	vector<OrderBySpec> order_bys;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	SortKeyTypeInfo();
 };
 
 } // namespace duckdb

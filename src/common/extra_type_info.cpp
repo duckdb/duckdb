@@ -346,7 +346,7 @@ bool AnyTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 }
 
 //===--------------------------------------------------------------------===//
-// Any Type Info
+// IntegerLiteralTypeInfo
 //===--------------------------------------------------------------------===//
 IntegerLiteralTypeInfo::IntegerLiteralTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO) {
 }
@@ -358,6 +358,36 @@ IntegerLiteralTypeInfo::IntegerLiteralTypeInfo(Value constant_value_p)
 bool IntegerLiteralTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<IntegerLiteralTypeInfo>();
 	return constant_value == other.constant_value;
+}
+
+//===--------------------------------------------------------------------===//
+// SortKeyTypeInfo
+//===--------------------------------------------------------------------===//
+void OrderBySpec::Serialize(Serializer &serializer) const {
+	// Enums are special in that we serialize their values as a list instead of dumping the whole vector
+	serializer.WriteProperty(200, "type", type);
+	serializer.WriteProperty(201, "null_order", null_order);
+	serializer.WriteProperty(202, "expr_type", expr_type);
+}
+
+OrderBySpec OrderBySpec::Deserialize(Deserializer &deserializer) {
+	// Enums are special in that we serialize their values as a list instead of dumping the whole vector
+	auto type = deserializer.ReadProperty<OrderType>(200, "type");
+	auto null_order = deserializer.ReadProperty<OrderByNullType>(201, "null_order");
+	auto expr_type = deserializer.ReadProperty<LogicalType>(202, "expr_type");
+	return OrderBySpec(type, null_order, expr_type);
+}
+
+SortKeyTypeInfo::SortKeyTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::SORT_KEY_TYPE_INFO) {
+}
+
+SortKeyTypeInfo::SortKeyTypeInfo(vector<OrderBySpec> order_bys)
+    : ExtraTypeInfo(ExtraTypeInfoType::SORT_KEY_TYPE_INFO), order_bys(std::move(order_bys)) {
+}
+
+bool SortKeyTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<SortKeyTypeInfo>();
+	return (order_bys == other.order_bys);
 }
 
 } // namespace duckdb
