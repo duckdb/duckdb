@@ -146,6 +146,11 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// replace current expression with stored macro expression
 	expr = macro_def.expression->Copy();
 
+	// qualify only the macro parameters with a new empty binder that only knows the macro binding
+	auto dummy_binder = Binder::CreateBinder(context);
+	dummy_binder->macro_binding = new_macro_binding.get();
+	ExpressionBinder::QualifyColumnNames(*dummy_binder, expr);
+
 	// now replace the parameters
 	vector<unordered_set<string>> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
