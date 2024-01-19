@@ -1053,12 +1053,12 @@ if(BUILD_PYTHON AND BUILD_MAIN_DUCKDB_LIBRARY)
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
   if(BUILD_PYTHON)
+    set(COMMON_COMMAND ${CMAKE_COMMAND} -E env DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR} DUCKDB_COMPILE_FLAGS=\"${ALL_COMPILE_FLAGS}\" DUCKDB_LIBS=\"${duckdb_libs}\" python3 -m pip install --editable .)
+
     if(USER_SPACE)
       add_custom_target(
               duckdb_python ALL
-              COMMAND
-              python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              COMMAND ${COMMON_COMMAND} --user
               DEPENDS duckdb duckdb_static
               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
               COMMENT Build
@@ -1066,8 +1066,7 @@ if(BUILD_PYTHON AND BUILD_MAIN_DUCKDB_LIBRARY)
     else()
       add_custom_target(
               duckdb_python ALL
-              COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              COMMAND ${COMMON_COMMAND}
               DEPENDS duckdb duckdb_static
               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
               COMMENT Build
