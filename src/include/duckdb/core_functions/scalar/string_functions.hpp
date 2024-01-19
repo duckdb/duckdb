@@ -93,16 +93,25 @@ struct FormatFun {
 struct FormatBytesFun {
 	static constexpr const char *Name = "format_bytes";
 	static constexpr const char *Parameters = "bytes";
-	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)";
 	static constexpr const char *Example = "format_bytes(1000 * 16)";
 
 	static ScalarFunction GetFunction();
 };
 
-struct FormatreadabledecimalsizeFun {
+struct FormatreadablesizeFun {
 	using ALIAS = FormatBytesFun;
 
+	static constexpr const char *Name = "formatReadableSize";
+};
+
+struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
+	static constexpr const char *Parameters = "bytes";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)";
+	static constexpr const char *Example = "format_bytes(1000 * 16)";
+
+	static ScalarFunction GetFunction();
 };
 
 struct HammingFun {
@@ -469,6 +478,15 @@ struct ToBaseFun {
 	static constexpr const char *Example = "to_base(42, 16)";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpEscapeFun {
+	static constexpr const char *Name = "regexp_escape";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
+	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
+
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb

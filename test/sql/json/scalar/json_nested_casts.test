@@ -30,7 +30,7 @@ select cast(json('[1,2]') as json[]);
 statement error
 select cast(['boom'] as json[]);
 ----
-Malformed JSON
+Conversion Error
 
 query I
 select cast(['[1, 2]', '[3, 4]'] as json[]);
@@ -56,7 +56,7 @@ SELECT {'a': 42, 'b': '[1, 2]'}::ROW(a JSON, b INT[])
 statement error
 SELECT {'a': 'boom', 'b': '[1, 2]'}::ROW(a JSON, b INT[])
 ----
-Malformed JSON
+Conversion Error
 
 # varchar to struct of json
 query I
@@ -245,6 +245,7 @@ select bool,
        int,
        bigint,
        hugeint,
+	   uhugeint,
        utinyint,
        usmallint,
        uint,
@@ -289,6 +290,7 @@ select bool::JSON as bool,
        int::JSON as int,
        bigint::JSON as bigint,
        hugeint::JSON as hugeint,
+       uhugeint::JSON as uhugeint,
        utinyint::JSON as utinyint,
        usmallint::JSON as usmallint,
        uint::JSON as uint,
@@ -331,6 +333,7 @@ select bool::BOOLEAN as bool,
        int::INTEGER as int,
        bigint::BIGINT as bigint,
        hugeint::HUGEINT as hugeint,
+       uhugeint::UHUGEINT as uhugeint,
        utinyint::UTINYINT as utinyint,
        usmallint::USMALLINT as usmallint,
        uint::UINTEGER as uint,
@@ -394,3 +397,25 @@ select v::JSON::ROW(i INTEGER, j VARCHAR) from test_vector_types(NULL::ROW(i INT
 
 
 endloop
+
+# we only cast our strings to JSON if they start with an alphabetic character, so this won't work
+statement error
+select ''::JSON
+----
+Conversion Error
+
+statement error
+select '          '::JSON
+----
+Conversion Error
+
+# JSON cannot contain the NULL byte
+statement error
+select chr(0)::JSON
+----
+Conversion Error
+
+statement error
+select ('duck' || chr(0))::JSON
+----
+Conversion Error

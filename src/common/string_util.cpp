@@ -4,6 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -154,31 +155,45 @@ string StringUtil::Join(const vector<string> &input, const string &separator) {
 	return StringUtil::Join(input, input.size(), separator, [](const string &s) { return s; });
 }
 
-string StringUtil::BytesToHumanReadableString(idx_t bytes) {
+string StringUtil::Join(const set<string> &input, const string &separator) {
+	// The result
+	std::string result;
+
+	auto it = input.begin();
+	while (it != input.end()) {
+		result += *it;
+		it++;
+		if (it == input.end()) {
+			break;
+		}
+		result += separator;
+	}
+	return result;
+}
+
+string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
+	D_ASSERT(multiplier == 1000 || multiplier == 1024);
 	string db_size;
-	auto kilobytes = bytes / 1000;
-	auto megabytes = kilobytes / 1000;
-	kilobytes -= megabytes * 1000;
-	auto gigabytes = megabytes / 1000;
-	megabytes -= gigabytes * 1000;
-	auto terabytes = gigabytes / 1000;
-	gigabytes -= terabytes * 1000;
-	auto petabytes = terabytes / 1000;
-	terabytes -= petabytes * 1000;
-	if (petabytes > 0) {
-		return to_string(petabytes) + "." + to_string(terabytes / 100) + "PB";
+	idx_t array[6] = {};
+	const char *unit[2][6] = {{"bytes", "KiB", "MiB", "GiB", "TiB", "PiB"}, {"bytes", "kB", "MB", "GB", "TB", "PB"}};
+
+	const int sel = (multiplier == 1000);
+
+	array[0] = bytes;
+	for (idx_t i = 1; i < 6; i++) {
+		array[i] = array[i - 1] / multiplier;
+		array[i - 1] %= multiplier;
 	}
-	if (terabytes > 0) {
-		return to_string(terabytes) + "." + to_string(gigabytes / 100) + "TB";
-	} else if (gigabytes > 0) {
-		return to_string(gigabytes) + "." + to_string(megabytes / 100) + "GB";
-	} else if (megabytes > 0) {
-		return to_string(megabytes) + "." + to_string(kilobytes / 100) + "MB";
-	} else if (kilobytes > 0) {
-		return to_string(kilobytes) + "KB";
-	} else {
-		return to_string(bytes) + (bytes == 1 ? " byte" : " bytes");
+
+	for (idx_t i = 5; i >= 1; i--) {
+		if (array[i]) {
+			// Map 0 -> 0 and (multiplier-1) -> 9
+			idx_t fractional_part = (array[i - 1] * 10) / multiplier;
+			return to_string(array[i]) + "." + to_string(fractional_part) + " " + unit[sel][i];
+		}
 	}
+
+	return to_string(array[0]) + (bytes == 1 ? " byte" : " bytes");
 }
 
 string StringUtil::Upper(const string &str) {
@@ -215,12 +230,30 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
+	const auto charmap = LowerFun::ascii_to_lower_map;
 	for (idx_t c = 0; c < l1.size(); c++) {
-		if (StringUtil::CharacterToLower(l1[c]) != StringUtil::CharacterToLower(l2[c])) {
+		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool StringUtil::CILessThan(const string &s1, const string &s2) {
+	const auto charmap = UpperFun::ascii_to_upper_map;
+
+	unsigned char u1, u2;
+
+	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
+	length += s1.length() != s2.length();
+	for (idx_t i = 0; i < length; i++) {
+		u1 = (unsigned char)s1[i];
+		u2 = (unsigned char)s2[i];
+		if (charmap[u1] != charmap[u2]) {
+			break;
+		}
+	}
+	return (charmap[u1] - charmap[u2]) < 0;
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

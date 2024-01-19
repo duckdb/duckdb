@@ -3,6 +3,7 @@ if(NOT CLANG_TIDY)
 endif()
 add_subdirectory(extension)
 add_subdirectory(relation)
+add_subdirectory(secret)
 add_subdirectory(settings)
 add_subdirectory(chunk_scan_state)
 
@@ -19,6 +20,7 @@ add_library_unity(
   client_context.cpp
   client_data.cpp
   client_verify.cpp
+  connection_manager.cpp
   chunk_scan_state.cpp
   config.cpp
   connection.cpp

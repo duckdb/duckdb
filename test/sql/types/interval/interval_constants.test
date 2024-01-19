@@ -82,60 +82,98 @@ SELECT interval 2 seconds, interval 2 second;
 # 2 years 10 months
 statement error
 SELECT interval '2 10' years to months
+----
 
 # 2 days 10 hours
 statement error
 SELECT interval '2 10' days to hours
+----
 
 # 12 days 15:06:00
 statement error
 SELECT interval '12 15:06' days to minutes
+----
 
 # 12 days 15:06:04.123
 statement error
 SELECT interval '12 15:06:04.123' days to seconds
+----
 
 # 12:30:00
 statement error
 SELECT interval '12:30' hours to minutes
+----
 
 # 15:06:04.123
 statement error
 SELECT interval '15:06:04.123' hours to seconds
+----
 
 # 00:12:30
 statement error
 SELECT interval '12:30' minutes to seconds
+----
 
 # test out of range interval constants
 statement error
 SELECT interval '99999999999999' years;
+----
 
 statement error
 SELECT interval '214748364' years;
+----
 
 statement error
 SELECT interval '9223372036854775807' hours;
+----
 
 statement error
 SELECT interval '9223372036854775807' minutes;
+----
 
 statement error
 SELECT interval '9223372036854775807' seconds;
+----
 
 statement error
 SELECT interval '9223372036854775807' milliseconds;
-
-# milli/microseconds
-query I
-SELECT interval 3 milliseconds;
 ----
-00:00:00.003
 
-query I
-SELECT interval 3 microseconds;
+# milliseconds
+query II
+SELECT interval 3 millisecond, interval 3 milliseconds;
 ----
-00:00:00.000003
+00:00:00.003	00:00:00.003
+
+# microseconds
+query II
+SELECT interval 3 microsecond, interval 3 microseconds;
+----
+00:00:00.000003	00:00:00.000003
+
+# weeks
+query II
+SELECT interval 3 week, interval 3 weeks;
+----
+21 days	21 days
+
+# decades
+query II
+SELECT interval 3 decade, interval 3 decades;
+----
+30 years	30 years
+
+# centuries
+query II
+SELECT interval 3 century, interval 3 centuries;
+----
+300 years	300 years
+
+# millennia
+query II
+SELECT interval 3 millennium, interval 3 millennia;
+----
+3000 years	3000 years
 
 query I
 select timestamp '1992-01-01 12:00:00' + interval 3 microseconds + interval 3 milliseconds
@@ -146,3 +184,296 @@ query I
 select timestamp '1992-01-01 12:00:00' + (interval 3 microseconds + interval 3 milliseconds)
 ----
 1992-01-01 12:00:00.003003
+
+# Fractional seconds
+query I
+select interval '10.123' second;
+----
+00:00:10.123
+
+query I
+select '47.210'::interval;
+----
+00:00:47.21
+
+# Negative values
+query I
+select '-47.210'::interval;
+----
+-00:00:47.21
+
+# Trailing spaces
+query I
+select '47.210  '::interval;
+----
+00:00:47.21
+
+# Nanoseconds are OK
+query I
+select '31.123456789'::interval;
+----
+00:00:31.123456
+
+# Non-alpha specifiers are still not OK
+statement error
+select '47.210 5'::interval;
+----
+Could not convert string '47.210 5' to INTERVAL
+
+#
+# Fractional to_interval parsing - above seconds truncates
+#
+
+query I
+SELECT INTERVAL '1.5' MICROSECOND;
+----
+00:00:00.000001
+
+query I
+SELECT INTERVAL '1.5' MILLISECOND;
+----
+00:00:00.0015
+
+query I
+SELECT INTERVAL '1.5' SECOND;
+----
+00:00:01.5
+
+query I
+SELECT INTERVAL '1.5' MINUTE;
+----
+00:01:00
+
+query I
+SELECT INTERVAL '1.5' HOUR;
+----
+01:00:00
+
+query I
+SELECT INTERVAL '1.5' DAY;
+----
+1 day
+
+query I
+SELECT INTERVAL '1.5' WEEK;
+----
+7 days
+
+query I
+SELECT INTERVAL '1.5' MONTH;
+----
+1 month
+
+query I
+SELECT INTERVAL '1.5' YEAR;
+----
+1 year
+
+query I
+SELECT INTERVAL '1.5' DECADE;
+----
+10 years
+
+query I
+SELECT INTERVAL '1.5' CENTURY;
+----
+100 years
+
+query I
+SELECT INTERVAL '1.5' MILLENNIA;
+----
+1000 years
+
+query I
+SELECT INTERVAL '-1.5' MICROSECOND;
+----
+-00:00:00.000001
+
+query I
+SELECT INTERVAL '-1.5' MILLISECOND;
+----
+-00:00:00.0015
+
+query I
+SELECT INTERVAL '-1.5' SECOND;
+----
+-00:00:01.5
+
+query I
+SELECT INTERVAL '-1.5' MINUTE;
+----
+-00:01:00
+
+query I
+SELECT INTERVAL '-1.5' HOUR;
+----
+-01:00:00
+
+query I
+SELECT INTERVAL '-1.5' DAY;
+----
+-1 day
+
+query I
+SELECT INTERVAL '-1.5' WEEK;
+----
+-7 days
+
+query I
+SELECT INTERVAL '-1.5' MONTH;
+----
+-1 month
+
+query I
+SELECT INTERVAL '-1.5' YEAR;
+----
+-1 year
+
+query I
+SELECT INTERVAL '-1.5' DECADE;
+----
+-10 years
+
+query I
+SELECT INTERVAL '-1.5' CENTURY;
+----
+-100 years
+
+query I
+SELECT INTERVAL '-1.5' MILLENNIA;
+----
+-1000 years
+
+#
+# Fractional VARCHAR casts - fractions spill one position
+#
+
+query I
+SELECT '1.5 MICROSECOND'::INTERVAL;
+----
+00:00:00.000002
+
+query I
+SELECT '1.5 MILLISECOND'::INTERVAL;
+----
+00:00:00.0015
+
+query I
+SELECT '1.5 SECOND'::INTERVAL;
+----
+00:00:01.5
+
+query I
+SELECT '1.5 MINUTE'::INTERVAL;
+----
+00:01:30
+
+query I
+SELECT '1.5 HOUR'::INTERVAL;
+----
+01:30:00
+
+query I
+SELECT '1.5 DAY'::INTERVAL;
+----
+1 day 12:00:00
+
+query I
+SELECT '1.5 WEEK'::INTERVAL;
+----
+10 days 12:00:00
+
+query I
+SELECT '1.5 MONTH'::INTERVAL;
+----
+1 month 15 days
+
+query I
+SELECT '1.5 QUARTER'::INTERVAL;
+----
+4 months 15 days
+
+query I
+SELECT '1.5 YEAR'::INTERVAL
+----
+1 year 6 months
+
+query I
+SELECT '1.5 DECADE'::INTERVAL
+----
+15 years
+
+query I
+SELECT '1.5 CENTURY'::INTERVAL
+----
+150 years
+
+query I
+SELECT '1.5 MILLENIUM'::INTERVAL
+----
+1500 years
+
+query I
+SELECT '-1.5 MICROSECOND'::INTERVAL;
+----
+-00:00:00.000002
+
+query I
+SELECT '-1.5 MILLISECOND'::INTERVAL;
+----
+-00:00:00.0015
+
+query I
+SELECT '-1.5 SECOND'::INTERVAL;
+----
+-00:00:01.5
+
+query I
+SELECT '-1.5 MINUTE'::INTERVAL;
+----
+-00:01:30
+
+query I
+SELECT '-1.5 HOUR'::INTERVAL;
+----
+-01:30:00
+
+query I
+SELECT '-1.5 DAY'::INTERVAL;
+----
+-1 day -12:00:00
+
+query I
+SELECT '-1.5 WEEK'::INTERVAL;
+----
+-10 days -12:00:00
+
+query I
+SELECT '-1.5 MONTH'::INTERVAL;
+----
+-1 month -15 days
+
+query I
+SELECT '-1.5 QUARTER'::INTERVAL;
+----
+-4 months -15 days
+
+query I
+SELECT '-1.5 YEAR'::INTERVAL
+----
+-1 year -6 months
+
+query I
+SELECT '-1.5 DECADE'::INTERVAL
+----
+-15 years
+
+query I
+SELECT '-1.5 CENTURY'::INTERVAL
+----
+-150 years
+
+query I
+SELECT '-1.5 MILLENIUM'::INTERVAL
+----
+-1500 years

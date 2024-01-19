@@ -10,15 +10,15 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #endif
 
 #include "miniz_wrapper.hpp"
@@ -644,6 +644,11 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
+	if (HasDictionary(state)) {
+		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
+		column_chunk.meta_data.statistics.__isset.distinct_count = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
 	for (const auto &write_info : state.write_info) {
 		column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
 	}
@@ -678,11 +683,11 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	for (auto &write_info : state.write_info) {
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
-		write_info.page_header.write(writer.GetProtocol());
+		writer.Write(write_info.page_header);
 		// total uncompressed size in the column chunk includes the header size (!)
 		total_uncompressed_size += column_writer.GetTotalWritten() - header_start_offset;
 		total_uncompressed_size += write_info.page_header.uncompressed_page_size;
-		column_writer.WriteData(write_info.compressed_data, write_info.compressed_size);
+		writer.WriteData(write_info.compressed_data, write_info.compressed_size);
 	}
 	column_chunk.meta_data.total_compressed_size = column_writer.GetTotalWritten() - start_offset;
 	column_chunk.meta_data.total_uncompressed_size = total_uncompressed_size;
@@ -807,6 +812,22 @@ struct ParquetHugeintOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Hugeint::Cast<double>(input);
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<ColumnWriterStatistics>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+	}
+};
+
+struct ParquetUhugeintOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Uhugeint::Cast<double>(input);
 	}
 
 	template <class SRC, class TGT>
@@ -1274,7 +1295,6 @@ public:
 		idx_t run_count = 0;
 		auto strings = FlatVector::GetData<string_t>(vector);
 		for (idx_t i = 0; i < vcount; i++) {
-
 			if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index + i]) {
 				continue;
 			}
@@ -1992,6 +2012,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::HUGEINT:
 		return make_uniq<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
+		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
+	case LogicalTypeId::UHUGEINT:
+		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(

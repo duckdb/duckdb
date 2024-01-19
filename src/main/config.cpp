@@ -54,6 +54,7 @@ bool DBConfigOptions::debug_print_bindings = false;
 	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
+                                                 DUCKDB_GLOBAL(AllowPersistentSecrets),
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
@@ -91,6 +92,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
+                                                 DUCKDB_GLOBAL(OldImplicitCasting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(OrderedAggregateThreshold),
@@ -107,6 +109,8 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(ProgressBarTimeSetting),
                                                  DUCKDB_LOCAL(SchemaSetting),
                                                  DUCKDB_LOCAL(SearchPathSetting),
+                                                 DUCKDB_GLOBAL(SecretDirectorySetting),
+                                                 DUCKDB_GLOBAL(DefaultSecretStorage),
                                                  DUCKDB_GLOBAL(TempDirectorySetting),
                                                  DUCKDB_GLOBAL(ThreadsSetting),
                                                  DUCKDB_GLOBAL(UsernameSetting),
@@ -183,6 +187,14 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 	}
 }
 
+void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
+	for (auto &kv : values) {
+		auto &name = kv.first;
+		auto &value = kv.second;
+		SetOptionByName(name, value);
+	}
+}
+
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
@@ -233,6 +245,10 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
+}
+
+IndexTypeSet &DBConfig::GetIndexTypes() {
+	return *index_types;
 }
 
 void DBConfig::SetDefaultMaxMemory() {
@@ -376,8 +392,17 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		multiplier = 1000LL * 1000LL * 1000LL;
 	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
 		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
+		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i unites)");
 	}
 	return (idx_t)multiplier * limit;
 }

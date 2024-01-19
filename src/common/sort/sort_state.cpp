@@ -3,6 +3,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -31,6 +32,10 @@ idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 			// Structs get 1 bytes (null)
 			col_size++;
 			return GetNestedSortingColSize(col_size, StructType::GetChildType(type, 0));
+		case PhysicalType::ARRAY:
+			// Arrays get 1 bytes (null)
+			col_size++;
+			return GetNestedSortingColSize(col_size, ArrayType::GetChildType(type));
 		default:
 			throw NotImplementedException("Unable to order column with type %s", type.ToString());
 		}
@@ -396,7 +401,7 @@ void GlobalSortState::PrepareMergePhase() {
 	idx_t total_heap_size =
 	    std::accumulate(sorted_blocks.begin(), sorted_blocks.end(), (idx_t)0,
 	                    [](idx_t a, const unique_ptr<SortedBlock> &b) { return a + b->HeapSize(); });
-	if (external || (pinned_blocks.empty() && total_heap_size > 0.25 * buffer_manager.GetMaxMemory())) {
+	if (external || (pinned_blocks.empty() && total_heap_size > 0.25 * buffer_manager.GetQueryMaxMemory())) {
 		external = true;
 	}
 	// Use the data that we have to determine which partition size to use during the merge

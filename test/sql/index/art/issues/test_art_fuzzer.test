@@ -96,3 +96,4 @@ ART indexes cannot contain BLOBs with zero bytes.
 
 statement error
 CREATE INDEX i21 ON t21 (c1);
+----

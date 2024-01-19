@@ -40,6 +40,12 @@ class Connection {
 public:
 	DUCKDB_API explicit Connection(DuckDB &database);
 	DUCKDB_API explicit Connection(DatabaseInstance &database);
+	// disable copy constructors
+	Connection(const Connection &other) = delete;
+	Connection &operator=(const Connection &) = delete;
+	//! enable move constructors
+	DUCKDB_API Connection(Connection &&other) noexcept;
+	DUCKDB_API Connection &operator=(Connection &&) noexcept;
 	DUCKDB_API ~Connection();
 
 	shared_ptr<ClientContext> context;
@@ -131,7 +137,8 @@ public:
 
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
-	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, named_parameter_map_t &&options);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const vector<string> &csv_input, named_parameter_map_t &&options);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_input, named_parameter_map_t &&options);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
 
 	//! Reads Parquet file

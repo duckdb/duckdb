@@ -22,6 +22,7 @@ PRAGMA enable_profiling='query_tree_optimizer'
 
 statement error
 PRAGMA enable_profiling='unknown'
+----
 
 statement ok
 PRAGMA profiling_output='__TEST_DIR__/test.json'
@@ -34,6 +35,7 @@ PRAGMA profiling_mode = detailed
 
 statement error
 PRAGMA profiling_mode = 'unknown'
+----
 
 statement ok
 CREATE TABLE tbl AS SELECT (i % 2)::TINYINT i FROM range(1) tbl(i);
@@ -49,6 +51,7 @@ PRAGMA all_profiling_output
 
 statement error
 PRAGMA profiler_history_size = -1
+----
 
 statement ok
 PRAGMA profiler_history_size = 5

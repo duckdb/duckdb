@@ -23,17 +23,21 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups->InitializeEmpty();
 
 	table.info->indexes.Scan([&](Index &index) {
-		D_ASSERT(index.type == IndexType::ART);
+		if (index.index_type != ART::TYPE_NAME) {
+			return false;
+		}
+		D_ASSERT(index.index_type == ART::TYPE_NAME);
+
 		auto &art = index.Cast<ART>();
-		if (art.constraint_type != IndexConstraintType::NONE) {
+		if (art.index_constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
 			unbound_expressions.reserve(art.unbound_expressions.size());
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_uniq<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
-			                                art.constraint_type, art.db));
+			indexes.AddIndex(make_uniq<ART>(art.name, art.index_constraint_type, art.column_ids, art.table_io_manager,
+			                                std::move(unbound_expressions), art.db));
 		}
 		return false;
 	});
@@ -80,13 +84,25 @@ void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<
 }
 
 idx_t LocalTableStorage::EstimatedSize() {
+	// count the appended rows
 	idx_t appended_rows = row_groups->GetTotalRows() - deleted_rows;
+
+	// get the (estimated) size of a row (no compressions, etc.)
 	idx_t row_size = 0;
 	auto &types = row_groups->GetTypes();
 	for (auto &type : types) {
 		row_size += GetTypeIdSize(type.InternalType());
 	}
-	return appended_rows * row_size;
+
+	// get the index size
+	idx_t index_sizes = 0;
+	indexes.Scan([&](Index &index) {
+		index_sizes += index.GetInMemorySize();
+		return false;
+	});
+
+	// return the size of the appended rows and the index size
+	return appended_rows * row_size + index_sizes;
 }
 
 void LocalTableStorage::WriteNewRowGroup() {
@@ -454,6 +470,9 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
 
+	// try to initialize any unknown indexes
+	table.info->InitializeIndexes(context);
+
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {
 		index.Vacuum();
@@ -556,6 +575,7 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 	if (!storage) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
+	table.info->InitializeIndexes(context);
 	return storage->indexes;
 }
 

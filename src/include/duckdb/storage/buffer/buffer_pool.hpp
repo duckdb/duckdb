@@ -1,11 +1,20 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/buffer/buffer_pool.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
+class TemporaryMemoryManager;
 struct EvictionQueue;
 
 struct BufferEvictionNode {
@@ -42,9 +51,13 @@ public:
 
 	void IncreaseUsedMemory(idx_t size);
 
-	idx_t GetUsedMemory();
+	idx_t GetUsedMemory() const;
 
-	idx_t GetMaxMemory();
+	idx_t GetMaxMemory() const;
+
+	virtual idx_t GetQueryMaxMemory() const;
+
+	TemporaryMemoryManager &GetTemporaryMemoryManager();
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
@@ -64,7 +77,7 @@ protected:
 	void PurgeQueue();
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
-private:
+protected:
 	//! The lock for changing the memory limit
 	mutex limit_lock;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
@@ -75,6 +88,8 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
 	atomic<uint32_t> queue_insertions;
+	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
+	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
 };
 
 } // namespace duckdb

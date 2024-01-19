@@ -40,7 +40,6 @@ public:
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
 	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
-		D_ASSERT(depth == 0);
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, &binder);
 		subquery_binder->can_contain_nulls = true;
@@ -89,7 +88,14 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// cast child and subquery child to equivalent types
 		D_ASSERT(bound_node->types.size() == 1);
 		auto &child = BoundExpression::GetExpression(*expr.child);
-		auto compare_type = LogicalType::MaxLogicalType(child->return_type, bound_node->types[0]);
+		auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
+		LogicalType compare_type;
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, bound_node->types[0], compare_type)) {
+			throw BinderException(binder.FormatError(
+			    expr, StringUtil::Format(
+			              "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
+			              child_type.ToString(), bound_node->types[0])));
+		}
 		child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;

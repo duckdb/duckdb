@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -14,6 +15,7 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -39,6 +41,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -214,6 +217,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto alias = type.GetAlias();
 		type = LogicalType::STRUCT(child_types);
 		type.SetAlias(alias);
+	} else if (type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(type);
+		auto array_size = ArrayType::GetSize(type);
+		BindLogicalType(context, child_type, catalog, schema);
+		auto alias = type.GetAlias();
+		type = LogicalType::ARRAY(child_type, array_size);
+		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
@@ -240,7 +250,10 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 			}
 		} else {
-			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+			string type_catalog = UserType::GetCatalog(type);
+			string type_schema = UserType::GetSchema(type);
+			BindSchemaOrCatalog(context, type_catalog, type_schema);
+			type = Catalog::GetType(context, type_catalog, type_schema, user_type_name);
 		}
 		BindLogicalType(context, type, catalog, schema);
 	}
@@ -621,18 +634,20 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(std::move(query));
-		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
+		} else {
 			// two cases:
-			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.
+			// 1: create a type with a non-existent type as source, Binder::BindLogicalType(...) will throw exception.
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
-			                                   UserType::GetTypeName(create_type_info.type));
-			inner_type.SetAlias(create_type_info.name);
-			create_type_info.type = inner_type;
+			Binder::BindLogicalType(context, create_type_info.type);
 		}
 		break;
+	}
+	case CatalogType::SECRET_ENTRY: {
+		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
+		properties.return_type = StatementReturnType::QUERY_RESULT;
+		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
 	}
 	default:
 		throw Exception("Unrecognized type!");

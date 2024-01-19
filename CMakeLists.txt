@@ -483,6 +483,7 @@ include_directories(third_party/fsst)
 include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/fastpforlib)
+include_directories(third_party/skiplist)
 include_directories(third_party/fast_float)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
@@ -697,6 +698,10 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
 
+  if(EMSCRIPTEN)
+    set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".duckdb_extension.wasm")
+  endif()
+
   if(MSVC)
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
@@ -704,6 +709,21 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+  endif()
+
+  if(EMSCRIPTEN)
+    # Copy file.duckdb_extension.wasm to file.duckdb_extension.wasm.lib
+    add_custom_command(
+      TARGET ${TARGET_NAME}
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_NAME}> $<TARGET_FILE:${TARGET_NAME}>.lib
+      )
+    # Compile the library into the actual wasm file
+    add_custom_command(
+      TARGET ${TARGET_NAME}
+      POST_BUILD
+      COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
+      )
   endif()
 endfunction()
 
@@ -1018,7 +1038,7 @@ if(${EXTENSION_CONFIG_BUILD})
   endforeach()
 endif()
 
-if(BUILD_PYTHON)
+if(BUILD_PYTHON AND BUILD_MAIN_DUCKDB_LIBRARY)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
   elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -1033,12 +1053,12 @@ if(BUILD_PYTHON)
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
   if(BUILD_PYTHON)
+    set(COMMON_COMMAND ${CMAKE_COMMAND} -E env DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR} DUCKDB_COMPILE_FLAGS=\"${ALL_COMPILE_FLAGS}\" DUCKDB_LIBS=\"${duckdb_libs}\" python3 -m pip install --editable .)
+
     if(USER_SPACE)
       add_custom_target(
               duckdb_python ALL
-              COMMAND
-              python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              COMMAND ${COMMON_COMMAND} --user
               DEPENDS duckdb duckdb_static
               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
               COMMENT Build
@@ -1046,8 +1066,7 @@ if(BUILD_PYTHON)
     else()
       add_custom_target(
               duckdb_python ALL
-              COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              COMMAND ${COMMON_COMMAND}
               DEPENDS duckdb duckdb_static
               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
               COMMENT Build
@@ -1072,7 +1091,7 @@ if(NOT CLANG_TIDY)
 endif()
 
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
   add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
@@ -1082,6 +1101,11 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
           COMMENT Create local extension repository)
   add_extension_dependencies(duckdb_local_extension_repo)
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    # jemalloc is odd duck
+    if ("${EXT_NAME}" STREQUAL "jemalloc")
+      continue()
+    endif()
+
     add_dependencies(duckdb_local_extension_repo ${EXT_NAME}_loadable_extension)
   endforeach()
   message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")

@@ -38,16 +38,16 @@ SELECT ARRAY[i] FROM range(3) tbl(i) WHERE (ARRAY[i])[1] == 1
 [1]
 
 # conversion failure (mixed types)
-query I
-SELECT ARRAY[i, 'hello'] FROM range(3) tbl(i) WHERE (ARRAY[i])[1] == 1
+statement error
+SELECT ARRAY[i, 'hello'] FROM generate_series(0,2) tbl(i) WHERE (ARRAY[i])[1] == 1
 ----
-[1, hello]
+Could not convert string
 
 # conversion failure (nested mixed types)
-query I
+statement error
 SELECT ARRAY[ARRAY[1], ARRAY['hello']]
 ----
-[[1], [hello]]
+explicit cast is required
 
 # array casts
 query I
@@ -69,6 +69,7 @@ SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[][]
 # this doesn't work: int[][] to bigint[]
 statement error
 SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[]
+----
 
 # however, this does work
 # casting to varchar[] or varchar
@@ -78,16 +79,11 @@ SELECT ARRAY[[1, 2], [3, 4]]::VARCHAR[]
 ----
 [[1, 2], [3, 4]]
 
-mode skip
-
-# FIXME: double unnest
-query I
+# double unnest
+statement error
 SELECT UNNEST(UNNEST(ARRAY[[1, 2], [3, 4]]::VARCHAR[][]))
 ----
-[1, 2]
-[3, 4]
-
-mode unskip
+not supported
 
 query I
 SELECT UNNEST(ARRAY[[1, 2], [3, 4]]::VARCHAR[])

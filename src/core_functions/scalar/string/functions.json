@@ -55,10 +55,17 @@
     {
         "name": "format_bytes",
         "parameters": "bytes",
-        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)",
         "example": "format_bytes(1000 * 16)",
         "type": "scalar_function",
-        "aliases": ["formatReadableDecimalSize"]
+        "aliases": ["formatReadableSize"]
+    },
+    {
+        "name": "formatReadableDecimalSize",
+        "parameters": "bytes",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)",
+        "example": "format_bytes(1000 * 16)",
+        "type": "scalar_function"
     },
     {
         "name": "hamming",
@@ -297,5 +304,13 @@
         "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
         "example": "to_base(42, 16)",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "regexp_escape",
+        "parameters": "string",
+        "description": "Escapes all potentially meaningful regexp characters in the input string",
+        "example": "regexp_escape('https://duckdb.org')",
+        "struct": "RegexpEscapeFun",
+        "type": "scalar_function"
     }
 ]

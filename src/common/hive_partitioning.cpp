@@ -1,5 +1,6 @@
 #include "duckdb/common/hive_partitioning.hpp"
 
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -65,7 +66,7 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
 const string &HivePartitioning::RegexString() {
-	static string REGEX = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
+	static string REGEX = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]*)";
 	return REGEX;
 }
 
@@ -260,6 +261,9 @@ static void GetHivePartitionValuesTypeSwitch(Vector &input, vector<HivePartition
 		break;
 	case PhysicalType::UINT64:
 		TemplatedGetHivePartitionValues<uint64_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedGetHivePartitionValues<uhugeint_t>(input, keys, col_idx, count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedGetHivePartitionValues<float>(input, keys, col_idx, count);

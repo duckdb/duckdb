@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -636,6 +637,53 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	}
 }
 
+void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
+                         idx_t offset, idx_t copy_count) {
+
+	auto &segment = meta_data.segment;
+
+	// copy the NULL values for the main array vector (the same as for a struct vector)
+	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
+
+	auto &child_vector = ArrayVector::GetEntry(source);
+	auto &child_type = child_vector.GetType();
+	auto array_size = ArrayType::GetSize(source.GetType());
+
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
+	}
+
+	auto &child_function = meta_data.copy_function.child_functions[0];
+	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+
+	auto current_child_index = child_index;
+	while (current_child_index.IsValid()) {
+		auto &child_vdata = segment.GetVectorData(current_child_index);
+		current_child_index = child_vdata.next_data;
+	}
+
+	UnifiedVectorFormat child_vector_data;
+	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
+	child_vector.ToUnifiedFormat(copy_count * array_size, child_vector_data);
+
+	// Broadcast and sync the validity of the array vector to the child vector
+
+	if (source_data.validity.IsMaskSet()) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				for (idx_t j = 0; j < array_size; j++) {
+					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
+				}
+			}
+		}
+	}
+
+	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
+	                        array_size * copy_count);
+}
+
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
 	ColumnDataCopyFunction result;
 	column_data_copy_function_t function;
@@ -670,6 +718,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 	case PhysicalType::UINT64:
 		function = ColumnDataCopy<uint64_t>;
 		break;
+	case PhysicalType::UINT128:
+		function = ColumnDataCopy<uhugeint_t>;
+		break;
 	case PhysicalType::FLOAT:
 		function = ColumnDataCopy<float>;
 		break;
@@ -696,6 +747,12 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		result.child_functions.push_back(child_function);
 		break;
 	}
+	case PhysicalType::ARRAY: {
+		function = ColumnDataCopyArray;
+		auto child_function = GetCopyFunction(ArrayType::GetChildType(type));
+		result.child_functions.push_back(child_function);
+		break;
+	}
 	default:
 		throw InternalException("Unsupported type for ColumnDataCollection::GetCopyFunction");
 	}
@@ -707,6 +764,7 @@ static bool IsComplexType(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
 		return true;
 	default:
 		return false;

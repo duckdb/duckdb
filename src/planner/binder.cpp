@@ -50,7 +50,8 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
-    : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
+    : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0),
+      inherit_ctes(inherit_ctes_p) {
 	if (parent) {
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
@@ -95,8 +96,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<ExplainStatement>());
 	case StatementType::VACUUM_STATEMENT:
 		return Bind(statement.Cast<VacuumStatement>());
-	case StatementType::SHOW_STATEMENT:
-		return Bind(statement.Cast<ShowStatement>());
 	case StatementType::CALL_STATEMENT:
 		return Bind(statement.Cast<CallStatement>());
 	case StatementType::EXPORT_STATEMENT:
@@ -117,6 +116,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<AttachStatement>());
 	case StatementType::DETACH_STATEMENT:
 		return Bind(statement.Cast<DetachStatement>());
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return Bind(statement.Cast<CopyDatabaseStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -191,7 +192,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::SUBQUERY:
 		result = Bind(ref.Cast<SubqueryRef>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		result = Bind(ref.Cast<EmptyTableRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
@@ -202,6 +203,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
+		break;
+	case TableReferenceType::SHOW_REF:
+		result = Bind(ref.Cast<ShowRef>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
@@ -227,7 +231,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::TABLE_FUNCTION:
 		root = CreatePlan(ref.Cast<BoundTableFunction>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
@@ -486,7 +490,9 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		result.types.push_back(result_type);
 		projection_expressions.push_back(std::move(expr));
 	}
-
+	if (new_returning_list.empty()) {
+		throw BinderException("RETURNING list is empty!");
+	}
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));
 	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());

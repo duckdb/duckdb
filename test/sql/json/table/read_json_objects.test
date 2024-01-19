@@ -7,6 +7,7 @@ require no_extension_autoloading
 # this was the previous implementation, doesn't work without JSON extension (no JSON type in catalog)
 statement error
 SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
+----
 
 require json
 
@@ -19,7 +20,7 @@ Invalid Input Error: Expected top-level JSON array
 
 # now it should work!
 query I
-SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
+SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL, auto_detect = false)
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -172,11 +173,11 @@ select * from read_ndjson_objects('https://github.com/duckdb/duckdb-data/release
 # empty file
 query I
 select * from read_json_objects('data/json/empty.ndjson')
----
+----
 
 query I
 select * from read_ndjson_objects('data/json/empty.ndjson')
----
+----
 
 # invalid json stuff
 statement error

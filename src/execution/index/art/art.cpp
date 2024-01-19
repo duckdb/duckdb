@@ -1,23 +1,21 @@
 #include "duckdb/execution/index/art/art.hpp"
 
-#include "duckdb/common/radix.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
-#include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-
-#include <algorithm>
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
 
@@ -33,15 +31,16 @@ struct ARTIndexScanState : public IndexScanState {
 	Iterator iterator;
 };
 
-ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-         const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+//===--------------------------------------------------------------------===//
+// ART
+//===--------------------------------------------------------------------===//
+
+ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+         TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
-         const BlockPointer &pointer)
-    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
+         const IndexStorageInfo &info)
+    : Index(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
-	if (!Radix::IsLittleEndian()) {
-		throw NotImplementedException("ART indexes are not supported on big endian architectures");
-	}
 
 	// initialize all allocators
 	if (!allocators) {
@@ -58,8 +57,16 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
-	if (pointer.IsValid()) {
-		Deserialize(pointer);
+	// deserialize lazily
+	if (info.IsValid()) {
+
+		if (!info.root_block_ptr.IsValid()) {
+			InitAllocators(info);
+
+		} else {
+			// old storage file
+			Deserialize(info.root_block_ptr);
+		}
 	}
 
 	// validate the types of the key columns
@@ -75,6 +82,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		case PhysicalType::UINT16:
 		case PhysicalType::UINT32:
 		case PhysicalType::UINT64:
+		case PhysicalType::UINT128:
 		case PhysicalType::FLOAT:
 		case PhysicalType::DOUBLE:
 		case PhysicalType::VARCHAR:
@@ -89,8 +97,9 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 // Initialize Predicate Scans
 //===--------------------------------------------------------------------===//
 
-unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-                                                              const ExpressionType expression_type) {
+//! Initialize a single predicate scan on the index with the given expression and column IDs
+static unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
+                                                                const ExpressionType expression_type) {
 	// initialize point lookup
 	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
@@ -98,10 +107,11 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction 
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
-                                                            const ExpressionType low_expression_type,
-                                                            const Value &high_value,
-                                                            const ExpressionType high_expression_type) {
+//! Initialize a two predicate scan on the index with the given expression and column IDs
+static unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
+                                                              const ExpressionType low_expression_type,
+                                                              const Value &high_value,
+                                                              const ExpressionType high_expression_type) {
 	// initialize range lookup
 	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
@@ -109,6 +119,93 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &t
 	result->values[1] = high_value;
 	result->expressions[1] = high_expression_type;
 	return std::move(result);
+}
+
+unique_ptr<IndexScanState> ART::TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+                                                  const Expression &filter_expr) {
+
+	Value low_value, high_value, equal_value;
+	ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
+	// try to find a matching index for any of the filter expressions
+
+	// create a matcher for a comparison with a constant
+	ComparisonExpressionMatcher matcher;
+	// match on a comparison type
+	matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
+	// match on a constant comparison with the indexed expression
+	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(const_cast<Expression &>(index_expr)));
+	matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+
+	matcher.policy = SetMatcher::Policy::UNORDERED;
+
+	vector<reference<Expression>> bindings;
+	if (matcher.Match(const_cast<Expression &>(filter_expr), bindings)) {
+		// range or equality comparison with constant value
+		// we can use our index here
+		// bindings[0] = the expression
+		// bindings[1] = the index expression
+		// bindings[2] = the constant
+		auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
+		auto comparison_type = comparison.type;
+		if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+			// the expression is on the right side, we flip them around
+			comparison_type = FlipComparisonExpression(comparison_type);
+		}
+		if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+			// equality value
+			// equality overrides any other bounds so we just break here
+			equal_value = constant_value;
+		} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			// greater than means this is a lower bound
+			low_value = constant_value;
+			low_comparison_type = comparison_type;
+		} else {
+			// smaller than means this is an upper bound
+			high_value = constant_value;
+			high_comparison_type = comparison_type;
+		}
+	} else if (filter_expr.type == ExpressionType::COMPARE_BETWEEN) {
+		// BETWEEN expression
+		auto &between = filter_expr.Cast<BoundBetweenExpression>();
+		if (!between.input->Equals(index_expr)) {
+			// expression doesn't match the index expression
+			return nullptr;
+		}
+		if (between.lower->type != ExpressionType::VALUE_CONSTANT ||
+		    between.upper->type != ExpressionType::VALUE_CONSTANT) {
+			// not a constant comparison
+			return nullptr;
+		}
+		low_value = (between.lower->Cast<BoundConstantExpression>()).value;
+		low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+		                                              : ExpressionType::COMPARE_GREATERTHAN;
+		high_value = (between.upper->Cast<BoundConstantExpression>()).value;
+		high_comparison_type =
+		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+	}
+
+	if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
+		// we can scan this index using this predicate: try a scan
+		unique_ptr<IndexScanState> index_state;
+		if (!equal_value.IsNull()) {
+			// equality predicate
+			index_state = InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
+		} else if (!low_value.IsNull() && !high_value.IsNull()) {
+			// two-sided predicate
+			index_state = InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
+			                                          high_comparison_type);
+		} else if (!low_value.IsNull()) {
+			// less than predicate
+			index_state = InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
+		} else {
+			D_ASSERT(!high_value.IsNull());
+			index_state = InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
+		}
+		return index_state;
+	}
+	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
@@ -188,6 +285,9 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKe
 	case PhysicalType::UINT64:
 		TemplatedGenerateKeys<uint64_t>(allocator, input.data[0], input.size(), keys);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedGenerateKeys<uhugeint_t>(allocator, input.data[0], input.size(), keys);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedGenerateKeys<float>(allocator, input.data[0], input.size(), keys);
 		break;
@@ -233,6 +333,9 @@ void ART::GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKe
 			break;
 		case PhysicalType::UINT64:
 			ConcatenateKeys<uint64_t>(allocator, input.data[i], input.size(), keys);
+			break;
+		case PhysicalType::UINT128:
+			ConcatenateKeys<uhugeint_t>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::FLOAT:
 			ConcatenateKeys<float>(allocator, input.data[i], input.size(), keys);
@@ -655,6 +758,8 @@ static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &val
 		return ARTKey::CreateARTKey<uint64_t>(allocator, value.type(), value);
 	case PhysicalType::INT128:
 		return ARTKey::CreateARTKey<hugeint_t>(allocator, value.type(), value);
+	case PhysicalType::UINT128:
+		return ARTKey::CreateARTKey<uhugeint_t>(allocator, value.type(), value);
 	case PhysicalType::FLOAT:
 		return ARTKey::CreateARTKey<float>(allocator, value.type(), value);
 	case PhysicalType::DOUBLE:
@@ -896,11 +1001,11 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	case VerifyExistenceType::APPEND: {
 		// APPEND to PK/UNIQUE table, but node/key already exists in PK/UNIQUE table
 		string type = IsPrimary() ? "primary key" : "unique";
-		return StringUtil::Format(
-		    "Duplicate key \"%s\" violates %s constraint. "
-		    "If this is an unexpected constraint violation please double "
-		    "check with the known index limitations section in our documentation (docs - sql - indexes).",
-		    key_name, type);
+		return StringUtil::Format("Duplicate key \"%s\" violates %s constraint. "
+		                          "If this is an unexpected constraint violation please double "
+		                          "check with the known index limitations section in our documentation "
+		                          "(https://duckdb.org/docs/sql/indexes).",
+		                          key_name, type);
 	}
 	case VerifyExistenceType::APPEND_FK: {
 		// APPEND_FK to FK table, node/key does not exist in PK/UNIQUE table
@@ -971,46 +1076,67 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 }
 
 //===--------------------------------------------------------------------===//
-// Serialization
+// Helper functions for (de)serialization
 //===--------------------------------------------------------------------===//
 
-BlockPointer ART::Serialize(MetadataWriter &writer) {
+IndexStorageInfo ART::GetStorageInfo(const bool get_buffers) {
 
-	D_ASSERT(owns_data);
+	// set the name and root node
+	IndexStorageInfo info;
+	info.name = name;
+	info.root = tree.Get();
 
-	// early-out, if all allocators are empty
-	if (!tree.HasMetadata()) {
-		root_block_pointer = BlockPointer();
-		return root_block_pointer;
+	if (!get_buffers) {
+		// store the data on disk as partial blocks and set the block ids
+		WritePartialBlocks();
+
+	} else {
+		// set the correct allocation sizes and get the map containing all buffers
+		for (const auto &allocator : *allocators) {
+			info.buffers.push_back(allocator->InitSerializationToWAL());
+		}
 	}
 
-	lock_guard<mutex> l(lock);
+	for (const auto &allocator : *allocators) {
+		info.allocator_infos.push_back(allocator->GetInfo());
+	}
+
+	return info;
+}
+
+void ART::WritePartialBlocks() {
+
+	// use the partial block manager to serialize all allocator data
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
 
-	vector<BlockPointer> allocator_pointers;
 	for (auto &allocator : *allocators) {
-		allocator_pointers.push_back(allocator->Serialize(partial_block_manager, writer));
+		allocator->SerializeBuffers(partial_block_manager);
 	}
 	partial_block_manager.FlushPartialBlocks();
+}
 
-	root_block_pointer = writer.GetBlockPointer();
-	writer.Write(tree);
-	for (auto &allocator_pointer : allocator_pointers) {
-		writer.Write(allocator_pointer);
+void ART::InitAllocators(const IndexStorageInfo &info) {
+
+	// set the root node
+	tree.Set(info.root);
+
+	// initialize the allocators
+	D_ASSERT(info.allocator_infos.size() == ALLOCATOR_COUNT);
+	for (idx_t i = 0; i < info.allocator_infos.size(); i++) {
+		(*allocators)[i]->Init(info.allocator_infos[i]);
 	}
-
-	return root_block_pointer;
 }
 
 void ART::Deserialize(const BlockPointer &pointer) {
 
 	D_ASSERT(pointer.IsValid());
-	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
+	auto &metadata_manager = table_io_manager.GetMetadataManager();
+	MetadataReader reader(metadata_manager, pointer);
 	tree = reader.Read<Node>();
 
 	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-		(*allocators)[i]->Deserialize(reader.Read<BlockPointer>());
+		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());
 	}
 }
 
@@ -1067,6 +1193,21 @@ void ART::Vacuum(IndexLock &state) {
 
 	// finalize the vacuum operation
 	FinalizeVacuum(flags);
+}
+
+//===--------------------------------------------------------------------===//
+// Size
+//===--------------------------------------------------------------------===//
+
+idx_t ART::GetInMemorySize(IndexLock &index_lock) {
+
+	D_ASSERT(owns_data);
+
+	idx_t in_memory_size = 0;
+	for (auto &allocator : *allocators) {
+		in_memory_size += allocator->GetInMemorySize();
+	}
+	return in_memory_size;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1128,5 +1269,13 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 	}
 	return "[empty]";
 }
+
+string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+	auto key_name = GenerateErrorKeyName(input, failed_index);
+	auto exception_msg = GenerateConstraintErrorMessage(verify_type, key_name);
+	return exception_msg;
+}
+
+constexpr const char *ART::TYPE_NAME;
 
 } // namespace duckdb

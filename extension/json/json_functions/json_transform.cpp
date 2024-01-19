@@ -79,7 +79,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else {
-		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
+		if (!structure_val.DefaultTryCastAs(LogicalType::JSON())) {
 			throw BinderException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
@@ -489,8 +489,8 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	return JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, options);
 }
 
-static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
-                           JSONTransformOptions &options) {
+static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                 JSONTransformOptions &options) {
 	bool success = true;
 
 	// Initialize list vector
@@ -557,6 +557,96 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 
 	// Transform array values
 	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options)) {
+		success = false;
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
+	}
+
+	return success;
+}
+
+static bool TransformArrayToArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                  JSONTransformOptions &options) {
+	bool success = true;
+
+	// Initialize array vector
+	auto &result_validity = FlatVector::Validity(result);
+	auto array_size = ArrayType::GetSize(result.GetType());
+	auto child_count = count * array_size;
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto &arr = arrays[i];
+		if (!arr || unsafe_yyjson_is_null(arr)) {
+			result_validity.SetInvalid(i);
+			continue;
+		}
+
+		if (!unsafe_yyjson_is_arr(arr)) {
+			result_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
+				options.error_message =
+				    StringUtil::Format("Expected ARRAY, but got %s: %s", JSONCommon::ValTypeToString(arrays[i]),
+				                       JSONCommon::ValToString(arrays[i], 50));
+				options.object_index = i;
+				success = false;
+			}
+			continue;
+		}
+
+		auto json_arr_size = unsafe_yyjson_get_len(arr);
+		if (json_arr_size != array_size) {
+			result_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
+				options.error_message =
+				    StringUtil::Format("Expected array of size %u, but got '%s' with size %u", array_size,
+				                       JSONCommon::ValToString(arrays[i], 50), json_arr_size);
+				options.object_index = i;
+				success = false;
+			}
+			continue;
+		}
+	}
+
+	// Initialize array for the nested values
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_val *>(alc, child_count);
+
+	// Get array values
+	size_t idx, max;
+	yyjson_val *val;
+	idx_t nested_elem_idx = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (!result_validity.RowIsValid(i)) {
+			// We already marked this as invalid, but we still need to increment nested_elem_idx
+			// and set the nullptrs (otherwise indexing will break after compaction)
+			for (idx_t j = 0; j < array_size; j++) {
+				nested_vals[nested_elem_idx] = nullptr;
+				nested_elem_idx++;
+			};
+		} else {
+			yyjson_arr_foreach(arrays[i], idx, max, val) {
+				nested_vals[nested_elem_idx] = val;
+				nested_elem_idx++;
+			}
+		}
+	}
+
+	if (!success) {
+		// Set object index in case of error in nested array so we can get accurate line number information
+		for (idx_t i = 0; i < count; i++) {
+			if (!result_validity.RowIsValid(i)) {
+				continue;
+			}
+			auto offset = i * array_size;
+			if (options.object_index >= offset && options.object_index < offset + array_size) {
+				options.object_index = i;
+			}
+		}
+	}
+
+	// Transform array values
+	if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetEntry(result), child_count, options)) {
 		success = false;
 	}
 
@@ -736,7 +826,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformFromStringWithFormat(vals, result, count, options);
 	}
 
-	if (JSONCommon::LogicalTypeIsJSON(result_type)) {
+	if (result_type.IsJSONType()) {
 		return TransformToJSON(vals, alc, result, count);
 	}
 
@@ -764,6 +854,8 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformNumerical<uint64_t>(vals, result, count, options);
 	case LogicalTypeId::HUGEINT:
 		return TransformNumerical<hugeint_t>(vals, result, count, options);
+	case LogicalTypeId::UHUGEINT:
+		return TransformNumerical<uhugeint_t>(vals, result, count, options);
 	case LogicalTypeId::FLOAT:
 		return TransformNumerical<float>(vals, result, count, options);
 	case LogicalTypeId::DOUBLE:
@@ -803,11 +895,13 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::STRUCT:
 		return TransformObjectInternal(vals, alc, result, count, options);
 	case LogicalTypeId::LIST:
-		return TransformArray(vals, alc, result, count, options);
+		return TransformArrayToList(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
 		return TransformObjectToMap(vals, alc, result, count, options);
 	case LogicalTypeId::UNION:
 		return TransformValueIntoUnion(vals, alc, result, count, options);
+	case LogicalTypeId::ARRAY:
+		return TransformArrayToArray(vals, alc, result, count, options);
 	default:
 		throw NotImplementedException("Cannot read a value of type %s from a json file", result_type.ToString());
 	}
@@ -862,7 +956,7 @@ static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	ScalarFunctionSet set("json_transform");
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
-	GetTransformFunctionInternal(set, JSONCommon::JSONType());
+	GetTransformFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 
@@ -874,7 +968,7 @@ static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const Log
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	ScalarFunctionSet set("json_transform_strict");
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
-	GetTransformStrictFunctionInternal(set, JSONCommon::JSONType());
+	GetTransformStrictFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 
@@ -914,6 +1008,9 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 		case LogicalTypeId::UNION:
 			target_type = LogicalType::UNION({{"any", LogicalType::ANY}});
 			break;
+		case LogicalTypeId::ARRAY:
+			target_type = LogicalType::ARRAY(LogicalType::ANY);
+			break;
 		case LogicalTypeId::VARCHAR:
 			// We skip this one here as it's handled in json_functions.cpp
 			continue;
@@ -922,7 +1019,7 @@ void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
 		}
 		// Going from JSON to another type has the same cost as going from VARCHAR to that type
 		const auto json_to_target_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, target_type);
-		casts.RegisterCastFunction(JSONCommon::JSONType(), target_type, JSONToAnyCastBind, json_to_target_cost);
+		casts.RegisterCastFunction(LogicalType::JSON(), target_type, JSONToAnyCastBind, json_to_target_cost);
 	}
 }
 

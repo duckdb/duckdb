@@ -9,17 +9,19 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
-#include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -29,21 +31,20 @@ namespace duckdb {
 
 DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
-	cast_functions = make_uniq<CastFunctionSet>();
+	cast_functions = make_uniq<CastFunctionSet>(*this);
+	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	options.duckdb_api = StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
+DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
 	if (read_only) {
 		options.access_mode = AccessMode::READ_ONLY;
 	}
-	for (auto &kv : config_dict) {
-		string key = kv.first;
-		string val = kv.second;
-		auto opt_val = Value(val);
-		DBConfig::SetOptionByName(key, opt_val);
-	}
+}
+
+DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only) : DBConfig::DBConfig(read_only) {
+	SetOptionsByName(config_dict);
 }
 
 DBConfig::~DBConfig() {
@@ -53,6 +54,7 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
+	GetDatabaseManager().ResetDatabases();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -118,22 +120,13 @@ ConnectionManager &ConnectionManager::Get(DatabaseInstance &db) {
 	return db.GetConnectionManager();
 }
 
-ClientContext *ConnectionManager::GetConnection(DatabaseInstance *db) {
-	for (auto &conn : connections) {
-		if (conn.first->db.get() == db) {
-			return conn.first;
-		}
-	}
-	return nullptr;
-}
-
 ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
-                                                                              AccessMode access_mode) {
-	duckdb::unique_ptr<AttachedDatabase> attached_database;
+unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(const AttachInfo &info, const string &type,
+                                                                      AccessMode access_mode) {
+	unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extension
 		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
@@ -163,16 +156,15 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
-	auto attached_database = CreateAttachedDatabase(info, config.options.database_type, config.options.access_mode);
-	auto initial_database = attached_database.get();
+	optional_ptr<AttachedDatabase> initial_database;
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		db_manager->AddDatabase(*con.context, std::move(attached_database));
+		initial_database =
+		    db_manager->AttachDatabase(*con.context, info, config.options.database_type, config.options.access_mode);
 		con.Commit();
 	}
 
-	// initialize the database
 	initial_database->SetInitialDatabase();
 	initial_database->Initialize();
 }
@@ -198,7 +190,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr->options.temporary_directory = string(database_path) + ".tmp";
 
 		// special treatment for in-memory mode
-		if (strcmp(database_path, ":memory:") == 0) {
+		if (strcmp(database_path, IN_MEMORY_PATH) == 0) {
 			config_ptr->options.temporary_directory = ".tmp";
 		}
 	}
@@ -208,6 +200,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		config_ptr->options.database_path.clear();
 	}
+
 	Configure(*config_ptr);
 
 	if (user_config && !user_config->options.use_temporary_directory) {
@@ -221,12 +214,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
-	// check if we are opening a standard DuckDB database or an extension database
-	if (config.options.database_type.empty()) {
-		auto path_and_type = DBPathAndType::Parse(config.options.database_path, config);
-		config.options.database_type = path_and_type.type;
-		config.options.database_path = path_and_type.path;
-	}
+	// resolve the type of teh database we are opening
+	DBPathAndType::ResolveDatabaseType(config.options.database_path, config.options.database_type, config);
+
+	// initialize the secret manager
+	config.secret_manager->Initialize(*this);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -267,11 +259,15 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 DuckDB::~DuckDB() {
 }
 
+SecretManager &DatabaseInstance::GetSecretManager() {
+	return *config.secret_manager;
+}
+
 BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
-BufferPool &DatabaseInstance::GetBufferPool() {
+BufferPool &DatabaseInstance::GetBufferPool() const {
 	return *config.buffer_pool;
 }
 
@@ -320,10 +316,16 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
+	config.extension_parameters = new_config.extension_parameters;
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>();
+	}
+	if (new_config.secret_manager) {
+		config.secret_manager = std::move(new_config.secret_manager);
+	} else {
+		config.secret_manager = make_uniq<SecretManager>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();

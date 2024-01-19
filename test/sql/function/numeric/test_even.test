@@ -56,6 +56,7 @@ NULL
 
 statement error
 SELECT even('abcd')
+----
 
 # check bound
 query I

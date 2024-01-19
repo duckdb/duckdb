@@ -24,6 +24,12 @@
         "id": 102,
         "name": "alias",
         "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "query_location",
+        "type": "idx_t",
+        "default": "idx_t(DConstants::INVALID_INDEX)"
       }
     ]
   },
@@ -116,6 +122,24 @@
         "type": "vector<string>"
       }
     ]
+  },
+  {
+    "class": "LambdaRefExpression",
+    "base": "ParsedExpression",
+    "enum": "LAMBDA_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "lambda_idx",
+        "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "column_name",
+        "type": "string"
+      }
+    ],
+    "constructor": ["lambda_idx", "column_name"]
   },
   {
     "class": "ComparisonExpression",
@@ -407,6 +431,17 @@
         "id": 213,
         "name": "filter_expr",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 214,
+        "name": "exclude_clause",
+        "type": "WindowExcludeMode",
+        "default": "WindowExcludeMode::NO_OTHER"
+      },
+      {
+        "id": 215,
+        "name": "distinct",
+        "type": "bool"
       }
     ],
     "constructor": ["type"]

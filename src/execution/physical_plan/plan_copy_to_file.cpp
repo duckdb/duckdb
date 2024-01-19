@@ -1,7 +1,7 @@
-#include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/execution/operator/persistent/physical_fixed_batch_copy.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
 namespace duckdb {
@@ -15,7 +15,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	if (op.use_tmp_file) {
 		op.file_path += ".tmp";
 	}
-	if (op.per_thread_output || op.partition_output || !op.partition_columns.empty() || op.overwrite_or_ignore) {
+	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.partition_output || !op.partition_columns.empty() ||
+	    op.overwrite_or_ignore) {
 		// hive-partitioning/per-thread output does not care about insertion order, and does not support batch indexes
 		preserve_insertion_order = false;
 		supports_batch_index = false;
@@ -51,7 +52,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	copy->use_tmp_file = op.use_tmp_file;
 	copy->overwrite_or_ignore = op.overwrite_or_ignore;
 	copy->filename_pattern = op.filename_pattern;
+	copy->file_extension = op.file_extension;
 	copy->per_thread_output = op.per_thread_output;
+	if (op.file_size_bytes.IsValid()) {
+		copy->file_size_bytes = op.file_size_bytes;
+	}
 	copy->partition_output = op.partition_output;
 	copy->partition_columns = op.partition_columns;
 	copy->names = op.names;

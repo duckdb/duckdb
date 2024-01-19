@@ -12,6 +12,7 @@ CREATE TABLE test (x INT, y AS (x + 100));
 # Error: Vacuum the same column twice
 statement error
 ANALYZE test(x, x);
+----
 
 statement ok
 ANALYZE test(y, x);

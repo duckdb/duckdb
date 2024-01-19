@@ -34,6 +34,7 @@ with cte1 as (with b as (Select i as j from a) select j from b), cte2 as (with c
 # duplicate CTE alias
 statement error
 with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
+----
 
 # refer to CTE in subquery tableref
 query I
@@ -58,3 +59,4 @@ with cte as (Select i as j from a) select * from cte where j = (with cte as (sel
 # self-refer to non-existent cte
 statement error
 with cte as (select * from cte) select * from cte
+----

@@ -59,6 +59,7 @@ SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
 # cant write to existing folders
 statement error
 COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+----
 
 # we have not added anything
 query I
@@ -70,3 +71,4 @@ SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
 # this should not work
 statement error
 COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output3' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);
+----

@@ -1,14 +1,26 @@
-from fsspec import filesystem, AbstractFileSystem
-from fsspec.implementations.memory import MemoryFileSystem
-from shutil import copyfileobj
-from .bytes_io_wrapper import BytesIOWrapper
-from io import StringIO, BytesIO, TextIOBase, BufferedReader
 import os
+from io import StringIO, BytesIO, TextIOBase, BufferedReader
+
+from fsspec import AbstractFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
+
+from .bytes_io_wrapper import BytesIOWrapper
 
 
 def is_file_like(obj):
     # We only care that we can read from the file
     return hasattr(obj, "read") and hasattr(obj, "seek")
+
+
+class Unclosable:
+    def __init__(self, file):
+        self.file = file
+
+    def __getattr__(self, attr):
+        return getattr(self.file, attr)
+
+    def close(self):
+        pass
 
 
 class ModifiedMemoryFileSystem(MemoryFileSystem):
@@ -30,8 +42,17 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
             return len(filelike.getvalue())
         elif isinstance(filelike, BufferedReader):
             return os.stat(filelike.name).st_size
-        else:
-            return getattr(filelike, 'size', 0)
+        elif hasattr(filelike, 'size'):
+            size = filelike.size
+            return size() if callable(size) else size
+        elif hasattr(filelike, 'seek') and hasattr(filelike, 'tell'):
+            pos = filelike.tell()
+            filelike.seek(0, 2)
+            size = filelike.tell()
+            filelike.seek(pos)
+            return size
+
+        return -1
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
@@ -58,7 +79,7 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
         path = self._strip_protocol(path)
         if path in self.store:
             f = self.store[path]
-            return f
+            return Unclosable(f)
         else:
             raise FileNotFoundError(path)
 

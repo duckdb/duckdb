@@ -26,6 +26,14 @@ statement ok con2
 FORCE CHECKPOINT
 
 # force checkpoint rolled back the transaction of con1
+statement error con1
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+transaction is aborted
+
+statement ok con1
+ROLLBACK
+
 query III con1
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
@@ -93,20 +101,52 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
 
+statement error con2
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+transaction is aborted
+
+statement ok con2
+ROLLBACK
+
 query III con2
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
+
+statement error con3
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+transaction is aborted
+
+statement ok con3
+ROLLBACK
 
 query III con3
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
 
+statement error con4
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+transaction is aborted
+
+statement ok con4
+ROLLBACK
+
 query III con4
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;
 ----
 0	999999	1000000
+
+statement error con5
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+transaction is aborted
+
+statement ok con5
+ROLLBACK
 
 query III con5
 SELECT MIN(i), MAX(i), COUNT(*) FROM test;

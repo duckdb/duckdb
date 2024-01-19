@@ -5,25 +5,34 @@ namespace duckdb {
 //! The target type determines the preferred implicit casts
 static int64_t TargetTypeCost(const LogicalType &type) {
 	switch (type.id()) {
-	case LogicalTypeId::INTEGER:
-		return 103;
 	case LogicalTypeId::BIGINT:
 		return 101;
-	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::INTEGER:
 		return 102;
 	case LogicalTypeId::HUGEINT:
-		return 120;
+		return 103;
+	case LogicalTypeId::DOUBLE:
+		return 104;
+	case LogicalTypeId::DECIMAL:
+		return 105;
+	case LogicalTypeId::TIMESTAMP_NS:
+		return 119;
 	case LogicalTypeId::TIMESTAMP:
 		return 120;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return 121;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return 122;
 	case LogicalTypeId::VARCHAR:
 		return 149;
-	case LogicalTypeId::DECIMAL:
-		return 104;
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::ARRAY:
 		return 160;
+	case LogicalTypeId::ANY:
+		return int64_t(AnyType::GetCastScore(type));
 	default:
 		return 110;
 	}
@@ -92,6 +101,7 @@ static int64_t ImplicitCastUTinyint(const LogicalType &to) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
@@ -108,6 +118,7 @@ static int64_t ImplicitCastUSmallint(const LogicalType &to) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
@@ -122,6 +133,7 @@ static int64_t ImplicitCastUInteger(const LogicalType &to) {
 
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -136,6 +148,7 @@ static int64_t ImplicitCastUBigint(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
 		return TargetTypeCost(to);
@@ -181,6 +194,17 @@ static int64_t ImplicitCastHugeint(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastUhugeint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
 static int64_t ImplicitCastDate(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
@@ -190,8 +214,106 @@ static int64_t ImplicitCastDate(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastEnum(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::VARCHAR:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestampSec(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestampMS(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestampNS(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP:
+		// we allow casting ALL timestamps, including nanosecond ones, to TimestampNS
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastTimestamp(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::TIMESTAMP_NS:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+bool LogicalTypeIsValid(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::DECIMAL:
+		// these types are only valid with auxiliary info
+		if (!type.AuxInfo()) {
+			return false;
+		}
+		break;
+	default:
+		break;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::ANY:
+	case LogicalTypeId::INVALID:
+	case LogicalTypeId::UNKNOWN:
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto child_count = StructType::GetChildCount(type);
+		for (idx_t i = 0; i < child_count; i++) {
+			if (!LogicalTypeIsValid(StructType::GetChildType(type, i))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::UNION: {
+		auto member_count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < member_count; i++) {
+			if (!LogicalTypeIsValid(UnionType::GetMemberType(type, i))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return LogicalTypeIsValid(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return LogicalTypeIsValid(ArrayType::GetChildType(type));
+	default:
+		return true;
+	}
+}
+
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
-	if (from.id() == LogicalTypeId::SQLNULL) {
+	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY) {
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);
 	}
@@ -199,9 +321,34 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// parameter expression can be cast to anything for no cost
 		return 0;
 	}
-	if (to.id() == LogicalTypeId::ANY) {
-		// anything can be cast to ANY type for (almost no) cost
-		return 1;
+	if (from.id() == LogicalTypeId::STRING_LITERAL) {
+		// string literals can be cast to any type for low cost as long as the type is valid
+		// i.e. we cannot cast to LIST(ANY) as we don't know what "ANY" should be
+		// we cannot cast to DECIMAL without precision/width specified
+		if (!LogicalTypeIsValid(to)) {
+			return -1;
+		}
+		if (to.id() == LogicalTypeId::VARCHAR && to.GetAlias().empty()) {
+			return 1;
+		}
+		return 20;
+	}
+	if (from.id() == LogicalTypeId::INTEGER_LITERAL) {
+		// the integer literal has an underlying type - this type always matches
+		if (IntegerLiteral::GetType(from).id() == to.id()) {
+			return 0;
+		}
+		// integer literals can be cast to any other integer type for a low cost, but only if the literal fits
+		if (IntegerLiteral::FitsInType(from, to)) {
+			// to avoid ties we prefer BIGINT, INT, ...
+			auto target_cost = TargetTypeCost(to);
+			if (target_cost < 100) {
+				throw InternalException("Integer literal implicit cast - TargetTypeCost should be >= 100");
+			}
+			return target_cost - 90;
+		}
+		// in any other case we use the casting rules of the preferred type of the literal
+		return CastRules::ImplicitCast(IntegerLiteral::GetType(from), to);
 	}
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible
@@ -210,23 +357,42 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
 		// Lists can be cast if their child types can be cast
 		auto child_cost = ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
-		if (child_cost >= 100) {
+		if (child_cost >= 1) {
 			// subtract one from the cost because we prefer LIST[X] -> LIST[VARCHAR] over LIST[X] -> VARCHAR
 			child_cost--;
 		}
 		return child_cost;
 	}
+	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::ARRAY) {
+		// Arrays can be cast if their child types can be cast and the source and target has the same size
+		// or the target type has a unknown (any) size.
+		auto from_size = ArrayType::GetSize(from);
+		auto to_size = ArrayType::GetSize(to);
+		auto to_is_any_size = ArrayType::IsAnySize(to);
+		if (from_size == to_size || to_is_any_size) {
+			auto child_cost = ImplicitCast(ArrayType::GetChildType(from), ArrayType::GetChildType(to));
+			if (child_cost >= 100) {
+				// subtract one from the cost because we prefer ARRAY[X] -> ARRAY[VARCHAR] over ARRAY[X] -> VARCHAR
+				child_cost--;
+			}
+			return child_cost;
+		}
+		return -1; // Not possible if the sizes are different
+	}
+	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::LIST) {
+		// Arrays can be cast to lists for the cost of casting the child type
+		// add 1 because we prefer ARRAY->ARRAY casts over ARRAY->LIST casts
+		return ImplicitCast(ArrayType::GetChildType(from), ListType::GetChildType(to)) + 1;
+	}
+	if (from.id() == LogicalTypeId::LIST && (to.id() == LogicalTypeId::ARRAY && !ArrayType::IsAnySize(to))) {
+		// Lists can be cast to arrays for the cost of casting the child type, if the target size is known
+		// there is no way for us to resolve the size at bind-time without inspecting the list values.
+		// TODO: if we can access the expression we could resolve the size if the list is constant.
+		return ImplicitCast(ListType::GetChildType(from), ArrayType::GetChildType(to));
+	}
 	if (from.id() == to.id()) {
 		// arguments match: do nothing
 		return 0;
-	}
-	if (from.id() == LogicalTypeId::BLOB && to.id() == LogicalTypeId::VARCHAR) {
-		// Implicit cast not allowed from BLOB to VARCHAR
-		return -1;
-	}
-	if (to.id() == LogicalTypeId::VARCHAR) {
-		// everything can be cast to VARCHAR, but this cast has a high cost
-		return TargetTypeCost(to);
 	}
 
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {
@@ -273,18 +439,6 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 	}
 
-	if ((from.id() == LogicalTypeId::TIMESTAMP_SEC || from.id() == LogicalTypeId::TIMESTAMP_MS ||
-	     from.id() == LogicalTypeId::TIMESTAMP_NS) &&
-	    to.id() == LogicalTypeId::TIMESTAMP) {
-		//! Any timestamp type can be converted to the default (us) type at low cost
-		return 101;
-	}
-	if ((to.id() == LogicalTypeId::TIMESTAMP_SEC || to.id() == LogicalTypeId::TIMESTAMP_MS ||
-	     to.id() == LogicalTypeId::TIMESTAMP_NS) &&
-	    from.id() == LogicalTypeId::TIMESTAMP) {
-		//! Any timestamp type can be converted to the default (us) type at low cost
-		return 100;
-	}
 	switch (from.id()) {
 	case LogicalTypeId::TINYINT:
 		return ImplicitCastTinyint(to);
@@ -304,6 +458,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastUBigint(to);
 	case LogicalTypeId::HUGEINT:
 		return ImplicitCastHugeint(to);
+	case LogicalTypeId::UHUGEINT:
+		return ImplicitCastUhugeint(to);
 	case LogicalTypeId::FLOAT:
 		return ImplicitCastFloat(to);
 	case LogicalTypeId::DOUBLE:
@@ -312,6 +468,16 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastDate(to);
 	case LogicalTypeId::DECIMAL:
 		return ImplicitCastDecimal(to);
+	case LogicalTypeId::ENUM:
+		return ImplicitCastEnum(to);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return ImplicitCastTimestampSec(to);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return ImplicitCastTimestampMS(to);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return ImplicitCastTimestampNS(to);
+	case LogicalTypeId::TIMESTAMP:
+		return ImplicitCastTimestamp(to);
 	default:
 		return -1;
 	}

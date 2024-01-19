@@ -25,6 +25,7 @@ SELECT nextval('seq');
 # node two can't see it
 statement error con2
 SELECT nextval('seq');
+----
 
 # we commit the sequence
 statement ok con1
@@ -33,6 +34,7 @@ COMMIT
 # node two still can't see it
 statement error con2
 SELECT nextval('seq');
+----
 
 # now commit node two
 statement ok con2
@@ -54,6 +56,7 @@ DROP SEQUENCE seq;
 # node one can't use it anymore
 statement error con1
 SELECT nextval('seq');
+----
 
 # node two can still use it
 query I con2
@@ -78,7 +81,9 @@ DROP SEQUENCE seq;
 # we can't use it anymore
 statement error con1
 SELECT nextval('seq');
+----
 
 statement error con2
 SELECT nextval('seq');
+----
 

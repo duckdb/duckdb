@@ -346,7 +346,7 @@ struct CeilDecimalOperator {
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
 		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
-			if (input < 0) {
+			if (input <= 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
 				return input / power_of_ten;
 			} else {
@@ -484,6 +484,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
 			func = ScalarFunction::NopFunction;
 			break;
 		default:
@@ -1126,6 +1127,23 @@ ScalarFunction AcosFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 // cot
 //===--------------------------------------------------------------------===//
+template <class OP>
+struct NoInfiniteNoZeroDoubleWrapper {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		if (DUCKDB_UNLIKELY(!Value::IsFinite(input))) {
+			if (Value::IsNan(input)) {
+				return input;
+			}
+			throw OutOfRangeException("input value %lf is out of range for numeric function", input);
+		}
+		if (DUCKDB_UNLIKELY((double)input == 0.0 || (double)input == -0.0)) {
+			throw OutOfRangeException("input value %lf is out of range for numeric function cotangent", input);
+		}
+		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
+	}
+};
+
 struct CotOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -1135,7 +1153,7 @@ struct CotOperator {
 
 ScalarFunction CotFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CotOperator>>);
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteNoZeroDoubleWrapper<CotOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1182,7 +1200,9 @@ struct FactorialOperator {
 	static inline TR Operation(TA left) {
 		TR ret = 1;
 		for (TA i = 2; i <= left; i++) {
-			ret *= i;
+			if (!TryMultiplyOperator::Operation(ret, TR(i), ret)) {
+				throw OutOfRangeException("Value out of range");
+			}
 		}
 		return ret;
 	}

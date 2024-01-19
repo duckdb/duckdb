@@ -466,6 +466,21 @@ function duckdb_value_hugeint(result, col, row)
 end
 
 """
+	duckdb_value_uhugeint(result,col,row)
+ * returns: The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_uhugeint(result, col, row)
+    return ccall(
+        (:duckdb_value_uhugeint, libduckdb),
+        UInt64,
+        (Ref{duckdb_result}, Int32, Int32),
+        result,
+        col - 1,
+        row - 1
+    )
+end
+
+"""
 	duckdb_value_uint8(result,col,row)
  * returns: The uint8_t value at the specified location, or 0 if the value cannot be converted.
 
@@ -762,6 +777,21 @@ end
 #     return ccall((:duckdb_from_timestamp, libduckdb), Ptr{Cvoid}, (Ptr{Cvoid},), ts)
 # end
 #
+
+"""
+Decompose a TIME_TZ objects into micros and a timezone offset.
+
+Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
+
+* micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+* out_micros: The microsecond component of the time.
+* out_offset: The timezone offset component of the time.
+"""
+function duckdb_from_time_tz(val)
+    return ccall((:duckdb_from_time_tz, libduckdb), duckdb_time_tz, (UInt64,), val)
+end
+
+#
 # """
 # duckdb_to_timestamp(ts)
 # Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
@@ -978,6 +1008,23 @@ function duckdb_bind_hugeint(prepared_statement, param_idx, val)
         (:duckdb_bind_hugeint, libduckdb),
         duckdb_state,
         (duckdb_prepared_statement, Int32, duckdb_hugeint),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+Binds an duckdb_uhugeint value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_uhugeint val);
+"""
+function duckdb_bind_uhugeint(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_uhugeint, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Int32, duckdb_uhugeint),
         prepared_statement,
         param_idx,
         val
@@ -1359,7 +1406,7 @@ DUCKDB_PENDING_RESULT_READY, this function will return true.
 * returns: Boolean indicating pending execution should be considered finished.
 """
 function duckdb_pending_execution_is_finished(pending_state)
-    return ccall((:duckdb_execute_pending, libduckdb), Bool, (duckdb_pending_state,), pending_state)
+    return ccall((:duckdb_pending_execution_is_finished, libduckdb), Bool, (duckdb_pending_state,), pending_state)
 end
 
 #=
@@ -2558,6 +2605,14 @@ DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_h
 """
 function duckdb_append_hugeint(appender, value)
     return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
+end
+
+"""
+Append a duckdb_uhugeint value to the appender.
+DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value);
+"""
+function duckdb_append_uhugeint(appender, value)
+    return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
 end
 
 """

@@ -13,6 +13,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
@@ -23,6 +24,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
@@ -200,8 +202,8 @@ jobs:
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         treat_warn_as_error: 0
-        run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
+        run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
@@ -387,6 +389,7 @@ jobs:
       run: |
         python3 scripts/get_test_list.py --file-contains 'require httpfs' --list '"*"' > test.list
         python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
+        python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '[secret]'
 
  amalgamation-tests:
     name: Amalgamation Tests

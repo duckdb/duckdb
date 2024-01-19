@@ -56,6 +56,14 @@
         "aliases": ["array_sort"]
     },
     {
+        "name": "list_grade_up",
+        "parameters": "list",
+        "description": "Returns the index of their sorted position.",
+        "example": "list_grade_up([3, 6, 1, 2])",
+        "type": "scalar_function_set",
+        "aliases": ["array_grade_up", "grade_up"]
+    },
+    {
         "name": "list_reverse_sort",
         "parameters": "list",
         "description": "Sorts the elements of the list in reverse order",
@@ -78,6 +86,14 @@
         "example": "list_filter([3, 4, 5], x -> x > 4)",
         "type": "scalar_function",
         "aliases": ["array_filter", "filter"]
+    },
+    {
+        "name": "list_reduce",
+        "parameters": "list,lambda",
+        "description": "Returns a single value that is the result of applying the lambda function to each element of the input list, starting with the first element and then repeatedly applying the lambda function to the result of the previous application and the next element of the list.",
+        "example": "list_reduce([1, 2, 3], (x, y) -> x + y)",
+        "type": "scalar_function",
+        "aliases": ["array_reduce", "reduce"]
     },
     {
         "name": "generate_series",

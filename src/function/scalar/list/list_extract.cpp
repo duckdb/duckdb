@@ -1,12 +1,14 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
@@ -113,6 +115,9 @@ static void ExecuteListExtractInternal(const idx_t count, UnifiedVectorFormat &l
 	case PhysicalType::UINT64:
 		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
 		break;
+	case PhysicalType::UINT128:
+		ListExtractTemplate<uhugeint_t>(count, list, offsets, child_vector, list_size, result);
+		break;
 	case PhysicalType::FLOAT:
 		ListExtractTemplate<float>(count, list, offsets, child_vector, list_size, result);
 		break;
@@ -203,9 +208,14 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
 	// list extract returns the child type of the list as return type
-	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
+	auto child_type = ListType::GetChildType(arguments[0]->return_type);
+
+	bound_function.return_type = child_type;
+	bound_function.arguments[0] = LogicalType::LIST(child_type);
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 

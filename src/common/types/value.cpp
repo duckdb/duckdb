@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
+#include "duckdb/common/uhugeint.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
@@ -206,6 +207,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(NumericLimits<uhugeint_t>::Minimum());
 	case LogicalTypeId::UUID:
 		return Value::UUID(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
@@ -230,7 +233,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MIN_OFFSET));
+		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
+		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(Timestamp::FromDatetime(
 		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0)));
@@ -276,6 +280,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(NumericLimits<uhugeint_t>::Maximum());
 	case LogicalTypeId::UUID:
 		return Value::UUID(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
@@ -289,7 +295,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(Date::FromDate(Date::DATE_MAX_YEAR, Date::DATE_MAX_MONTH, Date::DATE_MAX_DAY));
 	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
+		//	24:00:00 according to PG
+		return Value::TIME(dtime_t(Interval::MICROS_PER_DAY));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -299,8 +306,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(
-		    dtime_tz_t(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1), dtime_tz_t::MAX_OFFSET));
+		//	"24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59"
+		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return MaximumValue(LogicalType::TIMESTAMP);
 	case LogicalTypeId::FLOAT:
@@ -414,6 +421,13 @@ Value Value::BIGINT(int64_t value) {
 Value Value::HUGEINT(hugeint_t value) {
 	Value result(LogicalType::HUGEINT);
 	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::UHUGEINT(uhugeint_t value) {
+	Value result(LogicalType::UHUGEINT);
+	result.value_.uhugeint = value;
 	result.is_null = false;
 	return result;
 }
@@ -644,38 +658,54 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return val;
 }
 
-Value Value::STRUCT(child_list_t<Value> values) {
+Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	Value result;
+	auto child_types = StructType::GetChildTypes(type);
+	for (size_t i = 0; i < struct_values.size(); i++) {
+		struct_values[i] = struct_values[i].DefaultCastAs(child_types[i].second);
+	}
+	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
+	result.type_ = type;
+	result.is_null = false;
+	return result;
+}
+Value Value::STRUCT(child_list_t<Value> values) {
 	child_list_t<LogicalType> child_types;
 	vector<Value> struct_values;
 	for (auto &child : values) {
 		child_types.push_back(make_pair(std::move(child.first), child.second.type()));
 		struct_values.push_back(std::move(child.second));
 	}
-	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
-	result.type_ = LogicalType::STRUCT(child_types);
-	result.is_null = false;
-	return result;
+	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
-Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
-	Value result;
-
-	result.type_ = LogicalType::MAP(child_type);
-	result.is_null = false;
+Value Value::MAP(const LogicalType &child_type, vector<Value> values) { // NOLINT
+	vector<Value> map_keys;
+	vector<Value> map_values;
 	for (auto &val : values) {
 		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
 		auto &children = StructValue::GetChildren(val);
-
-		// Ensure that the field containing the keys is called 'key'
-		// and that the field containing the values is called 'value'
-		// this is required to make equality checks work
 		D_ASSERT(children.size() == 2);
+		map_keys.push_back(children[0]);
+		map_values.push_back(children[1]);
+	}
+	auto &key_type = StructType::GetChildType(child_type, 0);
+	auto &value_type = StructType::GetChildType(child_type, 1);
+	return Value::MAP(key_type, value_type, std::move(map_keys), std::move(map_values));
+}
+
+Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys, vector<Value> values) {
+	D_ASSERT(keys.size() == values.size());
+	Value result;
+
+	result.type_ = LogicalType::MAP(key_type, value_type);
+	result.is_null = false;
+	for (idx_t i = 0; i < keys.size(); i++) {
 		child_list_t<Value> new_children;
 		new_children.reserve(2);
-		new_children.push_back(std::make_pair("key", children[0]));
-		new_children.push_back(std::make_pair("value", children[1]));
-		val = Value::STRUCT(std::move(new_children));
+		new_children.push_back(std::make_pair("key", std::move(keys[i])));
+		new_children.push_back(std::make_pair("value", std::move(values[i])));
+		values[i] = Value::STRUCT(std::move(new_children));
 	}
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
 	return result;
@@ -736,6 +766,41 @@ Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 Value Value::EMPTYLIST(const LogicalType &child_type) {
 	Value result;
 	result.type_ = LogicalType::LIST(child_type);
+	result.value_info_ = make_shared<NestedValueInfo>();
+	result.is_null = false;
+	return result;
+}
+
+Value Value::ARRAY(vector<Value> values) {
+	if (values.empty()) {
+		throw InternalException("Value::ARRAY without providing a child-type requires a non-empty list of values. Use "
+		                        "Value::ARRAY(child_type, list) instead.");
+	}
+#ifdef DEBUG
+	for (idx_t i = 1; i < values.size(); i++) {
+		D_ASSERT(values[i].type() == values[0].type());
+	}
+#endif
+	Value result;
+	result.type_ = LogicalType::ARRAY(values[0].type(), values.size());
+	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
+	result.is_null = false;
+	return result;
+}
+
+Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
+	if (values.empty()) {
+		return Value::EMPTYARRAY(child_type, 0);
+	}
+	for (auto &val : values) {
+		val = val.DefaultCastAs(child_type);
+	}
+	return Value::ARRAY(std::move(values));
+}
+
+Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
+	Value result;
+	result.type_ = LogicalType::ARRAY(child_type, size);
 	result.value_info_ = make_shared<NestedValueInfo>();
 	result.is_null = false;
 	return result;
@@ -856,6 +921,11 @@ Value Value::CreateValue(hugeint_t value) {
 }
 
 template <>
+Value Value::CreateValue(uhugeint_t value) {
+	return Value::UHUGEINT(value);
+}
+
+template <>
 Value Value::CreateValue(date_t value) {
 	return Value::DATE(value);
 }
@@ -952,6 +1022,8 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UUID:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
+	case LogicalTypeId::UHUGEINT:
+		return Cast::Operation<uhugeint_t, T>(value_.uhugeint);
 	case LogicalTypeId::DATE:
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
@@ -1056,6 +1128,10 @@ uint64_t Value::GetValue() const {
 	return GetValueInternal<uint64_t>();
 }
 template <>
+uhugeint_t Value::GetValue() const {
+	return GetValueInternal<uhugeint_t>();
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -1125,6 +1201,8 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::UBIGINT(value);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(value);
 	case LogicalTypeId::DECIMAL:
 		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
 	case LogicalTypeId::FLOAT:
@@ -1179,6 +1257,21 @@ Value Value::Numeric(const LogicalType &type, hugeint_t value) {
 		return Value::UBIGINT(Hugeint::Cast<uint64_t>(value));
 	default:
 		return Value::Numeric(type, Hugeint::Cast<int64_t>(value));
+	}
+}
+
+Value Value::Numeric(const LogicalType &type, uhugeint_t value) {
+#ifdef DEBUG
+	// perform a throwing cast to verify that the type fits
+	Value::UHUGEINT(value).DefaultCastAs(type);
+#endif
+	switch (type.id()) {
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(value);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(Uhugeint::Cast<uint64_t>(value));
+	default:
+		return Value::Numeric(type, Uhugeint::Cast<int64_t>(value));
 	}
 }
 
@@ -1246,6 +1339,12 @@ uint64_t Value::GetValueUnsafe() const {
 }
 
 template <>
+uhugeint_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT128);
+	return value_.uhugeint;
+}
+
+template <>
 string Value::GetValueUnsafe() const {
 	return StringValue::Get(*this);
 }
@@ -1277,6 +1376,12 @@ template <>
 dtime_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.time;
+}
+
+template <>
+dtime_tz_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.timetz;
 }
 
 template <>
@@ -1334,18 +1439,23 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::ENUM:
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
-		string ret = "{";
+		bool is_unnamed = StructType::IsUnnamed(type_);
+		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type_);
 		auto &struct_values = StructValue::GetChildren(*this);
-		for (size_t i = 0; i < struct_values.size(); i++) {
+		for (idx_t i = 0; i < struct_values.size(); i++) {
 			auto &name = child_types[i].first;
 			auto &child = struct_values[i];
-			ret += "'" + name + "': " + child.ToSQLString();
+			if (is_unnamed) {
+				ret += child.ToSQLString();
+			} else {
+				ret += "'" + name + "': " + child.ToSQLString();
+			}
 			if (i < struct_values.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += "}";
+		ret += is_unnamed ? ")" : "}";
 		return ret;
 	}
 	case LogicalTypeId::FLOAT:
@@ -1367,10 +1477,23 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::LIST: {
 		string ret = "[";
 		auto &list_values = ListValue::GetChildren(*this);
-		for (size_t i = 0; i < list_values.size(); i++) {
+		for (idx_t i = 0; i < list_values.size(); i++) {
 			auto &child = list_values[i];
 			ret += child.ToSQLString();
 			if (i < list_values.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::ARRAY: {
+		string ret = "[";
+		auto &array_values = ArrayValue::GetChildren(*this);
+		for (idx_t i = 0; i < array_values.size(); i++) {
+			auto &child = array_values[i];
+			ret += child.ToSQLString();
+			if (i < array_values.size() - 1) {
 				ret += ", ";
 			}
 		}
@@ -1425,6 +1548,10 @@ uint64_t UBigIntValue::Get(const Value &value) {
 	return value.GetValueUnsafe<uint64_t>();
 }
 
+uhugeint_t UhugeIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<uhugeint_t>();
+}
+
 float FloatValue::Get(const Value &value) {
 	return value.GetValueUnsafe<float>();
 }
@@ -1476,6 +1603,15 @@ const vector<Value> &ListValue::GetChildren(const Value &value) {
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
 
+const vector<Value> &ArrayValue::GetChildren(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling ArrayValue::GetChildren on a NULL value");
+	}
+	D_ASSERT(value.type().InternalType() == PhysicalType::ARRAY);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
 const Value &UnionValue::GetValue(const Value &value) {
 	D_ASSERT(value.type().id() == LogicalTypeId::UNION);
 	auto &children = StructValue::GetChildren(value);
@@ -1516,6 +1652,8 @@ hugeint_t IntegralValue::Get(const Value &value) {
 		return UIntegerValue::Get(value);
 	case PhysicalType::UINT64:
 		return UBigIntValue::Get(value);
+	case PhysicalType::UINT128:
+		return static_cast<hugeint_t>(UhugeIntValue::Get(value));
 	default:
 		throw InternalException("Invalid internal type \"%s\" for IntegralValue::Get", value.type().ToString());
 	}
@@ -1687,6 +1825,9 @@ void Value::Serialize(Serializer &serializer) const {
 		case PhysicalType::INT128:
 			serializer.WriteProperty(102, "value", value_.hugeint);
 			break;
+		case PhysicalType::UINT128:
+			serializer.WriteProperty(102, "value", value_.uhugeint);
+			break;
 		case PhysicalType::FLOAT:
 			serializer.WriteProperty(102, "value", value_.float_);
 			break;
@@ -1713,6 +1854,12 @@ void Value::Serialize(Serializer &serializer) const {
 		case PhysicalType::STRUCT: {
 			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
 				auto &children = StructValue::GetChildren(*this);
+				serializer.WriteProperty(100, "children", children);
+			});
+		} break;
+		case PhysicalType::ARRAY: {
+			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
+				auto &children = ArrayValue::GetChildren(*this);
 				serializer.WriteProperty(100, "children", children);
 			});
 		} break;
@@ -1760,6 +1907,9 @@ Value Value::Deserialize(Deserializer &deserializer) {
 	case PhysicalType::INT64:
 		new_value.value_.bigint = deserializer.ReadProperty<int64_t>(102, "value");
 		break;
+	case PhysicalType::UINT128:
+		new_value.value_.uhugeint = deserializer.ReadProperty<uhugeint_t>(102, "value");
+		break;
 	case PhysicalType::INT128:
 		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(102, "value");
 		break;
@@ -1787,6 +1937,12 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		});
 	} break;
 	case PhysicalType::STRUCT: {
+		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
+			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		});
+	} break;
+	case PhysicalType::ARRAY: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared<NestedValueInfo>(children);

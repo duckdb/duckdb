@@ -10,6 +10,14 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"
   )
+  if(CMAKE_COMPILER_IS_GNUCC)
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 6)
+      set(CMAKE_CXX_FLAGS_DEBUG
+          "${CMAKE_CXX_FLAGS_DEBUG} -Wimplicit-fallthrough")
+    endif()
+  else()
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wimplicit-fallthrough")
+  endif()
 endif()
 set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
@@ -20,7 +28,7 @@ endif()
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 
 if(MSVC OR MINGW)
-  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32)
+  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr)
 endif()
 
 if(AMALGAMATION_BUILD)
@@ -75,6 +83,7 @@ else()
       duckdb_utf8proc
       duckdb_hyperloglog
       duckdb_fastpforlib
+      duckdb_skiplistlib
       duckdb_mbedtls)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
