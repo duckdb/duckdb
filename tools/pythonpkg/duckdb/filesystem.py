@@ -52,7 +52,7 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
             filelike.seek(pos)
             return size
 
-        raise ValueError(f"Could not determine size of file {filelike}")
+        return -1
 
     def info(self, path, **kwargs):
         path = self._strip_protocol(path)
