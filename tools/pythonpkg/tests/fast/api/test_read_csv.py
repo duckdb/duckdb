@@ -335,14 +335,24 @@ class TestReadCSV(object):
         class CustomIO:
             def __init__(self):
                 self.loc = 0
-                pass
+                self.data = b"c1,c2,c3\na,b,c"
 
-            def seek(self, loc):
-                self.loc = loc
-                return loc
+            def seek(self, loc, whence=0):
+                if whence == 0:
+                    self.loc = loc
+                elif whence == 1:
+                    self.loc += loc
+                elif whence == 2:
+                    self.loc = len(self.data) - loc
+                else:
+                    raise NotImplementedError()
+                return self.loc
+
+            def tell(self):
+                return self.loc
 
             def read(self, amount):
-                out = b"c1,c2,c3\na,b,c"[self.loc : self.loc + amount : 1]
+                out = self.data[self.loc : self.loc + amount : 1]
                 self.loc += amount
                 return out
 
