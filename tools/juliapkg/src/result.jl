@@ -660,8 +660,8 @@ function pending_execute_tasks(pending::PendingQueryResult)::Bool
 end
 
 function pending_execute_check_state(pending::PendingQueryResult)::duckdb_pending_state
-	ret = duckdb_pending_execute_check_state(pending.handle)
-	return ret
+    ret = duckdb_pending_execute_check_state(pending.handle)
+    return ret
 end
 
 # execute background tasks in a loop, until task execution is finished
@@ -725,10 +725,10 @@ function execute_multithreaded(stmt::Stmt, pending::PendingQueryResult)
 
     # When we have additional worker threads, don't execute using the main thread
     while duckdb_execution_is_finished(stmt.con.handle) == false
-		ret = pending_execute_check_state(pending)
-		if ret == DUCKDB_PENDING_RESULT_READY
-			break;
-		end
+        ret = pending_execute_check_state(pending)
+        if ret == DUCKDB_PENDING_RESULT_READY
+            break
+        end
         Base.yield()
         GC.safepoint()
     end
@@ -853,6 +853,7 @@ like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams) = execute(stmt, params)
 DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type) = execute(Stmt(con, sql, result_type))
 DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(con, sql, MaterializedResult)
-DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) = DBInterface.execute(db.main_connection, sql, result_type)
+DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
+    DBInterface.execute(db.main_connection, sql, result_type)
 
 Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.columntable(result))
