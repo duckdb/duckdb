@@ -228,7 +228,7 @@ def exclude_extensions(f: TextIO):
         return [x for x in files if 'jemalloc' not in x]
 
 
-if len(existing_duckdb_dir) == 0:
+if not existing_duckdb_dir:
     # no existing library supplied: compile everything from source
     source_files = main_source_files
 
