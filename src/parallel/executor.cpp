@@ -490,7 +490,7 @@ bool Executor::ExecutionIsFinished() {
 	return completed_pipelines >= total_pipelines || HasError();
 }
 
-PendingExecutionResult Executor::ExecuteTask() {
+PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
@@ -500,10 +500,18 @@ PendingExecutionResult Executor::ExecuteTask() {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	while (completed_pipelines < total_pipelines) {
 		// there are! if we don't already have a task, fetch one
-		if (!task) {
-			scheduler.GetTaskFromProducer(*producer, task);
+		auto current_task = task.get();
+		if (dry_run) {
+			// Pretend we have no task, we don't want to execute anything
+			current_task = nullptr;
+		} else {
+			if (!task) {
+				scheduler.GetTaskFromProducer(*producer, task);
+			}
+			current_task = task.get();
 		}
-		if (!task && !HasError()) {
+
+		if (!current_task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
 			if (ResultCollectorIsBlocked()) {
 				// The blocked tasks are processing the Sink of a BufferedResultCollector
@@ -513,7 +521,8 @@ PendingExecutionResult Executor::ExecuteTask() {
 			}
 			return PendingExecutionResult::NO_TASKS_AVAILABLE;
 		}
-		if (task) {
+
+		if (current_task) {
 			// if we have a task, partially process it
 			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
 			if (result == TaskExecutionResult::TASK_BLOCKED) {

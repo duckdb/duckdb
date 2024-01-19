@@ -442,11 +442,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	return pending_result;
 }
 
-PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result) {
+PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
 	try {
-		auto query_result = active_query->executor->ExecuteTask();
+		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
 			active_query->progress_bar->Update(is_finished);
