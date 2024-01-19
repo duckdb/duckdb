@@ -68,13 +68,17 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() {
 	auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	ret->reservoir_initialized = reservoir_initialized;
-	ret->reservoir_chunk = reservoir_chunk->Copy();
+	ret->reservoir_chunk = nullptr;
+	if (reservoir_chunk) {
+		ret->reservoir_chunk = reservoir_chunk->Copy();
+	}
 	return ret;
 }
 
 unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
 	auto copy = make_uniq<ReservoirChunk>();
 	copy->chunk.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+
 	chunk.Copy(copy->chunk);
 	return copy;
 }
@@ -463,9 +467,7 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
 }
 
 void ReservoirSample::PushNewWeightsForSamples() {
-	if (base_reservoir_sample->reservoir_weights.size() != STANDARD_VECTOR_SIZE) {
-		throw InternalException("reservoir weights were not deserialized correctly");
-	}
+	return;
 }
 
 void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_size) {

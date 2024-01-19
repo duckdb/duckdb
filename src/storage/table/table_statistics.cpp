@@ -119,6 +119,7 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
 	}
+	other.sample = sample->Copy();
 }
 
 void TableStatistics::Serialize(Serializer &serializer) const {

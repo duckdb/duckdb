@@ -385,9 +385,11 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	auto stats_lock = stats.GetLock();
 	if (!stats.Empty() && stats.sample != nullptr) {
 		auto sample_chunk = make_uniq<DataChunk>();
-		sample_chunk->Initialize(Allocator::DefaultAllocator(), types);
+		sample_chunk->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 		chunk.Copy(*sample_chunk);
-		stats.sample->AddToReservoir(chunk);
+//		DataChunk sample_chunk(chunk);
+		std::cout << "adding to row group" << std::endl;
+		stats.sample->AddToReservoir(*sample_chunk);
 	}
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());

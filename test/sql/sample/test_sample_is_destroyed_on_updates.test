@@ -1,0 +1,44 @@
+# name: test/sql/sample/test_sample_is_destroyed_on_updates.test
+# description: Test sampling of larger relations
+# group: [sample]
+
+require vector_size 2048
+
+load __TEST_DIR__/test_samples.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers_1 as select range a, range+120 b  from range(30);
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+30
+
+restart
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+30
+
+statement ok
+insert into integers_1 VALUES (5, 3);
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+31
+
+restart
+
+
+query II
+select * from pragma_table_sample('integers_1');
+----
+5	3
+
+
+
