@@ -23,14 +23,6 @@ no_exit = args.no_exit
 profile = args.profile
 assertions = args.no_assertions
 
-# Access the extra arguments
-print(f'Unittest program: {unittest_program}')
-print(f'--no-exit: {no_exit}')
-print(f'--profile: {profile}')
-print(f'--no-assertions: {assertions}')
-print(f'Extra arguments: {extra_args}')
-
-
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout = proc.stdout.read().decode('utf8')
@@ -72,7 +64,7 @@ def parse_assertions(stdout):
     return ""
 
 
-for test_number, test_case in test_cases:
+for test_number, test_case in enumerate(test_cases):
     if not profile:
         print("[" + str(test_number) + "/" + str(test_count) + "]: " + test_case, end="")
     start = time.time()
