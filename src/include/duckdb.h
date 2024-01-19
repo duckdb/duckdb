@@ -391,31 +391,11 @@ typedef struct _duckdb_appender {
 	void *__appn;
 } * duckdb_appender;
 
-//! Holds an arrow query result. Must be destroyed with `duckdb_destroy_arrow`.
-typedef struct _duckdb_arrow {
-	void *__arrw;
-} * duckdb_arrow;
-
-//! TODO: destroy-function required?
-typedef struct _duckdb_arrow_stream {
-	void *__arrwstr;
-} * duckdb_arrow_stream;
-
 //! Can be used to provide start-up options for the DuckDB instance.
 //! Must be destroyed with `duckdb_destroy_config`.
 typedef struct _duckdb_config {
 	void *__cnfg;
 } * duckdb_config;
-
-//! TODO: destroy-function required?
-typedef struct _duckdb_arrow_schema {
-	void *__arrs;
-} * duckdb_arrow_schema;
-
-//! TODO: destroy-function required?
-typedef struct _duckdb_arrow_array {
-	void *__arra;
-} * duckdb_arrow_array;
 
 //! Holds an internal logical type.
 //! Must be destroyed with `duckdb_destroy_logical_type`.
@@ -434,6 +414,30 @@ typedef struct _duckdb_data_chunk {
 typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
+
+//===--------------------------------------------------------------------===//
+// Arrow-related types
+//===--------------------------------------------------------------------===//
+
+//! Holds an arrow query result. Must be destroyed with `duckdb_destroy_arrow`.
+typedef struct _duckdb_arrow {
+	void *__arrw;
+} * duckdb_arrow;
+
+//! Holds an arrow array stream. Must be destroyed with `duckdb_destroy_arrow_stream`.
+typedef struct _duckdb_arrow_stream {
+	void *__arrwstr;
+} * duckdb_arrow_stream;
+
+//! Holds an arrow schema. Remember to release the respective ArrowSchema object.
+typedef struct _duckdb_arrow_schema {
+	void *__arrs;
+} * duckdb_arrow_schema;
+
+//! Holds an arrow array. Remember to release the respective ArrowArray object.
+typedef struct _duckdb_arrow_array {
+	void *__arra;
+} * duckdb_arrow_array;
 
 //===--------------------------------------------------------------------===//
 // Functions
@@ -2636,7 +2640,8 @@ query fails, otherwise the error stored within the result will not be freed corr
 DUCKDB_API duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
 
 /*!
-Fetch the internal arrow schema from the arrow result.
+Fetch the internal arrow schema from the arrow result. Remember to call release on the respective
+ArrowSchema object.
 
 * result: The result to fetch the schema from.
 * out_schema: The output schema.
@@ -2645,7 +2650,8 @@ Fetch the internal arrow schema from the arrow result.
 DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
 
 /*!
-Fetch the internal arrow schema from the prepared statement.
+Fetch the internal arrow schema from the prepared statement. Remember to call release on the respective
+ArrowSchema object.
 
 * result: The prepared statement to fetch the schema from.
 * out_schema: The output schema.
@@ -2716,6 +2722,13 @@ Closes the result and de-allocates all memory allocated for the arrow result.
 * result: The result to destroy.
 */
 DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
+
+/*!
+Releases the arrow array stream and de-allocates its memory.
+
+* stream: The arrow array stream to destroy.
+*/
+DUCKDB_API void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p);
 
 //===--------------------------------------------------------------------===//
 // Threading Information
