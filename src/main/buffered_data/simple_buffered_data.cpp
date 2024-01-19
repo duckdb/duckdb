@@ -19,22 +19,21 @@ bool SimpleBufferedData::BufferIsFull() {
 	return buffered_count >= BUFFER_SIZE;
 }
 
-void SimpleBufferedData::UnblockSinks(idx_t &estimated_tuples) {
+void SimpleBufferedData::UnblockSinks() {
 	if (Closed()) {
 		return;
 	}
-	if (buffered_count + estimated_tuples >= BUFFER_SIZE) {
+	if (buffered_count >= BUFFER_SIZE) {
 		return;
 	}
 	// Reschedule enough blocked sinks to populate the buffer
 	lock_guard<mutex> lock(glock);
 	while (!blocked_sinks.empty()) {
 		auto &blocked_sink = blocked_sinks.front();
-		if (buffered_count + estimated_tuples >= BUFFER_SIZE) {
+		if (buffered_count >= BUFFER_SIZE) {
 			// We have unblocked enough sinks already
 			break;
 		}
-		estimated_tuples += blocked_sink.chunk_size;
 		blocked_sink.state.Callback();
 		blocked_sinks.pop();
 	}
@@ -48,8 +47,7 @@ PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &re
 		// The buffer isn't empty yet, just return
 		return PendingExecutionResult::RESULT_READY;
 	}
-	idx_t estimated_tuples = 0;
-	UnblockSinks(estimated_tuples);
+	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
 	auto res = context->ExecuteTaskInternal(context_lock, result);
 	while (!PendingQueryResult::IsFinished(res)) {
@@ -57,7 +55,7 @@ PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &re
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
-		UnblockSinks(estimated_tuples);
+		UnblockSinks();
 		res = context->ExecuteTaskInternal(context_lock, result);
 	}
 	if (result.HasError()) {

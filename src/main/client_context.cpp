@@ -442,7 +442,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	return pending_result;
 }
 
-PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run) {
+PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
+                                                          bool dry_run) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
 	try {

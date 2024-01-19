@@ -35,7 +35,7 @@ public:
 	unique_ptr<DataChunk> Scan() override;
 
 private:
-	void UnblockSinks(idx_t &estimated_tuples);
+	void UnblockSinks();
 
 private:
 	//! Our handles to reschedule the blocked sink tasks
