@@ -147,14 +147,14 @@ struct AlpRDCompression {
 		return estimated_size;
 	}
 
-	static void Compress(const vector<EXACT_TYPE> &in, idx_t n_values, State &state) {
+	static void Compress(const EXACT_TYPE *input_vector, idx_t n_values, State &state) {
 
 		uint64_t right_parts[AlpRDConstants::ALP_VECTOR_SIZE];
 		uint16_t left_parts[AlpRDConstants::ALP_VECTOR_SIZE];
 
 		// Cutting the floating point values
 		for (idx_t i = 0; i < n_values; i++) {
-			EXACT_TYPE tmp = in[i];
+			EXACT_TYPE tmp = input_vector[i];
 			right_parts[i] = tmp & ((1ULL << state.right_bit_width) - 1);
 			left_parts[i] = (tmp >> state.right_bit_width);
 		}
@@ -199,9 +199,10 @@ template <class T>
 struct AlpRDDecompression {
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 
-	static void Decompress(uint8_t *left_encoded, uint8_t *right_encoded, uint16_t *left_parts_dict, EXACT_TYPE *output,
-	                       idx_t values_count, uint16_t exceptions_count, uint16_t *exceptions,
-	                       uint16_t *exceptions_positions, uint8_t left_bit_width, uint8_t right_bit_width) {
+	static void Decompress(uint8_t *left_encoded, uint8_t *right_encoded, const uint16_t *left_parts_dict,
+	                       EXACT_TYPE *output, idx_t values_count, uint16_t exceptions_count,
+	                       const uint16_t *exceptions, const uint16_t *exceptions_positions, uint8_t left_bit_width,
+	                       uint8_t right_bit_width) {
 
 		uint8_t left_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};
 		uint8_t right_decoded[AlpRDConstants::ALP_VECTOR_SIZE * 8] = {0};

@@ -10,12 +10,18 @@ require parquet
 require httpfs
 
 load
-PRAGMA force_compression='alp';
-DROP TABLE IF EXISTS temperatures;
-CREATE TABLE temperatures (
+PRAGMA force_compression='uncompressed';
+DROP TABLE IF EXISTS temperatures_uncompressed;
+CREATE TABLE temperatures_uncompressed (
 	temperature DOUBLE
 );
+INSERT INTO temperatures_uncompressed SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(28);
+CREATE TABLE temperatures_alp (
+	temperature DOUBLE
+);
+PRAGMA force_compression='alp';
+checkpoint;
 
 run
-INSERT INTO temperatures SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(28);
+INSERT INTO temperatures_alp SELECT * FROM temperatures_uncompressed;
 checkpoint;

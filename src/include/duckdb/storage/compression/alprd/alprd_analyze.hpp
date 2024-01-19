@@ -46,9 +46,6 @@ template <class T>
 bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	using EXACT_TYPE = typename FloatingToExact<T>::type;
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
 	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
@@ -58,6 +55,10 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 		return true;
 	}
 
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
+
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);
 
 	vector<uint16_t> current_vector_null_positions(sampling_params.n_lookup_values, 0);
@@ -66,20 +67,31 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	// Storing the sample of that vector
 	idx_t sample_idx = 0;
 	idx_t nulls_idx = 0;
-	for (idx_t i = 0; i < sampling_params.n_lookup_values; i += sampling_params.n_sampled_increments) {
-		auto idx = vdata.sel->get_index(i);
-		EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
-		current_vector_sample[sample_idx] = value;
-		//! We resolve null values with a predicated comparison
-		bool is_null = !vdata.validity.RowIsValid(idx);
-		current_vector_null_positions[nulls_idx] = sample_idx;
-		nulls_idx += is_null;
-		sample_idx++;
+	// We optimize by doing a different loop when there are no nulls
+	if (vdata.validity.AllValid()) {
+		for (idx_t i = 0; i < sampling_params.n_lookup_values; i += sampling_params.n_sampled_increments) {
+			auto idx = vdata.sel->get_index(i);
+			EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
+			current_vector_sample[sample_idx] = value;
+			sample_idx++;
+		}
+	} else {
+		for (idx_t i = 0; i < sampling_params.n_lookup_values; i += sampling_params.n_sampled_increments) {
+			auto idx = vdata.sel->get_index(i);
+			EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
+			current_vector_sample[sample_idx] = value;
+			//! We resolve null values with a predicated comparison
+			bool is_null = !vdata.validity.RowIsValid(idx);
+			current_vector_null_positions[nulls_idx] = sample_idx;
+			nulls_idx += is_null;
+			sample_idx++;
+		}
+		alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(current_vector_sample.data(),
+		                                                       current_vector_null_positions.data(),
+		                                                       sampling_params.n_sampled_values, nulls_idx);
 	}
-	D_ASSERT(sample_idx == sampling_params.n_sampled_values);
 
-	alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(current_vector_sample, current_vector_null_positions,
-	                                                       sampling_params.n_sampled_values, nulls_idx);
+	D_ASSERT(sample_idx == sampling_params.n_sampled_values);
 
 	// Pushing the sampled vector samples into the rowgroup samples
 	for (auto &value : current_vector_sample) {

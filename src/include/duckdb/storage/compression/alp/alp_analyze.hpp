@@ -81,10 +81,6 @@ unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type)
 template <class T>
 bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = (AlpAnalyzeState<T> &)state;
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
 	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;
@@ -92,6 +88,10 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	if (must_skip_current_vector) {
 		return true;
 	}
+
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);
 
@@ -102,18 +102,27 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	// Storing the entire sampled vector
 	//! We need to store the entire sampled vector to perform the 'analyze' compression in it
 	idx_t nulls_idx = 0;
-	for (idx_t i = 0; i < sampling_params.n_lookup_values; i++) {
-		auto idx = vdata.sel->get_index(i);
-		T value = data[idx];
-		//! We resolve null values with a predicated comparison
-		bool is_null = !vdata.validity.RowIsValid(idx);
-		current_vector_null_positions[nulls_idx] = i;
-		nulls_idx += is_null;
-		current_vector_values[i] = value;
+	// We optimize by doing a different loop when there are no nulls
+	if (vdata.validity.AllValid()) {
+		for (idx_t i = 0; i < sampling_params.n_lookup_values; i++) {
+			auto idx = vdata.sel->get_index(i);
+			T value = data[idx];
+			current_vector_values[i] = value;
+		}
+	} else {
+		for (idx_t i = 0; i < sampling_params.n_lookup_values; i++) {
+			auto idx = vdata.sel->get_index(i);
+			T value = data[idx];
+			//! We resolve null values with a predicated comparison
+			bool is_null = !vdata.validity.RowIsValid(idx);
+			current_vector_null_positions[nulls_idx] = i;
+			nulls_idx += is_null;
+			current_vector_values[i] = value;
+		}
+		alp::AlpUtils::FindAndReplaceNullsInVector<T>(current_vector_values.data(),
+		                                              current_vector_null_positions.data(),
+		                                              sampling_params.n_lookup_values, nulls_idx);
 	}
-
-	alp::AlpUtils::FindAndReplaceNullsInVector<T>(current_vector_values, current_vector_null_positions,
-	                                              sampling_params.n_lookup_values, nulls_idx);
 
 	// Storing the sample of that vector
 	idx_t sample_idx = 0;
@@ -143,7 +152,8 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	// Encode the entire sampled vectors to estimate a compression size
 	idx_t compressed_values = 0;
 	for (auto &vector_to_compress : analyze_state.complete_vectors_sampled) {
-		alp::AlpCompression<T, true>::Compress(vector_to_compress, vector_to_compress.size(), analyze_state.state);
+		alp::AlpCompression<T, true>::Compress(vector_to_compress.data(), vector_to_compress.size(),
+		                                       analyze_state.state);
 		if (!analyze_state.HasEnoughSpace()) {
 			analyze_state.FlushSegment();
 		}

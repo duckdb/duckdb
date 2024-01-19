@@ -37,9 +37,6 @@ public:
 	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
-		input_vector = vector<T>(AlpConstants::ALP_VECTOR_SIZE, 0);
-		vector_null_positions = vector<uint16_t>(AlpConstants::ALP_VECTOR_SIZE, 0);
-
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
 	}
@@ -58,8 +55,8 @@ public:
 	data_ptr_t metadata_ptr; // Reverse pointer to the next free spot for the metadata; used in decoding to SKIP vectors
 	uint32_t next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 
-	vector<T> input_vector;
-	vector<uint16_t> vector_null_positions;
+	T input_vector[AlpConstants::ALP_VECTOR_SIZE];
+	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
 
 	alp::AlpCompressionState<T, false> state;
 
@@ -228,15 +225,34 @@ public:
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		auto data = UnifiedVectorFormat::GetData<T>(vdata);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			T value = data[idx];
-			bool is_null = !vdata.validity.RowIsValid(idx);
-			//! We resolve null values with a predicated comparison
-			vector_null_positions[nulls_idx] = vector_idx;
-			nulls_idx += is_null;
-			input_vector[vector_idx] = value;
-			vector_idx++;
+		idx_t values_left_in_data = count;
+		idx_t offset_in_data = 0;
+		while (values_left_in_data > 0) {
+			// We calculate until which value in data we must go to fill the input_vector
+			// to avoid checking if input_vector is filled in each iteration
+			auto values_to_fill_alp_input =
+			    MinValue<idx_t>(AlpConstants::ALP_VECTOR_SIZE - vector_idx, values_left_in_data);
+			if (vdata.validity.AllValid()) { //! We optimize a loop when there are no null
+				for (idx_t i = 0; i < values_to_fill_alp_input; i++) {
+					auto idx = vdata.sel->get_index(offset_in_data + i);
+					T value = data[idx];
+					input_vector[vector_idx + i] = value;
+				}
+			} else {
+				for (idx_t i = 0; i < values_to_fill_alp_input; i++) {
+					auto idx = vdata.sel->get_index(offset_in_data + i);
+					T value = data[idx];
+					bool is_null = !vdata.validity.RowIsValid(idx);
+					//! We resolve null values with a predicated comparison
+					vector_null_positions[nulls_idx] = vector_idx + i;
+					nulls_idx += is_null;
+					input_vector[vector_idx + i] = value;
+				}
+			}
+			offset_in_data += values_to_fill_alp_input;
+			values_left_in_data -= values_to_fill_alp_input;
+			vector_idx += values_to_fill_alp_input;
+			// We still need this check since we could have an incomplete input_vector at the end of data
 			if (vector_idx == AlpConstants::ALP_VECTOR_SIZE) {
 				CompressVector();
 				D_ASSERT(vector_idx == 0);

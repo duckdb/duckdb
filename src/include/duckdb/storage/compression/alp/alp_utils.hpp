@@ -67,22 +67,19 @@ public:
 	}
 
 	template <class T>
-	static T FindFirstValueNotInPositionsArray(const vector<T> &input_vector, const vector<uint16_t> &positions,
-	                                           idx_t values_count) {
-		idx_t tmp_position_idx = 0;
+	static T FindFirstValueNotInPositionsArray(const T *input_vector, const uint16_t *positions, idx_t values_count) {
 		T a_non_special_value = 0;
 		for (idx_t i = 0; i < values_count; i++) {
-			if (i != positions[tmp_position_idx]) {
+			if (i != positions[i]) {
 				a_non_special_value = input_vector[i];
 				break;
 			}
-			tmp_position_idx += 1;
 		}
 		return a_non_special_value;
 	}
 
 	template <class T>
-	static void ReplaceValueInVectorPositions(vector<T> &input_vector, const vector<uint16_t> &positions_to_replace,
+	static void ReplaceValueInVectorPositions(T *input_vector, const uint16_t *positions_to_replace,
 	                                          idx_t special_values_count, T value_to_replace) {
 		for (idx_t i = 0; i < special_values_count; i++) {
 			uint16_t null_value_pos = positions_to_replace[i];
@@ -91,8 +88,8 @@ public:
 	}
 
 	template <class T>
-	static void FindAndReplaceNullsInVector(vector<T> &input_vector, const vector<uint16_t> &vector_null_positions,
-	                                        idx_t values_count, idx_t nulls_count) {
+	static void FindAndReplaceNullsInVector(T *input_vector, const uint16_t *vector_null_positions, idx_t values_count,
+	                                        idx_t nulls_count) {
 		if (nulls_count == 0) {
 			return;
 		}

@@ -150,8 +150,8 @@ struct AlpCompression {
 	 * Dry compress a vector (ideally a sample) to estimate ALP compression size given a exponent and factor
 	 */
 	template <bool PENALIZE_EXCEPTIONS>
-	static uint64_t DryCompressToEstimateSize(const vector<T> &in, AlpEncodingIndices encoding_indices) {
-		idx_t n_values = in.size();
+	static uint64_t DryCompressToEstimateSize(const vector<T> &input_vector, AlpEncodingIndices encoding_indices) {
+		idx_t n_values = input_vector.size();
 		idx_t exceptions_count = 0;
 		idx_t non_exceptions_count = 0;
 		uint32_t estimated_bits_per_value = 0;
@@ -159,7 +159,7 @@ struct AlpCompression {
 		int64_t max_encoded_value = NumericLimits<int64_t>::Minimum();
 		int64_t min_encoded_value = NumericLimits<int64_t>::Maximum();
 
-		for (const T &value : in) {
+		for (const T &value : input_vector) {
 			int64_t encoded_value = EncodeValue(value, encoding_indices);
 			T decoded_value = DecodeValue(encoded_value, encoding_indices);
 			if (decoded_value == value) {
@@ -244,7 +244,7 @@ struct AlpCompression {
 	 * Find the best combination of factor-exponent for a vector from within the best k combinations
 	 * This is ALP second level sampling
 	 */
-	static void FindBestFactorAndExponent(const vector<T> &input_vector, idx_t n_values, State &state) {
+	static void FindBestFactorAndExponent(const T *input_vector, idx_t n_values, State &state) {
 		//! We sample equidistant values within a vector; to do this we skip a fixed number of values
 		vector<T> vector_sample;
 		uint32_t idx_increments = MaxValue(1, (int32_t)std::ceil((double)n_values / AlpConstants::SAMPLES_PER_VECTOR));
@@ -281,7 +281,7 @@ struct AlpCompression {
 	/*
 	 * ALP Compress
 	 */
-	static void Compress(const vector<T> &input_vector, idx_t n_values, const vector<uint16_t> &vector_null_positions,
+	static void Compress(const T *input_vector, idx_t n_values, const uint16_t *vector_null_positions,
 	                     idx_t nulls_count, State &state) {
 		if (state.best_k_combinations.size() > 1) {
 			FindBestFactorAndExponent(input_vector, n_values, state);
@@ -291,42 +291,32 @@ struct AlpCompression {
 
 		// Encoding Floating-Point to Int64
 		//! We encode all the values regardless of their correctness to recover the original floating-point
-		//! We detect exceptions later using a predicated comparison
-		vector<T> tmp_decoded_values(n_values, 0); // Tmp array to check wether the encoded values are exceptions
+		uint16_t exceptions_idx = 0;
 		for (idx_t i = 0; i < n_values; i++) {
-			T value = input_vector[i];
-			int64_t encoded_value = EncodeValue(value, state.vector_encoding_indices);
+			T actual_value = input_vector[i];
+			int64_t encoded_value = EncodeValue(actual_value, state.vector_encoding_indices);
 			T decoded_value = DecodeValue(encoded_value, state.vector_encoding_indices);
 			state.encoded_integers[i] = encoded_value;
-			tmp_decoded_values[i] = decoded_value;
-		}
-
-		// Detecting exceptions with predicated comparison
-		uint16_t exceptions_idx = 0;
-		vector<uint64_t> exceptions_positions(n_values, 0);
-		for (idx_t i = 0; i < n_values; i++) {
-			T decoded_value = tmp_decoded_values[i];
-			T actual_value = input_vector[i];
+			//! We detect exceptions using a predicated comparison
 			auto is_exception = (decoded_value != actual_value);
-			exceptions_positions[exceptions_idx] = i;
+			state.exceptions_positions[exceptions_idx] = i;
 			exceptions_idx += is_exception;
 		}
 
 		// Finding first non exception value
 		int64_t a_non_exception_value = 0;
 		for (idx_t i = 0; i < n_values; i++) {
-			if (i != exceptions_positions[i]) {
+			if (i != state.exceptions_positions[i]) {
 				a_non_exception_value = state.encoded_integers[i];
 				break;
 			}
 		}
 		// Replacing that first non exception value on the vector exceptions
 		for (idx_t i = 0; i < exceptions_idx; i++) {
-			idx_t exception_pos = exceptions_positions[i];
+			idx_t exception_pos = state.exceptions_positions[i];
 			T actual_value = input_vector[exception_pos];
 			state.encoded_integers[exception_pos] = a_non_exception_value;
 			state.exceptions[i] = actual_value;
-			state.exceptions_positions[i] = exception_pos;
 		}
 		state.exceptions_count = exceptions_idx;
 
@@ -339,9 +329,9 @@ struct AlpCompression {
 		// Analyze FFOR
 		auto min_value = NumericLimits<int64_t>::Maximum();
 		auto max_value = NumericLimits<int64_t>::Minimum();
-		for (auto &encoded_value : state.encoded_integers) {
-			max_value = MaxValue(max_value, encoded_value);
-			min_value = MinValue(min_value, encoded_value);
+		for (idx_t i = 0; i < n_values; i++) {
+			max_value = MaxValue(max_value, state.encoded_integers[i]);
+			min_value = MinValue(min_value, state.encoded_integers[i]);
 		}
 		uint64_t min_max_diff = (static_cast<uint64_t>(max_value) - static_cast<uint64_t>(min_value));
 
@@ -369,8 +359,8 @@ struct AlpCompression {
 	/*
 	 * Overload without specifying nulls
 	 */
-	static void Compress(const vector<T> &input_vector, idx_t n_values, State &state) {
-		vector<uint16_t> vector_null_positions;
+	static void Compress(const T *input_vector, idx_t n_values, State &state) {
+		uint16_t *vector_null_positions;
 		idx_t nulls_count = 0;
 		Compress(input_vector, n_values, vector_null_positions, nulls_count, state);
 	}
@@ -379,7 +369,7 @@ struct AlpCompression {
 template <class T>
 struct AlpDecompression {
 	static void Decompress(uint8_t *for_encoded, T *output, idx_t count, uint8_t vector_factor, uint8_t vector_exponent,
-	                       uint16_t exceptions_count, T *exceptions, uint16_t *exceptions_positions,
+	                       uint16_t exceptions_count, T *exceptions, const uint16_t *exceptions_positions,
 	                       uint64_t frame_of_reference, uint8_t bit_width) {
 		AlpEncodingIndices encoding_indices = {vector_exponent, vector_factor};
 
@@ -388,7 +378,7 @@ struct AlpDecompression {
 		if (bit_width > 0) {
 			BitpackingPrimitives::UnPackBuffer<uint64_t>(for_decoded, for_encoded, count, bit_width);
 		}
-		uint64_t *encoded_integers = reinterpret_cast<uint64_t *>(data_ptr_cast(for_decoded));
+		auto *encoded_integers = reinterpret_cast<uint64_t *>(data_ptr_cast(for_decoded));
 
 		// unFOR
 		for (idx_t i = 0; i < count; i++) {
@@ -397,7 +387,7 @@ struct AlpDecompression {
 
 		// Decoding
 		for (idx_t i = 0; i < count; i++) {
-			int64_t encoded_integer = static_cast<int64_t>(encoded_integers[i]);
+			auto encoded_integer = static_cast<int64_t>(encoded_integers[i]);
 			output[i] = alp::AlpCompression<T, true>::DecodeValue(encoded_integer, encoding_indices);
 		}
 

@@ -38,11 +38,6 @@ public:
 	explicit AlpRDCompressionState(ColumnDataCheckpointer &checkpointer, AlpRDAnalyzeState<T> *analyze_state)
 	    : checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALPRD)) {
-
-		input_vector = vector<EXACT_TYPE>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
-		raw_input_vector = vector<T>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
-		vector_null_positions = vector<uint16_t>(AlpRDConstants::ALP_VECTOR_SIZE, 0);
-
 		//! State variables from the analyze step that are needed for compression
 		state.left_parts_dict_map = std::move(analyze_state->state.left_parts_dict_map);
 		state.left_bit_width = analyze_state->state.left_bit_width;
@@ -70,9 +65,8 @@ public:
 	uint32_t actual_dictionary_size_bytes;
 	uint32_t next_vector_byte_index_start;
 
-	vector<EXACT_TYPE> input_vector;
-	vector<T> raw_input_vector;
-	vector<uint16_t> vector_null_positions;
+	EXACT_TYPE input_vector[AlpRDConstants::ALP_VECTOR_SIZE];
+	uint16_t vector_null_positions[AlpRDConstants::ALP_VECTOR_SIZE];
 
 	alp::AlpRDCompressionState<T, false> state;
 
@@ -129,8 +123,6 @@ public:
 		if (nulls_idx) {
 			alp::AlpUtils::FindAndReplaceNullsInVector<EXACT_TYPE>(input_vector, vector_null_positions, vector_idx,
 			                                                       nulls_idx);
-			alp::AlpUtils::FindAndReplaceNullsInVector<T>(raw_input_vector, vector_null_positions, vector_idx,
-			                                              nulls_idx);
 		}
 		alp::AlpRDCompression<T, false>::Compress(input_vector, vector_idx, state);
 		//! Check if the compressed vector fits on current segment
@@ -141,7 +133,8 @@ public:
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
 			for (idx_t i = 0; i < vector_idx; i++) {
-				NumericStats::Update<T>(current_segment->stats.statistics, raw_input_vector[i]);
+				T floating_point_value = Load<T>(const_data_ptr_cast(&input_vector[i]));
+				NumericStats::Update<T>(current_segment->stats.statistics, floating_point_value);
 			}
 		}
 		current_segment->count += vector_idx;
@@ -249,19 +242,37 @@ public:
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		auto data = UnifiedVectorFormat::GetData<T>(vdata);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
-			//! We resolve null values with a predicated comparison
-			bool is_null = !vdata.validity.RowIsValid(idx);
-			vector_null_positions[nulls_idx] = vector_idx;
-			nulls_idx += is_null;
-			//! For convenience purposes we store here a parallel vector with the raw type instead of the EXACT_TYPE
-			input_vector[vector_idx] = value;
-			raw_input_vector[vector_idx] = data[idx];
-			vector_idx++;
+		idx_t values_left_in_data = count;
+		idx_t offset_in_data = 0;
+		while (values_left_in_data > 0) {
+			// We calculate until which value in data we must go to fill the input_vector
+			// to avoid checking if input_vector is filled in each iteration
+			auto values_to_fill_alp_input =
+			    MinValue<idx_t>(AlpConstants::ALP_VECTOR_SIZE - vector_idx, values_left_in_data);
+			if (vdata.validity.AllValid()) { //! We optimize a loop when there are no null
+				for (idx_t i = 0; i < values_to_fill_alp_input; i++) {
+					auto idx = vdata.sel->get_index(offset_in_data + i);
+					EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
+					input_vector[vector_idx + i] = value;
+				}
+			} else {
+				for (idx_t i = 0; i < values_to_fill_alp_input; i++) {
+					auto idx = vdata.sel->get_index(offset_in_data + i);
+					EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
+					bool is_null = !vdata.validity.RowIsValid(idx);
+					//! We resolve null values with a predicated comparison
+					vector_null_positions[nulls_idx] = vector_idx + i;
+					nulls_idx += is_null;
+					input_vector[vector_idx + i] = value;
+				}
+			}
+			offset_in_data += values_to_fill_alp_input;
+			values_left_in_data -= values_to_fill_alp_input;
+			vector_idx += values_to_fill_alp_input;
+			// We still need this check since we could have an incomplete input_vector at the end of data
 			if (vector_idx == AlpConstants::ALP_VECTOR_SIZE) {
 				CompressVector();
+				D_ASSERT(vector_idx == 0);
 			}
 		}
 	}
