@@ -129,7 +129,7 @@ protected:
 			case CSVState::INVALID:
 				T::InvalidState(result);
 				iterator.pos.buffer_pos++;
-				break;
+				return;
 			case CSVState::RECORD_SEPARATOR:
 				if (states.states[0] == CSVState::RECORD_SEPARATOR) {
 					lines_read++;
