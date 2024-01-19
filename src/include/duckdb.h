@@ -1419,10 +1419,22 @@ If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
 
 The error message can be obtained by calling duckdb_pending_error on the pending_result.
 
-* pending_result: The pending result to execute a task within..
+* pending_result: The pending result to execute a task within.
 * returns: The state of the pending result after the execution.
 */
 DUCKDB_API duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result);
+
+/*!
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result.
+* returns: The state of the pending result.
+*/
+DUCKDB_API duckdb_pending_state duckdb_pending_execute_check_state(duckdb_pending_result pending_result);
 
 /*!
 Fully execute a pending query result, returning the final query result.

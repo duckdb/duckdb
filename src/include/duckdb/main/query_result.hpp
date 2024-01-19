@@ -16,14 +16,10 @@
 
 namespace duckdb {
 struct BoxRendererConfig;
-class QueryResultExecutor;
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT };
 
 class BaseQueryResult {
-private:
-	friend class QueryResultExecutor;
-
 public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,

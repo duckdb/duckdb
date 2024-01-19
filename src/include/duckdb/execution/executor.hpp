@@ -48,7 +48,7 @@ public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
-	PendingExecutionResult ExecuteTask();
+	PendingExecutionResult ExecuteTask(bool dry_run = false);
 
 	void Reset();
 

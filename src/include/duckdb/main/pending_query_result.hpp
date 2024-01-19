@@ -39,6 +39,7 @@ public:
 	//!	    but tasks may become available in the future.
 	//! The error message can be obtained by calling GetError() on the PendingQueryResult.
 	DUCKDB_API PendingExecutionResult ExecuteTask();
+	DUCKDB_API PendingExecutionResult CheckPulse();
 
 	//! Returns the result of the query as an actual query result.
 	//! This returns (mostly) instantly if ExecuteTask has been called until RESULT_READY was returned.

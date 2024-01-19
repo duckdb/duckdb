@@ -246,7 +246,7 @@ private:
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	PreservedError EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
-	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result);
+	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result, bool dry_run = false);
 
 	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(
 	    ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,

@@ -172,6 +172,11 @@ public:
 		auxiliary = std::move(new_buffer);
 	};
 
+	inline void CopyBuffer(Vector &other) {
+		buffer = other.buffer;
+		data = other.data;
+	}
+
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 

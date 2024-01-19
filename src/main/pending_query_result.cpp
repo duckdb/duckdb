@@ -48,13 +48,19 @@ PendingExecutionResult PendingQueryResult::ExecuteTask() {
 	return ExecuteTaskInternal(*lock);
 }
 
+PendingExecutionResult PendingQueryResult::CheckPulse() {
+	auto lock = LockContext();
+	CheckExecutableInternal(*lock);
+	return context->ExecuteTaskInternal(*lock, *this, true);
+}
+
 bool PendingQueryResult::AllowStreamResult() const {
 	return allow_stream_result;
 }
 
 PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	return context->ExecuteTaskInternal(lock, *this);
+	return context->ExecuteTaskInternal(lock, *this, false);
 }
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
