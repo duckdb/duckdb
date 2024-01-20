@@ -116,6 +116,7 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 	Reference(other);
 }
 
+#ifdef DEBUG
 void VerifyReinterpretConstraints(const LogicalType &a, const LogicalType &b) {
 	auto phys_a = a.InternalType();
 	auto phys_b = b.InternalType();
@@ -141,6 +142,7 @@ void VerifyReinterpretConstraints(const LogicalType &a, const LogicalType &b) {
 		VerifyReinterpretConstraints(child_a, child_b);
 	}
 }
+#endif
 
 void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
