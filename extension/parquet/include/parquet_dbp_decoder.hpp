@@ -61,7 +61,8 @@ public:
 				if (bitpack_pos > 0) {       // have to eat the leftovers if any
 					buffer_.inc(1);
 				}
-				min_delta = ParquetDecodeUtils::ZigzagToInt<int64_t>(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
+				min_delta =
+				    ParquetDecodeUtils::ZigzagToInt<int64_t>(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
 				for (idx_t miniblock_idx = 0; miniblock_idx < miniblocks_per_block; miniblock_idx++) {
 					miniblock_bit_widths[miniblock_idx] = buffer_.read<uint8_t>();
 					// TODO what happens if width is 0?
