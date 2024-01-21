@@ -228,7 +228,7 @@ unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpoi
 
 template <class T, bool WRITE_STATISTICS>
 void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
+	auto &state = state_p.Cast<RLECompressState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 
@@ -237,7 +237,7 @@ void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 
 template <class T, bool WRITE_STATISTICS>
 void RLEFinalizeCompress(CompressionState &state_p) {
-	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
+	auto &state = state_p.Cast<RLECompressState<T, WRITE_STATISTICS>>();
 	state.Finalize();
 }
 

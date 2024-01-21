@@ -99,7 +99,7 @@ static list_entry_t *GetBiggestList(Vector &key, Vector &value, idx_t &size) {
 	return ListVector::GetData(value);
 }
 
-void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
 	auto count = args.size();
