@@ -72,8 +72,8 @@ class TestArrowREE(object):
             ('DECIMAL(7,6)', "'1.234234'", "'0.000001'"),
             ('DECIMAL(14,7)', "'134523.234234'", "'999999.000001'"),
             ('DECIMAL(28,1)', "'12345678910111234123456789.1'", "'999999999999999999999999999.9'"),
-            # ("'10acd298-15d7-417c-8b59-eabb5a2bacab'::UUID", "'eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID"),
-            # ("'01010101010000'::BIT", "'01010100010101010101010101111111111'::BIT"), # FIXME: BIT seems broken?
+            ('UUID', "'10acd298-15d7-417c-8b59-eabb5a2bacab'", "'eeccb8c5-9943-b2bb-bb5e-222f4e14b687'"),
+            ('BIT', "'01010101010000'", "'01010100010101010101010101111111111'"),
         ],
     )
     @pytest.mark.parametrize(
@@ -84,6 +84,8 @@ class TestArrowREE(object):
         ],
     )
     def test_arrow_run_end_encoding(self, duckdb_cursor, dbtype, val1, val2, filter):
+        if dbtype in ['BIT', 'UUID']:
+            pytest.skip("BIT and UUID are currently broken (FIXME)")
         projection = "a, b, ree"
         query = """
             create table ree_tbl as select
