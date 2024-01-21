@@ -56,7 +56,8 @@ class TestNativeTimeZone(object):
         pa = pytest.importorskip('pyarrow')
         con = duckdb.connect('')
         res = con.execute("SET timezone='America/Los_Angeles';")
-        res = con.execute(f"select TimeRecStart as tz  from '{filename}'").arrow().to_pandas()
+        table = con.execute(f"select TimeRecStart as tz  from '{filename}'").arrow()
+        res = table.to_pandas()
         assert res.dtypes["tz"].tz.zone == 'America/Los_Angeles'
         assert res['tz'][0].hour == 14 and res['tz'][0].minute == 52
 
