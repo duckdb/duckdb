@@ -175,10 +175,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
-	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = scalar_function.expression->Copy();
+	ExpressionBinder::QualifyColumnNames(*this, expression);
 
 	// bind it to verify the function was defined correctly
 	string error;
@@ -247,7 +247,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 			}
 
 			if (type.id() == LogicalTypeId::INVALID) {
-				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+				type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, user_type_name);
 			}
 		} else {
 			string type_catalog = UserType::GetCatalog(type);
@@ -634,16 +634,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(std::move(query));
-		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
+		} else {
 			// two cases:
-			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.
+			// 1: create a type with a non-existent type as source, Binder::BindLogicalType(...) will throw exception.
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
-			                                   UserType::GetTypeName(create_type_info.type));
-			inner_type.SetAlias(create_type_info.name);
-			create_type_info.type = inner_type;
+			Binder::BindLogicalType(context, create_type_info.type);
 		}
 		break;
 	}
@@ -651,7 +648,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
 		properties.return_type = StatementReturnType::QUERY_RESULT;
 		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
-		break;
 	}
 	default:
 		throw Exception("Unrecognized type!");

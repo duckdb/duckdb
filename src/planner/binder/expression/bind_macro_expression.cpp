@@ -9,43 +9,107 @@
 
 namespace duckdb {
 
-void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr) {
+void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
+                                                      vector<unordered_set<string>> &lambda_params) {
+
+	for (auto &child : function.children) {
+		if (child->expression_class != ExpressionClass::LAMBDA) {
+			// not a lambda expression
+			ReplaceMacroParameters(child, lambda_params);
+			continue;
+		}
+
+		// special-handling for LHS lambda parameters
+		// we do not replace them, and we add them to the lambda_params vector
+		auto &lambda_expr = child->Cast<LambdaExpression>();
+		string error_message;
+		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
+
+		if (!error_message.empty()) {
+			// possibly a JSON function, replace both LHS and RHS
+			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.lhs, [&](unique_ptr<ParsedExpression> &child) {
+				ReplaceMacroParameters(child, lambda_params);
+			});
+			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
+				ReplaceMacroParameters(child, lambda_params);
+			});
+			continue;
+		}
+
+		// push this level
+		lambda_params.emplace_back();
+
+		// push the lambda parameter names
+		for (const auto column_ref_expr : column_ref_expressions) {
+			auto column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
+			lambda_params.back().emplace(column_ref.GetName());
+		}
+
+		// only replace in RHS
+		ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
+			ReplaceMacroParameters(child, lambda_params);
+		});
+
+		// pop this level
+		lambda_params.pop_back();
+	}
+}
+
+void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr,
+                                              vector<unordered_set<string>> &lambda_params) {
+
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
-		// if expr is a parameter, replace it with its argument
-		auto &colref = expr->Cast<ColumnRefExpression>();
+		// if the expression is a parameter, replace it with its argument
+		auto &col_ref = expr->Cast<ColumnRefExpression>();
+
+		// don't replace lambda parameters
+		if (LambdaExpression::IsLambdaParameter(lambda_params, col_ref.GetName())) {
+			return;
+		}
+
 		bool bind_macro_parameter = false;
-		if (colref.IsQualified()) {
-			bind_macro_parameter = false;
-			if (colref.GetTableName().find(DummyBinding::DUMMY_NAME) != string::npos) {
+		if (col_ref.IsQualified()) {
+			if (col_ref.GetTableName().find(DummyBinding::DUMMY_NAME) != string::npos) {
 				bind_macro_parameter = true;
 			}
 		} else {
-			bind_macro_parameter = macro_binding->HasMatchingBinding(colref.GetColumnName());
+			bind_macro_parameter = macro_binding->HasMatchingBinding(col_ref.GetColumnName());
 		}
+
 		if (bind_macro_parameter) {
-			D_ASSERT(macro_binding->HasMatchingBinding(colref.GetColumnName()));
-			expr = macro_binding->ParamToArg(colref);
+			D_ASSERT(macro_binding->HasMatchingBinding(col_ref.GetColumnName()));
+			expr = macro_binding->ParamToArg(col_ref);
 		}
 		return;
 	}
+	case ExpressionClass::FUNCTION: {
+		// special-handling for lambdas, which are inside function expressions,
+		auto &function = expr->Cast<FunctionExpression>();
+		if (IsLambdaFunction(function)) {
+			// special case
+			return ReplaceMacroParametersInLambda(function, lambda_params);
+		}
+		break;
+	}
 	case ExpressionClass::SUBQUERY: {
-		// replacing parameters within a subquery is slightly different
 		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
 		ParsedExpressionIterator::EnumerateQueryNodeChildren(
-		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
+		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 		break;
 	}
 	default: // fall through
 		break;
 	}
-	// unfold child expressions
+
+	// replace macro parameters in child expressions
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
+
 	// recast function so we can access the scalar member function->expression
 	auto &macro_def = macro_func.function->Cast<ScalarMacroFunction>();
 
@@ -82,8 +146,14 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// replace current expression with stored macro expression
 	expr = macro_def.expression->Copy();
 
+	// qualify only the macro parameters with a new empty binder that only knows the macro binding
+	auto dummy_binder = Binder::CreateBinder(context);
+	dummy_binder->macro_binding = new_macro_binding.get();
+	ExpressionBinder::QualifyColumnNames(*dummy_binder, expr);
+
 	// now replace the parameters
-	ReplaceMacroParametersRecursive(expr);
+	vector<unordered_set<string>> lambda_params;
+	ReplaceMacroParameters(expr, lambda_params);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

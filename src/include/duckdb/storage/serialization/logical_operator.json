@@ -433,6 +433,12 @@
         "id": 206,
         "name": "duplicate_eliminated_columns",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "delim_flipped",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["join_type", "type"]
@@ -793,23 +799,6 @@
       }
     ],
     "constructor": ["explain_type"]
-  },
-  {
-    "class": "LogicalShow",
-    "base": "LogicalOperator",
-    "enum": "LOGICAL_SHOW",
-    "members": [
-      {
-        "id": 200,
-        "name": "types_select",
-        "type": "vector<LogicalType>"
-      },
-      {
-        "id": 201,
-        "name": "aliases",
-        "type": "vector<string>"
-      }
-    ]
   },
   {
     "class": "LogicalSet",

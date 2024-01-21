@@ -319,6 +319,27 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+	if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	    op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
+		// after removing duplicate columns we may have duplicate join conditions (if the join graph is cyclical)
+		vector<JoinCondition> unique_conditions;
+		for (auto &cond : comp_join.conditions) {
+			bool found = false;
+			for (auto &unique_cond : unique_conditions) {
+				if (cond.comparison == unique_cond.comparison && cond.left->Equals(*unique_cond.left) &&
+				    cond.right->Equals(*unique_cond.right)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				unique_conditions.push_back(std::move(cond));
+			}
+		}
+		comp_join.conditions = std::move(unique_conditions);
+	}
 }
 
 unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr,

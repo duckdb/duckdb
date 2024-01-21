@@ -63,7 +63,7 @@ typedef struct {
 typedef uint32_t bitpacking_metadata_encoded_t;
 
 static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) {
-	D_ASSERT(metadata.offset <= 16777215); // max uint24_t
+	D_ASSERT(metadata.offset <= 0x00FFFFFF); // max uint24_t
 	bitpacking_metadata_encoded_t encoded_value = metadata.offset;
 	encoded_value |= (uint8_t)metadata.mode << 24;
 	return encoded_value;
@@ -218,8 +218,11 @@ public:
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
 		static_assert(IsIntegral<T_INNER>::value, "Integral type required.");
+
+		using T_U = typename MakeUnsigned<T_INNER>::type;
+
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= static_cast<typename MakeUnsigned<T_INNER>::type>(frame_of_reference);
+			reinterpret_cast<T_U *>(buffer)[i] -= static_cast<T_U>(frame_of_reference);
 		}
 	}
 
@@ -250,10 +253,8 @@ public:
 			}
 
 			// Check if delta has benefit
-			// bitwidth is calculated differently between signed and unsigned values, but considering we do not have
-			// an unsigned version of hugeint, we need to explicitly specify (through boolean) that we wish to calculate
-			// the unsigned minimum bit-width instead of relying on MakeUnsigned and IsSigned
-			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T, false>(min_max_delta_diff);
+			auto delta_required_bitwidth =
+			    BitpackingPrimitives::MinimumBitWidth<T, false>(static_cast<T>(min_max_delta_diff));
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(min_max_diff);
 
 			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
@@ -331,7 +332,7 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = static_cast<BitpackingAnalyzeState<T> &>(state);
+	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
@@ -347,7 +348,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
-	auto &bitpacking_state = static_cast<BitpackingAnalyzeState<T> &>(state);
+	auto &bitpacking_state = state.Cast<BitpackingAnalyzeState<T>>();
 	auto flush_result = bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
 	if (!flush_result) {
 		return DConstants::INVALID_INDEX;
@@ -547,7 +548,7 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &c
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = static_cast<BitpackingCompressState<T, WRITE_STATISTICS> &>(state_p);
+	auto &state = state_p.Cast<BitpackingCompressState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -555,7 +556,7 @@ void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t co
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingFinalizeCompress(CompressionState &state_p) {
-	auto &state = static_cast<BitpackingCompressState<T, WRITE_STATISTICS> &>(state_p);
+	auto &state = state_p.Cast<BitpackingCompressState<T, WRITE_STATISTICS>>();
 	state.Finalize();
 }
 
@@ -758,7 +759,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
-	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
+	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -939,6 +940,8 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<uint64_t>(type);
 	case PhysicalType::INT128:
 		return GetBitpackingFunction<hugeint_t>(type);
+	case PhysicalType::UINT128:
+		return GetBitpackingFunction<uhugeint_t>(type);
 	case PhysicalType::LIST:
 		return GetBitpackingFunction<uint64_t, false>(type);
 	default:
@@ -959,6 +962,7 @@ bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT64:
 	case PhysicalType::LIST:
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 		return true;
 	default:
 		return false;

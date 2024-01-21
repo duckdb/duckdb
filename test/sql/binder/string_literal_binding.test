@@ -2,6 +2,9 @@
 # description: Test string literal binding
 # group: [binder]
 
+statement ok
+PRAGMA enable_verification
+
 # string literals bind differently from strings
 # they can be auto-cast to everything
 # this is an integer comparison

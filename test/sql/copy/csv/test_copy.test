@@ -207,7 +207,7 @@ CREATE TABLE unterminated (a VARCHAR);
 statement error
 COPY unterminated FROM 'test/sql/copy/csv/data/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE);
 ----
-unterminated quotes.
+Value with unterminated quote found.
 
 # 1024 rows (vector size)
 # load CSV file into a table

@@ -16,7 +16,6 @@
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
-class ClientContext;
 
 //! ObjectCache is the base class for objects caches in DuckDB
 class ObjectCacheEntry {

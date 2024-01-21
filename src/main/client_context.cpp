@@ -41,6 +41,7 @@
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 

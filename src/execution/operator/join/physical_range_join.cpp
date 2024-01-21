@@ -5,6 +5,8 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -40,13 +42,15 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 	keys.Reset();
 	executor.Execute(input, keys);
 
+	// Do not operate on primary key directly to avoid modifying the input chunk
+	Vector primary = keys.data[0];
 	// Count the NULLs so we can exclude them later
-	has_null += MergeNulls(op.conditions);
+	has_null += MergeNulls(primary, op.conditions);
 	count += keys.size();
 
 	//	Only sort the primary key
 	DataChunk join_head;
-	join_head.data.emplace_back(keys.data[0]);
+	join_head.data.emplace_back(primary);
 	join_head.SetCardinality(keys.size());
 
 	// Sink the data into the local sort state
@@ -214,7 +218,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
-idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {
+idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vector<JoinCondition> &conditions) {
 	// Merge the validity masks of the comparison keys into the primary
 	// Return the number of NULLs in the resulting chunk
 	D_ASSERT(keys.ColumnCount() > 0);
@@ -227,11 +231,18 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		}
 	}
 
-	auto &primary = keys.data[0];
 	if (all_constant == keys.data.size()) {
 		//	Either all NULL or no NULLs
+		if (ConstantVector::IsNull(primary)) {
+			// Primary is already NULL
+			return count;
+		}
 		for (auto &v : keys.data) {
 			if (ConstantVector::IsNull(v)) {
+				// Create a new validity mask to avoid modifying original mask
+				auto &pvalidity = ConstantVector::Validity(primary);
+				ValidityMask pvalidity_copy = ConstantVector::Validity(primary);
+				pvalidity.Copy(pvalidity_copy, count);
 				ConstantVector::SetNull(primary, true);
 				return count;
 			}
@@ -241,6 +252,10 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		//	Flatten the primary, as it will need to merge arbitrary validity masks
 		primary.Flatten(count);
 		auto &pvalidity = FlatVector::Validity(primary);
+		// Make a copy of validity to avoid modifying original mask
+		ValidityMask pvalidity_copy = FlatVector::Validity(primary);
+		pvalidity.Copy(pvalidity_copy, count);
+
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs

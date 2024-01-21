@@ -89,7 +89,7 @@ public:
 
 public:
 	//! The hash table load factor, when a resize is triggered
-	constexpr static float LOAD_FACTOR = 1.5;
+	constexpr static double LOAD_FACTOR = 1.5;
 
 	//! Get the layout of this HT
 	const TupleDataLayout &GetLayout() const;

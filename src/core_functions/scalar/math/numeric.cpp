@@ -1200,7 +1200,9 @@ struct FactorialOperator {
 	static inline TR Operation(TA left) {
 		TR ret = 1;
 		for (TA i = 2; i <= left; i++) {
-			ret *= i;
+			if (!TryMultiplyOperator::Operation(ret, TR(i), ret)) {
+				throw OutOfRangeException("Value out of range");
+			}
 		}
 		return ret;
 	}

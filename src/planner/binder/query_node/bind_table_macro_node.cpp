@@ -58,10 +58,9 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	auto eb = ExpressionBinder(*this, this->context);
 
 	eb.macro_binding = new_macro_binding.get();
-
-	/* Does it all goes throu every expression in a selectstmt  */
+	vector<unordered_set<string>> lambda_params;
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
-	    *node, [&](unique_ptr<ParsedExpression> &child) { eb.ReplaceMacroParametersRecursive(child); });
+	    *node, [&](unique_ptr<ParsedExpression> &child) { eb.ReplaceMacroParameters(child, lambda_params); });
 
 	return node;
 }

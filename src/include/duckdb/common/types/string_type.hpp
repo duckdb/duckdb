@@ -91,6 +91,10 @@ public:
 		return value.inlined.length;
 	}
 
+	bool Empty() const {
+		return value.inlined.length == 0;
+	}
+
 	string GetString() const {
 		return string(GetData(), GetSize());
 	}

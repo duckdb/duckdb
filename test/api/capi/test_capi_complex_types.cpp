@@ -422,3 +422,46 @@ TEST_CASE("Binding values", "[capi]") {
 		duckdb_destroy_logical_type(&logical_type);
 	}
 }
+
+TEST_CASE("Test Infinite Dates", "[capi]") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	{
+		auto result = tester.Query("SELECT '-infinity'::DATE, 'epoch'::DATE, 'infinity'::DATE");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto d = result->Fetch<duckdb_date>(0, 0);
+		REQUIRE(!duckdb_is_finite_date(d));
+		REQUIRE(d.days < 0);
+
+		d = result->Fetch<duckdb_date>(1, 0);
+		REQUIRE(duckdb_is_finite_date(d));
+		REQUIRE(d.days == 0);
+
+		d = result->Fetch<duckdb_date>(2, 0);
+		REQUIRE(!duckdb_is_finite_date(d));
+		REQUIRE(d.days > 0);
+	}
+
+	{
+		auto result = tester.Query("SELECT '-infinity'::TIMESTAMP, 'epoch'::TIMESTAMP, 'infinity'::TIMESTAMP");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto ts = result->Fetch<duckdb_timestamp>(0, 0);
+		REQUIRE(!duckdb_is_finite_timestamp(ts));
+		REQUIRE(ts.micros < 0);
+
+		ts = result->Fetch<duckdb_timestamp>(1, 0);
+		REQUIRE(duckdb_is_finite_timestamp(ts));
+		REQUIRE(ts.micros == 0);
+
+		ts = result->Fetch<duckdb_timestamp>(2, 0);
+		REQUIRE(!duckdb_is_finite_timestamp(ts));
+		REQUIRE(ts.micros > 0);
+	}
+}

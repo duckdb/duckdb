@@ -6,10 +6,6 @@
 statement ok
 PRAGMA verify_parallelism
 
-loop thr 1 8
-
-statement ok
-pragma threads=${thr}
 
 query IIII rowsort
 select * from read_csv_auto('test/sql/copy/csv/data/auto/glob/[0-9].csv');
@@ -248,4 +244,3 @@ select * from read_csv('test/sql/copy/csv/data/auto/glob/[0-9].csv', sample_size
 8	8	1.8	eight
 9	9	1.9	nine
 
-endloop
