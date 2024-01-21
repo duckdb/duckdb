@@ -61,7 +61,7 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 	if (percentage_int == rendered_percentage) {
 		return;
 	}
-	PrintProgressInternal(NormalizePercentage(percentage));
+	PrintProgressInternal(percentage_int);
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 	rendered_percentage = percentage_int;
 }
