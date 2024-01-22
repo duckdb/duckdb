@@ -224,18 +224,17 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index, bool &file_done);
+	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index, bool &file_done);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index, bool &file_done);
 	void SkipOverArrayStart();
 
 	void ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index);
-	void ReconstructFirstObject();
+	bool ReconstructFirstObject();
 	void ParseNextChunk();
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void ThrowInvalidAtEndError();
 
 	//! Must hold the lock
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
