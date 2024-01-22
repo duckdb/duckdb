@@ -399,7 +399,7 @@ sqlsmith: debug
 # works both on executable, libraries (-> .duckdb_extension) and on WebAssembly
 bloaty/bloaty:
 	git clone https://github.com/google/bloaty.git
-	cd bloaty && git submodule update --init --recursive && cmake -B build -G Ninja -S . && cmake --build build
+	cd bloaty && git submodule update --init --recursive && cmake -Bm build -G Ninja -S . && cmake --build build
 	mv bloaty/build/bloaty bloaty/bloaty
 
 bloaty: reldebug bloaty/bloaty
