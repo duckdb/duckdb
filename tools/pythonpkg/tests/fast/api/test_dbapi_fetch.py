@@ -37,7 +37,8 @@ class TestDBApiFetch(object):
         arrow = pytest.importorskip("pyarrow")
         con = duckdb.connect()
         c = con.execute('SELECT 42::BIGINT AS a')
-        df = c.arrow().to_pandas()
+        table = c.arrow()
+        df = table.to_pandas()
         pd.testing.assert_frame_equal(df, pd.DataFrame.from_dict({'a': [42]}))
         assert c.arrow() is None
         assert c.arrow() is None
