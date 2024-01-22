@@ -175,7 +175,7 @@ static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// set default values
 	Vector &path = args.data[0];
 	Vector separator(string_t("default"));
-	Vector trim_extension(false);
+	Vector trim_extension(Value::BOOLEAN(false));
 	ReadOptionalArgs(args, separator, trim_extension, FRONT_TRIM);
 
 	TernaryExecutor::Execute<string_t, string_t, bool, string_t>(
