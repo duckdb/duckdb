@@ -52,7 +52,7 @@ class TestNativeTimeZone(object):
             duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").df()
 
     @pytest.mark.skipif(
-        Version(pa.__version__) <= Version('15.0.0'), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
+        Version(pa.__version__) < Version('15.0.0'), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
     )
     def test_arrow_timestamp_timezone(self, duckdb_cursor):
         res = duckdb_cursor.execute("SET timezone='America/Los_Angeles';")

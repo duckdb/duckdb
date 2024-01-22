@@ -506,7 +506,7 @@ class TestArrowFilterPushdown(object):
         assert expected == actual
 
     @pytest.mark.skipif(
-        Version(pa.__version__) <= Version('15.0.0'), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
+        Version(pa.__version__) < Version('15.0.0'), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
     )
     def test_9371(self, duckdb_cursor, tmp_path):
         import datetime
