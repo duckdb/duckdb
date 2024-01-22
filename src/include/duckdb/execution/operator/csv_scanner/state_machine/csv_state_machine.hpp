@@ -39,7 +39,7 @@ struct CSVStates {
 
 	inline bool EmptyLine() {
 		return (states[1] == CSVState::CARRIAGE_RETURN || states[1] == CSVState::RECORD_SEPARATOR) &&
-		       states[0] == CSVState::RECORD_SEPARATOR;
+		       (states[0] == CSVState::RECORD_SEPARATOR || states[0] == CSVState::NOT_SET);
 	}
 
 	inline bool IsNotSet() {
@@ -48,6 +48,10 @@ struct CSVStates {
 
 	inline bool IsCurrentNewRow() {
 		return states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN;
+	}
+
+	inline bool IsCarriageReturn() {
+		return states[1] == CSVState::CARRIAGE_RETURN;
 	}
 
 	inline bool IsQuoted() {
