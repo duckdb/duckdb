@@ -131,7 +131,7 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::RECORD_SEPARATOR:
-				if (states.states[0] == CSVState::RECORD_SEPARATOR) {
+				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
 					lines_read++;
 					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
@@ -148,13 +148,13 @@ protected:
 				break;
 			case CSVState::CARRIAGE_RETURN:
 				lines_read++;
-				if (states.states[0] != CSVState::RECORD_SEPARATOR) {
-					if (T::AddRow(result, iterator.pos.buffer_pos)) {
+				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
+					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
 						return;
 					}
-				} else {
-					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
+				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
+					if (T::AddRow(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
 						return;
 					}

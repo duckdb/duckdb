@@ -63,7 +63,7 @@ ColumnCountResult &ColumnCountScanner::GetResult() {
 }
 
 void ColumnCountScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
@@ -78,7 +78,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
-				if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow()) {
+				if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || states.IsNotSet()) {
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added

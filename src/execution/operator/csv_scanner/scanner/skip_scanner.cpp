@@ -50,7 +50,7 @@ SkipResult &SkipScanner::GetResult() {
 }
 
 void SkipScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
 }
 
 void SkipScanner::FinalizeChunkProcess() {

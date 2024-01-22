@@ -430,11 +430,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 }
 
 void StringValueScanner::Initialize() {
-	if (state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		states.Initialize(CSVState::CARRIAGE_RETURN);
-	} else {
-		states.Initialize(CSVState::RECORD_SEPARATOR);
-	}
+	states.Initialize();
+
 	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
 	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
@@ -547,7 +544,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 
 void StringValueScanner::ProcessOverbufferValue() {
 	// Process first string
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
 	string overbuffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
 	if (result.last_position == previous_buffer_handle->actual_size) {
@@ -640,7 +637,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
-			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow()) {
+			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
+			    states.IsNotSet()) {
 				while (result.result_position % result.number_of_columns != 0) {
 					result.result_position--;
 				}

@@ -77,7 +77,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
 	    CSVState::RECORD_SEPARATOR;
 	transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] =
-	    CSVState::RECORD_SEPARATOR;
+	    CSVState::CARRIAGE_RETURN;
 	transition_array[quote][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::QUOTED;
 	// 5) Quoted State
 	transition_array[quote][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::UNQUOTED;
@@ -100,6 +100,18 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	// 7) Escaped State
 	transition_array[quote][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
 	transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
+
+	// 8) Not Set
+	transition_array[delimiter][static_cast<uint8_t>(static_cast<uint8_t>(CSVState::NOT_SET))] = CSVState::DELIMITER;
+	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::RECORD_SEPARATOR;
+	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::NOT_SET)] =
+		    CSVState::CARRIAGE_RETURN;
+	} else {
+		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::NOT_SET)] =
+		    CSVState::RECORD_SEPARATOR;
+	}
+	transition_array[static_cast<uint8_t>(quote)][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::QUOTED;
 
 	// Initialize characters we can skip during processing, for Standard and Quoted states
 	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
