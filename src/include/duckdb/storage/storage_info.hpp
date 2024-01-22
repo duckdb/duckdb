@@ -22,6 +22,8 @@ struct FileHandle;
 #define INVALID_BLOCK (-1)
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
+//! The default block size
+#define DEFAULT_BLOCK_ALLOC_SIZE 262144
 
 using block_id_t = int64_t;
 
@@ -32,7 +34,7 @@ struct Storage {
 	constexpr static idx_t BLOCK_HEADER_SIZE = sizeof(uint64_t);
 	//! Size of a memory slot managed by the StorageManager. This is the quantum of allocation for Blocks on DuckDB. We
 	//! default to 256KB. (1 << 18)
-	constexpr static idx_t BLOCK_ALLOC_SIZE = 262144;
+	constexpr static idx_t BLOCK_ALLOC_SIZE = DEFAULT_BLOCK_ALLOC_SIZE;
 	//! The actual memory space that is available within the blocks
 	constexpr static idx_t BLOCK_SIZE = BLOCK_ALLOC_SIZE - BLOCK_HEADER_SIZE;
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
@@ -92,6 +94,10 @@ struct DatabaseHeader {
 	//! The number of blocks that is in the file as of this database header. If the file is larger than BLOCK_SIZE *
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
 	uint64_t block_count;
+	//! The block size of the database file
+	idx_t block_size;
+	//! The vector size of the database file
+	idx_t vector_size;
 
 	void Write(WriteStream &ser);
 	static DatabaseHeader Read(ReadStream &source);

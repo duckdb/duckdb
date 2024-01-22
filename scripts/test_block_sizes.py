@@ -29,13 +29,13 @@ print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
 
 replace_in_file(
     'src/include/duckdb/storage/storage_info.hpp',
-    r'constexpr static idx_t BLOCK_ALLOC_SIZE = \d+',
+    r'constexpr static idx_t BLOCK_ALLOC_SIZE = \w+',
     'constexpr static idx_t BLOCK_ALLOC_SIZE = %d' % (block_size,),
 )
 
 replace_in_file(
     'src/include/duckdb/common/vector_size.hpp',
-    r'#define STANDARD_VECTOR_SIZE \d+',
+    r'#define STANDARD_VECTOR_SIZE \w+',
     '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
 )
 
@@ -49,7 +49,7 @@ print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
 
 replace_in_file(
     'src/include/duckdb/common/vector_size.hpp',
-    r'#define STANDARD_VECTOR_SIZE \d+',
+    r'#define STANDARD_VECTOR_SIZE \w+',
     '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
 )
 

@@ -2,8 +2,10 @@
 # description: Test WAL backwards compatibility
 # group: [wal]
 
-# FIXME: changing the vector size (512) causes this test to fail with:
-# FIXME: Exception in WAL playback during initial read: INTERNAL Error [...]
+# the file was created with a block size of 256KB
+require block_size 262144
+
+# the file was created with a vector size of 2048
 require vector_size 2048
 
 load data/storage/wal_test_092.db readonly
