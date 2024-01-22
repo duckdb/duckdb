@@ -213,7 +213,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 			result.AddValueToVector(value);
 		}
 		if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-			if (result.states.current_state == CSVState::RECORD_SEPARATOR) {
+			if (result.states.states[1] == CSVState::RECORD_SEPARATOR) {
 				// Even though this is marked as a carry on, this is a hippie mixie
 				result.last_position = buffer_pos + 1;
 			} else {
@@ -241,6 +241,10 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = buffer_pos + 1;
+	if (result.states.IsCarriageReturn() &&
+	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+		result.last_position++;
+	}
 	if (result.parse_chunk.ColumnCount() == 1) {
 		if (result.null_str.Empty()) {
 			bool empty = false;
@@ -264,6 +268,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 
 idx_t StringValueResult::NumberOfRows() {
 	if (result_position % number_of_columns != 0) {
+		Print();
 		throw InternalException("Something went wrong when reading the CSV file, more positions than columns. Open an "
 		                        "issue on the issue tracker.");
 	}
@@ -301,7 +306,7 @@ StringValueResult &StringValueScanner::ParseChunk() {
 	result.result_position = 0;
 	result.last_row_pos = 0;
 	result.validity_mask->SetAllValid(result.vector_size);
-	ParseChunkInternal();
+	ParseChunkInternal(result);
 	return result;
 }
 
@@ -430,7 +435,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 }
 
 void StringValueScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
+
 	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
 	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
@@ -441,33 +447,71 @@ void StringValueScanner::Initialize() {
 	result.pre_previous_line_start = result.previous_line_start;
 }
 
-void StringValueScanner::Process() {
-	idx_t to_pos;
-	if (iterator.IsBoundarySet()) {
-		to_pos = iterator.GetEndPos();
-		if (to_pos > cur_buffer_handle->actual_size) {
-			to_pos = cur_buffer_handle->actual_size;
-		}
-	} else {
-		to_pos = cur_buffer_handle->actual_size;
-	}
-	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
-			iterator.pos.buffer_pos++;
-			return;
-		}
-	}
-}
-
 void StringValueScanner::ProcessExtraRow() {
 	idx_t to_pos = cur_buffer_handle->actual_size;
-	idx_t cur_result_pos = result.result_position;
-	cur_result_pos++;
-	for (; iterator.pos.buffer_pos < to_pos; iterator.pos.buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result) ||
-		    (result.result_position >= cur_result_pos &&
-		     result.result_position % state_machine->dialect_options.num_cols == 0)) {
-			return;
+	while (iterator.pos.buffer_pos < to_pos) {
+		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+		switch (states.states[1]) {
+		case CSVState::INVALID:
+			result.InvalidState(result);
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::RECORD_SEPARATOR:
+			if (states.states[0] == CSVState::RECORD_SEPARATOR) {
+				lines_read++;
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
+				lines_read++;
+				result.AddRow(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			}
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::CARRIAGE_RETURN:
+			lines_read++;
+			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
+				result.AddRow(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			} else {
+				result.EmptyLine(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				return;
+			}
+		case CSVState::DELIMITER:
+			result.AddValue(result, iterator.pos.buffer_pos);
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::QUOTED:
+			if (states.states[0] == CSVState::UNQUOTED) {
+				result.SetEscaped(result);
+			}
+			result.SetQuoted(result);
+			iterator.pos.buffer_pos++;
+			while (state_machine->transition_array
+			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
+				iterator.pos.buffer_pos++;
+			}
+			break;
+		case CSVState::ESCAPE:
+			result.SetEscaped(result);
+			iterator.pos.buffer_pos++;
+			break;
+		case CSVState::STANDARD:
+			iterator.pos.buffer_pos++;
+			while (state_machine->transition_array
+			           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+			       iterator.pos.buffer_pos < to_pos - 1) {
+				iterator.pos.buffer_pos++;
+			}
+			break;
+		default:
+			iterator.pos.buffer_pos++;
+			break;
 		}
 	}
 }
@@ -505,7 +549,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 
 void StringValueScanner::ProcessOverbufferValue() {
 	// Process first string
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
 	string overbuffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
 	if (result.last_position == previous_buffer_handle->actual_size) {
@@ -568,8 +612,10 @@ void StringValueScanner::ProcessOverbufferValue() {
 	} else {
 		value = string_t(overbuffer_string.c_str(), overbuffer_string.size());
 	}
-	result.AddValueToVector(value, true);
-	if (states.NewRow()) {
+	if (!states.IsNotSet()) {
+		result.AddValueToVector(value, true);
+	}
+	if (states.NewRow() && !states.IsNotSet()) {
 		result.AddRowInternal();
 		lines_read++;
 	}
@@ -579,7 +625,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
 	}
-	if (states.IsCurrentNewRow() &&
+	if (states.IsCarriageReturn() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		result.last_position = ++iterator.pos.buffer_pos + 1;
 	} else {
@@ -598,7 +644,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
-			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow()) {
+			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
+			    states.IsNotSet()) {
 				while (result.result_position % result.number_of_columns != 0) {
 					result.result_position--;
 				}
@@ -645,6 +692,11 @@ void StringValueScanner::SkipCSVRows() {
 	SkipScanner row_skipper(buffer_manager, state_machine, error_handler, rows_to_skip);
 	row_skipper.ParseChunk();
 	iterator.pos.buffer_pos = row_skipper.GetIteratorPosition();
+	if (row_skipper.state_machine->options.dialect_options.state_machine_options.new_line ==
+	        NewLineIdentifier::CARRY_ON &&
+	    row_skipper.states.states[1] == CSVState::CARRIAGE_RETURN) {
+		iterator.pos.buffer_pos++;
+	}
 	if (result.store_line_size) {
 		result.error_handler.NewMaxLineSize(iterator.pos.buffer_pos);
 	}
@@ -742,7 +794,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 				return;
 			}
 			if (cur_buffer_handle) {
-				Process();
+				Process(result);
 			}
 		}
 		iterator.done = FinishedFile();

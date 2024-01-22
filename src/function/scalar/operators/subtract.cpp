@@ -57,8 +57,8 @@ interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 }
 
 template <>
-date_t SubtractOperator::Operation(date_t left, interval_t right) {
-	return AddOperator::Operation<date_t, interval_t, date_t>(left, Interval::Invert(right));
+timestamp_t SubtractOperator::Operation(date_t left, interval_t right) {
+	return AddOperator::Operation<date_t, interval_t, timestamp_t>(left, Interval::Invert(right));
 }
 
 template <>

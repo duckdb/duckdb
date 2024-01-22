@@ -181,6 +181,38 @@
         "struct": "MD5NumberUpperFun"
     },
     {
+        "name": "parse_dirname",
+        "parameters": "string,separator",
+        "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_dirname('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParseDirnameFun"
+    },
+    {
+        "name": "parse_dirpath",
+        "parameters": "string,separator",
+        "description": "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_dirpath('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParseDirpathFun"
+    },
+    {
+        "name": "parse_filename",
+        "parameters": "string,trim_extension,separator",
+        "description": "Returns the last component of the path similarly to Python's os.path.basename. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_filename('path/to/file.csv', true, 'forward_slash')",
+        "type": "scalar_function_set",
+        "struct": "ParseFilenameFun"
+    },
+    {
+        "name": "parse_path",
+        "parameters": "string,separator",
+        "description": "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.PurePath::parts. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_path('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParsePathFun"
+    },
+    {
         "name": "printf",
         "parameters": "format,parameters...",
         "description": "Formats a string using printf syntax",
