@@ -1,0 +1,8 @@
+# name: test/sql/copy/csv/test_parallel_nullpadding.test
+# description: Test NullPadding in parallel
+# group: [csv]
+
+query I
+from read_csv('data/csv/evil_nullpadding.csv', null_padding = True)
+----
+0

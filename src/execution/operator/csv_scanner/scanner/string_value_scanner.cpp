@@ -264,8 +264,29 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 
 idx_t StringValueResult::NumberOfRows() {
 	if (result_position % number_of_columns != 0) {
-		throw InternalException("Something went wrong when reading the CSV file, more positions than columns. Open an "
-		                        "issue on the issue tracker.");
+		// Maybe we have too few columns:
+		// 1) if null_padding is on we null pad it
+		if (null_padding) {
+			while (result_position % number_of_columns != 0) {
+				bool empty = false;
+				idx_t cur_pos = result_position % number_of_columns;
+				if (cur_pos < state_machine.options.force_not_null.size()) {
+					empty = state_machine.options.force_not_null[cur_pos];
+				}
+				if (empty) {
+					vector_ptr[result_position++] = string_t();
+				} else {
+					validity_mask->SetInvalid(result_position++);
+				}
+			}
+		} else {
+			auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, vector_ptr, number_of_columns,
+			                                                      result_position % number_of_columns);
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), result_position / number_of_columns + 1);
+			error_handler.Error(lines_per_batch, csv_error);
+			result_position -= result_position % number_of_columns;
+			D_ASSERT(result_position % number_of_columns == 0);
+		}
 	}
 	return result_position / number_of_columns;
 }
@@ -690,6 +711,10 @@ void StringValueScanner::SetStart() {
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
 	SkipUntilNewLine();
+	if (state_machine->options.null_padding){
+		// When Null Padding, we assume we start from the correct new-line
+		return;
+	}
 	StringValueScanner scan_finder(0, buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), iterator, 1);
 	auto &tuples = scan_finder.ParseChunk();
 	if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {

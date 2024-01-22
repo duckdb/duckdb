@@ -101,6 +101,8 @@ struct CSVReaderOptions {
 	string decimal_separator = ".";
 	//! Whether or not to pad rows that do not have enough columns with NULL values
 	bool null_padding = false;
+	//! If we should attempt to run parallel scanning over one file
+	bool parallel = true;
 
 	//! User defined parameters for the csv function concatenated on a string
 	string user_defined_parameters;

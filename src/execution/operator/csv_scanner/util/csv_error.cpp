@@ -122,7 +122,11 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, stri
                                            idx_t vector_line_start, idx_t current_column) {
 	std::ostringstream error;
 	// What is the problematic CSV Line
-	error << "Value with unterminated quote found." << std::endl;
+	error << "Value with unterminated quote found.";
+	if (options.null_padding){
+		error << " Null Padding is set, this indicates a quoted newline exists. Quoted new lines are not supported with null padding.";
+	}
+	error << std::endl;
 	error << "Problematic CSV Line (Up to unquoted value):" << std::endl;
 	for (; vector_line_start < current_column; vector_line_start++) {
 		error << vector_ptr[vector_line_start].GetString();
@@ -145,6 +149,7 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	      << std::endl;
 	// What is the problematic CSV Line
 	error << "Problematic CSV Line:" << std::endl;
+	error << "Consider using the \'null_padding\' or \'ignore_errors\' options." << std::endl;
 	for (; vector_line_start < actual_columns; vector_line_start++) {
 		//		error << vector_ptr[vector_line_start].GetString();
 		if (vector_line_start < actual_columns - 1) {
