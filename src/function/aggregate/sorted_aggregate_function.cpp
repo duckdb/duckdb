@@ -1,11 +1,13 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
@@ -708,8 +710,7 @@ struct SortedAggregateFunction {
 	}
 };
 
-void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
-                                         const vector<unique_ptr<Expression>> &groups) {
+void FunctionBinder::BindSortedAggregate(BoundAggregateExpression &expr, const vector<unique_ptr<Expression>> &groups) {
 	if (!expr.order_bys || expr.order_bys->orders.empty() || expr.children.empty()) {
 		// not a sorted aggregate: return
 		return;
@@ -738,11 +739,34 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 		}
 		expr.order_bys->orders = std::move(new_order_nodes);
 	}
+	if (expr.order_bys->orders.empty()) {
+		// not really a sorted aggregate: return
+		return;
+	}
+
 	auto &bound_function = expr.function;
-	auto &children = expr.children;
 	auto &order_bys = *expr.order_bys;
+
+	//	Some sorted aggregates (FIRST, LAST...) only need to compare sort keys on each row
+	//	instead of keeping all the values around (i.e., they are not holistic)
+	//	Th convention is that we give them an extra argument containing the sort key
+	//	which they can use to compare against the current state.
+	if (bound_function.order_dependent == AggregateOrderDependent::COMPARE_DEPENDENT) {
+		//	Add one more child that is a sort key.
+		auto sort_function = SortKeyFun::GetFunction();
+		sort_function.return_type = order_bys.GetSortKeyType();
+		vector<unique_ptr<Expression>> children;
+		for (auto &order : order_bys.orders) {
+			children.emplace_back(std::move(order.expression));
+		}
+
+		expr.children.emplace_back(BindScalarFunction(sort_function, std::move(children), false));
+		return;
+	}
+
 	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr);
 
+	auto &children = expr.children;
 	if (!sorted_bind->sorted_on_args) {
 		// The arguments are the children plus the sort columns.
 		for (auto &order : order_bys.orders) {

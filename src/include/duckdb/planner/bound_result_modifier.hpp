@@ -98,6 +98,8 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BoundOrderModifier> Deserialize(Deserializer &deserializer);
+
+	LogicalType GetSortKeyType() const;
 };
 
 enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };

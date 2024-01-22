@@ -364,18 +364,18 @@ bool IntegerLiteralTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 // SortKeyTypeInfo
 //===--------------------------------------------------------------------===//
 void OrderBySpec::Serialize(Serializer &serializer) const {
-	// Enums are special in that we serialize their values as a list instead of dumping the whole vector
 	serializer.WriteProperty(200, "type", type);
 	serializer.WriteProperty(201, "null_order", null_order);
 	serializer.WriteProperty(202, "expr_type", expr_type);
+	serializer.WriteProperty(203, "has_null", has_null);
 }
 
 OrderBySpec OrderBySpec::Deserialize(Deserializer &deserializer) {
-	// Enums are special in that we serialize their values as a list instead of dumping the whole vector
 	auto type = deserializer.ReadProperty<OrderType>(200, "type");
 	auto null_order = deserializer.ReadProperty<OrderByNullType>(201, "null_order");
 	auto expr_type = deserializer.ReadProperty<LogicalType>(202, "expr_type");
-	return OrderBySpec(type, null_order, expr_type);
+	auto has_null = deserializer.ReadProperty<bool>(203, "has_null");
+	return OrderBySpec(type, null_order, expr_type, has_null);
 }
 
 SortKeyTypeInfo::SortKeyTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::SORT_KEY_TYPE_INFO) {

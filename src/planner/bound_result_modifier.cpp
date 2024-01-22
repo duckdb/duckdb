@@ -1,4 +1,5 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
 
@@ -90,6 +91,16 @@ bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
 		return false;
 	}
 	return BoundOrderModifier::Equals(*left, *right);
+}
+
+LogicalType BoundOrderModifier::GetSortKeyType() const {
+	vector<OrderBySpec> order_specs;
+	for (const auto &order_by : orders) {
+		const auto has_null = order_by.stats ? order_by.stats->CanHaveNull() : true;
+		order_specs.emplace_back(order_by.type, order_by.null_order, order_by.expression->return_type, has_null);
+	}
+
+	return LogicalType::SORT_KEY(order_specs);
 }
 
 BoundLimitModifier::BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {

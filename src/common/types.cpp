@@ -1210,6 +1210,11 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 string OrderBySpec::ToString() const {
 	auto str = expr_type.ToString();
+
+	if (!has_null) {
+		str += " NOT NULL";
+	}
+
 	switch (type) {
 	case OrderType::ASCENDING:
 		str += " ASC";

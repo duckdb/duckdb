@@ -42,4 +42,13 @@ struct RowFun {
 	static ScalarFunction GetFunction();
 };
 
+struct SortKeyFun {
+	static constexpr const char *Name = "sort_key";
+	static constexpr const char *Parameters = "any";
+	static constexpr const char *Description = "Creates a SORT_KEY containing the argument values.";
+	static constexpr const char *Example = "sort_key(major, minor)";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

@@ -237,12 +237,13 @@ private:
 };
 
 struct OrderBySpec {
-	OrderBySpec(OrderType type, OrderByNullType null_order, const LogicalType &expr_type)
-	    : type(type), null_order(null_order), expr_type(expr_type) {
+	OrderBySpec(OrderType type, OrderByNullType null_order, const LogicalType &expr_type, bool has_null)
+	    : type(type), null_order(null_order), expr_type(expr_type), has_null(has_null) {
 	}
 
 	bool operator==(const OrderBySpec &other) const {
-		return type == other.type && null_order == other.null_order && expr_type == other.expr_type;
+		return type == other.type && null_order == other.null_order && expr_type == other.expr_type &&
+		       has_null == other.has_null;
 	}
 	bool operator!=(const OrderBySpec &other) const {
 		return !(*this == other);
@@ -254,6 +255,8 @@ struct OrderBySpec {
 	OrderByNullType null_order;
 	//! Type to order by
 	LogicalType expr_type;
+	//! Does the type's column have NULL values?
+	bool has_null;
 
 public:
 	string ToString() const;
