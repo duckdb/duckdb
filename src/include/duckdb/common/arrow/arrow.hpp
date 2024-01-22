@@ -77,9 +77,9 @@ struct ArrowArrayStream {
 
 	// Release callback: release the stream's own resources.
 	// Note that arrays returned by `get_next` must be individually released.
-	void (*release)(struct ArrowArrayStream *) = nullptr;
+	void (*release)(struct ArrowArrayStream *);
 	// Opaque producer-specific data
-	void *private_data = nullptr;
+	void *private_data;
 };
 #endif
 
