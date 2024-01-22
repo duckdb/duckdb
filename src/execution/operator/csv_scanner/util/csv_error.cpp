@@ -123,8 +123,9 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, stri
 	std::ostringstream error;
 	// What is the problematic CSV Line
 	error << "Value with unterminated quote found.";
-	if (options.null_padding){
-		error << " Null Padding is set, this indicates a quoted newline exists. Quoted new lines are not supported with null padding.";
+	if (options.null_padding) {
+		error << " Null Padding is set, this indicates a quoted newline exists. Quoted new lines are not supported "
+		         "with null padding.";
 	}
 	error << std::endl;
 	error << "Problematic CSV Line (Up to unquoted value):" << std::endl;

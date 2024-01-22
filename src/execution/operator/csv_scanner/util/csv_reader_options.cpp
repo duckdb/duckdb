@@ -202,7 +202,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		}
 	} else if (loption == "null_padding") {
 		null_padding = ParseBoolean(value, loption);
-	}else if (loption == "parallel") {
+	} else if (loption == "parallel") {
 		parallel = ParseBoolean(value, loption);
 	} else if (loption == "allow_quoted_nulls") {
 		allow_quoted_nulls = ParseBoolean(value, loption);

@@ -18,3 +18,7 @@ select count(*) from read_csv('data/csv/evil_nullpadding.csv', delim = ';', quot
 ----
 Value with unterminated quote found. Null Padding is set, this indicates a quoted newline exists. Quoted new lines are not supported with null padding.
 
+query I
+select count(*) from read_csv('data/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 27, parallel = false)
+----
+3

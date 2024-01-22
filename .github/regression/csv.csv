@@ -1,3 +1,4 @@
 benchmark/micro/csv/sniffer.benchmark
 benchmark/micro/csv/read.benchmark
 benchmark/micro/csv/small_csv.benchmark
+benchmark/micro/csv/null_padding.benchmark

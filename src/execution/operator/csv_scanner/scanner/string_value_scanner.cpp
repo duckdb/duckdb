@@ -711,7 +711,7 @@ void StringValueScanner::SetStart() {
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
 	SkipUntilNewLine();
-	if (state_machine->options.null_padding){
+	if (state_machine->options.null_padding) {
 		// When Null Padding, we assume we start from the correct new-line
 		return;
 	}
