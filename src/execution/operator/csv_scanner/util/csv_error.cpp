@@ -124,8 +124,8 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, stri
 	// What is the problematic CSV Line
 	error << "Value with unterminated quote found.";
 	if (options.null_padding) {
-		error << " Null Padding is set, this indicates a quoted newline exists. Quoted new lines are not supported "
-		         "with null padding.";
+		error << " The parallel scanner does not support null_padding in conjunction with quoted new lines. Please "
+		         "disable the parallel csv reader with parallel=false";
 	}
 	error << std::endl;
 	error << "Problematic CSV Line (Up to unquoted value):" << std::endl;
