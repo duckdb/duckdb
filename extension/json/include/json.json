@@ -135,6 +135,18 @@
         "name": "timestamp_format",
         "type": "string",
         "serialize_property": "GetTimestampFormat()"
+      },
+      {
+        "id": 113,
+        "name": "field_appearance_threshold",
+        "type": "double",
+        "default": 0.1
+      },
+      {
+        "id": 114,
+        "name": "maximum_sample_files",
+        "type": "idx_t",
+        "default": 32
       }
     ],
     "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]

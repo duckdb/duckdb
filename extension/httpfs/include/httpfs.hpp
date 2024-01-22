@@ -35,12 +35,14 @@ struct HTTPParams {
 	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
+	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 
 	uint64_t timeout;
 	uint64_t retries;
 	uint64_t retry_wait_ms;
 	float retry_backoff;
 	bool force_download;
+	bool keep_alive;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };
@@ -125,6 +127,7 @@ public:
 	time_t GetLastModifiedTime(FileHandle &handle) override;
 	bool FileExists(const string &filename) override;
 	void Seek(FileHandle &handle, idx_t location) override;
+	idx_t SeekPosition(FileHandle &handle) override;
 	bool CanHandleFile(const string &fpath) override;
 	bool CanSeek() override {
 		return true;

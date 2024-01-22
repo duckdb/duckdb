@@ -11,9 +11,10 @@ LogicalDelete::LogicalDelete(TableCatalogEntry &table, idx_t table_index)
       return_chunk(false) {
 }
 
-LogicalDelete::LogicalDelete(ClientContext &context, const string &catalog, const string &schema, const string &table)
+LogicalDelete::LogicalDelete(ClientContext &context, const unique_ptr<CreateInfo> &table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
+                                                 dynamic_cast<CreateTableInfo &>(*table_info).table)) {
 }
 
 idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {

@@ -120,7 +120,7 @@
         "description": "Concatenates the column string values with an optional separator.",
         "example": "string_agg(A, '-')",
         "type": "aggregate_function_set",
-        "aliases": ["group_concat"]
+        "aliases": ["group_concat","listagg"]
     },
     {
         "name": "sum",

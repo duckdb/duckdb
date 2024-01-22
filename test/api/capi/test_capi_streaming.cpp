@@ -98,6 +98,45 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 	REQUIRE(is_null == false);
 }
 
+TEST_CASE("Test streaming arrow results in C API", "[capi][arrow]") {
+	CAPITester tester;
+	CAPIPrepared prepared;
+	CAPIPending pending;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE(prepared.Prepare(tester, "SELECT i::UINT32 FROM range(1000000) tbl(i)"));
+	REQUIRE(pending.PendingStreaming(prepared));
+
+	while (true) {
+		auto state = pending.ExecuteTask();
+		REQUIRE(state != DUCKDB_PENDING_ERROR);
+		if (state == DUCKDB_PENDING_RESULT_READY) {
+			break;
+		}
+	}
+
+	result = pending.Execute();
+	REQUIRE(result);
+	REQUIRE(!result->HasError());
+	auto chunk = result->StreamChunk();
+
+	// Check handle null out_array
+	duckdb_result_arrow_array(result->InternalResult(), chunk->GetChunk(), nullptr);
+
+	int nb_row = 0;
+	while (chunk) {
+		ArrowArray *arrow_array = new ArrowArray();
+		duckdb_result_arrow_array(result->InternalResult(), chunk->GetChunk(), (duckdb_arrow_array *)&arrow_array);
+		nb_row += arrow_array->length;
+		chunk = result->StreamChunk();
+		arrow_array->release(arrow_array);
+		delete arrow_array;
+	}
+	REQUIRE(nb_row == 1000000);
+}
+
 TEST_CASE("Test query progress and interrupt in C API", "[capi]") {
 	CAPITester tester;
 	CAPIPrepared prepared;
@@ -105,7 +144,7 @@ TEST_CASE("Test query progress and interrupt in C API", "[capi]") {
 	duckdb::unique_ptr<CAPIResult> result;
 
 	// test null handling
-	REQUIRE(duckdb_query_progress(nullptr) == -1.0);
+	REQUIRE(duckdb_query_progress(nullptr).percentage == -1.0);
 	duckdb_interrupt(nullptr);
 
 	// open the database in in-memory mode
@@ -116,18 +155,18 @@ TEST_CASE("Test query progress and interrupt in C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("set enable_progress_bar=true;"));
 	REQUIRE_NO_FAIL(tester.Query("set enable_progress_bar_print=false;"));
 	// test no progress before query
-	REQUIRE(duckdb_query_progress(tester.connection) == -1.0);
+	REQUIRE(duckdb_query_progress(tester.connection).percentage == -1.0);
 	// test zero progress with query
 	REQUIRE(prepared.Prepare(tester, "select count(*) from tbl where a = (select min(a) from tbl_2)"));
 	REQUIRE(pending.PendingStreaming(prepared));
-	REQUIRE(duckdb_query_progress(tester.connection) == 0.0);
+	REQUIRE(duckdb_query_progress(tester.connection).percentage == 0.0);
 
 	// test progress
-	while (duckdb_query_progress(tester.connection) == 0.0) {
+	while (duckdb_query_progress(tester.connection).percentage == 0.0) {
 		auto state = pending.ExecuteTask();
 		REQUIRE(state == DUCKDB_PENDING_RESULT_NOT_READY);
 	}
-	REQUIRE(duckdb_query_progress(tester.connection) >= 0.0);
+	REQUIRE(duckdb_query_progress(tester.connection).percentage >= 0.0);
 
 	// test interrupt
 	duckdb_interrupt(tester.connection);

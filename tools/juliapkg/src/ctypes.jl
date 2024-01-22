@@ -45,6 +45,7 @@ const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
     DUCKDB_TYPE_TIME
     DUCKDB_TYPE_INTERVAL
     DUCKDB_TYPE_HUGEINT
+    DUCKDB_TYPE_UHUGEINT
     DUCKDB_TYPE_VARCHAR
     DUCKDB_TYPE_BLOB
     DUCKDB_TYPE_DECIMAL
@@ -58,6 +59,8 @@ const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
     DUCKDB_TYPE_UUID
     DUCKDB_TYPE_UNION
     DUCKDB_TYPE_BIT
+    DUCKDB_TYPE_TIME_TZ
+    DUCKDB_TYPE_TIMESTAMP_TZ
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -93,6 +96,11 @@ struct duckdb_time_struct
     micros::Int32
 end
 
+struct duckdb_time_tz
+    micros::Int64
+    offset::Int32
+end
+
 """
 Timestamps are stored as microseconds since 1970-01-01\n
 Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
@@ -122,6 +130,11 @@ For easy usage, the functions duckdb_hugeint_to_double/duckdb_double_to_hugeint 
 struct duckdb_hugeint
     lower::UInt64
     upper::Int64
+end
+
+struct duckdb_uhugeint
+    lower::UInt64
+    upper::UInt64
 end
 
 struct duckdb_string_t
@@ -169,10 +182,13 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIMESTAMP_S => Int64,
     DUCKDB_TYPE_TIMESTAMP_MS => Int64,
     DUCKDB_TYPE_TIMESTAMP_NS => Int64,
+    DUCKDB_TYPE_TIMESTAMP_TZ => Int64,
     DUCKDB_TYPE_DATE => Int32,
     DUCKDB_TYPE_TIME => Int64,
+    DUCKDB_TYPE_TIME_TZ => UInt64,
     DUCKDB_TYPE_INTERVAL => duckdb_interval,
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
+    DUCKDB_TYPE_UHUGEINT => duckdb_uhugeint,
     DUCKDB_TYPE_UUID => duckdb_hugeint,
     DUCKDB_TYPE_VARCHAR => duckdb_string_t,
     DUCKDB_TYPE_BLOB => duckdb_string_t,
@@ -192,6 +208,7 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_INTEGER => Int32,
     DUCKDB_TYPE_BIGINT => Int64,
     DUCKDB_TYPE_HUGEINT => Int128,
+    DUCKDB_TYPE_UHUGEINT => UInt128,
     DUCKDB_TYPE_UTINYINT => UInt8,
     DUCKDB_TYPE_USMALLINT => UInt16,
     DUCKDB_TYPE_UINTEGER => UInt32,
@@ -200,7 +217,9 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_DOUBLE => Float64,
     DUCKDB_TYPE_DATE => Date,
     DUCKDB_TYPE_TIME => Time,
+    DUCKDB_TYPE_TIME_TZ => Time,
     DUCKDB_TYPE_TIMESTAMP => DateTime,
+    DUCKDB_TYPE_TIMESTAMP_TZ => DateTime,
     DUCKDB_TYPE_TIMESTAMP_S => DateTime,
     DUCKDB_TYPE_TIMESTAMP_MS => DateTime,
     DUCKDB_TYPE_TIMESTAMP_NS => DateTime,

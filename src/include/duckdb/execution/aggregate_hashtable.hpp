@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/row_operations/row_matcher.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
@@ -88,7 +89,7 @@ public:
 
 public:
 	//! The hash table load factor, when a resize is triggered
-	constexpr static float LOAD_FACTOR = 1.5;
+	constexpr static double LOAD_FACTOR = 1.5;
 
 	//! Get the layout of this HT
 	const TupleDataLayout &GetLayout() const;
@@ -137,12 +138,15 @@ public:
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
-	void Combine(TupleDataCollection &other_data);
+	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
 
 	//! Unpins the data blocks
 	void UnpinData();
 
 private:
+	//! Efficiently matches groups
+	RowMatcher row_matcher;
+
 	//! Append state
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();

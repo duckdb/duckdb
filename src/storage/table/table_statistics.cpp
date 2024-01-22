@@ -69,7 +69,10 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	for (idx_t i = 0; i < column_stats.size(); i++) {
-		column_stats[i]->Merge(*other.column_stats[i]);
+		if (column_stats[i]) {
+			D_ASSERT(other.column_stats[i]);
+			column_stats[i]->Merge(*other.column_stats[i]);
+		}
 	}
 }
 
@@ -102,9 +105,7 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 }
 
 void TableStatistics::Serialize(Serializer &serializer) const {
-	auto column_count = column_stats.size();
-	serializer.WriteList(100, "column_stats", column_count,
-	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(column_stats[i]); });
+	serializer.WriteProperty(100, "column_stats", column_stats);
 }
 
 void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {

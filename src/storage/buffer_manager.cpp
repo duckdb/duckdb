@@ -1,7 +1,9 @@
 #include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 
 namespace duckdb {
@@ -37,8 +39,12 @@ const string &BufferManager::GetTemporaryDirectory() {
 	throw InternalException("This type of BufferManager does not allow a temporary directory");
 }
 
-BufferPool &BufferManager::GetBufferPool() {
+BufferPool &BufferManager::GetBufferPool() const {
 	throw InternalException("This type of BufferManager does not have a buffer pool");
+}
+
+TemporaryMemoryManager &BufferManager::GetTemporaryMemoryManager() {
+	throw NotImplementedException("This type of BufferManager does not have a TemporaryMemoryManager");
 }
 
 void BufferManager::SetTemporaryDirectory(const string &new_dir) {
@@ -51,6 +57,11 @@ DatabaseInstance &BufferManager::GetDatabase() {
 
 bool BufferManager::HasTemporaryDirectory() const {
 	return false;
+}
+
+//! Returns the maximum available memory for a given query
+idx_t BufferManager::GetQueryMaxMemory() const {
+	return GetBufferPool().GetQueryMaxMemory();
 }
 
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,

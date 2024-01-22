@@ -10,23 +10,31 @@ env:
   PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
 
 jobs:
+  handle_pr_submitted_label:
+    if: github.event.label.name == 'PR submitted'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove 'needs triage' label
+        run: |
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage"
+
   create_or_label_issue:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
     runs-on: ubuntu-latest
     steps:
-      - name: Remove needs triage / under review if reproduced
+      - name: Remove 'needs triage' / 'under review' if 'reproduced'
         if: github.event.label.name == 'reproduced'
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "under review"
 
-      - name: Remove needs triage / reproduced if under review
+      - name: Remove 'needs triage' / 'reproduced' if 'under review'
         if: github.event.label.name == 'under review'
         run: |
           gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --remove-label "needs triage" --remove-label "reproduced"
 
       - name: Get mirror issue number
         run: |
-          gh issue list --repo duckdblabs/duckdb-internal --json title,number --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number" > mirror_issue_number.txt
+          gh issue list --repo duckdblabs/duckdb-internal --search "${TITLE_PREFIX}" --json title,number --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number" > mirror_issue_number.txt
           echo "MIRROR_ISSUE_NUMBER=$(cat mirror_issue_number.txt)" >> $GITHUB_ENV
 
       - name: Print whether mirror issue exists

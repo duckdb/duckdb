@@ -14,6 +14,7 @@ CREATE TABLE person (
     name text,
     current_car car
 );
+----
 
 statement ok
 CREATE TABLE person (
@@ -89,6 +90,7 @@ CREATE TABLE aliens (
     name text,
     current_alias alias
 );
+----
 
 statement ok
 CREATE TYPE alias AS VARCHAR;

@@ -38,13 +38,14 @@ public:
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
 
 protected:
+	virtual void WriteEntry(CatalogEntry &entry, Serializer &serializer);
 	virtual void WriteSchema(SchemaCatalogEntry &schema, Serializer &serializer);
 	virtual void WriteTable(TableCatalogEntry &table, Serializer &serializer);
 	virtual void WriteView(ViewCatalogEntry &table, Serializer &serializer);
 	virtual void WriteSequence(SequenceCatalogEntry &table, Serializer &serializer);
 	virtual void WriteMacro(ScalarMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteTableMacro(TableMacroCatalogEntry &table, Serializer &serializer);
-	virtual void WriteIndex(IndexCatalogEntry &index_catalog, Serializer &serializer);
+	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
 	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
 };
 
@@ -60,6 +61,7 @@ protected:
 
 protected:
 	virtual void LoadCheckpoint(ClientContext &context, MetadataReader &reader);
+	virtual void ReadEntry(ClientContext &context, Deserializer &deserializer);
 	virtual void ReadSchema(ClientContext &context, Deserializer &deserializer);
 	virtual void ReadTable(ClientContext &context, Deserializer &deserializer);
 	virtual void ReadView(ClientContext &context, Deserializer &deserializer);

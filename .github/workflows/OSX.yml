@@ -13,10 +13,11 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/OSX.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -56,13 +57,20 @@ jobs:
       shell: bash
       run: GEN=ninja make debug
 
-    - name: Test
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
-      run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
-          make unittestci
+      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
+
+    - name: Test DUCKDB_INSTALL_LIB variable
+      run: echo $DUCKDB_INSTALL_LIB
+
+    - name: Test
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      shell: bash
+      run: make unittestci
 
     - name: Amalgamation
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
       run: |
         python scripts/amalgamation.py --extended
@@ -109,6 +117,10 @@ jobs:
           brew remove --ignore-dependencies unixodbc
           CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
+      - name: Install pytest
+        run: |
+          python -m pip install pytest
+
       - name: Build
         shell: bash
         run: make
@@ -119,15 +131,18 @@ jobs:
 
       - name: Unit Test
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: make allunit
 
       - name: Tools Tests
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          python tools/shell/shell-test.py build/release/duckdb
+          python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
       - name: Examples
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
           (cd examples/embedded-c; make)
           (cd examples/embedded-c++; make)
@@ -200,8 +215,8 @@ jobs:
         with:
           python-version: '3.7'
 
-      - name: Install Ninja
-        run: brew install ninja
+      - name: Install Ninja and Pkg-config
+        run: brew install pkg-config ninja
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -242,15 +257,16 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
+            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
+            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
           else
-            echo "would do: ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
+            echo "would do: ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
           fi
 
       - name: Test loadable extensions
@@ -278,7 +294,7 @@ jobs:
 
       # Run autoload unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
       - name: Run tests with auto loading
-        if: ${{ matrix.osx_arch == 'x86_64' }}
+        if: ${{ matrix.osx_arch == 'x86_64' && !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         env:
           LOCAL_EXTENSION_REPO: ${{ github.workspace }}

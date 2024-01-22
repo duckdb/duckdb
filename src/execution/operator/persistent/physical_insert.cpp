@@ -298,7 +298,7 @@ static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids,
 		auto result = updated_rows.insert(data[i]);
 		if (result.second == false) {
 			throw InvalidInputException(
-			    "ON CONFLICT DO UPDATE can not update the same row twice in the same command, Ensure that no rows "
+			    "ON CONFLICT DO UPDATE can not update the same row twice in the same command. Ensure that no rows "
 			    "proposed for insertion within the same command have duplicate constrained values");
 		}
 	}
@@ -482,7 +482,7 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
-	if (append_count < RowGroup::ROW_GROUP_SIZE) {
+	if (append_count < Storage::ROW_GROUP_SIZE) {
 		// we have few rows - append to the local storage directly
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();

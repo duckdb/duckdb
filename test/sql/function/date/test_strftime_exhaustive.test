@@ -42,6 +42,16 @@ NULL
 0
 1
 
+# %u - ISO Weekday as a decimal number (1-7)
+query I
+SELECT strftime(d, '%u') FROM dates ORDER BY d;
+----
+NULL
+3
+6
+7
+1
+
 # %d - Day of the month as a zero-padded decimal.
 query I
 SELECT strftime(d, '%d') FROM dates ORDER BY d;
@@ -140,6 +150,16 @@ SELECT strftime(DATE '2001-01-01', '%-y')
 # %Y - Year with century as a decimal number.
 query I
 SELECT strftime(d, '%Y') FROM dates ORDER BY d;
+----
+NULL
+1992
+1993
+2020
+2020
+
+# %G - ISO Year as a decimal number.
+query I
+SELECT strftime(d, '%G') FROM dates ORDER BY d;
 ----
 NULL
 1992
@@ -307,6 +327,16 @@ NULL
 31
 32
 
+# %V - ISO Week number of the year (First week contains Jan 4).
+query I
+SELECT strftime(d, '%V') FROM dates ORDER BY d;
+----
+NULL
+01
+11
+32
+33
+
 # %c - Locale’s appropriate date and time representation.
 query I
 SELECT strftime(d, '%c') FROM dates ORDER BY d;
@@ -383,4 +413,5 @@ SELECT strftime(DATE '-4869706-10-11','%-yi');
 
 statement error
 SELECT strftime(date '-99999-01-01', random()::varchar)
+----
 

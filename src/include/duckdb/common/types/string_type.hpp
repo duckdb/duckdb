@@ -80,15 +80,19 @@ public:
 	}
 
 	const char *GetPrefix() const {
-		return value.pointer.prefix;
+		return value.inlined.inlined;
 	}
 
 	char *GetPrefixWriteable() const {
-		return (char *)value.pointer.prefix;
+		return (char *)value.inlined.inlined;
 	}
 
 	idx_t GetSize() const {
 		return value.inlined.length;
+	}
+
+	bool Empty() const {
+		return value.inlined.length == 0;
 	}
 
 	string GetString() const {

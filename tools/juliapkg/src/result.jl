@@ -89,6 +89,12 @@ function convert_time(column_data::ColumnConversionData, val::Int64)::Time
     return Dates.Time(Dates.Nanosecond(val * 1000))
 end
 
+function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
+    time_tz = duckdb_from_time_tz(val)
+    # TODO: how to preserve the offset?
+    return Dates.Time(Dates.Nanosecond(time_tz.micros * 1000))
+end
+
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
     return Dates.epochms2datetime((val ÷ 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 end
@@ -113,11 +119,15 @@ function convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)
     return Int128(val.lower) + Int128(val.upper) << 64
 end
 
+function convert_uhugeint(column_data::ColumnConversionData, val::duckdb_uhugeint)::UInt128
+    return UInt128(val.lower) + UInt128(val.upper) << 64
+end
+
 function convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint)::UUID
     hugeint = convert_hugeint(column_data, val)
     base_value = Int128(170141183460469231731687303715884105727)
     if hugeint < 0
-        return UUID(UInt128(hugeint + base_value) + 1)
+        return UUID(UInt128(hugeint + base_value + 1))
     else
         return UUID(UInt128(hugeint) + base_value + 1)
     end
@@ -494,7 +504,9 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_date
     elseif type == DUCKDB_TYPE_TIME
         return convert_time
-    elseif type == DUCKDB_TYPE_TIMESTAMP
+    elseif type == DUCKDB_TYPE_TIME_TZ
+        return convert_time_tz
+    elseif type == DUCKDB_TYPE_TIMESTAMP || type == DUCKDB_TYPE_TIMESTAMP_TZ
         return convert_timestamp
     elseif type == DUCKDB_TYPE_TIMESTAMP_S
         return convert_timestamp_s
@@ -506,6 +518,8 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_interval
     elseif type == DUCKDB_TYPE_HUGEINT
         return convert_hugeint
+    elseif type == DUCKDB_TYPE_UHUGEINT
+        return convert_uhugeint
     elseif type == DUCKDB_TYPE_UUID
         return convert_uuid
     elseif type == DUCKDB_TYPE_DECIMAL

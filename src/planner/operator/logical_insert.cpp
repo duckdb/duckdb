@@ -11,9 +11,10 @@ LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
       action_type(OnConflictAction::THROW) {
 }
 
-LogicalInsert::LogicalInsert(ClientContext &context, const string &catalog, const string &schema, const string &table)
+LogicalInsert::LogicalInsert(ClientContext &context, const unique_ptr<CreateInfo> table_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT),
-      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
+      table(Catalog::GetEntry<TableCatalogEntry>(context, table_info->catalog, table_info->schema,
+                                                 dynamic_cast<CreateTableInfo &>(*table_info).table)) {
 }
 
 idx_t LogicalInsert::EstimateCardinality(ClientContext &context) {

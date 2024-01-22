@@ -5,17 +5,18 @@
 statement ok
 PRAGMA enable_verification
 
+query I
+FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv')
+----
+2019-06-05
+
 # dateformat
 statement ok
 CREATE TABLE dates (d DATE);
 
 # base date format does not work here
-statement error
-INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
-
-# have to specify it ourselves
 statement ok
-INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0, dateformat='%d/%m/%Y')
+INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', columns=STRUCT_PACK(d := 'DATE'), header=0)
 
 query I
 SELECT * FROM dates
@@ -35,7 +36,7 @@ SELECT * FROM dates ORDER BY 1
 # we can also do this for timestamps
 # as long as we make the date format fail
 statement ok
-CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%Y-%m-%d', timestampformat='%m/%d/%Y')
+CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y', columns=STRUCT_PACK(d := 'TIMESTAMP'))
 
 query I
 SELECT * FROM timestamps
@@ -66,4 +67,5 @@ SELECT l_partkey, RTRIM(l_comment) FROM lineitem WHERE l_orderkey=1 ORDER BY l_l
 # wrong argument type
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', sep='|', columns=STRUCT_PACK(l_orderkey := 5))
+----
 

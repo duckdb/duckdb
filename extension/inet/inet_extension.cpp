@@ -28,8 +28,8 @@ void InetExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterType(*db.instance, INET_TYPE_NAME, inet_type);
 
 	// add the casts to and from INET type
-	ExtensionUtil::RegisterCastFunction(*db.instance, LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET,
-	                                    100);
+	ExtensionUtil::RegisterCastFunction(*db.instance, LogicalType::VARCHAR, inet_type,
+	                                    INetFunctions::CastVarcharToINET);
 	ExtensionUtil::RegisterCastFunction(*db.instance, inet_type, LogicalType::VARCHAR,
 	                                    INetFunctions::CastINETToVarchar);
 
@@ -38,14 +38,8 @@ void InetExtension::Load(DuckDB &db) {
 	                                ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host));
 
 	// Add - function with ALTER_ON_CONFLICT
-	Connection con(db);
-	con.BeginTransaction();
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
-	auto substract_fun = ScalarFunction("-", {inet_type, LogicalType::BIGINT}, inet_type, INetFunctions::Subtract);
-	CreateScalarFunctionInfo subtract_info(substract_fun);
-	subtract_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-	catalog.CreateFunction(*con.context, subtract_info);
-	con.Commit();
+	ScalarFunction substract_fun("-", {inet_type, LogicalType::BIGINT}, inet_type, INetFunctions::Subtract);
+	ExtensionUtil::AddFunctionOverload(*db.instance, substract_fun);
 }
 
 std::string InetExtension::Name() {

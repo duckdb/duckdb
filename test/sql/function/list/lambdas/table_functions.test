@@ -42,6 +42,12 @@ s -> lower(s)), 'string_agg', '') || '.parquet');
 ----
 10
 
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/my_file_' ||
+list_aggr(list_reduce([['c', 'b', NULL, 'a']], (x, y) -> coalesce(x,y)), 'string_agg', '') || '.parquet');
+----
+10
+
 # lambda parameters in rhs
 query I
 COPY tmp TO '__TEST_DIR__/my_file_ac.parquet' (FORMAT PARQUET);

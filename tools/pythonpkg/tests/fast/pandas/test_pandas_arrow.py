@@ -36,7 +36,9 @@ class TestPandasArrow(object):
         )
         pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
         con = duckdb.connect()
-        with pytest.raises(duckdb.InvalidInputException, match='Conversion failed for column objects with type object'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='The dataframe could not be converted to a pyarrow.lib.Table'
+        ):
             res = con.sql('select * from pyarrow_df').fetchall()
 
         numpy_df = pd.DataFrame(
@@ -61,7 +63,9 @@ class TestPandasArrow(object):
         assert isinstance(df.dtypes['arrow'], pd.ArrowDtype)
         assert isinstance(df.dtypes['python'], np.dtype('O').__class__)
 
-        with pytest.raises(duckdb.InvalidInputException, match='Conversion failed for column python with type object'):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='The dataframe could not be converted to a pyarrow.lib.Table'
+        ):
             res = con.sql('select * from df').fetchall()
 
     def test_empty_df(self):

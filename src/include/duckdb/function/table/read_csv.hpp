@@ -8,18 +8,20 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_buffer.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
-#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
 
 namespace duckdb {
+class BaseScanner;
+class StringValueScanner;
 
 class ReadCSV {
 public:
@@ -73,6 +75,7 @@ struct ColumnInfo {
 };
 
 struct ReadCSVData : public BaseCSVData {
+	ReadCSVData();
 	//! The expected SQL types to read from the file
 	vector<LogicalType> csv_types;
 	//! The expected SQL names to be read from the file
@@ -84,21 +87,15 @@ struct ReadCSVData : public BaseCSVData {
 	//! The buffer manager (if any): this is used when automatic detection is used during binding.
 	//! In this case, some CSV buffers have already been read and can be reused.
 	shared_ptr<CSVBufferManager> buffer_manager;
-	unique_ptr<BufferedCSVReader> initial_reader;
+	unique_ptr<CSVFileScan> initial_reader;
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<BufferedCSVReader>> union_readers;
-	//! Whether or not the single-threaded reader should be used
-	bool single_threaded = false;
+	vector<unique_ptr<CSVFileScan>> union_readers;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
 	vector<ColumnInfo> column_info;
-	//! The CSVStateMachineCache caches state machines created for sniffing and parsing csv files
-	//! We cache them because when reading very small csv files, the cost of creating all the possible
-	//! State machines for sniffing becomes a major bottleneck.
-	CSVStateMachineCache state_machine_cache;
 
-	void Initialize(unique_ptr<BufferedCSVReader> &reader) {
+	void Initialize(unique_ptr<CSVFileScan> &reader) {
 		this->initial_reader = std::move(reader);
 	}
 	void FinalizeRead(ClientContext &context);
@@ -114,6 +111,7 @@ struct CSVCopyFunction {
 struct ReadCSVTableFunction {
 	static TableFunction GetFunction();
 	static TableFunction GetAutoFunction();
+	static void ReadCSVAddNamedParameters(TableFunction &table_function);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

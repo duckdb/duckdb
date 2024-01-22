@@ -4,6 +4,9 @@
 
 require httpfs
 
+#FIXME this test fails: file is nonexistent
+mode skip
+
 query IIIIII rowsort
 SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----

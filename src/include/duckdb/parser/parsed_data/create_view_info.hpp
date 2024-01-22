@@ -15,11 +15,13 @@ namespace duckdb {
 class SchemaCatalogEntry;
 
 struct CreateViewInfo : public CreateInfo {
+public:
 	CreateViewInfo();
 	CreateViewInfo(SchemaCatalogEntry &schema, string view_name);
 	CreateViewInfo(string catalog_p, string schema_p, string view_name);
 
-	//! Table name to insert to
+public:
+	//! View name
 	string view_name;
 	//! Aliases of the view
 	vector<string> aliases;
@@ -35,9 +37,12 @@ public:
 	DUCKDB_API static unique_ptr<CreateViewInfo> FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info);
 	//! Gets a bound CreateViewInfo object from a CREATE VIEW statement
 	DUCKDB_API static unique_ptr<CreateViewInfo> FromCreateView(ClientContext &context, const string &sql);
+	//! Parse a SELECT statement from a SQL string
+	DUCKDB_API static unique_ptr<SelectStatement> ParseSelect(const string &sql);
 
 	DUCKDB_API void Serialize(Serializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+	string ToString() const override;
 };
 
 } // namespace duckdb

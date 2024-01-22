@@ -1,0 +1,21 @@
+# name: test/sql/window/test_window_order_collate.test
+# description: Test collation is honoured by over(order by)
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query III rowsort
+select
+    *,
+    array_agg(col) over(partition by id order by col collate nocase) as lead_col_nocase
+from (
+	select 
+		unnest(array[1, 1, 1, 1]) as id, 
+		unnest(array['A', 'a', 'b', 'B']) as col
+)
+----
+1	A	[A, a]
+1	B	[A, a, b, B]
+1	a	[A, a]
+1	b	[A, a, b, B]

@@ -158,11 +158,12 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 }
 
 string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const ClientConfig> client_config, const string &repository) {
-	string default_endpoint = "http://extensions.duckdb.org";
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 #ifdef WASM_LOADABLE_EXTENSIONS
+	string default_endpoint = "https://extensions.duckdb.org";
 	versioned_path = "/duckdb-wasm" + versioned_path + ".wasm";
 #else
+	string default_endpoint = "http://extensions.duckdb.org";
 	versioned_path = versioned_path + ".gz";
 #endif
 	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
@@ -207,18 +208,20 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		fs.RemoveFile(temp_path);
 	}
 	auto is_http_url = StringUtil::Contains(extension, "http://");
-	if (fs.FileExists(extension)) {
-		idx_t file_size;
-		auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
-		WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
+	if (ExtensionHelper::IsFullPath(extension)) {
+		if (fs.FileExists(extension)) {
+			idx_t file_size;
+			auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
+			WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
-		if (fs.FileExists(local_extension_path) && force_install) {
-			fs.RemoveFile(local_extension_path);
+			if (fs.FileExists(local_extension_path) && force_install) {
+				fs.RemoveFile(local_extension_path);
+			}
+			fs.MoveFile(temp_path, local_extension_path);
+			return;
+		} else if (!is_http_url) {
+			throw IOException("Failed to read extension from \"%s\": no such file", extension);
 		}
-		fs.MoveFile(temp_path, local_extension_path);
-		return;
-	} else if (StringUtil::Contains(extension, "/") && !is_http_url) {
-		throw IOException("Failed to read extension from \"%s\": no such file", extension);
 	}
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -270,8 +273,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	auto url_base = "http://" + hostname_without_http;
 	duckdb_httplib::Client cli(url_base.c_str());
 
-	duckdb_httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
-	                                                                     DuckDB::SourceID(), DuckDB::Platform())}};
+	duckdb_httplib::Headers headers = {
+	    {"User-Agent", StringUtil::Format("%s %s", config.UserAgent(), DuckDB::SourceID())}};
 
 	auto res = cli.Get(url_local_part.c_str(), headers);
 
@@ -279,7 +282,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		// create suggestions
 		string message;
 		auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
-		if (exact_match) {
+		if (exact_match && !IsRelease(DuckDB::LibraryVersion())) {
 			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 		}
 		if (res.error() == duckdb_httplib::Error::Success) {

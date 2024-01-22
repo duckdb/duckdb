@@ -136,8 +136,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		}
 		if (column.Generated()) {
 			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
-		} else if (column.DefaultValue()) {
-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
+		} else if (column.HasDefaultValue()) {
+			ss << " DEFAULT(" << column.DefaultValue().ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed
@@ -151,19 +151,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 }
 
 string TableCatalogEntry::ToSQL() const {
-	std::stringstream ss;
-
-	ss << "CREATE TABLE ";
-
-	if (schema.name != DEFAULT_SCHEMA) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema.name) << ".";
-	}
-
-	ss << KeywordHelper::WriteOptionallyQuoted(name);
-	ss << ColumnsToSQL(columns, constraints);
-	ss << ";";
-
-	return ss.str();
+	auto create_info = GetInfo();
+	return create_info->ToString();
 }
 
 const ColumnList &TableCatalogEntry::GetColumns() const {

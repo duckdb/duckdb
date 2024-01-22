@@ -1,7 +1,6 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
-#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
@@ -9,9 +8,10 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
+
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-
 #include <cmath>
 #include <fstream>
 
@@ -105,7 +105,8 @@ string TestDirectoryPath() {
 	string path;
 	if (custom_test_directory.empty()) {
 		// add the PID to the test directory - but only if it was not specified explicitly by the user
-		path = StringUtil::Format(test_directory + "/%d", getpid());
+		auto pid = getpid();
+		path = fs->JoinPath(test_directory, to_string(pid));
 	} else {
 		path = test_directory;
 	}
@@ -254,6 +255,14 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	return "";
 }
 
+string compare_csv_collection(duckdb::ColumnDataCollection &collection, string csv, bool header) {
+	string error;
+	if (!compare_result(csv, collection, collection.Types(), header, error)) {
+		return error;
+	}
+	return "";
+}
+
 string show_diff(DataChunk &left, DataChunk &right) {
 	if (left.ColumnCount() != right.ColumnCount()) {
 		return StringUtil::Format("Different column counts: %d vs %d", (int)left.ColumnCount(),
@@ -316,22 +325,21 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	options.dialect_options.state_machine_options.quote = '\"';
 	options.dialect_options.state_machine_options.escape = '\"';
 	options.file_path = csv_path;
-
+	options.dialect_options.num_cols = sql_types.size();
 	// set up the intermediate result chunk
 	DataChunk parsed_result;
 	parsed_result.Initialize(Allocator::DefaultAllocator(), sql_types);
 
 	DuckDB db;
 	Connection con(db);
-	BufferedCSVReader reader(*con.context, std::move(options), sql_types);
-	reader.InitializeProjection();
-
+	auto scanner_ptr = StringValueScanner::GetCSVScanner(*con.context, options);
+	auto &scanner = *scanner_ptr;
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);
-	while (true) {
+	while (!scanner.FinishedIterator()) {
 		// parse a chunk from the CSV file
 		try {
 			parsed_result.Reset();
-			reader.ParseCSV(parsed_result);
+			scanner.Flush(parsed_result);
 		} catch (std::exception &ex) {
 			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;

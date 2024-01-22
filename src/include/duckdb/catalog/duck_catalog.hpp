@@ -54,6 +54,7 @@ public:
 	                                                       unique_ptr<LogicalOperator> plan) override;
 
 	DatabaseSize GetDatabaseSize(ClientContext &context) override;
+	vector<MetadataBlockInfo> GetMetadataInfo(ClientContext &context) override;
 
 	DUCKDB_API bool InMemory() override;
 	DUCKDB_API string GetDBPath() override;

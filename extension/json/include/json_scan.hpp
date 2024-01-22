@@ -122,6 +122,12 @@ public:
 	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! We divide the number of appearances of each JSON field by the auto-detection sample size
+	//! If the average over the fields of an object is less than this threshold,
+	//! we default to the JSON type for this object rather than the shredded type
+	double field_appearance_threshold = 0.1;
+	//! The maximum number of files we sample to sample sample_size rows
+	idx_t maximum_sample_files = 32;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -231,6 +237,7 @@ private:
 	void ThrowObjectSizeError(const idx_t object_size);
 	void ThrowInvalidAtEndError();
 
+	//! Must hold the lock
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
@@ -245,6 +252,12 @@ private:
 	optional_ptr<JSONBufferHandle> current_buffer_handle;
 	//! Whether this is the last batch of the file
 	bool is_last;
+
+	//! The current main filesystem
+	FileSystem &fs;
+
+	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
+	unique_ptr<FileHandle> thread_local_filehandle;
 
 	//! Current buffer read info
 	char *buffer_ptr;

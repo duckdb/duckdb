@@ -19,6 +19,33 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, string view_name)
     : CreateViewInfo(schema.catalog.GetName(), schema.name, std::move(view_name)) {
 }
 
+string CreateViewInfo::ToString() const {
+	string result;
+
+	result += "CREATE";
+	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		result += " OR REPLACE";
+	}
+	if (temporary) {
+		result += " TEMPORARY";
+	}
+	result += " VIEW ";
+	if (schema != DEFAULT_SCHEMA) {
+		result += KeywordHelper::WriteOptionallyQuoted(schema);
+		result += ".";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(view_name);
+	if (!aliases.empty()) {
+		result += " (";
+		result += StringUtil::Join(aliases, aliases.size(), ", ",
+		                           [](const string &name) { return KeywordHelper::WriteOptionallyQuoted(name); });
+		result += ")";
+	}
+	result += " AS ";
+	result += query->ToString();
+	return result;
+}
+
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	auto result = make_uniq<CreateViewInfo>(catalog, schema, view_name);
 	CopyProperties(*result);
@@ -28,21 +55,25 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	return std::move(result);
 }
 
+unique_ptr<SelectStatement> CreateViewInfo::ParseSelect(const string &sql) {
+	Parser parser;
+	parser.ParseQuery(sql);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		throw BinderException(
+		    "Failed to create view from SQL string - \"%s\" - statement did not contain a single SELECT statement",
+		    sql);
+	}
+	D_ASSERT(parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT);
+	return unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+}
+
 unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info) {
 	D_ASSERT(info);
 	D_ASSERT(!info->view_name.empty());
 	D_ASSERT(!info->sql.empty());
 	D_ASSERT(!info->query);
 
-	Parser parser;
-	parser.ParseQuery(info->sql);
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw BinderException(
-		    "Failed to create view from SQL string - \"%s\" - statement did not contain a single SELECT statement",
-		    info->sql);
-	}
-	D_ASSERT(parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT);
-	info->query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+	info->query = ParseSelect(info->sql);
 
 	auto binder = Binder::CreateBinder(context);
 	binder->BindCreateViewInfo(*info);

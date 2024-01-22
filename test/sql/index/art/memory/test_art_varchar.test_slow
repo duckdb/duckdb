@@ -4,6 +4,8 @@
 
 # test issue #7760
 
+require 64bit
+
 require vector_size 2048
 
 statement ok
@@ -15,6 +17,10 @@ CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::BIGINT * 1000 * 1000
     WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::BIGINT * 1000 * 1000 * 1000
     WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::BIGINT * 1000 * 1000 * 1000 * 1000
+    WHEN CONTAINS(x, 'KiB') THEN REPLACE(x, 'KiB', '')::INT * 1024.0
+    WHEN CONTAINS(x, 'MiB') THEN REPLACE(x, 'MiB', '')::INT * 1024.0 * 1024
+    WHEN CONTAINS(x, 'GiB') THEN REPLACE(x, 'GiB', '')::INT * 1024.0 * 1024 * 1024
+    WHEN CONTAINS(x, 'TiB') THEN REPLACE(x, 'TiB', '')::INT * 1024.0 * 1024 * 1024 * 1024
     WHEN x = '0 bytes' THEN 0::BIGINT
     ELSE x::BIGINT END;
 

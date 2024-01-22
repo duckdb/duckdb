@@ -8,12 +8,15 @@
 
 #pragma once
 
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/storage/block.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
+//! Column segment information
 struct ColumnSegmentInfo {
 	idx_t row_group_index;
 	idx_t column_id;
@@ -28,15 +31,10 @@ struct ColumnSegmentInfo {
 	bool persistent;
 	block_id_t block_id;
 	idx_t block_offset;
+	string segment_info;
 };
 
-struct IndexInfo {
-	bool is_unique;
-	bool is_primary;
-	bool is_foreign;
-	unordered_set<column_t> column_set;
-};
-
+//! Table storage information
 class TableStorageInfo {
 public:
 	//! The (estimated) cardinality of the table

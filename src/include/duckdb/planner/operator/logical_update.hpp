@@ -42,6 +42,6 @@ protected:
 	void ResolveTypes() override;
 
 private:
-	LogicalUpdate(ClientContext &context, const string &catalog, const string &schema, const string &table);
+	LogicalUpdate(ClientContext &context, const unique_ptr<CreateInfo> &table_info);
 };
 } // namespace duckdb

@@ -18,6 +18,8 @@ namespace duckdb {
 //! The Hugeint class contains static operations for the INT128 type
 class Hugeint {
 public:
+	constexpr static const char *HUGEINT_MINIMUM_STRING = "-170141183460469231731687303715884105728";
+
 	//! Convert a hugeint object to a string
 	static string ToString(hugeint_t input);
 
@@ -43,33 +45,89 @@ public:
 		return result;
 	}
 
-	static void NegateInPlace(hugeint_t &input) {
-		if (input.upper == NumericLimits<int64_t>::Minimum() && input.lower == 0) {
-			throw OutOfRangeException("HUGEINT is out of range");
+	static bool TryNegate(hugeint_t input, hugeint_t &result);
+
+	template <bool CHECK_OVERFLOW = true>
+	inline static void NegateInPlace(hugeint_t &input) {
+		if (!TryNegate(input, input)) {
+			throw OutOfRangeException("Negation of HUGEINT is out of range!");
 		}
-		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
-		input.upper = -1 - input.upper + (input.lower == 0);
 	}
-	static hugeint_t Negate(hugeint_t input) {
-		NegateInPlace(input);
+
+	template <bool CHECK_OVERFLOW = true>
+	inline static hugeint_t Negate(hugeint_t input) {
+		NegateInPlace<CHECK_OVERFLOW>(input);
 		return input;
 	}
 
 	static bool TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
 
-	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs);
-	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs);
-	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs);
-	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs);
-	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs);
+	template <bool CHECK_OVERFLOW = true>
+	inline static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs) {
+		hugeint_t result;
+		if (!TryMultiply(lhs, rhs, result)) {
+			throw OutOfRangeException("Overflow in HUGEINT multiplication: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return result;
+	}
+
+	static bool TryDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &result, hugeint_t &remainder);
+
+	template <bool CHECK_OVERFLOW = true>
+	inline static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs) {
+		// No division by zero
+		if (rhs == 0) {
+			throw OutOfRangeException("Division of HUGEINT by zero!");
+		}
+
+		// division only has one reason to overflow: MINIMUM / -1
+		if (lhs == NumericLimits<hugeint_t>::Minimum() && rhs == -1) {
+			throw OutOfRangeException("Overflow in HUGEINT division: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return Divide<false>(lhs, rhs);
+	}
+
+	template <bool CHECK_OVERFLOW = true>
+	inline static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs) {
+		// No division by zero
+		if (rhs == 0) {
+			throw OutOfRangeException("Modulo of HUGEINT by zero: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+
+		// division only has one reason to overflow: MINIMUM / -1
+		if (lhs == NumericLimits<hugeint_t>::Minimum() && rhs == -1) {
+			throw OutOfRangeException("Overflow in HUGEINT modulo: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return Modulo<false>(lhs, rhs);
+	}
+
+	static bool TryAddInPlace(hugeint_t &lhs, hugeint_t rhs);
+
+	template <bool CHECK_OVERFLOW = true>
+	inline static hugeint_t Add(hugeint_t lhs, hugeint_t rhs) {
+		if (!TryAddInPlace(lhs, rhs)) {
+			throw OutOfRangeException("Overflow in HUGEINT addition: %s + %s", lhs.ToString(), rhs.ToString());
+		}
+		return lhs;
+	}
+
+	static bool TrySubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
+
+	template <bool CHECK_OVERFLOW = true>
+	inline static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs) {
+		if (!TrySubtractInPlace(lhs, rhs)) {
+			throw OutOfRangeException("Underflow in HUGEINT addition: %s - %s", lhs.ToString(), rhs.ToString());
+		}
+		return lhs;
+	}
 
 	// DivMod -> returns the result of the division (lhs / rhs), and fills up the remainder
 	static hugeint_t DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder);
 	// DivMod but lhs MUST be positive, and rhs is a uint64_t
 	static hugeint_t DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder);
 
-	static bool AddInPlace(hugeint_t &lhs, hugeint_t rhs);
-	static bool SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
+	static int Sign(hugeint_t n);
+	static hugeint_t Abs(hugeint_t n);
 
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops
@@ -79,35 +137,41 @@ public:
 		int upper_equals = lhs.upper == rhs.upper;
 		return lower_equals & upper_equals;
 	}
+
 	static bool NotEquals(hugeint_t lhs, hugeint_t rhs) {
 		int lower_not_equals = lhs.lower != rhs.lower;
 		int upper_not_equals = lhs.upper != rhs.upper;
 		return lower_not_equals | upper_not_equals;
 	}
+
 	static bool GreaterThan(hugeint_t lhs, hugeint_t rhs) {
 		int upper_bigger = lhs.upper > rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_bigger = lhs.lower > rhs.lower;
 		return upper_bigger | (upper_equal & lower_bigger);
 	}
+
 	static bool GreaterThanEquals(hugeint_t lhs, hugeint_t rhs) {
 		int upper_bigger = lhs.upper > rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_bigger_equals = lhs.lower >= rhs.lower;
 		return upper_bigger | (upper_equal & lower_bigger_equals);
 	}
+
 	static bool LessThan(hugeint_t lhs, hugeint_t rhs) {
 		int upper_smaller = lhs.upper < rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_smaller = lhs.lower < rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller);
 	}
+
 	static bool LessThanEquals(hugeint_t lhs, hugeint_t rhs) {
 		int upper_smaller = lhs.upper < rhs.upper;
 		int upper_equal = lhs.upper == rhs.upper;
 		int lower_smaller_equals = lhs.lower <= rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller_equals);
 	}
+
 	static const hugeint_t POWERS_OF_TEN[40];
 };
 
@@ -129,6 +193,8 @@ template <>
 DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uint64_t &result);
 template <>
 DUCKDB_API bool Hugeint::TryCast(hugeint_t input, hugeint_t &result);
+template <>
+DUCKDB_API bool Hugeint::TryCast(hugeint_t input, uhugeint_t &result);
 template <>
 DUCKDB_API bool Hugeint::TryCast(hugeint_t input, float &result);
 template <>

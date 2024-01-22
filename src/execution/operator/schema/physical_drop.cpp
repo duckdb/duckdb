@@ -3,6 +3,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -24,7 +25,6 @@ SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chu
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.DropEntry(context.client, *info);
-		auto qualified_name = QualifiedName::Parse(info->name);
 
 		// Check if the dropped schema was set as the current schema
 		auto &client_data = ClientData::Get(context.client);
@@ -37,6 +37,12 @@ SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chu
 			// Reset the schema to default
 			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
 		}
+		break;
+	}
+	case CatalogType::SECRET_ENTRY: {
+		// Note: the schema param is used to optionally pass the storage to drop from
+		SecretManager::Get(context.client)
+		    .DropSecretByName(context.client, info->name, info->if_not_found, info->schema);
 		break;
 	}
 	default: {

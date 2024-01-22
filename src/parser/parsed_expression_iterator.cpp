@@ -141,6 +141,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 	case ExpressionClass::BOUND_EXPRESSION:
 	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::CONSTANT:
 	case ExpressionClass::DEFAULT:
 	case ExpressionClass::PARAMETER:
@@ -239,7 +240,8 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::BASE_TABLE:
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
+	case TableReferenceType::SHOW_REF:
 		// these TableRefs do not need to be unfolded
 		break;
 	case TableReferenceType::INVALID:

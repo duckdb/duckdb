@@ -16,6 +16,7 @@ SELECT * FROM integers
 
 statement error
 INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');
+----
 
 statement ok
 INSERT INTO integers VALUES (6, 'bla');

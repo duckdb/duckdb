@@ -7,30 +7,64 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
 struct ICUDateTrunc : public ICUDateFunc {
-	static void TruncMicrosecond(icu::Calendar *calendar, uint64_t &micros) {
+	static void PreserveOffsets(icu::Calendar *calendar) {
+		//	We have to extract _everything_ before setting anything
+		//	Otherwise ICU will clear the fStamp fields
+		//	This also means we must call this method first.
+
+		//	Force reuse of offsets when reassembling truncated sub-hour times.
+		const auto zone_offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
+		const auto dst_offset = ExtractField(calendar, UCAL_DST_OFFSET);
+
+		calendar->set(UCAL_ZONE_OFFSET, zone_offset);
+		calendar->set(UCAL_DST_OFFSET, dst_offset);
 	}
 
-	static void TruncMillisecond(icu::Calendar *calendar, uint64_t &micros) {
-		TruncMicrosecond(calendar, micros);
+	static void TruncMicrosecondInternal(icu::Calendar *calendar, uint64_t &micros) {
+	}
+
+	static void TruncMicrosecond(icu::Calendar *calendar, uint64_t &micros) {
+		PreserveOffsets(calendar);
+		TruncMicrosecondInternal(calendar, micros);
+	}
+
+	static void TruncMillisecondInternal(icu::Calendar *calendar, uint64_t &micros) {
+		TruncMicrosecondInternal(calendar, micros);
 		micros = 0;
 	}
 
-	static void TruncSecond(icu::Calendar *calendar, uint64_t &micros) {
-		TruncMillisecond(calendar, micros);
+	static void TruncMillisecond(icu::Calendar *calendar, uint64_t &micros) {
+		PreserveOffsets(calendar);
+		TruncMillisecondInternal(calendar, micros);
+	}
+
+	static void TruncSecondInternal(icu::Calendar *calendar, uint64_t &micros) {
+		TruncMillisecondInternal(calendar, micros);
 		calendar->set(UCAL_MILLISECOND, 0);
 	}
 
-	static void TruncMinute(icu::Calendar *calendar, uint64_t &micros) {
-		TruncSecond(calendar, micros);
+	static void TruncSecond(icu::Calendar *calendar, uint64_t &micros) {
+		PreserveOffsets(calendar);
+		TruncSecondInternal(calendar, micros);
+	}
+
+	static void TruncMinuteInternal(icu::Calendar *calendar, uint64_t &micros) {
+		TruncSecondInternal(calendar, micros);
 		calendar->set(UCAL_SECOND, 0);
 	}
 
+	static void TruncMinute(icu::Calendar *calendar, uint64_t &micros) {
+		PreserveOffsets(calendar);
+		TruncMinuteInternal(calendar, micros);
+	}
+
 	static void TruncHour(icu::Calendar *calendar, uint64_t &micros) {
-		TruncMinute(calendar, micros);
+		TruncMinuteInternal(calendar, micros);
 		calendar->set(UCAL_MINUTE, 0);
 	}
 
@@ -140,13 +174,10 @@ struct ICUDateTrunc : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, Bind);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		ExtensionUtil::AddFunctionOverload(db, set);
 	}
 };
 
@@ -193,9 +224,9 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	}
 }
 
-void RegisterICUDateTruncFunctions(ClientContext &context) {
-	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", context);
-	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", context);
+void RegisterICUDateTruncFunctions(DatabaseInstance &db) {
+	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", db);
+	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", db);
 }
 
 } // namespace duckdb

@@ -57,6 +57,7 @@ SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a);
 # too many aliases: fails
 statement error
 SELECT * FROM (WITH cte AS (SELECT 42, 41 AS x) SELECT * FROM cte) v1(a, b, c);
+----
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

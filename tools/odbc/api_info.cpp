@@ -12,7 +12,6 @@ using std::string;
 
 /*** ODBC API Functions ********************************/
 SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
-
 	if (function_id == SQL_API_ODBC3_ALL_FUNCTIONS) {
 		return ApiInfo::GetFunctions30(connection_handle, function_id, supported_ptr);
 	} else {
@@ -22,8 +21,9 @@ SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT functi
 
 SQLRETURN SQL_API SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	string query("SELECT * FROM (VALUES ");
@@ -88,63 +88,38 @@ const std::unordered_set<SQLUSMALLINT> ApiInfo::ODBC3_EXTRA_SUPPORTED_FUNCTIONS 
     SQL_API_SQLGETDESCREC,    SQL_API_SQLPRIMARYKEYS,    SQL_API_SQLPROCEDURECOLUMNS, SQL_API_SQLPROCEDURES,
     SQL_API_SQLSETDESCREC,    SQL_API_SQLSETPOS,         SQL_API_SQLTABLEPRIVILEGES};
 
+// clang-format off
 const vector<duckdb::TypeInfo> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {
-    {"'CHAR'", SQL_CHAR, 1, "''''", "''''", "'length'", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, -1, SQL_FALSE,
-     SQL_FALSE, "NULL", -1, -1, SQL_CHAR, -1, -1, -1},
-    {"'BOOLEAN'", SQL_BIT, 1, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_TRUE, SQL_TRUE,
-     SQL_FALSE, "'boolean'", -1, -1, SQL_BIT, -1, -1, -1},
-    {"'TINYINT'", SQL_TINYINT, 3, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
-     SQL_FALSE, "NULL", 0, 0, SQL_TINYINT, -1, 2, -1},
-    {"'SMALLINT'", SQL_SMALLINT, 5, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE,
-     SQL_FALSE, SQL_FALSE, "NULL", 0, 0, SQL_SMALLINT, -1, 2, -1},
-    {"'INTEGER'", SQL_INTEGER, 10, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE,
-     SQL_FALSE, SQL_FALSE, "NULL", 0, 0, SQL_INTEGER, -1, 2, -1},
-    {"'BIGINT'", SQL_BIGINT, 19, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
-     SQL_FALSE, "NULL", 0, 0, SQL_BIGINT, -1, 2, -1},
-    {"'DATE'", SQL_TYPE_DATE, 10, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
-     SQL_FALSE, "NULL", -1, -1, SQL_DATETIME, SQL_CODE_DATE, -1, -1},
-    {"'TIME'", SQL_TYPE_TIME, 8, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1, SQL_FALSE,
-     SQL_FALSE, "NULL", 0, 0, SQL_DATETIME, SQL_CODE_TIME, -1, -1},
-    {"'TIMESTAMP'", SQL_TYPE_TIMESTAMP, 26, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, SQL_FALSE, "NULL", 0, 0, SQL_DATETIME, SQL_CODE_TIMESTAMP, -1, -1},
-    {"'DECIMAL'", SQL_DECIMAL, 38, "''''", "''''", "'precision,scale'", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, SQL_FALSE, "NULL", 0, 38, SQL_DECIMAL, -1, 10, -1},
-    {"'NUMERIC'", SQL_NUMERIC, 38, "''''", "''''", "'precision,scale'", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, SQL_FALSE, "NULL", 0, 38, SQL_NUMERIC, -1, 10, -1},
-    {"'FLOAT'", SQL_FLOAT, 24, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
-     SQL_FALSE, "NULL", 0, 0, SQL_FLOAT, -1, 2, -1},
-    {"'DOUBLE'", SQL_DOUBLE, 53, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE,
-     SQL_FALSE, "NULL", 0, 0, SQL_DOUBLE, -1, 2, -1},
-    {"'VARCHAR'", SQL_VARCHAR, -1, "''''", "''''", "'length'", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, -1, SQL_FALSE,
-     -1, "NULL", -1, -1, SQL_VARCHAR, -1, -1, -1},
-    {"'BLOB'", SQL_VARBINARY, -1, "'x'''", "''''", "'length'", SQL_NULLABLE, SQL_TRUE, SQL_PRED_BASIC, -1, SQL_FALSE,
-     SQL_FALSE, "NULL", -1, -1, SQL_VARBINARY, -1, -1, -1},
-    {"'INTERVAL YEAR'", SQL_INTERVAL_YEAR, 9, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_YEAR, -1, -1},
-    {"'INTERVAL MONTH'", SQL_INTERVAL_MONTH, 10, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_MONTH, -1, -1},
-    {"'INTERVAL DAY'", SQL_INTERVAL_DAY, 5, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY, -1, -1},
-    {"'INTERVAL HOUR'", SQL_INTERVAL_HOUR, 6, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_HOUR, -1, -1},
-    {"'INTERVAL MINUTE'", SQL_INTERVAL_MINUTE, 8, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_MINUTE, -1, -1},
-    {"'INTERVAL SECOND'", SQL_INTERVAL_SECOND, 10, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, -1,
-     SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_SECOND, -1, -1},
-    {"'INTERVAL YEAR TO MONTH'", SQL_INTERVAL_YEAR_TO_MONTH, 12, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE,
-     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH, -1, -1},
-    {"'INTERVAL DAY TO HOUR'", SQL_INTERVAL_DAY_TO_HOUR, 8, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE,
-     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_HOUR, -1, -1},
-    {"'INTERVAL DAY TO MINUTE'", SQL_INTERVAL_DAY_TO_MINUTE, 11, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE,
-     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_MINUTE, -1, -1},
-    {"'INTERVAL DAY TO SECOND'", SQL_INTERVAL_DAY_TO_SECOND, 14, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE,
-     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND, -1, -1},
-    {"'INTERVAL HOUR TO MINUTE'", SQL_INTERVAL_HOUR_TO_MINUTE, 9, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE,
-     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_HOUR_TO_MINUTE, -1, -1},
-    {"'INTERVAL HOUR TO SECOND'", SQL_INTERVAL_HOUR_TO_SECOND, 12, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE,
-     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_HOUR_TO_SECOND, -1, -1},
-    {"'INTERVAL MINUTE TO SECOND'", SQL_INTERVAL_MINUTE_TO_SECOND, 12, "''''", "''''", "NULL", SQL_NULLABLE, SQL_FALSE,
-     SQL_PRED_BASIC, -1, SQL_FALSE, -1, "NULL", 0, 0, SQL_INTERVAL, SQL_CODE_MINUTE_TO_SECOND, -1, -1}};
+{                     "'CHAR'",                      SQL_CHAR,  1,  "''''", "''''",          "'length'", SQL_NULLABLE,  SQL_TRUE, SQL_SEARCHABLE,        -1, SQL_FALSE, SQL_FALSE,      "NULL", -1, -1,      SQL_CHAR,                        -1, -1, -1},
+{                  "'BOOLEAN'",                       SQL_BIT,  1,  "NULL", "NULL",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,  SQL_TRUE,  SQL_TRUE, SQL_FALSE, "'boolean'", -1, -1,       SQL_BIT,                        -1, -1, -1},
+{                  "'TINYINT'",                   SQL_TINYINT,  3,  "NULL", "NULL",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,   SQL_TINYINT,                        -1,  2, -1},
+{                 "'SMALLINT'",                  SQL_SMALLINT,  5,  "NULL", "NULL",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,  SQL_SMALLINT,                        -1,  2, -1},
+{                  "'INTEGER'",                   SQL_INTEGER, 10,  "NULL", "NULL",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,   SQL_INTEGER,                        -1,  2, -1},
+{                   "'BIGINT'",                    SQL_BIGINT, 19,  "NULL", "NULL",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,    SQL_BIGINT,                        -1,  2, -1},
+{                     "'DATE'",                 SQL_TYPE_DATE, 10,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE, SQL_FALSE,      "NULL", -1, -1,  SQL_DATETIME,             SQL_CODE_DATE, -1, -1},
+{                     "'TIME'",                 SQL_TYPE_TIME,  8,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,  SQL_DATETIME,             SQL_CODE_TIME, -1, -1},
+{                "'TIMESTAMP'",            SQL_TYPE_TIMESTAMP, 26,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,  SQL_DATETIME,        SQL_CODE_TIMESTAMP, -1, -1},
+{                  "'DECIMAL'",                   SQL_DECIMAL, 38,  "''''", "''''", "'precision,scale'", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE, SQL_FALSE,      "NULL",  0, 38,   SQL_DECIMAL,                        -1, 10, -1},
+{                  "'NUMERIC'",                   SQL_NUMERIC, 38,  "''''", "''''", "'precision,scale'", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE, SQL_FALSE,      "NULL",  0, 38,   SQL_NUMERIC,                        -1, 10, -1},
+{                    "'FLOAT'",                     SQL_FLOAT, 24,  "NULL", "NULL",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,     SQL_FLOAT,                        -1,  2, -1},
+{                   "'DOUBLE'",                    SQL_DOUBLE, 53,  "NULL", "NULL",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_FALSE, SQL_FALSE, SQL_FALSE,      "NULL",  0,  0,    SQL_DOUBLE,                        -1,  2, -1},
+{                  "'VARCHAR'",                   SQL_VARCHAR, -1,  "''''", "''''",          "'length'", SQL_NULLABLE,  SQL_TRUE, SQL_SEARCHABLE,        -1, SQL_FALSE,        -1,      "NULL", -1, -1,   SQL_VARCHAR,                        -1, -1, -1},
+{                     "'BLOB'",                 SQL_VARBINARY, -1, "'x'''", "''''",          "'length'", SQL_NULLABLE,  SQL_TRUE, SQL_PRED_BASIC,        -1, SQL_FALSE, SQL_FALSE,      "NULL", -1, -1, SQL_VARBINARY,                        -1, -1, -1},
+{            "'INTERVAL YEAR'",             SQL_INTERVAL_YEAR,  9,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,             SQL_CODE_YEAR, -1, -1},
+{           "'INTERVAL MONTH'",            SQL_INTERVAL_MONTH, 10,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,            SQL_CODE_MONTH, -1, -1},
+{             "'INTERVAL DAY'",              SQL_INTERVAL_DAY,  5,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,              SQL_CODE_DAY, -1, -1},
+{            "'INTERVAL HOUR'",             SQL_INTERVAL_HOUR,  6,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,             SQL_CODE_HOUR, -1, -1},
+{          "'INTERVAL MINUTE'",           SQL_INTERVAL_MINUTE,  8,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,           SQL_CODE_MINUTE, -1, -1},
+{          "'INTERVAL SECOND'",           SQL_INTERVAL_SECOND, 10,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,           SQL_CODE_SECOND, -1, -1},
+{   "'INTERVAL YEAR TO MONTH'",    SQL_INTERVAL_YEAR_TO_MONTH, 12,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,    SQL_CODE_YEAR_TO_MONTH, -1, -1},
+{     "'INTERVAL DAY TO HOUR'",      SQL_INTERVAL_DAY_TO_HOUR,  8,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,      SQL_CODE_DAY_TO_HOUR, -1, -1},
+{   "'INTERVAL DAY TO MINUTE'",    SQL_INTERVAL_DAY_TO_MINUTE, 11,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,    SQL_CODE_DAY_TO_MINUTE, -1, -1},
+{   "'INTERVAL DAY TO SECOND'",    SQL_INTERVAL_DAY_TO_SECOND, 14,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,    SQL_CODE_DAY_TO_SECOND, -1, -1},
+{  "'INTERVAL HOUR TO MINUTE'",   SQL_INTERVAL_HOUR_TO_MINUTE,  9,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,   SQL_CODE_HOUR_TO_MINUTE, -1, -1},
+{  "'INTERVAL HOUR TO SECOND'",   SQL_INTERVAL_HOUR_TO_SECOND, 12,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL,   SQL_CODE_HOUR_TO_SECOND, -1, -1},
+{"'INTERVAL MINUTE TO SECOND'", SQL_INTERVAL_MINUTE_TO_SECOND, 12,  "''''", "''''",              "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC,        -1, SQL_FALSE,        -1,      "NULL",  0,  0,  SQL_INTERVAL, SQL_CODE_MINUTE_TO_SECOND, -1, -1}
+};
+// clang-format on
 
 void ApiInfo::FindDataType(SQLSMALLINT data_type, vector<TypeInfo> &vec_types) {
 	duckdb::idx_t size_types = ODBC_SUPPORTED_SQL_TYPES.size();
@@ -216,9 +191,6 @@ SQLRETURN ApiInfo::GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function
 }
 
 SQLRETURN ApiInfo::GetFunctions30(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
-	if (function_id != SQL_API_ODBC3_ALL_FUNCTIONS) {
-		return SQL_ERROR;
-	}
 	memset(supported_ptr, 0, sizeof(UWORD) * SQL_API_ODBC3_ALL_FUNCTIONS_SIZE);
 	for (auto it = BASE_SUPPORTED_FUNCTIONS.begin(); it != BASE_SUPPORTED_FUNCTIONS.end(); it++) {
 		SetFunctionSupported(supported_ptr, *it);

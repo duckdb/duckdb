@@ -1,5 +1,7 @@
 #include "capi_tester.hpp"
 
+#include <regex>
+
 using namespace duckdb;
 using namespace std;
 
@@ -13,6 +15,18 @@ static void require_hugeint_eq(duckdb_hugeint left, uint64_t lower, int64_t uppe
 	temp.lower = lower;
 	temp.upper = upper;
 	require_hugeint_eq(left, temp);
+}
+
+static void require_uhugeint_eq(duckdb_uhugeint left, duckdb_uhugeint right) {
+	REQUIRE(left.lower == right.lower);
+	REQUIRE(left.upper == right.upper);
+}
+
+static void require_uhugeint_eq(duckdb_uhugeint left, uint64_t lower, uint64_t upper) {
+	duckdb_uhugeint temp;
+	temp.lower = lower;
+	temp.upper = upper;
+	require_uhugeint_eq(left, temp);
 }
 
 TEST_CASE("Basic test of C API", "[capi]") {
@@ -87,6 +101,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// NULL selection
 	result = tester.Query("SELECT a, b FROM test ORDER BY a");
 	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->rows_changed() == 0);
 	// NULL, 11, 13
 	REQUIRE(result->IsNull(0, 0));
 	REQUIRE(result->Fetch<int32_t>(0, 1) == 11);
@@ -124,8 +139,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("SET default_null_order='nulls_first'"));
 
 	// integer columns
-	duckdb::vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT", "HUGEINT",
-	                                "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
+	duckdb::vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT",  "HUGEINT",
+	                                "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT"};
 	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
@@ -143,6 +158,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<uint16_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<uint32_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+		REQUIRE(duckdb_uhugeint_to_double(result->Fetch<duckdb_uhugeint>(0, 0)) == 0);
 		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 0)) == 0);
 		REQUIRE(result->Fetch<string>(0, 0) == "");
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 0), 0.0f));
@@ -157,6 +173,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<uint16_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<uint32_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<uint64_t>(0, 1) == 1);
+		REQUIRE(duckdb_uhugeint_to_double(result->Fetch<duckdb_uhugeint>(0, 1)) == 1);
 		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 1)) == 1);
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 1), 1.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 1), 1.0));
@@ -348,6 +365,12 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	require_hugeint_eq(result->Fetch<duckdb_hugeint>(3, 0), 49082094825, 0);
 	require_hugeint_eq(result->Fetch<duckdb_hugeint>(4, 0), 0, 0);
 
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(0, 0), 1, 0);
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(1, 0), 100, 0);
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(2, 0), 0, 0); // overflow
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(3, 0), 49082094825, 0);
+	require_uhugeint_eq(result->Fetch<duckdb_uhugeint>(4, 0), 0, 0);
+
 	REQUIRE(result->Fetch<float>(0, 0) == 1.2f);
 	REQUIRE(result->Fetch<float>(1, 0) == 100.3f);
 	REQUIRE(floor(result->Fetch<float>(2, 0)) == -320939);
@@ -388,6 +411,56 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<float>(0, 0) == -123.45f);
 	REQUIRE(result->Fetch<double>(0, 0) == -123.45);
 	REQUIRE(result->Fetch<string>(0, 0) == "-123.45");
+}
+
+TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
+	CAPITester tester;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto res = tester.Query("SELECT TIMETZ '11:30:00.123456-02:00'");
+	REQUIRE(res->success);
+
+	auto chunk = res->FetchChunk(0);
+
+	REQUIRE(chunk->ColumnCount() == 1);
+	REQUIRE(res->ColumnType(0) == DUCKDB_TYPE_TIME_TZ);
+
+	auto data = (duckdb_time_tz *)chunk->GetData(0);
+
+	auto time_tz = duckdb_from_time_tz(data[0]);
+
+	auto val = duckdb_from_time(time_tz.time);
+	REQUIRE(val.hour == 11);
+	REQUIRE(val.min == 30);
+	REQUIRE(val.sec == 0);
+	REQUIRE(val.micros == 123456);
+
+	REQUIRE(time_tz.offset == -7200);
+}
+
+TEST_CASE("create time_tz value") {
+	duckdb_time_struct time;
+	time.hour = 4;
+	time.min = 2;
+	time.sec = 6;
+	time.micros = 9;
+	int offset = 8000;
+
+	auto micros = duckdb_to_time(time);
+	auto res = duckdb_create_time_tz(micros.micros, offset);
+
+	// and back again
+
+	auto inverse = duckdb_from_time_tz(res);
+	REQUIRE(micros.micros == inverse.time.micros);
+	REQUIRE(offset == inverse.offset);
+
+	time = duckdb_from_time(inverse.time);
+	REQUIRE(time.hour == 4);
+	REQUIRE(time.min == 2);
+	REQUIRE(time.sec == 6);
+	REQUIRE(time.micros == 9);
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
@@ -572,4 +645,64 @@ TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 
 	auto string_from_decimal = result->Fetch<string>(0, 0);
 	REQUIRE(string_from_decimal == "-0.5");
+}
+
+TEST_CASE("Test custom_user_agent config", "[capi]") {
+
+	{
+		duckdb_database db;
+		duckdb_connection con;
+		duckdb_result result;
+
+		// Default custom_user_agent value
+		REQUIRE(duckdb_open_ext(NULL, &db, nullptr, NULL) != DuckDBError);
+		REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+		duckdb_query(con, "PRAGMA user_agent", &result);
+
+		REQUIRE(duckdb_row_count(&result) == 1);
+		char *user_agent_value = duckdb_value_varchar(&result, 0, 0);
+		REQUIRE_THAT(user_agent_value, Catch::Matchers::Matches("duckdb/.*(.*) capi"));
+
+		duckdb_free(user_agent_value);
+		duckdb_destroy_result(&result);
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
+
+	{
+		// Custom custom_user_agent value
+
+		duckdb_database db;
+		duckdb_connection con;
+		duckdb_result result_custom_user_agent;
+		duckdb_result result_full_user_agent;
+
+		duckdb_config config;
+		REQUIRE(duckdb_create_config(&config) != DuckDBError);
+		REQUIRE(duckdb_set_config(config, "custom_user_agent", "CUSTOM_STRING") != DuckDBError);
+
+		REQUIRE(duckdb_open_ext(NULL, &db, config, NULL) != DuckDBError);
+		REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+		duckdb_query(con, "SELECT current_setting('custom_user_agent')", &result_custom_user_agent);
+		duckdb_query(con, "PRAGMA user_agent", &result_full_user_agent);
+
+		REQUIRE(duckdb_row_count(&result_custom_user_agent) == 1);
+		REQUIRE(duckdb_row_count(&result_full_user_agent) == 1);
+
+		char *custom_user_agent_value = duckdb_value_varchar(&result_custom_user_agent, 0, 0);
+		REQUIRE(string(custom_user_agent_value) == "CUSTOM_STRING");
+
+		char *full_user_agent_value = duckdb_value_varchar(&result_full_user_agent, 0, 0);
+		REQUIRE_THAT(full_user_agent_value, Catch::Matchers::Matches("duckdb/.*(.*) capi CUSTOM_STRING"));
+
+		duckdb_destroy_config(&config);
+		duckdb_free(custom_user_agent_value);
+		duckdb_free(full_user_agent_value);
+		duckdb_destroy_result(&result_custom_user_agent);
+		duckdb_destroy_result(&result_full_user_agent);
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
 }

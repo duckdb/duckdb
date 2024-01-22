@@ -6,6 +6,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -191,9 +192,11 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 	}
 
 	auto sel_length = 0;
+	bool sel_valid = false;
 	if (step_vector && step_valid && str_valid && begin_valid && end_valid && step != 1 && end - begin > 0) {
 		sel_length = CalculateSliceLength(begin, end, step, step_valid);
 		sel.Initialize(sel_length);
+		sel_valid = true;
 	}
 
 	// Try to slice
@@ -205,8 +208,9 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 		result_data[0] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, str, begin, end, step, sel_idx);
 	}
 
-	if (step_vector && step != 0 && end - begin > 0) {
+	if (sel_valid) {
 		result_child_vector->Slice(sel, sel_length);
+		ListVector::SetListSize(result, sel_length);
 	}
 }
 
@@ -234,6 +238,16 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 		auto end_idx = end_data.sel->get_index(i);
 		auto step_idx = step_vector ? step_data.sel->get_index(i) : 0;
 
+		auto list_valid = list_data.validity.RowIsValid(list_idx);
+		auto begin_valid = begin_data.validity.RowIsValid(begin_idx);
+		auto end_valid = end_data.validity.RowIsValid(end_idx);
+		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
+
+		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
+			result_mask.SetInvalid(i);
+			continue;
+		}
+
 		auto sliced = reinterpret_cast<INPUT_TYPE *>(list_data.data)[list_idx];
 		auto begin = begin_is_empty ? 0 : reinterpret_cast<INDEX_TYPE *>(begin_data.data)[begin_idx];
 		auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced)
@@ -245,23 +259,19 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			begin = end_is_empty ? 0 : begin;
 			end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced) : end;
 		}
-		auto list_valid = list_data.validity.RowIsValid(list_idx);
-		auto begin_valid = begin_data.validity.RowIsValid(begin_idx);
-		auto end_valid = end_data.validity.RowIsValid(end_idx);
-		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
 
 		bool clamp_result = false;
-		if (list_valid && begin_valid && end_valid && (step_valid || step == 1)) {
+		if (step_valid || step == 1) {
 			clamp_result = ClampSlice(sliced, begin, end);
 		}
 
 		auto length = 0;
-		if (step_vector && step_valid && list_valid && begin_valid && end_valid && end - begin > 0) {
+		if (end - begin > 0) {
 			length = CalculateSliceLength(begin, end, step, step_valid);
 		}
 		sel_length += length;
 
-		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid) || !clamp_result) {
+		if (!clamp_result) {
 			result_mask.SetInvalid(i);
 		} else if (!step_vector) {
 			result_data[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
@@ -276,6 +286,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
+		ListVector::SetListSize(result, sel_length);
 	}
 }
 
@@ -369,6 +380,13 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 	D_ASSERT(bound_function.arguments.size() == 3 || bound_function.arguments.size() == 4);
 
 	switch (arguments[0]->return_type.id()) {
+	case LogicalTypeId::ARRAY: {
+		// Cast to list
+		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		auto target_type = LogicalType::LIST(child_type);
+		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), target_type);
+		bound_function.return_type = arguments[0]->return_type;
+	} break;
 	case LogicalTypeId::LIST:
 		// The result is the same type
 		bound_function.return_type = arguments[0]->return_type;

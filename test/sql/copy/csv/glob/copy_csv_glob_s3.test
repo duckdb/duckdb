@@ -65,5 +65,6 @@ SELECT * FROM dates ORDER BY 1
 # nothing matches the glob
 statement error
 COPY dates FROM read_csv('s3://test-bucket/copy_csv_glob_s3/copy/*/a*a.csv', auto_detect=1)
+----
 
 endloop

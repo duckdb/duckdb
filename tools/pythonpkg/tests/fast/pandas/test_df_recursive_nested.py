@@ -25,7 +25,7 @@ def create_reference_query(data):
 class TestDFRecursiveNested(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_list_of_structs(self, duckdb_cursor, pandas):
-        data = [[{'a': 5}, NULL, {'a': NULL}], NULL, [{'b': 5}, NULL, {'b': NULL}]]
+        data = [[{'a': 5}, NULL, {'a': NULL}], NULL, [{'a': 5}, NULL, {'a': NULL}]]
         reference_query = create_reference_query(data)
         df = pandas.DataFrame([{'a': data}])
         check_equal(df, reference_query)
@@ -38,7 +38,16 @@ class TestDFRecursiveNested(object):
             NULL,
             [NULL, {'key': [3, 2, 4], 'value': [NULL, 'a', NULL]}, {'key': ['a', 'b', 'c'], 'value': [1, 2, 3]}],
         ]
-        reference_query = create_reference_query(data)
+        reference_data = [
+            [{'key': ['5'], 'value': [NULL]}, NULL, {'key': [], 'value': []}],
+            NULL,
+            [
+                NULL,
+                {'key': ['3', '2', '4'], 'value': [NULL, 'a', NULL]},
+                {'key': ['a', 'b', 'c'], 'value': ['1', '2', '3']},
+            ],
+        ]
+        reference_query = create_reference_query(reference_data)
         df = pandas.DataFrame([{'a': data}])
         check_equal(df, reference_query)
 

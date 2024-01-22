@@ -39,24 +39,32 @@ INET
 
 statement error
 select '127'::inet;
+----
 
 statement error
 select '127..1'::inet;
+----
 
 statement error
 SELECT '256.0.0.1'::INET::VARCHAR
+----
 
 statement error
 SELECT '-1.0.0.1'::INET::VARCHAR
+----
 
 statement error
 SELECT '127..0.1'::INET::VARCHAR
+----
 
 statement error
 SELECT '127.0.0.1/33'::INET::VARCHAR
+----
 
 statement error
 SELECT '127.0.0.1/333'::INET::VARCHAR
+----
 
 statement error
 SELECT '127.0.0.1/33333333333333333333'::INET::VARCHAR
+----

@@ -18,7 +18,7 @@ class ColumnDataCollection;
 class ColumnDataRowCollection;
 
 enum class ValueRenderAlignment { LEFT, MIDDLE, RIGHT };
-enum class RenderMode { ROWS, COLUMNS };
+enum class RenderMode : uint8_t { ROWS, COLUMNS };
 
 struct BoxRendererConfig {
 	// a max_width of 0 means we default to the terminal width

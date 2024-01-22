@@ -22,7 +22,7 @@ insert into tmp values
 (0,	1);
 
 query II
-SELECT c0, histogram(c1) FROM tmp GROUP BY c0
+SELECT c0, histogram(c1) FROM tmp GROUP BY c0 ORDER BY ALL
 ----
 0	{0=2, 1=2}
 1	{0=1, 1=2}

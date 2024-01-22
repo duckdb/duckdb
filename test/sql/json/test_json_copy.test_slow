@@ -4,26 +4,44 @@
 
 require json
 
+# test automatic detection even with .gz
+statement ok
+create table integers as select 42 i
+
+statement ok
+copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
+
+statement ok
+delete from integers
+
+statement ok
+copy integers from '__TEST_DIR__/integers.json.gz'
+
+query T
+select i from integers
+----
+42
+
 # test writing all types to file
 statement ok
 create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
 
 query I nosort q0
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ----
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ) to '__TEST_DIR__/all_types.ndjson'
 
 statement ok
 create table roundtrip as
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 limit 0
@@ -40,7 +58,7 @@ delete from roundtrip
 
 statement ok
 copy (
-select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint, uhugeint)
          replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
 from test_all_types()
 ) to '__TEST_DIR__/all_types.json' (array true)
@@ -143,6 +161,7 @@ create table conclusions (conclusion varchar)
 # this doesn't work because we assume NDJSON records
 statement error
 copy conclusions from 'data/json/top_level_array.json'
+----
 
 # but works if we tell it to auto-detect
 statement ok

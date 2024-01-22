@@ -11,12 +11,12 @@ def assert_result_equal(result):
 
 
 class TestSimpleDBAPI(object):
-    def test_regular_selection(self, duckdb_cursor):
+    def test_regular_selection(self, duckdb_cursor, integers):
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchall()
         assert_result_equal(result)
 
-    def test_fetchmany_default(self, duckdb_cursor):
+    def test_fetchmany_default(self, duckdb_cursor, integers):
         # Get truth-value
         truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
 
@@ -37,7 +37,7 @@ class TestSimpleDBAPI(object):
         res = duckdb_cursor.fetchmany(3)
         assert len(res) == 0
 
-    def test_fetchmany(self, duckdb_cursor):
+    def test_fetchmany(self, duckdb_cursor, integers):
         # Get truth value
         truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
         duckdb_cursor.execute('select * from integers')
@@ -62,7 +62,7 @@ class TestSimpleDBAPI(object):
         res = duckdb_cursor.fetchmany(3)
         assert len(res) == 0
 
-    def test_fetchmany_too_many(self, duckdb_cursor):
+    def test_fetchmany_too_many(self, duckdb_cursor, integers):
         truth_value = len(duckdb_cursor.execute('select * from integers').fetchall())
         duckdb_cursor.execute('select * from integers')
         res = duckdb_cursor.fetchmany(truth_value * 5)
@@ -73,7 +73,7 @@ class TestSimpleDBAPI(object):
         res = duckdb_cursor.fetchmany(3)
         assert len(res) == 0
 
-    def test_numpy_selection(self, duckdb_cursor):
+    def test_numpy_selection(self, duckdb_cursor, integers, timestamps):
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchnumpy()
         arr = numpy.ma.masked_array(numpy.arange(11))
@@ -87,7 +87,7 @@ class TestSimpleDBAPI(object):
         numpy.testing.assert_array_equal(result['t'], arr, "Incorrect result returned")
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_pandas_selection(self, duckdb_cursor, pandas):
+    def test_pandas_selection(self, duckdb_cursor, pandas, integers, timestamps):
         import datetime
 
         duckdb_cursor.execute('SELECT * FROM integers')

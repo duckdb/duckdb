@@ -51,6 +51,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(
     unique_ptr<LogicalOperator> &right_child, const unordered_set<idx_t> &left_bindings,
     const unordered_set<idx_t> &right_bindings, vector<unique_ptr<Expression>> &expressions,
     vector<JoinCondition> &conditions, vector<unique_ptr<Expression>> &arbitrary_expressions) {
+
 	for (auto &expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
@@ -77,10 +78,17 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 					continue;
 				}
 			}
-		} else if ((expr->type >= ExpressionType::COMPARE_EQUAL &&
-		            expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) ||
-		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM ||
-		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		} else if (expr->type == ExpressionType::COMPARE_EQUAL || expr->type == ExpressionType::COMPARE_NOTEQUAL ||
+		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->type == ExpressionType::COMPARE_LESSTHAN ||
+		           expr->type == ExpressionType::COMPARE_GREATERTHAN ||
+		           expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+		           expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM)
+
+		{
 			// comparison, check if we can create a comparison JoinCondition
 			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
@@ -127,6 +135,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	bool need_to_consider_arbitrary_expressions = true;
 	switch (reftype) {
 	case JoinRefType::ASOF: {
+		if (!arbitrary_expressions.empty()) {
+			throw BinderException("Invalid ASOF JOIN condition");
+		}
 		need_to_consider_arbitrary_expressions = false;
 		auto asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {

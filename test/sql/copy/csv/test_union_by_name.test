@@ -42,6 +42,8 @@ COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
 
 statement error
 SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv']);
+----
+Mismatch between the schema of different files
 
 query III
 SELECT a, b, c
@@ -67,11 +69,11 @@ BIGINT	BIGINT	BIGINT
 statement error
 SELECT * FROM read_csv_auto(['data/csv/union-by-name/ubn1.csv', 'data/csv/union-by-name/ubn2.csv', 'data/csv/union-by-name/ubn3.csv', 'data/csv/union-by-name/ubn4.csv'])
 ----
-Error in file
+Conversion Error
 
 query IIIII
-SELECT  a, b, c, ts, k  
-FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE) 
+SELECT  a, b, c, ts, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
 ORDER BY a, c, ts
 ----
 NULL	NULL	3	2003-06-30 12:03:10	6
@@ -135,6 +137,11 @@ NULL
 NULL
 NULL
 
+query TTT
+SELECT typeof(a), typeof(b), typeof(ts) FROM read_csv_auto('data/csv/union-by-name/ubn2.csv') LIMIT 1;
+----
+VARCHAR	BIGINT	TIMESTAMP
+
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII
 SELECT a, b, c, ts, replace(filename, '\', '/')
@@ -168,7 +175,7 @@ TIMESTAMP
 # Test glob pattern [!1-2] and union_by_name with filename options
 query IIII
 SELECT k, c, ts, replace(filename, '\', '/')
-FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE) 
+FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
 ORDER BY c
 ----
 6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
@@ -178,9 +185,10 @@ NULL	100	Monday	data/csv/union-by-name/ubn4.csv
 NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
 NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 
-# Test hive_partition with union_by_name 
+# Test hive_partition with union_by_name
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
+----
 
 query IIII
 SELECT id, value, a, part
@@ -193,3 +201,4 @@ ORDER BY id
 # Test hive_partition with union_by_name 
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
+----

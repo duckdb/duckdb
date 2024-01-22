@@ -16,7 +16,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	ArenaAllocator allocator(BufferAllocator::Get(context));
 	Vector string_vector(LogicalType::VARCHAR);
 
-	// Loop through the files (if union_by_name, else just sample the first file)
+	// Loop through the files (if union_by_name, else sample up to sample_size rows or maximum_sample_files files)
+	idx_t remaining = bind_data.sample_size;
 	for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
 		// Create global/local state and place the reader in the right field
 		JSONScanGlobalState gstate(context, bind_data);
@@ -28,7 +29,6 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 
 		// Read and detect schema
-		idx_t remaining = bind_data.sample_size;
 		while (remaining != 0) {
 			allocator.Reset();
 			auto read_count = lstate.ReadNext(gstate);
@@ -56,7 +56,11 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 
 		// Close the file and stop detection if not union_by_name
-		if (!bind_data.options.file_options.union_by_name) {
+		if (bind_data.options.file_options.union_by_name) {
+			// When union_by_name=true we sample sample_size per file
+			remaining = bind_data.sample_size;
+		} else if (remaining == 0 || file_idx == bind_data.maximum_sample_files - 1) {
+			// When union_by_name=false, we sample sample_size in total (across the first maximum_sample_files files)
 			break;
 		}
 	}
@@ -65,7 +69,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
-	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
+	auto type =
+	    JSONStructure::StructureToType(context, node, bind_data.max_depth, bind_data.field_appearance_threshold);
 
 	// Auto-detect record type
 	if (bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
@@ -111,6 +116,9 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
+		if (kv.second.IsNull()) {
+			throw BinderException("read_json parameter \"%s\" cannot be NULL.", loption);
+		}
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
@@ -141,8 +149,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else if (arg > 0) {
 				bind_data->sample_size = arg;
 			} else {
-				throw BinderException(
-				    "read_json \"sample_size\" parameter must be positive, or -1 to sample the entire file.");
+				throw BinderException("read_json \"sample_size\" parameter must be positive, or -1 to sample all input "
+				                      "files entirely, up to \"maximum_sample_files\" files.");
 			}
 		} else if (loption == "maximum_depth") {
 			auto arg = BigIntValue::Get(kv.second);
@@ -151,6 +159,13 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else {
 				bind_data->max_depth = arg;
 			}
+		} else if (loption == "field_appearance_threshold") {
+			auto arg = DoubleValue::Get(kv.second);
+			if (arg < 0 || arg > 1) {
+				throw BinderException(
+				    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
+			}
+			bind_data->field_appearance_threshold = arg;
 		} else if (loption == "dateformat" || loption == "date_format") {
 			auto format_string = StringValue::Get(kv.second);
 			if (StringUtil::Lower(format_string) == "iso") {
@@ -186,6 +201,16 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else {
 				throw BinderException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
 			}
+		} else if (loption == "maximum_sample_files") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				bind_data->maximum_sample_files = NumericLimits<idx_t>::Maximum();
+			} else if (arg > 0) {
+				bind_data->maximum_sample_files = arg;
+			} else {
+				throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
+				                      "the limit on the number of files used to sample \"sample_size\" rows.");
+			}
 		}
 	}
 
@@ -197,8 +222,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	if (!bind_data->auto_detect) {
 		// Need to specify columns if RECORDS and not auto-detecting
 		if (return_types.empty()) {
-			throw BinderException("read_json requires columns to be specified through the \"columns\" parameter."
-			                      "\n Use read_json_auto or set auto_detect=true to automatically guess columns.");
+			throw BinderException("When auto_detect=false, read_json requires columns to be specified through the "
+			                      "\"columns\" parameter.");
 		}
 		// If we are reading VALUES, we can only have one column
 		if (bind_data->options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
@@ -224,6 +249,21 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = bind_data->auto_detect && !bind_data->ignore_errors;
 	transform_options.delay_error = true;
+
+	if (bind_data->auto_detect) {
+		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
+		// We rename them so we can parse the file anyway. Note that we can't change bind_data->names,
+		// because the JSON reader gets columns by exact name, not position
+		case_insensitive_map_t<idx_t> name_count_map;
+		for (auto &name : names) {
+			auto it = name_count_map.find(name);
+			if (it == name_count_map.end()) {
+				name_count_map[name] = 1;
+			} else {
+				name = StringUtil::Format("%s_%llu", name, it->second++);
+			}
+		}
+	}
 
 	return std::move(bind_data);
 }
@@ -286,6 +326,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["records"] = LogicalType::VARCHAR;
+	table_function.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 
 	// TODO: might be able to do filter pushdown/prune ?
 
@@ -294,36 +335,36 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	return table_function;
 }
 
-TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info, bool auto_function = false) {
+TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info) {
 	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
 	table_function.name = std::move(name);
-	if (auto_function) {
-		table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
-	}
+	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
+	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
 	return MultiFileReader::CreateFunctionSet(table_function);
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::ARRAY, JSONRecordType::RECORDS);
+	auto info =
+	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_json", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS);
+	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                      JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
 	auto info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_json_auto", std::move(info), true);
+	return CreateJSONFunctionInfo("read_json_auto", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
 	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
 	                                      JSONRecordType::AUTO_DETECT, true);
-	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info), true);
+	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info));
 }
 
 } // namespace duckdb

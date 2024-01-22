@@ -155,7 +155,8 @@ unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, Aggreg
 AggregateFunctionSet StringAggFun::GetFunctions() {
 	AggregateFunctionSet string_agg;
 	AggregateFunction string_agg_param(
-	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
+	    {LogicalType::ANY_PARAMS(LogicalType::VARCHAR)}, LogicalType::VARCHAR,
+	    AggregateFunction::StateSize<StringAggState>,
 	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
 	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,

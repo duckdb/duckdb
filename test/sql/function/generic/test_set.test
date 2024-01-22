@@ -8,15 +8,21 @@ PRAGMA enable_verification
 # unrecognized configuration parameter
 statement error
 SELECT CURRENT_SETTING('a');
+----
 
 statement error
 SELECT CURRENT_SETTING('memori_limit');
+----
 
 statement ok
 SELECT CURRENT_SETTING('default_null_order');
 
 statement ok
 SET default_null_order = 'nulls_last';
+
+# set from a function
+statement ok
+SET default_null_order = concat('nulls', '_', 'last');
 
 query I
 SELECT CURRENT_SETTING('default_null_order');
@@ -38,9 +44,22 @@ NULL
 
 statement error
 SELECT CURRENT_SETTING(i::VARCHAR) FROM range(1) tbl(i)
+----
 
 statement error
 SELECT CURRENT_SETTING(NULL)
+----
 
 statement error
 SELECT CURRENT_SETTING('')
+----
+
+statement error
+SET default_null_order = colref || '_last';
+----
+cannot contain column names
+
+statement error
+SET default_null_order = (SELECT 'nulls_last')
+----
+cannot contain subqueries

@@ -9,6 +9,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -21,6 +22,10 @@ namespace duckdb {
 // Access Mode
 //===--------------------------------------------------------------------===//
 void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db) {
+		throw InvalidInputException("Cannot change access_mode setting while database is running - it must be set when "
+		                            "opening or attaching the database");
+	}
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "automatic") {
 		config.options.access_mode = AccessMode::AUTOMATIC;
@@ -50,6 +55,22 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 	default:
 		throw InternalException("Unknown access mode setting");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Allow Persistent Secrets
+//===--------------------------------------------------------------------===//
+void AllowPersistentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.secret_manager->SetEnablePersistentSecrets(input.GetValue<bool>());
+}
+
+void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.secret_manager->ResetEnablePersistentSecrets();
+}
+
+Value AllowPersistentSecrets::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.secret_manager->PersistentSecretsEnabled();
 }
 
 //===--------------------------------------------------------------------===//
@@ -313,6 +334,22 @@ Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 	default:
 		throw InternalException("Unknown null order setting");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Default Null Order
+//===--------------------------------------------------------------------===//
+void DefaultSecretStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.secret_manager->SetDefaultStorage(input.ToString());
+}
+
+void DefaultSecretStorage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.secret_manager->ResetDefaultStorage();
+}
+
+Value DefaultSecretStorage::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.secret_manager->DefaultStorage();
 }
 
 //===--------------------------------------------------------------------===//
@@ -726,17 +763,12 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto mode_str = StringUtil::Lower(input.ToString());
-	if (mode_str == "none") {
-		config.options.force_bitpacking_mode = BitpackingMode::AUTO;
-	} else {
-		auto mode = BitpackingModeFromString(mode_str);
-		if (mode == BitpackingMode::AUTO) {
-			throw ParserException(
-			    "Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
-			    "delta_for, or for");
-		}
-		config.options.force_bitpacking_mode = mode;
+	auto mode = BitpackingModeFromString(mode_str);
+	if (mode == BitpackingMode::INVALID) {
+		throw ParserException("Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
+		                      "delta_for, or for");
 	}
+	config.options.force_bitpacking_mode = mode;
 }
 
 void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -756,6 +788,11 @@ void HomeDirectorySetting::ResetLocal(ClientContext &context) {
 
 void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
+
+	if (!input.IsNull() && FileSystem::GetFileSystem(context).IsRemoteFile(input.ToString())) {
+		throw InvalidInputException("Cannot set the home directory to a remote path");
+	}
+
 	config.home_directory = input.IsNull() ? string() : input.ToString();
 }
 
@@ -872,6 +909,22 @@ void MaximumMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_memory));
+}
+
+//===--------------------------------------------------------------------===//
+// Old Implicit Casting
+//===--------------------------------------------------------------------===//
+void OldImplicitCasting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.old_implicit_casting = input.GetValue<bool>();
+}
+
+void OldImplicitCasting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.old_implicit_casting = DBConfig().options.old_implicit_casting;
+}
+
+Value OldImplicitCasting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.old_implicit_casting);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1123,6 +1176,22 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Secret Directory
+//===--------------------------------------------------------------------===//
+void SecretDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.secret_manager->SetPersistentSecretPath(input.ToString());
+}
+
+void SecretDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.secret_manager->ResetPersistentSecretPath();
+}
+
+Value SecretDirectorySetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return config.secret_manager->PersistentSecretPath();
+}
+
+//===--------------------------------------------------------------------===//
 // Temp Directory
 //===--------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1202,6 +1271,55 @@ void FlushAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) 
 Value FlushAllocatorSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
+}
+
+//===--------------------------------------------------------------------===//
+// DuckDBApi Setting
+//===--------------------------------------------------------------------===//
+
+void DuckDBApiSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (db) {
+		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
+	}
+	config.options.duckdb_api += " " + new_value;
+}
+
+void DuckDBApiSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
+	}
+	config.options.duckdb_api = DBConfig().options.duckdb_api;
+}
+
+Value DuckDBApiSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.duckdb_api);
+}
+
+//===--------------------------------------------------------------------===//
+// CustomUserAgent Setting
+//===--------------------------------------------------------------------===//
+
+void CustomUserAgentSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<string>();
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent =
+	    config.options.custom_user_agent.empty() ? new_value : config.options.custom_user_agent + " " + new_value;
+}
+
+void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
+	}
+	config.options.custom_user_agent = DBConfig().options.custom_user_agent;
+}
+
+Value CustomUserAgentSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.custom_user_agent);
 }
 
 } // namespace duckdb

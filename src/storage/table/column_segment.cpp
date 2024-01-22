@@ -9,6 +9,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/data_pointer.hpp"
 
 #include <cstring>
 
@@ -18,7 +19,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
                                                                  block_id_t block_id, idx_t offset,
                                                                  const LogicalType &type, idx_t start, idx_t count,
                                                                  CompressionType compression_type,
-                                                                 BaseStatistics statistics) {
+                                                                 BaseStatistics statistics,
+                                                                 unique_ptr<ColumnSegmentState> segment_state) {
 	auto &config = DBConfig::GetConfig(db);
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
@@ -31,7 +33,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	}
 	auto segment_size = Storage::BLOCK_SIZE;
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
-	                                std::move(statistics), block_id, offset, segment_size);
+	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
@@ -56,13 +58,14 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx
 
 ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p,
                              ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction &function_p,
-                             BaseStatistics statistics, block_id_t block_id_p, idx_t offset_p, idx_t segment_size_p)
+                             BaseStatistics statistics, block_id_t block_id_p, idx_t offset_p, idx_t segment_size_p,
+                             unique_ptr<ColumnSegmentState> segment_state)
     : SegmentBase<ColumnSegment>(start, count), db(db), type(std::move(type_p)),
       type_size(GetTypeIdSize(type.InternalType())), segment_type(segment_type), function(function_p),
       stats(std::move(statistics)), block(std::move(block)), block_id(block_id_p), offset(offset_p),
       segment_size(segment_size_p) {
 	if (function.get().init_segment) {
-		segment_state = function.get().init_segment(*this, block_id);
+		this->segment_state = function.get().init_segment(*this, block_id, segment_state.get());
 	}
 }
 
@@ -128,7 +131,7 @@ void ColumnSegment::Resize(idx_t new_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	shared_ptr<BlockHandle> new_block;
-	auto new_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
+	auto new_handle = buffer_manager.Allocate(new_size, false, &new_block);
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);
@@ -190,11 +193,6 @@ void ColumnSegment::ConvertToPersistent(optional_ptr<BlockManager> block_manager
 		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
 		block = block_manager->ConvertToPersistent(block_id, std::move(block));
 	}
-
-	segment_state.reset();
-	if (function.get().init_segment) {
-		segment_state = function.get().init_segment(*this, block_id);
-	}
 }
 
 void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t offset_p) {
@@ -204,10 +202,21 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 	block_id = block_p->BlockId();
 	offset = offset_p;
 	block = std::move(block_p);
+}
 
-	segment_state.reset();
-	if (function.get().init_segment) {
-		segment_state = function.get().init_segment(*this, block_id);
+//===--------------------------------------------------------------------===//
+// Drop Segment
+//===--------------------------------------------------------------------===//
+void ColumnSegment::CommitDropSegment() {
+	if (segment_type != ColumnSegmentType::PERSISTENT) {
+		// not persistent
+		return;
+	}
+	if (block_id != INVALID_BLOCK) {
+		GetBlockManager().MarkBlockAsModified(block_id);
+	}
+	if (function.get().cleanup_state) {
+		function.get().cleanup_state(*this);
 	}
 }
 
@@ -428,6 +437,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 			auto predicate = HugeIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<hugeint_t>(result_flat, predicate, sel, approved_tuple_count,
 			                                 constant_filter.comparison_type, mask);
+			break;
+		}
+		case PhysicalType::UINT128: {
+			auto result_flat = FlatVector::GetData<uhugeint_t>(result);
+			auto predicate = UhugeIntValue::Get(constant_filter.constant);
+			FilterSelectionSwitch<uhugeint_t>(result_flat, predicate, sel, approved_tuple_count,
+			                                  constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::FLOAT: {

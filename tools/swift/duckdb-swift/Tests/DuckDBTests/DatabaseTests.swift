@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -54,7 +54,7 @@ final class DatabaseTests: XCTestCase {
   
   func test_query_result() throws {
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT * FROM test_all_types(use_large_enum=true);")
+    let result = try connection.query("SELECT * FROM test_all_types();")
     let element: Void? = result[0][0]
     XCTAssertNotNil(element)
   }

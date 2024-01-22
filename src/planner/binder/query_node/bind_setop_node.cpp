@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -51,17 +52,7 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 
 			idx_t index = reorder_idx[i];
 
-			if (entry != aliases.end()) {
-				// the alias already exists
-				// check if there is a conflict
-
-				if (entry->second != index) {
-					// there is a conflict
-					// we place "-1" in the aliases map at this location
-					// "-1" signifies that there is an ambiguous reference
-					aliases[name] = DConstants::INVALID_INDEX;
-				}
-			} else {
+			if (entry == aliases.end()) {
 				// the alias is not in there yet, just assign it
 				aliases[name] = index;
 			}
@@ -81,37 +72,37 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 	}
 }
 
-static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain_nulls) {
+static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &result, bool can_contain_nulls) {
 	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
 	case_insensitive_map_t<idx_t> left_names_map;
 	case_insensitive_map_t<idx_t> right_names_map;
 
-	BoundQueryNode *left_node = result.left.get();
-	BoundQueryNode *right_node = result.right.get();
+	auto &left_node = *result.left;
+	auto &right_node = *result.right;
 
 	// Build a name_map to use to check if a name exists
 	// We throw a binder exception if two same name in the SELECT list
-	for (idx_t i = 0; i < left_node->names.size(); ++i) {
-		if (left_names_map.find(left_node->names[i]) != left_names_map.end()) {
+	for (idx_t i = 0; i < left_node.names.size(); ++i) {
+		if (left_names_map.find(left_node.names[i]) != left_names_map.end()) {
 			throw BinderException("UNION(ALL) BY NAME operation doesn't support same name in SELECT list");
 		}
-		left_names_map[left_node->names[i]] = i;
+		left_names_map[left_node.names[i]] = i;
 	}
 
-	for (idx_t i = 0; i < right_node->names.size(); ++i) {
-		if (right_names_map.find(right_node->names[i]) != right_names_map.end()) {
+	for (idx_t i = 0; i < right_node.names.size(); ++i) {
+		if (right_names_map.find(right_node.names[i]) != right_names_map.end()) {
 			throw BinderException("UNION(ALL) BY NAME operation doesn't support same name in SELECT list");
 		}
-		if (left_names_map.find(right_node->names[i]) == left_names_map.end()) {
-			result.names.push_back(right_node->names[i]);
+		if (left_names_map.find(right_node.names[i]) == left_names_map.end()) {
+			result.names.push_back(right_node.names[i]);
 		}
-		right_names_map[right_node->names[i]] = i;
+		right_names_map[right_node.names[i]] = i;
 	}
 
 	idx_t new_size = result.names.size();
 	bool need_reorder = false;
-	vector<idx_t> left_reorder_idx(left_node->names.size());
-	vector<idx_t> right_reorder_idx(right_node->names.size());
+	vector<idx_t> left_reorder_idx(left_node.names.size());
+	vector<idx_t> right_reorder_idx(right_node.names.size());
 
 	// Construct return type and reorder_idxs
 	// reorder_idxs is used to gather correct alias_map
@@ -123,20 +114,20 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 		bool right_exist = right_index != right_names_map.end();
 		LogicalType result_type;
 		if (left_exist && right_exist) {
-			result_type = LogicalType::MaxLogicalType(left_node->types[left_index->second],
-			                                          right_node->types[right_index->second]);
+			result_type = LogicalType::MaxLogicalType(context, left_node.types[left_index->second],
+			                                          right_node.types[right_index->second]);
 			if (left_index->second != i || right_index->second != i) {
 				need_reorder = true;
 			}
 			left_reorder_idx[left_index->second] = i;
 			right_reorder_idx[right_index->second] = i;
 		} else if (left_exist) {
-			result_type = left_node->types[left_index->second];
+			result_type = left_node.types[left_index->second];
 			need_reorder = true;
 			left_reorder_idx[left_index->second] = i;
 		} else {
 			D_ASSERT(right_exist);
-			result_type = right_node->types[right_index->second];
+			result_type = right_node.types[right_index->second];
 			need_reorder = true;
 			right_reorder_idx[right_index->second] = i;
 		}
@@ -165,21 +156,21 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 			unique_ptr<Expression> right_reorder_expr;
 			if (left_exist && right_exist) {
 				left_reorder_expr = make_uniq<BoundColumnRefExpression>(
-				    left_node->types[left_index->second], ColumnBinding(left_node->GetRootIndex(), left_index->second));
+				    left_node.types[left_index->second], ColumnBinding(left_node.GetRootIndex(), left_index->second));
 				right_reorder_expr =
-				    make_uniq<BoundColumnRefExpression>(right_node->types[right_index->second],
-				                                        ColumnBinding(right_node->GetRootIndex(), right_index->second));
+				    make_uniq<BoundColumnRefExpression>(right_node.types[right_index->second],
+				                                        ColumnBinding(right_node.GetRootIndex(), right_index->second));
 			} else if (left_exist) {
 				left_reorder_expr = make_uniq<BoundColumnRefExpression>(
-				    left_node->types[left_index->second], ColumnBinding(left_node->GetRootIndex(), left_index->second));
+				    left_node.types[left_index->second], ColumnBinding(left_node.GetRootIndex(), left_index->second));
 				// create null value here
 				right_reorder_expr = make_uniq<BoundConstantExpression>(Value(result.types[i]));
 			} else {
 				D_ASSERT(right_exist);
 				left_reorder_expr = make_uniq<BoundConstantExpression>(Value(result.types[i]));
 				right_reorder_expr =
-				    make_uniq<BoundColumnRefExpression>(right_node->types[right_index->second],
-				                                        ColumnBinding(right_node->GetRootIndex(), right_index->second));
+				    make_uniq<BoundColumnRefExpression>(right_node.types[right_index->second],
+				                                        ColumnBinding(right_node.GetRootIndex(), right_index->second));
 			}
 			result.left_reorder_exprs.push_back(std::move(left_reorder_expr));
 			result.right_reorder_exprs.push_back(std::move(right_reorder_expr));
@@ -190,6 +181,7 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_uniq<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
+	result->setop_all = statement.setop_all;
 
 	// first recursively visit the set operations
 	// both the left and right sides have an independent BindContext and Binder
@@ -219,12 +211,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	}
 
 	if (result->setop_type == SetOperationType::UNION_BY_NAME) {
-		BuildUnionByNameInfo(*result, can_contain_nulls);
-
+		BuildUnionByNameInfo(context, *result, can_contain_nulls);
 	} else {
 		// figure out the types of the setop result by picking the max of both
 		for (idx_t i = 0; i < result->left->types.size(); i++) {
-			auto result_type = LogicalType::MaxLogicalType(result->left->types[i], result->right->types[i]);
+			auto result_type = LogicalType::ForceMaxLogicalType(result->left->types[i], result->right->types[i]);
 			if (!can_contain_nulls) {
 				if (ExpressionBinder::ContainsNullType(result_type)) {
 					result_type = ExpressionBinder::ExchangeNullType(result_type);

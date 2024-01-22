@@ -1,0 +1,23 @@
+# name: test/sql/copy/csv/auto/test_auto_8231.test
+# description: Test issue 8231 related to missing headers and null padding
+# group: [auto]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create view locations_header_trailing_comma as SELECT * from read_csv_auto('data/csv/locations_row_trailing_comma.csv', null_padding=True)
+
+query IIIII
+SELECT * from locations_header_trailing_comma
+----
+1	name	0	0	NULL
+
+query IIIIII
+describe locations_header_trailing_comma;
+----
+id	BIGINT	YES	NULL	NULL	NULL
+name	VARCHAR	YES	NULL	NULL	NULL
+lat	BIGINT	YES	NULL	NULL	NULL
+lon	BIGINT	YES	NULL	NULL	NULL
+column4	VARCHAR	YES	NULL	NULL	NULL

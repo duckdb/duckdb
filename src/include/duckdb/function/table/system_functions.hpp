@@ -25,6 +25,10 @@ struct PragmaStorageInfo {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct PragmaMetadataInfo {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct PragmaLastProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -57,6 +61,10 @@ struct DuckDBConstraintsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBSecretsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBDatabasesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -78,6 +86,10 @@ struct DuckDBKeywordsFun {
 };
 
 struct DuckDBIndexesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBOptimizersFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -126,6 +138,10 @@ struct TestAllTypesFun {
 };
 
 struct TestVectorTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct PragmaUserAgent {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

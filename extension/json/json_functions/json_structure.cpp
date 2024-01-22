@@ -19,11 +19,11 @@ static inline LogicalTypeId MaxNumericType(LogicalTypeId &a, LogicalTypeId &b) {
 	return LogicalTypeId::BIGINT;
 }
 
-JSONStructureNode::JSONStructureNode() : initialized(false) {
+JSONStructureNode::JSONStructureNode() : initialized(false), count(0) {
 }
 
 JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p)
-    : key(make_uniq<string>(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p))), initialized(false) {
+    : key(make_uniq<string>(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p))), initialized(false), count(0) {
 	D_ASSERT(yyjson_is_str(key_p));
 	JSONStructure::ExtractStructure(val_p, *this);
 }
@@ -32,12 +32,14 @@ JSONStructureNode::JSONStructureNode(JSONStructureNode &&other) noexcept {
 	std::swap(key, other.key);
 	std::swap(initialized, other.initialized);
 	std::swap(descriptions, other.descriptions);
+	std::swap(count, other.count);
 }
 
 JSONStructureNode &JSONStructureNode::operator=(JSONStructureNode &&other) noexcept {
 	std::swap(key, other.key);
 	std::swap(initialized, other.initialized);
 	std::swap(descriptions, other.descriptions);
+	std::swap(count, other.count);
 	return *this;
 }
 
@@ -399,6 +401,7 @@ static inline void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node)
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node) {
+	node.count++;
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 		return ExtractStructureArray(val, node);
@@ -433,7 +436,7 @@ static inline yyjson_mut_val *ConvertStructureObject(const JSONStructureNode &no
 	auto &desc = node.descriptions[0];
 	if (desc.children.empty()) {
 		// Empty struct - let's do JSON instead
-		return yyjson_mut_str(doc, JSONCommon::JSON_TYPE_NAME);
+		return yyjson_mut_str(doc, LogicalType::JSON_TYPE_NAME);
 	}
 
 	auto obj = yyjson_mut_obj(doc);
@@ -450,7 +453,7 @@ static inline yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yy
 		return yyjson_mut_str(doc, JSONCommon::TYPE_STRING_NULL);
 	}
 	if (node.descriptions.size() != 1) { // Inconsistent types, so we resort to JSON
-		return yyjson_mut_str(doc, JSONCommon::JSON_TYPE_NAME);
+		return yyjson_mut_str(doc, LogicalType::JSON_TYPE_NAME);
 	}
 	auto &desc = node.descriptions[0];
 	D_ASSERT(desc.type != LogicalTypeId::INVALID);
@@ -474,40 +477,57 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type}, JSONCommon::JSONType(), StructureFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
-	GetStructureFunctionInternal(set, JSONCommon::JSONType());
+	GetStructureFunctionInternal(set, LogicalType::JSON());
 	return set;
 }
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                        idx_t depth) {
+                                        const double field_appearance_threshold, idx_t depth,
+                                        const idx_t sample_count) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
 	const auto &desc = node.descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
 
-	return LogicalType::LIST(JSONStructure::StructureToType(context, desc.children[0], max_depth, depth + 1));
+	return LogicalType::LIST(JSONStructure::StructureToType(
+	    context, desc.children[0], max_depth, field_appearance_threshold, depth + 1, desc.children[0].count));
 }
 
 static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                         idx_t depth) {
+                                         const double field_appearance_threshold, idx_t depth,
+                                         const idx_t sample_count) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
+
+	// If it's an empty struct we do JSON instead
 	if (desc.children.empty()) {
 		// Empty struct - let's do JSON instead
-		return JSONCommon::JSONType();
+		return LogicalType::JSON();
+	}
+
+	// If it's an inconsistent object we also just do JSON
+	double total_child_counts = 0;
+	for (const auto &child : desc.children) {
+		total_child_counts += double(child.count) / sample_count;
+	}
+	const auto avg_occurrence = total_child_counts / desc.children.size();
+	if (avg_occurrence < field_appearance_threshold) {
+		return LogicalType::JSON();
 	}
 
 	child_list_t<LogicalType> child_types;
 	child_types.reserve(desc.children.size());
 	for (auto &child : desc.children) {
 		D_ASSERT(child.key);
-		child_types.emplace_back(*child.key, JSONStructure::StructureToType(context, child, max_depth, depth + 1));
+		child_types.emplace_back(*child.key,
+		                         JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
+		                                                        depth + 1, sample_count));
 	}
 	return LogicalType::STRUCT(child_types);
 }
@@ -522,27 +542,28 @@ static LogicalType StructureToTypeString(const JSONStructureNode &node) {
 }
 
 LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                           idx_t depth) {
+                                           const double field_appearance_threshold, idx_t depth, idx_t sample_count) {
 	if (depth >= max_depth) {
-		return JSONCommon::JSONType();
+		return LogicalType::JSON();
 	}
 	if (node.descriptions.empty()) {
-		return JSONCommon::JSONType();
+		return LogicalType::JSON();
 	}
 	if (node.descriptions.size() != 1) { // Inconsistent types, so we resort to JSON
-		return JSONCommon::JSONType();
+		return LogicalType::JSON();
 	}
+	sample_count = sample_count == DConstants::INVALID_INDEX ? node.count : sample_count;
 	auto &desc = node.descriptions[0];
 	D_ASSERT(desc.type != LogicalTypeId::INVALID);
 	switch (desc.type) {
 	case LogicalTypeId::LIST:
-		return StructureToTypeArray(context, node, max_depth, depth);
+		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, depth, sample_count);
 	case LogicalTypeId::STRUCT:
-		return StructureToTypeObject(context, node, max_depth, depth);
+		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, depth, sample_count);
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::SQLNULL:
-		return JSONCommon::JSONType();
+		return LogicalType::JSON();
 	case LogicalTypeId::UBIGINT:
 		return LogicalTypeId::BIGINT; // We prefer not to return UBIGINT in our type auto-detection
 	default:

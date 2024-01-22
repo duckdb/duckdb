@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/execution/task_error_manager.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
@@ -77,7 +78,7 @@ public:
 	void AddToBeRescheduled(shared_ptr<Task> &task);
 
 	//! Returns the progress of the pipelines
-	bool GetPipelinesProgress(double &current_progress);
+	bool GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality, uint64_t &total_cardinality);
 
 	void CompletePipeline() {
 		completed_pipelines++;
@@ -106,8 +107,8 @@ private:
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
 
 	static void VerifyScheduledEvents(const ScheduleEventData &event_data);
-	static void VerifyScheduledEventsInternal(const idx_t i, const vector<Event *> &vertices, vector<bool> &visited,
-	                                          vector<bool> &recursion_stack);
+	static void VerifyScheduledEventsInternal(const idx_t i, const vector<reference<Event>> &vertices,
+	                                          vector<bool> &visited, vector<bool> &recursion_stack);
 
 	static void SchedulePipeline(const shared_ptr<MetaPipeline> &pipeline, ScheduleEventData &event_data);
 
@@ -123,7 +124,6 @@ private:
 	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
-	mutex error_lock;
 	//! All pipelines of the query plan
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! The root pipelines of the query
@@ -138,12 +138,12 @@ private:
 	idx_t root_pipeline_idx;
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
-	//! Exceptions that occurred during the execution of the current query
-	vector<PreservedError> exceptions;
 	//! List of events
 	vector<shared_ptr<Event>> events;
 	//! The query profiler
 	shared_ptr<QueryProfiler> profiler;
+	//! Task error manager
+	TaskErrorManager error_manager;
 
 	//! The amount of completed pipelines of the query
 	atomic<idx_t> completed_pipelines;

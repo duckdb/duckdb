@@ -15,8 +15,6 @@ Node48 &Node48::New(ART &art, Node &node) {
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		n48.child_index[i] = Node::EMPTY_MARKER;
 	}
-
-	// necessary for faster child insertion/deletion
 	for (idx_t i = 0; i < Node::NODE_48_CAPACITY; i++) {
 		n48.children[i].Clear();
 	}

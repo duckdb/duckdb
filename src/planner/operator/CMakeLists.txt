@@ -6,6 +6,7 @@ add_library_unity(
   logical_column_data_get.cpp
   logical_comparison_join.cpp
   logical_copy_to_file.cpp
+  logical_copy_database.cpp
   logical_create.cpp
   logical_create_index.cpp
   logical_create_table.cpp

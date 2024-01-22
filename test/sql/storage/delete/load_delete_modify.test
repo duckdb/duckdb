@@ -1,0 +1,49 @@
+# name: test/sql/storage/delete/load_delete_modify.test
+# description: Test loading a table with deletes and then performing an operation
+# group: [delete]
+
+# load the DB from disk
+load __TEST_DIR__/load_delete_modify.db
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM generate_series(0,599999) t(i);
+
+query I
+DELETE FROM integers WHERE i%2=0
+----
+300000
+
+# LOAD -> ALTER
+restart
+
+statement ok
+ALTER TABLE integers ADD COLUMN k INTEGER
+
+query III
+SELECT COUNT(*), COUNT(i), COUNT(k) FROM integers
+----
+300000	300000	0
+
+# LOAD -> UPDATE
+restart
+
+statement ok
+UPDATE integers SET k=i+1
+
+query IIII
+SELECT COUNT(*), COUNT(i), COUNT(k), SUM(k) - SUM(i) FROM integers
+----
+300000	300000	300000	300000
+
+# LOAD -> DELETE MORE
+restart
+
+query I
+DELETE FROM integers WHERE i%3=0
+----
+100000
+
+query IIII
+SELECT COUNT(*), COUNT(i), COUNT(k), SUM(k) - SUM(i) FROM integers
+----
+200000	200000	200000	200000

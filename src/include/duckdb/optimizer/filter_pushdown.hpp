@@ -43,6 +43,8 @@ private:
 
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
+	//! Push down a distinct operator
+	unique_ptr<LogicalOperator> PushdownDistinct(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalFilter op
 	unique_ptr<LogicalOperator> PushdownFilter(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalCrossProduct op
@@ -63,6 +65,8 @@ private:
 	// Pushdown a left join
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                             unordered_set<idx_t> &right_bindings);
+
+	unique_ptr<LogicalOperator> PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op);
 	// Pushdown a mark join
 	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                             unordered_set<idx_t> &right_bindings);

@@ -24,10 +24,8 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 
 SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &config = DBConfig::GetConfig(context.client);
-	if (config.options.lock_configuration) {
-		throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked",
-		                            name);
-	}
+	// check if we are allowed to change the configuration option
+	config.CheckLock(name);
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		// check if this is an extra extension variable

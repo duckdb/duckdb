@@ -36,14 +36,12 @@
       {
         "id": 201,
         "name": "from_table",
-        "type": "TableRef*",
-        "optional": true
+        "type": "TableRef*"
       },
       {
         "id": 202,
         "name": "where_clause",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 203,
@@ -54,7 +52,7 @@
       {
         "id": 204,
         "name": "group_sets",
-        "type": "set<idx_t>",
+        "type": "vector<GroupingSet>",
         "property": "groups.grouping_sets"
       },
       {
@@ -65,20 +63,17 @@
       {
         "id": 206,
         "name": "having",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 207,
         "name": "sample",
-        "type": "SampleOptions*",
-        "optional": true
+        "type": "SampleOptions*"
       },
       {
         "id": 208,
         "name": "qualify",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       }
     ]
   },
@@ -101,6 +96,12 @@
         "id": 202,
         "name": "right",
         "type": "QueryNode*"
+      },
+      {
+        "id": 203,
+        "name": "setop_all",
+        "type": "bool",
+        "default": "true"
       }
     ]
   },
@@ -118,7 +119,8 @@
       {
         "id": 201,
         "name": "union_all",
-        "type": "bool"
+        "type": "bool",
+        "default": "false"
       },
       {
         "id": 202,

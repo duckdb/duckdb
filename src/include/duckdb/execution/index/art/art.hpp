@@ -33,16 +33,18 @@ struct ARTFlags {
 
 class ART : public Index {
 public:
+	// Index type name for the ART
+	static constexpr const char *TYPE_NAME = "ART";
 	//! FixedSizeAllocator count of the ART
 	static constexpr uint8_t ALLOCATOR_COUNT = 6;
 
 public:
 	//! Constructs an ART
-	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
 	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
-	    const BlockPointer &block = BlockPointer());
+	    const IndexStorageInfo &info = IndexStorageInfo());
 
 	//! Root of the tree
 	Node tree = Node();
@@ -51,19 +53,26 @@ public:
 	//! True, if the ART owns its data
 	bool owns_data;
 
-public:
-	//! Initialize a single predicate scan on the index with the given expression and column IDs
-	unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                         const ExpressionType expression_type) override;
-	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
-	                                                       const ExpressionType low_expression_type,
-	                                                       const Value &high_value,
-	                                                       const ExpressionType high_expression_type) override;
+	//! Try to initialize a scan on the index with the given expression and filter
+	unique_ptr<IndexScanState> TryInitializeScan(const Transaction &transaction, const Expression &index_expr,
+	                                             const Expression &filter_expr);
+
 	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
 	//! and false otherwise
-	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, const idx_t max_count,
-	          vector<row_t> &result_ids) override;
+	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, idx_t max_count,
+	          vector<row_t> &result_ids);
+
+public:
+	//! Create a index instance of this type
+	static unique_ptr<Index> Create(const string &name, const IndexConstraintType constraint_type,
+	                                const vector<column_t> &column_ids,
+	                                const vector<unique_ptr<Expression>> &unbound_expressions,
+	                                TableIOManager &table_io_manager, AttachedDatabase &db,
+	                                const IndexStorageInfo &storage_info) {
+		auto art = make_uniq<ART>(name, constraint_type, column_ids, table_io_manager, unbound_expressions, db, nullptr,
+		                          storage_info);
+		return std::move(art);
+	}
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
 	PreservedError Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
@@ -86,8 +95,8 @@ public:
 	//! Search equal values used for joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
-	//! Serializes the index and returns the pair of block_id offset positions
-	BlockPointer Serialize(MetadataWriter &writer) override;
+	//! Returns all ART storage information for serialization
+	IndexStorageInfo GetStorageInfo(const bool get_buffers) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -95,6 +104,9 @@ public:
 
 	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
 	void Vacuum(IndexLock &state) override;
+
+	//! Returns the in-memory usage of the index. The lock obtained from InitializeLock must be held
+	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
@@ -144,8 +156,15 @@ private:
 	//! or only traverses and verifies the index
 	string VerifyAndToStringInternal(const bool only_verify);
 
-	//! Deserialize the allocators of the ART
+	//! Initialize the allocators of the ART
+	void InitAllocators(const IndexStorageInfo &info);
+	//! STABLE STORAGE NOTE: This is for old storage files, to deserialize the allocators of the ART
 	void Deserialize(const BlockPointer &pointer);
+	//! Initializes the serialization of the index by combining the allocator data onto partial blocks
+	void WritePartialBlocks();
+
+	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
+	                                     DataChunk &input) override;
 };
 
 } // namespace duckdb

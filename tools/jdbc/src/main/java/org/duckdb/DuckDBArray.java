@@ -3,18 +3,25 @@ package org.duckdb;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Map;
 
 import static org.duckdb.DuckDBResultSetMetaData.type_to_int;
 
 public class DuckDBArray implements Array {
-    private DuckDBVector vector;
-    int offset, length;
+    private final Object[] array;
+    private final DuckDBVector vector;
+    final int offset, length;
 
-    public DuckDBArray(DuckDBVector vector, int offset, int length) {
+    DuckDBArray(DuckDBVector vector, int offset, int length) throws SQLException {
         this.vector = vector;
         this.length = length;
         this.offset = offset;
+
+        array = new Object[length];
+        for (int i = 0; i < length; i++) {
+            array[i] = vector.getObject(offset + i);
+        }
     }
 
     @Override
@@ -23,11 +30,7 @@ public class DuckDBArray implements Array {
     }
     @Override
     public Object getArray() throws SQLException {
-        Object[] out = new Object[length];
-        for (int i = 0; i < length; i++) {
-            out[i] = vector.getObject(offset + i);
-        }
-        return out;
+        return array;
     }
 
     @Override
@@ -59,8 +62,7 @@ public class DuckDBArray implements Array {
 
     @Override
     public ResultSet getResultSet() throws SQLException {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getResultSet'");
+        return new DuckDBArrayResultSet(vector, offset, length);
     }
 
     @Override
@@ -79,5 +81,10 @@ public class DuckDBArray implements Array {
     public ResultSet getResultSet(long index, int count, Map<String, Class<?>> map) throws SQLException {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'getResultSet'");
+    }
+
+    @Override
+    public String toString() {
+        return Arrays.toString(array);
     }
 }

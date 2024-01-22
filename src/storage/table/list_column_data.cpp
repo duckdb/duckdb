@@ -86,7 +86,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(!updates);
 
 	Vector offset_vector(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, offset_vector, count);
+	idx_t scan_count = ScanVector(state, offset_vector, count, false);
 	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
@@ -113,6 +113,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
 		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
+		    child_entry.GetType().InternalType() != PhysicalType::ARRAY &&
 		    state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
 			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
 		}
@@ -132,7 +133,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// note that we only need to read the first and last entry
 	// however, let's just read all "count" entries for now
 	Vector result(LogicalType::UBIGINT, count);
-	idx_t scan_count = ScanVector(state, result, count);
+	idx_t scan_count = ScanVector(state, result, count, false);
 	if (scan_count == 0) {
 		return;
 	}
@@ -339,8 +340,8 @@ unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group,
                                                              PartialBlockManager &partial_block_manager,
                                                              ColumnCheckpointInfo &checkpoint_info) {
-	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
 
 	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();

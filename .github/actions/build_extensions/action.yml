@@ -91,9 +91,9 @@ runs:
 
     - name: Setup vcpkg
       if: inputs.vcpkg_build == 1
-      uses: lukka/run-vcpkg@v11
+      uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
 
     - name: Set vcpkg env variables
       if: inputs.vcpkg_build == 1
@@ -209,15 +209,16 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
+        DUCKDB_DEPLOY_SCRIPT_MODE: for_real
       run: |
         cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
           elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-            ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
           fi
         fi
 

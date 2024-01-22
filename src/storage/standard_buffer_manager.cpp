@@ -8,6 +8,7 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
 
@@ -66,8 +67,12 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
 StandardBufferManager::~StandardBufferManager() {
 }
 
-BufferPool &StandardBufferManager::GetBufferPool() {
+BufferPool &StandardBufferManager::GetBufferPool() const {
 	return buffer_pool;
+}
+
+TemporaryMemoryManager &StandardBufferManager::GetTemporaryMemoryManager() {
+	return buffer_pool.GetTemporaryMemoryManager();
 }
 
 idx_t StandardBufferManager::GetUsedMemory() const {

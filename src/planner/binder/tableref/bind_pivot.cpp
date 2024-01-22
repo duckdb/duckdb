@@ -108,7 +108,8 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(PivotRef &ref, vector<uniqu
 		for (auto &pivot_column : ref.pivots) {
 			for (auto &pivot_expr : pivot_column.pivot_expressions) {
 				auto column_ref = make_uniq<CastExpression>(LogicalType::VARCHAR, pivot_expr->Copy());
-				auto constant_value = make_uniq<ConstantExpression>(pivot_value.values[pivot_value_idx++]);
+				auto constant_value = make_uniq<ConstantExpression>(
+				    pivot_value.values[pivot_value_idx++].DefaultCastAs(LogicalType::VARCHAR));
 				auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
 				                                                 std::move(column_ref), std::move(constant_value));
 				if (filter) {
@@ -559,7 +560,8 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		vector<unique_ptr<ParsedExpression>> expressions;
 		expressions.reserve(unpivot.entries.size());
 		for (auto &entry : unpivot.entries) {
-			expressions.push_back(make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString()));
+			auto colref = make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString());
+			expressions.push_back(std::move(colref));
 		}
 		unpivot_expressions.push_back(std::move(expressions));
 	}

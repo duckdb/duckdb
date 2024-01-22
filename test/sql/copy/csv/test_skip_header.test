@@ -1,0 +1,20 @@
+# name: test/sql/copy/csv/test_skip_header.test
+# description: Test read CSV function
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+FROM 'data/csv/skip_header.csv'
+----
+1	2	3
+4	5	6
+7	8	9
+
+query III
+FROM read_csv_auto('data/csv/skip_header.csv', columns={'a': 'INT32', 'b': 'INT32', 'c': 'INT32'});
+----
+1	2	3
+4	5	6
+7	8	9

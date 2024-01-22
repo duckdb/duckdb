@@ -15,10 +15,12 @@
 namespace duckdb {
 class ClientContext;
 class Catalog;
+class DatabaseInstance;
 enum class ExpressionType : uint8_t;
 
 struct DeserializationData {
 	stack<reference<ClientContext>> contexts;
+	stack<reference<DatabaseInstance>> databases;
 	stack<idx_t> enums;
 	stack<reference<bound_parameter_map_t>> parameter_data;
 	stack<reference<LogicalType>> types;
@@ -75,6 +77,23 @@ inline void DeserializationData::Unset<LogicalOperatorType>() {
 }
 
 template <>
+inline void DeserializationData::Set(CompressionType type) {
+	enums.push(idx_t(type));
+}
+
+template <>
+inline CompressionType DeserializationData::Get() {
+	AssertNotEmpty(enums);
+	return CompressionType(enums.top());
+}
+
+template <>
+inline void DeserializationData::Unset<CompressionType>() {
+	AssertNotEmpty(enums);
+	enums.pop();
+}
+
+template <>
 inline void DeserializationData::Set(CatalogType type) {
 	enums.push(idx_t(type));
 }
@@ -106,6 +125,23 @@ template <>
 inline void DeserializationData::Unset<ClientContext>() {
 	AssertNotEmpty(contexts);
 	contexts.pop();
+}
+
+template <>
+inline void DeserializationData::Set(DatabaseInstance &db) {
+	databases.push(db);
+}
+
+template <>
+inline DatabaseInstance &DeserializationData::Get() {
+	AssertNotEmpty(databases);
+	return databases.top();
+}
+
+template <>
+inline void DeserializationData::Unset<DatabaseInstance>() {
+	AssertNotEmpty(databases);
+	databases.pop();
 }
 
 template <>

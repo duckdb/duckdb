@@ -1,8 +1,8 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
-from pyduckdb.spark.sql.types import Row
-from pyduckdb.spark.sql.types import (
+_ = pytest.importorskip("duckdb.experimental.spark")
+from duckdb.experimental.spark.sql.types import Row
+from duckdb.experimental.spark.sql.types import (
     StringType,
     BinaryType,
     BitstringType,
@@ -28,6 +28,7 @@ from pyduckdb.spark.sql.types import (
     LongType,
     UnsignedLongType,
     HugeIntegerType,
+    UnsignedHugeIntegerType,
     DayTimeIntervalType,
     ArrayType,
     MapType,
@@ -58,6 +59,7 @@ class TestTypes(object):
                 StructField('int', IntegerType(), True),
                 StructField('bigint', LongType(), True),
                 StructField('hugeint', HugeIntegerType(), True),
+                StructField('uhugeint', UnsignedHugeIntegerType(), True),
                 StructField('utinyint', UnsignedByteType(), True),
                 StructField('usmallint', UnsignedShortType(), True),
                 StructField('uint', UnsignedIntegerType(), True),

@@ -9,6 +9,7 @@
 #include "duckdb/common/types/row/row_data_collection.hpp"
 #include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -135,6 +136,9 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 	case PhysicalType::UINT64:
 		TemplatedGatherLoop<uint64_t>(rows, row_sel, col, col_sel, count, layout, col_no, build_size);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedGatherLoop<uhugeint_t>(rows, row_sel, col, col_sel, count, layout, col_no, build_size);
+		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedGatherLoop<int8_t>(rows, row_sel, col, col_sel, count, layout, col_no, build_size);
@@ -165,6 +169,7 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 		break;
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
 		GatherNestedVector(rows, row_sel, col, col_sel, count, layout, col_no, heap_ptr);
 		break;
 	default:

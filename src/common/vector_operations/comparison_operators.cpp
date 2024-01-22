@@ -6,6 +6,7 @@
 
 #include "duckdb/common/operator/comparison_operators.hpp"
 
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -237,6 +238,9 @@ public:
 		case PhysicalType::INT128:
 			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
 			break;
+		case PhysicalType::UINT128:
+			TemplatedExecute<uhugeint_t, OP>(left, right, result, count);
+			break;
 		case PhysicalType::FLOAT:
 			TemplatedExecute<float, OP>(left, right, result, count);
 			break;
@@ -251,6 +255,7 @@ public:
 			break;
 		case PhysicalType::LIST:
 		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
 			NestedComparisonExecutor<OP>(left, right, result, count);
 			break;
 		default:

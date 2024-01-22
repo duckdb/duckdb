@@ -83,7 +83,7 @@ struct TimestampConvertNano {
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(date_t val) {
-		return Date::EpochNanoseconds(val);
+		return Date::EpochMicroseconds(val);
 	}
 
 	template <class NUMPY_T, bool PANDAS>
@@ -216,7 +216,7 @@ struct StringConvert {
 	static NUMPY_T NullValue(bool &set_mask) {
 		if (PANDAS) {
 			set_mask = false;
-			return Py_None;
+			Py_RETURN_NONE;
 		}
 		set_mask = true;
 		return nullptr;
@@ -253,7 +253,7 @@ struct UUIDConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(hugeint_t val) {
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		py::handle h = import_cache.uuid().UUID()(UUID::ToString(val)).release();
+		py::handle h = import_cache.uuid.UUID()(UUID::ToString(val)).release();
 		return h.ptr();
 	}
 
@@ -342,6 +342,13 @@ template <>
 double IntegralConvert::ConvertValue(hugeint_t val) {
 	double result;
 	Hugeint::TryCast(val, result);
+	return result;
+}
+
+template <>
+double IntegralConvert::ConvertValue(uhugeint_t val) {
+	double result;
+	Uhugeint::TryCast(val, result);
 	return result;
 }
 
@@ -601,6 +608,9 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::HUGEINT:
 		may_have_null = ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(append_data);
+		break;
+	case LogicalTypeId::UHUGEINT:
+		may_have_null = ConvertColumn<uhugeint_t, double, duckdb_py_convert::IntegralConvert>(append_data);
 		break;
 	case LogicalTypeId::FLOAT:
 		may_have_null = ConvertColumnRegular<float>(append_data);

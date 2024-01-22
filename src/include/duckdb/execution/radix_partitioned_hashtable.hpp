@@ -50,14 +50,15 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;
 
+	double GetProgress(ClientContext &context, GlobalSinkState &sink_p, GlobalSourceState &gstate) const;
+
 	const TupleDataLayout &GetLayout() const;
-	idx_t Count(GlobalSinkState &sink) const;
+	idx_t MaxThreads(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);
 
 private:
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
-	idx_t CountInternal(GlobalSinkState &sink) const;
 
 	TupleDataLayout layout;
 };

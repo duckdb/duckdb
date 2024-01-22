@@ -15,12 +15,15 @@ PRAGMA verify_external
 
 statement error
 SELECT STRING_AGG()
+----
 
 statement error
-SELECT STRING_AGG(1, 2, 3)
+SELECT STRING_AGG('a', 'b', 'c')
+----
 
 statement error
 SELECT STRING_AGG(STRING_AGG('a',','))
+----
 
 # test string aggregation on scalar values
 query T
@@ -47,6 +50,7 @@ INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), (2,'i','/'), (2,NULL,'-'), 
 # string agg separator must be a constant
 statement error
 SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings
+----
 
 query II
 SELECT g, STRING_AGG(x,'|') FROM strings GROUP BY g ORDER BY g
@@ -62,11 +66,11 @@ SELECT STRING_AGG(x,',') FROM strings WHERE g > 100
 ----
 NULL
 
-# numerics are auto cast to strings
-query T
+# numerics are not auto cast to strings
+statement error
 SELECT STRING_AGG(1, 2)
 ----
-1
+No function matches
 
 # group concat is an alias for string_agg
 query T
@@ -128,9 +132,11 @@ SELECT g, STRING_AGG(x ORDER BY x DESC), STRING_AGG(x, '|' ORDER BY x DESC) FROM
 # Variable separator
 statement error
 SELECT g, STRING_AGG(x, y ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
+----
 
 statement error
 SELECT g, STRING_AGG(x, y ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
+----
 
 # A more complex ORDER BY expression
 # Ordering [NULL a b i j p x y z]
