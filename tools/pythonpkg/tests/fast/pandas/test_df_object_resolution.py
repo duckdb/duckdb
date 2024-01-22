@@ -609,7 +609,7 @@ class TestResolveObjectColumns(object):
         # Now interleave nulls into the dataframe
         duckdb_cursor.execute('drop table dates')
         for i in range(0, len(res['i']), 2):
-            res['i'][i] = None
+            res.loc[i, 'i'] = None
         duckdb_cursor.execute('create table dates as select * from res')
 
         expected_res = [
