@@ -1,0 +1,335 @@
+# name: test/sql/storage/compression/alp/alp_inf_null_nan.test
+# group: [alp]
+
+# load the DB from disk
+load __TEST_DIR__/test_alp_nulls.db
+
+foreach compression uncompressed alp
+
+# Set the compression algorithm
+
+statement ok
+pragma force_compression='${compression}'
+
+# Create tables
+
+statement ok
+create table tbl1_${compression}(
+	a INTEGER DEFAULT 5,
+	b VARCHAR DEFAULT 'test',
+	c BOOL DEFAULT false,
+	d DOUBLE,
+	e TEXT default 'null',
+	f FLOAT
+);
+
+statement ok
+create table tbl2_${compression}(
+	a INTEGER DEFAULT 5,
+	b VARCHAR DEFAULT 'test',
+	c BOOL DEFAULT false,
+	d DOUBLE,
+	e TEXT default 'null',
+	f FLOAT
+);
+
+statement ok
+create table tbl3_${compression}(
+	a INTEGER DEFAULT 5,
+	b VARCHAR DEFAULT 'test',
+	c BOOL DEFAULT false,
+	d DOUBLE,
+	e TEXT default 'null',
+	f FLOAT
+);
+
+# Populate tables
+
+# Mixed NULLs
+statement ok
+insert into tbl1_${compression}(d,f) VALUES
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity');
+
+# Only NULLS
+statement ok
+insert into tbl2_${compression}(d,f) VALUES
+(NULL, NULL),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', 'Infinity'),
+('Infinity', '-Infinity'),
+('Infinity', '-Infinity'),
+('Infinity', '-Infinity'),
+('Infinity', '-Infinity'),
+('Infinity', '-Infinity'),
+('-Infinity', '-Infinity'),
+('-Infinity', '-Infinity'),
+('-Infinity', '-Infinity'),
+('-Infinity', '-Infinity'),
+('-Infinity', '-Infinity'),
+('-Infinity', '-Infinity'),
+(0, 0),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL);
+
+# Starting with NULLS
+statement ok
+insert into tbl3_${compression}(d,f) VALUES
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(NULL, NULL),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', '-Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', '-Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', '-Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', '-Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', '-Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('-Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('Infinity', 'Infinity'),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(NULL, NULL),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+(1.213123, 1.232142),
+(7034.34968234, 93472948.98034),
+(7034.34968234, 93472948.98034),
+('NaN', 'NaN'),
+('NaN', 'NaN'),
+('NaN', 'NaN');
+
+# Force a checkpoint
+
+statement ok
+checkpoint
+
+endloop
+
+# Assert that the scanned results are the same
+
+#tbl1
+
+query II nosort r1
+select d, f from tbl1_uncompressed;
+----
+
+query II nosort r1
+select d, f from tbl1_alp;
+----
+
+#tbl2
+
+query II nosort r2
+select d, f from tbl2_uncompressed;
+----
+
+query II nosort r2
+select d, f from tbl2_alp;
+----
+
+# tbl3
+
+query II nosort r3
+select d, f from tbl3_uncompressed;
+----
+
+query II nosort r3
+select d, f from tbl3_alp;
+----
