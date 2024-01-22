@@ -85,81 +85,19 @@ import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toMap;
 import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
+import static org.duckdb.test.Assertions.assertEquals;
+import static org.duckdb.test.Assertions.assertFalse;
+import static org.duckdb.test.Assertions.assertNotNull;
+import static org.duckdb.test.Assertions.assertNull;
+import static org.duckdb.test.Assertions.assertThrows;
+import static org.duckdb.test.Assertions.assertThrowsMaybe;
+import static org.duckdb.test.Assertions.assertTrue;
+import static org.duckdb.test.Assertions.fail;
+import static org.duckdb.test.Runner.runTests;
 
 public class TestDuckDBJDBC {
 
     private static final String JDBC_URL = "jdbc:duckdb:";
-
-    private static void assertTrue(boolean val) throws Exception {
-        assertTrue(val, null);
-    }
-
-    private static void assertTrue(boolean val, String message) throws Exception {
-        if (!val) {
-            throw new Exception(message);
-        }
-    }
-
-    private static void assertFalse(boolean val) throws Exception {
-        assertTrue(!val);
-    }
-
-    private static void assertEquals(Object actual, Object expected) throws Exception {
-        Function<Object, String> getClass = (Object a) -> a == null ? "null" : a.getClass().toString();
-
-        String message = String.format("\"%s\" (of %s) should equal \"%s\" (of %s)", actual, getClass.apply(actual),
-                                       expected, getClass.apply(expected));
-        assertTrue(Objects.equals(actual, expected), message);
-    }
-
-    private static void assertNotNull(Object a) throws Exception {
-        assertFalse(a == null);
-    }
-
-    private static void assertNull(Object a) throws Exception {
-        assertEquals(a, null);
-    }
-
-    private static void assertEquals(double a, double b, double epsilon) throws Exception {
-        assertTrue(Math.abs(a - b) < epsilon);
-    }
-
-    private static void fail() throws Exception {
-        fail(null);
-    }
-
-    private static void fail(String s) throws Exception {
-        throw new Exception(s);
-    }
-
-    private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
-        return assertThrows(exception, thrower).getMessage();
-    }
-
-    private static <T extends Throwable> Throwable assertThrows(Class<T> exception, Thrower thrower) throws Exception {
-        try {
-            thrower.run();
-        } catch (Throwable e) {
-            assertEquals(e.getClass(), exception);
-            return e;
-        }
-        throw new Exception("Expected to throw " + exception.getName());
-    }
-
-    // Asserts we are either throwing the correct exception, or not throwing at all
-    private static <T extends Throwable> boolean assertThrowsMaybe(Thrower thrower, Class<T> exception)
-        throws Exception {
-        try {
-            thrower.run();
-            return true;
-        } catch (Throwable e) {
-            if (e.getClass().equals(exception)) {
-                return true;
-            } else {
-                throw new Exception("Unexpected exception: " + e.getClass().getName());
-            }
-        }
-    }
 
     static {
         try {
@@ -4337,52 +4275,6 @@ public class TestDuckDBJDBC {
     }
 
     public static void main(String[] args) throws Exception {
-        // Woo I can do reflection too, take this, JUnit!
-        Method[] methods = TestDuckDBJDBC.class.getMethods();
-
-        Arrays.sort(methods, new Comparator<Method>() {
-            @Override
-            public int compare(Method o1, Method o2) {
-                return o1.getName().compareTo(o2.getName());
-            }
-        });
-
-        String specific_test = null;
-        if (args.length >= 1) {
-            specific_test = args[0];
-        }
-
-        boolean anySucceeded = false;
-        boolean anyFailed = false;
-        for (Method m : methods) {
-            if (m.getName().startsWith("test_")) {
-                if (specific_test != null && !m.getName().contains(specific_test)) {
-                    continue;
-                }
-                System.out.print(m.getName() + " ");
-
-                LocalDateTime start = LocalDateTime.now();
-                try {
-                    m.invoke(null);
-                    System.out.println("success in " + Duration.between(start, LocalDateTime.now()).getSeconds() +
-                                       " seconds");
-                } catch (Throwable t) {
-                    if (t instanceof InvocationTargetException) {
-                        t = t.getCause();
-                    }
-                    System.out.println("failed with " + t);
-                    t.printStackTrace(System.out);
-                    anyFailed = true;
-                }
-                anySucceeded = true;
-            }
-        }
-        if (!anySucceeded) {
-            System.out.println("No tests found that match " + specific_test);
-            System.exit(1);
-        }
-        System.out.println(anyFailed ? "FAILED" : "OK");
-
-        System.exit(anyFailed ? 1 : 0);
+        System.exit(runTests(args, TestDuckDBJDBC.class));
     }
 }
