@@ -7,7 +7,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 from duckdb.experimental.spark.sql import SparkSession as session
 from duckdb import connect, InvalidInputException, read_csv
-from conftest import NumpyPandas, ArrowPandas
+from conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
 import pandas._testing as tm
 import datetime
 import csv
@@ -121,7 +121,7 @@ class TestSparkToCSV(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_date_format(self, pandas, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")
-        pandas_df = pandas.DataFrame(tm.getTimeSeriesData())
+        pandas_df = pandas.DataFrame(getTimeSeriesData())
         dt_index = pandas_df.index
         pandas_df = pandas.DataFrame({"A": dt_index, "B": dt_index.shift(1)}, index=dt_index)
 
