@@ -64,7 +64,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
 	}
 
 	// create tokenize macro based on parameters
-	string tokenize = "s";
+	string tokenize = "s::VARCHAR";
 	vector<string> before;
 	vector<string> after;
 	if (strip_accents) {
@@ -171,6 +171,20 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
                 WHERE CASE WHEN fields IS NULL THEN 1 ELSE fieldid IN (SELECT * FROM fieldids) END
                   AND termid IN (SELECT qtermids.termid FROM qtermids)
             ),
+			term_tf AS (
+				SELECT termid,
+				   	   docid,
+                       COUNT(*) AS tf
+				FROM qterms
+				GROUP BY docid,
+						 termid
+			),
+			cdocs AS (
+				SELECT docid
+				FROM qterms
+				GROUP BY docid
+				HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END
+			),
             subscores AS (
                 SELECT docs.docid,
                        len,
@@ -178,36 +192,25 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
                        tf,
                        df,
                        (log(((SELECT num_docs FROM %fts_schema%.stats) - df + 0.5) / (df + 0.5))* ((tf * (k + 1)/(tf + k * (1 - b + b * (len / (SELECT avgdl FROM %fts_schema%.stats))))))) AS subscore
-                FROM (
-                    SELECT termid,
-                           docid,
-                           COUNT(*) AS tf
-                    FROM qterms
-                    GROUP BY docid,
-                             termid
-                ) AS term_tf
-                JOIN (
-                    SELECT docid
-                    FROM qterms
-                    GROUP BY docid
-                    HAVING CASE WHEN conjunctive THEN COUNT(DISTINCT termid) = (SELECT COUNT(*) FROM tokens) ELSE 1 END
-                ) AS cdocs
-                ON term_tf.docid = cdocs.docid
-                JOIN %fts_schema%.docs AS docs
-                ON term_tf.docid = docs.docid
-                JOIN %fts_schema%.dict AS dict
-                ON term_tf.termid = dict.termid
-            )
+                FROM term_tf,
+					 cdocs,
+					 %fts_schema%.docs AS docs,
+					 %fts_schema%.dict AS dict
+				WHERE term_tf.docid = cdocs.docid
+				  AND term_tf.docid = docs.docid
+                  AND term_tf.termid = dict.termid
+            ),
+			scores AS (
+				SELECT docid,
+					   sum(subscore) AS score
+				FROM subscores
+				GROUP BY docid
+			)
             SELECT score
-            FROM (
-                SELECT docid,
-                       sum(subscore) AS score
-                FROM subscores
-                GROUP BY docid
-            ) AS scores
-            JOIN %fts_schema%.docs AS docs
-            ON  scores.docid = docs.docid
-            AND docs.name = docname
+            FROM scores,
+				 %fts_schema%.docs AS docs
+            WHERE scores.docid = docs.docid
+              AND docs.name = docname
         );
     )";
 
@@ -266,7 +269,7 @@ string FTSIndexing::CreateFTSIndexQuery(ClientContext &context, const FunctionPa
 		}
 	}
 
-	string ignore = "(\\\\.|[^a-z])+";
+	string ignore = "[0-9!@#$%^&*()_+={}\\[\\]:;<>,.?~\\\\/\\|''\"`-]+";
 	auto ignore_entry = parameters.named_parameters.find("ignore");
 	if (ignore_entry != parameters.named_parameters.end()) {
 		ignore = StringValue::Get(ignore_entry->second);

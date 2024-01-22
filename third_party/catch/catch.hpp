@@ -11308,12 +11308,28 @@ namespace Catch {
         Catch::cout() << "name\tgroup" << std::endl;
 
         auto matchedTestCases = filterTests( getAllTestCasesSorted( config ), testSpec, config );
-        for( auto const& testCaseInfo : matchedTestCases ) {
+        auto total_tests_run = matchedTestCases.size();
+        int start_offset = 0;
+        int end_offset = total_tests_run;
+        if (config.startOffset() >= 0) {
+            start_offset = config.startOffset();
+        } else if (config.startOffsetPercentage() >= 0) {
+            start_offset = int((config.startOffsetPercentage() / 100.0) * total_tests_run);
+        }
+        auto it = matchedTestCases.begin();
+        for(int current_test = 0; it != matchedTestCases.end(); current_test++) {
+            if (current_test < start_offset || current_test >= end_offset) {
+                // skip this test
+                it++;
+                continue;
+            }
+            auto &testCaseInfo = *it;
             Catch::cout() << testCaseInfo.name << "\t";
             if( !testCaseInfo.tags.empty() ) {
                 Catch::cout() << testCaseInfo.tagsAsString();
             }
             Catch::cout() << std::endl;
+            it++;
         }
         return matchedTestCases.size();
     }

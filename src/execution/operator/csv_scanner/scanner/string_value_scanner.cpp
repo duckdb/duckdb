@@ -241,7 +241,8 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
 	// We care about empty lines if this is a single column csv file
 	result.last_position = buffer_pos + 1;
-	if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
+	if (result.states.IsCarriageReturn() &&
+	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		result.last_position++;
 	}
 	if (result.parse_chunk.ColumnCount() == 1) {
@@ -267,6 +268,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 
 idx_t StringValueResult::NumberOfRows() {
 	if (result_position % number_of_columns != 0) {
+		Print();
 		throw InternalException("Something went wrong when reading the CSV file, more positions than columns. Open an "
 		                        "issue on the issue tracker.");
 	}
@@ -433,7 +435,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 }
 
 void StringValueScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
+
 	if (result.result_size != 1 && !(sniffing && state_machine->options.null_padding &&
 	                                 !state_machine->options.dialect_options.skip_rows.IsSetByUser())) {
 		SetStart();
@@ -546,7 +549,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 
 void StringValueScanner::ProcessOverbufferValue() {
 	// Process first string
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
 	string overbuffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
 	if (result.last_position == previous_buffer_handle->actual_size) {
@@ -609,8 +612,10 @@ void StringValueScanner::ProcessOverbufferValue() {
 	} else {
 		value = string_t(overbuffer_string.c_str(), overbuffer_string.size());
 	}
-	result.AddValueToVector(value, true);
-	if (states.NewRow()) {
+	if (!states.IsNotSet()) {
+		result.AddValueToVector(value, true);
+	}
+	if (states.NewRow() && !states.IsNotSet()) {
 		result.AddRowInternal();
 		lines_read++;
 	}
@@ -620,7 +625,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
 	}
-	if (states.IsCurrentNewRow() &&
+	if (states.IsCarriageReturn() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		result.last_position = ++iterator.pos.buffer_pos + 1;
 	} else {
@@ -639,7 +644,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
-			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow()) {
+			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
+			    states.IsNotSet()) {
 				while (result.result_position % result.number_of_columns != 0) {
 					result.result_position--;
 				}

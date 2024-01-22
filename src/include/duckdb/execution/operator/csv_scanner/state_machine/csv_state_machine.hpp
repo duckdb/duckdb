@@ -17,9 +17,9 @@ namespace duckdb {
 //! State of necessary CSV States to parse file
 //! Current, previous, and state before the previous
 struct CSVStates {
-	void Initialize(CSVState initial_state) {
-		states[0] = initial_state;
-		states[1] = initial_state;
+	void Initialize() {
+		states[0] = CSVState::NOT_SET;
+		states[1] = CSVState::NOT_SET;
 	}
 	inline bool NewValue() {
 		return states[1] == CSVState::DELIMITER;
@@ -39,11 +39,19 @@ struct CSVStates {
 
 	inline bool EmptyLine() {
 		return (states[1] == CSVState::CARRIAGE_RETURN || states[1] == CSVState::RECORD_SEPARATOR) &&
-		       states[0] == CSVState::RECORD_SEPARATOR;
+		       (states[0] == CSVState::RECORD_SEPARATOR || states[0] == CSVState::NOT_SET);
+	}
+
+	inline bool IsNotSet() {
+		return states[1] == CSVState::NOT_SET;
 	}
 
 	inline bool IsCurrentNewRow() {
 		return states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN;
+	}
+
+	inline bool IsCarriageReturn() {
+		return states[1] == CSVState::CARRIAGE_RETURN;
 	}
 
 	inline bool IsQuoted() {

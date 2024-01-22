@@ -1,0 +1,25 @@
+# name: test/issues/general/test_9384.test
+# description: Issue 9384: DuckDB fails when trying to add a JSON column to an existing table via ALTER TABLE
+# group: [general]
+
+require json
+
+statement ok
+create schema my_schema;
+
+statement ok
+use my_schema;
+
+statement ok
+create table t1 (i json);
+
+statement ok
+alter table t1 add column my_col json;
+
+require inet
+
+statement ok
+create table t2 (i inet);
+
+statement ok
+alter table t2 add column my_col inet;
