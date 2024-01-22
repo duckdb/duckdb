@@ -50,8 +50,6 @@ public:
 private:
 	void Initialize() override;
 
-	void Process() override;
-
 	void FinalizeChunkProcess() override;
 
 	SkipResult result;

@@ -73,51 +73,6 @@ public:
 		return iterator.pos.buffer_pos;
 	}
 
-	//! Templated function that process the parsing of a character
-	//! OP = Operation used to alter the result of the parser
-	//! T = Type of the result
-	template <class T>
-	inline static bool ProcessCharacter(BaseScanner &scanner, const char current_char, const idx_t buffer_pos,
-	                                    T &result) {
-		scanner.state_machine->Transition(scanner.states, current_char);
-		switch (scanner.states.current_state) {
-		case CSVState::INVALID:
-			T::InvalidState(result);
-			return true;
-		case CSVState::RECORD_SEPARATOR:
-			if (scanner.states.previous_state == CSVState::RECORD_SEPARATOR ||
-			    (scanner.states.previous_state == CSVState::CARRIAGE_RETURN &&
-			     scanner.states.pre_previous_state == CSVState::RECORD_SEPARATOR)) {
-				scanner.lines_read++;
-				return T::EmptyLine(result, buffer_pos);
-			} else if (scanner.states.previous_state != CSVState::CARRIAGE_RETURN) {
-				scanner.lines_read++;
-				return T::AddRow(result, buffer_pos);
-			}
-			return false;
-		case CSVState::CARRIAGE_RETURN:
-			scanner.lines_read++;
-			if (scanner.states.previous_state != CSVState::RECORD_SEPARATOR) {
-				return T::AddRow(result, buffer_pos);
-			}
-			return false;
-		case CSVState::DELIMITER:
-			T::AddValue(result, buffer_pos);
-			return false;
-		case CSVState::QUOTED:
-			if (scanner.states.previous_state == CSVState::UNQUOTED) {
-				T::SetEscaped(result);
-			}
-			T::SetQuoted(result);
-			return false;
-		case CSVState::ESCAPE:
-			T::SetEscaped(result);
-			return false;
-		default:
-			return false;
-		}
-	}
-
 	CSVStateMachine &GetStateMachine();
 
 	shared_ptr<CSVFileScan> csv_file_scan;
@@ -126,6 +81,12 @@ public:
 	bool sniffing = false;
 	//! The guy that handles errors
 	shared_ptr<CSVErrorHandler> error_handler;
+
+	//! Shared pointer to the state machine, this is used across multiple scanners
+	shared_ptr<CSVStateMachine> state_machine;
+
+	//! States
+	CSVStates states;
 
 protected:
 	//! Boundaries of this scanner
@@ -141,27 +102,113 @@ protected:
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
 
-	//! Shared pointer to the state machine, this is used across multiple scanners
-	shared_ptr<CSVStateMachine> state_machine;
 	//! If this scanner has been initialized
 	bool initialized = false;
 	//! How many lines were read by this scanner
 	idx_t lines_read = 0;
-	//! States
-	CSVStates states;
 
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner
 	virtual void Initialize();
 
 	//! Process one chunk
-	virtual void Process();
+	template <class T>
+	void Process(T &result) {
+		idx_t to_pos;
+		if (iterator.IsBoundarySet()) {
+			to_pos = iterator.GetEndPos();
+			if (to_pos > cur_buffer_handle->actual_size) {
+				to_pos = cur_buffer_handle->actual_size;
+			}
+		} else {
+			to_pos = cur_buffer_handle->actual_size;
+		}
+		while (iterator.pos.buffer_pos < to_pos) {
+			state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+			switch (states.states[1]) {
+			case CSVState::INVALID:
+				T::InvalidState(result);
+				iterator.pos.buffer_pos++;
+				break;
+			case CSVState::RECORD_SEPARATOR:
+				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
+					lines_read++;
+					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
+						iterator.pos.buffer_pos++;
+						return;
+					}
+				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
+					lines_read++;
+					if (T::AddRow(result, iterator.pos.buffer_pos)) {
+						iterator.pos.buffer_pos++;
+						return;
+					}
+				}
+				iterator.pos.buffer_pos++;
+				break;
+			case CSVState::CARRIAGE_RETURN:
+				lines_read++;
+				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
+					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
+						iterator.pos.buffer_pos++;
+						return;
+					}
+				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
+					if (T::AddRow(result, iterator.pos.buffer_pos)) {
+						iterator.pos.buffer_pos++;
+						return;
+					}
+				}
+				iterator.pos.buffer_pos++;
+				break;
+			case CSVState::DELIMITER:
+				T::AddValue(result, iterator.pos.buffer_pos);
+				iterator.pos.buffer_pos++;
+				break;
+			case CSVState::QUOTED:
+				if (states.states[0] == CSVState::UNQUOTED) {
+					T::SetEscaped(result);
+				}
+				T::SetQuoted(result);
+				iterator.pos.buffer_pos++;
+				while (state_machine->transition_array
+				           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+				       iterator.pos.buffer_pos < to_pos - 1) {
+					iterator.pos.buffer_pos++;
+				}
+				break;
+			case CSVState::ESCAPE:
+				T::SetEscaped(result);
+				iterator.pos.buffer_pos++;
+				break;
+			case CSVState::STANDARD:
+				iterator.pos.buffer_pos++;
+				while (state_machine->transition_array
+				           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
+				       iterator.pos.buffer_pos < to_pos - 1) {
+					iterator.pos.buffer_pos++;
+				}
+				break;
+			default:
+				iterator.pos.buffer_pos++;
+				break;
+			}
+		}
+	}
 
 	//! Finalizes the process of the chunk
 	virtual void FinalizeChunkProcess();
 
 	//! Internal function for parse chunk
-	void ParseChunkInternal();
+	template <class T>
+	void ParseChunkInternal(T &result) {
+		if (!initialized) {
+			Initialize();
+			initialized = true;
+		}
+		Process(result);
+		FinalizeChunkProcess();
+	}
 };
 
 } // namespace duckdb

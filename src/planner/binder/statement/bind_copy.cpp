@@ -79,14 +79,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
+
 	bool use_tmp_file = true;
 	bool overwrite_or_ignore = false;
 	FilenamePattern filename_pattern;
-	string file_extension = copy_function.function.extension;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
+
+	CopyFunctionBindInput bind_input(*stmt.info);
+
+	bind_input.file_extension = copy_function.function.extension;
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
@@ -108,7 +112,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			if (option.second.empty()) {
 				throw IOException("FILE_EXTENSION cannot be empty");
 			}
-			file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+			bind_input.file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 		} else if (loption == "per_thread_output") {
 			per_thread_output = GetBooleanArg(context, option.second);
 		} else if (loption == "file_size_bytes") {
@@ -160,14 +164,15 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto file_path = stmt.info->file_path;
 
 	auto function_data =
-	    copy_function.function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
+	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
 	copy->filename_pattern = filename_pattern;
-	copy->file_extension = file_extension;
+	copy->file_extension = bind_input.file_extension;
 	copy->per_thread_output = per_thread_output;
 	if (file_size_bytes.IsValid()) {
 		copy->file_size_bytes = file_size_bytes;

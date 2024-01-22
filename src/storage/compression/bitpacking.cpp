@@ -332,7 +332,7 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = static_cast<BitpackingAnalyzeState<T> &>(state);
+	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
@@ -348,7 +348,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
-	auto &bitpacking_state = static_cast<BitpackingAnalyzeState<T> &>(state);
+	auto &bitpacking_state = state.Cast<BitpackingAnalyzeState<T>>();
 	auto flush_result = bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
 	if (!flush_result) {
 		return DConstants::INVALID_INDEX;
@@ -548,7 +548,7 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &c
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = static_cast<BitpackingCompressState<T, WRITE_STATISTICS> &>(state_p);
+	auto &state = state_p.Cast<BitpackingCompressState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -556,7 +556,7 @@ void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t co
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingFinalizeCompress(CompressionState &state_p) {
-	auto &state = static_cast<BitpackingCompressState<T, WRITE_STATISTICS> &>(state_p);
+	auto &state = state_p.Cast<BitpackingCompressState<T, WRITE_STATISTICS>>();
 	state.Finalize();
 }
 
@@ -740,6 +740,11 @@ public:
 			skipped += to_skip;
 			current_group_offset += to_skip;
 		}
+
+		// load next group if we skipped over the end of the current group
+		if (current_group_offset >= BITPACKING_METADATA_GROUP_SIZE) {
+			LoadNextGroup();
+		}
 	}
 
 	data_ptr_t GetPtr(bitpacking_metadata_t group) {
@@ -759,7 +764,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
-	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
+	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
