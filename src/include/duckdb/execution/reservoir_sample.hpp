@@ -26,7 +26,7 @@ public:
 	explicit BaseReservoirSampling(int64_t seed);
 	BaseReservoirSampling();
 
-	void InitializeReservoir(idx_t cur_size, idx_t sample_size);
+	void InitializeReservoirWeights(idx_t cur_size, idx_t sample_size);
 
 	void SetNextEntry();
 
@@ -60,7 +60,8 @@ public:
 
 public:
 	explicit BlockingSample(int64_t seed = -1)
-	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), type(SampleType::BLOCKING_SAMPLE) {
+	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), type(SampleType::BLOCKING_SAMPLE),
+	      destroyed(false) {
 	}
 	virtual ~BlockingSample() {
 	}
@@ -85,9 +86,12 @@ public:
 	//! querying from a live sample and not a table collected sample.
 	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
 	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
+	virtual void Destroy();
 	unique_ptr<BaseReservoirSampling> base_reservoir_sample;
 	//! The sample type
 	SampleType type;
+	//! has the sample been destroyed due to updates to the referenced table
+	bool destroyed;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
@@ -147,6 +151,7 @@ public:
 	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunkAndShrink() override;
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
+	void Destroy() override;
 	void Finalize() override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
@@ -156,7 +161,7 @@ private:
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
 	void ReplaceElement(idx_t index, DataChunk &input, idx_t index_in_chunk, double with_weight);
 
-	void InitializeReservoir(DataChunk &input);
+	void CreateReservoirChunk(vector<LogicalType> types);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
 
@@ -168,7 +173,7 @@ public:
 	//! when calculating percentages, it is set to reservoir_threshold * percentage
 	//! when explicit number used, sample_count = number
 	idx_t sample_count;
-	bool reservoir_initialized;
+
 	//! The current reservoir
 	unique_ptr<ReservoirChunk> reservoir_chunk;
 };

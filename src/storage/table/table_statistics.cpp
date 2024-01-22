@@ -84,6 +84,8 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	// if the sample has been nullified, no need to merge.
 	if (sample) {
 		sample->Merge(std::move(other.sample));
+	} else {
+		sample = std::move(other.sample);
 	}
 	for (idx_t i = 0; i < column_stats.size(); i++) {
 		if (column_stats[i]) {
@@ -119,7 +121,9 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
 	}
-	other.sample = sample->Copy();
+	if (sample) {
+		other.sample = sample->Copy();
+	}
 }
 
 void TableStatistics::Serialize(Serializer &serializer) const {

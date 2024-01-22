@@ -10,35 +10,119 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create table integers_1 as select range a, range+120 b  from range(30);
-
-query I
-select count(*) from pragma_table_sample('integers_1');
-----
-30
-
-restart
-
-query I
-select count(*) from pragma_table_sample('integers_1');
-----
-30
-
-statement ok
-insert into integers_1 VALUES (5, 3);
-
-query I
-select count(*) from pragma_table_sample('integers_1');
-----
-31
-
-restart
-
+create table integers_1 as select range a, range+1 b  from range(5);
 
 query II
 select * from pragma_table_sample('integers_1');
 ----
+0	1
+1	2
+2	3
+3	4
+4	5
+
+restart
+
+query II
+select * from integers_1 order by all;
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+
+query II
+select * from pragma_table_sample('integers_1') order by all;
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+
+statement ok
+insert into integers_1 VALUES (5, 3);
+
+query II
+select * from pragma_table_sample('integers_1') order by all;
+----
+0	1
+1	2
+2	3
+3	4
+4	5
 5	3
+
+statement ok
+delete from integers_1 where a = 3;
+
+query II
+select * from pragma_table_sample('integers_1') order by all;
+----
+
+statement ok
+create or replace table integers_1 as select range a, range+1 b  from range(5);
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+5
+
+statement ok
+update integers_1 set a = 5 where a = 1;
+
+query II
+select * from pragma_table_sample('integers_1');
+----
+
+# test adding columns destroys the sample.
+statement ok
+create or replace table integers_1 as select range a, range+1 b  from range(5);
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+5
+
+statement ok
+Alter table integers_1 add column c DOUBLE;
+
+query III
+select * from pragma_table_sample('integers_1');
+----
+
+# test altering types destroys the sample
+statement ok
+create or replace table integers_1 as select range a, range+1 b  from range(5);
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+5
+
+statement ok
+Alter table integers_1 alter b TYPE VARCHAR
+
+query II
+select * from pragma_table_sample('integers_1');
+----
+
+# test dropping a columns
+statement ok
+create or replace table integers_1 as select range a, range+1 b  from range(5);
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+5
+
+statement ok
+Alter table integers_1 drop b;
+
+query I
+select * from pragma_table_sample('integers_1');
+----
 
 
 

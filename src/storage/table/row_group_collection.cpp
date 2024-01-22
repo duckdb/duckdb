@@ -384,12 +384,10 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	state.current_row += append_count;
 	auto stats_lock = stats.GetLock();
 	if (!stats.Empty() && stats.sample != nullptr) {
-		auto sample_chunk = make_uniq<DataChunk>();
-		sample_chunk->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-		chunk.Copy(*sample_chunk);
-//		DataChunk sample_chunk(chunk);
-		std::cout << "adding to row group" << std::endl;
-		stats.sample->AddToReservoir(*sample_chunk);
+		auto copy_for_sample = make_uniq<DataChunk>();
+		copy_for_sample->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+		chunk.Copy(*copy_for_sample);
+		stats.sample->AddToReservoir(*copy_for_sample);
 	}
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
@@ -493,6 +491,8 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
+	auto stats_guard = stats.GetLock();
+	stats.sample->Destroy();
 	return delete_count;
 }
 
@@ -528,6 +528,9 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
+	// on update destroy the sample
+	auto stats_guard = stats.GetLock();
+	stats.sample->Destroy();
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
@@ -1030,6 +1033,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+	// on update destroy the sample
+	auto stats_guard = stats.GetLock();
+	stats.sample->Destroy();
 	return result;
 }
 
@@ -1046,6 +1052,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+	auto stats_guard = stats.GetLock();
+	stats.sample->Destroy();
 	return result;
 }
 
@@ -1086,6 +1094,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+	auto stats_guard = stats.GetLock();
+	stats.sample->Destroy();
 
 	return result;
 }

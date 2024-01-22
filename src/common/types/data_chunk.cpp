@@ -273,7 +273,7 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
-	Initialize(Allocator::DefaultAllocator(), types);
+	Initialize(Allocator::DefaultAllocator(), types, MaxValue<idx_t>(row_count, STANDARD_VECTOR_SIZE));
 	SetCardinality(row_count);
 
 	// read the data
