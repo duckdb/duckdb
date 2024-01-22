@@ -128,6 +128,8 @@ public:
 	double field_appearance_threshold = 0.1;
 	//! The maximum number of files we sample to sample sample_size rows
 	idx_t maximum_sample_files = 32;
+	//! Whether we auto-detect and convert JSON strings to integers
+	bool convert_strings_to_integers = false;
 
 	//! All column names (in order)
 	vector<string> names;
