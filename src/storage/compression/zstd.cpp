@@ -49,6 +49,7 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 	return make_uniq<ZSTDAnalyzeState>();
 }
 
+// Determines wether compression is possible and calculates sizes for the FinalAnalyze
 bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 	UnifiedVectorFormat vdata;
@@ -66,10 +67,11 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 	return true;
 }
 
+// Compression score to determine which compression to use
 idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 
-	if (!state.count) {
+	if (state.count == 0) {
 		return DConstants::INVALID_INDEX;
 	}
 	// get the size of the offsets into the buffer
@@ -88,6 +90,10 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
+struct StringMetadata {
+	idx_t size;
+};
+
 class ZSTDCompressionState : public CompressionState {
 public:
 	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer)
@@ -106,8 +112,11 @@ public:
 	// ZSTDDictionary current_dictionary
 
 	// buffer for current segment
+	idx_t total_data_size;
 	StringHeap heap;
 	vector<uint32_t> index_buffer;
+
+	data_ptr_t current_data_ptr;
 
 	//! Temporary buffer
 	// BufferHandle handle;
@@ -123,14 +132,25 @@ public:
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
+		total_data_size = 0;
+
 		// reset buffer
-		index_buffer.clear();
+		// index_buffer.clear();
 
 		// reset pointers
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		current_handle = buffer_manager.Pin(current_segment->block);
+		current_data_ptr = current_handle.Ptr();
+	}
 
-		// current_dictionary = XXX::GetDict(...)
+	void FlushSegment(idx_t segment_size) {
+		auto& state = checkpointer.GetCheckpointState();
+		state.FlushSegment(std::move(current_segment), segment_size);
+	}
+
+	void Finalize(idx_t segment_size) {
+		FlushSegment(segment_size);
+		current_segment.reset();
 	}
 
 	void UpdateState(string_t uncompressed_string, unsigned char *compressed_string, size_t compressed_string_len) {
@@ -138,36 +158,45 @@ public:
 	}
 
 	void AddNull() {
-		throw InternalException("FIXME: ZSTD AddNull");
+		// TODO: make this more efficient
+		AddString("");
 	}
 
 	void AddEmptyString() {
 		AddNull();
-		UncompressedStringStorage::UpdateStringStats(current_segment->stats, ""); //?
+		// UncompressedStringStorage::UpdateStringStats(current_segment->stats, ""); //?
 	}
 
-	size_t GetRequiredSize(size_t string_len) {
-		throw InternalException("FIXME: ZSTD GetRequiredSize");
-		return 0;
-	}
+	// size_t GetRequiredSize(size_t string_len) {
+	// 	throw InternalException("FIXME: ZSTD GetRequiredSize");
+	// 	return 0;
+	// }
 
 	// Checks if there is enough space, if there is, sets last_fitting_size
-	bool HasEnoughSpace(size_t string_len) {
-		throw InternalException("FIXME: ZSTD HasEnoughSpace");
-		return false;
-	}
+	// bool HasEnoughSpace(size_t string_len) {
+	// 	throw InternalException("FIXME: ZSTD HasEnoughSpace");
+	// 	return false;
+	// }
 
 	void AddString(const string_t &str) {
-		throw InternalException("FIXME: ZSTD AddString");
-	}
 
-	void Flush(bool final = false) {
-		throw InternalException("FIXME: ZSTD Flush");
-	}
+		// TODO: add to dictionary
+		
+		// Create metadata
+		StringMetadata meta {
+			.size = str.GetSize()
+		};
 
-	idx_t Finalize() {
-		throw InternalException("FIXME: ZSTD Finalize");
-		return 0;
+		// TODO: check if there is space
+
+		// Write metadata
+		current_data_ptr = data_ptr_cast(memcpy(current_data_ptr, &meta, sizeof(StringMetadata)));
+		total_data_size += sizeof(StringMetadata);
+
+		// Write string
+		current_data_ptr = data_ptr_cast(memcpy(current_data_ptr, str.GetData(), str.GetSize()));
+		total_data_size += str.GetSize();
+
 	}
 };
 
@@ -197,36 +226,21 @@ void ZSTDStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 
 void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
 	auto &state = state_p.Cast<ZSTDCompressionState>();
-	state.Flush();
+	state.Finalize(state.total_data_size);
 }
 
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
 struct ZSTDScanState : public StringScanState {
-	ZSTDScanState() {
-		ResetStoredDelta();
-	}
-
-	// buffer_ptr<void> duckdb_zstd_decoder;
-	// bitpacking_width_t current_width;
-
-	// To speed up delta decoding we store the last index
-	uint32_t last_known_index;
-	int64_t last_known_row;
-
-	void StoreLastDelta(uint32_t value, int64_t row) {
-		last_known_index = value;
-		last_known_row = row;
-	}
-	void ResetStoredDelta() {
-		last_known_index = 0;
-		last_known_row = -1;
-	}
+	BufferHandle handle;
 };
 
 unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
-	throw InternalException("FIXME: ZSTD StringInitScan");
+	auto result = make_uniq<ZSTDScanState>();
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	result->handle = buffer_manager.Pin(segment.block);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -234,11 +248,19 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment)
 //===--------------------------------------------------------------------===//
 void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
+	// auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
+	// auto start = segment.GetRelativeIndex(state.row_index);
+
+	// auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	// auto source_data = data + start * sizeof(T);
+
+	// result.SetVectorType(VectorType::FLAT_VECTOR);
+	// FlatVector::SetData(result, source_data);
 	throw InternalException("FIXME: ZSTD StringScanPartial");
 }
 
 void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	throw InternalException("FIXME: ZSTD StringScan");
+	StringScanPartial(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
