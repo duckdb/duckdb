@@ -279,6 +279,42 @@ struct MD5NumberUpperFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ParseDirnameFun {
+	static constexpr const char *Name = "parse_dirname";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_dirname('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParseDirpathFun {
+	static constexpr const char *Name = "parse_dirpath";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_dirpath('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParseFilenameFun {
+	static constexpr const char *Name = "parse_filename";
+	static constexpr const char *Parameters = "string,trim_extension,separator";
+	static constexpr const char *Description = "Returns the last component of the path similarly to Python's os.path.basename. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_filename('path/to/file.csv', true, 'forward_slash')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParsePathFun {
+	static constexpr const char *Name = "parse_path";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.PurePath::parts. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_path('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct PrintfFun {
 	static constexpr const char *Name = "printf";
 	static constexpr const char *Parameters = "format,parameters...";
