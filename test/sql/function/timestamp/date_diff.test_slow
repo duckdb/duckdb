@@ -72,7 +72,7 @@ SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', end
 endloop
 
 # Table
-foreach datepart year month day
+foreach datepart year month day hour minute second millisecond microsecond
 
 query I
 SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
@@ -83,20 +83,6 @@ FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5)
 1
 1
 1
-
-endloop
-
-foreach datepart hour minute second millisecond microsecond
-
-query I
-SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
-FROM (SELECT '2021-07-30'::DATE + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
-----
-0
-0
-0
-0
-0
 
 endloop
 

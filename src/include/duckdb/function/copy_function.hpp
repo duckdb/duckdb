@@ -68,10 +68,19 @@ struct PreparedBatchData {
 	}
 };
 
+struct CopyFunctionBindInput {
+	const CopyInfo &info;
+
+	string file_extension;
+
+	CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
+	}
+};
+
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
 
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
-typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, const CopyInfo &info,
+typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyFunctionBindInput &input,
                                                    const vector<string> &names, const vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ExecutionContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data,
