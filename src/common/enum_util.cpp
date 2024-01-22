@@ -694,6 +694,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "ESCAPE";
 	case CSVState::INVALID:
 		return "INVALID";
+	case CSVState::NOT_SET:
+		return "NOT_SET";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -724,6 +726,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return CSVState::INVALID;
+	}
+	if (StringUtil::Equals(value, "NOT_SET")) {
+		return CSVState::NOT_SET;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
