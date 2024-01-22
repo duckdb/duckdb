@@ -4,6 +4,7 @@ import os
 import pytest
 import tempfile
 from conftest import pandas_supports_arrow_backend
+from packaging.version import Version
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
@@ -504,6 +505,9 @@ class TestArrowFilterPushdown(object):
         actual = duckdb_cursor.execute("select * from arrow_table where i = ?", (value,)).fetchall()
         assert expected == actual
 
+    @pytest.mark.skipif(
+        Version(pa.__version__) < Version('15.0.0'), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
+    )
     def test_9371(self, duckdb_cursor, tmp_path):
         import datetime
         import pathlib
