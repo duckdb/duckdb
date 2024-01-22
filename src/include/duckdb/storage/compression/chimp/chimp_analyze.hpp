@@ -103,7 +103,8 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<ChimpAnalyzeState<T>>();
+	// This compression type is deprecated
+	return nullptr;
 }
 
 template <class T>

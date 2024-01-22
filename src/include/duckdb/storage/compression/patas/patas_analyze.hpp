@@ -108,7 +108,8 @@ struct EmptyPatasWriter {
 
 template <class T>
 unique_ptr<AnalyzeState> PatasInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<PatasAnalyzeState<T>>();
+	// This compression type is deprecated
+	return nullptr;
 }
 
 template <class T>

@@ -29,8 +29,13 @@ CompressionFunction ChimpCompressionFun::GetFunction(PhysicalType type) {
 }
 
 bool ChimpCompressionFun::TypeIsSupported(PhysicalType type) {
-	// This compression type is deprecated
-	return false;
+	switch (type) {
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		return true;
+	default:
+		return false;
+	}
 }
 
 } // namespace duckdb
