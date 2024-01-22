@@ -132,7 +132,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 					break;
 				}
 				success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
-			} while(false);
+			} while (false);
 
 			if (!success) {
 				// could not use this compression function on this data set
