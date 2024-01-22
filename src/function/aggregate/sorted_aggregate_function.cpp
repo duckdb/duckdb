@@ -1,4 +1,5 @@
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
@@ -710,6 +711,53 @@ struct SortedAggregateFunction {
 	}
 };
 
+static void SortKeyExecute(DataChunk &sort, SortLayout &sort_layout, Vector &result) {
+	// Build and serialize sorting data to radix sortable rows
+	Vector addresses(LogicalType::POINTER);
+	const SelectionVector &sel_ptr = *FlatVector::IncrementalSelectionVector();
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
+
+	auto base_ptr = FlatVector::GetData<data_t>(result);
+	for (idx_t i = 0; i < sort.size(); ++i) {
+		data_pointers[i] = base_ptr;
+		base_ptr += sort_layout.entry_size;
+	}
+
+	for (column_t sort_col = 0; sort_col < sort.ColumnCount(); ++sort_col) {
+		bool has_null = sort_layout.has_null[sort_col];
+		bool nulls_first = sort_layout.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
+		bool desc = sort_layout.order_types[sort_col] == OrderType::DESCENDING;
+		RowOperations::RadixScatter(sort.data[sort_col], sort.size(), sel_ptr, sort.size(), data_pointers, desc,
+		                            has_null, nulls_first, sort_layout.prefix_lengths[sort_col],
+		                            sort_layout.column_sizes[sort_col]);
+	}
+
+	// Also fully serialize blob sorting columns (to be able to break ties)
+	if (sort_layout.all_constant) {
+		return;
+	}
+
+	throw NotImplementedException("Non-constant sort keys are not supported yet");
+#if 0
+	//	For each row allocate a blob and point the variable size data into it.
+	DataChunk blob_chunk;
+	blob_chunk.SetCardinality(sort.size());
+	for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
+		if (!sort_layout.constant_size[sort_col]) {
+			blob_chunk.data.emplace_back(sort.data[sort_col]);
+		}
+	}
+
+
+	handles = blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
+
+
+	auto blob_data = blob_chunk.ToUnifiedFormat();
+	RowOperations::Scatter(blob_chunk, blob_data.get(), sort_layout.blob_layout, addresses, *blob_sorting_heap,
+						   sel_ptr, blob_chunk.size());
+#endif
+}
+
 void FunctionBinder::BindSortedAggregate(BoundAggregateExpression &expr, const vector<unique_ptr<Expression>> &groups) {
 	if (!expr.order_bys || expr.order_bys->orders.empty() || expr.children.empty()) {
 		// not a sorted aggregate: return
@@ -749,18 +797,8 @@ void FunctionBinder::BindSortedAggregate(BoundAggregateExpression &expr, const v
 
 	//	Some sorted aggregates (FIRST, LAST...) only need to compare sort keys on each row
 	//	instead of keeping all the values around (i.e., they are not holistic)
-	//	Th convention is that we give them an extra argument containing the sort key
-	//	which they can use to compare against the current state.
 	if (bound_function.order_dependent == AggregateOrderDependent::COMPARE_DEPENDENT) {
 		//	Add one more child that is a sort key.
-		auto sort_function = SortKeyFun::GetFunction();
-		sort_function.return_type = order_bys.GetSortKeyType();
-		vector<unique_ptr<Expression>> children;
-		for (auto &order : order_bys.orders) {
-			children.emplace_back(std::move(order.expression));
-		}
-
-		expr.children.emplace_back(BindScalarFunction(sort_function, std::move(children), false));
 		return;
 	}
 

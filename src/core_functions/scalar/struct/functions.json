@@ -19,12 +19,5 @@
         "description": "Creates an unnamed STRUCT containing the argument values.",
         "example": "row(4, 'hello')",
         "type": "scalar_function"
-    },
-    {
-        "name": "sort_key",
-        "parameters": "any",
-        "description": "Creates a SORT_KEY containing the argument values.",
-        "example": "sort_key(major, minor)",
-        "type": "scalar_function"
     }
 ]

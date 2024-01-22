@@ -45,9 +45,6 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
 		result = ListTypeInfo::Deserialize(deserializer);
 		break;
-	case ExtraTypeInfoType::SORT_KEY_TYPE_INFO:
-		result = SortKeyTypeInfo::Deserialize(deserializer);
-		break;
 	case ExtraTypeInfoType::STRING_TYPE_INFO:
 		result = StringTypeInfo::Deserialize(deserializer);
 		break;
@@ -137,17 +134,6 @@ void ListTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> ListTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<ListTypeInfo>(new ListTypeInfo());
 	deserializer.ReadProperty<LogicalType>(200, "child_type", result->child_type);
-	return std::move(result);
-}
-
-void SortKeyTypeInfo::Serialize(Serializer &serializer) const {
-	ExtraTypeInfo::Serialize(serializer);
-	serializer.WriteProperty<vector<OrderBySpec>>(200, "order_bys", order_bys);
-}
-
-shared_ptr<ExtraTypeInfo> SortKeyTypeInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::shared_ptr<SortKeyTypeInfo>(new SortKeyTypeInfo());
-	deserializer.ReadPropertyWithDefault<vector<OrderBySpec>>(200, "order_bys", result->order_bys);
 	return std::move(result);
 }
 

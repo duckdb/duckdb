@@ -346,7 +346,7 @@ bool AnyTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 }
 
 //===--------------------------------------------------------------------===//
-// IntegerLiteralTypeInfo
+// Any Type Info
 //===--------------------------------------------------------------------===//
 IntegerLiteralTypeInfo::IntegerLiteralTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO) {
 }
@@ -358,36 +358,6 @@ IntegerLiteralTypeInfo::IntegerLiteralTypeInfo(Value constant_value_p)
 bool IntegerLiteralTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<IntegerLiteralTypeInfo>();
 	return constant_value == other.constant_value;
-}
-
-//===--------------------------------------------------------------------===//
-// SortKeyTypeInfo
-//===--------------------------------------------------------------------===//
-void OrderBySpec::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(200, "type", type);
-	serializer.WriteProperty(201, "null_order", null_order);
-	serializer.WriteProperty(202, "expr_type", expr_type);
-	serializer.WriteProperty(203, "has_null", has_null);
-}
-
-OrderBySpec OrderBySpec::Deserialize(Deserializer &deserializer) {
-	auto type = deserializer.ReadProperty<OrderType>(200, "type");
-	auto null_order = deserializer.ReadProperty<OrderByNullType>(201, "null_order");
-	auto expr_type = deserializer.ReadProperty<LogicalType>(202, "expr_type");
-	auto has_null = deserializer.ReadProperty<bool>(203, "has_null");
-	return OrderBySpec(type, null_order, expr_type, has_null);
-}
-
-SortKeyTypeInfo::SortKeyTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::SORT_KEY_TYPE_INFO) {
-}
-
-SortKeyTypeInfo::SortKeyTypeInfo(vector<OrderBySpec> order_bys)
-    : ExtraTypeInfo(ExtraTypeInfoType::SORT_KEY_TYPE_INFO), order_bys(std::move(order_bys)) {
-}
-
-bool SortKeyTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
-	auto &other = other_p->Cast<SortKeyTypeInfo>();
-	return (order_bys == other.order_bys);
 }
 
 } // namespace duckdb
