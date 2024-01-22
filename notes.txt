@@ -1,9 +1,0 @@
-Investigate
-
-- duckdb_string.data freeing
-- duckdb_blob.data freeing
-
-
-Questions
-
-- No destructor for duckdb_arrow_stream, duckdb_arrow_schema, duckdb_arrow_array
