@@ -203,8 +203,8 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bitpacking");
 		result.push_back("dictionary");
 		result.push_back("fsst");
-		result.push_back("chimp");
-		result.push_back("patas");
+		result.push_back("alp");
+		result.push_back("alprd");
 		collection = true;
 	}
 	return collection;
