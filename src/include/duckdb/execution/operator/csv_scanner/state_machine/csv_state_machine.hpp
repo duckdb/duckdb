@@ -17,49 +17,53 @@ namespace duckdb {
 //! State of necessary CSV States to parse file
 //! Current, previous, and state before the previous
 struct CSVStates {
-	void Initialize(CSVState initial_state) {
-		current_state = initial_state;
-		previous_state = initial_state;
-		pre_previous_state = initial_state;
+	void Initialize() {
+		states[0] = CSVState::NOT_SET;
+		states[1] = CSVState::NOT_SET;
 	}
 	inline bool NewValue() {
-		return current_state == CSVState::DELIMITER;
+		return states[1] == CSVState::DELIMITER;
 	}
 
 	inline bool NewRow() {
 		// It is a new row, if the previous state is not a record separator, and the current one is
-		return previous_state != CSVState::RECORD_SEPARATOR && previous_state != CSVState::CARRIAGE_RETURN &&
-		       (current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN);
+		return states[0] != CSVState::RECORD_SEPARATOR && states[0] != CSVState::CARRIAGE_RETURN &&
+		       (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN);
 	}
 
 	inline bool EmptyLastValue() {
 		// It is a new row, if the previous state is not a record separator, and the current one is
-		return previous_state == CSVState::DELIMITER &&
-		       (current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN);
+		return states[0] == CSVState::DELIMITER &&
+		       (states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN);
 	}
 
 	inline bool EmptyLine() {
-		return (current_state == CSVState::CARRIAGE_RETURN || current_state == CSVState::RECORD_SEPARATOR) &&
-		       previous_state == CSVState::RECORD_SEPARATOR;
+		return (states[1] == CSVState::CARRIAGE_RETURN || states[1] == CSVState::RECORD_SEPARATOR) &&
+		       (states[0] == CSVState::RECORD_SEPARATOR || states[0] == CSVState::NOT_SET);
+	}
+
+	inline bool IsNotSet() {
+		return states[1] == CSVState::NOT_SET;
 	}
 
 	inline bool IsCurrentNewRow() {
-		return current_state == CSVState::RECORD_SEPARATOR || current_state == CSVState::CARRIAGE_RETURN;
+		return states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN;
+	}
+
+	inline bool IsCarriageReturn() {
+		return states[1] == CSVState::CARRIAGE_RETURN;
 	}
 
 	inline bool IsQuoted() {
-		return previous_state == CSVState::QUOTED;
+		return states[0] == CSVState::QUOTED;
 	}
 	inline bool IsEscaped() {
-		return previous_state == CSVState::ESCAPE ||
-		       (pre_previous_state == CSVState::UNQUOTED && previous_state == CSVState::QUOTED);
+		return states[1] == CSVState::ESCAPE || (states[0] == CSVState::UNQUOTED && states[1] == CSVState::QUOTED);
 	}
 	inline bool IsQuotedCurrent() {
-		return current_state == CSVState::QUOTED;
+		return states[1] == CSVState::QUOTED;
 	}
-	CSVState current_state = CSVState::RECORD_SEPARATOR;
-	CSVState previous_state = CSVState::RECORD_SEPARATOR;
-	CSVState pre_previous_state = CSVState::RECORD_SEPARATOR;
+	CSVState states[2];
 };
 
 //! The CSV State Machine comprises a state transition array (STA).
@@ -79,9 +83,8 @@ public:
 
 	//! Transition all states to next state, that depends on the current char
 	inline void Transition(CSVStates &states, char current_char) const {
-		states.pre_previous_state = states.previous_state;
-		states.previous_state = states.current_state;
-		states.current_state = transition_array[states.current_state][static_cast<uint8_t>(current_char)];
+		states.states[0] = states.states[1];
+		states.states[1] = transition_array[static_cast<uint8_t>(current_char)][static_cast<uint8_t>(states.states[1])];
 	}
 
 	const vector<SelectionVector> &GetSelectionVector();
@@ -92,7 +95,6 @@ public:
 	const CSVStateMachineOptions state_machine_options;
 	//! CSV Reader Options
 	const CSVReaderOptions &options;
-
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
 
