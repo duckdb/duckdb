@@ -24,8 +24,10 @@ ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
 }
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
-	if (sample_count == 0) {
+	if (sample_count == 0 || destroyed) {
 		// sample count is 0, means no samples were requested
+		// destroyed means the original table has been altered and the changes have not yet
+		// been reflected within the sample reservoir. So we also don't add anything
 		return;
 	}
 	base_reservoir_sample->num_entries_seen_total += input.size();
@@ -68,7 +70,7 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() {
 	auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	ret->reservoir_chunk = nullptr;
-	if (reservoir_chunk) {
+	if (reservoir_chunk && !destroyed) {
 		ret->reservoir_chunk = reservoir_chunk->Copy();
 	}
 	return ret;

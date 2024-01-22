@@ -492,7 +492,9 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
 	auto stats_guard = stats.GetLock();
-	stats.sample->Destroy();
+	if (stats.sample) {
+		stats.sample->Destroy();
+	}
 	return delete_count;
 }
 
@@ -530,7 +532,9 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 	} while (pos < updates.size());
 	// on update destroy the sample
 	auto stats_guard = stats.GetLock();
-	stats.sample->Destroy();
+	if (stats.sample) {
+		stats.sample->Destroy();
+	}
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
@@ -1035,7 +1039,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	}
 	// on update destroy the sample
 	auto stats_guard = stats.GetLock();
-	stats.sample->Destroy();
+	if (stats.sample) {
+		stats.sample->Destroy();
+	}
 	return result;
 }
 
@@ -1053,7 +1059,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
 	auto stats_guard = stats.GetLock();
-	stats.sample->Destroy();
+	if (stats.sample) {
+		stats.sample->Destroy();
+	}
 	return result;
 }
 
@@ -1095,7 +1103,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
 	auto stats_guard = stats.GetLock();
-	stats.sample->Destroy();
+	if (stats.sample) {
+		stats.sample->Destroy();
+	}
 
 	return result;
 }
