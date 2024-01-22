@@ -740,6 +740,11 @@ public:
 			skipped += to_skip;
 			current_group_offset += to_skip;
 		}
+
+		// load next group if we skipped over the end of the current group
+		if (current_group_offset >= BITPACKING_METADATA_GROUP_SIZE) {
+			LoadNextGroup();
+		}
 	}
 
 	data_ptr_t GetPtr(bitpacking_metadata_t group) {
