@@ -207,7 +207,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		auto window_spec = PGPointerCast<duckdb_libpgquery::PGWindowDef>(root.over);
 		if (window_spec->name) {
-			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
+			auto it = window_clauses.find(string(window_spec->name));
 			if (it == window_clauses.end()) {
 				throw ParserException("window \"%s\" does not exist", window_spec->name);
 			}
@@ -217,7 +217,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto window_ref = window_spec;
 		auto window_name = window_ref->refname;
 		if (window_ref->refname) {
-			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
+			auto it = window_clauses.find(string(window_spec->refname));
 			if (it == window_clauses.end()) {
 				throw ParserException("window \"%s\" does not exist", window_spec->refname);
 			}

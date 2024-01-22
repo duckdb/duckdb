@@ -12,4 +12,4 @@ run
 SELECT MIN(CAST(d AS VARCHAR)) FROM dates
 
 result I
-1992-01-01
+1992-01-01 00:00:00
