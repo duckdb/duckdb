@@ -4,10 +4,12 @@
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
 #include "string_column_reader.hpp"
+#include "struct_column_reader.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #endif
 
 namespace duckdb {
@@ -241,15 +243,18 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	}
 }
 
-unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const SchemaElement &s_ele,
-                                                                             const LogicalType &type,
-                                                                             const ColumnChunk &column_chunk) {
+unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ColumnReader &reader,
+                                                                             const vector<ColumnChunk> &columns) {
+	auto &column_chunk = columns[reader.FileIdx()];
 	if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
 		// no stats present for row group
 		return nullptr;
 	}
 	auto &parquet_stats = column_chunk.meta_data.statistics;
 	unique_ptr<BaseStatistics> row_group_stats;
+
+	auto &type = reader.Type();
+	auto &s_ele = reader.Schema();
 
 	switch (type.id()) {
 	case LogicalTypeId::UTINYINT:
@@ -296,6 +301,17 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		row_group_stats = string_stats.ToUnique();
 		break;
 	}
+	case LogicalTypeId::STRUCT: {
+		auto struct_stats = StructStats::CreateUnknown(reader.Type());
+		auto &struct_reader = reader.Cast<StructColumnReader>();
+		// Recurse into child readers
+		for (idx_t i = 0; i < struct_reader.child_readers.size(); i++) {
+			auto &child_reader = *struct_reader.child_readers[i];
+			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_reader, columns);
+			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
+		}
+		row_group_stats = struct_stats.ToUnique();
+	} break;
 	default:
 		// no stats for you
 		break;

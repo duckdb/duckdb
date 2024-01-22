@@ -13,6 +13,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
@@ -407,8 +408,58 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			     constant_value.second[0].constant.type().InternalType() == PhysicalType::BOOL)) {
 				//! Here we check if these filters are column references
 				filter_exp = equivalence_map.find(constant_value.first);
+
+				// Check for a struct_extract filter
 				if (filter_exp->second.size() == 1 &&
-				    filter_exp->second[0].get().type == ExpressionType::BOUND_COLUMN_REF) {
+				    filter_exp->second[0].get().type == ExpressionType::BOUND_FUNCTION) {
+					auto &func = filter_exp->second[0].get().Cast<BoundFunctionExpression>();
+
+					// Only support one-level struct_extract for now
+					if (func.function.name == "struct_extract" &&
+					    func.children[0]->type == ExpressionType::BOUND_COLUMN_REF &&
+					    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
+
+						auto &struct_col = func.children[0]->Cast<BoundColumnRefExpression>();
+						auto child_name = func.children[1]->Cast<BoundConstantExpression>().value.GetValue<string>();
+						auto &children = StructType::GetChildTypes(struct_col.return_type);
+						idx_t child_idx = 0;
+						for (auto &struct_child : children) {
+							if (struct_child.first == child_name) {
+								break;
+							}
+							child_idx++;
+						}
+						D_ASSERT(child_idx < children.size());
+
+						auto column_index =
+						    column_ids[func.children[0]->Cast<BoundColumnRefExpression>().binding.column_index];
+						if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+							break;
+						}
+
+						auto equivalence_set = filter_exp->first;
+						auto &entries = filter_exp->second;
+						auto &constant_list = constant_values.find(equivalence_set)->second;
+
+						// for each entry generate an equality expression comparing to each other
+						for (idx_t i = 0; i < entries.size(); i++) {
+							for (idx_t j = 0; j < constant_list.size(); j++) {
+								auto constant_filter = make_uniq<ConstantFilter>(
+								    constant_value.second[j].comparison_type, constant_value.second[j].constant);
+
+								auto struct_filter =
+								    make_uniq<StructFilter>(child_idx, child_name, std::move(constant_filter));
+								table_filters.PushFilter(column_index, std::move(struct_filter));
+							}
+							table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
+						}
+						equivalence_map.erase(filter_exp);
+					}
+				}
+
+				// Otherwise just look for a normal column reference
+				else if (filter_exp->second.size() == 1 &&
+				         filter_exp->second[0].get().type == ExpressionType::BOUND_COLUMN_REF) {
 					auto &filter_col_exp = filter_exp->second[0].get().Cast<BoundColumnRefExpression>();
 					auto column_index = column_ids[filter_col_exp.binding.column_index];
 					if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
