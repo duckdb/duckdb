@@ -292,9 +292,11 @@ static int enableRawMode(int fd) {
 	raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
 	/* output modes - disable post processing */
 	raw.c_oflag &= ~(OPOST);
+#ifndef __MVS__
 	/* control modes - set 8 bit chars */
-	#ifndef __MVS__ raw.c_iflag |= IUTF8;
-	#endif raw.c_cflag |= CS8;
+	raw.c_iflag |= IUTF8;
+#endif
+	raw.c_cflag |= CS8;
 	/* local modes - choing off, canonical off, no extended functions,
 	 * no signal chars (^Z,^C) */
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
