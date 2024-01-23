@@ -868,7 +868,7 @@ void JSONScanLocalState::ParseNextChunk() {
 			if (!is_last) {
 				// Last bit of data belongs to the next batch
 				if (format != JSONFormat::NEWLINE_DELIMITED) {
-					if (scan_count == 0) {
+					if (remaining > bind_data.maximum_object_size) {
 						ThrowObjectSizeError(remaining);
 					}
 					memcpy(reconstruct_buffer.get(), json_start, remaining);
