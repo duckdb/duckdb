@@ -3634,7 +3634,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-
     public static void test_getColumnClassName() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement();) {
             try (ResultSet rs = s.executeQuery("select * from test_all_types()")) {
