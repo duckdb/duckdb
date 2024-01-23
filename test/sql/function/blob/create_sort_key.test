@@ -11,6 +11,18 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
+## test list types
+#statement ok
+#CREATE TABLE int_list(l INT[]);
+#
+#statement ok
+#INSERT INTO int_list VALUES ([1, 2, 3]), ([]), ([1]), ([2]), ([NULL]), (NULL);
+#
+#query I
+#SELECT * FROM int_list ORDER BY create_sort_key(l, 'ASC NULLS LAST')
+#----
+
+
 # test integer types with all modifiers
 query I
 SELECT * FROM integers ORDER BY create_sort_key(i, 'ASC NULLS LAST')
