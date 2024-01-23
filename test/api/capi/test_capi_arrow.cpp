@@ -36,7 +36,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		// query the arrow schema
 		ArrowSchema arrow_schema;
-		arrow_schema.release = nullptr;
+		arrow_schema.Init();
 		auto arrow_schema_ptr = &arrow_schema;
 
 		state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
@@ -48,7 +48,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		// query array data
 		ArrowArray arrow_array;
-		arrow_array.release = nullptr;
+		arrow_array.Init();
 		auto arrow_array_ptr = &arrow_array;
 
 		state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
@@ -78,7 +78,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		// query the arrow schema
 		ArrowSchema arrow_schema;
-		arrow_schema.release = nullptr;
+		arrow_schema.Init();
 		auto arrow_schema_ptr = &arrow_schema;
 
 		state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
@@ -91,7 +91,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 			// query array data
 			ArrowArray arrow_array;
-			arrow_array.release = nullptr;
+			arrow_array.Init();
 			auto arrow_array_ptr = &arrow_array;
 
 			state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
@@ -123,7 +123,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		// prepare and execute the arrow schema
 		ArrowSchema prepared_schema;
-		prepared_schema.release = nullptr;
+		prepared_schema.Init();
 		auto prepared_schema_ptr = &prepared_schema;
 
 		state = duckdb_prepared_arrow_schema(stmt, reinterpret_cast<duckdb_arrow_schema *>(&prepared_schema_ptr));
@@ -136,7 +136,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		// query the arrow schema
 		ArrowSchema arrow_schema;
-		arrow_schema.release = nullptr;
+		arrow_schema.Init();
 		auto arrow_schema_ptr = &arrow_schema;
 
 		state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
@@ -146,7 +146,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		arrow_schema.release(arrow_schema_ptr);
 
 		ArrowArray arrow_array;
-		arrow_array.release = nullptr;
+		arrow_array.Init();
 		auto arrow_array_ptr = &arrow_array;
 
 		state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&arrow_array_ptr));
@@ -166,14 +166,14 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 		// arrow schema, release after use
 		ArrowSchema arrow_schema;
-		arrow_schema.release = nullptr;
+		arrow_schema.Init();
 		auto arrow_schema_ptr = &arrow_schema;
 
 		ClientProperties options = (reinterpret_cast<Connection *>(tester.connection)->context->GetClientProperties());
 		duckdb::ArrowConverter::ToArrowSchema(arrow_schema_ptr, logical_types, column_names, options);
 
 		ArrowArray arrow_array;
-		arrow_array.release = nullptr;
+		arrow_array.Init();
 		auto arrow_array_ptr = &arrow_array;
 
 		SECTION("empty array") {
@@ -199,7 +199,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 			// recover the arrow array from the arrow result
 			ArrowArray out_array;
-			out_array.release = nullptr;
+			out_array.Init();
 			auto out_array_ptr = &out_array;
 
 			state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&out_array_ptr));
@@ -252,7 +252,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 			// Recover the arrow array from the arrow result.
 			ArrowArray out_array;
-			out_array.release = nullptr;
+			out_array.Init();
 			auto out_array_ptr = &out_array;
 			state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&out_array_ptr));
 			REQUIRE(state == DuckDBSuccess);
@@ -260,16 +260,14 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 			REQUIRE(out_array.release != nullptr);
 			out_array.release(out_array_ptr);
 
-			out_array = ArrowArray(); // reset
-			out_array.release = nullptr;
+			out_array.Init();
 			state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&out_array_ptr));
 			REQUIRE(state == DuckDBSuccess);
 			REQUIRE(out_array.length == STANDARD_VECTOR_SIZE);
 			REQUIRE(out_array.release != nullptr);
 			out_array.release(out_array_ptr);
 
-			out_array = ArrowArray(); // reset
-			out_array.release = nullptr;
+			out_array.Init();
 			state = duckdb_query_arrow_array(arrow_result, reinterpret_cast<duckdb_arrow_array *>(&out_array_ptr));
 			REQUIRE(state == DuckDBSuccess);
 			REQUIRE(out_array.length == 0);

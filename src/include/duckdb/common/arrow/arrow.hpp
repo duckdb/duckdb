@@ -22,8 +22,6 @@ extern "C" {
 #define ARROW_FLAG_MAP_KEYS_SORTED    4
 
 struct ArrowSchema {
-	ArrowSchema() : flags(0), n_children(0), release(nullptr), private_data(nullptr) {};
-
 	//! Array type description
 	const char *format;
 	const char *name;
@@ -37,12 +35,17 @@ struct ArrowSchema {
 	void (*release)(struct ArrowSchema *);
 	//! Opaque producer-specific data
 	void *private_data;
+
+	//! Initialize all fields
+	void Init() {
+		flags = 0;
+		n_children = 0;
+		release = nullptr;
+		private_data = nullptr;
+	}
 };
 
 struct ArrowArray {
-	ArrowArray()
-	    : length(0), null_count(0), offset(0), n_buffers(0), n_children(0), release(nullptr), private_data(nullptr) {};
-
 	//! Array data description
 	int64_t length;
 	int64_t null_count;
@@ -57,6 +60,17 @@ struct ArrowArray {
 	void (*release)(struct ArrowArray *);
 	//! Opaque producer-specific data
 	void *private_data;
+
+	//! Initialize all fields
+	void Init() {
+		length = 0;
+		null_count = 0;
+		offset = 0;
+		n_buffers = 0;
+		n_children = 0;
+		release = nullptr;
+		private_data = nullptr;
+	}
 };
 #endif
 
