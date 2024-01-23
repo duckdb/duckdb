@@ -5,25 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
+# test integer types with all modifiers
 statement ok
 CREATE TABLE integers(i INTEGER);
 
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
-## test list types
-#statement ok
-#CREATE TABLE int_list(l INT[]);
-#
-#statement ok
-#INSERT INTO int_list VALUES ([1, 2, 3]), ([]), ([1]), ([2]), ([NULL]), (NULL);
-#
-#query I
-#SELECT * FROM int_list ORDER BY create_sort_key(l, 'ASC NULLS LAST')
-#----
-
-
-# test integer types with all modifiers
 query I
 SELECT * FROM integers ORDER BY create_sort_key(i, 'ASC NULLS LAST')
 ----
@@ -98,3 +86,50 @@ world
 hello\0\0
 hello
 (empty)
+
+# test list types
+statement ok
+CREATE TABLE int_list(l INT[]);
+
+statement ok
+INSERT INTO int_list VALUES ([1, 2, 3]), ([]), ([1]), ([2]), ([NULL]), (NULL);
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'ASC NULLS LAST')
+----
+[]
+[1]
+[1, 2, 3]
+[2]
+[NULL]
+NULL
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'DESC NULLS LAST')
+----
+[NULL]
+[2]
+[1, 2, 3]
+[1]
+[]
+NULL
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'ASC NULLS FIRST')
+----
+NULL
+[]
+[1]
+[1, 2, 3]
+[2]
+[NULL]
+
+query I
+SELECT l FROM int_list ORDER BY create_sort_key(l, 'DESC NULLS FIRST')
+----
+NULL
+[NULL]
+[2]
+[1, 2, 3]
+[1]
+[]
