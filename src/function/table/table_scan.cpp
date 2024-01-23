@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -78,6 +79,9 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		auto &tsgs = gstate->Cast<TableScanGlobalState>();
 		result->all_columns.Initialize(context.client, tsgs.scanned_types);
 	}
+
+	result->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+
 	return std::move(result);
 }
 
@@ -118,6 +122,8 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &state = data_p.local_state->Cast<TableScanLocalState>();
 	auto &transaction = DuckTransaction::Get(context, bind_data.table.catalog);
 	auto &storage = bind_data.table.GetStorage();
+
+	state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 	do {
 		if (bind_data.is_create_index) {
 			storage.CreateIndexScan(state.scan_state, output,
@@ -222,6 +228,8 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	}
 	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
+
+	result->local_storage_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
 	result->column_ids.reserve(input.column_ids.size());
 	for (auto &id : input.column_ids) {

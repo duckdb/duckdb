@@ -54,7 +54,7 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 ColumnCountResult &ColumnCountScanner::ParseChunk() {
 	result.result_position = 0;
 	column_count = 1;
-	ParseChunkInternal();
+	ParseChunkInternal(result);
 	return result;
 }
 
@@ -63,17 +63,7 @@ ColumnCountResult &ColumnCountScanner::GetResult() {
 }
 
 void ColumnCountScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
-}
-
-void ColumnCountScanner::Process() {
-	// Run on this buffer
-	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
-			iterator.pos.buffer_pos++;
-			return;
-		}
-	}
+	states.Initialize();
 }
 
 void ColumnCountScanner::FinalizeChunkProcess() {
@@ -88,7 +78,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
-				if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow()) {
+				if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || states.IsNotSet()) {
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
@@ -98,7 +88,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			iterator.pos.buffer_pos = 0;
 			buffer_handle_ptr = cur_buffer_handle->Ptr();
 		}
-		Process();
+		Process(result);
 	}
 }
 } // namespace duckdb
