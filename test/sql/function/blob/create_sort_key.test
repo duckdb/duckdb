@@ -43,3 +43,46 @@ NULL
 3
 2
 1
+
+# test varchar types
+statement ok
+CREATE TABLE varchars(v VARCHAR);
+
+statement ok
+INSERT INTO varchars VALUES ('hello'), ('hello' || chr(0) || chr(0)), ('world'), (''), (NULL)
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'ASC NULLS LAST')
+----
+(empty)
+hello
+hello\0\0
+world
+NULL
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'ASC NULLS FIRST')
+----
+NULL
+(empty)
+hello
+hello\0\0
+world
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'DESC NULLS LAST')
+----
+world
+hello\0\0
+hello
+(empty)
+NULL
+
+query I
+SELECT * FROM varchars ORDER BY create_sort_key(v, 'DESC NULLS FIRST')
+----
+NULL
+world
+hello\0\0
+hello
+(empty)

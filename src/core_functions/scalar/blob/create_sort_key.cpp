@@ -76,6 +76,52 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// Operators
+//===--------------------------------------------------------------------===//
+template<class T>
+struct SortKeyConstantOperator {
+	using TYPE = T;
+
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		Radix::EncodeData<T>(result, input);
+		return sizeof(T);
+	}
+};
+
+struct SortKeyVarcharOperator {
+	using TYPE = string_t;
+
+	static idx_t GetEncodeLength(TYPE input) {
+		return input.GetSize() + 1;
+	}
+
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		auto input_data = input.GetDataUnsafe();
+		auto input_size = input.GetSize();
+		for(idx_t r = 0; r < input_size; r++) {
+			result[r] = input_data[r] + 1;
+		}
+		result[input_size] = 0; // null-byte delimiter
+		return input_size + 1;
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// Get Sort Key Length
+//===--------------------------------------------------------------------===//
+template<class OP>
+void TemplatedGetSortKeyLength(UnifiedVectorFormat &udata, idx_t size, unsafe_vector<idx_t> &variable_lengths) {
+	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(udata);
+	for(idx_t r = 0; r < size; r++) {
+		auto idx = udata.sel->get_index(r);
+		if (!udata.validity.RowIsValid(idx)) {
+			break;
+		}
+		variable_lengths[r] += OP::GetEncodeLength(data[idx]);
+	}
+}
+
 static void GetSortKeyLength(Vector &vec, UnifiedVectorFormat &udata, idx_t size, idx_t &constant_length, unsafe_vector<idx_t> &variable_lengths) {
 	auto physical_type = vec.GetType().InternalType();
 	// every row is prefixed by a validity byte
@@ -86,44 +132,62 @@ static void GetSortKeyLength(Vector &vec, UnifiedVectorFormat &udata, idx_t size
 	}
 	// handle variable lengths
 	switch(physical_type) {
+	case PhysicalType::VARCHAR:
+		if (vec.GetType().id() == LogicalTypeId::VARCHAR) {
+			TemplatedGetSortKeyLength<SortKeyVarcharOperator>(udata, size, variable_lengths);
+		} else {
+			throw InternalException("FIXME: ConstructSortKey blob");
+		}
+		break;
 	default:
 		throw InternalException("Unsupported physical type in GetSortKeyLength", physical_type);
 	}
 }
 
-template<class T>
-void ConstructSortKeyConstant(UnifiedVectorFormat &udata, idx_t size, OrderModifiers modifiers, unsafe_vector<idx_t> &offsets, string_t *result_data) {
-	auto data = UnifiedVectorFormat::GetData<T>(udata);
+
+//===--------------------------------------------------------------------===//
+// Construct Sort Key
+//===--------------------------------------------------------------------===//
+template<class OP>
+void TemplatedConstructSortKey(UnifiedVectorFormat &udata, idx_t size, OrderModifiers modifiers, unsafe_vector<idx_t> &offsets, string_t *result_data) {
+	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(udata);
 	data_t null_byte = modifiers.null_type == OrderByNullType::NULLS_LAST ? 1 : 0;
 	data_t valid_byte = 1 - null_byte;
 	bool flip_bytes = modifiers.order_type == OrderType::DESCENDING;
 	for(idx_t r = 0; r < size; r++) {
-		auto ptr = data_ptr_cast(result_data[r].GetDataWriteable());
+		auto result_ptr = data_ptr_cast(result_data[r].GetDataWriteable());
 		auto idx = udata.sel->get_index(r);
 		if (!udata.validity.RowIsValid(idx)) {
-			// NULL value - write 1 as the validity byte and skip
-			ptr[offsets[r]] = null_byte;
+			// NULL value - write the null byte and skip
+			result_ptr[offsets[r]] = null_byte;
 			offsets[r]++;
 			break;
 		}
-		// valid value - write 0 as the validity byte
-		ptr[offsets[r]] = valid_byte;
+		// valid value - write the validity byte
+		result_ptr[offsets[r]] = valid_byte;
 		offsets[r]++;
-		Radix::EncodeData<T>(ptr + offsets[r], data[idx]);
+		idx_t encode_len = OP::Encode(result_ptr + offsets[r], data[idx]);
 		if (flip_bytes) {
 			// descending order - so flip bytes
-			for(idx_t b = offsets[r]; b < offsets[r] + sizeof(T); b++) {
-				ptr[b] = ~ptr[b];
+			for(idx_t b = offsets[r]; b < offsets[r] + encode_len; b++) {
+				result_ptr[b] = ~result_ptr[b];
 			}
 		}
-		offsets[r] += sizeof(T) + 1;
+		offsets[r] += encode_len;
 	}
 }
 
 static void ConstructSortKey(Vector &vec, UnifiedVectorFormat &udata, idx_t size, OrderModifiers modifiers, unsafe_vector<idx_t> &offsets, string_t *result_data) {
 	switch(vec.GetType().InternalType()) {
 	case PhysicalType::INT32:
-		ConstructSortKeyConstant<int32_t>(udata, size, modifiers, offsets, result_data);
+		TemplatedConstructSortKey<SortKeyConstantOperator<int32_t>>(udata, size, modifiers, offsets, result_data);
+		break;
+	case PhysicalType::VARCHAR:
+		if (vec.GetType().id() == LogicalTypeId::VARCHAR) {
+			TemplatedConstructSortKey<SortKeyVarcharOperator>(udata, size, modifiers, offsets, result_data);
+		} else {
+			throw InternalException("FIXME: ConstructSortKey blob");
+		}
 		break;
 	default:
 		throw InternalException("Unsupported physical type in ConstructSortKey");
