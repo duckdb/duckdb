@@ -68,7 +68,7 @@ def parse_assertions(stdout):
 
 for test_number, test_case in enumerate(test_cases):
     if not profile:
-        print("[" + str(test_number) + "/" + str(test_count) + "]: " + test_case, end="")
+        print(f"[{test_number}/{test_count}]: {test_case}", end="")
     start = time.time()
     res = subprocess.run([unittest_program, test_case], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout = res.stdout.decode('utf8')
@@ -81,7 +81,7 @@ for test_number, test_case in enumerate(test_cases):
     if args.time_execution:
         additional_data += f" (Time: {end - start:.4f} seconds)"
 
-    print(additional_data)
+    print(additional_data, flush=True)
     if profile:
         print(f'{test_case}	{end - start}')
     if res.returncode is not None and res.returncode != 0:
