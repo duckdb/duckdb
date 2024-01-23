@@ -12,6 +12,7 @@ parser.add_argument('--no-exit', action='store_true', help='Do not exit after ru
 parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
+parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
 
 args, extra_args = parser.parse_known_args()
 
@@ -48,7 +49,11 @@ for line in stdout.splitlines():
     splits = line.rsplit('\t', 1)
     test_cases.append(splits[0])
 
+
 test_count = len(test_cases)
+if args.list:
+    for test_number, test_case in enumerate(test_cases):
+        print(print(f"[{test_number}/{test_count}]: {test_case}"))
 return_code = 0
 
 
