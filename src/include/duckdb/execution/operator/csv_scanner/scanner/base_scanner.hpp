@@ -189,6 +189,10 @@ protected:
 					iterator.pos.buffer_pos++;
 				}
 				break;
+			case CSVState::QUOTED_NEW_LINE:
+				T::QuotedNewLine(result);
+				iterator.pos.buffer_pos++;
+				break;
 			default:
 				iterator.pos.buffer_pos++;
 				break;

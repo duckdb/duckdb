@@ -34,6 +34,8 @@ public:
 	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(ColumnCountResult &result);
+	//! Handles QuotedNewline State
+	static inline void QuotedNewLine(ColumnCountResult &result);
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(ColumnCountResult &result, const idx_t buffer_pos);
 	inline void InternalAddRow();

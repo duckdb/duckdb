@@ -126,8 +126,18 @@ void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
 		}
 	}
 }
+void StringValueResult::QuotedNewLine(StringValueResult &result) {
+	result.quoted_new_line = true;
+}
 
 bool StringValueResult::AddRowInternal() {
+	// We do some checks for null_padding correctness
+	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line && iterator.done) {
+		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel and it's the
+		// last row of this thread.
+		throw ParameterNotAllowedException("oh no");
+	}
+	quoted_new_line = false;
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
 	idx_t total_columns_in_row = result_position - last_row_pos;
@@ -528,6 +538,10 @@ void StringValueScanner::ProcessExtraRow() {
 			       iterator.pos.buffer_pos < to_pos - 1) {
 				iterator.pos.buffer_pos++;
 			}
+			break;
+		case CSVState::QUOTED_NEW_LINE:
+			result.QuotedNewLine(result);
+			iterator.pos.buffer_pos++;
 			break;
 		default:
 			iterator.pos.buffer_pos++;
