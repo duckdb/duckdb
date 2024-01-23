@@ -292,7 +292,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
-		child_state->Initialize(child_type);
+		child_state->Initialize(child_type, nullptr);
 		child_column->InitializeScanWithOffset(*child_state, start + start_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
 		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());
