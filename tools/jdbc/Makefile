@@ -1,4 +1,4 @@
-JARS=build/debug/tools/jdbc
+JARS=../../build/debug/tools/jdbc
 ifeq ($(OS),Windows_NT)
 	SEP=";"
 else
