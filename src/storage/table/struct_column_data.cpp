@@ -148,6 +148,7 @@ idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resu
 	// insert any child states that are required
 	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
 		ColumnScanState child_state;
+		child_state.scan_options = state.scan_options;
 		state.child_states.push_back(std::move(child_state));
 	}
 	// fetch the validity state
