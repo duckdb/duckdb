@@ -230,6 +230,7 @@ jobs:
           run_tests: 0
           osx_arch: ${{ matrix.osx_arch }}
           vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
+          duckdb_arch: ${{ matrix.duckdb_arch }}
           build_in_tree_extensions: 1
           build_out_of_tree_extensions: 1
           run_autoload_tests: ${{ matrix.run_autoload_tests }}

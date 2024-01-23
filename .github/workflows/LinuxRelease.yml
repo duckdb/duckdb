@@ -239,6 +239,7 @@ jobs:
         with:
           vcpkg_target_triplet: arm64-linux
           deploy_as: linux_arm64
+          duckdb_arch: linux_arm64
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
