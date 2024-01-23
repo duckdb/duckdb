@@ -2,6 +2,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -711,52 +712,183 @@ struct SortedAggregateFunction {
 	}
 };
 
-static void SortKeyExecute(DataChunk &sort, SortLayout &sort_layout, Vector &result) {
-	// Build and serialize sorting data to radix sortable rows
-	Vector addresses(LogicalType::POINTER);
-	const SelectionVector &sel_ptr = *FlatVector::IncrementalSelectionVector();
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-
-	auto base_ptr = FlatVector::GetData<data_t>(result);
-	for (idx_t i = 0; i < sort.size(); ++i) {
-		data_pointers[i] = base_ptr;
-		base_ptr += sort_layout.entry_size;
-	}
-
-	for (column_t sort_col = 0; sort_col < sort.ColumnCount(); ++sort_col) {
-		bool has_null = sort_layout.has_null[sort_col];
-		bool nulls_first = sort_layout.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
-		bool desc = sort_layout.order_types[sort_col] == OrderType::DESCENDING;
-		RowOperations::RadixScatter(sort.data[sort_col], sort.size(), sel_ptr, sort.size(), data_pointers, desc,
-		                            has_null, nulls_first, sort_layout.prefix_lengths[sort_col],
-		                            sort_layout.column_sizes[sort_col]);
-	}
-
-	// Also fully serialize blob sorting columns (to be able to break ties)
-	if (sort_layout.all_constant) {
-		return;
-	}
-
-	throw NotImplementedException("Non-constant sort keys are not supported yet");
-#if 0
-	//	For each row allocate a blob and point the variable size data into it.
-	DataChunk blob_chunk;
-	blob_chunk.SetCardinality(sort.size());
-	for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
-		if (!sort_layout.constant_size[sort_col]) {
-			blob_chunk.data.emplace_back(sort.data[sort_col]);
+struct CompareAggregateBindData {
+	explicit CompareAggregateBindData(BoundAggregateExpression &expr)
+	    : function(expr.function), child_bind(std::move(expr.bind_info)), sort_layout(expr.order_bys->orders) {
+		if (!sort_layout.all_constant) {
+			throw NotImplementedException("Non-constant sort keys are not supported yet");
 		}
 	}
 
+	AggregateFunction function;
+	unique_ptr<FunctionData> child_bind;
+	SortLayout sort_layout;
 
-	handles = blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
+	void BuildSortKeys(Vector sort[], const idx_t count, vector<data_t> &radix_data) {
+		// Build and serialize sorting data to radix sortable rows
+		data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
+		Vector addresses(LogicalType::POINTER, reinterpret_cast<data_ptr_t>(data_pointers));
+		radix_data.resize(sort_layout.entry_size * count);
+
+		auto base_ptr = radix_data.data();
+		for (idx_t i = 0; i < count; ++i) {
+			data_pointers[i] = base_ptr;
+			base_ptr += sort_layout.entry_size;
+		}
+
+		const SelectionVector &sel_ptr = *FlatVector::IncrementalSelectionVector();
+		for (column_t sort_col = 0; sort_col < sort_layout.column_count; ++sort_col) {
+			bool has_null = sort_layout.has_null[sort_col];
+			bool nulls_first = sort_layout.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
+			bool desc = sort_layout.order_types[sort_col] == OrderType::DESCENDING;
+			RowOperations::RadixScatter(sort[sort_col], count, sel_ptr, count, data_pointers, desc, has_null,
+			                            nulls_first, sort_layout.prefix_lengths[sort_col],
+			                            sort_layout.column_sizes[sort_col]);
+		}
+
+#if 0
+		//	For each row allocate a blob and point the variable size data into it.
+		DataChunk blob_chunk;
+		blob_chunk.SetCardinality(sort.size());
+		for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
+			if (!sort_layout.constant_size[sort_col]) {
+				blob_chunk.data.emplace_back(sort.data[sort_col]);
+			}
+		}
 
 
-	auto blob_data = blob_chunk.ToUnifiedFormat();
-	RowOperations::Scatter(blob_chunk, blob_data.get(), sort_layout.blob_layout, addresses, *blob_sorting_heap,
-						   sel_ptr, blob_chunk.size());
+		handles = blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
+
+
+		auto blob_data = blob_chunk.ToUnifiedFormat();
+		RowOperations::Scatter(blob_chunk, blob_data.get(), sort_layout.blob_layout, addresses, *blob_sorting_heap,
+							   sel_ptr, blob_chunk.size());
 #endif
-}
+	}
+};
+
+struct CompareAggregateState {
+	vector<data_t> state;
+	vector<data_t> radix;
+	vector<data_t> heap;
+
+	void Swap(CompareAggregateState &other) {
+		state.swap(other.state);
+		radix.swap(other.radix);
+		heap.swap(other.heap);
+	}
+
+	void Absorb(CompareAggregateBindData &compare_bind, CompareAggregateState &other) {
+		if (other.state.empty()) {
+			return;
+		} else if (state.empty()) {
+			Swap(other);
+		} else {
+			auto comp_res = FastMemcmp(other.radix.data(), radix.data(), compare_bind.sort_layout.comparison_size);
+			if (comp_res > 0) {
+				Swap(other);
+			}
+		}
+	}
+};
+
+struct CombineAggregateFunction {
+	template <typename STATE>
+	static void Initialize(STATE &state) {
+		new (&state) STATE();
+	}
+
+	template <typename STATE>
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.~STATE();
+	}
+
+	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
+	                          idx_t count) {
+		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+		auto &sort_layout = compare_bind.sort_layout;
+		const auto child_cols = (input_count - sort_layout.column_count);
+
+		//	TODO: Share memory between calls?
+		vector<data_t> radix_data;
+		compare_bind.BuildSortKeys(inputs + child_cols, count, radix_data);
+		auto radix_ptr = radix_data.data();
+
+		UnifiedVectorFormat svdata;
+		states.ToUnifiedFormat(count, svdata);
+		auto sdata = UnifiedVectorFormat::GetDataNoConst<CompareAggregateState *>(svdata);
+
+		data_ptr_t child_state_ptrs[STANDARD_VECTOR_SIZE];
+		Vector child_states(LogicalType::POINTER, reinterpret_cast<data_ptr_t>(child_state_ptrs));
+		sel_t seldata[STANDARD_VECTOR_SIZE];
+		SelectionVector sel(seldata);
+		idx_t nsel = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto sidx = svdata.sel->get_index(i);
+			auto state = sdata[sidx];
+			int comp_res;
+			if (state->state.empty()) {
+				state->state.resize(compare_bind.function.state_size());
+				compare_bind.function.initialize(state->state.data());
+				state->radix.resize(sort_layout.entry_size);
+				comp_res = 1;
+			} else {
+				comp_res = FastMemcmp(state->radix.data(), radix_ptr, sort_layout.comparison_size);
+			}
+			if (comp_res > 0) {
+				child_state_ptrs[nsel] = state->state.data();
+				seldata[nsel++] = i;
+				::memcpy(state->radix.data(), radix_ptr, state->radix.size());
+			}
+
+			radix_ptr += sort_layout.entry_size;
+		}
+
+		//	Update the winners
+		SelCache merge_cache;
+		for (idx_t i = 0; i < child_cols; ++i) {
+			inputs[i].Slice(sel, nsel, merge_cache);
+		}
+		AggregateInputData child_aggr_data(compare_bind.child_bind, aggr_input_data.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
+		compare_bind.function.update(inputs, child_aggr_data, child_cols, child_states, nsel);
+	}
+
+	template <typename STATE>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
+		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+		auto &other = const_cast<STATE &>(source);
+		target.Absorb(compare_bind, other);
+	}
+
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes, Vector &result,
+	                   idx_t rid) {
+		throw InternalException("Sorted aggregates should not be generated for window clauses");
+	}
+
+	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                     const idx_t offset) {
+		//	Finalize the inner aggregate into the result
+		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+
+		UnifiedVectorFormat svdata;
+		states.ToUnifiedFormat(count, svdata);
+		auto sdata = UnifiedVectorFormat::GetDataNoConst<CompareAggregateState *>(svdata);
+
+		data_ptr_t child_state_ptrs[STANDARD_VECTOR_SIZE];
+		Vector child_states(LogicalType::POINTER, reinterpret_cast<data_ptr_t>(child_state_ptrs));
+		for (idx_t i = 0; i < count; ++i) {
+			const auto sidx = svdata.sel->get_index(i);
+			auto state = sdata[sidx];
+			child_state_ptrs[i] = state->state.data();
+		}
+
+		AggregateInputData child_aggr_data(compare_bind.child_bind, aggr_input_data.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
+		compare_bind.function.finalize(child_states, child_aggr_data, result, count, offset);
+	}
+};
 
 void FunctionBinder::BindSortedAggregate(BoundAggregateExpression &expr, const vector<unique_ptr<Expression>> &groups) {
 	if (!expr.order_bys || expr.order_bys->orders.empty() || expr.children.empty()) {
