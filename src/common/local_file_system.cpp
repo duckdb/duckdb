@@ -41,11 +41,13 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 
 #if defined(__linux__)
 #include <libgen.h>
+// See e.g.:
+// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
-#  include <TargetConditionals.h>
-#  if not (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
-#    include <libproc.h>
-#  endif
+#include <TargetConditionals.h> // NOLINT
+#if not (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
+#include <libproc.h> // NOLINT
+#endif // NOLINT
 #elif defined(_WIN32)
 #include <RestartManager.h>
 #endif
@@ -178,7 +180,7 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-#ifdef __APPLE__ && !TARGET_OS_IPHONE
+#if __APPLE__ && !TARGET_OS_IPHONE
 
 static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
