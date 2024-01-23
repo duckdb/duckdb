@@ -130,13 +130,19 @@ void StringValueResult::QuotedNewLine(StringValueResult &result) {
 	result.quoted_new_line = true;
 }
 
-bool StringValueResult::AddRowInternal() {
+void StringValueResult::NullPaddingQuotedNewlineCheck() {
 	// We do some checks for null_padding correctness
 	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line && iterator.done) {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel and it's the
 		// last row of this thread.
-		throw ParameterNotAllowedException("oh no");
+		auto csv_error = CSVError::NullPaddingFail(state_machine.options);
+		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), result_position / number_of_columns + 1);
+		error_handler.Error(lines_per_batch, csv_error, true);
 	}
+}
+
+bool StringValueResult::AddRowInternal() {
+	NullPaddingQuotedNewlineCheck();
 	quoted_new_line = false;
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
@@ -478,6 +484,7 @@ void StringValueScanner::Initialize() {
 }
 
 void StringValueScanner::ProcessExtraRow() {
+	result.NullPaddingQuotedNewlineCheck();
 	idx_t to_pos = cur_buffer_handle->actual_size;
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
@@ -540,7 +547,8 @@ void StringValueScanner::ProcessExtraRow() {
 			}
 			break;
 		case CSVState::QUOTED_NEW_LINE:
-			result.QuotedNewLine(result);
+			result.quoted_new_line = true;
+			result.NullPaddingQuotedNewlineCheck();
 			iterator.pos.buffer_pos++;
 			break;
 		default:
@@ -677,6 +685,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 		if (!cur_buffer_handle) {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
+			// We do not care if it's a quoted new line on the last row of our file.
+			result.quoted_new_line = false;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 			    states.IsNotSet()) {

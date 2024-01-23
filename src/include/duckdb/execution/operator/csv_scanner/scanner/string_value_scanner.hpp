@@ -84,7 +84,7 @@ public:
 	static inline void InvalidState(StringValueResult &result);
 	//! Handles QuotedNewline State
 	static inline void QuotedNewLine(StringValueResult &result);
-
+	void NullPaddingQuotedNewlineCheck();
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
