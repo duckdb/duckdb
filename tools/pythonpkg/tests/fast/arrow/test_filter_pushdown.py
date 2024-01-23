@@ -709,3 +709,70 @@ class TestArrowFilterPushdown(object):
         assert not match
         match = re.search("│ +b +│", query_res[0][1])
         assert not match
+
+    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    def test_struct_filter_pushdown(self, duckdb_cursor, create_table):
+        duckdb_cursor.execute(
+            """
+            CREATE TABLE test_structs (s STRUCT(a integer, b bool))
+        """
+        )
+        duckdb_cursor.execute(
+            """
+            INSERT INTO test_structs VALUES
+                ({'a': 1, 'b': true}), 
+                ({'a': 2, 'b': false}), 
+                (NULL),
+                ({'a': 3, 'b': true}), 
+                ({'a': NULL, 'b': NULL});
+        """
+        )
+
+        duck_tbl = duckdb_cursor.table("test_structs")
+        arrow_table = create_table(duck_tbl)
+
+        # Ensure that the filter is pushed down
+        query_res = duckdb_cursor.execute(
+            """
+            EXPLAIN SELECT * FROM arrow_table WHERE
+                s.a < 2
+        """
+        ).fetchall()
+
+        match = re.search(".*ARROW_SCAN.*Filters: s\\.a IS NOT NULL.*AND s\\.a<2.*", query_res[0][1], flags=re.DOTALL)
+        assert match
+
+        # Check that the filter is applied correctly
+        assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a < 2").fetchone()[0] == {"a": 1, "b": True}
+
+        query_res = duckdb_cursor.execute(
+            """
+            EXPLAIN SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true 
+        """
+        ).fetchall()
+
+        # the explain-output is pretty cramped, so just make sure we see both struct references.
+        match = re.search(
+            ".*ARROW_SCAN.*Filters: s\\.a IS NOT NULL.*AND s\\.a<3.*AND s\\.b IS NOT NULL.*",
+            query_res[0][1],
+            flags=re.DOTALL,
+        )
+        assert match
+
+        # Check that the filter is applied correctly
+        assert duckdb_cursor.execute("SELECT COUNT(*) FROM arrow_table WHERE s.a < 3 AND s.b = true").fetchone()[0] == 1
+        assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true").fetchone()[0] == {
+            "a": 1,
+            "b": True,
+        }
+
+        # This should not produce a pushdown
+        query_res = duckdb_cursor.execute(
+            """
+            EXPLAIN SELECT * FROM arrow_table WHERE
+                s.a IS NULL
+        """
+        ).fetchall()
+
+        match = re.search(".*ARROW_SCAN.*Filters: s\\.a IS NULL.*", query_res[0][1], flags=re.DOTALL)
+        assert not match
