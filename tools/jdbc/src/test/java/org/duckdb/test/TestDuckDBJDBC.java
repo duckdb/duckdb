@@ -4,17 +4,15 @@ import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
-import org.duckdb.DuckDBNative;
 import org.duckdb.DuckDBResultSet;
 import org.duckdb.DuckDBResultSetMetaData;
 import org.duckdb.DuckDBStruct;
 import org.duckdb.DuckDBTimestamp;
 import org.duckdb.JsonNode;
+import org.duckdb.TestExtensionTypes;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -38,7 +36,6 @@ import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -51,7 +48,6 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
@@ -62,7 +58,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
@@ -70,7 +65,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.logging.Logger;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
@@ -82,7 +76,6 @@ import static java.time.temporal.ChronoField.YEAR_OF_ERA;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static java.util.stream.Collectors.toMap;
 import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
 import static org.duckdb.test.Assertions.assertEquals;
@@ -97,15 +90,7 @@ import static org.duckdb.test.Runner.runTests;
 
 public class TestDuckDBJDBC {
 
-    private static final String JDBC_URL = "jdbc:duckdb:";
-
-    static {
-        try {
-            Class.forName("org.duckdb.DuckDBDriver");
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        }
-    }
+    public static final String JDBC_URL = "jdbc:duckdb:";
 
     private static void createTable(Connection conn) throws SQLException {
         try (Statement createStmt = conn.createStatement()) {
@@ -3649,44 +3634,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_extension_type() throws Exception {
-        try (Connection connection = DriverManager.getConnection(JDBC_URL);
-             Statement stmt = connection.createStatement()) {
-
-            DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) connection);
-
-            try (ResultSet rs = stmt.executeQuery(
-                     "SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type, '\\xAA'::byte_test_type")) {
-                rs.next();
-                assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
-                assertEquals(rs.getObject(2), "\\xAA");
-            }
-        }
-    }
-
-    public static void test_extension_type_metadata() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
-            DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) conn);
-
-            stmt.execute("CREATE TABLE test (foo test_type, bar byte_test_type);");
-            stmt.execute("INSERT INTO test VALUES ({\"hello\": 'foo', \"world\": 'bar'}, '\\xAA');");
-
-            try (ResultSet rs = stmt.executeQuery("SELECT * FROM test")) {
-                ResultSetMetaData meta = rs.getMetaData();
-                assertEquals(meta.getColumnCount(), 2);
-
-                assertEquals(meta.getColumnName(1), "foo");
-                assertEquals(meta.getColumnTypeName(1), "test_type");
-                assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
-                assertEquals(meta.getColumnClassName(1), "java.lang.String");
-
-                assertEquals(meta.getColumnName(2), "bar");
-                assertEquals(meta.getColumnTypeName(2), "byte_test_type");
-                assertEquals(meta.getColumnType(2), Types.JAVA_OBJECT);
-                assertEquals(meta.getColumnClassName(2), "java.lang.String");
-            }
-        }
-    }
 
     public static void test_getColumnClassName() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement();) {
@@ -4275,6 +4222,6 @@ public class TestDuckDBJDBC {
     }
 
     public static void main(String[] args) throws Exception {
-        System.exit(runTests(args, TestDuckDBJDBC.class));
+        System.exit(runTests(args, TestDuckDBJDBC.class) + runTests(args, TestExtensionTypes.class));
     }
 }

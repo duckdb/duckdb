@@ -16,10 +16,9 @@ public class Runner {
         }
     }
 
-
-    public static int runTests(String[] args, Class<TestDuckDBJDBC> testDuckDBJDBCClass) throws Exception {
+    public static int runTests(String[] args, Class<?> testClass) {
         // Woo I can do reflection too, take this, JUnit!
-        Method[] methods = testDuckDBJDBCClass.getMethods();
+        Method[] methods = testClass.getMethods();
 
         Arrays.sort(methods, Comparator.comparing(Method::getName));
 
