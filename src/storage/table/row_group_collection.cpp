@@ -491,6 +491,8 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
+
+	// When deleting destroy the sample.
 	auto stats_guard = stats.GetLock();
 	if (stats.sample) {
 		stats.sample->Destroy();
@@ -1037,7 +1039,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-	// on update destroy the sample
+	// When adding a column destroy the sample
 	auto stats_guard = stats.GetLock();
 	if (stats.sample) {
 		stats.sample->Destroy();
@@ -1057,10 +1059,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
 		result->row_groups->AppendSegment(std::move(new_row_group));
-	}
-	auto stats_guard = stats.GetLock();
-	if (stats.sample) {
-		stats.sample->Destroy();
 	}
 	return result;
 }
@@ -1102,11 +1100,11 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+	// When altering types destory the sample
 	auto stats_guard = stats.GetLock();
 	if (stats.sample) {
 		stats.sample->Destroy();
 	}
-
 	return result;
 }
 
@@ -1156,9 +1154,9 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
 }
 
-optional_ptr<BlockingSample> RowGroupCollection::GetSample() {
+unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	if (stats.sample) {
-		return optional_ptr<BlockingSample>(stats.sample.get());
+		return stats.sample->Copy();
 	}
 	return nullptr;
 }

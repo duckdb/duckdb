@@ -183,32 +183,32 @@
     ],
     "members": [
       {
-        "id": 102,
+        "id": 100,
         "name": "next_index_to_sample",
         "type": "idx_t"
       },
       {
-        "id": 103,
+        "id": 101,
         "name": "min_weight_threshold",
         "type": "double"
       },
       {
-        "id": 104,
+        "id": 102,
         "name": "min_weighted_entry_index",
         "type": "idx_t"
       },
       {
-        "id": 105,
+        "id": 103,
         "name": "num_entries_to_skip_b4_next_sample",
         "type": "idx_t"
       },
       {
-        "id": 106,
+        "id": 104,
         "name": "num_entries_seen_total",
         "type": "idx_t"
       },
       {
-        "id": 107,
+        "id": 105,
         "name": "reservoir_weights",
         "type": "std::priority_queue<std::pair<double, idx_t>>"
       }
@@ -224,9 +224,14 @@
         "type" : "unique_ptr<BaseReservoirSampling>"
       },
       {
-        "id" : 102,
+        "id" : 101,
         "name": "type",
         "type": "SampleType"
+      },
+      {
+        "id": 102,
+        "name": "destroyed",
+        "type": "bool"
       }
     ]
   },

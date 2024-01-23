@@ -58,6 +58,12 @@ class BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::BLOCKING_SAMPLE;
 
+	unique_ptr<BaseReservoirSampling> base_reservoir_sample;
+	//! The sample type
+	SampleType type;
+	//! has the sample been destroyed due to updates to the referenced table
+	bool destroyed;
+
 public:
 	explicit BlockingSample(int64_t seed = -1)
 	    : base_reservoir_sample(make_uniq<BaseReservoirSampling>(seed)), type(SampleType::BLOCKING_SAMPLE),
@@ -73,13 +79,6 @@ public:
 
 	virtual unique_ptr<BlockingSample> Copy() = 0;
 
-	std::pair<double, idx_t> PopFromWeightQueue();
-	double GetMinWeightThreshold();
-	idx_t GetPriorityQueueSize();
-	//! When deserializing a sample, we don't serialize the weights for each tuple
-	//! Instead we assign new weights to each tuple between min_weight_threshold and 1
-	virtual void PushNewWeightsForSamples() = 0;
-
 	virtual void Finalize() = 0;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
@@ -87,18 +86,16 @@ public:
 	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
 	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
 	virtual void Destroy();
-	unique_ptr<BaseReservoirSampling> base_reservoir_sample;
-	//! The sample type
-	SampleType type;
-	//! has the sample been destroyed due to updates to the referenced table
-	bool destroyed;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
 protected:
-	//! The reservoir sampling
-	//	RandomEngine &random;
+	//! Helper functions needed to merge two reservoirs while respecting weights of sampled rows
+	std::pair<double, idx_t> PopFromWeightQueue();
+	double GetMinWeightThreshold();
+	idx_t GetPriorityQueueSize();
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -144,8 +141,6 @@ public:
 	void Merge(unique_ptr<BlockingSample> other) override;
 
 	unique_ptr<BlockingSample> Copy() override;
-
-	void PushNewWeightsForSamples() override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -193,8 +188,6 @@ public:
 	void AddToReservoir(DataChunk &input) override;
 
 	void Merge(unique_ptr<BlockingSample> other) override;
-
-	void PushNewWeightsForSamples() override;
 
 	unique_ptr<BlockingSample> Copy() override;
 

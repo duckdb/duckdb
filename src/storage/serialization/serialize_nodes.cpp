@@ -37,12 +37,14 @@ namespace duckdb {
 
 void BlockingSample::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
-	serializer.WriteProperty<SampleType>(102, "type", type);
+	serializer.WriteProperty<SampleType>(101, "type", type);
+	serializer.WriteProperty<bool>(102, "destroyed", destroyed);
 }
 
 unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
 	auto base_reservoir_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
-	auto type = deserializer.ReadProperty<SampleType>(102, "type");
+	auto type = deserializer.ReadProperty<SampleType>(101, "type");
+	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
 	unique_ptr<BlockingSample> result;
 	switch (type) {
 	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
@@ -55,26 +57,27 @@ unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserialize
 		throw SerializationException("Unsupported type for deserialization of BlockingSample!");
 	}
 	result->base_reservoir_sample = std::move(base_reservoir_sample);
+	result->destroyed = destroyed;
 	return result;
 }
 
 void BaseReservoirSampling::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<idx_t>(102, "next_index_to_sample", next_index_to_sample);
-	serializer.WriteProperty<double>(103, "min_weight_threshold", min_weight_threshold);
-	serializer.WritePropertyWithDefault<idx_t>(104, "min_weighted_entry_index", min_weighted_entry_index);
-	serializer.WritePropertyWithDefault<idx_t>(105, "num_entries_to_skip_b4_next_sample", num_entries_to_skip_b4_next_sample);
-	serializer.WritePropertyWithDefault<idx_t>(106, "num_entries_seen_total", num_entries_seen_total);
-	serializer.WritePropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(107, "reservoir_weights", reservoir_weights);
+	serializer.WritePropertyWithDefault<idx_t>(100, "next_index_to_sample", next_index_to_sample);
+	serializer.WriteProperty<double>(101, "min_weight_threshold", min_weight_threshold);
+	serializer.WritePropertyWithDefault<idx_t>(102, "min_weighted_entry_index", min_weighted_entry_index);
+	serializer.WritePropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", num_entries_to_skip_b4_next_sample);
+	serializer.WritePropertyWithDefault<idx_t>(104, "num_entries_seen_total", num_entries_seen_total);
+	serializer.WritePropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", reservoir_weights);
 }
 
 unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BaseReservoirSampling>(new BaseReservoirSampling());
-	deserializer.ReadPropertyWithDefault<idx_t>(102, "next_index_to_sample", result->next_index_to_sample);
-	deserializer.ReadProperty<double>(103, "min_weight_threshold", result->min_weight_threshold);
-	deserializer.ReadPropertyWithDefault<idx_t>(104, "min_weighted_entry_index", result->min_weighted_entry_index);
-	deserializer.ReadPropertyWithDefault<idx_t>(105, "num_entries_to_skip_b4_next_sample", result->num_entries_to_skip_b4_next_sample);
-	deserializer.ReadPropertyWithDefault<idx_t>(106, "num_entries_seen_total", result->num_entries_seen_total);
-	deserializer.ReadPropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(107, "reservoir_weights", result->reservoir_weights);
+	deserializer.ReadPropertyWithDefault<idx_t>(100, "next_index_to_sample", result->next_index_to_sample);
+	deserializer.ReadProperty<double>(101, "min_weight_threshold", result->min_weight_threshold);
+	deserializer.ReadPropertyWithDefault<idx_t>(102, "min_weighted_entry_index", result->min_weighted_entry_index);
+	deserializer.ReadPropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", result->num_entries_to_skip_b4_next_sample);
+	deserializer.ReadPropertyWithDefault<idx_t>(104, "num_entries_seen_total", result->num_entries_seen_total);
+	deserializer.ReadPropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", result->reservoir_weights);
 	return result;
 }
 

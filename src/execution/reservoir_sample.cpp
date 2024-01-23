@@ -70,7 +70,8 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() {
 	auto ret = make_uniq<ReservoirSample>(Allocator::DefaultAllocator(), sample_count);
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	ret->reservoir_chunk = nullptr;
-	if (reservoir_chunk && !destroyed) {
+	ret->destroyed = destroyed;
+	if (reservoir_chunk) {
 		ret->reservoir_chunk = reservoir_chunk->Copy();
 	}
 	return ret;
@@ -190,7 +191,7 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
-	if (!reservoir_chunk || Chunk().size() == 0 || offset >= Chunk().size()) {
+	if (destroyed || !reservoir_chunk || Chunk().size() == 0 || offset >= Chunk().size()) {
 		return nullptr;
 	}
 	auto ret = make_uniq<DataChunk>();
@@ -392,10 +393,6 @@ void ReservoirSamplePercentage::Merge(unique_ptr<BlockingSample> other) {
 	throw NotImplementedException("Merging Percentage samples is not yet supported");
 }
 
-void ReservoirSamplePercentage::PushNewWeightsForSamples() {
-	throw NotImplementedException("Cannot Push new weights for Percentage Sample");
-}
-
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() {
 	throw NotImplementedException("Cannot copy percentage sample");
 }
@@ -472,10 +469,6 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
 	ret->num_entries_to_skip_b4_next_sample = num_entries_to_skip_b4_next_sample;
 	ret->num_entries_seen_total = num_entries_seen_total;
 	return ret;
-}
-
-void ReservoirSample::PushNewWeightsForSamples() {
-	return;
 }
 
 void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size) {

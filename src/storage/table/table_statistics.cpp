@@ -26,7 +26,6 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 
 	auto &allocator = Allocator::DefaultAllocator();
-	//	std::cout << "initialize empty sample" << std::endl;
 	sample = make_uniq<ReservoirSample>(allocator, STANDARD_VECTOR_SIZE, 1);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
@@ -37,23 +36,27 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 	D_ASSERT(Empty());
 
 	lock_guard<mutex> stats_lock(parent.stats_lock);
-	sample = nullptr;
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
 	}
 	column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_column_type));
+	// TODO: add new chunk with one type so that sample does not need to be destroyed
+	sample = std::move(parent.sample);
+	sample->Destroy();
 }
 
 void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t removed_column) {
 	D_ASSERT(Empty());
 
 	lock_guard<mutex> stats_lock(parent.stats_lock);
-	sample = nullptr;
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		if (i != removed_column) {
 			column_stats.push_back(parent.column_stats[i]);
 		}
 	}
+	// TODO: split the sample chunk and fuse it back together without the deleted column
+	sample = std::move(parent.sample);
+	sample->Destroy();
 }
 
 void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed_idx, const LogicalType &new_type) {
@@ -67,6 +70,8 @@ void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed
 			column_stats.push_back(parent.column_stats[i]);
 		}
 	}
+	sample = std::move(parent.sample);
+	sample->Destroy();
 }
 
 void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {

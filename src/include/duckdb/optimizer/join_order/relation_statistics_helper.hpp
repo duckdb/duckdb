@@ -28,6 +28,7 @@ struct ExpressionBinding {
 struct RelationStats {
 	// column_id -> estimated distinct count for column
 	vector<DistinctCount> column_distinct_count;
+//	vector<Selectivity> column_Selectivity;
 	idx_t cardinality;
 	double filter_strength = 1;
 	bool stats_initialized = false;

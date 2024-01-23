@@ -4,10 +4,7 @@
 
 require vector_size 2048
 
-load __TEST_DIR__/test_samples.db
-
-statement ok
-PRAGMA enable_verification
+load __TEST_DIR__/test_samples_doot.db
 
 statement ok
 create table integers_1 as select range a, range+1 b  from range(5);
@@ -92,6 +89,7 @@ query III
 select * from pragma_table_sample('integers_1');
 ----
 
+
 # test altering types destroys the sample
 statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(5);
@@ -123,6 +121,35 @@ Alter table integers_1 drop b;
 query I
 select * from pragma_table_sample('integers_1');
 ----
+
+
+# test sample is destroyed after a restart
+statement ok
+create or replace table integers_1 as select range a, range+1 b  from range(500);
+
+query I
+select count(*) from pragma_table_sample('integers_1');
+----
+500
+
+statement ok
+Alter table integers_1 drop b;
+
+# sample is destroyed
+query I
+select * from pragma_table_sample('integers_1');
+----
+
+restart
+
+statement ok
+insert into integers_1 select range a from range(500);
+
+# sample is still destroyed
+query I
+select * from pragma_table_sample('integers_1');
+----
+
 
 
 
