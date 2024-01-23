@@ -800,8 +800,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		global_stats.GetStats(column_idx).Statistics().Merge(write_data.statistics[column_idx]);
 	}
-	// TODO: Are we merging the write data into global stats?
-	//       or are we merging the global stats into the write data?
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(write_data.states.size() == columns.size());
