@@ -20,7 +20,6 @@ using duckdb::timestamp_t;
 using duckdb::ToCStringCastWrapper;
 using duckdb::uhugeint_t;
 using duckdb::UnsafeFetch;
-
 bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {
 	return GetInternalCValue<bool>(result, col, row);
 }

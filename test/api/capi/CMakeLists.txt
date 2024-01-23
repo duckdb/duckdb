@@ -15,6 +15,9 @@ add_library_unity(
   test_capi_to_decimal.cpp
   test_capi_replacement_scan.cpp
   test_capi_streaming.cpp)
+add_library_unity(test_sql_capi_1_0_0 OBJECT capi_1.0.0.cpp)
+
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_capi>
+    $<TARGET_OBJECTS:test_sql_capi_1_0_0>
     PARENT_SCOPE)
