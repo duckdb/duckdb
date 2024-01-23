@@ -1,0 +1,45 @@
+# name: test/sql/function/blob/create_sort_key.test
+# description: Test create_sort_key function
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# test integer types with all modifiers
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'ASC NULLS LAST')
+----
+1
+2
+3
+NULL
+
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'ASC NULLS FIRST')
+----
+NULL
+1
+2
+3
+
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'DESC NULLS LAST')
+----
+3
+2
+1
+NULL
+
+query I
+SELECT * FROM integers ORDER BY create_sort_key(i, 'DESC NULLS FIRST')
+----
+NULL
+3
+2
+1
