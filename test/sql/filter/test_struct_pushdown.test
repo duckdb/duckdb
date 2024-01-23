@@ -1,6 +1,8 @@
 # name: test/sql/filter/test_struct_pushdown.test
 # group: [filter]
 
+load __TEST_DIR__/test_struct_pushdown.test
+
 statement ok
 PRAGMA enable_verification
 
@@ -51,6 +53,30 @@ SELECT * FROM integers WHERE i.a = 2 OR i.a IS NULL;
 ----
 {'a': NULL, 'b': NULL}
 {'a': 2, 'b': false}
+
+# Large collection of structs
+statement ok
+CREATE TABLE integers2(i STRUCT(a integer, b bool));
+
+statement ok
+INSERT INTO integers2 SELECT {'a': n, 'b': n % 2 = 0} FROM generate_series(200000) as t(n);
+
+restart
+
+query II
+EXPLAIN SELECT * FROM integers2 WHERE i.a > 150000;
+----
+physical_plan	<REGEX>:.*Filters: i\.a IS NOT NULL.*AND i\.a>150000.*
+
+query II
+EXPLAIN SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM integers2 WHERE i.a > 150000;
+----
+physical_plan	<REGEX>:.*Filters: i\.a IS NOT NULL.*AND i\.a>150000.*
+
+query III
+SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM integers2 WHERE i.a > 150000;
+----
+150001	200000	50000
 
 
 # Parquet test
