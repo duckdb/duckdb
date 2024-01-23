@@ -41,8 +41,12 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 	}
 	column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_column_type));
 	// TODO: add new chunk with one type so that sample does not need to be destroyed
-	sample = std::move(parent.sample);
-	sample->Destroy();
+	if (parent.sample) {
+		sample = std::move(parent.sample);
+	}
+	if (sample) {
+		sample->Destroy();
+	}
 }
 
 void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t removed_column) {
@@ -55,8 +59,12 @@ void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t remo
 		}
 	}
 	// TODO: split the sample chunk and fuse it back together without the deleted column
-	sample = std::move(parent.sample);
-	sample->Destroy();
+	if (parent.sample) {
+		sample = std::move(parent.sample);
+	}
+	if (sample) {
+		sample->Destroy();
+	}
 }
 
 void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed_idx, const LogicalType &new_type) {
@@ -70,8 +78,12 @@ void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed
 			column_stats.push_back(parent.column_stats[i]);
 		}
 	}
-	sample = std::move(parent.sample);
-	sample->Destroy();
+	if (parent.sample) {
+		sample = std::move(parent.sample);
+	}
+	if (sample) {
+		sample->Destroy();
+	}
 }
 
 void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
