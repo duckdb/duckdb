@@ -1,1 +1,0 @@
-[Link to dataset](https://repository.surfsara.nl/datasets/cwi/lsqb/files/lsqb-projected/social-network-sf0.1-projected-fk.tar.zst)
