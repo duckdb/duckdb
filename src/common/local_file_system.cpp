@@ -42,7 +42,10 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #if defined(__linux__)
 #include <libgen.h>
 #elif defined(__APPLE__)
-#include <libproc.h>
+#  include <TargetConditionals.h>
+#  if not (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
+#    include <libproc.h>
+#  endif
 #elif defined(_WIN32)
 #include <RestartManager.h>
 #endif
@@ -175,7 +178,7 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-#ifdef __APPLE__
+#ifdef __APPLE__ && !TARGET_OS_IPHONE
 
 static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
