@@ -113,8 +113,15 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
 		idx_t result_offset = initial_remaining - remaining;
 		if (scan_count > 0) {
-			state.current->Scan(state, scan_count, result, result_offset,
-			                    !has_updates && scan_count == initial_remaining);
+			if (state.scan_options && state.scan_options->force_fetch_row) {
+				for (idx_t i = 0; i < scan_count; i++) {
+					ColumnFetchState fetch_state;
+					state.current->FetchRow(fetch_state, state.row_index + i, result, result_offset + i);
+				}
+			} else {
+				state.current->Scan(state, scan_count, result, result_offset,
+				                    !has_updates && scan_count == initial_remaining);
+			}
 
 			state.row_index += scan_count;
 			remaining -= scan_count;
@@ -413,7 +420,15 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &ro
 
 void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
                                 Vector &scan_vector) {
-	segment.Scan(state, count, scan_vector, 0, true);
+	if (state.scan_options && state.scan_options->force_fetch_row) {
+		for (idx_t i = 0; i < count; i++) {
+			ColumnFetchState fetch_state;
+			segment.FetchRow(fetch_state, state.row_index + i, scan_vector, i);
+		}
+	} else {
+		segment.Scan(state, count, scan_vector, 0, true);
+	}
+
 	if (updates) {
 		scan_vector.Flatten(count);
 		updates->FetchCommittedRange(state.row_index - row_group_start, count, scan_vector);
