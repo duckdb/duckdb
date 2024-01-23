@@ -1,0 +1,12 @@
+diff --git a/src/include/storage/postgres_index_set.hpp b/src/include/storage/postgres_index_set.hpp
+index 3dbb65f..30a148a 100644
+--- a/src/include/storage/postgres_index_set.hpp
++++ b/src/include/storage/postgres_index_set.hpp
+@@ -13,6 +13,7 @@
+ 
+ namespace duckdb {
+ class PostgresSchemaEntry;
++class TableCatalogEntry;
+ 
+ class PostgresIndexSet : public PostgresCatalogSet {
+ public:
