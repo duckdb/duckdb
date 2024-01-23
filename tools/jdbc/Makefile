@@ -1,8 +1,10 @@
-JARS=build/debug/tools/jdbc
 ifeq ($(OS),Windows_NT)
+	# windows is weird
 	SEP=";"
+	JARS=tools/jdbc
 else
 	SEP=":"
+	JARS=build/debug/tools/jdbc
 endif
 
 JAR=$(JARS)/duckdb_jdbc.jar
