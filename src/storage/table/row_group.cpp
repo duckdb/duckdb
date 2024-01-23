@@ -803,7 +803,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	// TODO: Are we merging the write data into global stats?
 	//       or are we merging the global stats into the write data?
 
-
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(write_data.states.size() == columns.size());
 	row_group_pointer.row_start = start;

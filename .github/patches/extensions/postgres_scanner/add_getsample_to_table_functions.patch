@@ -6,7 +6,7 @@ index d96dfad..6279076 100644
  public:
  	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
  
-+	optional_ptr<BlockingSample> GetSample() override;
++	unique_ptr<BlockingSample> GetSample() override;
 +
  	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
  
@@ -27,7 +27,7 @@ index d791678..93caa7b 100644
  	return nullptr;
  }
  
-+optional_ptr<BlockingSample> PostgresTableEntry::GetSample() {
++unique_ptr<BlockingSample> PostgresTableEntry::GetSample() {
 +	return nullptr;
 +}
 +

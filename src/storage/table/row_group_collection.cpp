@@ -1100,11 +1100,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-	// When altering types destory the sample
-	auto stats_guard = stats.GetLock();
-	if (stats.sample) {
-		stats.sample->Destroy();
-	}
 	return result;
 }
 
