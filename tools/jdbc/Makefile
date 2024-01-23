@@ -9,7 +9,7 @@ endif
 
 JAR=$(JARS)/duckdb_jdbc.jar
 TEST_JAR=$(JARS)/duckdb_jdbc_tests.jar
-CP="$(JAR)$(SEP)$(TEST_JAR)"
+CP=$(JAR)$(SEP)$(TEST_JAR)
 
 test_debug: ../../$(JAR) ../../$(TEST_JAR)
 	cd ../.. && java -cp $(CP) org.duckdb.test.TestDuckDBJDBC
