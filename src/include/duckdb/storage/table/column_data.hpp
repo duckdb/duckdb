@@ -26,6 +26,7 @@ class RowGroupWriter;
 class TableDataWriter;
 class TableStorageInfo;
 struct TransactionData;
+struct TableScanOptions;
 
 struct DataTableInfo;
 
