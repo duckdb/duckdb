@@ -1101,11 +1101,19 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                          ${PROJECT_BINARY_DIR})
-  add_custom_target(
+  if (WIN32)
+    add_custom_target(
+          duckdb_platform ALL
+	  COMMAND
+	  duckdb_platform_binary.exe > duckdb_platform_out
+          )
+  else()
+    add_custom_target(
           duckdb_platform ALL
 	  COMMAND
 	  ./duckdb_platform_binary > duckdb_platform_out
           )
+  endif()
   add_dependencies(duckdb_platform duckdb_platform_binary)
 else()
   add_custom_target(
@@ -1141,11 +1149,10 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
           COMMAND
           ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/extension/*/*.duckdb_extension" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
           COMMAND
-          cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
+          cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && rm -rf "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
   add_dependencies(duckdb_local_extension_repo duckdb_platform)
-  add_extension_dependencies(duckdb_local_extension_repo)
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     # jemalloc is odd duck
     if ("${EXT_NAME}" STREQUAL "jemalloc")
