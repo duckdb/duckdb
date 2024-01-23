@@ -22,12 +22,14 @@ extern "C" {
 #define ARROW_FLAG_MAP_KEYS_SORTED    4
 
 struct ArrowSchema {
+	ArrowSchema() : flags(0), n_children(0), release(nullptr), private_data(nullptr) {};
+
 	//! Array type description
 	const char *format;
 	const char *name;
 	const char *metadata;
-	int64_t flags = 0;
-	int64_t n_children = 0;
+	int64_t flags;
+	int64_t n_children;
 	struct ArrowSchema **children;
 	struct ArrowSchema *dictionary;
 
@@ -38,12 +40,15 @@ struct ArrowSchema {
 };
 
 struct ArrowArray {
+	ArrowArray()
+	    : length(0), null_count(0), offset(0), n_buffers(0), n_children(0), release(nullptr), private_data(nullptr) {};
+
 	//! Array data description
-	int64_t length = 0;
-	int64_t null_count = 0;
-	int64_t offset = 0;
-	int64_t n_buffers = 0;
-	int64_t n_children = 0;
+	int64_t length;
+	int64_t null_count;
+	int64_t offset;
+	int64_t n_buffers;
+	int64_t n_children;
 	const void **buffers;
 	struct ArrowArray **children;
 	struct ArrowArray *dictionary;
