@@ -10,8 +10,7 @@ StructFilter::StructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<Ta
 }
 
 FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
-	auto &type = stats.GetType();
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(stats.GetType().id() == LogicalTypeId::STRUCT);
 	// Check the child statistics
 	auto &child_stats = StructStats::GetChildStats(stats, child_idx);
 	return child_filter->CheckStatistics(child_stats);
