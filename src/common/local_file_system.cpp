@@ -44,10 +44,10 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
-#include <TargetConditionals.h> // NOLINT
-#if not (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
-#include <libproc.h> // NOLINT
-#endif // NOLINT
+#include <TargetConditionals.h>                             // NOLINT
+#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
+#include <libproc.h>                                        // NOLINT
+#endif                                                      // NOLINT
 #elif defined(_WIN32)
 #include <RestartManager.h>
 #endif
