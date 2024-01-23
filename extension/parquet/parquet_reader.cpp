@@ -878,6 +878,7 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
+		FilterIsNotNull(*child, filter_mask, count);
 		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
 	} break;
 	default:

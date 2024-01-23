@@ -6,6 +6,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 #include "duckdb_python/pyconnection/pyconnection.hpp"
@@ -355,6 +356,13 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 			expression = expression.attr("__and__")(child_expression);
 		}
 		return expression;
+	}
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter->Cast<StructFilter>();
+		auto &child_type = StructType::GetChildType(type.GetDuckType(), struct_filter.child_idx);
+		auto child_expr =
+		    TransformFilterRecursive(struct_filter.child_filter.get(), column_name, timezone_config, child_type);
+		return child_expr;
 	}
 	default:
 		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans");

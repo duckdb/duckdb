@@ -487,8 +487,16 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child_vec = StructVector::GetEntries(result)[struct_filter.child_idx];
-		return FilterSelection(sel, *child_vec, *struct_filter.child_filter, approved_tuple_count, mask);
-	} break;
+
+		// Also do a null-scan here
+		// This is safe (and neccessary), because we ONLY produce StructFilters when theres a constant comparison on the
+		// struct field which must always have a IS NOT NULL clause applied anyway.
+		TemplatedNullSelection<false>(sel, approved_tuple_count, FlatVector::Validity(*child_vec));
+		// Apply the filter on the child vector
+		FilterSelection(sel, *child_vec, *struct_filter.child_filter, approved_tuple_count, mask);
+
+		return approved_tuple_count;
+	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}

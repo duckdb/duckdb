@@ -99,7 +99,7 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	auto &block_pointer = column_pointers[c];
 	MetadataReader column_data_reader(metadata_manager, block_pointer);
 	this->columns[c] =
-	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
+	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
 		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
@@ -365,8 +365,28 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		const auto &base_column_idx = column_ids[column_idx];
 		bool read_segment = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], *entry.second);
 		if (!read_segment) {
-			idx_t target_row =
-			    state.column_scans[column_idx].current->start + state.column_scans[column_idx].current->count;
+
+			idx_t target_row;
+
+			// FIXME: for struct extract filters we dont actually scan the struct column itself but the child column
+			// so we have this ugly special case here.
+			if (entry.second->filter_type == TableFilterType::CONJUNCTION_AND &&
+			    entry.second->Cast<ConjunctionAndFilter>().child_filters[0]->filter_type ==
+			        TableFilterType::STRUCT_EXTRACT) {
+
+				// Check the child segments
+				auto &conjunction_state = entry.second->Cast<ConjunctionAndFilter>();
+				auto &struct_state = conjunction_state.child_filters[0]->Cast<StructFilter>();
+				auto &child_states = state.column_scans[column_idx].child_states;
+				auto &child_state = child_states[1 + struct_state.child_idx]; // +1 for validity
+
+				// Add up the count from the child segment we scanned
+				target_row = child_state.current->start + child_state.current->count;
+
+			} else {
+				target_row =
+				    state.column_scans[column_idx].current->start + state.column_scans[column_idx].current->count;
+			}
 			D_ASSERT(target_row >= this->start);
 			D_ASSERT(target_row <= this->start + this->count);
 			idx_t target_vector_index = (target_row - this->start) / STANDARD_VECTOR_SIZE;

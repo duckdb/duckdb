@@ -350,14 +350,16 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	return base_state;
 }
 
-void ListColumnData::DeserializeColumn(Deserializer &deserializer) {
-	ColumnData::DeserializeColumn(deserializer);
+void ListColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
+	ColumnData::DeserializeColumn(deserializer, target_stats);
 
-	deserializer.ReadObject(101, "validity",
-	                        [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+	deserializer.ReadObject(
+	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
 
-	deserializer.ReadObject(102, "child_column",
-	                        [&](Deserializer &deserializer) { child_column->DeserializeColumn(deserializer); });
+	auto &child_stats = ListStats::GetChildStats(target_stats);
+	deserializer.ReadObject(102, "child_column", [&](Deserializer &deserializer) {
+		child_column->DeserializeColumn(deserializer, child_stats);
+	});
 }
 
 void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

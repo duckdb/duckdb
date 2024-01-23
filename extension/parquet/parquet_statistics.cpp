@@ -245,63 +245,11 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ColumnReader &reader,
                                                                              const vector<ColumnChunk> &columns) {
-	auto &column_chunk = columns[reader.FileIdx()];
-	if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
-		// no stats present for row group
-		return nullptr;
-	}
-	auto &parquet_stats = column_chunk.meta_data.statistics;
+
 	unique_ptr<BaseStatistics> row_group_stats;
 
-	auto &type = reader.Type();
-	auto &s_ele = reader.Schema();
-
-	switch (type.id()) {
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::DECIMAL:
-		row_group_stats = CreateNumericStats(type, s_ele, parquet_stats);
-		break;
-	case LogicalTypeId::VARCHAR: {
-		auto string_stats = StringStats::CreateEmpty(type);
-		if (parquet_stats.__isset.min) {
-			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min);
-		} else if (parquet_stats.__isset.min_value) {
-			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.min_value);
-		} else {
-			return nullptr;
-		}
-		if (parquet_stats.__isset.max) {
-			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max);
-		} else if (parquet_stats.__isset.max_value) {
-			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
-			StringStats::Update(string_stats, parquet_stats.max_value);
-		} else {
-			return nullptr;
-		}
-		StringStats::SetContainsUnicode(string_stats);
-		StringStats::ResetMaxStringLength(string_stats);
-		row_group_stats = string_stats.ToUnique();
-		break;
-	}
-	case LogicalTypeId::STRUCT: {
+	// Structs are handled differently (they dont have stats)
+	if (reader.Type().id() == LogicalTypeId::STRUCT) {
 		auto struct_stats = StructStats::CreateUnknown(reader.Type());
 		auto &struct_reader = reader.Cast<StructColumnReader>();
 		// Recurse into child readers
@@ -311,22 +259,83 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
 		}
 		row_group_stats = struct_stats.ToUnique();
-	} break;
-	default:
-		// no stats for you
-		break;
-	} // end of type switch
 
-	// null count is generic
-	if (!row_group_stats) {
-		// if stats are missing from any row group we know squat
-		return nullptr;
+		// null count is generic
+		if (row_group_stats) {
+			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+		}
+		return row_group_stats;
+
+	} else {
+		auto &column_chunk = columns[reader.FileIdx()];
+		if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
+			// no stats present for row group
+			return nullptr;
+		}
+		auto &parquet_stats = column_chunk.meta_data.statistics;
+
+		auto &type = reader.Type();
+		auto &s_ele = reader.Schema();
+
+		switch (type.id()) {
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::DECIMAL:
+			row_group_stats = CreateNumericStats(type, s_ele, parquet_stats);
+			break;
+		case LogicalTypeId::VARCHAR: {
+			auto string_stats = StringStats::CreateEmpty(type);
+			if (parquet_stats.__isset.min) {
+				StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
+				StringStats::Update(string_stats, parquet_stats.min);
+			} else if (parquet_stats.__isset.min_value) {
+				StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
+				StringStats::Update(string_stats, parquet_stats.min_value);
+			} else {
+				return nullptr;
+			}
+			if (parquet_stats.__isset.max) {
+				StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
+				StringStats::Update(string_stats, parquet_stats.max);
+			} else if (parquet_stats.__isset.max_value) {
+				StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
+				StringStats::Update(string_stats, parquet_stats.max_value);
+			} else {
+				return nullptr;
+			}
+			StringStats::SetContainsUnicode(string_stats);
+			StringStats::ResetMaxStringLength(string_stats);
+			row_group_stats = string_stats.ToUnique();
+			break;
+		}
+		default:
+			// no stats for you
+			break;
+		} // end of type switch
+
+		// null count is generic
+		if (row_group_stats) {
+			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+			if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
+				row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+			}
+		}
+		return row_group_stats;
 	}
-	row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
-	if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
-		row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
-	}
-	return row_group_stats;
 }
 
 } // namespace duckdb

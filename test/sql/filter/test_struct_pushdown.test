@@ -1,0 +1,100 @@
+# name: test/sql/filter/test_struct_pushdown.test
+# group: [filter]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i STRUCT(a integer, b bool));
+
+statement ok
+INSERT INTO integers VALUES ({'a': 1, 'b': true}), ({'a': 2, 'b': false}), ({'a': 3, 'b': true}), ({'a': NULL, 'b': NULL});
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i.a < 2;
+----
+physical_plan	<REGEX>:.*Filters: i\.a IS NOT NULL.*AND i\.a<2.*
+
+query I
+SELECT * FROM integers WHERE i.a < 2;
+----
+{'a': 1, 'b': true}
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i.a > 2;
+----
+physical_plan	<REGEX>:.*Filters: i\.a IS NOT NULL.*AND i\.a>2.*
+
+query I
+SELECT * FROM integers WHERE i.a > 2;
+----
+{'a': 3, 'b': true}
+
+# This should not produce a filter pushdown
+query II
+EXPLAIN SELECT * FROM integers WHERE i.a IS NULL;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query I
+SELECT * FROM integers WHERE i.a IS NULL;
+----
+{'a': NULL, 'b': NULL}
+
+query II
+EXPLAIN SELECT * FROM integers WHERE i.a = 2 OR i.a IS NULL;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query I
+SELECT * FROM integers WHERE i.a = 2 OR i.a IS NULL;
+----
+{'a': NULL, 'b': NULL}
+{'a': 2, 'b': false}
+
+
+# Parquet test
+require parquet
+
+statement ok
+COPY (FROM integers) TO '__TEST_DIR__/integers.parquet' (FORMAT PARQUET);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/integers.parquet') WHERE i.a < 2;
+----
+physical_plan	<REGEX>:.*Filters: i\.a IS NOT NULL.*AND i\.a<2.*
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/integers.parquet') WHERE i.a < 2;
+----
+{'a': 1, 'b': true}
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/integers.parquet') WHERE i.b = true or i.a IS NULL;
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/integers.parquet') WHERE i.b = true or i.a IS NULL ORDER BY ALL;
+----
+{'a': 1, 'b': true}
+{'a': 3, 'b': true}
+{'a': NULL, 'b': NULL}
+
+# Test with large (multi-row-group) parquet files
+
+statement ok
+COPY (SELECT {'i': n} as s FROM generate_series(100000) as t(n)) TO '__TEST_DIR__/large.parquet' (FORMAT 'parquet', ROW_GROUP_SIZE 3000);
+
+query II
+EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
+----
+physical_plan	<REGEX>:.*Filters: s\.i IS NOT NULL.*AND s\.i>=500.*AND s\.i<5000.*
+
+query II
+SELECT min(s.i), max(s.i) FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
+----
+500	4999
+
+
+
