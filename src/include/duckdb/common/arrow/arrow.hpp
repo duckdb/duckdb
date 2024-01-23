@@ -32,9 +32,9 @@ struct ArrowSchema {
 	struct ArrowSchema *dictionary;
 
 	//! Release callback
-	void (*release)(struct ArrowSchema *) = nullptr;
+	void (*release)(struct ArrowSchema *);
 	//! Opaque producer-specific data
-	void *private_data = nullptr;
+	void *private_data;
 };
 
 struct ArrowArray {
@@ -49,9 +49,9 @@ struct ArrowArray {
 	struct ArrowArray *dictionary;
 
 	//! Release callback
-	void (*release)(struct ArrowArray *) = nullptr;
+	void (*release)(struct ArrowArray *);
 	//! Opaque producer-specific data
-	void *private_data = nullptr;
+	void *private_data;
 };
 #endif
 
