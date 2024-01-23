@@ -44,7 +44,7 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	D_ASSERT(reservoir_chunk);
 	D_ASSERT(Chunk().size() == sample_count);
 	// Initialize the weights if we have collected sample_count rows and weights have not been initialized
-	if (Chunk().size() == sample_count && base_reservoir_sample->reservoir_weights.size() == 0) {
+	if (Chunk().size() == sample_count && base_reservoir_sample->reservoir_weights.empty()) {
 		base_reservoir_sample->InitializeReservoirWeights(Chunk().size(), sample_count);
 	}
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
@@ -74,7 +74,8 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() {
 	if (reservoir_chunk) {
 		ret->reservoir_chunk = reservoir_chunk->Copy();
 	}
-	return ret;
+	unique_ptr<BlockingSample> base_ret = std::move(ret);
+	return base_ret;
 }
 
 unique_ptr<ReservoirChunk> ReservoirChunk::Copy() {
@@ -180,7 +181,7 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 		min_weight_threshold_other = reservoir_other->GetMinWeightThreshold();
 	}
 
-	while (replaceable_indexes.size() > 0) {
+	while (!replaceable_indexes.empty()) {
 		auto top_other = reservoir_other->PopFromWeightQueue();
 		auto index_to_replace = replaceable_indexes.back();
 		ReplaceElement(index_to_replace, reservoir_other->Chunk(), top_other.second, -top_other.first);
@@ -265,7 +266,7 @@ void ReservoirSample::ReplaceElement(idx_t index, DataChunk &input, idx_t index_
 	base_reservoir_sample->ReplaceElementWithIndex(index, with_weight);
 }
 
-void ReservoirSample::CreateReservoirChunk(vector<LogicalType> types) {
+void ReservoirSample::CreateReservoirChunk(const vector<LogicalType> &types) {
 	reservoir_chunk = make_uniq<ReservoirChunk>();
 	Chunk().Initialize(allocator, types, sample_count);
 	for (idx_t col_idx = 0; col_idx < Chunk().ColumnCount(); col_idx++) {
@@ -295,7 +296,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 		CreateReservoirChunk(input.GetTypes());
 	}
 	Chunk().Append(input, false, nullptr, required_count);
-	if (num_added_samples + required_count >= sample_count && base_reservoir_sample->reservoir_weights.size() == 0) {
+	if (num_added_samples + required_count >= sample_count && base_reservoir_sample->reservoir_weights.empty()) {
 		base_reservoir_sample->InitializeReservoirWeights(Chunk().size(), sample_count);
 	}
 

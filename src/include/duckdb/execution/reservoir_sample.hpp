@@ -156,7 +156,7 @@ private:
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
 	void ReplaceElement(idx_t index, DataChunk &input, idx_t index_in_chunk, double with_weight);
 
-	void CreateReservoirChunk(vector<LogicalType> types);
+	void CreateReservoirChunk(const vector<LogicalType> &types);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
 
