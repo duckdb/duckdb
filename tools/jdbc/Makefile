@@ -10,7 +10,7 @@ TEST_JAR=$(JARS)/duckdb_jdbc_tests.jar
 CP="$(JAR)$(SEP)$(TEST_JAR)"
 
 test_debug: ../../$(JAR) ../../$(TEST_JAR)
-	cd ../.. && java -verbose:class -cp $(CP) org.duckdb.test.TestDuckDBJDBC
+	cd ../.. && java -cp $(CP) org.duckdb.test.TestDuckDBJDBC
 
 test_release: ../../$(subst debug,release,$(JAR)) ../../$(subst debug,release,$(TEST_JAR))
 	cd ../.. && java -cp $(subst debug,release,$(CP)) org.duckdb.test.TestDuckDBJDBC
