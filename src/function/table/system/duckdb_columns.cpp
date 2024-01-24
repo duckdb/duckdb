@@ -47,6 +47,9 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	names.emplace_back("column_index");
 	return_types.emplace_back(LogicalType::INTEGER);
 
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -102,6 +105,7 @@ public:
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
 	virtual const Value ColumnDefault(idx_t col) = 0;
 	virtual bool IsNullable(idx_t col) = 0;
+	virtual const Value ColumnComment(idx_t col) = 0;
 
 	void WriteColumns(idx_t index, idx_t start_col, idx_t end_col, DataChunk &output);
 };
@@ -141,6 +145,9 @@ public:
 	bool IsNullable(idx_t col) override {
 		return not_null_cols.find(col) == not_null_cols.end();
 	}
+	const Value ColumnComment(idx_t col) override {
+		return entry.GetColumn(LogicalIndex(col)).Comment();
+	}
 
 private:
 	TableCatalogEntry &entry;
@@ -169,6 +176,9 @@ public:
 	}
 	bool IsNullable(idx_t col) override {
 		return true;
+	}
+	const Value ColumnComment(idx_t col) override {
+		return Value();
 	}
 
 private:
@@ -208,6 +218,8 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		output.SetValue(col++, index, Value(ColumnName(i)));
 		// column_index, INTEGER
 		output.SetValue(col++, index, Value::INTEGER(i + 1));
+		// comment, VARCHAR
+		output.SetValue(col++, index, ColumnComment(i));
 		// internal, BOOLEAN
 		output.SetValue(col++, index, Value::BOOLEAN(entry.internal));
 		// column_default, VARCHAR

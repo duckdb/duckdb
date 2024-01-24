@@ -66,7 +66,7 @@ enum class AlterTableType : uint8_t {
 	FOREIGN_KEY_CONSTRAINT = 7,
 	SET_NOT_NULL = 8,
 	DROP_NOT_NULL = 9,
-	SET_COMMENT = 10
+	ALTER_COLUMN_COMMENT = 10
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -201,6 +201,33 @@ public:
 private:
 	ChangeColumnTypeInfo();
 };
+
+//===--------------------------------------------------------------------===//
+// AlterColumnCommentInfo
+//===--------------------------------------------------------------------===//
+struct AlterColumnCommentInfo : public AlterTableInfo {
+	AlterColumnCommentInfo(AlterEntryData data, string column_name, Value comment_value);
+	~AlterColumnCommentInfo() override;
+
+	//! The column name to alter
+	string column_name;
+	//! The target type of the column
+	Value comment;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+//	void Serialize(Serializer &serializer) const override;
+//	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+	string GetColumnName() const override {
+		return column_name;
+	};
+
+private:
+	AlterColumnCommentInfo();
+};
+
+
 
 //===--------------------------------------------------------------------===//
 // SetDefaultInfo

@@ -32,6 +32,7 @@ struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
+struct AlterColumnCommentInfo;
 
 class TableFunction;
 struct FunctionData;

@@ -18,6 +18,7 @@ comment_value:
 			Sconst			                { $$ = makeStringConst($1, @1); }
 			| NULL_P					    { $$ = makeNullAConst(@1); }
 
+// TODO ensure these match what we support?
 comment_on_type_any_name:
 			TABLE									{ $$ = PG_OBJECT_TABLE; }
 			| SEQUENCE								{ $$ = PG_OBJECT_SEQUENCE; }
@@ -27,8 +28,8 @@ comment_on_type_any_name:
 			| VIEW									{ $$ = PG_OBJECT_VIEW; }
 			| MATERIALIZED VIEW						{ $$ = PG_OBJECT_MATVIEW; }
 			| INDEX									{ $$ = PG_OBJECT_INDEX; }
-			| FOREIGN TABLE							{ $$ = PG_OBJECT_FOREIGN_TABLE; }
 			| COLLATION								{ $$ = PG_OBJECT_COLLATION; }
+			| COLUMN								{ $$ = PG_OBJECT_COLUMN; }
 			| CONVERSION_P							{ $$ = PG_OBJECT_CONVERSION; }
 			| SCHEMA								{ $$ = PG_OBJECT_SCHEMA; }
 			| STATISTICS							{ $$ = PG_OBJECT_STATISTIC_EXT; }

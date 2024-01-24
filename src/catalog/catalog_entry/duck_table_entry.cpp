@@ -207,6 +207,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &drop_not_null_info = table_info.Cast<DropNotNullInfo>();
 		return DropNotNull(context, drop_not_null_info);
 	}
+	case AlterTableType::ALTER_COLUMN_COMMENT: {
+		auto &column_comment_info = table_info.Cast<AlterColumnCommentInfo>();
+		return AlterColumnComment(context, column_comment_info);
+	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
 	}
@@ -647,6 +651,33 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	                           info.target_type, std::move(storage_oids), *bound_expression);
 	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 	return std::move(result);
+}
+
+// TODO DEDUPLICATE?
+unique_ptr<CatalogEntry> DuckTableEntry::AlterColumnComment(ClientContext &context, AlterColumnCommentInfo &info) {
+	auto create_info = make_uniq<CreateTableInfo>(schema, name);
+	auto default_idx = GetColumnIndex(info.column_name);
+	if (default_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
+		throw CatalogException("Cannot SET DEFAULT for rowid column");
+	}
+
+	// Copy all the columns, changing the value of the one that was specified by 'column_name'
+	for (auto &col : columns.Logical()) {
+		auto copy = col.Copy();
+		if (default_idx == col.Logical()) {
+			copy.SetComment(info.comment);
+		}
+		create_info->columns.AddColumn(std::move(copy));
+	}
+	// Copy all the constraints
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(std::move(constraint));
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {

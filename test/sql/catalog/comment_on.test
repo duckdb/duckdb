@@ -15,7 +15,7 @@ Catalog Error: Table with name hahahoehoe does not exist!
 
 ### Comment on Tables
 statement ok
-CREATE TABLE test_table as SELECT 1 as a
+CREATE TABLE test_table as SELECT 1 as test_table_column
 
 query I
 select comment from duckdb_tables() where table_name='test_table';
@@ -32,7 +32,7 @@ very gezellige table
 
 ### Comment on view
 statement ok
-CREATE VIEW test_view as SELECT 1 as A
+CREATE VIEW test_view as SELECT 1 as test_view_column
 
 query I
 select comment from duckdb_views() where view_name='test_view';
@@ -49,7 +49,7 @@ very gezellige view
 
 ### Comment on indices
 statement ok
-CREATE INDEX test_index ON test_table using art(a)
+CREATE INDEX test_index ON test_table using art(test_table_column)
 
 query I
 select comment from duckdb_indexes() where index_name='test_index';
@@ -115,5 +115,29 @@ select comment from duckdb_types() where type_name='test_type';
 ----
 very gezellige type
 
-### TODO: secrets, columns, functions (scalar, table, pragma), collations
-### TODO2: multiple schemas, multiple databases
+### Comment on column
+statement ok
+CREATE TABLE test_table_2 AS SELECT 1 as test_table_2_column;
+
+query I
+select comment from duckdb_columns() where column_name='test_table_column';
+----
+NULL
+
+query I
+select comment from duckdb_columns() where column_name='test_table_2_column';
+----
+NULL
+
+statement ok
+COMMENT ON COLUMN test_table_2.test_table_2_column IS 'very gezellige column'
+
+query I
+select comment from duckdb_columns() where column_name='test_table_2_column';
+----
+very gezellige column
+
+
+### TODO: functions (scalar, table, pragma), collations
+### TODO2: multiple schemas, multiple databases, columns with multiple columns
+### TODO3: persistence

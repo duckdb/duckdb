@@ -64,9 +64,16 @@ void ColumnDefinition::SetType(const LogicalType &type) {
 const string &ColumnDefinition::Name() const {
 	return name;
 }
-
 void ColumnDefinition::SetName(const string &name) {
 	this->name = name;
+}
+
+const Value &ColumnDefinition::Comment() const {
+	return comment;
+}
+
+void ColumnDefinition::SetComment(const Value &comment) {
+	this->comment = comment;
 }
 
 const duckdb::CompressionType &ColumnDefinition::CompressionType() const {
