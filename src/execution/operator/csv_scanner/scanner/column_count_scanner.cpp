@@ -37,6 +37,10 @@ bool ColumnCountResult::EmptyLine(ColumnCountResult &result, const idx_t buffer_
 	return false;
 }
 
+void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
+	// nop
+}
+
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        shared_ptr<CSVErrorHandler> error_handler)
