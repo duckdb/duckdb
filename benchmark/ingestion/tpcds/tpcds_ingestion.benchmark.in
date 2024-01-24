@@ -4,16 +4,18 @@
 
 name Q${table_name}
 group ingestion
-subgroup tpch
+subgroup tpcds
 
 require tpcds
 
-cache tpcds_sf5.duckdb
+require parquet
+
+cache tpcds_sf10.duckdb
 
 load benchmark/ingestion/tpcds/load.sql
 
 run
-create table ${table_name}_ingested as select * from ${table_name};
+create table ${table_name}_ingested as select * from read_parquet('tpcds_parquet/${table_name}.parquet');
 
 cleanup
-DROP TABLE ${table_name}_ingested;
+drop table ${table_name}_ingested;

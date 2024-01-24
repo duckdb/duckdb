@@ -1,1 +1,2 @@
-CALL dbgen(sf=5);
+CALL dbgen(sf=10);
+EXPORT DATABASE 'tpch_parquet' (FORMAT PARQUET);
