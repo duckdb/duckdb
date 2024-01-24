@@ -455,7 +455,7 @@ void StringValueScanner::ProcessExtraRow() {
 		case CSVState::INVALID:
 			result.InvalidState(result);
 			iterator.pos.buffer_pos++;
-			break;
+			return;
 		case CSVState::RECORD_SEPARATOR:
 			if (states.states[0] == CSVState::RECORD_SEPARATOR) {
 				lines_read++;
@@ -741,31 +741,40 @@ void StringValueScanner::SetStart() {
 	}
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
-	SkipUntilNewLine();
-	StringValueScanner scan_finder(0, buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), iterator, 1);
-	auto &tuples = scan_finder.ParseChunk();
-	if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
-		// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
-		// Or if columns don't match, this is not the correct start, we need to skip until the next new line
-		if (scan_finder.iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
-		    cur_buffer_handle->is_last_buffer) {
-			iterator.pos.buffer_idx = scan_finder.iterator.pos.buffer_idx;
-			iterator.pos.buffer_pos = scan_finder.iterator.pos.buffer_pos;
-			result.last_position = iterator.pos.buffer_pos;
-			return;
+	bool line_found = true;
+	unique_ptr<StringValueScanner> scan_finder;
+	do {
+		SkipUntilNewLine();
+		scan_finder = make_uniq<StringValueScanner>(0, buffer_manager, state_machine,
+		                                            make_shared<CSVErrorHandler>(true), iterator, 1);
+		auto &tuples = scan_finder->ParseChunk();
+		line_found = true;
+		if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
+			line_found = false;
+			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
+			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
+			if (scan_finder->iterator.pos.buffer_pos >= cur_buffer_handle->actual_size &&
+			    cur_buffer_handle->is_last_buffer) {
+				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
+				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
+				result.last_position = iterator.pos.buffer_pos;
+				return;
+			}
 		}
-	}
-	iterator.pos.buffer_idx = scan_finder.result.pre_previous_line_start.buffer_idx;
-	iterator.pos.buffer_pos = scan_finder.result.pre_previous_line_start.buffer_pos;
+	} while (!line_found);
+	iterator.pos.buffer_idx = scan_finder->result.pre_previous_line_start.buffer_idx;
+	iterator.pos.buffer_pos = scan_finder->result.pre_previous_line_start.buffer_pos;
 	result.last_position = iterator.pos.buffer_pos;
 }
 
 void StringValueScanner::FinalizeChunkProcess() {
 	if (result.result_position >= result.vector_size || iterator.done) {
 		// We are done
-		if (!sniffing){
-			csv_file_scan->bytes_read += bytes_read;
-			bytes_read = 0;
+		if (!sniffing) {
+			if (csv_file_scan) {
+				csv_file_scan->bytes_read += bytes_read;
+				bytes_read = 0;
+			}
 		}
 		return;
 	}
