@@ -801,13 +801,15 @@ void StringValueScanner::SetStart() {
 			line_found = false;
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			// Or if columns don't match, this is not the correct start, we need to skip until the next new line
-			if (scan_finder->iterator.pos.buffer_pos >= scan_finder->previous_buffer_handle->actual_size &&
-			    scan_finder->previous_buffer_handle->is_last_buffer) {
-				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
-				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
-				result.last_position = iterator.pos.buffer_pos;
-				iterator.done = scan_finder->iterator.done;
-				return;
+			if (scan_finder->previous_buffer_handle) {
+				if (scan_finder->iterator.pos.buffer_pos >= scan_finder->previous_buffer_handle->actual_size &&
+				    scan_finder->previous_buffer_handle->is_last_buffer) {
+					iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
+					iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
+					result.last_position = iterator.pos.buffer_pos;
+					iterator.done = scan_finder->iterator.done;
+					return;
+				}
 			}
 		}
 	} while (!line_found);
