@@ -324,3 +324,28 @@ hello\x00\x00\x00\x00\x00	world
 hello\x00	NULL
 hello	world
 (empty)	(empty)
+
+# test array type
+statement ok
+CREATE TABLE arrays(l INT[3]);
+
+statement ok
+INSERT INTO arrays VALUES ([1, 2, 3]), (NULL), ([NULL, NULL, NULL]), ([1, NULL, 3]), ([2, 3, 4]);
+
+query I
+SELECT l FROM arrays ORDER BY create_sort_key(l, 'ASC NULLS LAST')
+----
+[1, 2, 3]
+[1, NULL, 3]
+[2, 3, 4]
+[NULL, NULL, NULL]
+NULL
+
+query I
+SELECT l FROM arrays ORDER BY create_sort_key(l, 'DESC NULLS FIRST')
+----
+NULL
+[NULL, NULL, NULL]
+[2, 3, 4]
+[1, NULL, 3]
+[1, 2, 3]

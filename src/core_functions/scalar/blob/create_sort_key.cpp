@@ -96,7 +96,59 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 //===--------------------------------------------------------------------===//
 // Operators
 //===--------------------------------------------------------------------===//
-template<class T>
+struct SortKeyVectorData {
+	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) :
+			vec(input) {
+		input.ToUnifiedFormat(size, format);
+		this->size = size;
+
+		null_byte = modifiers.null_type == OrderByNullType::NULLS_LAST ? 1 : 0;
+		valid_byte = 1 - null_byte;
+
+		// NULLS FIRST/NULLS LAST passed in by the user are only respected at the top level
+		// within nested types NULLS LAST/NULLS FIRST is dependent on ASC/DESC order instead
+		// don't blame me this is what Postgres does
+		auto child_null_type = modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		OrderModifiers child_modifiers(modifiers.order_type, child_null_type);
+		switch(input.GetType().InternalType()) {
+			case PhysicalType::STRUCT: {
+				auto &children = StructVector::GetEntries(input);
+				for(auto &child : children) {
+					child_data.emplace_back(*child, size, child_modifiers);
+				}
+				break;
+			}
+			case PhysicalType::ARRAY: {
+				auto &child_entry = ArrayVector::GetEntry(input);
+				auto array_size = ArrayType::GetSize(input.GetType());
+				child_data.emplace_back(child_entry, size * array_size, child_modifiers);
+				break;
+			}
+			case PhysicalType::LIST: {
+				auto &child_entry = ListVector::GetEntry(input);
+				auto child_size = ListVector::GetListSize(input);
+				child_data.emplace_back(child_entry, child_size, child_modifiers);
+				break;
+			}
+			default:
+				break;
+		}
+	}
+
+	PhysicalType GetPhysicalType() {
+		return vec.GetType().InternalType();
+	}
+
+	Vector &vec;
+	idx_t size;
+	UnifiedVectorFormat format;
+	vector<SortKeyVectorData> child_data;
+	SelectionVector result_sel;
+	data_t null_byte;
+	data_t valid_byte;
+};
+
+	template<class T>
 struct SortKeyConstantOperator {
 	using TYPE = T;
 
@@ -162,6 +214,28 @@ struct SortKeyBlobOperator {
 	}
 };
 
+struct SortKeyListEntry {
+	static bool IsArray() {
+		return false;
+	}
+
+	static list_entry_t GetListEntry(SortKeyVectorData &vector_data, idx_t idx) {
+		auto data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data.format);
+		return data[idx];
+	}
+};
+
+struct SortKeyArrayEntry {
+	static bool IsArray() {
+		return true;
+	}
+
+	static list_entry_t GetListEntry(SortKeyVectorData &vector_data, idx_t idx) {
+		auto array_size = ArrayType::GetSize(vector_data.vec.GetType());
+		return list_entry_t(array_size * idx, array_size);
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Get Sort Key Length
 //===--------------------------------------------------------------------===//
@@ -172,52 +246,6 @@ struct SortKeyLengthInfo {
 
 	idx_t constant_length;
 	unsafe_vector<idx_t> variable_lengths;
-};
-
-struct SortKeyVectorData {
-	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) :
-		vec(input) {
-		input.ToUnifiedFormat(size, format);
-		this->size = size;
-
-		null_byte = modifiers.null_type == OrderByNullType::NULLS_LAST ? 1 : 0;
-		valid_byte = 1 - null_byte;
-
-		// NULLS FIRST/NULLS LAST passed in by the user are only respected at the top level
-		// within nested types NULLS LAST/NULLS FIRST is dependent on ASC/DESC order instead
-		// don't blame me this is what Postgres does
-		auto child_null_type = modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
-		OrderModifiers child_modifiers(modifiers.order_type, child_null_type);
-		switch(input.GetType().InternalType()) {
-		case PhysicalType::STRUCT: {
-			auto &children = StructVector::GetEntries(input);
-			for(auto &child : children) {
-				child_data.emplace_back(*child, size, child_modifiers);
-			}
-			break;
-		}
-		case PhysicalType::LIST: {
-			auto &child_entry = ListVector::GetEntry(input);
-			auto child_size = ListVector::GetListSize(input);
-			child_data.emplace_back(child_entry, child_size, child_modifiers);
-			break;
-		}
-		default:
-			break;
-		}
-	}
-
-	PhysicalType GetPhysicalType() {
-		return vec.GetType().InternalType();
-	}
-
-	Vector &vec;
-	idx_t size;
-	UnifiedVectorFormat format;
-	vector<SortKeyVectorData> child_data;
-	SelectionVector result_sel;
-	data_t null_byte;
-	data_t valid_byte;
 };
 
 static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyLengthInfo &result);
@@ -249,8 +277,9 @@ void GetSortKeyLengthStruct(SortKeyVectorData &vector_data, SortKeyLengthInfo &r
 		GetSortKeyLengthRecursive(child_data, result);
 	}
 }
+
+template<class OP>
 void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
-	auto data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data.format);
 	auto &child_data = vector_data.child_data[0];
 	child_data.result_sel.Initialize(child_data.size);
 	for (idx_t r = 0; r < vector_data.size; r++) {
@@ -259,9 +288,12 @@ void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyLengthInfo &res
 
 		auto idx = vector_data.format.sel->get_index(r);
 		if (!vector_data.format.validity.RowIsValid(idx)) {
-			continue;
+			if (!OP::IsArray()) {
+				// for arrays we need to fill in the child vector for all elements, even if the top-level array is NULL
+				continue;
+			}
 		}
-		auto list_entry = data[idx];
+		auto list_entry = OP::GetListEntry(vector_data, idx);
 		// for each non-null list we have an "end of list" delimiter
 		result.variable_lengths[result_index]++;
 		// set up the selection vector for the child
@@ -330,7 +362,10 @@ static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyLen
 		GetSortKeyLengthStruct(vector_data, result);
 		break;
 	case PhysicalType::LIST:
-		GetSortKeyLengthList(vector_data, result);
+		GetSortKeyLengthList<SortKeyListEntry>(vector_data, result);
+		break;
+	case PhysicalType::ARRAY:
+		GetSortKeyLengthList<SortKeyArrayEntry>(vector_data, result);
 		break;
 	default:
 		throw NotImplementedException("Unsupported physical type %s in GetSortKeyLength", physical_type);
@@ -425,8 +460,8 @@ void ConstructSortKeyStruct(SortKeyVectorData &vector_data, idx_t start, idx_t e
 	}
 }
 
+template<class OP>
 void ConstructSortKeyList(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info) {
-	auto data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data.format);
 	auto &offsets = info.offsets;
 	for (idx_t r = start; r < end; r++) {
 		auto result_index = vector_data.result_sel.get_index(r);
@@ -436,12 +471,16 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, idx_t start, idx_t end
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
-			continue;
+			if (!OP::IsArray()) {
+				// for arrays we always write the child elements - also if the top-level array is NULL
+				continue;
+			}
+		} else {
+			// valid value - write the validity byte
+			result_ptr[offset++] = vector_data.valid_byte;
 		}
-		// valid value - write the validity byte
-		result_ptr[offset++] = vector_data.valid_byte;
 
-		auto list_entry = data[idx];
+		auto list_entry = OP::GetListEntry(vector_data, idx);
 		// recurse and write the list elements
 		if (list_entry.length > 0) {
 			ConstructSortKeyRecursive(vector_data.child_data[0], list_entry.offset, list_entry.offset + list_entry.length, info);
@@ -507,7 +546,10 @@ static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, idx_t star
 		ConstructSortKeyStruct(vector_data, start, end, info);
 		break;
 	case PhysicalType::LIST:
-		ConstructSortKeyList(vector_data, start, end, info);
+		ConstructSortKeyList<SortKeyListEntry>(vector_data, start, end, info);
+		break;
+	case PhysicalType::ARRAY:
+		ConstructSortKeyList<SortKeyArrayEntry>(vector_data, start, end, info);
 		break;
 	default:
 		throw NotImplementedException("Unsupported type %s in ConstructSortKey", vector_data.vec.GetType());
