@@ -78,13 +78,6 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
     exit 0
 fi
 
-if [ "$DUCKDB_EXTENSION_SIGNING_PK" != "" ]; then
-  echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
-  $script_dir/compute-extension-hash.sh $ext.append > $ext.hash
-  openssl pkeyutl -sign -in $ext.hash -inkey private.pem -pkeyopt digest:sha256 -out $ext.sign
-  rm -f private.pem
-fi
-
 # Set dry run unless guard var is set
 DRY_RUN_PARAM="--dryrun"
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
