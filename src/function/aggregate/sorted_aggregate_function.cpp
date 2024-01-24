@@ -715,10 +715,6 @@ struct SortedAggregateFunction {
 struct CompareAggregateBindData : public FunctionData {
 	explicit CompareAggregateBindData(BoundAggregateExpression &expr)
 	    : function(expr.function), child_bind(std::move(expr.bind_info)), sort_layout(expr.order_bys->orders) {
-		if (!sort_layout.all_constant) {
-			throw NotImplementedException("Non-constant sort keys are not supported yet");
-		}
-
 		auto &order_bys = *expr.order_bys;
 		for (auto &order : order_bys.orders) {
 			orders.emplace_back(order.Copy());
@@ -792,24 +788,44 @@ struct CompareAggregateBindData : public FunctionData {
 };
 
 struct CompareAggregateState {
-	vector<data_t> state;
-	vector<data_t> radix;
-	vector<data_t> heap;
+	vector<data_t> val;
+	vector<data_t> key;
 
-	void Swap(CompareAggregateState &other) {
-		state.swap(other.state);
-		radix.swap(other.radix);
-		heap.swap(other.heap);
+	inline void Initialize(CompareAggregateBindData &compare_bind) {
+		auto &sort_layout = compare_bind.sort_layout;
+		val.resize(compare_bind.function.state_size());
+		compare_bind.function.initialize(val.data());
+		key.resize(sort_layout.entry_size);
+	}
+
+	inline int Compare(CompareAggregateBindData &compare_bind, const_data_ptr_t right_key) {
+		auto &sort_layout = compare_bind.sort_layout;
+		if (val.empty()) {
+			Initialize(compare_bind);
+			return -1; // Uninitialized is before all keys
+		} else {
+			return FastMemcmp(key.data(), right_key, sort_layout.comparison_size);
+		}
+	}
+
+	inline void UpdateKey(const_data_ptr_t right_key) {
+		::memcpy(key.data(), right_key, key.size());
+	}
+
+	inline void Swap(CompareAggregateState &other) {
+		val.swap(other.val);
+		key.swap(other.key);
 	}
 
 	void Absorb(CompareAggregateBindData &compare_bind, CompareAggregateState &other) {
-		if (other.state.empty()) {
+		if (other.val.empty()) {
 			return;
-		} else if (state.empty()) {
+		} else if (val.empty()) {
 			Swap(other);
 		} else {
-			auto comp_res = FastMemcmp(other.radix.data(), radix.data(), compare_bind.sort_layout.comparison_size);
-			if (comp_res > 0) {
+			const auto cmp = Compare(compare_bind, other.key.data());
+			if (cmp < 0) {
+				//	Our key is smaller, so update
 				Swap(other);
 			}
 		}
@@ -834,29 +850,22 @@ struct CombineAggregateFunction {
 		const auto child_cols = (input_count - sort_layout.column_count);
 
 		//	TODO: Share memory between calls?
-		vector<data_t> radix_data;
-		compare_bind.BuildSortKeys(inputs + child_cols, count, radix_data);
-		auto radix_ptr = radix_data.data();
+		vector<data_t> key_data;
+		compare_bind.BuildSortKeys(inputs + child_cols, count, key_data);
+		auto right_key = key_data.data();
 
 		auto state = reinterpret_cast<CompareAggregateState *>(state_p);
 
 		sel_t best_idx = count;
 		for (idx_t i = 0; i < count; ++i) {
-			int comp_res;
-			if (state->state.empty()) {
-				state->state.resize(compare_bind.function.state_size());
-				compare_bind.function.initialize(state->state.data());
-				state->radix.resize(sort_layout.entry_size);
-				comp_res = 1;
-			} else {
-				comp_res = FastMemcmp(state->radix.data(), radix_ptr, sort_layout.comparison_size);
-			}
-			if (comp_res > 0) {
+			const auto cmp = state->Compare(compare_bind, right_key);
+			if (cmp < 0) {
+				//	Old key is smaller, so update
 				best_idx = i;
-				::memcpy(state->radix.data(), radix_ptr, state->radix.size());
+				state->UpdateKey(right_key);
 			}
 
-			radix_ptr += sort_layout.entry_size;
+			right_key += sort_layout.entry_size;
 		}
 
 		if (best_idx >= count) {
@@ -874,10 +883,10 @@ struct CombineAggregateFunction {
 		// These are all simple updates, so use it if available
 		auto simple_update = compare_bind.function.simple_update;
 		if (simple_update) {
-			simple_update(inputs, child_aggr_data, child_cols, state->state.data(), 1);
+			simple_update(inputs, child_aggr_data, child_cols, state->val.data(), 1);
 		} else {
 			// We are only updating a constant state
-			Vector agg_state_vec(Value::POINTER(CastPointerToValue(state->state.data())));
+			Vector agg_state_vec(Value::POINTER(CastPointerToValue(state->val.data())));
 			agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
 			compare_bind.function.update(inputs, child_aggr_data, child_cols, agg_state_vec, 1);
 		}
@@ -890,9 +899,9 @@ struct CombineAggregateFunction {
 		const auto child_cols = (input_count - sort_layout.column_count);
 
 		//	TODO: Share memory between calls?
-		vector<data_t> radix_data;
-		compare_bind.BuildSortKeys(inputs + child_cols, count, radix_data);
-		auto radix_ptr = radix_data.data();
+		vector<data_t> key_data;
+		compare_bind.BuildSortKeys(inputs + child_cols, count, key_data);
+		auto right_key = key_data.data();
 
 		UnifiedVectorFormat svdata;
 		states.ToUnifiedFormat(count, svdata);
@@ -906,22 +915,15 @@ struct CombineAggregateFunction {
 		for (idx_t i = 0; i < count; ++i) {
 			const auto sidx = svdata.sel->get_index(i);
 			auto state = sdata[sidx];
-			int comp_res;
-			if (state->state.empty()) {
-				state->state.resize(compare_bind.function.state_size());
-				compare_bind.function.initialize(state->state.data());
-				state->radix.resize(sort_layout.entry_size);
-				comp_res = 1;
-			} else {
-				comp_res = FastMemcmp(state->radix.data(), radix_ptr, sort_layout.comparison_size);
-			}
-			if (comp_res > 0) {
-				child_state_ptrs[nsel] = state->state.data();
+			const auto cmp = state->Compare(compare_bind, right_key);
+			if (cmp < 0) {
+				//	Old key is smaller, so update
+				child_state_ptrs[nsel] = state->val.data();
 				seldata[nsel++] = i;
-				::memcpy(state->radix.data(), radix_ptr, state->radix.size());
+				state->UpdateKey(right_key);
 			}
 
-			radix_ptr += sort_layout.entry_size;
+			right_key += sort_layout.entry_size;
 		}
 
 		//	Update the winners
@@ -961,12 +963,20 @@ struct CombineAggregateFunction {
 		for (idx_t i = 0; i < count; ++i) {
 			const auto sidx = svdata.sel->get_index(i);
 			auto state = sdata[sidx];
-			child_state_ptrs[i] = state->state.data();
+			if (state->val.empty()) {
+				state->Initialize(compare_bind);
+			}
+			child_state_ptrs[i] = state->val.data();
 		}
 
 		AggregateInputData child_aggr_data(compare_bind.child_bind, aggr_input_data.allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		compare_bind.function.finalize(child_states, child_aggr_data, result, count, offset);
+
+		auto destructor = compare_bind.function.destructor;
+		if (destructor) {
+			destructor(child_states, child_aggr_data, count);
+		}
 	}
 
 	static bool Bind(BoundAggregateExpression &expr) {
@@ -975,6 +985,10 @@ struct CombineAggregateFunction {
 		}
 
 		auto parent_bind = make_uniq<CompareAggregateBindData>(expr);
+		if (!parent_bind->sort_layout.all_constant) {
+			return false;
+		}
+
 		auto &children = expr.children;
 		auto &bound_function = expr.function;
 
@@ -1043,12 +1057,11 @@ void FunctionBinder::BindSortedAggregate(BoundAggregateExpression &expr, const v
 	}
 
 	auto &bound_function = expr.function;
-	auto &order_bys = *expr.order_bys;
 
 	//	Some sorted aggregates (FIRST, LAST...) only need to compare sort keys on each row
 	//	instead of keeping all the values around (i.e., they are not holistic)
-	if (bound_function.order_dependent == AggregateOrderDependent::COMPARE_DEPENDENT) {
-		//	Add one more child that is a sort key.
+	if (bound_function.order_dependent == AggregateOrderDependent::COMPARE_DEPENDENT &&
+	    CombineAggregateFunction::Bind(expr)) {
 		return;
 	}
 
@@ -1057,7 +1070,7 @@ void FunctionBinder::BindSortedAggregate(BoundAggregateExpression &expr, const v
 	auto &children = expr.children;
 	if (!sorted_bind->sorted_on_args) {
 		// The arguments are the children plus the sort columns.
-		for (auto &order : order_bys.orders) {
+		for (auto &order : expr.order_bys->orders) {
 			children.emplace_back(std::move(order.expression));
 		}
 	}

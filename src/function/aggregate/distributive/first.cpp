@@ -326,6 +326,8 @@ unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &fu
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
+	// FIRST and friends are order-dependent but not holistic.
+	function.order_dependent = AggregateOrderDependent::COMPARE_DEPENDENT;
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {
