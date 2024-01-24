@@ -2,12 +2,15 @@
 # description: Test COMMENT ON to add comments to catalog entries
 # group: [catalog]
 
-# Generic tests
+### Generic tests
+
+# String literal or NULL only
 statement error
 COMMENT ON TABLE test IS 1337
 ----
 Parser Error: syntax error
 
+# Catalog entry not found is error
 statement error
 COMMENT ON TABLE hahahoehoe IS 'blablabloebloe'
 ----
@@ -29,6 +32,15 @@ query I
 select comment from duckdb_tables() where table_name='test_table';
 ----
 very gezellige table
+
+# Reverting to null goes like dis
+statement ok
+COMMENT ON TABLE test_table IS NULL
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+NULL
 
 ### Comment on view
 statement ok
@@ -137,7 +149,57 @@ select comment from duckdb_columns() where column_name='test_table_2_column';
 ----
 very gezellige column
 
+### Comment on Macro
+statement ok
+CREATE MACRO test_macro(a, b) AS a + b
 
-### TODO: functions (scalar, table, pragma), collations
+query I
+select comment from duckdb_functions() where function_name='test_macro';
+----
+NULL
+
+statement ok
+COMMENT ON FUNCTION test_macro IS 'very gezellige macro'
+
+query I
+select comment from duckdb_functions() where function_name='test_macro';
+----
+very gezellige macro
+
+### Comment on function (alias for scalar macro)
+statement ok
+CREATE FUNCTION test_function(a, b) AS a + b
+
+query I
+select comment from duckdb_functions() where function_name='test_function';
+----
+NULL
+
+statement ok
+COMMENT ON FUNCTION test_function IS 'very gezellige function'
+
+query I
+select comment from duckdb_functions() where function_name='test_function';
+----
+very gezellige function
+
+### Comment on TABLE MACRO
+statement ok
+CREATE MACRO test_table_macro(a,b) as TABLE select a,b from test_tbl;
+
+query I
+select comment from duckdb_functions() where function_name='test_table_macro';
+----
+NULL
+
+statement ok
+COMMENT ON MACRO TABLE test_table_macro IS 'very gezellige table macro'
+
+query I
+select comment from duckdb_functions() where function_name='test_table_macro';
+----
+very gezellige table macro
+
+### TODO: databases
 ### TODO2: multiple schemas, multiple databases, columns with multiple columns
 ### TODO3: persistence
