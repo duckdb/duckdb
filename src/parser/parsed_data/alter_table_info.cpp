@@ -42,6 +42,8 @@ unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
 	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog, schema, name, comment_value, if_not_found);
 }
 
+SetCommentInfo::SetCommentInfo() : AlterInfo(AlterType::SET_COMMENT) {
+}
 
 //===--------------------------------------------------------------------===//
 // AlterTableInfo

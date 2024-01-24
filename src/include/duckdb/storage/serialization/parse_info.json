@@ -217,6 +217,23 @@
     ]
   },
   {
+    "class": "AlterColumnCommentInfo",
+    "base": "AlterTableInfo",
+    "enum": "ALTER_COLUMN_COMMENT",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "comment",
+        "type": "Value"
+      }
+    ]
+  },
+  {
     "class": "SetNotNullInfo",
     "base": "AlterTableInfo",
     "enum": "SET_NOT_NULL",
@@ -237,6 +254,23 @@
         "id": 400,
         "name": "column_name",
         "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "SetCommentInfo",
+    "base": "AlterInfo",
+    "enum": "SET_COMMENT",
+    "members": [
+      {
+        "id": 300,
+        "name": "entry_catalog_type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 301,
+        "name": "comment_value",
+        "type": "Value"
       }
     ]
   },

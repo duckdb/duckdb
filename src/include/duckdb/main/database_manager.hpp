@@ -46,6 +46,8 @@ public:
 	                                              AccessMode access_mode);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	//! Alter a database
+	optional_ptr<AttachedDatabase> AlterDatabase(ClientContext &context, AlterInfo &info);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 

@@ -18,7 +18,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
-	if (stmt.info->GetCatalogType() == CatalogType::SCHEMA_ENTRY) {
+	// Edge case for COMMENT ON statement on SCHEMA or DATABASE
+	if (stmt.info->GetCatalogType() == CatalogType::SCHEMA_ENTRY || stmt.info->GetCatalogType() == CatalogType::DATABASE_ENTRY) {
 		D_ASSERT(stmt.info->type == AlterType::SET_COMMENT);
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		properties.return_type = StatementReturnType::NOTHING;

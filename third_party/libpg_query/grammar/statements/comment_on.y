@@ -26,6 +26,7 @@ comment_on_type_any_name:
 			| MACRO									{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO TABLE                           { $$ = PG_OBJECT_TABLE_MACRO; }
 			| VIEW									{ $$ = PG_OBJECT_VIEW; }
+			| DATABASE								{ $$ = PG_OBJECT_DATABASE; }
 			| MATERIALIZED VIEW						{ $$ = PG_OBJECT_MATVIEW; }
 			| INDEX									{ $$ = PG_OBJECT_INDEX; }
 			| COLLATION								{ $$ = PG_OBJECT_COLLATION; }

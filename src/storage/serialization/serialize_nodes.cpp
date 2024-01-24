@@ -199,6 +199,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression", expression);
 	serializer.WriteProperty<TableColumnType>(103, "category", category);
 	serializer.WriteProperty<duckdb::CompressionType>(104, "compression_type", compression_type);
+	serializer.WriteProperty<Value>(105, "comment", comment);
 }
 
 ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -208,6 +209,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	auto category = deserializer.ReadProperty<TableColumnType>(103, "category");
 	ColumnDefinition result(std::move(name), std::move(type), std::move(expression), category);
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
+	deserializer.ReadProperty<Value>(105, "comment", result.comment);
 	return result;
 }
 

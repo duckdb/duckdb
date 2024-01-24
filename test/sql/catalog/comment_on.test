@@ -2,6 +2,8 @@
 # description: Test COMMENT ON to add comments to catalog entries
 # group: [catalog]
 
+load __TEST_DIR__/comment_on.db
+
 ### Generic tests
 
 # String literal or NULL only
@@ -27,6 +29,13 @@ NULL
 
 statement ok
 COMMENT ON TABLE test_table IS 'very gezellige table'
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+very gezellige table
+
+restart
 
 query I
 select comment from duckdb_tables() where table_name='test_table';
@@ -59,6 +68,13 @@ select comment from duckdb_views() where view_name='test_view';
 ----
 very gezellige view
 
+restart
+
+query I
+select comment from duckdb_views() where view_name='test_view';
+----
+very gezellige view
+
 ### Comment on indices
 statement ok
 CREATE INDEX test_index ON test_table using art(test_table_column)
@@ -70,6 +86,13 @@ NULL
 
 statement ok
 COMMENT ON INDEX test_index IS 'very gezellige index'
+
+query I
+select comment from duckdb_indexes() where index_name='test_index';
+----
+very gezellige index
+
+restart
 
 query I
 select comment from duckdb_indexes() where index_name='test_index';
@@ -93,6 +116,13 @@ select comment from duckdb_sequences() where sequence_name='test_sequence';
 ----
 very gezellige sequence
 
+restart
+
+query I
+select comment from duckdb_sequences() where sequence_name='test_sequence';
+----
+very gezellige sequence
+
 ### Comment on schemas
 statement ok
 CREATE SCHEMA test_schema;
@@ -104,6 +134,13 @@ NULL
 
 statement ok
 COMMENT ON SCHEMA test_schema IS 'very gezellige schema'
+
+query I
+select comment from duckdb_schemas() where schema_name='test_schema';
+----
+very gezellige schema
+
+restart
 
 query I
 select comment from duckdb_schemas() where schema_name='test_schema';
@@ -127,6 +164,14 @@ select comment from duckdb_types() where type_name='test_type';
 ----
 very gezellige type
 
+restart
+
+query I
+select comment from duckdb_types() where type_name='test_type';
+----
+very gezellige type
+
+
 ### Comment on column
 statement ok
 CREATE TABLE test_table_2 AS SELECT 1 as test_table_2_column;
@@ -143,6 +188,13 @@ NULL
 
 statement ok
 COMMENT ON COLUMN test_table_2.test_table_2_column IS 'very gezellige column'
+
+query I
+select comment from duckdb_columns() where column_name='test_table_2_column';
+----
+very gezellige column
+
+restart
 
 query I
 select comment from duckdb_columns() where column_name='test_table_2_column';
@@ -166,6 +218,13 @@ select comment from duckdb_functions() where function_name='test_macro';
 ----
 very gezellige macro
 
+restart
+
+query I
+select comment from duckdb_functions() where function_name='test_macro';
+----
+very gezellige macro
+
 ### Comment on function (alias for scalar macro)
 statement ok
 CREATE FUNCTION test_function(a, b) AS a + b
@@ -177,6 +236,13 @@ NULL
 
 statement ok
 COMMENT ON FUNCTION test_function IS 'very gezellige function'
+
+query I
+select comment from duckdb_functions() where function_name='test_function';
+----
+very gezellige function
+
+restart
 
 query I
 select comment from duckdb_functions() where function_name='test_function';
@@ -200,6 +266,15 @@ select comment from duckdb_functions() where function_name='test_table_macro';
 ----
 very gezellige table macro
 
-### TODO: databases
-### TODO2: multiple schemas, multiple databases, columns with multiple columns
-### TODO3: persistence
+restart
+
+query I
+select comment from duckdb_functions() where function_name='test_table_macro';
+----
+very gezellige table macro
+
+### Comment on DATABASE
+statement error
+COMMENT ON DATABASE blabla IS 'bloebloe'
+----
+Not implemented Error: Adding comments to databases in not implemented

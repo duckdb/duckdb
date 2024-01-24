@@ -22,6 +22,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	copy.expression = expression ? expression->Copy() : nullptr;
 	copy.compression_type = compression_type;
 	copy.category = category;
+	copy.comment = comment;
 	return copy;
 }
 

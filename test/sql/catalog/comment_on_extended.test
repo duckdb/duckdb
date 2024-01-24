@@ -1,0 +1,6 @@
+# name: test/sql/catalog/comment_on_extended.test
+# description: Test COMMENT ON to add comment on database
+# group: [catalog]
+
+load __TEST_DIR__/comment_on_extended.db
+

@@ -34,9 +34,6 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 	case duckdb_libpgquery::PG_OBJECT_VIEW:
 		type = CatalogType::VIEW_ENTRY;
 		break;
-	case duckdb_libpgquery::PG_OBJECT_DATABASE:
-		type = CatalogType::DATABASE_ENTRY;
-		break;
 	case duckdb_libpgquery::PG_OBJECT_FUNCTION:
 		type = CatalogType::MACRO_ENTRY;
 		break;
@@ -52,32 +49,25 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 	default:
 		break;
 	}
+
 	if (type != CatalogType::INVALID) {
 		info = make_uniq<SetCommentInfo>(type, qualified_name.catalog, qualified_name.schema,
 		                                 qualified_name.name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
-		res->info = std::move(info);
-		return res;
-	}
-
-	// Special cases
-	if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_COLUMN) {
+	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_COLUMN) {
+		// Special case: Table Column
 		AlterEntryData alter_entry_data;
 		alter_entry_data.catalog = INVALID_CATALOG; // TODO HACKY: support fully specified path
 		alter_entry_data.schema = qualified_name.catalog;
 		alter_entry_data.name = qualified_name.schema;
 
 		info = make_uniq<AlterColumnCommentInfo>(alter_entry_data, qualified_name.name, comment_value);
-
-		res->info = std::move(info);
-		return res;
-
-		// Handle column
-		throw NotImplementedException("Column comments");
+	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_DATABASE) {
+		throw NotImplementedException("Adding comments to databases in not implemented");
 	}
 
-	if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_DATABASE) {
-		// Handle column
-		throw NotImplementedException("Database comments");
+	if (info) {
+		res->info = std::move(info);
+		return res;
 	}
 
 	throw NotImplementedException("Can not comment on this type");

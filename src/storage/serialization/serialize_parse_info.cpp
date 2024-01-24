@@ -89,6 +89,9 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	case AlterType::ALTER_VIEW:
 		result = AlterViewInfo::Deserialize(deserializer);
 		break;
+	case AlterType::SET_COMMENT:
+		result = SetCommentInfo::Deserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterInfo!");
 	}
@@ -111,6 +114,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	switch (alter_table_type) {
 	case AlterTableType::ADD_COLUMN:
 		result = AddColumnInfo::Deserialize(deserializer);
+		break;
+	case AlterTableType::ALTER_COLUMN_COMMENT:
+		result = AlterColumnCommentInfo::Deserialize(deserializer);
 		break;
 	case AlterTableType::ALTER_COLUMN_TYPE:
 		result = ChangeColumnTypeInfo::Deserialize(deserializer);
@@ -170,6 +176,19 @@ unique_ptr<AlterTableInfo> AddColumnInfo::Deserialize(Deserializer &deserializer
 	auto new_column = deserializer.ReadProperty<ColumnDefinition>(400, "new_column");
 	auto result = duckdb::unique_ptr<AddColumnInfo>(new AddColumnInfo(std::move(new_column)));
 	deserializer.ReadPropertyWithDefault<bool>(401, "if_column_not_exists", result->if_column_not_exists);
+	return std::move(result);
+}
+
+void AlterColumnCommentInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(400, "column_name", column_name);
+	serializer.WriteProperty<Value>(401, "comment", comment);
+}
+
+unique_ptr<AlterTableInfo> AlterColumnCommentInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<AlterColumnCommentInfo>(new AlterColumnCommentInfo());
+	deserializer.ReadPropertyWithDefault<string>(400, "column_name", result->column_name);
+	deserializer.ReadProperty<Value>(401, "comment", result->comment);
 	return std::move(result);
 }
 
@@ -394,6 +413,19 @@ void RenameViewInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RenameViewInfo>(new RenameViewInfo());
 	deserializer.ReadPropertyWithDefault<string>(400, "new_view_name", result->new_view_name);
+	return std::move(result);
+}
+
+void SetCommentInfo::Serialize(Serializer &serializer) const {
+	AlterInfo::Serialize(serializer);
+	serializer.WriteProperty<CatalogType>(300, "entry_catalog_type", entry_catalog_type);
+	serializer.WriteProperty<Value>(301, "comment_value", comment_value);
+}
+
+unique_ptr<AlterInfo> SetCommentInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SetCommentInfo>(new SetCommentInfo());
+	deserializer.ReadProperty<CatalogType>(300, "entry_catalog_type", result->entry_catalog_type);
+	deserializer.ReadProperty<Value>(301, "comment_value", result->comment_value);
 	return std::move(result);
 }
 

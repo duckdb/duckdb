@@ -50,6 +50,11 @@ struct SetCommentInfo : public AlterInfo {
 public:
 	CatalogType GetCatalogType() const override;
 	unique_ptr<AlterInfo> Copy() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
+
+	explicit SetCommentInfo();
 };
 
 //===--------------------------------------------------------------------===//
@@ -82,7 +87,7 @@ public:
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 
 protected:
-	AlterTableInfo(AlterTableType type);
+	explicit AlterTableInfo(AlterTableType type);
 };
 
 //===--------------------------------------------------------------------===//
@@ -216,15 +221,14 @@ struct AlterColumnCommentInfo : public AlterTableInfo {
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
-//	void Serialize(Serializer &serializer) const override;
-//	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 
 	string GetColumnName() const override {
 		return column_name;
 	};
 
-private:
-	AlterColumnCommentInfo();
+	explicit AlterColumnCommentInfo();
 };
 
 
