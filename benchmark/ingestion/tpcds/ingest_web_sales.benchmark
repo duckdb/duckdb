@@ -1,0 +1,6 @@
+# name: benchmark/micro/ingestion/tpcds/ingest_web_sales.benchmark
+# description: benchmark ingestion of web_sales
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=web_sales

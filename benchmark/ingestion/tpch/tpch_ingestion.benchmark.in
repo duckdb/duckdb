@@ -10,7 +10,7 @@ require tpch
 
 cache tpch_sf5.duckdb
 
-load benchmark/micro/ingestion/tpch/load.sql
+load benchmark/ingestion/tpch/load.sql
 
 run
 create table ${table_name}_ingested as select * from ${table_name};

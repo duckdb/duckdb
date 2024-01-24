@@ -1,0 +1,6 @@
+# name: benchmark/micro/ingestion/tpcds/ingest_call_center.benchmark
+# description: benchmark ingestion of call_center
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=call_center

@@ -1,0 +1,6 @@
+# name: benchmark/micro/ingestion/tpcds/ingest_catalog_sales.benchmark
+# description: benchmark ingestion of catalog_sales
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=catalog_sales

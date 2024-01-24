@@ -1,0 +1,6 @@
+# name: benchmark/micro/ingestion/tpcds/ingest_item.benchmark
+# description: benchmark ingestion of item
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=item
