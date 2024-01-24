@@ -400,14 +400,23 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::VARCHAR: {
 		auto size_type = arrow_type.GetSizeType();
 		auto cdata = ArrowBufferData<char>(array, 2);
-		if (size_type == ArrowVariableSizeType::SUPER_SIZE) {
+		switch (size_type) {
+		case ArrowVariableSizeType::SUPER_SIZE: {
 			auto offsets = ArrowBufferData<uint64_t>(array, 1) +
 			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 			SetVectorString(vector, size, cdata, offsets);
-		} else {
-			auto offsets = ArrowBufferData<uint32_t>(array, 1) +
+			break;
+		}
+		case ArrowVariableSizeType::NORMAL:
+		case ArrowVariableSizeType::FIXED_SIZE:{
+			auto offsets = ArrowBufferData<uint64_t>(array, 1) +
 			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 			SetVectorString(vector, size, cdata, offsets);
+			break;
+		}
+		case ArrowVariableSizeType::VIEW: {
+			break;
+		}
 		}
 		break;
 	}
