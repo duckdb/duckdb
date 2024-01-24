@@ -15,6 +15,13 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 	this->internal = info.internal;
 }
 
+unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateTypeInfo>();
+	auto result = make_uniq<TypeCatalogEntry>(catalog, schema, cast_info);
+	return std::move(result);
+}
+
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateTypeInfo>();
 	result->catalog = catalog.GetName();

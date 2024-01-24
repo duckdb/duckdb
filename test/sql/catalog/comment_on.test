@@ -98,5 +98,22 @@ select comment from duckdb_schemas() where schema_name='test_schema';
 ----
 very gezellige schema
 
-### TODO: secrets, columns, functions (scalar, table, pragma), TYPES, collations
+### Comment on types
+statement ok
+CREATE TYPE test_type AS int32;
+
+query I
+select comment from duckdb_types() where type_name='test_type';
+----
+NULL
+
+statement ok
+COMMENT ON TYPE test_type IS 'very gezellige type'
+
+query I
+select comment from duckdb_types() where type_name='test_type';
+----
+very gezellige type
+
+### TODO: secrets, columns, functions (scalar, table, pragma), collations
 ### TODO2: multiple schemas, multiple databases
