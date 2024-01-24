@@ -126,8 +126,24 @@ void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
 		}
 	}
 }
+void StringValueResult::QuotedNewLine(StringValueResult &result) {
+	result.quoted_new_line = true;
+}
+
+void StringValueResult::NullPaddingQuotedNewlineCheck() {
+	// We do some checks for null_padding correctness
+	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line && iterator.done) {
+		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel and it's the
+		// last row of this thread.
+		auto csv_error = CSVError::NullPaddingFail(state_machine.options);
+		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), result_position / number_of_columns + 1);
+		error_handler.Error(lines_per_batch, csv_error, true);
+	}
+}
 
 bool StringValueResult::AddRowInternal() {
+	NullPaddingQuotedNewlineCheck();
+	quoted_new_line = false;
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
 	idx_t total_columns_in_row = result_position - last_row_pos;
@@ -268,9 +284,29 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 
 idx_t StringValueResult::NumberOfRows() {
 	if (result_position % number_of_columns != 0) {
-		Print();
-		throw InternalException("Something went wrong when reading the CSV file, more positions than columns. Open an "
-		                        "issue on the issue tracker.");
+		// Maybe we have too few columns:
+		// 1) if null_padding is on we null pad it
+		if (null_padding) {
+			while (result_position % number_of_columns != 0) {
+				bool empty = false;
+				idx_t cur_pos = result_position % number_of_columns;
+				if (cur_pos < state_machine.options.force_not_null.size()) {
+					empty = state_machine.options.force_not_null[cur_pos];
+				}
+				if (empty) {
+					vector_ptr[result_position++] = string_t();
+				} else {
+					validity_mask->SetInvalid(result_position++);
+				}
+			}
+		} else {
+			auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, vector_ptr, number_of_columns,
+			                                                      result_position % number_of_columns);
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), result_position / number_of_columns + 1);
+			error_handler.Error(lines_per_batch, csv_error);
+			result_position -= result_position % number_of_columns;
+			D_ASSERT(result_position % number_of_columns == 0);
+		}
 	}
 	return result_position / number_of_columns;
 }
@@ -448,6 +484,7 @@ void StringValueScanner::Initialize() {
 }
 
 void StringValueScanner::ProcessExtraRow() {
+	result.NullPaddingQuotedNewlineCheck();
 	idx_t to_pos = cur_buffer_handle->actual_size;
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
@@ -508,6 +545,11 @@ void StringValueScanner::ProcessExtraRow() {
 			       iterator.pos.buffer_pos < to_pos - 1) {
 				iterator.pos.buffer_pos++;
 			}
+			break;
+		case CSVState::QUOTED_NEW_LINE:
+			result.quoted_new_line = true;
+			result.NullPaddingQuotedNewlineCheck();
+			iterator.pos.buffer_pos++;
 			break;
 		default:
 			iterator.pos.buffer_pos++;
@@ -643,6 +685,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 		if (!cur_buffer_handle) {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
+			// We do not care if it's a quoted new line on the last row of our file.
+			result.quoted_new_line = false;
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 			    states.IsNotSet()) {
@@ -742,6 +786,10 @@ void StringValueScanner::SetStart() {
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
 	SkipUntilNewLine();
+	if (state_machine->options.null_padding) {
+		// When Null Padding, we assume we start from the correct new-line
+		return;
+	}
 	StringValueScanner scan_finder(0, buffer_manager, state_machine, make_shared<CSVErrorHandler>(true), iterator, 1);
 	auto &tuples = scan_finder.ParseChunk();
 	if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
