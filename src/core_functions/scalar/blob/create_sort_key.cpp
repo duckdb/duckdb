@@ -128,6 +128,40 @@ struct SortKeyVarcharOperator {
 	}
 };
 
+struct SortKeyBlobOperator {
+	using TYPE = string_t;
+
+	static idx_t GetEncodeLength(TYPE input) {
+		auto input_data = data_ptr_t(input.GetDataUnsafe());
+		auto input_size = input.GetSize();
+		idx_t escaped_characters = 0;
+		for(idx_t r = 0; r < input_size; r++) {
+			if (input_data[r] <= 1) {
+				// we escape both \x00 and \x01
+				escaped_characters++;
+			}
+		}
+		return input.GetSize() + escaped_characters + 1;
+	}
+
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		auto input_data = data_ptr_t(input.GetDataUnsafe());
+		auto input_size = input.GetSize();
+		idx_t result_offset = 0;
+		for(idx_t r = 0; r < input_size; r++) {
+			if (input_data[r] <= 1) {
+				// we escape both \x00 and \x01 with \x01
+				result[result_offset++] = 1;
+				result[result_offset++] = input_data[r];
+			} else {
+				result[result_offset++] = input_data[r];
+			}
+		}
+		result[result_offset++] = 0; // null-byte delimiter
+		return result_offset;
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Get Sort Key Length
 //===--------------------------------------------------------------------===//
@@ -250,7 +284,7 @@ static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyLen
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
 			TemplatedGetSortKeyLength<SortKeyVarcharOperator>(vector_data, result);
 		} else {
-			throw NotImplementedException("FIXME: ConstructSortKey blob");
+			TemplatedGetSortKeyLength<SortKeyBlobOperator>(vector_data, result);
 		}
 		break;
 	case PhysicalType::STRUCT:
@@ -388,7 +422,7 @@ static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, idx_t star
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
 			TemplatedConstructSortKey<SortKeyVarcharOperator>(vector_data, start, end, info);
 		} else {
-			throw NotImplementedException("FIXME: ConstructSortKey blob");
+			TemplatedConstructSortKey<SortKeyBlobOperator>(vector_data, start, end, info);
 		}
 		break;
 	case PhysicalType::STRUCT:
