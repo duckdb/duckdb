@@ -217,7 +217,9 @@ protected:
 			Initialize();
 			initialized = true;
 		}
-		Process(result);
+		if (!iterator.done) {
+			Process(result);
+		}
 		FinalizeChunkProcess();
 	}
 };
