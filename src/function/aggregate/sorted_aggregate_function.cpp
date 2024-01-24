@@ -843,6 +843,7 @@ struct CombineAggregateFunction {
 		state.~STATE();
 	}
 
+	template <bool SKIP_NULLS>
 	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                         data_ptr_t state_p, idx_t count) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
@@ -856,16 +857,26 @@ struct CombineAggregateFunction {
 
 		auto state = reinterpret_cast<CompareAggregateState *>(state_p);
 
+		UnifiedVectorFormat avdata;
+		if (SKIP_NULLS) {
+			inputs[0].ToUnifiedFormat(count, avdata);
+		}
+
 		sel_t best_idx = count;
-		for (idx_t i = 0; i < count; ++i) {
+		for (idx_t i = 0; i < count; ++i, right_key += sort_layout.entry_size) {
+			if (SKIP_NULLS && !avdata.validity.AllValid()) {
+				const auto aidx = avdata.sel->get_index(i);
+				if (!avdata.validity.RowIsValid(aidx)) {
+					continue;
+				}
+			}
+
 			const auto cmp = state->Compare(compare_bind, right_key);
 			if (cmp < 0) {
 				//	Old key is smaller, so update
 				best_idx = i;
 				state->UpdateKey(right_key);
 			}
-
-			right_key += sort_layout.entry_size;
 		}
 
 		if (best_idx >= count) {
@@ -892,6 +903,7 @@ struct CombineAggregateFunction {
 		}
 	}
 
+	template <bool SKIP_NULLS>
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                          idx_t count) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
@@ -903,7 +915,10 @@ struct CombineAggregateFunction {
 		compare_bind.BuildSortKeys(inputs + child_cols, count, key_data);
 		auto right_key = key_data.data();
 
-		UnifiedVectorFormat svdata;
+		UnifiedVectorFormat avdata, svdata;
+		if (SKIP_NULLS) {
+			inputs[0].ToUnifiedFormat(count, avdata);
+		}
 		states.ToUnifiedFormat(count, svdata);
 		auto sdata = UnifiedVectorFormat::GetDataNoConst<CompareAggregateState *>(svdata);
 
@@ -912,7 +927,14 @@ struct CombineAggregateFunction {
 		sel_t seldata[STANDARD_VECTOR_SIZE];
 		SelectionVector sel(seldata);
 		idx_t nsel = 0;
-		for (idx_t i = 0; i < count; ++i) {
+		for (idx_t i = 0; i < count; ++i, right_key += sort_layout.entry_size) {
+			if (SKIP_NULLS && !avdata.validity.AllValid()) {
+				const auto aidx = avdata.sel->get_index(i);
+				if (!avdata.validity.RowIsValid(aidx)) {
+					continue;
+				}
+			}
+
 			const auto sidx = svdata.sel->get_index(i);
 			auto state = sdata[sidx];
 			const auto cmp = state->Compare(compare_bind, right_key);
@@ -922,8 +944,6 @@ struct CombineAggregateFunction {
 				seldata[nsel++] = i;
 				state->UpdateKey(right_key);
 			}
-
-			right_key += sort_layout.entry_size;
 		}
 
 		//	Update the winners
@@ -979,6 +999,28 @@ struct CombineAggregateFunction {
 		}
 	}
 
+	template <bool SKIP_NULLS>
+	static AggregateFunction GetFunction(BoundAggregateExpression &expr) {
+		auto &children = expr.children;
+		auto &bound_function = expr.function;
+
+		vector<LogicalType> arguments;
+		arguments.reserve(children.size());
+		for (const auto &child : children) {
+			arguments.emplace_back(child->return_type);
+		}
+
+		return AggregateFunction(bound_function.name, arguments, bound_function.return_type,
+		                         AggregateFunction::StateSize<CompareAggregateState>,
+		                         AggregateFunction::StateInitialize<CompareAggregateState, CombineAggregateFunction>,
+		                         CombineAggregateFunction::ScatterUpdate<SKIP_NULLS>,
+		                         AggregateFunction::StateCombine<CompareAggregateState, CombineAggregateFunction>,
+		                         CombineAggregateFunction::Finalize, bound_function.null_handling,
+		                         CombineAggregateFunction::SimpleUpdate<SKIP_NULLS>, nullptr,
+		                         AggregateFunction::StateDestroy<CompareAggregateState, CombineAggregateFunction>,
+		                         nullptr, SortedAggregateFunction::Window);
+	}
+
 	static bool Bind(ClientContext &context, BoundAggregateExpression &expr) {
 		//	Only comparable aggregates
 		if (expr.function.order_dependent != AggregateOrderDependent::COMPARE_DEPENDENT) {
@@ -992,7 +1034,9 @@ struct CombineAggregateFunction {
 			return false;
 		}
 
-		if (expr.function.name == "first" || expr.function.name == "arbitrary") {
+		const auto &fname = expr.function.name;
+		const bool skip_nulls = (fname == "any_value");
+		if (fname == "first" || fname == "arbitrary" || skip_nulls) {
 			//	Rebind to LAST and invert the sort order
 			expr.function = FirstFun::GetLastFunction(expr.return_type);
 			if (expr.function.bind) {
@@ -1009,30 +1053,12 @@ struct CombineAggregateFunction {
 
 		auto parent_bind = make_uniq<CompareAggregateBindData>(expr);
 		auto &children = expr.children;
-		auto &bound_function = expr.function;
-
 		for (auto &order : order_bys.orders) {
 			children.emplace_back(std::move(order.expression));
 		}
 
-		vector<LogicalType> arguments;
-		arguments.reserve(children.size());
-		for (const auto &child : children) {
-			arguments.emplace_back(child->return_type);
-		}
-
 		// Replace the aggregate with the wrapper
-		AggregateFunction ordered_aggregate(
-		    bound_function.name, arguments, bound_function.return_type,
-		    AggregateFunction::StateSize<CompareAggregateState>,
-		    AggregateFunction::StateInitialize<CompareAggregateState, CombineAggregateFunction>,
-		    CombineAggregateFunction::ScatterUpdate,
-		    AggregateFunction::StateCombine<CompareAggregateState, CombineAggregateFunction>,
-		    CombineAggregateFunction::Finalize, bound_function.null_handling, CombineAggregateFunction::SimpleUpdate,
-		    nullptr, AggregateFunction::StateDestroy<CompareAggregateState, CombineAggregateFunction>, nullptr,
-		    SortedAggregateFunction::Window);
-
-		expr.function = std::move(ordered_aggregate);
+		expr.function = skip_nulls ? GetFunction<true>(expr) : GetFunction<false>(expr);
 		expr.bind_info = std::move(parent_bind);
 		expr.order_bys.reset();
 
