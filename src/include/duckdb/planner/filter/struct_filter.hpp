@@ -14,12 +14,6 @@
 
 namespace duckdb {
 
-// StructFilters can currently only be used in combination with a ConstantFilter
-// e.g. SELECT * FROM t WHERE a.b > 2;
-// ConstantFilters generally push a IS_NOT_NULL filter on the column they filter, but there is currently no way to
-// push a IS_NOT_NULL filter that references another expression (e.g as if was applied  on top of a StructFilter).
-// Therefore StructFilters implicitly work as if a IS_NOT_NULL filter has been applied on the extracted column.
-
 class StructFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::STRUCT_EXTRACT;
@@ -44,13 +38,4 @@ public:
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 };
 
-// SELECT * FROM t WHERE a.b > 2;
-// STRUCT ('b', COMP(>, 2));
-
 } // namespace duckdb
-
-// test/sql/storage/types/struct/wal_struct_storage.test
-// test/sql/storage/types/struct/struct_storage.test
-// test/sql/copy/parquet/writer/write_complex_nested.test:21
-// test/sql/copy/parquet/parquet_3896.test:59
-// test/sql/copy/parquet/parquet_3896.test

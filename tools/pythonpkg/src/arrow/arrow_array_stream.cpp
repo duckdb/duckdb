@@ -363,13 +363,9 @@ py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_
 		auto &child_name = struct_filter.child_name;
 
 		column_ref.push_back(child_name);
-
 		auto child_expr =
 		    TransformFilterRecursive(struct_filter.child_filter.get(), column_ref, timezone_config, child_type);
-
 		column_ref.pop_back();
-		// Also add a IS_NOT_NULL to the output
-		child_expr = child_expr.attr("__and__")(field(py::tuple(py::cast(column_ref))).attr("is_valid")());
 
 		return child_expr;
 	}

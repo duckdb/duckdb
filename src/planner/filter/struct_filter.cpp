@@ -1,6 +1,7 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -17,8 +18,7 @@ FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
 }
 
 string StructFilter::ToString(const string &column_name) {
-	return column_name + "." + child_name + " IS NOT NULL AND " + column_name + "." +
-	       child_filter->ToString(child_name);
+	return child_filter->ToString(column_name + "." + child_name);
 }
 
 bool StructFilter::Equals(const TableFilter &other_p) const {
@@ -26,7 +26,8 @@ bool StructFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<StructFilter>();
-	return other.child_name == child_name && other.child_idx == child_idx && other.child_filter->Equals(*child_filter);
+	return other.child_idx == child_idx && StringUtil::CIEquals(other.child_name, child_name) &&
+	       other.child_filter->Equals(*child_filter);
 }
 
 } // namespace duckdb

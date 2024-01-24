@@ -739,7 +739,7 @@ class TestArrowFilterPushdown(object):
         """
         ).fetchall()
 
-        match = re.search(".*ARROW_SCAN.*Filters: s\\.a IS NOT NULL.*AND s\\.a<2.*", query_res[0][1], flags=re.DOTALL)
+        match = re.search(".*ARROW_SCAN.*Filters: s\\.a<2 AND s\\.a IS.*NOT NULL.*", query_res[0][1], flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -753,7 +753,7 @@ class TestArrowFilterPushdown(object):
 
         # the explain-output is pretty cramped, so just make sure we see both struct references.
         match = re.search(
-            ".*ARROW_SCAN.*Filters: s\\.a IS NOT NULL.*AND s\\.a<3.*AND s\\.b IS NOT NULL.*",
+            ".*ARROW_SCAN.*Filters: s\\.a<3 AND s\\.a IS.*NOT NULL AND s\\.b=true\\.\\.\\..*\\.b IS NOT NULL.*",
             query_res[0][1],
             flags=re.DOTALL,
         )
@@ -776,3 +776,83 @@ class TestArrowFilterPushdown(object):
 
         match = re.search(".*ARROW_SCAN.*Filters: s\\.a IS NULL.*", query_res[0][1], flags=re.DOTALL)
         assert not match
+
+    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    def test_nested_struct_filter_pushdown(self, duckdb_cursor, create_table):
+        duckdb_cursor.execute(
+            """
+            CREATE TABLE test_nested_structs(s STRUCT(a STRUCT(b integer, c bool), d STRUCT(e integer, f varchar)));
+        """
+        )
+        duckdb_cursor.execute(
+            """
+            INSERT INTO test_nested_structs VALUES
+                ({'a': {'b': 1, 'c': false}, 'd': {'e': 2, 'f': 'foo'}}),
+                (NULL),
+                ({'a': {'b': 3, 'c': true}, 'd': {'e': 4, 'f': 'bar'}}),
+                ({'a': {'b': NULL, 'c': true}, 'd': {'e': 5, 'f': 'qux'}}),
+                ({'a': NULL, 'd': NULL});
+        """
+        )
+
+        duck_tbl = duckdb_cursor.table("test_nested_structs")
+        arrow_table = create_table(duck_tbl)
+
+        # Ensure that the filter is pushed down
+        query_res = duckdb_cursor.execute(
+            """
+            EXPLAIN SELECT * FROM arrow_table WHERE s.a.b < 2;
+        """
+        ).fetchall()
+
+        match = re.search(
+            ".*ARROW_SCAN.*Filters: s\\.a\\.b<2 AND s\\.a\\.b.*IS NOT NULL.*", query_res[0][1], flags=re.DOTALL
+        )
+        assert match
+
+        # Check that the filter is applied correctly
+        assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a.b < 2").fetchone()[0] == {
+            'a': {'b': 1, 'c': False},
+            'd': {'e': 2, 'f': 'foo'},
+        }
+
+        query_res = duckdb_cursor.execute(
+            """
+            EXPLAIN SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5 
+        """
+        ).fetchall()
+
+        # the explain-output is pretty cramped, so just make sure we see both struct references.
+        match = re.search(
+            ".*ARROW_SCAN.*Filters: s\\.a\\.c=true AND s\\.a.*\\.c IS NOT NULL.*AND s\\.d\\.e=5.*AND s\\.d\\.e.*IS NOT NULL.*",
+            query_res[0][1],
+            flags=re.DOTALL,
+        )
+        assert match
+
+        # Check that the filter is applied correctly
+        assert duckdb_cursor.execute("SELECT COUNT(*) FROM arrow_table WHERE s.a.c=true AND s.d.e=5").fetchone()[0] == 1
+        assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5").fetchone()[0] == {
+            'a': {'b': None, 'c': True},
+            'd': {'e': 5, 'f': 'qux'},
+        }
+
+        query_res = duckdb_cursor.execute(
+            """
+            EXPLAIN SELECT * FROM arrow_table WHERE s.d.f = 'bar';
+        """
+        )
+
+        match = re.search(
+            ".*ARROW_SCAN.*Filters: s\\.d\\.f=bar AND s\\.d.*\\.f IS NOT NULL.*",
+            query_res.fetchone()[1],
+            flags=re.DOTALL,
+        )
+
+        assert match
+
+        # Check that the filter is applied correctly
+        assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.d.f = 'bar'").fetchone()[0] == {
+            'a': {'b': 3, 'c': True},
+            'd': {'e': 4, 'f': 'bar'},
+        }
