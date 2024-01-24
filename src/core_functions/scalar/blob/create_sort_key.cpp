@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -71,6 +72,10 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
+	// push collations
+	for(idx_t i = 0; i < arguments.size(); i += 2) {
+		ExpressionBinder::PushCollation(context, arguments[i], arguments[i]->return_type, false);
+	}
 	// check if all types are constant
 	bool all_constant = true;
 	idx_t constant_size = 0;
@@ -122,26 +127,29 @@ struct SortKeyVectorData {
 			case PhysicalType::STRUCT: {
 				auto &children = StructVector::GetEntries(input);
 				for(auto &child : children) {
-					child_data.emplace_back(*child, size, child_modifiers);
+					child_data.push_back(make_uniq<SortKeyVectorData>(*child, size, child_modifiers));
 				}
 				break;
 			}
 			case PhysicalType::ARRAY: {
 				auto &child_entry = ArrayVector::GetEntry(input);
 				auto array_size = ArrayType::GetSize(input.GetType());
-				child_data.emplace_back(child_entry, size * array_size, child_modifiers);
+				child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
 				break;
 			}
 			case PhysicalType::LIST: {
 				auto &child_entry = ListVector::GetEntry(input);
 				auto child_size = ListVector::GetListSize(input);
-				child_data.emplace_back(child_entry, child_size, child_modifiers);
+				child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
 				break;
 			}
 			default:
 				break;
 		}
 	}
+	// disable copy constructors
+	SortKeyVectorData(const SortKeyVectorData &other) = delete;
+	SortKeyVectorData &operator=(const SortKeyVectorData &) = delete;
 
 	PhysicalType GetPhysicalType() {
 		return vec.GetType().InternalType();
@@ -150,7 +158,7 @@ struct SortKeyVectorData {
 	Vector &vec;
 	idx_t size;
 	UnifiedVectorFormat format;
-	vector<SortKeyVectorData> child_data;
+	vector<unique_ptr<SortKeyVectorData>> child_data;
 	data_t null_byte;
 	data_t valid_byte;
 };
@@ -295,7 +303,7 @@ void GetSortKeyLengthStruct(SortKeyVectorData &vector_data, SortKeyChunk chunk, 
 	}
 	// now recursively call GetSortKeyLength on the child elements
 	for(auto &child_data : vector_data.child_data) {
-		GetSortKeyLengthRecursive(child_data, chunk, result);
+		GetSortKeyLengthRecursive(*child_data, chunk, result);
 	}
 }
 
@@ -319,7 +327,7 @@ void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 		if (list_entry.length > 0) {
 			// recursively call GetSortKeyLength for the children of this list
 			SortKeyChunk child_chunk(list_entry.offset, list_entry.offset + list_entry.length, result_index);
-			GetSortKeyLengthRecursive(child_data, child_chunk, result);
+			GetSortKeyLengthRecursive(*child_data, child_chunk, result);
 		}
 	}
 }
@@ -469,13 +477,13 @@ void ConstructSortKeyStruct(SortKeyVectorData &vector_data, SortKeyChunk chunk, 
 			// [struct1][struct2][...]
 			for(auto &child : vector_data.child_data) {
 				SortKeyChunk child_chunk(r, r + 1, result_index);
-				ConstructSortKeyRecursive(child, child_chunk, info);
+				ConstructSortKeyRecursive(*child, child_chunk, info);
 			}
 		}
 	}
 	if (!list_of_structs) {
 		for(auto &child : vector_data.child_data) {
-			ConstructSortKeyRecursive(child, chunk, info);
+			ConstructSortKeyRecursive(*child, chunk, info);
 		}
 	}
 }
@@ -504,7 +512,7 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 		// recurse and write the list elements
 		if (list_entry.length > 0) {
 			SortKeyChunk child_chunk(list_entry.offset, list_entry.offset + list_entry.length, result_index);
-			ConstructSortKeyRecursive(vector_data.child_data[0], child_chunk, info);
+			ConstructSortKeyRecursive(*vector_data.child_data[0], child_chunk, info);
 		}
 
 		// write the end-of-list delimiter
@@ -634,9 +642,9 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<CreateSortKeyBindData>();
 
 	// prepare the sort key data
-	vector<SortKeyVectorData> sort_key_data;
+	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	for(idx_t c = 0; c < args.ColumnCount(); c += 2) {
-		sort_key_data.emplace_back(args.data[c], args.size(), bind_data.modifiers[c / 2]);
+		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
 
 	// two phases
@@ -645,7 +653,7 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	// we do all of this in a vectorized manner
 	SortKeyLengthInfo key_lengths(args.size());
 	for(auto &vector_data : sort_key_data) {
-		GetSortKeyLength(vector_data, key_lengths);
+		GetSortKeyLength(*vector_data, key_lengths);
 	}
 	// allocate the empty sort keys
 	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[args.size()]);
@@ -656,7 +664,7 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	// now construct the sort keys
 	for(idx_t c = 0; c < sort_key_data.size(); c++) {
 		SortKeyConstructInfo info(bind_data.modifiers[c], offsets, data_pointers.get());
-		ConstructSortKey(sort_key_data[c], info);
+		ConstructSortKey(*sort_key_data[c], info);
 	}
 	FinalizeSortData(result, args.size());
 	if (args.AllConstant()) {
