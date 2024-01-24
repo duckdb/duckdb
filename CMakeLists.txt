@@ -796,6 +796,12 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
       COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
       )
   endif()
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND
+    ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> 4 placeholder_duckdb_version placeholder_extension_version placeholder_platform
+    )
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)
