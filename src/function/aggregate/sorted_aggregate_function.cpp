@@ -712,17 +712,55 @@ struct SortedAggregateFunction {
 	}
 };
 
-struct CompareAggregateBindData {
+struct CompareAggregateBindData : public FunctionData {
 	explicit CompareAggregateBindData(BoundAggregateExpression &expr)
 	    : function(expr.function), child_bind(std::move(expr.bind_info)), sort_layout(expr.order_bys->orders) {
 		if (!sort_layout.all_constant) {
 			throw NotImplementedException("Non-constant sort keys are not supported yet");
 		}
+
+		auto &order_bys = *expr.order_bys;
+		for (auto &order : order_bys.orders) {
+			orders.emplace_back(order.Copy());
+		}
 	}
 
-	AggregateFunction function;
-	unique_ptr<FunctionData> child_bind;
-	SortLayout sort_layout;
+	CompareAggregateBindData(const CompareAggregateBindData &other)
+	    : function(other.function), sort_layout(other.orders) {
+		if (other.child_bind) {
+			child_bind = other.child_bind->Copy();
+		}
+		for (auto &order : other.orders) {
+			orders.emplace_back(order.Copy());
+		}
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<CompareAggregateBindData>(*this);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<CompareAggregateBindData>();
+		if (child_bind && other.child_bind) {
+			if (!child_bind->Equals(*other.child_bind)) {
+				return false;
+			}
+		} else if (child_bind || other.child_bind) {
+			return false;
+		}
+		if (function != other.function) {
+			return false;
+		}
+		if (orders.size() != other.orders.size()) {
+			return false;
+		}
+		for (size_t i = 0; i < orders.size(); ++i) {
+			if (!orders[i].Equals(other.orders[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
 
 	void BuildSortKeys(Vector sort[], const idx_t count, vector<data_t> &radix_data) {
 		// Build and serialize sorting data to radix sortable rows
@@ -745,26 +783,12 @@ struct CompareAggregateBindData {
 			                            nulls_first, sort_layout.prefix_lengths[sort_col],
 			                            sort_layout.column_sizes[sort_col]);
 		}
-
-#if 0
-		//	For each row allocate a blob and point the variable size data into it.
-		DataChunk blob_chunk;
-		blob_chunk.SetCardinality(sort.size());
-		for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
-			if (!sort_layout.constant_size[sort_col]) {
-				blob_chunk.data.emplace_back(sort.data[sort_col]);
-			}
-		}
-
-
-		handles = blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
-
-
-		auto blob_data = blob_chunk.ToUnifiedFormat();
-		RowOperations::Scatter(blob_chunk, blob_data.get(), sort_layout.blob_layout, addresses, *blob_sorting_heap,
-							   sel_ptr, blob_chunk.size());
-#endif
 	}
+
+	AggregateFunction function;
+	vector<BoundOrderByNode> orders;
+	unique_ptr<FunctionData> child_bind;
+	SortLayout sort_layout;
 };
 
 struct CompareAggregateState {
@@ -801,6 +825,62 @@ struct CombineAggregateFunction {
 	template <typename STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
 		state.~STATE();
+	}
+
+	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+	                         data_ptr_t state_p, idx_t count) {
+		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+		auto &sort_layout = compare_bind.sort_layout;
+		const auto child_cols = (input_count - sort_layout.column_count);
+
+		//	TODO: Share memory between calls?
+		vector<data_t> radix_data;
+		compare_bind.BuildSortKeys(inputs + child_cols, count, radix_data);
+		auto radix_ptr = radix_data.data();
+
+		auto state = reinterpret_cast<CompareAggregateState *>(state_p);
+
+		sel_t best_idx = count;
+		for (idx_t i = 0; i < count; ++i) {
+			int comp_res;
+			if (state->state.empty()) {
+				state->state.resize(compare_bind.function.state_size());
+				compare_bind.function.initialize(state->state.data());
+				state->radix.resize(sort_layout.entry_size);
+				comp_res = 1;
+			} else {
+				comp_res = FastMemcmp(state->radix.data(), radix_ptr, sort_layout.comparison_size);
+			}
+			if (comp_res > 0) {
+				best_idx = i;
+				::memcpy(state->radix.data(), radix_ptr, state->radix.size());
+			}
+
+			radix_ptr += sort_layout.entry_size;
+		}
+
+		if (best_idx >= count) {
+			return;
+		}
+
+		SelectionVector sel(&best_idx);
+		SelCache merge_cache;
+		for (idx_t i = 0; i < child_cols; ++i) {
+			inputs[i].Slice(sel, 1, merge_cache);
+		}
+		AggregateInputData child_aggr_data(compare_bind.child_bind, aggr_input_data.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
+
+		// These are all simple updates, so use it if available
+		auto simple_update = compare_bind.function.simple_update;
+		if (simple_update) {
+			simple_update(inputs, child_aggr_data, child_cols, state->state.data(), 1);
+		} else {
+			// We are only updating a constant state
+			Vector agg_state_vec(Value::POINTER(CastPointerToValue(state->state.data())));
+			agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+			compare_bind.function.update(inputs, child_aggr_data, child_cols, agg_state_vec, 1);
+		}
 	}
 
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
@@ -854,7 +934,7 @@ struct CombineAggregateFunction {
 		compare_bind.function.update(inputs, child_aggr_data, child_cols, child_states, nsel);
 	}
 
-	template <typename STATE>
+	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
 		auto &other = const_cast<STATE &>(source);
@@ -887,6 +967,44 @@ struct CombineAggregateFunction {
 		AggregateInputData child_aggr_data(compare_bind.child_bind, aggr_input_data.allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		compare_bind.function.finalize(child_states, child_aggr_data, result, count, offset);
+	}
+
+	static bool Bind(BoundAggregateExpression &expr) {
+		if (expr.function.name != "last") {
+			return false;
+		}
+
+		auto parent_bind = make_uniq<CompareAggregateBindData>(expr);
+		auto &children = expr.children;
+		auto &bound_function = expr.function;
+
+		auto &order_bys = *expr.order_bys;
+		for (auto &order : order_bys.orders) {
+			children.emplace_back(std::move(order.expression));
+		}
+
+		vector<LogicalType> arguments;
+		arguments.reserve(children.size());
+		for (const auto &child : children) {
+			arguments.emplace_back(child->return_type);
+		}
+
+		// Replace the aggregate with the wrapper
+		AggregateFunction ordered_aggregate(
+		    bound_function.name, arguments, bound_function.return_type,
+		    AggregateFunction::StateSize<CompareAggregateState>,
+		    AggregateFunction::StateInitialize<CompareAggregateState, CombineAggregateFunction>,
+		    CombineAggregateFunction::ScatterUpdate,
+		    AggregateFunction::StateCombine<CompareAggregateState, CombineAggregateFunction>,
+		    CombineAggregateFunction::Finalize, bound_function.null_handling, CombineAggregateFunction::SimpleUpdate,
+		    nullptr, AggregateFunction::StateDestroy<CompareAggregateState, CombineAggregateFunction>, nullptr,
+		    SortedAggregateFunction::Window);
+
+		expr.function = std::move(ordered_aggregate);
+		expr.bind_info = std::move(parent_bind);
+		expr.order_bys.reset();
+
+		return true;
 	}
 };
 
