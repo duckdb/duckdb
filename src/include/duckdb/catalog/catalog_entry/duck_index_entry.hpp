@@ -19,6 +19,8 @@ public:
 	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
 	~DuckIndexEntry() override;
 
+	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+
 	//! The indexed table information
 	shared_ptr<DataTableInfo> info;
 

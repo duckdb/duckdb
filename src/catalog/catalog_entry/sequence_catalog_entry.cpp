@@ -23,6 +23,16 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry 
 	this->temporary = info.temporary;
 }
 
+unique_ptr<CatalogEntry> SequenceCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateSequenceInfo>();
+
+	auto result = make_uniq<SequenceCatalogEntry>(catalog, schema, cast_info);
+	result->data = GetData();
+
+	return std::move(result);
+}
+
 SequenceData SequenceCatalogEntry::GetData() const {
 	lock_guard<mutex> seqlock(lock);
 	return data;

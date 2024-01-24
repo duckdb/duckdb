@@ -17,6 +17,14 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
+
+	if (stmt.info->GetCatalogType() == CatalogType::SCHEMA_ENTRY) {
+		D_ASSERT(stmt.info->type == AlterType::SET_COMMENT);
+		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
+		properties.return_type = StatementReturnType::NOTHING;
+		return result;
+	}
+
 	auto entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
 	                               stmt.info->name, stmt.info->if_not_found);
 	if (entry) {

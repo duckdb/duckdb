@@ -13,6 +13,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/types/value.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -23,6 +24,7 @@ class ClientContext;
 class SchemaCatalogEntry;
 class Serializer;
 class Deserializer;
+class Value;
 
 struct CreateInfo;
 
@@ -49,6 +51,8 @@ public:
 	bool internal;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
+	//! (optional) comment on this entry
+	Value comment;
 
 private:
 	//! Child entry

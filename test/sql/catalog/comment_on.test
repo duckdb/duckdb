@@ -1,0 +1,102 @@
+# name: test/sql/catalog/comment_on.test
+# description: Test COMMENT ON to add comments to catalog entries
+# group: [catalog]
+
+# Generic tests
+statement error
+COMMENT ON TABLE test IS 1337
+----
+Parser Error: syntax error
+
+statement error
+COMMENT ON TABLE hahahoehoe IS 'blablabloebloe'
+----
+Catalog Error: Table with name hahahoehoe does not exist!
+
+### Comment on Tables
+statement ok
+CREATE TABLE test_table as SELECT 1 as a
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+NULL
+
+statement ok
+COMMENT ON TABLE test_table IS 'very gezellige table'
+
+query I
+select comment from duckdb_tables() where table_name='test_table';
+----
+very gezellige table
+
+### Comment on view
+statement ok
+CREATE VIEW test_view as SELECT 1 as A
+
+query I
+select comment from duckdb_views() where view_name='test_view';
+----
+NULL
+
+statement ok
+COMMENT ON VIEW test_view IS 'very gezellige view'
+
+query I
+select comment from duckdb_views() where view_name='test_view';
+----
+very gezellige view
+
+### Comment on indices
+statement ok
+CREATE INDEX test_index ON test_table using art(a)
+
+query I
+select comment from duckdb_indexes() where index_name='test_index';
+----
+NULL
+
+statement ok
+COMMENT ON INDEX test_index IS 'very gezellige index'
+
+query I
+select comment from duckdb_indexes() where index_name='test_index';
+----
+very gezellige index
+
+### Comment on sequences TODO: copy
+statement ok
+CREATE SEQUENCE test_sequence;
+
+query I
+select comment from duckdb_sequences() where sequence_name='test_sequence';
+----
+NULL
+
+statement ok
+COMMENT ON SEQUENCE test_sequence IS 'very gezellige sequence'
+
+query I
+select comment from duckdb_sequences() where sequence_name='test_sequence';
+----
+very gezellige sequence
+
+### Comment on schemas
+statement ok
+CREATE SCHEMA test_schema;
+
+query I
+select comment from duckdb_schemas() where schema_name='test_schema';
+----
+NULL
+
+statement ok
+COMMENT ON SCHEMA test_schema IS 'very gezellige schema'
+
+query I
+select comment from duckdb_schemas() where schema_name='test_schema';
+----
+very gezellige schema
+
+### TODO: secrets, columns, functions (scalar, table, pragma), TYPES, collations
+### TODO2: multiple schemas, multiple databases

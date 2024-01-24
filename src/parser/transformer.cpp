@@ -215,6 +215,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformSecret(PGCast<duckdb_libpgquery::PGCreateSecretStmt>(stmt));
 	case duckdb_libpgquery::T_PGDropSecretStmt:
 		return TransformDropSecret(PGCast<duckdb_libpgquery::PGDropSecretStmt>(stmt));
+	case duckdb_libpgquery::T_PGCommentOnStmt:
+		return TransformCommentOn(PGCast<duckdb_libpgquery::PGCommentOnStmt>(stmt));
 	default:
 		throw NotImplementedException(NodetypeToString(stmt.type));
 	}

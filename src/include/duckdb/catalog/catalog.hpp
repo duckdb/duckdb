@@ -343,6 +343,7 @@ private:
 	                                                 const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	virtual void DropSchema(ClientContext &context, DropInfo &info) = 0;
+	virtual void AlterSchema(ClientContext &context, AlterInfo &info) = 0;
 
 public:
 	template <class TARGET>

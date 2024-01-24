@@ -64,6 +64,8 @@ public:
 	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+
 	void Verify(Catalog &catalog) override;
 
 private:

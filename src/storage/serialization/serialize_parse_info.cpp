@@ -16,6 +16,7 @@
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/parser/parsed_data/comment_on_info.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::ATTACH_INFO:
 		result = AttachInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::COMMENT_ON_INFO:
+		result = CommentOnInfo::Deserialize(deserializer);
 		break;
 	case ParseInfoType::COPY_INFO:
 		result = CopyInfo::Deserialize(deserializer);
@@ -219,6 +223,25 @@ unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<string>(400, "column_name", result->column_name);
 	deserializer.ReadProperty<LogicalType>(401, "target_type", result->target_type);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(402, "expression", result->expression);
+	return std::move(result);
+}
+
+void CommentOnInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WriteProperty<CatalogType>(200, "type", type);
+	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(202, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(203, "name", name);
+	serializer.WriteProperty<Value>(204, "comment", comment);
+}
+
+unique_ptr<ParseInfo> CommentOnInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CommentOnInfo>(new CommentOnInfo());
+	deserializer.ReadProperty<CatalogType>(200, "type", result->type);
+	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog);
+	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema);
+	deserializer.ReadPropertyWithDefault<string>(203, "name", result->name);
+	deserializer.ReadProperty<Value>(204, "comment", result->comment);
 	return std::move(result);
 }
 

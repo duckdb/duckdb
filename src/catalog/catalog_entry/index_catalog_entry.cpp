@@ -50,4 +50,5 @@ bool IndexCatalogEntry::IsPrimary() {
 	return (index_constraint_type == IndexConstraintType::PRIMARY);
 }
 
+
 } // namespace duckdb

@@ -38,6 +38,21 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// Set Comment
+//===--------------------------------------------------------------------===//
+struct SetCommentInfo : public AlterInfo {
+	SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog, string entry_schema, string entry_name,
+	                    Value new_comment_value_p, OnEntryNotFound if_not_found);
+
+	CatalogType entry_catalog_type;
+	Value comment_value;
+
+public:
+	CatalogType GetCatalogType() const override;
+	unique_ptr<AlterInfo> Copy() const override;
+};
+
+//===--------------------------------------------------------------------===//
 // Alter Table
 //===--------------------------------------------------------------------===//
 enum class AlterTableType : uint8_t {
@@ -50,7 +65,8 @@ enum class AlterTableType : uint8_t {
 	SET_DEFAULT = 6,
 	FOREIGN_KEY_CONSTRAINT = 7,
 	SET_NOT_NULL = 8,
-	DROP_NOT_NULL = 9
+	DROP_NOT_NULL = 9,
+	SET_COMMENT = 10
 };
 
 struct AlterTableInfo : public AlterInfo {

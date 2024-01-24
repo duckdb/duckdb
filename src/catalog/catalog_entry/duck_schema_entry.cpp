@@ -71,6 +71,15 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, string name_p, bool is_intern
       types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }
 
+unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateSchemaInfo>();
+
+	auto result = make_uniq<DuckSchemaEntry>(catalog, cast_info.schema, internal);
+
+	return std::move(result);
+}
+
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
                                                              unique_ptr<StandardEntry> entry,
                                                              OnCreateConflict on_conflict,
@@ -239,6 +248,13 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransact
 
 void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
 	CatalogType type = info.GetCatalogType();
+
+	if (type == CatalogType::SCHEMA_ENTRY) {
+		// This is an alter request on the schema itself
+		D_ASSERT(info.type == AlterType::SET_COMMENT);
+		comment = info.Cast<SetCommentInfo>().comment_value;
+	}
+
 	auto &set = GetCatalogSet(type);
 	auto transaction = GetCatalogTransaction(context);
 	if (info.type == AlterType::CHANGE_OWNERSHIP) {
