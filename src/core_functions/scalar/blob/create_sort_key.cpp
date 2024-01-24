@@ -17,7 +17,7 @@ struct OrderModifiers {
 	}
 
 	static OrderModifiers Parse(const string &val) {
-		auto lcase = StringUtil::Lower(val);
+		auto lcase = StringUtil::Replace(StringUtil::Lower(val), "_", " ");
 		OrderType order_type;
 		if (StringUtil::StartsWith(lcase, "asc")) {
 			order_type = OrderType::ASCENDING;
@@ -39,8 +39,6 @@ struct OrderModifiers {
 };
 
 struct CreateSortKeyBindData : public FunctionData {
-	CreateSortKeyBindData() {}
-
 	vector<OrderModifiers> modifiers;
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -97,13 +95,23 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 // Operators
 //===--------------------------------------------------------------------===//
 struct SortKeyVectorData {
+	static constexpr data_t NULL_FIRST_BYTE = 1;
+	static constexpr data_t NULL_LAST_BYTE = 2;
+	static constexpr data_t STRING_DELIMITER = 0;
+	static constexpr data_t LIST_DELIMITER = 0;
+	static constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
+
+
 	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) :
 			vec(input) {
 		input.ToUnifiedFormat(size, format);
 		this->size = size;
 
-		null_byte = modifiers.null_type == OrderByNullType::NULLS_LAST ? 1 : 0;
-		valid_byte = 1 - null_byte;
+		null_byte = NULL_FIRST_BYTE;
+		valid_byte = NULL_LAST_BYTE;
+		if (modifiers.null_type == OrderByNullType::NULLS_LAST) {
+			std::swap(null_byte, valid_byte);
+		}
 
 		// NULLS FIRST/NULLS LAST passed in by the user are only respected at the top level
 		// within nested types NULLS LAST/NULLS FIRST is dependent on ASC/DESC order instead
@@ -143,7 +151,6 @@ struct SortKeyVectorData {
 	idx_t size;
 	UnifiedVectorFormat format;
 	vector<SortKeyVectorData> child_data;
-	SelectionVector result_sel;
 	data_t null_byte;
 	data_t valid_byte;
 };
@@ -175,7 +182,7 @@ struct SortKeyVarcharOperator {
 		for(idx_t r = 0; r < input_size; r++) {
 			result[r] = input_data[r] + 1;
 		}
-		result[input_size] = 0; // null-byte delimiter
+		result[input_size] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
 		return input_size + 1;
 	}
 };
@@ -203,13 +210,13 @@ struct SortKeyBlobOperator {
 		for(idx_t r = 0; r < input_size; r++) {
 			if (input_data[r] <= 1) {
 				// we escape both \x00 and \x01 with \x01
-				result[result_offset++] = 1;
+				result[result_offset++] = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
 				result[result_offset++] = input_data[r];
 			} else {
 				result[result_offset++] = input_data[r];
 			}
 		}
-		result[result_offset++] = 0; // null-byte delimiter
+		result[result_offset++] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
 		return result_offset;
 	}
 };
@@ -236,6 +243,21 @@ struct SortKeyArrayEntry {
 	}
 };
 
+struct SortKeyChunk {
+	SortKeyChunk(idx_t start, idx_t end) : start(start), end(end), has_result_index(false) {}
+	SortKeyChunk(idx_t start, idx_t end, idx_t result_index) : start(start), end(end), result_index(result_index), has_result_index(true) {}
+
+	idx_t start;
+	idx_t end;
+	idx_t result_index;
+	bool has_result_index;
+
+	inline idx_t GetResultIndex(idx_t r) {
+		return has_result_index ? result_index : r;
+	}
+
+};
+
 //===--------------------------------------------------------------------===//
 // Get Sort Key Length
 //===--------------------------------------------------------------------===//
@@ -248,17 +270,17 @@ struct SortKeyLengthInfo {
 	unsafe_vector<idx_t> variable_lengths;
 };
 
-static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyLengthInfo &result);
+static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result);
 
 template<class OP>
-void TemplatedGetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+void TemplatedGetSortKeyLength(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
 	auto &format = vector_data.format;
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
-	for(idx_t r = 0; r < vector_data.size; r++) {
-		auto result_index = vector_data.result_sel.get_index(r);
+	for(idx_t r = chunk.start; r < chunk.end; r++) {
+		auto idx = format.sel->get_index(r);
+		auto result_index = chunk.GetResultIndex(r);
 		result.variable_lengths[result_index]++; // every value is prefixed by a validity byte
 
-		auto idx = format.sel->get_index(r);
 		if (!format.validity.RowIsValid(idx)) {
 			continue;
 		}
@@ -266,27 +288,25 @@ void TemplatedGetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo
 	}
 }
 
-void GetSortKeyLengthStruct(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
-	for (idx_t r = 0; r < vector_data.size; r++) {
-		auto result_index = vector_data.result_sel.get_index(r);
+void GetSortKeyLengthStruct(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
+	for (idx_t r = chunk.start; r < chunk.end; r++) {
+		auto result_index = chunk.GetResultIndex(r);
 		result.variable_lengths[result_index]++; // every struct is prefixed by a validity byte
 	}
 	// now recursively call GetSortKeyLength on the child elements
 	for(auto &child_data : vector_data.child_data) {
-		child_data.result_sel.Initialize(vector_data.result_sel);
-		GetSortKeyLengthRecursive(child_data, result);
+		GetSortKeyLengthRecursive(child_data, chunk, result);
 	}
 }
 
 template<class OP>
-void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
 	auto &child_data = vector_data.child_data[0];
-	child_data.result_sel.Initialize(child_data.size);
-	for (idx_t r = 0; r < vector_data.size; r++) {
-		auto result_index = vector_data.result_sel.get_index(r);
+	for (idx_t r = chunk.start; r < chunk.end; r++) {
+		auto idx = vector_data.format.sel->get_index(r);
+		auto result_index = chunk.GetResultIndex(r);
 		result.variable_lengths[result_index]++; // every list is prefixed by a validity byte
 
-		auto idx = vector_data.format.sel->get_index(r);
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			if (!OP::IsArray()) {
 				// for arrays we need to fill in the child vector for all elements, even if the top-level array is NULL
@@ -296,76 +316,75 @@ void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyLengthInfo &res
 		auto list_entry = OP::GetListEntry(vector_data, idx);
 		// for each non-null list we have an "end of list" delimiter
 		result.variable_lengths[result_index]++;
-		// set up the selection vector for the child
-		for (idx_t k = 0; k < list_entry.length; k++) {
-			child_data.result_sel.set_index(list_entry.offset + k, result_index);
+		if (list_entry.length > 0) {
+			// recursively call GetSortKeyLength for the children of this list
+			SortKeyChunk child_chunk(list_entry.offset, list_entry.offset + list_entry.length, result_index);
+			GetSortKeyLengthRecursive(child_data, child_chunk, result);
 		}
 	}
-	// now recursively call GetSortKeyLength on the child element
-	GetSortKeyLengthRecursive(child_data, result);
 }
 
-static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
 	auto physical_type = vector_data.GetPhysicalType();
 	// handle variable lengths
 	switch(physical_type) {
 	case PhysicalType::BOOL:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<bool>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<bool>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint8_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint8_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INT8:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<int8_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int8_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint16_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint16_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INT16:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<int16_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int16_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint32_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint32_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<int32_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int32_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint64_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint64_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<int64_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int64_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<float>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<float>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<double>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<double>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<interval_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<interval_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::UINT128:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<uhugeint_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uhugeint_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INT128:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<hugeint_t>>(vector_data, result);
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<hugeint_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
-			TemplatedGetSortKeyLength<SortKeyVarcharOperator>(vector_data, result);
+			TemplatedGetSortKeyLength<SortKeyVarcharOperator>(vector_data, chunk, result);
 		} else {
-			TemplatedGetSortKeyLength<SortKeyBlobOperator>(vector_data, result);
+			TemplatedGetSortKeyLength<SortKeyBlobOperator>(vector_data, chunk, result);
 		}
 		break;
 	case PhysicalType::STRUCT:
-		GetSortKeyLengthStruct(vector_data, result);
+		GetSortKeyLengthStruct(vector_data, chunk, result);
 		break;
 	case PhysicalType::LIST:
-		GetSortKeyLengthList<SortKeyListEntry>(vector_data, result);
+		GetSortKeyLengthList<SortKeyListEntry>(vector_data, chunk, result);
 		break;
 	case PhysicalType::ARRAY:
-		GetSortKeyLengthList<SortKeyArrayEntry>(vector_data, result);
+		GetSortKeyLengthList<SortKeyArrayEntry>(vector_data, chunk, result);
 		break;
 	default:
 		throw NotImplementedException("Unsupported physical type %s in GetSortKeyLength", physical_type);
@@ -381,7 +400,7 @@ static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &
 		result.constant_length += GetTypeIdSize(physical_type);
 		return;
 	}
-	GetSortKeyLengthRecursive(vector_data, result);
+	GetSortKeyLengthRecursive(vector_data, SortKeyChunk(0, vector_data.size), result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -399,17 +418,17 @@ struct SortKeyConstructInfo {
 	bool flip_bytes;
 };
 
-static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info);
+static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info);
 
 template<class OP>
-void TemplatedConstructSortKey(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info) {
+void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
 	auto &offsets = info.offsets;
-	for (idx_t r = start; r < end; r++) {
-		auto result_index = vector_data.result_sel.get_index(r);
+	for (idx_t r = chunk.start; r < chunk.end; r++) {
+		auto result_index = chunk.GetResultIndex(r);
+		auto idx = vector_data.format.sel->get_index(r);
 		auto &offset = offsets[result_index];
 		auto result_ptr = info.result_data[result_index];
-		auto idx = vector_data.format.sel->get_index(r);
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
@@ -428,15 +447,15 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, idx_t start, idx_
 	}
 }
 
-void ConstructSortKeyStruct(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info) {
-	bool list_of_structs = vector_data.result_sel.data() != nullptr;
+void ConstructSortKeyStruct(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
+	bool list_of_structs = chunk.has_result_index;
 	// write the validity data of the struct
 	auto &offsets = info.offsets;
-	for (idx_t r = start; r < end; r++) {
-		auto result_index = vector_data.result_sel.get_index(r);
+	for (idx_t r = chunk.start; r < chunk.end; r++) {
+		auto result_index = chunk.GetResultIndex(r);
+		auto idx = vector_data.format.sel->get_index(r);
 		auto &offset = offsets[result_index];
 		auto result_ptr = info.result_data[result_index];
-		auto idx = vector_data.format.sel->get_index(r);
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
@@ -449,25 +468,26 @@ void ConstructSortKeyStruct(SortKeyVectorData &vector_data, idx_t start, idx_t e
 			// since the final layout needs to be
 			// [struct1][struct2][...]
 			for(auto &child : vector_data.child_data) {
-				ConstructSortKeyRecursive(child, r, r + 1, info);
+				SortKeyChunk child_chunk(r, r + 1, result_index);
+				ConstructSortKeyRecursive(child, child_chunk, info);
 			}
 		}
 	}
 	if (!list_of_structs) {
 		for(auto &child : vector_data.child_data) {
-			ConstructSortKeyRecursive(child, start, end, info);
+			ConstructSortKeyRecursive(child, chunk, info);
 		}
 	}
 }
 
 template<class OP>
-void ConstructSortKeyList(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info) {
+void ConstructSortKeyList(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
 	auto &offsets = info.offsets;
-	for (idx_t r = start; r < end; r++) {
-		auto result_index = vector_data.result_sel.get_index(r);
+	for (idx_t r = chunk.start; r < chunk.end; r++) {
+		auto result_index = chunk.GetResultIndex(r);
+		auto idx = vector_data.format.sel->get_index(r);
 		auto &offset = offsets[result_index];
 		auto result_ptr = info.result_data[result_index];
-		auto idx = vector_data.format.sel->get_index(r);
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
@@ -483,73 +503,74 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, idx_t start, idx_t end
 		auto list_entry = OP::GetListEntry(vector_data, idx);
 		// recurse and write the list elements
 		if (list_entry.length > 0) {
-			ConstructSortKeyRecursive(vector_data.child_data[0], list_entry.offset, list_entry.offset + list_entry.length, info);
+			SortKeyChunk child_chunk(list_entry.offset, list_entry.offset + list_entry.length, result_index);
+			ConstructSortKeyRecursive(vector_data.child_data[0], child_chunk, info);
 		}
 
 		// write the end-of-list delimiter
-		result_ptr[offset++] = info.flip_bytes ? ~data_t(0) : 0;
+		result_ptr[offset++] = info.flip_bytes ? ~SortKeyVectorData::LIST_DELIMITER : SortKeyVectorData::LIST_DELIMITER;
 	}
 }
 
-static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info) {
+static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
 	switch(vector_data.GetPhysicalType()) {
 	case PhysicalType::BOOL:
-		TemplatedConstructSortKey<SortKeyConstantOperator<bool>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<bool>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedConstructSortKey<SortKeyConstantOperator<uint8_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint8_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INT8:
-		TemplatedConstructSortKey<SortKeyConstantOperator<int8_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<int8_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedConstructSortKey<SortKeyConstantOperator<uint16_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint16_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INT16:
-		TemplatedConstructSortKey<SortKeyConstantOperator<int16_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<int16_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedConstructSortKey<SortKeyConstantOperator<uint32_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint32_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INT32:
-		TemplatedConstructSortKey<SortKeyConstantOperator<int32_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<int32_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedConstructSortKey<SortKeyConstantOperator<uint64_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint64_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INT64:
-		TemplatedConstructSortKey<SortKeyConstantOperator<int64_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<int64_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedConstructSortKey<SortKeyConstantOperator<float>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<float>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedConstructSortKey<SortKeyConstantOperator<double>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<double>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedConstructSortKey<SortKeyConstantOperator<interval_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<interval_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::UINT128:
-		TemplatedConstructSortKey<SortKeyConstantOperator<uhugeint_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<uhugeint_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INT128:
-		TemplatedConstructSortKey<SortKeyConstantOperator<hugeint_t>>(vector_data, start, end, info);
+		TemplatedConstructSortKey<SortKeyConstantOperator<hugeint_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
-			TemplatedConstructSortKey<SortKeyVarcharOperator>(vector_data, start, end, info);
+			TemplatedConstructSortKey<SortKeyVarcharOperator>(vector_data, chunk, info);
 		} else {
-			TemplatedConstructSortKey<SortKeyBlobOperator>(vector_data, start, end, info);
+			TemplatedConstructSortKey<SortKeyBlobOperator>(vector_data, chunk, info);
 		}
 		break;
 	case PhysicalType::STRUCT:
-		ConstructSortKeyStruct(vector_data, start, end, info);
+		ConstructSortKeyStruct(vector_data, chunk, info);
 		break;
 	case PhysicalType::LIST:
-		ConstructSortKeyList<SortKeyListEntry>(vector_data, start, end, info);
+		ConstructSortKeyList<SortKeyListEntry>(vector_data, chunk, info);
 		break;
 	case PhysicalType::ARRAY:
-		ConstructSortKeyList<SortKeyArrayEntry>(vector_data, start, end, info);
+		ConstructSortKeyList<SortKeyArrayEntry>(vector_data, chunk, info);
 		break;
 	default:
 		throw NotImplementedException("Unsupported type %s in ConstructSortKey", vector_data.vec.GetType());
@@ -557,7 +578,7 @@ static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, idx_t star
 }
 
 static void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info) {
-	ConstructSortKeyRecursive(vector_data, 0, vector_data.size, info);
+	ConstructSortKeyRecursive(vector_data, SortKeyChunk(0, vector_data.size), info);
 }
 
 static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
@@ -600,7 +621,7 @@ static void FinalizeSortData(Vector &result, idx_t size) {
 	case LogicalTypeId::BIGINT: {
 		auto result_data = FlatVector::GetData<int64_t>(result);
 		for(idx_t r = 0; r < size; r++) {
-			result_data[r] = ntohll(result_data[r]);
+			result_data[r] = BSwap<int64_t>(result_data[r]);
 		}
 		break;
 	}
