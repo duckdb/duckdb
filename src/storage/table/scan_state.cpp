@@ -67,6 +67,10 @@ AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
 	return parent.GetAdaptiveFilter();
 }
 
+TableScanOptions &CollectionScanState::GetOptions() {
+	return parent.options;
+}
+
 ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
 }

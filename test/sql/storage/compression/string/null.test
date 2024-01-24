@@ -5,6 +5,9 @@
 # load the DB from disk
 load __TEST_DIR__/test_rle.db
 
+statement ok
+pragma enable_verification
+
 foreach compression fsst dictionary
 
 foreach enable_fsst_vector true false

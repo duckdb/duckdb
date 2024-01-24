@@ -15,6 +15,7 @@ add_library_unity(
   levenshtein.cpp
   md5.cpp
   pad.cpp
+  parse_path.cpp
   printf.cpp
   regexp_escape.cpp
   repeat.cpp
