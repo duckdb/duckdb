@@ -61,7 +61,7 @@ struct CSVStates {
 		return states[1] == CSVState::ESCAPE || (states[0] == CSVState::UNQUOTED && states[1] == CSVState::QUOTED);
 	}
 	inline bool IsQuotedCurrent() {
-		return states[1] == CSVState::QUOTED;
+		return states[1] == CSVState::QUOTED || states[1] == CSVState::QUOTED_NEW_LINE;
 	}
 	CSVState states[2];
 };

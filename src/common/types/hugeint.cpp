@@ -181,8 +181,12 @@ string Hugeint::ToString(hugeint_t input) {
 // Multiply with overflow checks
 bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	// Check if one of the sides is hugeint_t minimum, as that can't be negated.
-	// You can only multiply the minimum by 1, any other value will result in overflow
+	// You can only multiply the minimum by 0 or 1, any other value will result in overflow
 	if (lhs == NumericLimits<hugeint_t>::Minimum() || rhs == NumericLimits<hugeint_t>::Minimum()) {
+		if (lhs == 0 || rhs == 0) {
+			result = 0;
+			return true;
+		}
 		if (lhs == 1 || rhs == 1) {
 			result = NumericLimits<hugeint_t>::Minimum();
 			return true;

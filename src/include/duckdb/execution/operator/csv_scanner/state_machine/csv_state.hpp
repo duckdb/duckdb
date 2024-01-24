@@ -22,7 +22,8 @@ enum class CSVState : uint8_t {
 	UNQUOTED = 5,         //! State when leaving a quoted field
 	ESCAPE = 6,           //! State when encountering an escape character (e.g., \)
 	INVALID = 7,          //! Got to an Invalid State, this should error.
-	NOT_SET = 8           //! If the state is not set, usually the first state before getting the first character
+	NOT_SET = 8,          //! If the state is not set, usually the first state before getting the first character
+	QUOTED_NEW_LINE = 9   //! If we have a quoted newline
 };
 
 } // namespace duckdb
