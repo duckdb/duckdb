@@ -133,3 +133,51 @@ NULL
 [1, 2, 3]
 [1]
 []
+
+
+# test struct types
+statement ok
+CREATE TABLE structs(s ROW(i INT, v VARCHAR));
+
+statement ok
+INSERT INTO structs VALUES ({'i': 42, v: 'hello'}), ({'i': 42, v: 'hello' || chr(0)}), ({'i': 43, v: ''}), (NULL), ({'i': 42, v: NULL}), ({'i': NULL, v: ''})
+
+query I
+SELECT * FROM structs ORDER BY create_sort_key(s, 'ASC NULLS LAST')
+----
+{'i': 42, 'v': hello}
+{'i': 42, 'v': hello\0}
+{'i': 42, 'v': NULL}
+{'i': 43, 'v': }
+{'i': NULL, 'v': }
+NULL
+
+query I
+SELECT * FROM structs ORDER BY create_sort_key(s, 'ASC NULLS FIRST')
+----
+NULL
+{'i': 42, 'v': hello}
+{'i': 42, 'v': hello\0}
+{'i': 42, 'v': NULL}
+{'i': 43, 'v': }
+{'i': NULL, 'v': }
+
+query I
+SELECT * FROM structs ORDER BY create_sort_key(s, 'DESC NULLS LAST')
+----
+{'i': NULL, 'v': }
+{'i': 43, 'v': }
+{'i': 42, 'v': NULL}
+{'i': 42, 'v': hello\0}
+{'i': 42, 'v': hello}
+NULL
+
+query I
+SELECT * FROM structs ORDER BY create_sort_key(s, 'DESC NULLS FIRST')
+----
+NULL
+{'i': NULL, 'v': }
+{'i': 43, 'v': }
+{'i': 42, 'v': NULL}
+{'i': 42, 'v': hello\0}
+{'i': 42, 'v': hello}

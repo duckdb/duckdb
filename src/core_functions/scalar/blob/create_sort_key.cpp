@@ -155,6 +155,13 @@ struct SortKeyVectorData {
 		auto child_null_type = modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
 		OrderModifiers child_modifiers(modifiers.order_type, child_null_type);
 		switch(input.GetType().InternalType()) {
+		case PhysicalType::STRUCT: {
+			auto &children = StructVector::GetEntries(input);
+			for(auto &child : children) {
+				child_data.emplace_back(*child, size, child_modifiers);
+			}
+			break;
+		}
 		case PhysicalType::LIST: {
 			auto &child_entry = ListVector::GetEntry(input);
 			auto child_size = ListVector::GetListSize(input);
@@ -197,6 +204,17 @@ void TemplatedGetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo
 	}
 }
 
+void GetSortKeyLengthStruct(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
+	for (idx_t r = 0; r < vector_data.size; r++) {
+		auto result_index = vector_data.result_sel.get_index(r);
+		result.variable_lengths[result_index]++; // every struct is prefixed by a validity byte
+	}
+	// now recursively call GetSortKeyLength on the child elements
+	for(auto &child_data : vector_data.child_data) {
+		child_data.result_sel.Initialize(vector_data.result_sel);
+		GetSortKeyLengthRecursive(child_data, result);
+	}
+}
 void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyLengthInfo &result) {
 	auto data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data.format);
 	auto &child_data = vector_data.child_data[0];
@@ -234,6 +252,9 @@ static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyLen
 		} else {
 			throw NotImplementedException("FIXME: ConstructSortKey blob");
 		}
+		break;
+	case PhysicalType::STRUCT:
+		GetSortKeyLengthStruct(vector_data, result);
 		break;
 	case PhysicalType::LIST:
 		GetSortKeyLengthList(vector_data, result);
@@ -284,7 +305,7 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, idx_t start, idx_
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
-			break;
+			continue;
 		}
 		// valid value - write the validity byte
 		result_ptr[offset++] = vector_data.valid_byte;
@@ -296,6 +317,38 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, idx_t start, idx_
 			}
 		}
 		offset += encode_len;
+	}
+}
+
+void ConstructSortKeyStruct(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info) {
+	bool list_of_structs = vector_data.result_sel.data() != nullptr;
+	// write the validity data of the struct
+	auto &offsets = info.offsets;
+	for (idx_t r = start; r < end; r++) {
+		auto result_index = vector_data.result_sel.get_index(r);
+		auto &offset = offsets[result_index];
+		auto result_ptr = info.result_data[result_index];
+		auto idx = vector_data.format.sel->get_index(r);
+		if (!vector_data.format.validity.RowIsValid(idx)) {
+			// NULL value - write the null byte and skip
+			result_ptr[offset++] = vector_data.null_byte;
+		} else {
+			// valid value - write the validity byte
+			result_ptr[offset++] = vector_data.valid_byte;
+		}
+		if (list_of_structs) {
+			// for a list of structs we need to write the child data for every iteration
+			// since the final layout needs to be
+			// [struct1][struct2][...]
+			for(auto &child : vector_data.child_data) {
+				ConstructSortKeyRecursive(child, r, r + 1, info);
+			}
+		}
+	}
+	if (!list_of_structs) {
+		for(auto &child : vector_data.child_data) {
+			ConstructSortKeyRecursive(child, start, end, info);
+		}
 	}
 }
 
@@ -338,6 +391,9 @@ static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, idx_t star
 			throw NotImplementedException("FIXME: ConstructSortKey blob");
 		}
 		break;
+	case PhysicalType::STRUCT:
+		ConstructSortKeyStruct(vector_data, start, end, info);
+		break;
 	case PhysicalType::LIST:
 		ConstructSortKeyList(vector_data, start, end, info);
 		break;
@@ -355,8 +411,12 @@ static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_l
 	case LogicalTypeId::BLOB: {
 		auto result_data = FlatVector::GetData<string_t>(result);
 		for(idx_t r = 0; r < size; r++) {
-			result_data[r] = StringVector::EmptyString(result, key_lengths.variable_lengths[r] + key_lengths.constant_length);
+			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
+			result_data[r] = StringVector::EmptyString(result, blob_size);
 			data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+#ifdef DEBUG
+			memset(data_pointers[r], 0xFF, blob_size);
+#endif
 		}
 		break;
 	}
