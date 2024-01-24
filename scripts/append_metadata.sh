@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Usage: ./script/emit_signature.sh <soutput_file> <parameters...>
+# Usage: ./script/append_metadata.sh <extension_file_to_append_to> <parameters...>
 # Currently hardcoded to host up to 8 fields
-# Example: ./scripts/emit_signature.sh signature 0 git_hash_duckdb git_hash_extension platfrom
+# Example: ./scripts/append_metadata.sh file.duckdb_extension 0 git_hash_duckdb git_hash_extension platfrom
 
 if (($# >= 9)); then
   echo "Too many parameters provided, current script can handle at maxium 8 fields"
@@ -12,7 +12,7 @@ fi
 # 0 for custom section
 # 213 in hex = 531 in decimal, total lenght of what follows (1 + 16 + 2 + 8x32 + 256)
 # [1(continuation) + 0010011(payload) = \x93, 0(continuation) + 10(payload) = \x04]
-echo -n -e '\x00' > "$1"
+echo -n -e '\x00' >> "$1"
 echo -n -e '\x93\x04' >> "$1"
 # 10 in hex = 16 in decimal, lenght of name, 1 byte
 echo -n -e '\x10' >> "$1"
@@ -33,7 +33,7 @@ done
 
 for ((i=$#; i>=2; i--))
 do
-  echo "${!i}" > "$1.add"
+  echo -n "${!i}" > "$1.add"
   cat "$1.empty_32" >> "$1.add"
   dd if="$1.add" of="$1.add_trunc" bs=32 count=1 &> /dev/null
   cat "$1.add_trunc" >> "$1"
