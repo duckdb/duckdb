@@ -122,7 +122,7 @@ CREATE TABLE hits_og
 
 
 statement ok
-INSERT INTO hits_og SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/hits.parquet');
+INSERT INTO hits_og SELECT * FROM read_parquet('./hits.parquet');
 
 statement ok
 COPY hits_og TO '__TEST_DIR__/hits.csv';
@@ -131,7 +131,7 @@ statement ok
 create table hits as select * from hits_og limit 0;
 
 statement ok
-copy hits from '__TEST_DIR__/hits.csv';
+copy hits from '__TEST_DIR__/hits.csv' (TIMESTAMPFORMAT '%Y-%m-%d %H:%M:%S', DATEFORMAT '%Y-%m-%d');
 
 #Q 01
 query I
