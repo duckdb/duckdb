@@ -61,3 +61,26 @@ query I
 SELECT * FROM blobs WHERE b = '\x00\x01'
 ----
 \x00\x01
+
+query I
+SELECT * FROM blobs WHERE b >= '\x00' ORDER BY b::VARCHAR
+----
+\x00
+\x00\x00
+\x00\x01
+\x01
+\x01\x00
+\x01\x01
+
+query I
+SELECT * FROM blobs WHERE b >= '\x01' ORDER BY b::VARCHAR
+----
+\x01
+\x01\x00
+\x01\x01
+
+query I
+SELECT * FROM blobs WHERE b >= '\x01\x00' ORDER BY b::VARCHAR
+----
+\x01\x00
+\x01\x01
