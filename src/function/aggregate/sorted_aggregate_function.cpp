@@ -712,22 +712,124 @@ struct SortedAggregateFunction {
 	}
 };
 
-struct CompareAggregateBindData : public FunctionData {
-	explicit CompareAggregateBindData(BoundAggregateExpression &expr)
-	    : function(expr.function), child_bind(std::move(expr.bind_info)), sort_layout(expr.order_bys->orders) {
-		auto &order_bys = *expr.order_bys;
-		for (auto &order : order_bys.orders) {
+struct SortKeyBindData : public FunctionData {
+	explicit SortKeyBindData(const vector<BoundOrderByNode> &order_bys) {
+		for (auto &order : order_bys) {
 			orders.emplace_back(order.Copy());
 		}
 	}
 
-	CompareAggregateBindData(const CompareAggregateBindData &other)
-	    : function(other.function), sort_layout(other.orders) {
-		if (other.child_bind) {
-			child_bind = other.child_bind->Copy();
-		}
+	SortKeyBindData(const SortKeyBindData &other) {
 		for (auto &order : other.orders) {
 			orders.emplace_back(order.Copy());
+		}
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<SortKeyBindData>(*this);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<SortKeyBindData>();
+		if (orders.size() != other.orders.size()) {
+			return false;
+		}
+		for (size_t i = 0; i < orders.size(); ++i) {
+			if (!orders[i].Equals(other.orders[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	vector<BoundOrderByNode> orders;
+};
+
+struct SortKeyLocalData : public FunctionLocalState {
+	explicit SortKeyLocalData(const SortKeyBindData &bind_data) : sort_layout(bind_data.orders) {
+	}
+
+	SortLayout sort_layout;
+};
+
+struct SortKeyFun {
+
+	static unique_ptr<FunctionLocalState> InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+	                                                     FunctionData *bind_data_p) {
+		return make_uniq<SortKeyLocalData>(bind_data_p->Cast<SortKeyBindData>());
+	}
+
+	static void Execute(DataChunk &sort, ExpressionState &state, Vector &result) {
+		const auto count = sort.size();
+		auto &function_state = state.Cast<ExecuteFunctionState>();
+		auto &sort_key_state = function_state.local_state->Cast<SortKeyLocalData>();
+		auto &sort_layout = sort_key_state.sort_layout;
+
+		// Build and serialize sorting data to radix sortable rows
+		data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
+		Vector addresses(LogicalType::POINTER, reinterpret_cast<data_ptr_t>(data_pointers));
+
+		//	Allocate the strings and point into them
+		const auto key_size = sort_layout.entry_size;
+		auto rdata = FlatVector::GetData<string_t>(result);
+		for (idx_t i = 0; i < count; ++i) {
+			auto blob = StringVector::EmptyString(result, key_size);
+			data_pointers[i] = reinterpret_cast<data_ptr_t>(blob.GetDataWriteable());
+			rdata[i] = blob;
+		}
+
+		//	Scatter the keys
+		const SelectionVector &sel_ptr = *FlatVector::IncrementalSelectionVector();
+		for (column_t sort_col = 0; sort_col < sort_layout.column_count; ++sort_col) {
+			bool has_null = sort_layout.has_null[sort_col];
+			bool nulls_first = sort_layout.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
+			bool desc = sort_layout.order_types[sort_col] == OrderType::DESCENDING;
+			RowOperations::RadixScatter(sort.data[sort_col], count, sel_ptr, count, data_pointers, desc, has_null,
+			                            nulls_first, sort_layout.prefix_lengths[sort_col],
+			                            sort_layout.column_sizes[sort_col]);
+		}
+
+		//	Finalize the keys
+		for (idx_t i = 0; i < count; ++i) {
+			rdata[i].Finalize();
+		}
+	}
+
+	static ScalarFunction GetFunction(const vector<BoundOrderByNode> &orders) {
+		vector<LogicalType> arguments;
+		for (const auto &order : orders) {
+			arguments.emplace_back(order.expression->return_type);
+		}
+
+		return ScalarFunction("sort_key", arguments, LogicalTypeId::BLOB, Execute, nullptr, nullptr, nullptr,
+		                      InitLocalState);
+	}
+
+	static unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<BoundOrderByNode> &orders) {
+		auto sort_key_func = SortKeyFun::GetFunction(orders);
+		auto sort_key_bind_data = make_uniq<SortKeyBindData>(orders);
+		vector<unique_ptr<Expression>> children;
+		for (auto &order : orders) {
+			children.emplace_back(std::move(order.expression));
+		}
+		orders.clear();
+
+		FunctionBinder function_binder(context);
+		auto bound_sort_key = function_binder.BindScalarFunction(sort_key_func, std::move(children), false);
+		bound_sort_key->bind_info = std::move(sort_key_bind_data);
+
+		return bound_sort_key;
+	}
+};
+
+struct CompareAggregateBindData : public FunctionData {
+	explicit CompareAggregateBindData(BoundAggregateExpression &expr)
+	    : function(expr.function), child_bind(std::move(expr.bind_info)) {
+	}
+
+	CompareAggregateBindData(const CompareAggregateBindData &other) : function(other.function) {
+		if (other.child_bind) {
+			child_bind = other.child_bind->Copy();
 		}
 	}
 
@@ -747,48 +849,15 @@ struct CompareAggregateBindData : public FunctionData {
 		if (function != other.function) {
 			return false;
 		}
-		if (orders.size() != other.orders.size()) {
-			return false;
-		}
-		for (size_t i = 0; i < orders.size(); ++i) {
-			if (!orders[i].Equals(other.orders[i])) {
-				return false;
-			}
-		}
 		return true;
 	}
 
-	void BuildSortKeys(Vector sort[], const idx_t count, vector<data_t> &radix_data) {
-		// Build and serialize sorting data to radix sortable rows
-		data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
-		Vector addresses(LogicalType::POINTER, reinterpret_cast<data_ptr_t>(data_pointers));
-		radix_data.resize(sort_layout.entry_size * count);
-
-		auto base_ptr = radix_data.data();
-		for (idx_t i = 0; i < count; ++i) {
-			data_pointers[i] = base_ptr;
-			base_ptr += sort_layout.entry_size;
-		}
-
-		const SelectionVector &sel_ptr = *FlatVector::IncrementalSelectionVector();
-		for (column_t sort_col = 0; sort_col < sort_layout.column_count; ++sort_col) {
-			bool has_null = sort_layout.has_null[sort_col];
-			bool nulls_first = sort_layout.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
-			bool desc = sort_layout.order_types[sort_col] == OrderType::DESCENDING;
-			RowOperations::RadixScatter(sort[sort_col], count, sel_ptr, count, data_pointers, desc, has_null,
-			                            nulls_first, sort_layout.prefix_lengths[sort_col],
-			                            sort_layout.column_sizes[sort_col]);
-		}
-	}
-
 	AggregateFunction function;
-	vector<BoundOrderByNode> orders;
 	unique_ptr<FunctionData> child_bind;
-	SortLayout sort_layout;
 };
 
 struct CompareAggregateState {
-	CompareAggregateState() : val(nullptr), key(nullptr), key_size(0) {
+	CompareAggregateState() : val(nullptr), key(uint32_t(0)), key_data(nullptr) {
 	}
 
 	inline void Initialize(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator) {
@@ -796,23 +865,32 @@ struct CompareAggregateState {
 		compare_bind.function.initialize(val);
 	}
 
-	inline int Compare(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator, const_data_ptr_t right_key) {
-		auto &sort_layout = compare_bind.sort_layout;
+	inline int Compare(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator, const string_t &right_key) {
 		if (!val) {
 			Initialize(compare_bind, allocator);
 			return -1; // Uninitialized is before all keys
 		} else {
-			return FastMemcmp(key, right_key, sort_layout.comparison_size);
+			return key < right_key;
 		}
 	}
 
-	inline void UpdateKey(ArenaAllocator &allocator, const_data_ptr_t right_key, idx_t right_size) {
-		if (!key) {
-			key = allocator.Allocate(right_size);
-		} else if (key_size != right_size) {
-			key = allocator.Reallocate(key, key_size, right_size);
+	inline void UpdateKey(ArenaAllocator &allocator, const string_t &right_key) {
+		if (right_key.IsInlined()) {
+			key = right_key;
+			return;
 		}
-		::memcpy(key, right_key, key_size = right_size);
+
+		//	Need storage
+		const auto key_size = key.GetSize();
+		const auto right_size = right_key.GetSize();
+		if (!key_data) {
+			key_data = allocator.Allocate(right_size);
+		} else if (key_size < right_size) {
+			key_data = allocator.Reallocate(key_data, key_size, right_size);
+		}
+
+		::memcpy(key_data, right_key.GetData(), right_size);
+		key = string_t(reinterpret_cast<char *>(key_data), right_size);
 	}
 
 	void Absorb(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator, CompareAggregateState &other) {
@@ -830,8 +908,8 @@ struct CompareAggregateState {
 	}
 
 	data_ptr_t val;
-	data_ptr_t key;
-	idx_t key_size;
+	string_t key;
+	data_ptr_t key_data;
 };
 
 struct CombineAggregateFunction {
@@ -850,24 +928,19 @@ struct CombineAggregateFunction {
 	                         data_ptr_t state_p, idx_t count) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
 		auto &allocator = aggr_input_data.allocator;
-		auto &sort_layout = compare_bind.sort_layout;
-		const auto key_size = sort_layout.entry_size;
-		const auto child_cols = (input_count - sort_layout.column_count);
-
-		//	TODO: Share memory between calls?
-		vector<data_t> key_data;
-		compare_bind.BuildSortKeys(inputs + child_cols, count, key_data);
-		auto right_key = key_data.data();
+		const auto child_cols = input_count - 1;
 
 		auto state = reinterpret_cast<CompareAggregateState *>(state_p);
 
-		UnifiedVectorFormat avdata;
+		UnifiedVectorFormat avdata, kvdata;
 		if (SKIP_NULLS) {
 			inputs[0].ToUnifiedFormat(count, avdata);
 		}
+		inputs[1].ToUnifiedFormat(count, kvdata);
+		auto kdata = UnifiedVectorFormat::GetDataNoConst<string_t>(kvdata);
 
 		sel_t best_idx = count;
-		for (idx_t i = 0; i < count; ++i, right_key += sort_layout.entry_size) {
+		for (idx_t i = 0; i < count; ++i) {
 			if (SKIP_NULLS && !avdata.validity.AllValid()) {
 				const auto aidx = avdata.sel->get_index(i);
 				if (!avdata.validity.RowIsValid(aidx)) {
@@ -875,11 +948,13 @@ struct CombineAggregateFunction {
 				}
 			}
 
+			const auto kidx = kvdata.sel->get_index(i);
+			const auto right_key = kdata[kidx];
 			const auto cmp = state->Compare(compare_bind, allocator, right_key);
 			if (cmp < 0) {
 				//	Old key is smaller, so update
 				best_idx = i;
-				state->UpdateKey(allocator, right_key, key_size);
+				state->UpdateKey(allocator, right_key);
 			}
 		}
 
@@ -912,19 +987,15 @@ struct CombineAggregateFunction {
 	                          idx_t count) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
 		auto &allocator = aggr_input_data.allocator;
-		auto &sort_layout = compare_bind.sort_layout;
-		const auto key_size = sort_layout.entry_size;
-		const auto child_cols = (input_count - sort_layout.column_count);
+		const auto child_cols = (input_count - 1);
 
-		//	TODO: Share memory between calls?
-		vector<data_t> key_data;
-		compare_bind.BuildSortKeys(inputs + child_cols, count, key_data);
-		auto right_key = key_data.data();
-
-		UnifiedVectorFormat avdata, svdata;
+		UnifiedVectorFormat avdata, kvdata, svdata;
 		if (SKIP_NULLS) {
 			inputs[0].ToUnifiedFormat(count, avdata);
 		}
+		inputs[1].ToUnifiedFormat(count, kvdata);
+		auto kdata = UnifiedVectorFormat::GetDataNoConst<string_t>(kvdata);
+
 		states.ToUnifiedFormat(count, svdata);
 		auto sdata = UnifiedVectorFormat::GetDataNoConst<CompareAggregateState *>(svdata);
 
@@ -933,13 +1004,16 @@ struct CombineAggregateFunction {
 		sel_t seldata[STANDARD_VECTOR_SIZE];
 		SelectionVector sel(seldata);
 		idx_t nsel = 0;
-		for (idx_t i = 0; i < count; ++i, right_key += sort_layout.entry_size) {
+		for (idx_t i = 0; i < count; ++i) {
 			if (SKIP_NULLS && !avdata.validity.AllValid()) {
 				const auto aidx = avdata.sel->get_index(i);
 				if (!avdata.validity.RowIsValid(aidx)) {
 					continue;
 				}
 			}
+
+			const auto kidx = kvdata.sel->get_index(i);
+			const auto right_key = kdata[kidx];
 
 			const auto sidx = svdata.sel->get_index(i);
 			auto state = sdata[sidx];
@@ -948,7 +1022,7 @@ struct CombineAggregateFunction {
 				//	Old key is smaller, so update
 				child_state_ptrs[nsel] = state->val;
 				seldata[nsel++] = i;
-				state->UpdateKey(allocator, right_key, key_size);
+				state->UpdateKey(allocator, right_key);
 			}
 		}
 
@@ -1059,13 +1133,11 @@ struct CombineAggregateFunction {
 			return false;
 		}
 
-		auto parent_bind = make_uniq<CompareAggregateBindData>(expr);
-		auto &children = expr.children;
-		for (auto &order : order_bys.orders) {
-			children.emplace_back(std::move(order.expression));
-		}
+		//	Bind the sort key function as a second argument
+		expr.children.emplace_back(SortKeyFun::Bind(context, order_bys.orders));
 
 		// Replace the aggregate with the wrapper
+		auto parent_bind = make_uniq<CompareAggregateBindData>(expr);
 		expr.function = skip_nulls ? GetFunction<true>(expr) : GetFunction<false>(expr);
 		expr.bind_info = std::move(parent_bind);
 		expr.order_bys.reset();
