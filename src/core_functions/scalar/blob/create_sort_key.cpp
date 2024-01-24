@@ -277,8 +277,47 @@ static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyLen
 	auto physical_type = vector_data.GetPhysicalType();
 	// handle variable lengths
 	switch(physical_type) {
+	case PhysicalType::BOOL:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<bool>>(vector_data, result);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint8_t>>(vector_data, result);
+		break;
+	case PhysicalType::INT8:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int8_t>>(vector_data, result);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint16_t>>(vector_data, result);
+		break;
+	case PhysicalType::INT16:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int16_t>>(vector_data, result);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint32_t>>(vector_data, result);
+		break;
 	case PhysicalType::INT32:
 		TemplatedGetSortKeyLength<SortKeyConstantOperator<int32_t>>(vector_data, result);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint64_t>>(vector_data, result);
+		break;
+	case PhysicalType::INT64:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int64_t>>(vector_data, result);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<float>>(vector_data, result);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<double>>(vector_data, result);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<interval_t>>(vector_data, result);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<uhugeint_t>>(vector_data, result);
+		break;
+	case PhysicalType::INT128:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<hugeint_t>>(vector_data, result);
 		break;
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
@@ -415,8 +454,47 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, idx_t start, idx_t end
 
 static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, idx_t start, idx_t end, SortKeyConstructInfo &info) {
 	switch(vector_data.GetPhysicalType()) {
+	case PhysicalType::BOOL:
+		TemplatedConstructSortKey<SortKeyConstantOperator<bool>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint8_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::INT8:
+		TemplatedConstructSortKey<SortKeyConstantOperator<int8_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint16_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::INT16:
+		TemplatedConstructSortKey<SortKeyConstantOperator<int16_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint32_t>>(vector_data, start, end, info);
+		break;
 	case PhysicalType::INT32:
 		TemplatedConstructSortKey<SortKeyConstantOperator<int32_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedConstructSortKey<SortKeyConstantOperator<uint64_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::INT64:
+		TemplatedConstructSortKey<SortKeyConstantOperator<int64_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedConstructSortKey<SortKeyConstantOperator<float>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedConstructSortKey<SortKeyConstantOperator<double>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedConstructSortKey<SortKeyConstantOperator<interval_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedConstructSortKey<SortKeyConstantOperator<uhugeint_t>>(vector_data, start, end, info);
+		break;
+	case PhysicalType::INT128:
+		TemplatedConstructSortKey<SortKeyConstantOperator<hugeint_t>>(vector_data, start, end, info);
 		break;
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
