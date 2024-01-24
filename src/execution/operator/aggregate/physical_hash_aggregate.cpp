@@ -594,7 +594,7 @@ idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 		global_source_states.push_back(std::move(aggregate_sources));
 	}
 
-	return n_threads;
+	return MaxValue<idx_t>(n_threads, 1);
 }
 
 void HashAggregateDistinctFinalizeEvent::FinishEvent() {

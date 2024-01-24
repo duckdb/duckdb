@@ -448,6 +448,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		n_threads += radix_table_p.MaxThreads(*gstate.distinct_state->radix_states[table_idx]);
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
+	n_threads = MaxValue<idx_t>(n_threads, 1);
 
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_threads; i++) {
