@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_household_demographics.benchmark
+# name: benchmark/ingestion/tpcds/ingest_household_demographics.benchmark
 # description: benchmark ingestion of household_demographics
 # group: [tpcds]
 

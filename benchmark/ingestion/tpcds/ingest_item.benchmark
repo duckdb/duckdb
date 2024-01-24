@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_item.benchmark
+# name: benchmark/ingestion/tpcds/ingest_item.benchmark
 # description: benchmark ingestion of item
 # group: [tpcds]
 

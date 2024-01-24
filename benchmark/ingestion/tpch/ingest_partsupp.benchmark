@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpch/ingest_partsupp.benchmark
+# name: benchmark/ingestion/tpch/ingest_partsupp.benchmark
 # description: benchmark ingestion of partsupp
 # group: [tpch]
 

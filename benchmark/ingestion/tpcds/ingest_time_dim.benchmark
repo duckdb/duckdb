@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_time_dim.benchmark
+# name: benchmark/ingestion/tpcds/ingest_time_dim.benchmark
 # description: benchmark ingestion of time_dim
 # group: [tpcds]
 

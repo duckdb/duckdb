@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_customer_address.benchmark
+# name: benchmark/ingestion/tpcds/ingest_customer_address.benchmark
 # description: benchmark ingestion of customer_address
 # group: [tpcds]
 

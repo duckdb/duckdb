@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpch/ingest_customer.benchmark
+# name: benchmark/ingestion/tpch/ingest_customer.benchmark
 # description: benchmark ingestion of customer
 # group: [tpch]
 

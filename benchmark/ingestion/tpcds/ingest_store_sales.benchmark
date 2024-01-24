@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_store_sales.benchmark
+# name: benchmark/ingestion/tpcds/ingest_store_sales.benchmark
 # description: benchmark ingestion of store_sales
 # group: [tpcds]
 

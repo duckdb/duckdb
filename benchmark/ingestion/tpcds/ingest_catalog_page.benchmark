@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_catalog_page.benchmark
+# name: benchmark/ingestion/tpcds/ingest_catalog_page.benchmark
 # description: benchmark ingestion of catalog_page
 # group: [tpcds]
 

@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_promotion.benchmark
+# name: benchmark/ingestion/tpcds/ingest_promotion.benchmark
 # description: benchmark ingestion of promotion
 # group: [tpcds]
 

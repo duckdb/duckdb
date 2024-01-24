@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpcds/ingest_web_returns.benchmark
+# name: benchmark/ingestion/tpcds/ingest_web_returns.benchmark
 # description: benchmark ingestion of web_returns
 # group: [tpcds]
 

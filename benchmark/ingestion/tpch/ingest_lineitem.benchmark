@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/tpch/ingest_lineitem.benchmark
+# name: benchmark/ingestion/tpch/ingest_lineitem.benchmark
 # description: benchmark ingestion of lineitem
 # group: [tpch]
 
