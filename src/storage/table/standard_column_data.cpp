@@ -105,6 +105,7 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 	// fetch validity mask
 	if (state.child_states.empty()) {
 		ColumnScanState child_state;
+		child_state.scan_options = state.scan_options;
 		state.child_states.push_back(std::move(child_state));
 	}
 	auto scan_count = ColumnData::Fetch(state, row_id, result);
