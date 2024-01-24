@@ -4,6 +4,11 @@
 # Currently hardcoded to host up to 8 fields
 # Example: ./scripts/emit_signature.sh signature 0 git_hash_duckdb git_hash_extension platfrom
 
+if (($# >= 9)); then
+  echo "Too many parameters provided, current script can handle at maxium 8 fields"
+  exit 1
+fi
+
 # 0 for custom section
 # 213 in hex = 531 in decimal, total lenght of what follows (1 + 16 + 2 + 8x32 + 256)
 # [1(continuation) + 0010011(payload) = \x93, 0(continuation) + 10(payload) = \x04]
