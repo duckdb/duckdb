@@ -23,10 +23,8 @@ echo -n -e 'duckdb_signature' >> "$1"
 # for a grand total of 2 bytes
 echo -n -e '\x80\x04' >> "$1"
 
-rm -f "$1.*"
-
-dd if=/dev/zero of="$1.empty_32" bs=32 count=1
-dd if=/dev/zero of="$1.empty_256" bs=256 count=1
+dd if=/dev/zero of="$1.empty_32" bs=32 count=1 &> /dev/null
+dd if=/dev/zero of="$1.empty_256" bs=256 count=1 &> /dev/null
 
 for ((i=$#; i<9; i++))
 do
@@ -35,11 +33,12 @@ done
 
 for ((i=$#; i>=2; i--))
 do
-  rm "$1.add_trunc"
   echo "${!i}" > "$1.add"
   cat "$1.empty_32" >> "$1.add"
-  dd if="$1.add" of="$1.add_trunc" bs=32 count=1
+  dd if="$1.add" of="$1.add_trunc" bs=32 count=1 &> /dev/null
   cat "$1.add_trunc" >> "$1"
 done
 
 cat "$1.empty_256" >> "$1"
+
+rm -f "$1.*"
