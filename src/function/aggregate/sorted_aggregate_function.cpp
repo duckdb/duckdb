@@ -788,48 +788,50 @@ struct CompareAggregateBindData : public FunctionData {
 };
 
 struct CompareAggregateState {
-	vector<data_t> val;
-	vector<data_t> key;
-
-	inline void Initialize(CompareAggregateBindData &compare_bind) {
-		auto &sort_layout = compare_bind.sort_layout;
-		val.resize(compare_bind.function.state_size());
-		compare_bind.function.initialize(val.data());
-		key.resize(sort_layout.entry_size);
+	CompareAggregateState() : val(nullptr), key(nullptr), key_size(0) {
 	}
 
-	inline int Compare(CompareAggregateBindData &compare_bind, const_data_ptr_t right_key) {
+	inline void Initialize(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator) {
+		val = allocator.Allocate(compare_bind.function.state_size());
+		compare_bind.function.initialize(val);
+	}
+
+	inline int Compare(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator, const_data_ptr_t right_key) {
 		auto &sort_layout = compare_bind.sort_layout;
-		if (val.empty()) {
-			Initialize(compare_bind);
+		if (!val) {
+			Initialize(compare_bind, allocator);
 			return -1; // Uninitialized is before all keys
 		} else {
-			return FastMemcmp(key.data(), right_key, sort_layout.comparison_size);
+			return FastMemcmp(key, right_key, sort_layout.comparison_size);
 		}
 	}
 
-	inline void UpdateKey(const_data_ptr_t right_key) {
-		::memcpy(key.data(), right_key, key.size());
+	inline void UpdateKey(ArenaAllocator &allocator, const_data_ptr_t right_key, idx_t right_size) {
+		if (!key) {
+			key = allocator.Allocate(right_size);
+		} else if (key_size != right_size) {
+			key = allocator.Reallocate(key, key_size, right_size);
+		}
+		::memcpy(key, right_key, key_size = right_size);
 	}
 
-	inline void Swap(CompareAggregateState &other) {
-		val.swap(other.val);
-		key.swap(other.key);
-	}
-
-	void Absorb(CompareAggregateBindData &compare_bind, CompareAggregateState &other) {
-		if (other.val.empty()) {
+	void Absorb(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator, CompareAggregateState &other) {
+		if (!other.val) {
 			return;
-		} else if (val.empty()) {
-			Swap(other);
+		} else if (!val) {
+			std::swap(*this, other);
 		} else {
-			const auto cmp = Compare(compare_bind, other.key.data());
+			const auto cmp = Compare(compare_bind, allocator, other.key);
 			if (cmp < 0) {
 				//	Our key is smaller, so update
-				Swap(other);
+				std::swap(*this, other);
 			}
 		}
 	}
+
+	data_ptr_t val;
+	data_ptr_t key;
+	idx_t key_size;
 };
 
 struct CombineAggregateFunction {
@@ -847,7 +849,9 @@ struct CombineAggregateFunction {
 	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                         data_ptr_t state_p, idx_t count) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+		auto &allocator = aggr_input_data.allocator;
 		auto &sort_layout = compare_bind.sort_layout;
+		const auto key_size = sort_layout.entry_size;
 		const auto child_cols = (input_count - sort_layout.column_count);
 
 		//	TODO: Share memory between calls?
@@ -871,11 +875,11 @@ struct CombineAggregateFunction {
 				}
 			}
 
-			const auto cmp = state->Compare(compare_bind, right_key);
+			const auto cmp = state->Compare(compare_bind, allocator, right_key);
 			if (cmp < 0) {
 				//	Old key is smaller, so update
 				best_idx = i;
-				state->UpdateKey(right_key);
+				state->UpdateKey(allocator, right_key, key_size);
 			}
 		}
 
@@ -894,10 +898,10 @@ struct CombineAggregateFunction {
 		// These are all simple updates, so use it if available
 		auto simple_update = compare_bind.function.simple_update;
 		if (simple_update) {
-			simple_update(inputs, child_aggr_data, child_cols, state->val.data(), 1);
+			simple_update(inputs, child_aggr_data, child_cols, state->val, 1);
 		} else {
 			// We are only updating a constant state
-			Vector agg_state_vec(Value::POINTER(CastPointerToValue(state->val.data())));
+			Vector agg_state_vec(Value::POINTER(CastPointerToValue(state->val)));
 			agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
 			compare_bind.function.update(inputs, child_aggr_data, child_cols, agg_state_vec, 1);
 		}
@@ -907,7 +911,9 @@ struct CombineAggregateFunction {
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                          idx_t count) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+		auto &allocator = aggr_input_data.allocator;
 		auto &sort_layout = compare_bind.sort_layout;
+		const auto key_size = sort_layout.entry_size;
 		const auto child_cols = (input_count - sort_layout.column_count);
 
 		//	TODO: Share memory between calls?
@@ -937,12 +943,12 @@ struct CombineAggregateFunction {
 
 			const auto sidx = svdata.sel->get_index(i);
 			auto state = sdata[sidx];
-			const auto cmp = state->Compare(compare_bind, right_key);
+			const auto cmp = state->Compare(compare_bind, allocator, right_key);
 			if (cmp < 0) {
 				//	Old key is smaller, so update
-				child_state_ptrs[nsel] = state->val.data();
+				child_state_ptrs[nsel] = state->val;
 				seldata[nsel++] = i;
-				state->UpdateKey(right_key);
+				state->UpdateKey(allocator, right_key, key_size);
 			}
 		}
 
@@ -959,8 +965,9 @@ struct CombineAggregateFunction {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+		auto &allocator = aggr_input_data.allocator;
 		auto &other = const_cast<STATE &>(source);
-		target.Absorb(compare_bind, other);
+		target.Absorb(compare_bind, allocator, other);
 	}
 
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
@@ -973,6 +980,7 @@ struct CombineAggregateFunction {
 	                     const idx_t offset) {
 		//	Finalize the inner aggregate into the result
 		auto &compare_bind = aggr_input_data.bind_data->Cast<CompareAggregateBindData>();
+		auto &allocator = aggr_input_data.allocator;
 
 		UnifiedVectorFormat svdata;
 		states.ToUnifiedFormat(count, svdata);
@@ -983,10 +991,10 @@ struct CombineAggregateFunction {
 		for (idx_t i = 0; i < count; ++i) {
 			const auto sidx = svdata.sel->get_index(i);
 			auto state = sdata[sidx];
-			if (state->val.empty()) {
-				state->Initialize(compare_bind);
+			if (!state->val) {
+				state->Initialize(compare_bind, allocator);
 			}
-			child_state_ptrs[i] = state->val.data();
+			child_state_ptrs[i] = state->val;
 		}
 
 		AggregateInputData child_aggr_data(compare_bind.child_bind, aggr_input_data.allocator,
@@ -1018,7 +1026,7 @@ struct CombineAggregateFunction {
 		                         CombineAggregateFunction::Finalize, bound_function.null_handling,
 		                         CombineAggregateFunction::SimpleUpdate<SKIP_NULLS>, nullptr,
 		                         AggregateFunction::StateDestroy<CompareAggregateState, CombineAggregateFunction>,
-		                         nullptr, SortedAggregateFunction::Window);
+		                         nullptr, CombineAggregateFunction::Window);
 	}
 
 	static bool Bind(ClientContext &context, BoundAggregateExpression &expr) {
