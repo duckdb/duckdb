@@ -8,12 +8,13 @@
 namespace duckdb {
 
 struct OrderModifiers {
-	OrderModifiers(OrderType order_type, OrderByNullType null_type) : order_type(order_type), null_type(null_type) {}
+	OrderModifiers(OrderType order_type, OrderByNullType null_type) : order_type(order_type), null_type(null_type) {
+	}
 
 	OrderType order_type;
 	OrderByNullType null_type;
 
-	bool operator==(const OrderModifiers& other) const {
+	bool operator==(const OrderModifiers &other) const {
 		return order_type == other.order_type && null_type == other.null_type;
 	}
 
@@ -54,12 +55,13 @@ struct CreateSortKeyBindData : public FunctionData {
 };
 
 unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-											  vector<unique_ptr<Expression>> &arguments) {
+                                           vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() % 2 != 0) {
-		throw BinderException("Arguments to create_sort_key must be [key1, sort_specifier1, key2, sort_specifier2, ...]");
+		throw BinderException(
+		    "Arguments to create_sort_key must be [key1, sort_specifier1, key2, sort_specifier2, ...]");
 	}
 	auto result = make_uniq<CreateSortKeyBindData>();
-	for(idx_t i = 1; i < arguments.size(); i += 2) {
+	for (idx_t i = 1; i < arguments.size(); i += 2) {
 		if (!arguments[i]->IsFoldable()) {
 			throw BinderException("sort_specifier must be a constant value - but got %s", arguments[i]->ToString());
 		}
@@ -73,13 +75,13 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
 	// push collations
-	for(idx_t i = 0; i < arguments.size(); i += 2) {
+	for (idx_t i = 0; i < arguments.size(); i += 2) {
 		ExpressionBinder::PushCollation(context, arguments[i], arguments[i]->return_type, false);
 	}
 	// check if all types are constant
 	bool all_constant = true;
 	idx_t constant_size = 0;
-	for(idx_t i = 0; i < arguments.size(); i += 2) {
+	for (idx_t i = 0; i < arguments.size(); i += 2) {
 		auto physical_type = arguments[i]->return_type.InternalType();
 		if (!TypeIsConstantSize(physical_type)) {
 			all_constant = false;
@@ -106,9 +108,7 @@ struct SortKeyVectorData {
 	static constexpr data_t LIST_DELIMITER = 0;
 	static constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 
-
-	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) :
-			vec(input) {
+	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		input.ToUnifiedFormat(size, format);
 		this->size = size;
 
@@ -121,30 +121,31 @@ struct SortKeyVectorData {
 		// NULLS FIRST/NULLS LAST passed in by the user are only respected at the top level
 		// within nested types NULLS LAST/NULLS FIRST is dependent on ASC/DESC order instead
 		// don't blame me this is what Postgres does
-		auto child_null_type = modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		auto child_null_type =
+		    modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
 		OrderModifiers child_modifiers(modifiers.order_type, child_null_type);
-		switch(input.GetType().InternalType()) {
-			case PhysicalType::STRUCT: {
-				auto &children = StructVector::GetEntries(input);
-				for(auto &child : children) {
-					child_data.push_back(make_uniq<SortKeyVectorData>(*child, size, child_modifiers));
-				}
-				break;
+		switch (input.GetType().InternalType()) {
+		case PhysicalType::STRUCT: {
+			auto &children = StructVector::GetEntries(input);
+			for (auto &child : children) {
+				child_data.push_back(make_uniq<SortKeyVectorData>(*child, size, child_modifiers));
 			}
-			case PhysicalType::ARRAY: {
-				auto &child_entry = ArrayVector::GetEntry(input);
-				auto array_size = ArrayType::GetSize(input.GetType());
-				child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
-				break;
-			}
-			case PhysicalType::LIST: {
-				auto &child_entry = ListVector::GetEntry(input);
-				auto child_size = ListVector::GetListSize(input);
-				child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
-				break;
-			}
-			default:
-				break;
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto &child_entry = ArrayVector::GetEntry(input);
+			auto array_size = ArrayType::GetSize(input.GetType());
+			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
+			break;
+		}
+		case PhysicalType::LIST: {
+			auto &child_entry = ListVector::GetEntry(input);
+			auto child_size = ListVector::GetListSize(input);
+			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
+			break;
+		}
+		default:
+			break;
 		}
 	}
 	// disable copy constructors
@@ -163,7 +164,7 @@ struct SortKeyVectorData {
 	data_t valid_byte;
 };
 
-	template<class T>
+template <class T>
 struct SortKeyConstantOperator {
 	using TYPE = T;
 
@@ -187,7 +188,7 @@ struct SortKeyVarcharOperator {
 	static idx_t Encode(data_ptr_t result, TYPE input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_size = input.GetSize();
-		for(idx_t r = 0; r < input_size; r++) {
+		for (idx_t r = 0; r < input_size; r++) {
 			result[r] = input_data[r] + 1;
 		}
 		result[input_size] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
@@ -202,7 +203,7 @@ struct SortKeyBlobOperator {
 		auto input_data = data_ptr_t(input.GetDataUnsafe());
 		auto input_size = input.GetSize();
 		idx_t escaped_characters = 0;
-		for(idx_t r = 0; r < input_size; r++) {
+		for (idx_t r = 0; r < input_size; r++) {
 			if (input_data[r] <= 1) {
 				// we escape both \x00 and \x01
 				escaped_characters++;
@@ -215,7 +216,7 @@ struct SortKeyBlobOperator {
 		auto input_data = data_ptr_t(input.GetDataUnsafe());
 		auto input_size = input.GetSize();
 		idx_t result_offset = 0;
-		for(idx_t r = 0; r < input_size; r++) {
+		for (idx_t r = 0; r < input_size; r++) {
 			if (input_data[r] <= 1) {
 				// we escape both \x00 and \x01 with \x01
 				result[result_offset++] = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
@@ -252,8 +253,11 @@ struct SortKeyArrayEntry {
 };
 
 struct SortKeyChunk {
-	SortKeyChunk(idx_t start, idx_t end) : start(start), end(end), has_result_index(false) {}
-	SortKeyChunk(idx_t start, idx_t end, idx_t result_index) : start(start), end(end), result_index(result_index), has_result_index(true) {}
+	SortKeyChunk(idx_t start, idx_t end) : start(start), end(end), has_result_index(false) {
+	}
+	SortKeyChunk(idx_t start, idx_t end, idx_t result_index)
+	    : start(start), end(end), result_index(result_index), has_result_index(true) {
+	}
 
 	idx_t start;
 	idx_t end;
@@ -263,7 +267,6 @@ struct SortKeyChunk {
 	inline idx_t GetResultIndex(idx_t r) {
 		return has_result_index ? result_index : r;
 	}
-
 };
 
 //===--------------------------------------------------------------------===//
@@ -280,11 +283,11 @@ struct SortKeyLengthInfo {
 
 static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result);
 
-template<class OP>
+template <class OP>
 void TemplatedGetSortKeyLength(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
 	auto &format = vector_data.format;
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
-	for(idx_t r = chunk.start; r < chunk.end; r++) {
+	for (idx_t r = chunk.start; r < chunk.end; r++) {
 		auto idx = format.sel->get_index(r);
 		auto result_index = chunk.GetResultIndex(r);
 		result.variable_lengths[result_index]++; // every value is prefixed by a validity byte
@@ -302,12 +305,12 @@ void GetSortKeyLengthStruct(SortKeyVectorData &vector_data, SortKeyChunk chunk, 
 		result.variable_lengths[result_index]++; // every struct is prefixed by a validity byte
 	}
 	// now recursively call GetSortKeyLength on the child elements
-	for(auto &child_data : vector_data.child_data) {
+	for (auto &child_data : vector_data.child_data) {
 		GetSortKeyLengthRecursive(*child_data, chunk, result);
 	}
 }
 
-template<class OP>
+template <class OP>
 void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
 	auto &child_data = vector_data.child_data[0];
 	for (idx_t r = chunk.start; r < chunk.end; r++) {
@@ -335,7 +338,7 @@ void GetSortKeyLengthList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 static void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyLengthInfo &result) {
 	auto physical_type = vector_data.GetPhysicalType();
 	// handle variable lengths
-	switch(physical_type) {
+	switch (physical_type) {
 	case PhysicalType::BOOL:
 		TemplatedGetSortKeyLength<SortKeyConstantOperator<bool>>(vector_data, chunk, result);
 		break;
@@ -415,8 +418,8 @@ static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &
 // Construct Sort Key
 //===--------------------------------------------------------------------===//
 struct SortKeyConstructInfo {
-	SortKeyConstructInfo(OrderModifiers modifiers_p, unsafe_vector<idx_t> &offsets, data_ptr_t *result_data) :
-		modifiers(modifiers_p), offsets(offsets), result_data(result_data) {
+	SortKeyConstructInfo(OrderModifiers modifiers_p, unsafe_vector<idx_t> &offsets, data_ptr_t *result_data)
+	    : modifiers(modifiers_p), offsets(offsets), result_data(result_data) {
 		flip_bytes = modifiers.order_type == OrderType::DESCENDING;
 	}
 
@@ -428,7 +431,7 @@ struct SortKeyConstructInfo {
 
 static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info);
 
-template<class OP>
+template <class OP>
 void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
 	auto &offsets = info.offsets;
@@ -475,20 +478,20 @@ void ConstructSortKeyStruct(SortKeyVectorData &vector_data, SortKeyChunk chunk, 
 			// for a list of structs we need to write the child data for every iteration
 			// since the final layout needs to be
 			// [struct1][struct2][...]
-			for(auto &child : vector_data.child_data) {
+			for (auto &child : vector_data.child_data) {
 				SortKeyChunk child_chunk(r, r + 1, result_index);
 				ConstructSortKeyRecursive(*child, child_chunk, info);
 			}
 		}
 	}
 	if (!list_of_structs) {
-		for(auto &child : vector_data.child_data) {
+		for (auto &child : vector_data.child_data) {
 			ConstructSortKeyRecursive(*child, chunk, info);
 		}
 	}
 }
 
-template<class OP>
+template <class OP>
 void ConstructSortKeyList(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
 	auto &offsets = info.offsets;
 	for (idx_t r = chunk.start; r < chunk.end; r++) {
@@ -521,7 +524,7 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, SortKeyChunk chunk, So
 }
 
 static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
-	switch(vector_data.GetPhysicalType()) {
+	switch (vector_data.GetPhysicalType()) {
 	case PhysicalType::BOOL:
 		TemplatedConstructSortKey<SortKeyConstantOperator<bool>>(vector_data, chunk, info);
 		break;
@@ -590,10 +593,10 @@ static void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInf
 }
 
 static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
-	switch(result.GetType().id()) {
+	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
 		auto result_data = FlatVector::GetData<string_t>(result);
-		for(idx_t r = 0; r < size; r++) {
+		for (idx_t r = 0; r < size; r++) {
 			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
 			result_data[r] = StringVector::EmptyString(result, blob_size);
 			data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
@@ -605,7 +608,7 @@ static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_l
 	}
 	case LogicalTypeId::BIGINT: {
 		auto result_data = FlatVector::GetData<int64_t>(result);
-		for(idx_t r = 0; r < size; r++) {
+		for (idx_t r = 0; r < size; r++) {
 			result_data[r] = 0;
 			data_pointers[r] = data_ptr_cast(&result_data[r]);
 		}
@@ -617,18 +620,18 @@ static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_l
 }
 
 static void FinalizeSortData(Vector &result, idx_t size) {
-	switch(result.GetType().id()) {
+	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
 		auto result_data = FlatVector::GetData<string_t>(result);
 		// call Finalize on the result
-		for(idx_t r = 0; r < size; r++) {
+		for (idx_t r = 0; r < size; r++) {
 			result_data[r].Finalize();
 		}
 		break;
 	}
 	case LogicalTypeId::BIGINT: {
 		auto result_data = FlatVector::GetData<int64_t>(result);
-		for(idx_t r = 0; r < size; r++) {
+		for (idx_t r = 0; r < size; r++) {
 			result_data[r] = BSwap<int64_t>(result_data[r]);
 		}
 		break;
@@ -643,7 +646,7 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// prepare the sort key data
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
-	for(idx_t c = 0; c < args.ColumnCount(); c += 2) {
+	for (idx_t c = 0; c < args.ColumnCount(); c += 2) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
 
@@ -652,7 +655,7 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	// b) allocate the sorted key and construct
 	// we do all of this in a vectorized manner
 	SortKeyLengthInfo key_lengths(args.size());
-	for(auto &vector_data : sort_key_data) {
+	for (auto &vector_data : sort_key_data) {
 		GetSortKeyLength(*vector_data, key_lengths);
 	}
 	// allocate the empty sort keys
@@ -662,7 +665,7 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	unsafe_vector<idx_t> offsets;
 	offsets.resize(args.size(), 0);
 	// now construct the sort keys
-	for(idx_t c = 0; c < sort_key_data.size(); c++) {
+	for (idx_t c = 0; c < sort_key_data.size(); c++) {
 		SortKeyConstructInfo info(bind_data.modifiers[c], offsets, data_pointers.get());
 		ConstructSortKey(*sort_key_data[c], info);
 	}
