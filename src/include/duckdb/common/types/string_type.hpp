@@ -117,9 +117,7 @@ public:
 		// set trailing NULL byte
 		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = GetSize(); i < INLINE_BYTES; i++) {
-				value.inlined.inlined[i] = '\0';
-			}
+			memset(value.inlined.inlined + GetSize(), 0, INLINE_BYTES - GetSize());
 		} else {
 			// copy the data into the prefix
 #ifndef DUCKDB_DEBUG_NO_INLINE

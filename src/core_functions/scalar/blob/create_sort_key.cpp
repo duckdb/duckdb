@@ -73,6 +73,29 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
+#if 0
+	// FIXME enable other types
+	// check if all types are constant
+	bool all_constant = true;
+	idx_t constant_size = 0;
+	for(idx_t i = 0; i < arguments.size(); i++) {
+		auto physical_type = arguments[0]->return_type.InternalType();
+		if (!TypeIsConstantSize(physical_type)) {
+			all_constant = false;
+		} else {
+			// we always add one byte for the validity
+			constant_size += GetTypeIdSize(physical_type) + 1;
+		}
+	}
+	if (all_constant) {
+		if (constant_size <= sizeof(int64_t)) {
+			bound_function.return_type = LogicalType::BIGINT;
+		} else if (constant_size <= sizeof(hugeint_t)) {
+			bound_function.return_type = LogicalType::HUGEINT;
+		}
+	}
+#endif
+
 	return result;
 }
 
@@ -235,7 +258,6 @@ static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &
 		result.constant_length += GetTypeIdSize(physical_type);
 		return;
 	}
-	vector_data.result_sel.Initialize(*FlatVector::IncrementalSelectionVector());
 	GetSortKeyLengthRecursive(vector_data, result);
 }
 
@@ -243,14 +265,14 @@ static void GetSortKeyLength(SortKeyVectorData &vector_data, SortKeyLengthInfo &
 // Construct Sort Key
 //===--------------------------------------------------------------------===//
 struct SortKeyConstructInfo {
-	SortKeyConstructInfo(OrderModifiers modifiers_p, unsafe_vector<idx_t> &offsets, string_t *result_data) :
+	SortKeyConstructInfo(OrderModifiers modifiers_p, unsafe_vector<idx_t> &offsets, data_ptr_t *result_data) :
 		modifiers(modifiers_p), offsets(offsets), result_data(result_data) {
 		flip_bytes = modifiers.order_type == OrderType::DESCENDING;
 	}
 
 	OrderModifiers modifiers;
 	unsafe_vector<idx_t> &offsets;
-	string_t *result_data;
+	data_ptr_t *result_data;
 	bool flip_bytes;
 };
 
@@ -263,7 +285,7 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, idx_t start, idx_
 	for (idx_t r = start; r < end; r++) {
 		auto result_index = vector_data.result_sel.get_index(r);
 		auto &offset = offsets[result_index];
-		auto result_ptr = data_ptr_cast(info.result_data[result_index].GetDataWriteable());
+		auto result_ptr = info.result_data[result_index];
 		auto idx = vector_data.format.sel->get_index(r);
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
@@ -289,7 +311,7 @@ void ConstructSortKeyList(SortKeyVectorData &vector_data, idx_t start, idx_t end
 	for (idx_t r = start; r < end; r++) {
 		auto result_index = vector_data.result_sel.get_index(r);
 		auto &offset = offsets[result_index];
-		auto result_ptr = data_ptr_cast(info.result_data[result_index].GetDataWriteable());
+		auto result_ptr = info.result_data[result_index];
 		auto idx = vector_data.format.sel->get_index(r);
 		if (!vector_data.format.validity.RowIsValid(idx)) {
 			// NULL value - write the null byte and skip
@@ -334,6 +356,21 @@ static void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInf
 	ConstructSortKeyRecursive(vector_data, 0, vector_data.size, info);
 }
 
+static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
+	auto result_data = FlatVector::GetData<string_t>(result);
+	for(idx_t r = 0; r < size; r++) {
+		result_data[r] = StringVector::EmptyString(result, key_lengths.variable_lengths[r] + key_lengths.constant_length);
+		data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+	}
+}
+
+static void FinalizeSortData(Vector &result, idx_t size) {
+	auto result_data = FlatVector::GetData<string_t>(result);
+	// call Finalize on the result
+	for(idx_t r = 0; r < size; r++) {
+		result_data[r].Finalize();
+	}
+}
 
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<CreateSortKeyBindData>();
@@ -353,22 +390,17 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		GetSortKeyLength(vector_data, key_lengths);
 	}
 	// allocate the empty sort keys
-	auto result_data = FlatVector::GetData<string_t>(result);
-	for(idx_t r = 0; r < args.size(); r++) {
-		result_data[r] = StringVector::EmptyString(result, key_lengths.variable_lengths[r] + key_lengths.constant_length);
-	}
+	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[args.size()]);
+	PrepareSortData(result, args.size(), key_lengths, data_pointers.get());
 
 	unsafe_vector<idx_t> offsets;
 	offsets.resize(args.size(), 0);
 	// now construct the sort keys
 	for(idx_t c = 0; c < sort_key_data.size(); c++) {
-		SortKeyConstructInfo info(bind_data.modifiers[c], offsets, result_data);
+		SortKeyConstructInfo info(bind_data.modifiers[c], offsets, data_pointers.get());
 		ConstructSortKey(sort_key_data[c], info);
 	}
-	// call Finalize on the result
-	for(idx_t r = 0; r < args.size(); r++) {
-		result_data[r].Finalize();
-	}
+	FinalizeSortData(result, args.size());
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
