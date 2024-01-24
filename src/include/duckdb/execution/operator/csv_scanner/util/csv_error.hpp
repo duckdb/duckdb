@@ -34,8 +34,10 @@ enum CSVErrorType : uint8_t {
 	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
 	INCORRECT_COLUMN_AMOUNT = 2,   // If the CSV is missing a column
 	UNTERMINATED_QUOTES = 3,       // If a quote is not terminated
-	SNIFFING = 4,     // If something went wrong during sniffing and was not possible to find suitable candidates
-	MAXIMUM_LINE_SIZE // Maximum line size was exceeded by a line in the CSV File
+	SNIFFING = 4,          // If something went wrong during sniffing and was not possible to find suitable candidates
+	MAXIMUM_LINE_SIZE = 5, // Maximum line size was exceeded by a line in the CSV File
+	NULLPADDED_QUOTED_NEW_VALUE = 6, // If the null_padding option is set and we have quoted new values in parallel
+
 };
 
 class CSVError {
@@ -54,6 +56,8 @@ public:
 	//! Produces error messages for unterminated quoted values
 	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
 	                                        idx_t vector_line_start, idx_t current_column);
+	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
+	static CSVError NullPaddingFail(const CSVReaderOptions &options);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
 	                                           idx_t vector_line_start, idx_t actual_columns);

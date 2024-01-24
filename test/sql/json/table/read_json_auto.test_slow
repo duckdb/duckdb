@@ -186,7 +186,7 @@ Binder Error: read_json_auto "field_appearance_threshold" parameter must be betw
 
 # inconsistent schema's - if we only sample 1 row, we get an error, because we only see a NULL value for the 2nd column
 statement error
-select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1)
+select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1, convert_strings_to_integers=true)
 ----
 Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 3
 
@@ -200,12 +200,13 @@ select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_siz
 4	Broadcast News
 5	Raising Arizona
 
-# we can also find bigint in strings (happens a lot in JSON for some reason ...
+# we can also find bigint in strings (happens a lot in JSON for some reason ...)
 statement ok
 copy (select * from (values ('{"id": "26941143801"}'), ('{"id": "26941143807"}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
 
+# but only if we set the parameter to true
 query T
-select typeof(id) from '__TEST_DIR__/my_file.json'
+select typeof(id) from read_json('__TEST_DIR__/my_file.json', convert_strings_to_integers=true)
 ----
 BIGINT
 BIGINT

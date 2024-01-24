@@ -10,7 +10,7 @@ namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
 	// bind the child plan of the DESCRIBE statement
-	auto child_binder = Binder::CreateBinder(context);
+	auto child_binder = Binder::CreateBinder(context, this);
 	auto plan = child_binder->Bind(*ref.query);
 
 	// construct a column data collection with the result
