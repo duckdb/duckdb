@@ -763,6 +763,10 @@ void StringValueScanner::SetStart() {
 void StringValueScanner::FinalizeChunkProcess() {
 	if (result.result_position >= result.vector_size || iterator.done) {
 		// We are done
+		if (!sniffing){
+			csv_file_scan->bytes_read += bytes_read;
+			bytes_read = 0;
+		}
 		return;
 	}
 	// If we are not done we have two options.
