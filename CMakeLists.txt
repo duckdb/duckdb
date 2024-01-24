@@ -644,8 +644,28 @@ function(link_threads LIBRARY)
     target_link_libraries(${LIBRARY} Threads::Threads)
 endfunction()
 
+# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
+if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
+  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/.duckdb/extensions/)
+endif()
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
+  add_custom_target(
+          duckdb_local_extension_repo ALL
+          COMMAND
+          ${CMAKE_COMMAND} -E make_directory "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
+          COMMAND
+          ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/extension/*/*.duckdb_extension" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
+          COMMAND
+          cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && rm -rf "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT Create local extension repository)
+  add_dependencies(duckdb_local_extension_repo duckdb_platform)
+  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
+endif()
+
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
+  add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
   # remove name
@@ -1135,33 +1155,6 @@ if(NOT CLANG_TIDY)
   if (NOT EXTENSION_CONFIG_BUILD)
     add_subdirectory(third_party)
   endif()
-endif()
-
-# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
-if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
-  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/.duckdb/extensions/)
-endif()
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
-  add_custom_target(
-          duckdb_local_extension_repo ALL
-          COMMAND
-          ${CMAKE_COMMAND} -E make_directory "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
-          COMMAND
-          ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/extension/*/*.duckdb_extension" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
-          COMMAND
-          cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && rm -rf "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-          COMMENT Create local extension repository)
-  add_dependencies(duckdb_local_extension_repo duckdb_platform)
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    # jemalloc is odd duck
-    if ("${EXT_NAME}" STREQUAL "jemalloc")
-      continue()
-    endif()
-
-    add_dependencies(duckdb_local_extension_repo ${EXT_NAME}_loadable_extension)
-  endforeach()
-  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
 endif()
 
 # Write the export set for build and install tree
