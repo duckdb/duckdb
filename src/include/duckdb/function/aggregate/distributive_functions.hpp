@@ -29,6 +29,7 @@ struct CountFun {
 
 struct FirstFun {
 	static AggregateFunction GetFunction(const LogicalType &type);
+	static AggregateFunction GetLastFunction(const LogicalType &type);
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };

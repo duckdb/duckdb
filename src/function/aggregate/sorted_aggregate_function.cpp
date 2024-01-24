@@ -979,20 +979,38 @@ struct CombineAggregateFunction {
 		}
 	}
 
-	static bool Bind(BoundAggregateExpression &expr) {
-		if (expr.function.name != "last") {
+	static bool Bind(ClientContext &context, BoundAggregateExpression &expr) {
+		//	Only comparable aggregates
+		if (expr.function.order_dependent != AggregateOrderDependent::COMPARE_DEPENDENT) {
+			return false;
+		}
+
+		//	Only fixed-width radix keys for now
+		auto &order_bys = *expr.order_bys;
+		SortLayout sort_layout(order_bys.orders);
+		if (!sort_layout.all_constant) {
+			return false;
+		}
+
+		if (expr.function.name == "first" || expr.function.name == "arbitrary") {
+			//	Rebind to LAST and invert the sort order
+			expr.function = FirstFun::GetLastFunction(expr.return_type);
+			if (expr.function.bind) {
+				expr.bind_info = expr.function.bind(context, expr.function, expr.children);
+			}
+			for (auto &order : order_bys.orders) {
+				order.type = (order.type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
+				order.null_order = (order.null_order == OrderByNullType::NULLS_FIRST) ? OrderByNullType::NULLS_LAST
+				                                                                      : OrderByNullType::NULLS_FIRST;
+			}
+		} else if (expr.function.name != "last") {
 			return false;
 		}
 
 		auto parent_bind = make_uniq<CompareAggregateBindData>(expr);
-		if (!parent_bind->sort_layout.all_constant) {
-			return false;
-		}
-
 		auto &children = expr.children;
 		auto &bound_function = expr.function;
 
-		auto &order_bys = *expr.order_bys;
 		for (auto &order : order_bys.orders) {
 			children.emplace_back(std::move(order.expression));
 		}
@@ -1060,8 +1078,7 @@ void FunctionBinder::BindSortedAggregate(BoundAggregateExpression &expr, const v
 
 	//	Some sorted aggregates (FIRST, LAST...) only need to compare sort keys on each row
 	//	instead of keeping all the values around (i.e., they are not holistic)
-	if (bound_function.order_dependent == AggregateOrderDependent::COMPARE_DEPENDENT &&
-	    CombineAggregateFunction::Bind(expr)) {
+	if (CombineAggregateFunction::Bind(context, expr)) {
 		return;
 	}
 
