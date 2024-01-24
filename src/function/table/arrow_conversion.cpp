@@ -263,6 +263,37 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 	}
 }
 
+static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array) {
+	auto strings = FlatVector::GetData<string_t>(vector);
+	auto views_buffer = ArrowBufferData<char>(array, 1);
+	idx_t views_buffer_idx = 0;
+	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+		if (FlatVector::IsNull(vector, row_idx)) {
+			continue;
+		}
+		//  Our first 4 bytes are the length
+		uint32_t length = 0;
+		length |= views_buffer[views_buffer_idx]
+		          << 24; // Shift the first byte 24 bits to the left (to the highest order)
+		length |= views_buffer[views_buffer_idx + 1] << 16; // Shift the second byte 16 bits to the left
+		length |= views_buffer[views_buffer_idx + 2] << 8;  // Shift the third byte 8 bits to the left
+		length |= views_buffer[views_buffer_idx + 3];       // The fourth byte doesn't need to be shifted
+
+		if (length <= 12) {
+			//	This string is inlined
+			//  | Bytes 0-3  | Bytes 4-15                            |
+			//  |------------|---------------------------------------|
+			//  | length     | data (padded with 0)                  |
+			strings[row_idx] = string_t(&views_buffer[views_buffer_idx + 4], length);
+		} else {
+			//* This string is not inlined, we have to check a different buffer and offsets
+			//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
+			//  |------------|------------|------------|-------------|
+			//  | length     | prefix     | buf. index | offset      |
+		}
+	}
+}
+
 static void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
                              uint64_t parent_offset) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
@@ -399,22 +430,24 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	}
 	case LogicalTypeId::VARCHAR: {
 		auto size_type = arrow_type.GetSizeType();
-		auto cdata = ArrowBufferData<char>(array, 2);
 		switch (size_type) {
 		case ArrowVariableSizeType::SUPER_SIZE: {
+			auto cdata = ArrowBufferData<char>(array, 2);
 			auto offsets = ArrowBufferData<uint64_t>(array, 1) +
 			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 			SetVectorString(vector, size, cdata, offsets);
 			break;
 		}
 		case ArrowVariableSizeType::NORMAL:
-		case ArrowVariableSizeType::FIXED_SIZE:{
+		case ArrowVariableSizeType::FIXED_SIZE: {
+			auto cdata = ArrowBufferData<char>(array, 2);
 			auto offsets = ArrowBufferData<uint64_t>(array, 1) +
 			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 			SetVectorString(vector, size, cdata, offsets);
 			break;
 		}
 		case ArrowVariableSizeType::VIEW: {
+			SetVectorStringView(vector, size, array);
 			break;
 		}
 		}
