@@ -95,7 +95,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 			bound_function.return_type = LogicalType::BIGINT;
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
