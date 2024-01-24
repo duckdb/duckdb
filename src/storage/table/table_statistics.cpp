@@ -145,7 +145,7 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 
 void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
-	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample", sample);
+	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample", sample, nullptr);
 }
 
 void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
@@ -163,7 +163,7 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 
 		deserializer.Unset<LogicalType>();
 	});
-	sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample");
+	sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample", nullptr);
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

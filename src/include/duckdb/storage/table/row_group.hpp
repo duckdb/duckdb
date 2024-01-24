@@ -17,7 +17,6 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/execution/reservoir_sample.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -47,7 +46,6 @@ class RowVersionManager;
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
-	unique_ptr<BlockingSample> sample;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
