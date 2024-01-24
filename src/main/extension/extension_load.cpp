@@ -119,15 +119,20 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		error = StringUtil::Format("Extension \"%s\" not found.\n%s", filename, message);
 		return false;
 	}
+
+	string metadata_segment;
+	metadata_segment.resize(512);
+
+	auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
+	auto metadata_offset = handle->GetFileSize() - metadata_segment.size();
+
+	handle->Read((void *)metadata_segment.data(), metadata_segment.size(), metadata_offset);
+
 	if (!config.options.allow_unsigned_extensions) {
-		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
-
 		// signature is the last 256 bytes of the file
+		string signature(metadata_segment, metadata_segment.size() - 256);
 
-		string signature;
-		signature.resize(256);
-
-		auto signature_offset = handle->GetFileSize() - signature.size();
+		auto signature_offset = metadata_offset + metadata_segment.size() - signature.size();
 
 		const idx_t maxLenChunks = 1024ULL * 1024ULL;
 		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
@@ -179,6 +184,26 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}
+
+	std::vector<std::string> metadata_field;
+	// Signature has already be considered
+	for (idx_t i = 0; i < 8; i++) {
+		metadata_field.push_back(std::string(metadata_segment, i * 32, 32));
+	}
+
+	std::reverse(metadata_field.begin(), metadata_field.end());
+
+	for (auto& m : metadata_field) {
+		auto zero_pos = m.find_first_of((char)0);
+		if (zero_pos < m.size()) {
+			m.resize(zero_pos);
+		}
+	}
+
+	auto number_metadata_fields = std::stoi(metadata_field[0]);
+	D_ASSERT(number_metadata_fields == 4); // Currently hardcoded value
+	metadata_field.resize(number_metadata_fields);
+
 	auto filebase = fs.ExtractBaseName(filename);
 
 #ifdef WASM_LOADABLE_EXTENSIONS
