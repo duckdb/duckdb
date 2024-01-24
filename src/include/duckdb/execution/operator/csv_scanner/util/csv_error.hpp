@@ -93,6 +93,8 @@ private:
 	unordered_map<idx_t, LinesPerBoundary> lines_per_batch_map;
 	idx_t max_line_length = 0;
 	bool ignore_errors = false;
+
+	bool got_borked = false;
 };
 
 } // namespace duckdb

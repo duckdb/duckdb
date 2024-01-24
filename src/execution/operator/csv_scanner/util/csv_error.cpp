@@ -17,15 +17,20 @@ void CSVErrorHandler::Error(CSVError &csv_error) {
 	Error(mock, csv_error, true);
 }
 void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, bool force_error) {
-	lock_guard<mutex> parallel_lock(main_mutex);
 	if (ignore_errors && !force_error) {
+		lock_guard<mutex> parallel_lock(main_mutex);
 		// We store this error
 		errors.push_back({error_info, csv_error});
 		return;
 	}
+
 	std::ostringstream error;
 	if (PrintLineNumber(csv_error)) {
 		error << "CSV Error on Line: " << GetLine(error_info) << std::endl;
+	}
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		got_borked = true;
 	}
 	error << csv_error.error_message;
 	switch (csv_error.type) {
@@ -175,9 +180,16 @@ idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
 	for (idx_t boundary_idx = 0; boundary_idx < error_info.boundary_idx; boundary_idx++) {
 		bool batch_done = false;
 		while (!batch_done) {
+			if (boundary_idx == 0) {
+				// if it's the first boundary, we just return
+				break;
+			}
 			if (lines_per_batch_map.find(boundary_idx) != lines_per_batch_map.end()) {
 				batch_done = true;
 				current_line += lines_per_batch_map[boundary_idx].lines_in_batch;
+			}
+			if (got_borked) {
+				return current_line;
 			}
 		}
 	}
