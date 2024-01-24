@@ -50,14 +50,37 @@ def init_db(cli, dbname, benchmark_dir):
     print("INITIALIZATION DONE")
 
 
+class CardinalityCounter:
+    def __init__(self):
+        self.total = 0
+        self.build_side = 0
+        self.probe_side = 0
+
+    def __add__(self, other):
+        self.total += other.total
+        self.build_side += other.build_side
+        self.probe_side += other.probe_side
+        return self
+
 def op_inspect(op):
-    cost = 0
+    cost = CardinalityCounter()
     if op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
-        cost = op['cardinality']
-    if 'children' not in op:
+        cost.total = op['cardinality']
+        if 'cardinality' in op['children'][0]:
+            cost.probe_side += op['children'][0]['cardinality']
+        if 'cardinality' in op['children'][1]:
+            cost.build_side += op['children'][1]['cardinality']
+        left_cost = op_inspect(op['children'][0])
+        right_cost = op_inspect(op['children'][1])
+        cost.probe_side += left_cost.probe_side + right_cost.probe_side
+        cost.build_side += left_cost.build_side + right_cost.build_side
+        cost.total += left_cost.total + right_cost.total
         return cost
+
     for child_op in op['children']:
-        cost += op_inspect(child_op)
+        wat = op_inspect(child_op)
+        cost += wat
+
     return cost
 
 
@@ -101,20 +124,26 @@ def print_diffs(diffs):
     for query_name, old_cost, new_cost in diffs:
         print("")
         print("Query:", query_name)
-        print("Old cost:", old_cost)
-        print("New cost:", new_cost)
+        print("Old total cost:", old_cost.total)
+        print("Old build cost:", old_cost.build_side)
+        print("Old probe cost:", old_cost.probe_side)
+        print("New total cost:", new_cost.total)
+        print("New build cost:", new_cost.build_side)
+        print("New probe cost:", new_cost.probe_side)
 
 
-def cardinality_is_higher(card_a, card_b):
+def cardinality_is_higher(old_cost, new_cost):
     # card_a > card_b?
     # add 20% threshold before we start caring
-    return card_a > card_b
+    return old_cost.total > new_cost.total or \
+        old_cost.build_side > new_cost.build_side or \
+        old_cost.probe_side > new_cost.probe_side
 
 
 def main():
     old, new, benchmark_dir = parse_args()
-    init_db(old, OLD_DB_NAME, benchmark_dir)
-    init_db(new, NEW_DB_NAME, benchmark_dir)
+    # init_db(old, OLD_DB_NAME, benchmark_dir)
+    # init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
@@ -149,8 +178,8 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    os.remove(OLD_DB_NAME)
-    os.remove(NEW_DB_NAME)
+    # os.remove(OLD_DB_NAME)
+    # os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
