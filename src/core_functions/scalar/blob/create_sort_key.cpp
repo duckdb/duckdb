@@ -73,13 +73,11 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 		auto sort_specifier_str = sort_specifier.ToString();
 		result->modifiers.push_back(OrderModifiers::Parse(sort_specifier_str));
 	}
-#if 0
-	// FIXME enable other types
 	// check if all types are constant
 	bool all_constant = true;
 	idx_t constant_size = 0;
-	for(idx_t i = 0; i < arguments.size(); i++) {
-		auto physical_type = arguments[0]->return_type.InternalType();
+	for(idx_t i = 0; i < arguments.size(); i += 2) {
+		auto physical_type = arguments[i]->return_type.InternalType();
 		if (!TypeIsConstantSize(physical_type)) {
 			all_constant = false;
 		} else {
@@ -90,12 +88,8 @@ unique_ptr<FunctionData> CreateSortKeyBind(ClientContext &context, ScalarFunctio
 	if (all_constant) {
 		if (constant_size <= sizeof(int64_t)) {
 			bound_function.return_type = LogicalType::BIGINT;
-		} else if (constant_size <= sizeof(hugeint_t)) {
-			bound_function.return_type = LogicalType::HUGEINT;
 		}
 	}
-#endif
-
 	return result;
 }
 
@@ -357,18 +351,47 @@ static void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInf
 }
 
 static void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
-	auto result_data = FlatVector::GetData<string_t>(result);
-	for(idx_t r = 0; r < size; r++) {
-		result_data[r] = StringVector::EmptyString(result, key_lengths.variable_lengths[r] + key_lengths.constant_length);
-		data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+	switch(result.GetType().id()) {
+	case LogicalTypeId::BLOB: {
+		auto result_data = FlatVector::GetData<string_t>(result);
+		for(idx_t r = 0; r < size; r++) {
+			result_data[r] = StringVector::EmptyString(result, key_lengths.variable_lengths[r] + key_lengths.constant_length);
+			data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+		}
+		break;
+	}
+	case LogicalTypeId::BIGINT: {
+		auto result_data = FlatVector::GetData<int64_t>(result);
+		for(idx_t r = 0; r < size; r++) {
+			result_data[r] = 0;
+			data_pointers[r] = data_ptr_cast(&result_data[r]);
+		}
+		break;
+	}
+	default:
+		throw InternalException("Unsupported key type for CreateSortKey");
 	}
 }
 
 static void FinalizeSortData(Vector &result, idx_t size) {
-	auto result_data = FlatVector::GetData<string_t>(result);
-	// call Finalize on the result
-	for(idx_t r = 0; r < size; r++) {
-		result_data[r].Finalize();
+	switch(result.GetType().id()) {
+	case LogicalTypeId::BLOB: {
+		auto result_data = FlatVector::GetData<string_t>(result);
+		// call Finalize on the result
+		for(idx_t r = 0; r < size; r++) {
+			result_data[r].Finalize();
+		}
+		break;
+	}
+	case LogicalTypeId::BIGINT: {
+		auto result_data = FlatVector::GetData<int64_t>(result);
+		for(idx_t r = 0; r < size; r++) {
+			result_data[r] = ntohll(result_data[r]);
+		}
+		break;
+	}
+	default:
+		throw InternalException("Unsupported key type for CreateSortKey");
 	}
 }
 
