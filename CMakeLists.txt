@@ -294,6 +294,12 @@ else()
   set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
 endif()
 
+if(EMSCRIPTEN)
+  set(EXTENSION_POSTFIX ".wasm")
+else()
+  set(EXTENSION_POSTFIX "")
+endif()
+
 message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_NORMALIZED_VERSION}")
 
 option(AMALGAMATION_BUILD
@@ -646,15 +652,15 @@ endfunction()
 
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
 if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
-  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/.duckdb/extensions/)
+  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/.duckdb/extensions)
 endif()
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
   add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
           ${CMAKE_COMMAND} -E make_directory "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
           COMMAND
-          ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/extension/*/*.duckdb_extension" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
+          ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/extension/**/*.duckdb_extension${EXTENSION_POSTFIX}" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
           COMMAND
           cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && rm -rf "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -665,7 +671,9 @@ endif()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
-  add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
+  if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
+    add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
+  endif()
   # all parameters after output_directory
   set(FILES ${ARGV})
   # remove name
@@ -1124,14 +1132,12 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   if (WIN32)
     add_custom_target(
           duckdb_platform ALL
-	  COMMAND
-	  duckdb_platform_binary.exe > duckdb_platform_out
+	  COMMAND duckdb_platform_binary > duckdb_platform_out
           )
   else()
     add_custom_target(
           duckdb_platform ALL
-	  COMMAND
-	  ./duckdb_platform_binary > duckdb_platform_out
+	  COMMAND duckdb_platform_binary > duckdb_platform_out
           )
   endif()
   add_dependencies(duckdb_platform duckdb_platform_binary)
