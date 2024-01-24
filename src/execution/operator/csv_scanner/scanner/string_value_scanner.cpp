@@ -790,9 +790,9 @@ void StringValueScanner::SetStart() {
 	do {
 		SkipUntilNewLine();
 		if (state_machine->options.null_padding) {
-		// When Null Padding, we assume we start from the correct new-line
-		return;
-	}
+			// When Null Padding, we assume we start from the correct new-line
+			return;
+		}
 		scan_finder = make_uniq<StringValueScanner>(0, buffer_manager, state_machine,
 		                                            make_shared<CSVErrorHandler>(true), iterator, 1);
 		auto &tuples = scan_finder->ParseChunk();
