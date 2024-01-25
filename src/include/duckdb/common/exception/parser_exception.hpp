@@ -23,9 +23,6 @@ public:
 	}
 
 	static ParserException SyntaxError(const string &query, const string &error_message, optional_idx error_location);
-
-private:
-	unordered_map<string, string> extra_info;
 };
 
 } // namespace duckdb

@@ -213,6 +213,13 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 	}
 }
 
+void Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
+	extra_info["error_subtype"] = subtype;
+	if (error_location.IsValid()) {
+		extra_info["position"] = error_location.GetIndex();
+	}
+}
+
 StandardException::StandardException(ExceptionType exception_type, const string &message)
     : Exception(exception_type, message) {
 }

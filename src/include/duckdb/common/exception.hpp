@@ -11,7 +11,8 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/common/map.hpp"
+#include "duckdb/common/map.hpp" // FIXME <- can be removed when HTTPException is cleaned up
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 #include <vector>
@@ -21,6 +22,7 @@ namespace duckdb {
 enum class PhysicalType : uint8_t;
 struct LogicalType;
 struct hugeint_t;
+class optional_idx;
 
 inline void assert_restrict_function(const void *left_start, const void *left_end, const void *right_start,
                                      const void *right_end, const char *fname, int linenr) {
@@ -129,6 +131,15 @@ public:
 	static string FormatStackTrace(string message = "") {
 		return (message + "\n" + GetStackTrace());
 	}
+
+	const unordered_map<string, string> &GetExtraInfo() {
+		return extra_info;
+	}
+
+protected:
+	unordered_map<string, string> extra_info;
+
+	void InitializeExtraInfo(const string &subtype, optional_idx error_location);
 
 private:
 	string exception_message_;

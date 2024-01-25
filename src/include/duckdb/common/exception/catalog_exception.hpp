@@ -15,12 +15,6 @@
 
 namespace duckdb {
 
-enum class CatalogExceptionType : uint8_t {
-	INVALID = 0,
-	MISSING_ENTRY = 1,
-	ENTRY_ALREADY_EXISTS = 2
-};
-
 class CatalogException : public StandardException {
 public:
 	DUCKDB_API explicit CatalogException(const string &msg);
@@ -32,10 +26,6 @@ public:
 	static CatalogException MissingEntry(CatalogType type, const string &name, const string &suggestion, QueryErrorContext context = QueryErrorContext());
 	static CatalogException MissingEntry(const string &type, const string &name, const vector<string> &suggestions, QueryErrorContext context = QueryErrorContext());
 	static CatalogException EntryAlreadyExists(CatalogType type, const string &name, QueryErrorContext context = QueryErrorContext());
-
-private:
-	CatalogExceptionType catalog_exception_type;
-	unordered_map<string, string> extra_info;
 };
 
 } // namespace duckdb

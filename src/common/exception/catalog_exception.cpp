@@ -5,7 +5,7 @@
 namespace duckdb {
 
 CatalogException::CatalogException(const string &msg) :
-   StandardException(ExceptionType::CATALOG, msg), catalog_exception_type(CatalogExceptionType::INVALID) {
+   StandardException(ExceptionType::CATALOG, msg) {
 }
 
 CatalogException CatalogException::MissingEntry(CatalogType type, const string &name, const string &suggestion, QueryErrorContext context) {
@@ -15,8 +15,8 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const string &
 	}
 	CatalogException result(context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
 												name, did_you_mean));
-
-	result.catalog_exception_type = CatalogExceptionType::MISSING_ENTRY;
+	// FIXME: use InitializeExtraInfo
+	result.extra_info["error_subtype"] = "MISSING_ENTRY";
 	result.extra_info["name"] = name;
 	result.extra_info["type"] = CatalogTypeToString(type);
 	if (!suggestion.empty()) {
@@ -31,7 +31,8 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const string &
 CatalogException CatalogException::MissingEntry(const string &type, const string &name, const vector<string> &suggestions, QueryErrorContext context) {
 	CatalogException result(context.FormatError("unrecognized %s \"%s\"\n%s", type,
 												name, StringUtil::CandidatesErrorMessage(suggestions, name, "Did you mean")));
-	result.catalog_exception_type = CatalogExceptionType::MISSING_ENTRY;
+	// FIXME: use InitializeExtraInfo
+	result.extra_info["error_subtype"] = "MISSING_ENTRY";
 	result.extra_info["name"] = name;
 	result.extra_info["type"] = type;
 	if (!suggestions.empty()) {
@@ -45,7 +46,8 @@ CatalogException CatalogException::MissingEntry(const string &type, const string
 
 CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const string &name, QueryErrorContext context) {
 	CatalogException result(context.FormatError("%s with name \"%s\" already exists!", CatalogTypeToString(type), name));
-	result.catalog_exception_type = CatalogExceptionType::ENTRY_ALREADY_EXISTS;
+	// FIXME: use InitializeExtraInfo
+	result.extra_info["error_subtype"] = "ENTRY_ALREADY_EXISTS";
 	result.extra_info["name"] = name;
 	result.extra_info["type"] = CatalogTypeToString(type);
 	return result;

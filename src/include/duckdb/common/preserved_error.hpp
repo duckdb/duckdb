@@ -50,6 +50,8 @@ private:
 	string raw_message;
 	//! The final message (stored in the preserved error for compatibility reasons with C-API)
 	string final_message;
+	//! Extra exception info
+	unordered_map<string, string> extra_info;
 	std::shared_ptr<Exception> exception_instance;
 
 private:
