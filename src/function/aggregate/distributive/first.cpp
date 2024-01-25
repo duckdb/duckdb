@@ -312,6 +312,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 	auto decimal_type = arguments[0]->return_type;
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
+	function.order_dependent = AggregateOrderDependent::COMPARE_DEPENDENT;
 	function.name = std::move(name);
 	function.return_type = decimal_type;
 	return nullptr;
