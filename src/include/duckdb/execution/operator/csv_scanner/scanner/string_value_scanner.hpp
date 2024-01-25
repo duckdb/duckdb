@@ -42,10 +42,8 @@ public:
 	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size);
 
 	//! Information on the vector
-	unique_ptr<Vector> vector;
-	string_t *vector_ptr;
-	ValidityMask *validity_mask;
-	idx_t vector_size;
+	vector<string_t *> vector_ptr;
+	vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
 	idx_t last_position;
@@ -60,9 +58,9 @@ public:
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
-
+	idx_t number_of_rows = 0;
+	idx_t cur_col_id = 0;
 	idx_t result_size;
-
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
@@ -72,8 +70,6 @@ public:
 	bool store_line_size = false;
 	bool added_last_line = false;
 	bool quoted_new_line = false;
-	//! Last result position where a new row started
-	idx_t last_row_pos = 0;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -95,10 +91,6 @@ public:
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
-
-	idx_t NumberOfRows();
-
-	void Print();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t

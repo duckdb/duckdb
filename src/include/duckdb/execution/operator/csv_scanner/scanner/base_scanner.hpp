@@ -22,7 +22,6 @@ public:
 
 	idx_t Size();
 	bool Empty();
-	idx_t result_position = 0;
 
 	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result) {
