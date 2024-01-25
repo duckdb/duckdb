@@ -121,7 +121,9 @@ void VerifyReinterpretConstraints(const LogicalType &a, const LogicalType &b) {
 	auto phys_a = a.InternalType();
 	auto phys_b = b.InternalType();
 
-	D_ASSERT(phys_a == phys_b);
+	auto a_size = GetTypeIdSize(phys_a);
+	auto b_size = GetTypeIdSize(phys_b);
+	D_ASSERT(a_size == b_size);
 	if (phys_a == PhysicalType::STRUCT) {
 		auto &children_a = StructType::GetChildTypes(a);
 		auto &children_b = StructType::GetChildTypes(b);
