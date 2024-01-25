@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
+find_package (Python3)
+
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
 endif()
@@ -652,26 +654,32 @@ endfunction()
 
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
 if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
-  set(LOCAL_EXTENSION_REPO ${CMAKE_BINARY_DIR}/.duckdb/extensions)
+  set(LOCAL_EXTENSION_REPO_DIR ${CMAKE_BINARY_DIR}/repository)
+else()
+  if (NOT Python3_FOUND)
+    MESSAGE(FATAL_ERROR "Could not find python3 executable, when providing LOCAL_EXTENSION_REPO this is compulsory")
+  endif()
+  set(LOCAL_EXTENSION_REPO_DIR ${LOCAL_EXTENSION_REPO})
 endif()
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
-  add_custom_target(
+
+if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
+  if (NOT Python3_FOUND)
+    MESSAGE(STATUS "Could not find python3, create extension directory step will be skipped")
+  else()
+    add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
-          ${CMAKE_COMMAND} -E make_directory "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
-          COMMAND
-          cp "${CMAKE_BINARY_DIR}/extension/**/*.duckdb_extension${EXTENSION_POSTFIX}" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp/."
-          COMMAND
-          cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && rm -rf "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
+          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}"
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
-  add_dependencies(duckdb_local_extension_repo duckdb_platform)
-  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
+    add_dependencies(duckdb_local_extension_repo duckdb_platform)
+    message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO_DIR}")
+  endif()
 endif()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
-  if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
+  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
     add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
   endif()
   # all parameters after output_directory
