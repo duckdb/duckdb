@@ -16,6 +16,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
 #include <functional>
 
 namespace duckdb {

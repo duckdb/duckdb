@@ -2,6 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
 
 #ifdef DUCKDB_CRASH_ON_ASSERT
 #include "duckdb/common/printer.hpp"
@@ -296,9 +297,6 @@ NotImplementedException::NotImplementedException(const string &msg) : Exception(
 }
 
 OutOfRangeException::OutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
-}
-
-CatalogException::CatalogException(const string &msg) : StandardException(ExceptionType::CATALOG, msg) {
 }
 
 ConnectionException::ConnectionException(const string &msg) : StandardException(ExceptionType::CONNECTION, msg) {

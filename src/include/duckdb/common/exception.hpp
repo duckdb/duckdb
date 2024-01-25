@@ -145,15 +145,6 @@ public:
 	DUCKDB_API StandardException(ExceptionType exception_type, const string &message);
 };
 
-class CatalogException : public StandardException {
-public:
-	DUCKDB_API explicit CatalogException(const string &msg);
-
-	template <typename... Args>
-	explicit CatalogException(const string &msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
-	}
-};
-
 class ConnectionException : public StandardException {
 public:
 	DUCKDB_API explicit ConnectionException(const string &msg);
