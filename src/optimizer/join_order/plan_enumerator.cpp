@@ -124,8 +124,19 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	if (!possible_connections.empty()) {
 		best_connection = &possible_connections.back().get();
 	}
-
-	auto cost = cost_model.ComputeCost(left, right);
+	auto join_type = JoinType::INVALID;
+	auto &filter_bindings = query_graph_manager.GetFilterBindings();
+	for (auto &filter_binding : filter_bindings) {
+		bool left_subset = JoinRelationSet::IsSubset(*filter_binding->left_set, left.set);
+		bool right_subset = JoinRelationSet::IsSubset(*filter_binding->right_set, right.set);
+		if (left_subset && right_subset) {
+			join_type = filter_binding->join_type;
+			break;
+		}
+	}
+	D_ASSERT(join_type != JoinType::INVALID);
+	// need the filter info from the Neighborhood info.
+	auto cost = cost_model.ComputeCost(left, right, join_type);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
 	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<idx_t>(set);
 	return result;

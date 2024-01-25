@@ -45,9 +45,9 @@ struct FilterInfo {
 	}
 
 	unique_ptr<Expression> filter;
-	JoinType join_type;
 	JoinRelationSet &set;
 	idx_t filter_index;
+	JoinType join_type;
 	optional_ptr<JoinRelationSet> left_set;
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
