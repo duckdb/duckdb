@@ -24,6 +24,23 @@ if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell duckdb_utf8proc)
 endif()
 
+if(WIN32 AND NOT MINGW)
+  string(TIMESTAMP DUCKDB_COPYRIGHT_YEAR "%Y")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_VERSION=\"${DUCKDB_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_MAJOR_VERSION=\"${DUCKDB_MAJOR_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_MINOR_VERSION=\"${DUCKDB_MINOR_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_PATCH_VERSION=\"${DUCKDB_PATCH_VERSION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_DEV_ITERATION=\"${DUCKDB_DEV_ITERATION}\"")
+  set(CMAKE_RC_FLAGS
+      "${CMAKE_RC_FLAGS} -D DUCKDB_COPYRIGHT_YEAR=\"${DUCKDB_COPYRIGHT_YEAR}\"")
+  target_sources(shell PRIVATE rc/duckdb.rc)
+endif()
+
 set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)
 set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                        ${PROJECT_BINARY_DIR})

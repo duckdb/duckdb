@@ -118,6 +118,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(CotFun),
 	DUCKDB_AGGREGATE_FUNCTION(CovarPopFun),
 	DUCKDB_AGGREGATE_FUNCTION(CovarSampFun),
+	DUCKDB_SCALAR_FUNCTION(CreateSortKeyFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDatabaseFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDateFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentQueryFun),
