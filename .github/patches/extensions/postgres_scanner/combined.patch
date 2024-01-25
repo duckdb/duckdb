@@ -121,21 +121,6 @@ index 6de4b5c..e1b89e6 100644
  	lock_guard<mutex> l(transaction_lock);
  	transactions.erase(transaction);
  }
-diff --git a/test/all_pg_types.sql b/test/all_pg_types.sql
-index d2312bc..5b61607 100644
---- a/test/all_pg_types.sql
-+++ b/test/all_pg_types.sql
-@@ -185,3 +185,9 @@ INSERT INTO mixed_arrays VALUES (
- INSERT INTO mixed_arrays VALUES (
- 	ARRAY[1, 2, 3]
- );
-+
-+CREATE TYPE composite_a AS (i INTEGER, j INTEGER);
-+CREATE TYPE composite_b AS (a composite_a, k INTEGER);
-+CREATE TABLE composites_of_composites (b composite_b);
-+
-+INSERT INTO composites_of_composites VALUES (((1,2),3)), (((4,5),6)), (((7,8),9));
-\ No newline at end of file
 diff --git a/test/sql/storage/attach_detach.test b/test/sql/storage/attach_detach.test
 index 7b7d19f..ba8168f 100644
 --- a/test/sql/storage/attach_detach.test
