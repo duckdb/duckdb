@@ -238,11 +238,11 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 				empty = result.state_machine.options.force_not_null[0];
 			}
 			if (empty) {
-				*result.vector_ptr[0] = string_t();
+				result.vector_ptr[0][result.number_of_rows] = string_t();
 			} else {
 				result.validity_mask[0]->SetInvalid(result.number_of_rows);
-				result.number_of_rows++;
 			}
+			result.number_of_rows++;
 		}
 		if (result.number_of_rows >= result.result_size) {
 			// We have a full chunk
@@ -605,6 +605,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 		result.AddRowInternal();
 		lines_read++;
 	}
+	if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
+		result.EmptyLine(result,iterator.pos.buffer_pos);
+	}
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
 	}
@@ -631,7 +634,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 			    states.IsNotSet()) {
-				if (result.cur_col_id > 0){
+				if (result.cur_col_id == result.number_of_columns){
 					result.number_of_rows++;
 				}
 				result.cur_col_id = 0;
