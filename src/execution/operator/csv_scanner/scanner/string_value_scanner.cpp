@@ -27,7 +27,6 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	// Current Result information
 	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle.actual_size};
 	pre_previous_line_start = previous_line_start;
-	vector<LogicalType> parse_types;
 	if (types.empty()) {
 		parse_types = {number_of_columns, LogicalType::VARCHAR};
 	} else {
@@ -50,10 +49,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 
 Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
 	if (validity_mask[col_idx]->AllValid()) {
-		return Value(vector_ptr[col_idx][row_idx]);
+		return Value(static_cast<string_t *>(vector_ptr[col_idx])[row_idx]);
 	} else {
 		if (validity_mask[col_idx]->RowIsValid(row_idx)) {
-			return Value(vector_ptr[col_idx][row_idx]);
+			return Value(static_cast<string_t *>(vector_ptr[col_idx])[row_idx]);
 		} else {
 			return Value();
 		}
@@ -71,15 +70,15 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		    result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2,
 		    result.state_machine.options.GetEscape()[0], result.parse_chunk.data[result.cur_col_id]);
 
-		result.AddValueToVector(value);
+		result.AddValueToVector(value.GetData(), value.GetSize());
 	} else {
 		if (buffer_pos < result.last_position + 2) {
 			// empty value
 			auto value = string_t();
-			result.AddValueToVector(value);
+			result.AddValueToVector(value.GetData(), value.GetSize());
 		} else {
-			auto value = string_t(result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2);
-			result.AddValueToVector(value);
+			result.AddValueToVector(result.buffer_ptr + result.last_position + 1,
+			                        buffer_pos - result.last_position - 2);
 		}
 	}
 	result.quoted = false;
@@ -93,8 +92,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.quoted) {
 		StringValueResult::AddQuotedValue(result, buffer_pos);
 	} else {
-		auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
-		result.AddValueToVector(value);
+		result.AddValueToVector(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
 	}
 	result.last_position = buffer_pos + 1;
 }
@@ -108,6 +106,39 @@ void StringValueResult::HandleOverLimitRows() {
 	cur_col_id = 0;
 }
 
+void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size) {
+	//	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == null_str) {
+	//		bool empty = false;
+	//		if (cur_col_id < state_machine.options.force_not_null.size()) {
+	//			empty = state_machine.options.force_not_null[cur_col_id];
+	//		}
+	//		if (empty) {
+	//			if (cur_col_id >= number_of_columns) {
+	//				HandleOverLimitRows();
+	//			}
+	//			static_cast<string_t*>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
+	//		} else {
+	//			if (cur_col_id == number_of_columns) {
+	//				// We check for a weird case, where we ignore an extra value, if it is a null value
+	//				return;
+	//			}
+	//			validity_mask[cur_col_id]->SetInvalid(number_of_rows);
+	//		}
+	//	}
+	if (cur_col_id >= number_of_columns) {
+		HandleOverLimitRows();
+	}
+	switch (parse_types[cur_col_id].id()) {
+	case LogicalTypeId::BIGINT:
+		TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	default:
+		static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t(value_ptr, size);
+		break;
+	}
+	cur_col_id++;
+}
+
 void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
 	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == null_str) {
 		bool empty = false;
@@ -118,7 +149,7 @@ void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
 			if (cur_col_id >= number_of_columns) {
 				HandleOverLimitRows();
 			}
-			vector_ptr[cur_col_id][number_of_rows] = string_t();
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
 		} else {
 			if (cur_col_id == number_of_columns) {
 				// We check for a weird case, where we ignore an extra value, if it is a null value
@@ -131,13 +162,15 @@ void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
 			HandleOverLimitRows();
 		}
 		if (allocate) {
-			vector_ptr[cur_col_id][number_of_rows] = StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], value);
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] =
+			    StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], value);
 		} else {
-			vector_ptr[cur_col_id][number_of_rows] = value;
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = value;
 		}
 	}
 	cur_col_id++;
 }
+
 void StringValueResult::QuotedNewLine(StringValueResult &result) {
 	result.quoted_new_line = true;
 }
@@ -167,7 +200,7 @@ bool StringValueResult::AddRowInternal() {
 					empty = state_machine.options.force_not_null[cur_col_id];
 				}
 				if (empty) {
-					vector_ptr[cur_col_id][number_of_rows] = string_t();
+					static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
 				} else {
 					validity_mask[cur_col_id]->SetInvalid(number_of_rows);
 				}
@@ -175,8 +208,8 @@ bool StringValueResult::AddRowInternal() {
 			}
 		} else {
 			// If we are not nullpadding this is an error
-			auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, vector_ptr[cur_col_id],
-			                                                      number_of_columns, cur_col_id);
+			auto csv_error = CSVError::IncorrectColumnAmountError(
+			    state_machine.options, static_cast<string_t *>(vector_ptr[cur_col_id]), number_of_columns, cur_col_id);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
 			error_handler.Error(lines_per_batch, csv_error);
 			// If we are here we ignore_errors, so we delete this line
@@ -211,8 +244,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			StringValueResult::AddQuotedValue(result, buffer_pos);
 		} else {
-			auto value = string_t(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
-			result.AddValueToVector(value);
+			result.AddValueToVector(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
 		}
 		if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 			if (result.states.states[1] == CSVState::RECORD_SEPARATOR) {
@@ -232,8 +264,9 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 
 void StringValueResult::InvalidState(StringValueResult &result) {
 	// FIXME: How do we recover from an invalid state? Can we restart the state machine and jump to the next row?
-	auto csv_error = CSVError::UnterminatedQuotesError(
-	    result.state_machine.options, result.vector_ptr[result.cur_col_id], result.number_of_rows, result.cur_col_id);
+	auto csv_error = CSVError::UnterminatedQuotesError(result.state_machine.options,
+	                                                   static_cast<string_t *>(result.vector_ptr[result.cur_col_id]),
+	                                                   result.number_of_rows, result.cur_col_id);
 	LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
 	result.error_handler.Error(lines_per_batch, csv_error);
 }
@@ -252,7 +285,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 				empty = result.state_machine.options.force_not_null[0];
 			}
 			if (empty) {
-				result.vector_ptr[0][result.number_of_rows] = string_t();
+				static_cast<string_t *>(result.vector_ptr[0])[result.number_of_rows] = string_t();
 			} else {
 				result.validity_mask[0]->SetInvalid(result.number_of_rows);
 			}

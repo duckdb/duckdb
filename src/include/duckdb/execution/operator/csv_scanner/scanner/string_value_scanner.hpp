@@ -43,7 +43,7 @@ public:
 	                  vector<LogicalType> &types);
 
 	//! Information on the vector
-	vector<string_t *> vector_ptr;
+	vector<void *> vector_ptr;
 	vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
@@ -71,6 +71,8 @@ public:
 	bool store_line_size = false;
 	bool added_last_line = false;
 	bool quoted_new_line = false;
+
+	vector<LogicalType> parse_types;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -88,7 +90,7 @@ public:
 
 	void HandleOverLimitRows();
 
-	void AddValueToVector(string_t &value, char *buffer_ptr, idx_t size);
+	void AddValueToVector(const char *buffer_ptr, const idx_t size);
 
 	void AddValueToVector(string_t &value, bool allocate = false);
 
