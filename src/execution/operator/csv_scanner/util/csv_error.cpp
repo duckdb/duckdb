@@ -33,6 +33,8 @@ void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, b
 		throw CastException(error.str());
 	case CSVErrorType::COLUMN_NAME_TYPE_MISMATCH:
 		throw BinderException(error.str());
+	case CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE:
+		throw ParameterNotAllowedException(error.str());
 	default:
 		throw InvalidInputException(error.str());
 	}
@@ -118,6 +120,16 @@ CSVError CSVError::SniffingError(string &file_path) {
 	return CSVError(error.str(), CSVErrorType::SNIFFING);
 }
 
+CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options) {
+	std::ostringstream error;
+	error << " The parallel scanner does not support null_padding in conjunction with quoted new lines. Please "
+	         "disable the parallel csv reader with parallel=false"
+	      << std::endl;
+	// What were the options
+	error << options.ToString();
+	return CSVError(error.str(), CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE);
+}
+
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
                                            idx_t vector_line_start, idx_t current_column) {
 	std::ostringstream error;
@@ -145,6 +157,7 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	      << std::endl;
 	// What is the problematic CSV Line
 	error << "Problematic CSV Line:" << std::endl;
+	error << "Consider using the \'null_padding\' or \'ignore_errors\' options." << std::endl;
 	for (; vector_line_start < actual_columns; vector_line_start++) {
 		//		error << vector_ptr[vector_line_start].GetString();
 		if (vector_line_start < actual_columns - 1) {
@@ -164,6 +177,7 @@ bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
 	case CSVErrorType::UNTERMINATED_QUOTES:
 	case CSVErrorType::INCORRECT_COLUMN_AMOUNT:
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
+	case CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE:
 		return true;
 	default:
 		return false;

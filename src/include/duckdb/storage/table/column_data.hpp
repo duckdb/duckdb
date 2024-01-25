@@ -26,6 +26,7 @@ class RowGroupWriter;
 class TableDataWriter;
 class TableStorageInfo;
 struct TransactionData;
+struct TableScanOptions;
 
 struct DataTableInfo;
 
@@ -125,10 +126,9 @@ public:
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
-	virtual void DeserializeColumn(Deserializer &deserializer);
+	virtual void DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                          idx_t start_row, ReadStream &source, const LogicalType &type,
-	                                          optional_ptr<ColumnData> parent);
+	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
 
 	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);

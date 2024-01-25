@@ -64,7 +64,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
 	}
 
 	// create tokenize macro based on parameters
-	string tokenize = "s";
+	string tokenize = "s::VARCHAR";
 	vector<string> before;
 	vector<string> after;
 	if (strip_accents) {

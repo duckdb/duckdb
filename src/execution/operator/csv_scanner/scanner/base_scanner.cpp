@@ -17,8 +17,8 @@ bool ScannerResult::Empty() {
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
                          shared_ptr<CSVErrorHandler> error_handler_p, CSVIterator iterator_p)
-    : error_handler(std::move(error_handler_p)), iterator(iterator_p), buffer_manager(std::move(buffer_manager_p)),
-      state_machine(std::move(state_machine_p)) {
+    : error_handler(std::move(error_handler_p)), state_machine(std::move(state_machine_p)), iterator(iterator_p),
+      buffer_manager(std::move(buffer_manager_p)) {
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
 	// Initialize current buffer handle
@@ -67,21 +67,8 @@ void BaseScanner::Initialize() {
 	throw InternalException("Initialize() from CSV Base Scanner is mot implemented");
 }
 
-void BaseScanner::Process() {
-	throw InternalException("Process() from CSV Base Scanner is mot implemented");
-}
-
 void BaseScanner::FinalizeChunkProcess() {
 	throw InternalException("FinalizeChunkProcess() from CSV Base Scanner is mot implemented");
-}
-
-void BaseScanner::ParseChunkInternal() {
-	if (!initialized) {
-		Initialize();
-		initialized = true;
-	}
-	Process();
-	FinalizeChunkProcess();
 }
 
 CSVStateMachine &BaseScanner::GetStateMachine() {

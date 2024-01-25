@@ -31,6 +31,8 @@ public:
 	static inline void InvalidState(SkipResult &result);
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(SkipResult &result, const idx_t buffer_pos);
+	//! Handles QuotedNewline State
+	static inline void QuotedNewLine(SkipResult &result);
 	inline void InternalAddRow();
 };
 
@@ -49,8 +51,6 @@ public:
 
 private:
 	void Initialize() override;
-
-	void Process() override;
 
 	void FinalizeChunkProcess() override;
 
