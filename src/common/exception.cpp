@@ -302,9 +302,6 @@ OutOfRangeException::OutOfRangeException(const string &msg) : Exception(Exceptio
 ConnectionException::ConnectionException(const string &msg) : StandardException(ExceptionType::CONNECTION, msg) {
 }
 
-ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
-}
-
 PermissionException::PermissionException(const string &msg) : StandardException(ExceptionType::PERMISSION, msg) {
 }
 

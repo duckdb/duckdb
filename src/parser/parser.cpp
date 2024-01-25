@@ -150,6 +150,7 @@ vector<string> SplitQueryStringIntoStatements(const string &query) {
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
+	optional_idx parser_error_location;
 	{
 		// check if there are any unicode spaces in the string
 		string new_query;
@@ -178,7 +179,8 @@ void Parser::ParseQuery(const string &query) {
 				transformer.TransformParseTree(parser.parse_tree, statements);
 				parsing_succeed = true;
 			} else {
-				parser_error = QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1);
+				parser_error = parser.error_message;
+				parser_error_location = parser.error_location - 1;
 			}
 		}
 		// If DuckDB fails to parse the entire sql string, break the string down into individual statements
@@ -188,7 +190,7 @@ void Parser::ParseQuery(const string &query) {
 			// return here would require refactoring into another function. o.w. will just no-op in order to run wrap up
 			// code at the end of this function
 		} else if (!options.extensions || options.extensions->empty()) {
-			throw ParserException(parser_error);
+			throw ParserException::SyntaxError(query, parser_error, parser_error_location);
 		} else {
 			// split sql string into statements and re-parse using extension
 			auto query_statements = SplitQueryStringIntoStatements(query);
@@ -233,13 +235,13 @@ void Parser::ParseQuery(const string &query) {
 						parsed_single_statement = true;
 						break;
 					} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						throw ParserException(result.error);
+						throw ParserException::SyntaxError(query, result.error, result.error_location);
 					} else {
 						// We move to the next one!
 					}
 				}
 				if (!parsed_single_statement) {
-					throw ParserException(parser_error);
+					throw ParserException::SyntaxError(query, parser_error, parser_error_location);
 				} // LCOV_EXCL_STOP
 			}
 		}
