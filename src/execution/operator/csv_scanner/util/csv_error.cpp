@@ -164,7 +164,6 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	error << "Problematic CSV Line:" << std::endl;
 	error << "Consider using the \'null_padding\' or \'ignore_errors\' options." << std::endl;
 	for (; vector_line_start < actual_columns; vector_line_start++) {
-		//		error << vector_ptr[vector_line_start].GetString();
 		if (vector_line_start < actual_columns - 1) {
 			// we are not in the last line, add the delimiter
 			error << options.dialect_options.state_machine_options.delimiter.GetValue();

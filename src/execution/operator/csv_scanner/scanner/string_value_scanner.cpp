@@ -76,11 +76,6 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.last_position > buffer_pos) {
 		return;
 	}
-
-	D_ASSERT(result.result_position < result.vector_size);
-	if (result.cur_col_id >= result.number_of_columns) {
-		result.HandleOverLimitRows();
-	}
 	if (result.quoted) {
 		StringValueResult::AddQuotedValue(result, buffer_pos);
 	} else {
@@ -91,13 +86,12 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::HandleOverLimitRows() {
-	auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, vector_ptr[cur_col_id],
-	                                                      number_of_columns, cur_col_id);
+	auto csv_error =
+	    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id);
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
 	error_handler.Error(lines_per_batch, csv_error);
 	// If we get here we need to remove the last line
 	cur_col_id = 0;
-	number_of_rows--;
 }
 
 void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
@@ -112,8 +106,7 @@ void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
 			}
 			vector_ptr[cur_col_id][number_of_rows] = string_t();
 		} else {
-			if (cur_col_id == number_of_columns + 1) {
-				// If the columns are incorrect:
+			if (cur_col_id == number_of_columns) {
 				// We check for a weird case, where we ignore an extra value, if it is a null value
 				return;
 			}
@@ -172,11 +165,11 @@ bool StringValueResult::AddRowInternal() {
 			                                                      number_of_columns, cur_col_id);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
 			error_handler.Error(lines_per_batch, csv_error);
-			// If we are here we ignore_errors so we delete this line
+			// If we are here we ignore_errors, so we delete this line
 			number_of_rows--;
-			D_ASSERT(result_position % number_of_columns == 0);
 		}
 	}
+	cur_col_id = 0;
 	number_of_rows++;
 	if (number_of_rows >= result_size) {
 		// We have a full chunk
@@ -200,9 +193,6 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		}
 		result.pre_previous_line_start = result.previous_line_start;
 		result.previous_line_start = current_line_start;
-		if (result.cur_col_id == result.number_of_columns) {
-			result.HandleOverLimitRows();
-		}
 		// We add the value
 		if (result.quoted) {
 			StringValueResult::AddQuotedValue(result, buffer_pos);
@@ -811,9 +801,10 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		iterator.done = FinishedFile();
 		if (result.null_padding) {
-			while (result.cur_col_id != result.number_of_columns) {
-				result.validity_mask[result.cur_col_id]->SetInvalid(result.number_of_rows++);
+			while (result.cur_col_id < result.number_of_columns) {
+				result.validity_mask[result.cur_col_id++]->SetInvalid(result.number_of_rows);
 			}
+			result.number_of_rows++;
 		}
 	}
 }
