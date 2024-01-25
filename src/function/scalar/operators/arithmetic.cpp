@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "libdivide.h"
 
 #include <limits>
 
@@ -852,7 +853,7 @@ interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 	return left;
 }
 
-struct BinaryNumericDivideWrapper {
+struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
@@ -865,12 +866,53 @@ struct BinaryNumericDivideWrapper {
 		}
 	}
 
+	template <class RIGHT_TYPE>
+	const static inline bool OptimiseConstRight(RIGHT_TYPE right) {
+		return right != -1;
+	}
+
+	template <class OP, class RIGHT_TYPE>
+	static RIGHT_TYPE OptimisedRight(OP _, RIGHT_TYPE right) {
+		return right;
+	}
+
+	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
+	static bool Validity(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return right != 0;
+	}
+
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE OptimisedOperation(OP _, FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+	}
+
+	static libdivide::divider<int32_t> OptimisedRight(DivideOperator _, int32_t right) {
+		return libdivide::divider<int32_t>(right);
+	}
+
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
+	                                      libdivide::divider<int32_t> right) {
+		return DivideOperator::template Operation<LEFT_TYPE, libdivide::divider<int32_t>, RESULT_TYPE>(left, right);
+	}
+
+
+	static libdivide::divider<int64_t> OptimisedRight(DivideOperator _, int64_t right) {
+		return libdivide::divider<int64_t>(right);
+	}
+
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
+	                                      libdivide::divider<int64_t> right) {
+		return DivideOperator::template Operation<LEFT_TYPE, libdivide::divider<int64_t>, RESULT_TYPE>(left, right);
+	}
+
 	static bool AddsNulls() {
 		return true;
 	}
 };
 
-struct BinaryZeroIsNullWrapper {
+struct BinaryZeroIsNullWrapper : ConstRightOptOperatorWrapper{
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (right == 0) {
@@ -881,12 +923,27 @@ struct BinaryZeroIsNullWrapper {
 		}
 	}
 
+	template <class OP, class RIGHT_TYPE>
+	static RIGHT_TYPE OptimisedRight(OP _, RIGHT_TYPE right) {
+		return right;
+	}
+
+	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Validity(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return right != 0;
+	}
+
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE OptimisedOperation(OP _, FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+	}
+
 	static bool AddsNulls() {
 		return true;
 	}
 };
 
-struct BinaryNumericDivideHugeintWrapper {
+struct BinaryNumericDivideHugeintWrapper :ConstRightOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
@@ -897,6 +954,21 @@ struct BinaryNumericDivideHugeintWrapper {
 		} else {
 			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 		}
+	}
+
+	template <class OP, class RIGHT_TYPE>
+	static RIGHT_TYPE OptimisedRight(OP _, RIGHT_TYPE right) {
+		return right;
+	}
+
+	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Validity(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return right.upper != 0 || right.lower != 0;
+	}
+
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE OptimisedOperation(OP _, FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 	}
 
 	static bool AddsNulls() {

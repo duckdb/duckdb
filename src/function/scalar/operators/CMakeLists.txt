@@ -1,3 +1,5 @@
+include_directories(../../../../third_party/libdivide)
+
 add_library_unity(duckdb_func_ops_main OBJECT add.cpp arithmetic.cpp
                   multiply.cpp subtract.cpp)
 set(ALL_OBJECT_FILES

@@ -1,0 +1,48 @@
+set(BUILD_NAME "Sanitize")
+string(TOUPPER "${BUILD_NAME}" BUILD_NAME_U)
+
+set(BASE_BUILD_NAME "RelWithDebInfo")
+string(TOUPPER "${BASE_BUILD_NAME}" BASE_BUILD_NAME_U)
+
+if(CMAKE_CONFIGURATION_TYPES)
+  list(APPEND CMAKE_CONFIGURATION_TYPES "${BUILD_NAME}")
+  list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
+    "Add the configurations that we need"
+    FORCE)
+endif()
+
+if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+  set(COMPILER_FLAGS "/fsanitize=address /MTd")
+  set(LINKER_FLAGS "/INCREMENTAL:NO")
+elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
+  set(COMPILER_FLAGS "-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -U_DLL -U_MT -DDEBUG -O1 -g")
+  set(LINKER_FLAGS "-fsanitize=address")
+elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  set(COMPILER_FLAGS "-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -DDEBUG -O1 -g")
+  set(LINKER_FLAGS "-fsanitize=address -fsanitize=undefined")
+endif()
+
+set("CMAKE_CXX_FLAGS_${BUILD_NAME_U}" "${CMAKE_CXX_FLAGS_${BASE_BUILD_NAME_U}} ${COMPILER_FLAGS}" CACHE STRING
+ "Flags used by the C++ compiler during ${BUILD_NAME} builds."
+  FORCE)
+set("CMAKE_C_FLAGS_${BUILD_NAME_U}" "${CMAKE_C_FLAGS_${BASE_BUILD_NAME_U}} ${COMPILER_FLAGS}" CACHE STRING
+  "Flags used by the C compiler during ${BUILD_NAME} builds."
+  FORCE)
+set("CMAKE_EXE_LINKER_FLAGS_${BUILD_NAME_U}" "${CMAKE_EXE_LINKER_FLAGS_${BASE_BUILD_NAME_U}} ${LINKER_FLAGS}" CACHE STRING
+  "Flags used for linking binaries during ${BUILD_NAME} builds."
+  FORCE)
+set("CMAKE_SHARED_LINKER_FLAGS_${BUILD_NAME_U}" "${CMAKE_SHARED_LINKER_FLAGS_${BASE_BUILD_NAME_U}} ${LINKER_FLAGS}" CACHE STRING
+  "Flags used by the shared libraries linker during ${BUILD_NAME} builds."
+  FORCE)
+
+mark_as_advanced(
+  "${CMAKE_CXX_FLAGS_${BUILD_NAME_U}}" 
+  "${CMAKE_C_FLAGS_${BUILD_NAME_U}}" 
+  "${CMAKE_EXE_LINKER_FLAGS_${BUILD_NAME_U}}" 
+  "${CMAKE_SHARED_LINKER_FLAGS_${BUILD_NAME_U}}")
+
+# Update the documentation string of CMAKE_BUILD_TYPE for GUIs
+set(CMAKE_BUILD_TYPE "${CMAKE_BUILD_TYPE}" CACHE STRING
+  "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel ${BUILD_NAME}."
+  FORCE)

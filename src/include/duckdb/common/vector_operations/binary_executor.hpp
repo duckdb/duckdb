@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
+#include <duckdb/common/typedefs.hpp>
 #include <functional>
 
 namespace duckdb {
@@ -23,43 +24,106 @@ struct DefaultNullCheckOperator {
 	}
 };
 
-struct BinaryStandardOperatorWrapper {
+
+struct ConstRightOptOperatorWrapper {
+	template <class RIGHT_TYPE>
+	const static inline bool OptimiseConstRight(RIGHT_TYPE) {
+		return true;
+	}
+};
+
+struct NoOptOperatorWrapper {
+	template <class RIGHT_TYPE>
+	const static inline bool OptimiseConstRight(RIGHT_TYPE) {
+		return false;
+	}
+
+	template <class OP, class RIGHT_TYPE>
+	static RIGHT_TYPE OptimisedRight(OP _, RIGHT_TYPE right) {
+		return right;
+	}
+};
+
+struct BinaryStandardOperatorWrapper: NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 	}
 
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE OptimisedOperation(OP _, FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+	}
+
+	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Validity(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return true;
+	}
+
 	static bool AddsNulls() {
 		return false;
 	}
 };
 
-struct BinarySingleArgumentOperatorWrapper {
+struct BinarySingleArgumentOperatorWrapper: NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE>(left, right);
 	}
 
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE OptimisedOperation(OP _, FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return OP::template Operation<LEFT_TYPE>(left, right);
+	}
+
+	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Validity(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return true;
+	}
+
 	static bool AddsNulls() {
 		return false;
 	}
 };
 
-struct BinaryLambdaWrapper {
+struct BinaryLambdaWrapper:NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return fun(left, right);
 	}
 
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE OptimisedOperation(OP _, FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return fun(left, right);
+	}
+
+	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Validity(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		return true;
+	}
+
 	static bool AddsNulls() {
 		return false;
 	}
 };
 
-struct BinaryLambdaWrapperWithNulls {
+struct BinaryLambdaWrapperWithNulls:NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return fun(left, right, mask, idx);
+	}
+
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE OptimisedOperation(OP _, FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		ValidityMask mask = ValidityMask();
+		return fun(left, right, mask, 0);
+	}
+
+	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Validity(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right) {
+		ValidityMask mask = ValidityMask();
+		fun(left, right, mask, 0);
+		return mask.GetValidityEntry(0);
 	}
 
 	static bool AddsNulls() {
@@ -111,6 +175,17 @@ struct BinaryExecutor {
 						}
 					}
 				}
+			}
+		} else if (RIGHT_CONSTANT && OPWRAPPER::OptimiseConstRight(rdata[0])) {
+			if (!OPWRAPPER::template Validity(fun, ldata[0], rdata[0])) {
+				mask.SetAllInvalid(count);
+				return;
+			}
+			auto rentry = OPWRAPPER::template OptimisedRight(OP {}, rdata[0]);
+			for (idx_t i = 0; i < count; i++) {
+				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
+				result_data[i] = OPWRAPPER::template OptimisedOperation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+				    OP {}, fun, lentry, rentry);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
