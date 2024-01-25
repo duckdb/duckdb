@@ -1,0 +1,6 @@
+# name: benchmark/micro/ingestion/imdb/ingest_aka_name.benchmark
+# description: benchmark ingestion of aka_name
+# group: [imdb]
+
+template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
+table_name=aka_name

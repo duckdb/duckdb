@@ -1,0 +1,6 @@
+# name: benchmark/micro/ingestion/imdb/ingest_company_type.benchmark
+# description: benchmark ingestion of company_type
+# group: [imdb]
+
+template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
+table_name=company_type

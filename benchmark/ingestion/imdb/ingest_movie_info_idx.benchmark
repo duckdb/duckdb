@@ -1,0 +1,6 @@
+# name: benchmark/micro/ingestion/imdb/ingest_movie_info_idx.benchmark
+# description: benchmark ingestion of movie_info_idx
+# group: [imdb]
+
+template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
+table_name=movie_info_idx
