@@ -29,10 +29,10 @@ public:
 	}
 
 	static CatalogException MissingEntry(CatalogType type, const string &name, const string &suggestion, QueryErrorContext context = QueryErrorContext());
+	static CatalogException MissingEntry(const string &type, const string &name, const vector<string> &suggestions, QueryErrorContext context = QueryErrorContext());
 
 private:
 	CatalogExceptionType catalog_exception_type;
-	CatalogType catalog_type;
 	unordered_map<string, string> extra_info;
 };
 

@@ -510,9 +510,7 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
 		potential_names.push_back(entry.first);
 	}
-
-	throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-	                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
 }
 
 CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
