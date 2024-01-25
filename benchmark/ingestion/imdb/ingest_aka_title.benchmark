@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/imdb/ingest_aka_title.benchmark
+# name: benchmark/ingestion/imdb/ingest_aka_title.benchmark
 # description: benchmark ingestion of aka_title
 # group: [imdb]
 

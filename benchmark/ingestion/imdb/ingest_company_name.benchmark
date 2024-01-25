@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/imdb/ingest_company_name.benchmark
+# name: benchmark/ingestion/imdb/ingest_company_name.benchmark
 # description: benchmark ingestion of company_name
 # group: [imdb]
 

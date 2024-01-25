@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/imdb/ingest_movie_info.benchmark
+# name: benchmark/ingestion/imdb/ingest_movie_info.benchmark
 # description: benchmark ingestion of movie_info
 # group: [imdb]
 

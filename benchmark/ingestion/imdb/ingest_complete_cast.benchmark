@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/imdb/ingest_complete_cast.benchmark
+# name: benchmark/ingestion/imdb/ingest_complete_cast.benchmark
 # description: benchmark ingestion of complete_cast
 # group: [imdb]
 

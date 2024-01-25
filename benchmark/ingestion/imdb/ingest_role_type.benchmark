@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/imdb/ingest_role_type.benchmark
+# name: benchmark/ingestion/imdb/ingest_role_type.benchmark
 # description: benchmark ingestion of role_type
 # group: [imdb]
 

@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/imdb/ingest_comp_cast_type.benchmark
+# name: benchmark/ingestion/imdb/ingest_comp_cast_type.benchmark
 # description: benchmark ingestion of comp_cast_type
 # group: [imdb]
 

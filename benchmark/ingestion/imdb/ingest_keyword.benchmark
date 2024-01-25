@@ -1,4 +1,4 @@
-# name: benchmark/micro/ingestion/imdb/ingest_keyword.benchmark
+# name: benchmark/ingestion/imdb/ingest_keyword.benchmark
 # description: benchmark ingestion of keyword
 # group: [imdb]
 
