@@ -100,12 +100,7 @@ public:
 
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
 	DUCKDB_API static ExceptionType StringToExceptionType(const string &type);
-	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message,
-	                                                           const std::shared_ptr<Exception> &original);
-	virtual std::shared_ptr<Exception> Copy() const {
-		return make_shared<Exception>(type, raw_message_);
-	}
-	DUCKDB_API const HTTPException &AsHTTPException() const;
+	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message);
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
@@ -132,7 +127,7 @@ public:
 		return (message + "\n" + GetStackTrace());
 	}
 
-	const unordered_map<string, string> &GetExtraInfo() {
+	const unordered_map<string, string> &GetExtraInfo() const {
 		return extra_info;
 	}
 

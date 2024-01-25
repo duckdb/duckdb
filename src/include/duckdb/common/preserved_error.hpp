@@ -37,9 +37,6 @@ public:
 	//! Let's us do things like 'if (error)'
 	DUCKDB_API operator bool() const;
 	DUCKDB_API bool operator==(const PreservedError &other) const;
-	const shared_ptr<Exception> &GetError() {
-		return exception_instance;
-	}
 
 private:
 	//! Whether this PreservedError contains an exception or not
@@ -52,7 +49,6 @@ private:
 	string final_message;
 	//! Extra exception info
 	unordered_map<string, string> extra_info;
-	std::shared_ptr<Exception> exception_instance;
 
 private:
 	DUCKDB_API static string SanitizeErrorMessage(string error);

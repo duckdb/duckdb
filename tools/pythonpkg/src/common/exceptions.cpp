@@ -1,6 +1,8 @@
 #include "duckdb_python/pybind11/exceptions.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/list.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 namespace py = pybind11;
@@ -82,12 +84,17 @@ void RegisterExceptions(const py::module &m) {
 			// construct exception object
 			auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(httpe.what()));
 
-			e.attr("status_code") = httpe.GetStatusCode();
-			e.attr("body") = py::str(httpe.GetResponseBody());
-			e.attr("reason") = py::str(httpe.GetReason());
 			auto headers = py::dict();
-			for (const auto &item : httpe.GetHeaders()) {
-				headers[py::str(item.first)] = item.second;
+			for(auto &entry : httpe.GetExtraInfo()) {
+				if (entry.first == "status_code") {
+					e.attr("status_code") = std::stoi(entry.second);
+				} else if (entry.first == "response_body") {
+					e.attr("body") = entry.second;
+				} else if (entry.first == "reason") {
+					e.attr("reason") = entry.second;
+				} else if (StringUtil::StartsWith(entry.first, "headers_")) {
+					headers[py::str(entry.first.substr(8))] = entry.second;
+				}
 			}
 			e.attr("headers") = std::move(headers);
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -19,6 +20,10 @@ public:
 		typedef int status;
 	};
 
+	explicit HTTPException(string message)
+			: IOException(ExceptionType::HTTP, std::move(message)) {
+	}
+
 	template <class RESPONSE, typename ResponseShape<decltype(RESPONSE::status)>::status = 0, typename... ARGS>
 	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
 			: HTTPException(response.status, response.body, response.headers, response.reason, msg, params...) {
@@ -28,45 +33,23 @@ public:
 	struct ResponseWrapperShape {
 		typedef int code;
 	};
+
 	template <class RESPONSE, typename ResponseWrapperShape<decltype(RESPONSE::code)>::code = 0, typename... ARGS>
 	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
 			: HTTPException(response.code, response.body, response.headers, response.error, msg, params...) {
 	}
 
-	template <typename HEADERS, typename... ARGS>
-	explicit HTTPException(int status_code, string response_body, HEADERS headers, const string &reason,
+	template<class HEADERS, typename... ARGS>
+	explicit HTTPException(int status_code, string response_body, const HEADERS &headers, const string &reason,
 						   const string &msg, ARGS... params)
-			: IOException(ExceptionType::HTTP, ConstructMessage(msg, params...)), status_code(status_code), reason(reason),
-			  response_body(std::move(response_body)) {
-		this->headers.insert(headers.begin(), headers.end());
-		D_ASSERT(this->headers.size() > 0);
+			: IOException(ExceptionType::HTTP, ConstructMessage(msg, params...)) {
+		extra_info["status_code"] = to_string(status_code);
+		extra_info["reason"] = reason;
+		extra_info["response_body"] = std::move(response_body);
+		for(auto &entry : headers) {
+			extra_info["header_" + entry.first] = entry.second;
+		}
 	}
-
-	std::shared_ptr<Exception> Copy() const {
-		return make_shared<HTTPException>(status_code, response_body, headers, reason, RawMessage());
-	}
-
-	const std::multimap<std::string, std::string> GetHeaders() const {
-		return headers;
-	}
-	int GetStatusCode() const {
-		return status_code;
-	}
-	const string &GetResponseBody() const {
-		return response_body;
-	}
-	const string &GetReason() const {
-		return reason;
-	}
-	[[noreturn]] void Throw() const {
-		throw HTTPException(status_code, response_body, headers, reason, RawMessage());
-	}
-
-private:
-	int status_code;
-	string reason;
-	string response_body;
-	std::multimap<string, string> headers;
 };
 
 } // namespace duckdb
