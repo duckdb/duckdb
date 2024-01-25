@@ -53,10 +53,6 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
-		// already in a loop: add it to the currently active loop
-		if (definition.is_parallel) {
-			throw std::runtime_error("concurrent loop must be the outer-most loop!");
-		}
 		active_loops.back()->loop_commands.push_back(std::move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
