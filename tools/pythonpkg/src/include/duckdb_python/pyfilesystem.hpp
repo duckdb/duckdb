@@ -16,7 +16,7 @@ public:
 
 public:
 	static bool check_(const py::handle &object) {
-		return py::isinstance(object, py::module::import("pyduckdb.filesystem").attr("ModifiedMemoryFileSystem"));
+		return py::isinstance(object, py::module::import("duckdb.filesystem").attr("ModifiedMemoryFileSystem"));
 	}
 };
 
@@ -85,6 +85,7 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
+	string PathSeparator(const string &path) override;
 	int64_t GetFileSize(FileHandle &handle) override;
 	void RemoveFile(const string &filename) override;
 	void MoveFile(const string &source, const string &dest) override;

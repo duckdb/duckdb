@@ -5,15 +5,15 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink *root) {
-	D_ASSERT(root);
+unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
 	auto subquery_expr = make_uniq<SubqueryExpression>();
 
-	subquery_expr->subquery = TransformSelect(root->subselect);
+	subquery_expr->subquery = TransformSelect(root.subselect);
+	subquery_expr->query_location = root.location;
 	D_ASSERT(subquery_expr->subquery);
-	D_ASSERT(subquery_expr->subquery->node->GetSelectList().size() > 0);
+	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
 
-	switch (root->subLinkType) {
+	switch (root.subLinkType) {
 	case duckdb_libpgquery::PG_EXISTS_SUBLINK: {
 		subquery_expr->subquery_type = SubqueryType::EXISTS;
 		break;
@@ -22,14 +22,14 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	case duckdb_libpgquery::PG_ALL_SUBLINK: {
 		// comparison with ANY() or ALL()
 		subquery_expr->subquery_type = SubqueryType::ANY;
-		subquery_expr->child = TransformExpression(root->testexpr);
+		subquery_expr->child = TransformExpression(root.testexpr);
 		// get the operator name
-		if (!root->operName) {
+		if (!root.operName) {
 			// simple IN
 			subquery_expr->comparison_type = ExpressionType::COMPARE_EQUAL;
 		} else {
 			auto operator_name =
-			    string((reinterpret_cast<duckdb_libpgquery::PGValue *>(root->operName->head->data.ptr_value))->val.str);
+			    string((PGPointerCast<duckdb_libpgquery::PGValue>(root.operName->head->data.ptr_value))->val.str);
 			subquery_expr->comparison_type = OperatorToExpressionType(operator_name);
 		}
 		if (subquery_expr->comparison_type != ExpressionType::COMPARE_EQUAL &&
@@ -40,7 +40,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		    subquery_expr->comparison_type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
 			throw ParserException("ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!");
 		}
-		if (root->subLinkType == duckdb_libpgquery::PG_ALL_SUBLINK) {
+		if (root.subLinkType == duckdb_libpgquery::PG_ALL_SUBLINK) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
 			// first invert the comparison type
@@ -56,19 +56,20 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		break;
 	}
 	case duckdb_libpgquery::PG_ARRAY_SUBLINK: {
-		auto subquery_table_alias = "__subquery";
-		auto subquery_column_alias = "__arr_element";
-
 		// ARRAY expression
-		// wrap subquery into "SELECT CASE WHEN ARRAY_AGG(i) IS NULL THEN [] ELSE ARRAY_AGG(i) END FROM (...) tbl(i)"
+		// wrap subquery into
+		// "SELECT CASE WHEN ARRAY_AGG(COLUMNS(*)) IS NULL THEN [] ELSE ARRAY_AGG(COLUMNS(*)) END FROM (...) tbl"
 		auto select_node = make_uniq<SelectNode>();
 
-		// ARRAY_AGG(i)
+		// COLUMNS(*)
+		auto columns_star = make_uniq<StarExpression>();
+		columns_star->columns = true;
+
+		// ARRAY_AGG(COLUMNS(*))
 		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(
-		    make_uniq_base<ParsedExpression, ColumnRefExpression>(subquery_column_alias, subquery_table_alias));
+		children.push_back(std::move(columns_star));
 		auto aggr = make_uniq<FunctionExpression>("array_agg", std::move(children));
-		// ARRAY_AGG(i) IS NULL
+		// ARRAY_AGG(COLUMNS(*)) IS NULL
 		auto agg_is_null = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, aggr->Copy());
 		// empty list
 		vector<unique_ptr<ParsedExpression>> list_children;
@@ -83,9 +84,8 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 
 		select_node->select_list.push_back(std::move(case_expr));
 
-		// FROM (...) tbl(i)
-		auto child_subquery = make_uniq<SubqueryRef>(std::move(subquery_expr->subquery), subquery_table_alias);
-		child_subquery->column_name_alias.emplace_back(subquery_column_alias);
+		// FROM (...) tbl
+		auto child_subquery = make_uniq<SubqueryRef>(std::move(subquery_expr->subquery));
 		select_node->from_table = std::move(child_subquery);
 
 		auto new_subquery = make_uniq<SelectStatement>();
@@ -96,9 +96,8 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		break;
 	}
 	default:
-		throw NotImplementedException("Subquery of type %d not implemented\n", (int)root->subLinkType);
+		throw NotImplementedException("Subquery of type %d not implemented\n", (int)root.subLinkType);
 	}
-	subquery_expr->query_location = root->location;
 	return std::move(subquery_expr);
 }
 

@@ -12,12 +12,17 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
+
+BindContext::BindContext(Binder &binder) : binder(binder) {
+}
 
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
@@ -161,7 +166,7 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 
 	auto binding = GetBinding(table_name, error_message);
 	D_ASSERT(binding);
-	auto &table_binding = (TableBinding &)*binding;
+	auto &table_binding = binding->Cast<TableBinding>();
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->alias = column_name;
 	return result;
@@ -176,7 +181,7 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 	if (binding.binding_type != BindingType::TABLE) {
 		return false;
 	}
-	auto &table_binding = (TableBinding &)binding;
+	auto &table_binding = binding.Cast<TableBinding>();
 	auto catalog_entry = table_binding.GetStandardEntry();
 	if (!catalog_entry) {
 		return false;
@@ -285,15 +290,14 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 	return StringUtil::Format("Positional reference %d out of range (total %d columns)", ref.index, total_columns);
 }
 
-BindResult BindContext::BindColumn(PositionalReferenceExpression &ref, idx_t depth) {
+unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenceExpression &ref) {
 	string table_name, column_name;
 
 	string error = BindColumn(ref, table_name, column_name);
 	if (!error.empty()) {
-		return BindResult(error);
+		throw BinderException(error);
 	}
-	auto column_ref = make_uniq<ColumnRefExpression>(column_name, table_name);
-	return BindColumn(*column_ref, depth);
+	return make_uniq<ColumnRefExpression>(column_name, table_name);
 }
 
 bool BindContext::CheckExclusionList(StarExpression &expr, const string &column_name,
@@ -403,6 +407,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		}
 	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		expr.exclude_list.clear();
+		expr.replace_list.clear();
+	}
 	for (auto &excluded : expr.exclude_list) {
 		if (excluded_columns.find(excluded) == excluded_columns.end()) {
 			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded,
@@ -483,15 +491,14 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 }
 
 void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
-                                  const vector<LogicalType> &types, StandardEntry *entry) {
-	D_ASSERT(entry);
-	AddBinding(alias, make_uniq<EntryBinding>(alias, types, names, index, *entry));
+                                  const vector<LogicalType> &types, StandardEntry &entry) {
+	AddBinding(alias, make_uniq<EntryBinding>(alias, types, names, index, entry));
 }
 
 void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
                           ViewCatalogEntry *view) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddEntryBinding(index, alias, names, subquery.types, (StandardEntry *)view);
+	AddEntryBinding(index, alias, names, subquery.types, view->Cast<StandardEntry>());
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {

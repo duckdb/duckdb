@@ -30,9 +30,7 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 	UnifiedVectorFormat offset_data;
 	offsets.ToUnifiedFormat(count, offset_data);
 
-	UnifiedVectorFormat result_data;
-	result.ToUnifiedFormat(count, result_data);
-
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	auto entry_count = ListVector::GetListSize(map);
 	auto &values_entries = MapVector::GetValues(map);
 	UnifiedVectorFormat values_entry_data;
@@ -41,14 +39,13 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 
 	for (idx_t row = 0; row < count; row++) {
 		idx_t offset_idx = offset_data.sel->get_index(row);
-		auto offset = ((int32_t *)offset_data.data)[offset_idx];
+		auto offset = UnifiedVectorFormat::GetData<int32_t>(offset_data)[offset_idx];
 
 		// Get the current size of the list, for the offset
 		idx_t current_offset = ListVector::GetListSize(result);
 		if (!offset_data.validity.RowIsValid(offset_idx) || !offset) {
 			// Set the entry data for this result row
-			idx_t result_index = result_data.sel->get_index(row);
-			auto &entry = ((list_entry_t *)result_data.data)[result_index];
+			auto &entry = result_data[row];
 			entry.length = 0;
 			entry.offset = current_offset;
 			continue;
@@ -58,7 +55,7 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 
 		// Get the 'values' list entry corresponding to the offset
 		idx_t value_index = map_data.sel->get_index(row);
-		auto &value_list_entry = ((list_entry_t *)map_data.data)[value_index];
+		auto &value_list_entry = UnifiedVectorFormat::GetData<list_entry_t>(map_data)[value_index];
 
 		// Add the values to the result
 		idx_t list_offset = value_list_entry.offset + offset;
@@ -67,8 +64,7 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 		ListVector::Append(result, values_entries, length + list_offset, list_offset);
 
 		// Set the entry data for this result row
-		idx_t result_index = result_data.sel->get_index(row);
-		auto &entry = ((list_entry_t *)result_data.data)[result_index];
+		auto &entry = result_data[row];
 		entry.length = length;
 		entry.offset = current_offset;
 	}

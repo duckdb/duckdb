@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
@@ -128,7 +129,7 @@ struct ICUListRange : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &bind_info = (BindData &)*func_expr.bind_info;
+		auto &bind_info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(bind_info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -180,28 +181,25 @@ struct ICUListRange : public ICUDateFunc {
 		result.Verify(args.size());
 	}
 
-	static void AddICUListRangeFunction(ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
+	static void AddICUListRangeFunction(DatabaseInstance &db) {
 
 		ScalarFunctionSet range("range");
 		range.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,
 		                                 Bind));
-		CreateScalarFunctionInfo range_func_info(range);
-		catalog.AddFunction(context, range_func_info);
+		ExtensionUtil::AddFunctionOverload(db, range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		ScalarFunctionSet generate_series("generate_series");
 		generate_series.AddFunction(
 		    ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                   LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>, Bind));
-		CreateScalarFunctionInfo generate_series_func_info(generate_series);
-		catalog.AddFunction(context, generate_series_func_info);
+		ExtensionUtil::AddFunctionOverload(db, generate_series);
 	}
 };
 
-void RegisterICUListRangeFunctions(ClientContext &context) {
-	ICUListRange::AddICUListRangeFunction(context);
+void RegisterICUListRangeFunctions(DatabaseInstance &db) {
+	ICUListRange::AddICUListRangeFunction(db);
 }
 
 } // namespace duckdb

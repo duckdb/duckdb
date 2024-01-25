@@ -146,7 +146,7 @@ unique_ptr<FunctionData> RegexpReplaceBindData::Copy() const {
 }
 
 bool RegexpReplaceBindData::Equals(const FunctionData &other_p) const {
-	auto &other = (const RegexpReplaceBindData &)other_p;
+	auto &other = other_p.Cast<RegexpReplaceBindData>();
 	return RegexpBaseBindData::Equals(other) && global_replace == other.global_replace;
 }
 
@@ -214,7 +214,7 @@ unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
 }
 
 bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
-	auto &other = (const RegexpExtractBindData &)other_p;
+	auto &other = other_p.Cast<RegexpExtractBindData>();
 	return RegexpBaseBindData::Equals(other) && group_string == other.group_string;
 }
 
@@ -286,7 +286,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		input.ToUnifiedFormat(count, iunified);
 
 		const auto &ivalidity = iunified.validity;
-		auto idata = (const string_t *)iunified.data;
+		auto idata = UnifiedVectorFormat::GetData<string_t>(iunified);
 
 		// Start with a valid flat vector
 		result.SetVectorType(VectorType::FLAT_VECTOR);

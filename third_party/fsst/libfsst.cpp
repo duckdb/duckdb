@@ -381,8 +381,7 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 	size_t curLine, suffixLim = symbolTable.suffixLim;
 	u8 byteLim = symbolTable.nSymbols + symbolTable.zeroTerminated - symbolTable.lenHisto[0];
 
-	u8 buf[512+7]; /* +7 sentinel is to avoid 8-byte unaligned-loads going beyond 511 out-of-bounds */
-	memset(buf+511, 0, 8); /* and initialize the sentinal bytes */
+	u8 buf[512+7] = {}; /* +7 sentinel is to avoid 8-byte unaligned-loads going beyond 511 out-of-bounds */
 
 	// three variants are possible. dead code falls away since the bool arguments are constants
 	auto compressVariant = [&](bool noSuffixOpt, bool avoidBranch) {

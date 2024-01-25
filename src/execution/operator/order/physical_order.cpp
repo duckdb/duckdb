@@ -69,10 +69,9 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	return make_uniq<OrderLocalSinkState>(context.client, *this);
 }
 
-SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                   DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
+SinkResultType PhysicalOrder::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<OrderLocalSinkState>();
 
 	auto &global_sort_state = gstate.global_sort_state;
 	auto &local_sort_state = lstate.local_sort_state;
@@ -85,14 +84,14 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 	// Obtain sorting columns
 	auto &keys = lstate.keys;
 	keys.Reset();
-	lstate.key_executor.Execute(input, keys);
+	lstate.key_executor.Execute(chunk, keys);
 
 	auto &payload = lstate.payload;
-	payload.ReferenceColumns(input, projections);
+	payload.ReferenceColumns(chunk, projections);
 
 	// Sink the data into the local sort state
 	keys.Verify();
-	input.Verify();
+	chunk.Verify();
 	local_sort_state.SinkChunk(keys, payload);
 
 	// When sorting data reaches a certain size, we sort it
@@ -102,10 +101,12 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
+SinkCombineResultType PhysicalOrder::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<OrderLocalSinkState>();
 	gstate.global_sort_state.AddLocalState(lstate.local_sort_state);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 class PhysicalOrderMergeTask : public ExecutorTask {
@@ -145,7 +146,7 @@ public:
 		auto &ts = TaskScheduler::GetScheduler(context);
 		idx_t num_threads = ts.NumberOfThreads();
 
-		vector<unique_ptr<Task>> merge_tasks;
+		vector<shared_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 			merge_tasks.push_back(make_uniq<PhysicalOrderMergeTask>(shared_from_this(), context, gstate));
 		}
@@ -164,8 +165,8 @@ public:
 };
 
 SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                         GlobalSinkState &gstate_p) const {
-	auto &state = gstate_p.Cast<OrderGlobalSinkState>();
+                                         OperatorSinkFinalizeInput &input) const {
+	auto &state = input.global_state.Cast<OrderGlobalSinkState>();
 	auto &global_sort_state = state.global_sort_state;
 
 	if (global_sort_state.sorted_blocks.empty()) {
@@ -236,10 +237,9 @@ unique_ptr<LocalSourceState> PhysicalOrder::GetLocalSourceState(ExecutionContext
 	return make_uniq<PhysicalOrderLocalSourceState>(gstate);
 }
 
-void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                            LocalSourceState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<PhysicalOrderGlobalSourceState>();
-	auto &lstate = lstate_p.Cast<PhysicalOrderLocalSourceState>();
+SourceResultType PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &gstate = input.global_state.Cast<PhysicalOrderGlobalSourceState>();
+	auto &lstate = input.local_state.Cast<PhysicalOrderLocalSourceState>();
 
 	if (lstate.scanner && lstate.scanner->Remaining() == 0) {
 		lstate.batch_index = gstate.next_batch_index++;
@@ -247,7 +247,7 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 	}
 
 	if (lstate.batch_index >= gstate.total_batches) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	if (!lstate.scanner) {
@@ -257,6 +257,8 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 	}
 
 	lstate.scanner->Scan(chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

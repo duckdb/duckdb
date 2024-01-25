@@ -1,10 +1,13 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/array_stats.hpp"
+
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -24,6 +27,9 @@ void BaseStatistics::Construct(BaseStatistics &stats, LogicalType type) {
 		break;
 	case StatisticsType::STRUCT_STATS:
 		StructStats::Construct(stats);
+		break;
+	case StatisticsType::ARRAY_STATS:
+		ArrayStats::Construct(stats);
 		break;
 	default:
 		break;
@@ -67,6 +73,7 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return StatisticsType::NUMERIC_STATS;
@@ -76,6 +83,8 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 		return StatisticsType::STRUCT_STATS;
 	case PhysicalType::LIST:
 		return StatisticsType::LIST_STATS;
+	case PhysicalType::ARRAY:
+		return StatisticsType::ARRAY_STATS;
 	case PhysicalType::BIT:
 	case PhysicalType::INTERVAL:
 	default:
@@ -141,6 +150,9 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 	case StatisticsType::STRUCT_STATS:
 		StructStats::Merge(*this, other);
 		break;
+	case StatisticsType::ARRAY_STATS:
+		ArrayStats::Merge(*this, other);
+		break;
 	default:
 		break;
 	}
@@ -160,6 +172,8 @@ BaseStatistics BaseStatistics::CreateUnknownType(LogicalType type) {
 		return ListStats::CreateUnknown(std::move(type));
 	case StatisticsType::STRUCT_STATS:
 		return StructStats::CreateUnknown(std::move(type));
+	case StatisticsType::ARRAY_STATS:
+		return ArrayStats::CreateUnknown(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -175,6 +189,8 @@ BaseStatistics BaseStatistics::CreateEmptyType(LogicalType type) {
 		return ListStats::CreateEmpty(std::move(type));
 	case StatisticsType::STRUCT_STATS:
 		return StructStats::CreateEmpty(std::move(type));
+	case StatisticsType::ARRAY_STATS:
+		return ArrayStats::CreateEmpty(std::move(type));
 	default:
 		return BaseStatistics(std::move(type));
 	}
@@ -211,6 +227,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	case StatisticsType::STRUCT_STATS:
 		StructStats::Copy(*this, other);
 		break;
+	case StatisticsType::ARRAY_STATS:
+		ArrayStats::Copy(*this, other);
+		break;
 	default:
 		break;
 	}
@@ -237,23 +256,41 @@ void BaseStatistics::CopyBase(const BaseStatistics &other) {
 void BaseStatistics::Set(StatsInfo info) {
 	switch (info) {
 	case StatsInfo::CAN_HAVE_NULL_VALUES:
-		has_null = true;
+		SetHasNull();
 		break;
 	case StatsInfo::CANNOT_HAVE_NULL_VALUES:
 		has_null = false;
 		break;
 	case StatsInfo::CAN_HAVE_VALID_VALUES:
-		has_no_null = true;
+		SetHasNoNull();
 		break;
 	case StatsInfo::CANNOT_HAVE_VALID_VALUES:
 		has_no_null = false;
 		break;
 	case StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES:
-		has_null = true;
-		has_no_null = true;
+		SetHasNull();
+		SetHasNoNull();
 		break;
 	default:
 		throw InternalException("Unrecognized StatsInfo for BaseStatistics::Set");
+	}
+}
+
+void BaseStatistics::SetHasNull() {
+	has_null = true;
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
+			StructStats::GetChildStats(*this, c).SetHasNull();
+		}
+	}
+}
+
+void BaseStatistics::SetHasNoNull() {
+	has_no_null = true;
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
+			StructStats::GetChildStats(*this, c).SetHasNoNull();
+		}
 	}
 }
 
@@ -267,60 +304,76 @@ void BaseStatistics::CopyValidity(BaseStatistics &stats) {
 	has_no_null = stats.has_no_null;
 }
 
-void BaseStatistics::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<bool>(has_null);
-	writer.WriteField<bool>(has_no_null);
-	Serialize(writer);
-	writer.Finalize();
-}
-
 void BaseStatistics::SetDistinctCount(idx_t count) {
 	this->distinct_count = count;
 }
 
-void BaseStatistics::Serialize(FieldWriter &writer) const {
-	switch (GetStatsType()) {
-	case StatisticsType::NUMERIC_STATS:
-		NumericStats::Serialize(*this, writer);
-		break;
-	case StatisticsType::STRING_STATS:
-		StringStats::Serialize(*this, writer);
-		break;
-	case StatisticsType::LIST_STATS:
-		ListStats::Serialize(*this, writer);
-		break;
-	case StatisticsType::STRUCT_STATS:
-		StructStats::Serialize(*this, writer);
-		break;
-	default:
-		break;
-	}
-}
-BaseStatistics BaseStatistics::DeserializeType(FieldReader &reader, LogicalType type) {
-	switch (GetStatsType(type)) {
-	case StatisticsType::NUMERIC_STATS:
-		return NumericStats::Deserialize(reader, std::move(type));
-	case StatisticsType::STRING_STATS:
-		return StringStats::Deserialize(reader, std::move(type));
-	case StatisticsType::LIST_STATS:
-		return ListStats::Deserialize(reader, std::move(type));
-	case StatisticsType::STRUCT_STATS:
-		return StructStats::Deserialize(reader, std::move(type));
-	default:
-		return BaseStatistics(std::move(type));
-	}
+void BaseStatistics::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "has_null", has_null);
+	serializer.WriteProperty(101, "has_no_null", has_no_null);
+	serializer.WriteProperty(102, "distinct_count", distinct_count);
+	serializer.WriteObject(103, "type_stats", [&](Serializer &serializer) {
+		switch (GetStatsType()) {
+		case StatisticsType::NUMERIC_STATS:
+			NumericStats::Serialize(*this, serializer);
+			break;
+		case StatisticsType::STRING_STATS:
+			StringStats::Serialize(*this, serializer);
+			break;
+		case StatisticsType::LIST_STATS:
+			ListStats::Serialize(*this, serializer);
+			break;
+		case StatisticsType::STRUCT_STATS:
+			StructStats::Serialize(*this, serializer);
+			break;
+		case StatisticsType::ARRAY_STATS:
+			ArrayStats::Serialize(*this, serializer);
+			break;
+		default:
+			break;
+		}
+	});
 }
 
-BaseStatistics BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	FieldReader reader(source);
-	bool has_null = reader.ReadRequired<bool>();
-	bool has_no_null = reader.ReadRequired<bool>();
-	auto result = DeserializeType(reader, std::move(type));
-	result.has_null = has_null;
-	result.has_no_null = has_no_null;
-	reader.Finalize();
-	return result;
+BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
+	auto has_null = deserializer.ReadProperty<bool>(100, "has_null");
+	auto has_no_null = deserializer.ReadProperty<bool>(101, "has_no_null");
+	auto distinct_count = deserializer.ReadProperty<idx_t>(102, "distinct_count");
+
+	// Get the logical type from the deserializer context.
+	auto type = deserializer.Get<LogicalType &>();
+
+	auto stats_type = GetStatsType(type);
+
+	BaseStatistics stats(std::move(type));
+
+	stats.has_null = has_null;
+	stats.has_no_null = has_no_null;
+	stats.distinct_count = distinct_count;
+
+	deserializer.ReadObject(103, "type_stats", [&](Deserializer &obj) {
+		switch (stats_type) {
+		case StatisticsType::NUMERIC_STATS:
+			NumericStats::Deserialize(obj, stats);
+			break;
+		case StatisticsType::STRING_STATS:
+			StringStats::Deserialize(obj, stats);
+			break;
+		case StatisticsType::LIST_STATS:
+			ListStats::Deserialize(obj, stats);
+			break;
+		case StatisticsType::STRUCT_STATS:
+			StructStats::Deserialize(obj, stats);
+			break;
+		case StatisticsType::ARRAY_STATS:
+			ArrayStats::Deserialize(obj, stats);
+			break;
+		default:
+			break;
+		}
+	});
+
+	return stats;
 }
 
 string BaseStatistics::ToString() const {
@@ -342,6 +395,9 @@ string BaseStatistics::ToString() const {
 	case StatisticsType::STRUCT_STATS:
 		result = StructStats::ToString(*this) + result;
 		break;
+	case StatisticsType::ARRAY_STATS:
+		result = ArrayStats::ToString(*this) + result;
+		break;
 	default:
 		break;
 	}
@@ -362,6 +418,9 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		break;
 	case StatisticsType::STRUCT_STATS:
 		StructStats::Verify(*this, vector, sel, count);
+		break;
+	case StatisticsType::ARRAY_STATS:
+		ArrayStats::Verify(*this, vector, sel, count);
 		break;
 	default:
 		break;
@@ -432,6 +491,17 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 			auto &struct_children = StructValue::GetChildren(input);
 			for (idx_t i = 0; i < child_types.size(); i++) {
 				StructStats::SetChildStats(result, i, FromConstant(struct_children[i]));
+			}
+		}
+		return result;
+	}
+	case StatisticsType::ARRAY_STATS: {
+		auto result = ArrayStats::CreateEmpty(input.type());
+		auto &child_stats = ArrayStats::GetChildStats(result);
+		if (!input.IsNull()) {
+			auto &list_children = ArrayValue::GetChildren(input);
+			for (auto &child_element : list_children) {
+				child_stats.Merge(FromConstant(child_element));
 			}
 		}
 		return result;

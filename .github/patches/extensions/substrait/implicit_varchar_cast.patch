@@ -1,0 +1,54 @@
+diff --git a/src/substrait_extension.cpp b/src/substrait_extension.cpp
+index c24497f..15a8aab 100644
+--- a/src/substrait_extension.cpp
++++ b/src/substrait_extension.cpp
+@@ -195,6 +195,9 @@ static unique_ptr<FunctionData> SubstraitBind(ClientContext &context, TableFunct
+                                               vector<LogicalType> &return_types, vector<string> &names, bool is_json) {
+ 	auto result = make_uniq<FromSubstraitFunctionData>();
+ 	result->conn = make_uniq<Connection>(*context.db);
++	if (input.inputs[0].IsNull()) {
++		throw BinderException("from_substrait cannot be called with a NULL parameter");
++	}
+ 	string serialized = input.inputs[0].GetValueUnsafe<string>();
+ 	result->plan = SubstraitPlanToDuckDBRel(*result->conn, serialized, is_json);
+ 	for (auto &column : result->plan->Columns()) {
+diff --git a/test/sql/test_substrait.test b/test/sql/test_substrait.test
+index 0fdd4cc..d7ce259 100644
+--- a/test/sql/test_substrait.test
++++ b/test/sql/test_substrait.test
+@@ -72,9 +72,6 @@ syntax error at or near "NULL"
+ statement error
+ CALL from_substrait(NULL)
+ ----
+-No function matches the given name and argument types 'from_substrait(INTEGER)'
+-
+-
+ 
+ # Should fail with Invalid Query
+ statement error
+@@ -91,7 +88,7 @@ Catalog Error: Table with name t does not exist!
+ statement error
+ CALL from_substrait('ongezoutennoten')
+ ----
+-No function matches the given name and argument types 'from_substrait(VARCHAR)'
++No function matches
+ 
+ # Should fail on empty plan
+ statement error
+diff --git a/test/sql/test_substrait_function_name.test b/test/sql/test_substrait_function_name.test
+index 50c37ae..159e01a 100644
+--- a/test/sql/test_substrait_function_name.test
++++ b/test/sql/test_substrait_function_name.test
+@@ -35,10 +35,10 @@ statement ok
+ CALL get_substrait('SELECT abs(i) FROM ints');
+ 
+ statement ok
+-CALL get_substrait('SELECT prefix(i, ''1'') FROM ints');
++CALL get_substrait('SELECT prefix(v, ''1'') FROM varchars');
+ 
+ statement ok
+-CALL get_substrait('SELECT suffix(i, ''3'') FROM ints');
++CALL get_substrait('SELECT suffix(v, ''3'') FROM varchars');
+ 
+ statement ok
+ CALL get_substrait('SELECT substr(v, 1, 1) FROM varchars');

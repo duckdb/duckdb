@@ -1,0 +1,58 @@
+# name: test/sql/join/iejoin/iejoin_projection_maps.test
+# description: Test IEJoin projection mapping
+# group: [iejoin]
+
+require skip_reload
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+SELECT SETSEED(0.8765309);
+
+statement ok
+CREATE TABLE df AS
+    SELECT 
+        (random() * 100)::INTEGER + 1 as id,
+        (random() * 10)::INTEGER + 1 as id2,
+        (random() * 5)::INTEGER + 1 as id3,
+        ROUND(random(), 4)::DECIMAL(4,3) as value,
+    FROM range(5000);
+
+# Verify table contents
+query IIII
+SELECT SUM(id) AS id, SUM(id2) AS id2, SUM(id3) AS id3, SUM(value) AS value
+FROM df
+----
+256630	29499	17606	2500.780
+
+statement ok
+PRAGMA enable_verification
+
+# mode output_hash
+
+# Test right_projection_map
+foreach prefer False True
+
+statement ok
+PRAGMA prefer_range_joins=${prefer};
+
+query I
+SELECT id2, id3, id3_right, sum(value * value_right) as value
+FROM (
+	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
+	FROM df JOIN df as df2
+		ON (df.id = df2.id
+		AND df.id2 = df2.id2
+		AND df.id3 > df2.id3
+		AND df.id3 < df2.id3 + 30)
+	) tbl
+GROUP BY ALL
+ORDER BY ALL
+----
+660 values hashing to db1b6d9d57480b5a833c62f586133915
+
+endloop
+
+# Test left_projection_map
+# (Once it can acutally happen...)

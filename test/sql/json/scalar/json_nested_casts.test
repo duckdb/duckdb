@@ -1,0 +1,421 @@
+# name: test/sql/json/scalar/json_nested_casts.test
+# description: Casts to and from nested types with JSON
+# group: [scalar]
+
+require json
+
+require notwindows
+
+statement ok
+PRAGMA enable_verification
+
+# list with varchar to json
+statement ok
+create table t2(blobs json[])
+
+statement ok
+insert into t2 values(json('[1,2]'));
+
+query I
+SELECT * FROM t2
+----
+[1, 2]
+
+# varchar to list of json
+query I
+select cast(json('[1,2]') as json[]);
+----
+[1, 2]
+
+statement error
+select cast(['boom'] as json[]);
+----
+Conversion Error
+
+query I
+select cast(['[1, 2]', '[3, 4]'] as json[]);
+----
+[[1, 2], [3, 4]]
+
+# struct with varchar to json
+query I
+SELECT {'a': '[1, 2]'}::ROW(a JSON)
+----
+{'a': [1, 2]}
+
+query I
+SELECT {'a': 42, 'b': '[1, 2]'}::ROW(a JSON, b JSON)
+----
+{'a': 42, 'b': [1, 2]}
+
+query I
+SELECT {'a': 42, 'b': '[1, 2]'}::ROW(a JSON, b INT[])
+----
+{'a': 42, 'b': [1, 2]}
+
+statement error
+SELECT {'a': 'boom', 'b': '[1, 2]'}::ROW(a JSON, b INT[])
+----
+Conversion Error
+
+# varchar to struct of json
+query I
+SELECT '{a: [1, 2]}'::ROW(a JSON)
+----
+{'a': [1, 2]}
+
+# map with varchar to json
+query I
+SELECT MAP(['42'], ['88'])::MAP(JSON, JSON)
+----
+{42=88}
+
+# varchar to map of json
+query I
+SELECT '{42=88}'::MAP(JSON, JSON)
+----
+{42=88}
+
+# varchar to union with json
+query I
+SELECT '42'::UNION(u JSON)
+----
+42
+
+# union with varchar to union with json
+query I
+SELECT '42'::UNION(u VARCHAR)::UNION(u JSON)
+----
+42
+
+query I
+SELECT ['42']::UNION(u JSON)[]
+----
+[42]
+
+query I
+SELECT '42'::UNION(u VARCHAR)::JSON
+----
+{"u":"42"}
+
+# try_cast works too
+query I
+SELECT TRY_CAST('{"duck":42' AS JSON)
+----
+NULL
+
+# we support our nested to and from JSON (just calls to_json and from_json - well tested)
+query I
+SELECT {duck: 42}::JSON
+----
+{"duck":42}
+
+query I
+SELECT '{"duck":42}'::JSON::STRUCT(duck INTEGER)
+----
+{'duck': 42}
+
+query I
+SELECT ['duck']::JSON
+----
+["duck"]
+
+query I
+SELECT '["duck"]'::JSON::VARCHAR[]
+----
+[duck]
+
+query I
+SELECT MAP(['duck'], [42])::JSON
+----
+{"duck":42}
+
+query I
+SELECT '{"duck":42}'::JSON::MAP(VARCHAR, INTEGER)
+----
+{duck=42}
+
+# casting should be strict
+statement error
+SELECT '{"duck":42}'::JSON::STRUCT(goose INTEGER)
+----
+Conversion Error
+
+statement error
+SELECT '["a", "b", "c"]'::JSON::INT[]
+----
+Conversion Error
+
+statement error
+SELECT '{"duck":42}'::JSON::MAP(INTEGER, INTEGER)
+----
+Conversion Error
+
+# however, when we encounter a conversion error in a nested type with TRY, only that becomes NULL
+query I
+SELECT TRY_CAST('{"duck":42}'::JSON AS STRUCT(goose INTEGER))
+----
+{'goose': NULL}
+
+query I
+SELECT TRY_CAST('["a", "b", "c"]'::JSON AS INT[])
+----
+[NULL, NULL, NULL]
+
+# map keys cannot be NULL
+statement error
+SELECT TRY_CAST('{"duck":42}'::JSON AS MAP(INTEGER, INTEGER))
+----
+Conversion Error
+
+# but values can
+query I
+SELECT TRY_CAST('{"42":"duck"}'::JSON AS MAP(INTEGER, INTEGER))
+----
+{42=NULL}
+
+# we can also cast implicitly to our types
+statement ok
+CREATE TABLE structs (v STRUCT(duck INTEGER))
+
+statement ok
+CREATE TABLE lists (v VARCHAR[])
+
+statement ok
+CREATE table maps (v MAP(VARCHAR, INTEGER))
+
+statement ok
+INSERT INTO structs VALUES ('{"duck":42}'::JSON)
+
+statement ok
+INSERT INTO lists VALUES ('["duck"]'::JSON)
+
+statement ok
+INSERT INTO maps VALUES ('{"duck":42}'::JSON)
+
+query I
+SELECT * FROM structs
+----
+{'duck': 42}
+
+query I
+SELECT * FROM lists
+----
+[duck]
+
+query I
+SELECT * FROM maps
+----
+{duck=42}
+
+# and back to JSON
+statement ok
+CREATE TABLE jsons (j JSON)
+
+statement ok
+INSERT INTO jsons SELECT * FROM structs
+
+statement ok
+INSERT INTO jsons SELECT * FROM lists
+
+statement ok
+INSERT INTO jsons SELECT * FROM maps
+
+query I
+SELECT * FROM jsons
+----
+{"duck":42}
+["duck"]
+{"duck":42}
+
+# test_all_types roundtrip, excludes:
+# 1. varchar (special case - input is not valid JSON)
+# 2. blob - contains '\0'
+# 3. bit - contains '\0'
+# 4. medium_enum - don't want to create this enum
+# 5. large_enum - don't want to create this enum
+# and casts DECIMALs with large precision to DOUBLE because JSON can only deal with DOUBLE, and we lose some precision
+statement ok
+create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
+
+query I nosort q0
+select bool,
+       tinyint,
+       smallint,
+       int,
+       bigint,
+       hugeint,
+	   uhugeint,
+       utinyint,
+       usmallint,
+       uint,
+       ubigint,
+       date,
+       time,
+       timestamp,
+       timestamp_s,
+       timestamp_ms,
+       timestamp_ns,
+       time_tz,
+       timestamp_tz,
+       float,
+       double,
+       dec_4_1,
+       dec_9_4,
+       dec_18_6::DOUBLE as dec_18_6,
+       dec38_10::DOUBLE as dec38_10,
+       uuid,
+       interval,
+       small_enum,
+       int_array,
+       double_array,
+       date_array,
+       timestamp_array,
+       timestamptz_array,
+       varchar_array,
+       nested_int_array,
+       struct,
+       struct_of_arrays,
+       array_of_structs,
+       map,
+from test_all_types()
+----
+
+
+statement ok
+create table all_types_json as
+select bool::JSON as bool,
+       tinyint::JSON as tinyint,
+       smallint::JSON as smallint,
+       int::JSON as int,
+       bigint::JSON as bigint,
+       hugeint::JSON as hugeint,
+       uhugeint::JSON as uhugeint,
+       utinyint::JSON as utinyint,
+       usmallint::JSON as usmallint,
+       uint::JSON as uint,
+       ubigint::JSON as ubigint,
+       date::JSON as date,
+       time::JSON as time,
+       timestamp::JSON as timestamp,
+       timestamp_s::JSON as timestamp_s,
+       timestamp_ms::JSON as timestamp_ms,
+       timestamp_ns::JSON as timestamp_ns,
+       time_tz::JSON as time_tz,
+       timestamp_tz::JSON as timestamp_tz,
+       float::JSON as float,
+       double::JSON as double,
+       dec_4_1::JSON as dec_4_1,
+       dec_9_4::JSON as dec_9_4,
+       dec_18_6::DOUBLE::JSON as dec_18_6,
+       dec38_10::DOUBLE::JSON as dec38_10,
+       uuid::JSON as uuid,
+       interval::JSON as interval,
+       small_enum::JSON as small_enum,
+       int_array::JSON as int_array,
+       double_array::JSON as double_array,
+       date_array::JSON as date_array,
+       timestamp_array::JSON as timestamp_array,
+       timestamptz_array::JSON as timestamptz_array,
+       varchar_array::JSON as varchar_array,
+       nested_int_array::JSON as nested_int_array,
+       struct::JSON as struct,
+       struct_of_arrays::JSON as struct_of_arrays,
+       array_of_structs::JSON as array_of_structs,
+       map::JSON as map,
+from test_all_types()
+
+statement ok
+create table roundtrip as
+select bool::BOOLEAN as bool,
+       tinyint::TINYINT as tinyint,
+       smallint::SMALLINT as smallint,
+       int::INTEGER as int,
+       bigint::BIGINT as bigint,
+       hugeint::HUGEINT as hugeint,
+       uhugeint::UHUGEINT as uhugeint,
+       utinyint::UTINYINT as utinyint,
+       usmallint::USMALLINT as usmallint,
+       uint::UINTEGER as uint,
+       ubigint::UBIGINT as ubigint,
+       date::DATE as date,
+       time::TIME as time,
+       timestamp::TIMESTAMP as timestamp,
+       timestamp_s::TIMESTAMP_S as timestamp_s,
+       timestamp_ms::TIMESTAMP_MS as timestamp_ms,
+       timestamp_ns::TIMESTAMP_NS as timestamp_ns,
+       time_tz::TIME WITH TIME ZONE as time_tz,
+       timestamp_tz::TIMESTAMP WITH TIME ZONE as timestamp_tz,
+       float::FLOAT as float,
+       double::DOUBLE as double,
+       dec_4_1::DECIMAL(4,1) as dec_4_1,
+       dec_9_4::DECIMAL(9,4) as dec_9_4,
+       dec_18_6::DOUBLE as dec_18_6,
+       dec38_10::DOUBLE as dec38_10,
+       uuid::UUID as uuid,
+       interval::INTERVAL as interval,
+       small_enum::small_enum as small_enum,
+       int_array::INTEGER[] as int_array,
+       double_array::DOUBLE[] as double_array,
+       date_array::DATE[] as date_array,
+       timestamp_array::TIMESTAMP[] as timestamp_array,
+       timestamptz_array::TIMESTAMP WITH TIME ZONE[] as timestamptz_array,
+       varchar_array::VARCHAR[] as varchar_array,
+       nested_int_array::INTEGER[][] as nested_int_array,
+       struct::STRUCT(a INTEGER, b VARCHAR) as struct,
+       struct_of_arrays::STRUCT(a INTEGER[], b VARCHAR[]) as struct_of_arrays,
+       array_of_structs::STRUCT(a INTEGER, b VARCHAR)[] as array_of_structs,
+       map::MAP(VARCHAR, VARCHAR) as map
+from all_types_json
+
+query I nosort q0
+select * from roundtrip
+----
+
+
+# also check that we handle vector types properly
+foreach all_flat true false
+
+query I nosort q1
+select v from test_vector_types(null::int[], all_flat=${all_flat}) tbl(v)
+----
+
+
+query I nosort q1
+select v::JSON::INT[] from test_vector_types(null::int[], all_flat=${all_flat}) tbl(v)
+----
+
+
+query I nosort q2
+select v from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) tbl(v)
+----
+
+
+query I nosort q2
+select v::JSON::ROW(i INTEGER, j VARCHAR) from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) tbl(v)
+----
+
+
+endloop
+
+# we only cast our strings to JSON if they start with an alphabetic character, so this won't work
+statement error
+select ''::JSON
+----
+Conversion Error
+
+statement error
+select '          '::JSON
+----
+Conversion Error
+
+# JSON cannot contain the NULL byte
+statement error
+select chr(0)::JSON
+----
+Conversion Error
+
+statement error
+select ('duck' || chr(0))::JSON
+----
+Conversion Error

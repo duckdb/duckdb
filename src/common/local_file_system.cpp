@@ -34,6 +34,24 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #undef FILE_CREATE // woo mingw
 #endif
 
+// includes for giving a better error message on lock conflicts
+#if defined(__linux__) || defined(__APPLE__)
+#include <pwd.h>
+#endif
+
+#if defined(__linux__)
+#include <libgen.h>
+// See e.g.:
+// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
+#elif defined(__APPLE__)
+#include <TargetConditionals.h>                             // NOLINT
+#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
+#include <libproc.h>                                        // NOLINT
+#endif                                                      // NOLINT
+#elif defined(_WIN32)
+#include <RestartManager.h>
+#endif
+
 namespace duckdb {
 
 static void AssertValidFileFlags(uint8_t flags) {
@@ -162,8 +180,91 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+#if __APPLE__ && !TARGET_OS_IPHONE
+
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+
+	string process_name, process_owner;
+	// try to find out more about the process holding the lock
+	struct proc_bsdshortinfo proc;
+	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
+	    PROC_PIDT_SHORTBSDINFO_SIZE) {
+		process_name = proc.pbsi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
+		// try to get actual name of conflicting process owner
+		auto pw = getpwuid(proc.pbsi_uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	}
+	// try to get a better process name (full path)
+	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
+	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
+		// somehow could not get the path, lets use some sensible fallback
+		process_name = full_exec_path;
+	}
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
+}
+
+#elif __linux__
+
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+	string process_name, process_owner;
+
+	try {
+		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
+		auto cmdline = cmdline_file->ReadLine();
+		process_name = basename(const_cast<char *>(cmdline.c_str()));
+	} catch (Exception &) {
+		// ignore
+	}
+
+	// we would like to provide a full path to the executable if possible but we might not have rights
+	{
+		char exe_target[PATH_MAX];
+		memset(exe_target, '\0', PATH_MAX);
+		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
+		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
+		if (readlink_n > 0) {
+			process_name = exe_target;
+		}
+	}
+
+	// try to find out who created that process
+	try {
+		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
+		auto uid = std::stoi(loginuid_file->ReadLine());
+		auto pw = getpwuid(uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	} catch (Exception &) {
+		// ignore
+	}
+
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
+}
+
+#else
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	return "";
+}
+#endif
+
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -233,7 +334,26 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
 			if (rc == -1) {
-				throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
+				string message;
+				// try to find out who is holding the lock using F_GETLK
+				rc = fcntl(fd, F_GETLK, &fl);
+				if (rc == -1) { // fnctl does not want to help us
+					message = strerror(errno);
+				} else {
+					message = AdditionalProcessInfo(*this, fl.l_pid);
+				}
+
+				if (lock_type == FileLockType::WRITE_LOCK) {
+					// maybe we can get a read lock instead and tell this to the user.
+					fl.l_type = F_RDLCK;
+					rc = fcntl(fd, F_SETLK, &fl);
+					if (rc != -1) { // success!
+						message += ". However, you would be able to open this database in read-only mode, e.g. by "
+						           "using the -readonly parameter in the CLI";
+					}
+				}
+				message += ". See also https://duckdb.org/faq#how-does-duckdb-handle-concurrency";
+				throw IOException("Could not set lock on file \"%s\": %s", path, message);
 			}
 		}
 	}
@@ -241,7 +361,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
 		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path,
@@ -250,7 +370,7 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 }
 
 idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t position = lseek(fd, 0, SEEK_CUR);
 	if (position == (off_t)-1) {
 		throw IOException("Could not get file position file \"%s\": %s", handle.path, strerror(errno));
@@ -259,19 +379,25 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 }
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	int fd = ((UnixFileHandle &)handle).fd;
-	int64_t bytes_read = pread(fd, buffer, nr_bytes, location);
-	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
-	}
-	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
-		                  bytes_read);
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	auto read_buffer = char_ptr_cast(buffer);
+	while (nr_bytes > 0) {
+		int64_t bytes_read = pread(fd, read_buffer, nr_bytes, location);
+		if (bytes_read == -1) {
+			throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
+		}
+		if (bytes_read == 0) {
+			throw IOException(
+			    "Could not read enough bytes from file \"%s\": attempted to read %llu bytes from location %llu",
+			    handle.path, nr_bytes, location);
+		}
+		read_buffer += bytes_read;
+		nr_bytes -= bytes_read;
 	}
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
@@ -280,19 +406,21 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	int fd = ((UnixFileHandle &)handle).fd;
-	int64_t bytes_written = pwrite(fd, buffer, nr_bytes, location);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
-	}
-	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
-		                  bytes_written);
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	auto write_buffer = char_ptr_cast(buffer);
+	while (nr_bytes > 0) {
+		int64_t bytes_written = pwrite(fd, write_buffer, nr_bytes, location);
+		if (bytes_written < 0) {
+			throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+		}
+		D_ASSERT(bytes_written >= 0 && bytes_written);
+		write_buffer += bytes_written;
+		nr_bytes -= bytes_written;
 	}
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
@@ -301,7 +429,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		return -1;
@@ -310,7 +438,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 }
 
 time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		return -1;
@@ -319,12 +447,12 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	return GetFileTypeInternal(fd);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
 		throw IOException("Could not truncate file \"%s\": %s", handle.path, strerror(errno));
 	}
@@ -374,7 +502,7 @@ int RemoveDirectoryRecursive(const char *path) {
 				continue;
 			}
 			len = path_len + (idx_t)strlen(p->d_name) + 2;
-			buf = new char[len];
+			buf = new (std::nothrow) char[len];
 			if (buf) {
 				struct stat statbuf;
 				snprintf(buf, len, "%s/%s", path, p->d_name);
@@ -443,7 +571,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (fsync(fd) != 0) {
 		throw FatalException("fsync failed!");
 	}
@@ -506,8 +634,71 @@ public:
 	};
 };
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+static string AdditionalLockInfo(const std::wstring path) {
+	// try to find out if another process is holding the lock
+
+	// init of the somewhat obscure "Windows Restart Manager"
+	// see also https://devblogs.microsoft.com/oldnewthing/20120217-00/?p=8283
+
+	DWORD session, status, reason;
+	WCHAR session_key[CCH_RM_SESSION_KEY + 1] = {0};
+
+	status = RmStartSession(&session, 0, session_key);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+
+	PCWSTR path_ptr = path.c_str();
+	status = RmRegisterResources(session, 1, &path_ptr, 0, NULL, 0, NULL);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+	UINT process_info_size_needed, process_info_size;
+
+	// we first call with nProcInfo = 0 to find out how much to allocate
+	process_info_size = 0;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, NULL, &reason);
+	if (status != ERROR_MORE_DATA || process_info_size_needed == 0) {
+		return "";
+	}
+
+	// allocate
+	auto process_info_buffer = duckdb::unique_ptr<RM_PROCESS_INFO[]>(new RM_PROCESS_INFO[process_info_size_needed]);
+	auto process_info = process_info_buffer.get();
+
+	// now call again to get actual data
+	process_info_size = process_info_size_needed;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, process_info, &reason);
+	if (status != ERROR_SUCCESS || process_info_size == 0) {
+		return "";
+	}
+
+	string conflict_string = "File is already open in ";
+
+	for (UINT process_idx = 0; process_idx < process_info_size; process_idx++) {
+		string process_name = WindowsUtil::UnicodeToUTF8(process_info[process_idx].strAppName);
+		auto pid = process_info[process_idx].Process.dwProcessId;
+
+		// find out full path if possible
+		HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		if (process) {
+			WCHAR full_path[MAX_PATH];
+			DWORD full_path_size = MAX_PATH;
+			if (QueryFullProcessImageNameW(process, 0, full_path, &full_path_size) && full_path_size <= MAX_PATH) {
+				process_name = WindowsUtil::UnicodeToUTF8(full_path);
+			}
+			CloseHandle(process);
+		}
+		conflict_string += StringUtil::Format("\n%s (PID %d)", process_name, pid);
+	}
+
+	RmEndSession(session);
+	return conflict_string;
+}
+
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -546,6 +737,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
+
+		auto better_error = AdditionalLockInfo(unicode_path);
+		if (!better_error.empty()) {
+			throw IOException(better_error);
+		}
+
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
@@ -557,7 +754,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
-	auto &whandle = (WindowsFileHandle &)handle;
+	auto &whandle = handle.Cast<WindowsFileHandle>();
 	whandle.position = location;
 	LARGE_INTEGER wlocation;
 	wlocation.QuadPart = location;
@@ -565,7 +762,7 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 }
 
 idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
-	return ((WindowsFileHandle &)handle).position;
+	return handle.Cast<WindowsFileHandle>().position;
 }
 
 static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -595,8 +792,8 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	auto &pos = ((WindowsFileHandle &)handle).position;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto n = std::min<idx_t>(std::max<idx_t>(GetFileSize(handle), pos) - pos, nr_bytes);
 	auto bytes_read = FSInternalRead(handle, hFile, buffer, n, pos);
 	pos += bytes_read;
@@ -620,7 +817,7 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
@@ -629,15 +826,15 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	auto &pos = ((WindowsFileHandle &)handle).position;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	LARGE_INTEGER result;
 	if (!GetFileSizeEx(hFile, &result)) {
 		return -1;
@@ -646,7 +843,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 }
 
 time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 
 	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
 	FILETIME last_write;
@@ -672,7 +869,7 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	// seek to the location
 	SetFilePointer(handle, new_size);
 	// now set the end of file position
@@ -698,7 +895,7 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		throw IOException("Could not create directory!");
+		throw IOException("Could not create directory: \'%s\'", directory.c_str());
 	}
 }
 
@@ -765,7 +962,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	if (FlushFileBuffers(hFile) == 0) {
 		throw IOException("Could not flush file handle to disk!");
 	}
@@ -775,12 +972,12 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
-		throw IOException("Could not move file");
+		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	auto path = ((WindowsFileHandle &)handle).path;
+	auto path = handle.Cast<WindowsFileHandle>().path;
 	// pipes in windows are just files in '\\.\pipe\' folder
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;
@@ -819,19 +1016,6 @@ idx_t LocalFileSystem::SeekPosition(FileHandle &handle) {
 	return GetFilePointer(handle);
 }
 
-static bool HasGlob(const string &str) {
-	for (idx_t i = 0; i < str.size(); i++) {
-		switch (str[i]) {
-		case '*':
-		case '?':
-		case '[':
-			return true;
-		default:
-			break;
-		}
-	}
-	return false;
-}
 static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";

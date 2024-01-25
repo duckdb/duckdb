@@ -1,0 +1,88 @@
+# name: test/sql/index/art/multi_column/test_art_multi_column.test_slow
+# description: Test ART index on table with multiple columns and connections
+# group: [multi_column]
+
+statement ok
+PRAGMA enable_verification
+
+require skip_reload
+
+# create a table
+statement ok con1
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok con1
+CREATE INDEX i_index ON integers using art(i);
+
+statement ok con1
+INSERT INTO integers VALUES (1, 3);
+
+loop i 0 3000
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=${i} + 10;
+----
+0
+
+statement ok
+INSERT INTO integers VALUES (${i} + 10, ${i} + 12);
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=${i} + 10;
+----
+1
+
+endloop
+
+# both con and con2 start a transaction
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# con2 updates the integers array before index creation
+statement ok con2
+UPDATE integers SET i=4 WHERE i=1
+
+# con should see the old state
+query I con1
+SELECT j FROM integers WHERE i=1
+----
+3
+
+# con2 should see the updated state
+query I con2
+SELECT j FROM integers WHERE i=4
+----
+3
+
+# now we commit con
+statement ok con1
+COMMIT
+
+# con should still see the old state
+query I con1
+SELECT j FROM integers WHERE i=1
+----
+3
+
+statement ok con2
+COMMIT
+
+# after commit of con2 - con should see the old state
+query I con1
+SELECT j FROM integers WHERE i=4
+----
+3
+
+# now we update the index again, this time after index creation
+statement ok con2
+UPDATE integers SET i=7 WHERE i=4
+
+# the new state should be visible
+query I con1
+SELECT j FROM integers WHERE i=7
+----
+3
+

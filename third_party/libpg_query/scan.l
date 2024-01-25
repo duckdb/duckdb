@@ -376,7 +376,7 @@ operator		{op_chars}+
  * backup when the {real} rule fails to match completely.
  */
 
-integer			{digit}("_"*{digit})*
+integer			{digit}("_"?{digit})*
 decimal			({integer}\.{integer}?)|({integer}?\.{integer})
 decimalfail		{integer}+\.\.
 real			({integer}|{decimal})[Ee][-+]?{integer}

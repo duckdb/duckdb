@@ -6,15 +6,6 @@
 statement ok
 PRAGMA verify_parallelism
 
-loop thr 1 8
-
-statement ok
-pragma threads=${thr}
-
-statement error
-SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=5)
-----
-Line does not fit in one buffer
 
 query III
 SELECT sum(a), sum(b), sum(c) FROM read_csv('test/sql/copy/csv/data/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
@@ -63,7 +54,7 @@ SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/new_line_string_rn.csv'
 111
 
 query I
-SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=60)
+SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=80)
 ----
 111
 
@@ -88,5 +79,3 @@ query I
 SELECT sum(a) FROM read_csv('test/sql/copy/csv/data/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=60)
 ----
 111
-
-endloop

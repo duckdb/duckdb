@@ -152,6 +152,9 @@ void BaseAppender::AppendValueInternal(T input) {
 	case LogicalTypeId::HUGEINT:
 		AppendValueInternal<T, hugeint_t>(col, input);
 		break;
+	case LogicalTypeId::UHUGEINT:
+		AppendValueInternal<T, uhugeint_t>(col, input);
+		break;
 	case LogicalTypeId::FLOAT:
 		AppendValueInternal<T, float>(col, input);
 		break;
@@ -184,8 +187,10 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, timestamp_t>(col, input);
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		AppendValueInternal<T, dtime_t>(col, input);
+		break;
+	case LogicalTypeId::TIME_TZ:
+		AppendValueInternal<T, dtime_tz_t>(col, input);
 		break;
 	case LogicalTypeId::INTERVAL:
 		AppendValueInternal<T, interval_t>(col, input);
@@ -228,6 +233,11 @@ void BaseAppender::Append(int64_t value) {
 template <>
 void BaseAppender::Append(hugeint_t value) {
 	AppendValueInternal<hugeint_t>(value);
+}
+
+template <>
+void BaseAppender::Append(uhugeint_t value) {
+	AppendValueInternal<uhugeint_t>(value);
 }
 
 template <>

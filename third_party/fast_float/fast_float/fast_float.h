@@ -130,6 +130,8 @@ from_chars_result from_chars(const char *first, const char *last,
 #include <machine/endian.h>
 #elif defined(sun) || defined(__sun)
 #include <sys/byteorder.h>
+#elif defined(__MVS__)
+#include <sys/endian.h>
 #else
 #include <endian.h>
 #endif
@@ -527,18 +529,13 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
       i = 10 * i +
           uint64_t(*p - '0'); // might overflow, we will handle the overflow later
       ++p;
-    }
-    else if(*p == '_') {
-      // skip underscores
-      if(p == start_digits) {
-        // can't start with an underscore
-        return answer;
-      }
-      ++p;
-      if(p == pend || *p == '.') {
-        // can't have underscore at the end or before the decimal point
-        return answer;
-      }
+	  if(p != pend && *p == '_') {
+		  // skip 1 underscore if it is not the last character and followed by a digit
+		  ++p;
+		  if(p == pend || !is_integer(*p)) {
+			  return answer;
+		  }
+	  }
     }
     else {
       break;
@@ -566,23 +563,18 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
         uint8_t digit = uint8_t(*p - '0');
         ++p;
         i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
-      }
-      else if(*p == '_') {
-        if(p == end_of_integer_part + 1) {
-          // can't have an underscore right after the decimal point
-          return answer;
-        }
-        skipped_underscores++;
-        ++p; // skip underscore, if it is not the first character
 
-        if(p == pend || ((fmt & chars_format::scientific) && (p != pend) && (('e' == *p) || ('E' == *p)))) {
-          // can't have underscore at the end or before the exponent
-          return answer;
-        }
-      }
-      else {
-        break;
-      }
+		if(p != pend && *p == '_') {
+		  // skip 1 underscore if it is not the last character and followed by a digit
+		  ++p;
+		  ++skipped_underscores;
+		  if(p == pend || !is_integer(*p)) {
+			  return answer;
+		  }
+		}
+      } else {
+		break;
+	  }
     }
     exponent = end_of_integer_part + 1 - p + skipped_underscores;
     digit_count -= exponent;
@@ -617,17 +609,16 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
             exp_number = 10 * exp_number + digit;
           }
           ++p;
-        } else if(*p == '_') {
-          if(p == location_of_e + 1) {
-            // can't have an underscore right after the 'e'
-            return answer;
-          }
-          ++p; // skip underscore, if it is not the first character
-          if(p == pend) {
-            // can't have underscore at the end
-            return answer;
-          }
-        } else {
+
+		  if(p != pend && *p == '_') {
+			// skip 1 underscore if it is not the last character and followed by a digit
+			++p;
+			if(p == pend || !is_integer(*p)) {
+				return answer;
+			}
+		  }
+        }
+        else {
           break;
         }
       }
@@ -666,15 +657,17 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
         if (is_integer(*p)){ 
           i = i * 10 + uint64_t(*p - '0');
           ++p;
-        } else if(*p == '_' && p != start_digits) {
-          // skip underscore if it is not the first character
-          ++p;
-          if(p == pend || *p == '.') {
-            // can't have underscore at the end or before the decimal point
-            answer.valid = false;
-            return answer;
-          }
-        } else {
+
+		  if(p != pend && *p == '_') {
+			// skip 1 underscore if it is not the last character and followed by a digit
+			++p;
+			if(p == pend || !is_integer(*p)) {
+				answer.valid = false;
+				return answer;
+			}
+		  }
+        }
+		else {
           break;
         }
       }
@@ -688,17 +681,17 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
             if(is_integer(*p)) {
               i = i * 10 + uint64_t(*p - '0');
               ++p;
-            }
-            else if(*p == '_' && p != first_after_period) {
-              // skip underscore, if it is not the first character after period
-              ++p;
-              skipped_underscores++;
-              if(p == pend) {
-                // can't have underscore at the end
-                answer.valid = false;
-                return answer;
-              }
-            }
+
+			  if(p != pend && *p == '_') {
+				// skip 1 underscore if it is not the last character and followed by a digit
+				++p;
+				++skipped_underscores;
+				if(p == pend || !is_integer(*p)) {
+					answer.valid = false;
+					return answer;
+				}
+			  }
+			}
             else {
               break;
             }

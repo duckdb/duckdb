@@ -1,0 +1,104 @@
+# name: test/sql/subquery/scalar/expression_get.test_slow
+# description: Issue #2701: Nested selecting max from column values gives dependent join internal error
+# group: [scalar]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+# basic correlated VALUES clause in subquery
+statement ok
+CREATE TABLE test AS SELECT CAST((i % 10) AS INTEGER) AS i, CAST(((i * 2) % 10) AS INTEGER) AS j FROM generate_series(0, 9, 1) tbl(i);
+
+query III
+SELECT i, j, (SELECT max(x) FROM (VALUES (i), (j)) AS X(x)) as maxn FROM test ORDER BY ALL;
+----
+0	0	0
+1	2	2
+2	4	4
+3	6	6
+4	8	8
+5	0	5
+6	2	6
+7	4	7
+8	6	8
+9	8	9
+
+# mix of correlated and non-correlated values
+query III
+SELECT i, j, (SELECT max(x) FROM (VALUES (i), (j), (3), (NULL), (5)) AS X(x)) as maxn FROM test ORDER BY ALL;
+----
+0	0	5
+1	2	5
+2	4	5
+3	6	6
+4	8	8
+5	0	5
+6	2	6
+7	4	7
+8	6	8
+9	8	9
+
+# more complex correlated queries involving VALUES lists
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# subquery within correlated values list
+query I
+SELECT (SELECT max(x) FROM (VALUES ((SELECT i))) tbl(x)) FROM integers ORDER BY i;
+----
+NULL
+1
+2
+3
+
+# correlated values list within correlated values list
+query I
+SELECT (SELECT max(x) FROM (VALUES ((SELECT * FROM (VALUES (i)) tbl3(x)))) tbl(x)) FROM integers ORDER BY i;
+----
+NULL
+1
+2
+3
+
+# join between correlated values lists
+query I
+SELECT (SELECT max(x) FROM (VALUES (i)) tbl(x) JOIN (VALUES (i)) tbl2(x) USING (x)) FROM integers ORDER BY i;
+----
+NULL
+1
+2
+3
+
+# many rows
+statement ok
+CREATE TABLE test2 AS SELECT (i % 10)::INTEGER AS i, ((i * 2) % 10)::INTEGER AS j FROM generate_series(0, 99999, 1) tbl(i);
+
+query IIII
+SELECT SUM(i), SUM(j), SUM(GREATEST(i, j)), SUM((SELECT max(x) FROM (VALUES (i), (j)) AS X(x))) as maxn FROM test2;
+----
+450000	400000	550000	550000
+
+query IIII
+SELECT SUM(i), SUM(j), SUM(GREATEST(i, j)), SUM((SELECT max(x) FROM (VALUES (i), (j), (i), (j), (i), (j)) AS X(x))) as maxn FROM test2;
+----
+450000	400000	550000	550000
+
+# NULLs
+statement ok
+CREATE TABLE test3 AS SELECT CASE WHEN i%7=2 THEN NULL ELSE (i % 10)::INTEGER END AS i, CASE WHEN i%9=2 THEN NULL ELSE ((i * 2) % 10)::INTEGER END AS j FROM generate_series(0, 99999, 1) tbl(i);
+
+query III
+SELECT SUM(i), SUM(j), SUM((SELECT max(x) FROM (VALUES (i), (j)) AS X(x))) as maxn FROM test3;
+----
+385713	355556	512700
+
+query III
+SELECT SUM(i), SUM(j), SUM((SELECT max(x) FROM (VALUES (i), (j), (NULL), (NULL), (6)) AS X(x))) as maxn FROM test3;
+----
+385713	355556	671748

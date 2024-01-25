@@ -1,0 +1,87 @@
+# name: test/sql/index/art/insert_update_delete/test_art_update_scans.test_slow
+# description: Test mixing updates, insertions, deletions and big scans
+# group: [insert_update_delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(1, 25001, 1)
+
+statement ok
+COMMIT
+
+# check the sum and the count
+query RI
+SELECT SUM(i), COUNT(i) FROM integers WHERE i>0
+----
+312512500	25000
+
+query II
+SELECT MIN(i), MAX(i) FROM integers ORDER BY 1
+----
+1	25000
+
+# update the data with an index scan
+query I
+UPDATE integers SET i=i+1 WHERE i>0
+----
+25000
+
+query II
+SELECT MIN(i), MAX(i) FROM integers ORDER BY 1
+----
+2	25001
+
+query I
+SELECT COUNT(DISTINCT i) FROM integers ORDER BY 1
+----
+25000
+
+# now check the sum and the count again
+query RI
+SELECT SUM(i), COUNT(i) FROM integers WHERE i>0
+----
+312537500	25000
+
+# now delete from the table with an index scan
+query I
+DELETE FROM integers WHERE i>0
+----
+25000
+
+query RI
+SELECT SUM(i), COUNT(i) FROM integers WHERE i>0
+----
+NULL	0
+
+statement ok
+create table test_int(i integer primary key);
+
+statement ok
+insert into test_int select * from range(1000000);
+
+query I
+select count(*) from test_int;
+----
+1000000
+
+statement ok
+delete from test_int;
+
+statement ok
+insert into test_int select * from range(1000000);
+
+query I
+select count(*) from test_int;
+----
+1000000

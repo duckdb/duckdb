@@ -7,15 +7,16 @@ CallStmt
 CheckPointStmt
 CopyStmt
 CreateAsStmt
+CreateSecretStmt
 CreateTypeStmt
 CreateFunctionStmt
-CreateDatabaseStmt
 CreateSchemaStmt
 CreateSeqStmt
 CreateStmt
 DeallocateStmt
 DeleteStmt
 DetachStmt
+DropSecretStmt
 DropStmt
 ExecuteStmt
 ExplainStmt

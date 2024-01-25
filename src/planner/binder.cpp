@@ -21,12 +21,37 @@
 
 namespace duckdb {
 
+Binder *Binder::GetRootBinder() {
+	Binder *root = this;
+	while (root->parent) {
+		root = root->parent.get();
+	}
+	return root;
+}
+
+idx_t Binder::GetBinderDepth() const {
+	const Binder *root = this;
+	idx_t depth = 1;
+	while (root->parent) {
+		depth++;
+		root = root->parent.get();
+	}
+	return depth;
+}
+
 shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, bool inherit_ctes) {
+	auto depth = parent ? parent->GetBinderDepth() : 0;
+	if (depth > context.config.max_expression_depth) {
+		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      context.config.max_expression_depth);
+	}
 	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
-    : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
+    : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0),
+      inherit_ctes(inherit_ctes_p) {
 	if (parent) {
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
@@ -71,8 +96,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<ExplainStatement>());
 	case StatementType::VACUUM_STATEMENT:
 		return Bind(statement.Cast<VacuumStatement>());
-	case StatementType::SHOW_STATEMENT:
-		return Bind(statement.Cast<ShowStatement>());
 	case StatementType::CALL_STATEMENT:
 		return Bind(statement.Cast<CallStatement>());
 	case StatementType::EXPORT_STATEMENT:
@@ -93,6 +116,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<AttachStatement>());
 	case StatementType::DETACH_STATEMENT:
 		return Bind(statement.Cast<DetachStatement>());
+	case StatementType::COPY_DATABASE_STATEMENT:
+		return Bind(statement.Cast<CopyDatabaseStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -116,6 +141,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = BindNode(node.Cast<RecursiveCTENode>());
+		break;
+	case QueryNodeType::CTE_NODE:
+		result = BindNode(node.Cast<CTENode>());
 		break;
 	default:
 		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
@@ -145,6 +173,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 		return CreatePlan(node.Cast<BoundSetOperationNode>());
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		return CreatePlan(node.Cast<BoundRecursiveCTENode>());
+	case QueryNodeType::CTE_NODE:
+		return CreatePlan(node.Cast<BoundCTENode>());
 	default:
 		throw InternalException("Unsupported bound query node type");
 	}
@@ -162,7 +192,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::SUBQUERY:
 		result = Bind(ref.Cast<SubqueryRef>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		result = Bind(ref.Cast<EmptyTableRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
@@ -173,6 +203,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
+		break;
+	case TableReferenceType::SHOW_REF:
+		result = Bind(ref.Cast<ShowRef>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
@@ -198,7 +231,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::TABLE_FUNCTION:
 		root = CreatePlan(ref.Cast<BoundTableFunction>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
@@ -208,7 +241,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
 	case TableReferenceType::PIVOT:
-		root = CreatePlan((BoundPivotRef &)ref);
+		root = CreatePlan(ref.Cast<BoundPivotRef>());
 		break;
 	case TableReferenceType::INVALID:
 	default:
@@ -266,11 +299,8 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 }
 
 idx_t Binder::GenerateTableIndex() {
-	D_ASSERT(parent.get() != this);
-	if (parent) {
-		return parent->GenerateTableIndex();
-	}
-	return bound_tables++;
+	auto root_binder = GetRootBinder();
+	return root_binder->bound_tables++;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
@@ -296,18 +326,13 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	if (parent) {
-		return parent->GetActiveBinders();
-	}
-	return active_binders;
+	auto root_binder = GetRootBinder();
+	return root_binder->active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
-	if (parent) {
-		parent->AddUsingBindingSet(std::move(set));
-		return;
-	}
-	bind_context.AddUsingBindingSet(std::move(set));
+	auto root_binder = GetRootBinder();
+	root_binder->bind_context.AddUsingBindingSet(std::move(set));
 }
 
 void Binder::MoveCorrelatedExpressions(Binder &other) {
@@ -376,17 +401,14 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
-	if (parent) {
-		parent->SetBindingMode(mode);
-	}
-	this->mode = mode;
+	auto root_binder = GetRootBinder();
+	// FIXME: this used to also set the 'mode' for the current binder, was that necessary?
+	root_binder->mode = mode;
 }
 
 BindingMode Binder::GetBindingMode() {
-	if (parent) {
-		return parent->GetBindingMode();
-	}
-	return mode;
+	auto root_binder = GetRootBinder();
+	return root_binder->mode;
 }
 
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
@@ -394,18 +416,13 @@ void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 }
 
 void Binder::AddTableName(string table_name) {
-	if (parent) {
-		parent->AddTableName(std::move(table_name));
-		return;
-	}
-	table_names.insert(std::move(table_name));
+	auto root_binder = GetRootBinder();
+	root_binder->table_names.insert(std::move(table_name));
 }
 
 const unordered_set<string> &Binder::GetTableNames() {
-	if (parent) {
-		return parent->GetTableNames();
-	}
-	return table_names;
+	auto root_binder = GetRootBinder();
+	return root_binder->table_names;
 }
 
 string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
@@ -473,12 +490,18 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		result.types.push_back(result_type);
 		projection_expressions.push_back(std::move(expr));
 	}
-
+	if (new_returning_list.empty()) {
+		throw BinderException("RETURNING list is empty!");
+	}
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));
 	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(projection);
-	properties.allow_stream_result = true;
+	// If an insert/delete/update statement returns data, there are sometimes issues with streaming results
+	// where the data modification doesn't take place until the streamed result is exhausted. Once a row is
+	// returned, it should be guaranteed that the row has been inserted.
+	// see https://github.com/duckdb/duckdb/issues/8310
+	properties.allow_stream_result = false;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

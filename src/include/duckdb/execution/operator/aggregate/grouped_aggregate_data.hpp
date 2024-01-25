@@ -42,7 +42,7 @@ public:
 	const vector<vector<idx_t>> &GetGroupingFunctions() const;
 
 	void InitializeGroupby(vector<unique_ptr<Expression>> groups, vector<unique_ptr<Expression>> expressions,
-	                       vector<vector<idx_t>> grouping_functions);
+	                       vector<unsafe_vector<idx_t>> grouping_functions);
 
 	//! Initialize a GroupedAggregateData object for use with distinct aggregates
 	void InitializeDistinct(const unique_ptr<Expression> &aggregate, const vector<unique_ptr<Expression>> *groups_p);
@@ -50,7 +50,7 @@ public:
 private:
 	void InitializeDistinctGroups(const vector<unique_ptr<Expression>> *groups);
 	void InitializeGroupbyGroups(vector<unique_ptr<Expression>> groups);
-	void SetGroupingFunctions(vector<vector<idx_t>> &functions);
+	void SetGroupingFunctions(vector<unsafe_vector<idx_t>> &functions);
 };
 
 } // namespace duckdb

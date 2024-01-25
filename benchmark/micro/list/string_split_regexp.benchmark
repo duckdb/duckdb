@@ -17,4 +17,4 @@ run
 SELECT SUM(LENGTH(str_split_regex(l_comment, '[z ]'))) FROM lineitem
 
 result I
-27186473
+27179168

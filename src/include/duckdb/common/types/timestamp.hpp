@@ -20,13 +20,14 @@ namespace duckdb {
 
 struct date_t;
 struct dtime_t;
+struct dtime_tz_t;
 
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
 	int64_t value;
 
 	timestamp_t() = default;
-	explicit inline timestamp_t(int64_t value_p) : value(value_p) {
+	explicit inline constexpr timestamp_t(int64_t value_p) : value(value_p) {
 	}
 	inline timestamp_t &operator=(int64_t value_p) {
 		value = value_p;
@@ -59,39 +60,33 @@ struct timestamp_t { // NOLINT
 	};
 
 	// arithmetic operators
-	inline timestamp_t operator+(const double &value) const {
-		return timestamp_t(this->value + int64_t(value));
-	};
-	inline int64_t operator-(const timestamp_t &other) const {
-		return this->value - other.value;
-	};
+	timestamp_t operator+(const double &value) const;
+	int64_t operator-(const timestamp_t &other) const;
 
 	// in-place operators
-	inline timestamp_t &operator+=(const int64_t &value) {
-		this->value += value;
-		return *this;
-	};
-	inline timestamp_t &operator-=(const int64_t &value) {
-		this->value -= value;
-		return *this;
-	};
+	timestamp_t &operator+=(const int64_t &delta);
+	timestamp_t &operator-=(const int64_t &delta);
 
 	// special values
-	static timestamp_t infinity() { // NOLINT
+	static constexpr timestamp_t infinity() { // NOLINT
 		return timestamp_t(NumericLimits<int64_t>::Maximum());
-	}                                // NOLINT
-	static timestamp_t ninfinity() { // NOLINT
+	}                                          // NOLINT
+	static constexpr timestamp_t ninfinity() { // NOLINT
 		return timestamp_t(-NumericLimits<int64_t>::Maximum());
-	}                                   // NOLINT
-	static inline timestamp_t epoch() { // NOLINT
+	}                                             // NOLINT
+	static constexpr inline timestamp_t epoch() { // NOLINT
 		return timestamp_t(0);
 	} // NOLINT
 };
 
-struct timestamp_tz_t : public timestamp_t {};  // NOLINT
-struct timestamp_ns_t : public timestamp_t {};  // NOLINT
-struct timestamp_ms_t : public timestamp_t {};  // NOLINT
-struct timestamp_sec_t : public timestamp_t {}; // NOLINT
+struct timestamp_tz_t : public timestamp_t { // NOLINT
+};
+struct timestamp_ns_t : public timestamp_t { // NOLINT
+};
+struct timestamp_ms_t : public timestamp_t { // NOLINT
+};
+struct timestamp_sec_t : public timestamp_t { // NOLINT
+};
 
 enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };
 
@@ -123,6 +118,7 @@ public:
 	//! Create a Timestamp object from a specified (date, time) combination
 	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
 	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
+	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_tz_t timetz, timestamp_t &result);
 
 	//! Is the character a valid part of a time zone name?
 	static inline bool CharacterIsTimeZone(char c) {
@@ -157,6 +153,8 @@ public:
 	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
+	//! Convert a timestamp to a Julian Day
+	DUCKDB_API static double GetJulianDay(timestamp_t timestamp);
 
 	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
 	                                         int &minute_offset);

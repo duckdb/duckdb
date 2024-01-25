@@ -4,6 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/http_state.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 
@@ -34,12 +35,14 @@ struct HTTPParams {
 	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
+	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 
 	uint64_t timeout;
 	uint64_t retries;
 	uint64_t retry_wait_ms;
 	float retry_backoff;
 	bool force_download;
+	bool keep_alive;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };
@@ -60,7 +63,9 @@ public:
 	uint8_t flags;
 	idx_t length;
 	time_t last_modified;
-	bool range_read = true;
+
+	// When using full file download, the full file will be written to a cached file handle
+	unique_ptr<CachedFileHandle> cached_file_handle;
 
 	// Read info
 	idx_t buffer_available;
@@ -73,7 +78,7 @@ public:
 	duckdb::unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
-	HTTPState *state;
+	shared_ptr<HTTPState> state;
 
 public:
 	void Close() override {
@@ -122,6 +127,7 @@ public:
 	time_t GetLastModifiedTime(FileHandle &handle) override;
 	bool FileExists(const string &filename) override;
 	void Seek(FileHandle &handle, idx_t location) override;
+	idx_t SeekPosition(FileHandle &handle) override;
 	bool CanHandleFile(const string &fpath) override;
 	bool CanSeek() override {
 		return true;
@@ -129,10 +135,15 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
+	bool IsPipe(const string &filename) override {
+		return false;
+	}
 	string GetName() const override {
 		return "HTTPFileSystem";
 	}
-
+	string PathSeparator(const string &path) override {
+		return "/";
+	}
 	static void Verify();
 
 	// Global cache

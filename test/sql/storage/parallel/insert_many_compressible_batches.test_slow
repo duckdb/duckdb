@@ -1,0 +1,112 @@
+# name: test/sql/storage/parallel/insert_many_compressible_batches.test_slow
+# description: Test writing many compressible batches
+# group: [parallel]
+
+require vector_size 512
+
+load __TEST_DIR__/insert_many_compressible_batches.db
+
+require parquet
+
+# 50M values, extremely compressible
+query I
+CREATE TABLE integers AS SELECT CASE WHEN i%50000=0 THEN 1 ELSE 0 END AS i FROM range(50000000) tbl(i);
+----
+50000000
+
+# check the block count and median number of rows per row group
+query I
+SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers');
+----
+true
+
+query I
+SELECT MEDIAN(count) FROM pragma_storage_info('integers');
+----
+122880
+
+statement ok
+COPY integers TO '__TEST_DIR__/integers.parquet'
+
+# verify that reading while preserving insertion order creates the same size table
+statement ok
+CREATE TABLE integers_parquet AS FROM '__TEST_DIR__/integers.parquet';
+
+query I
+SELECT * FROM integers_parquet LIMIT 5
+----
+1
+0
+0
+0
+0
+
+query II
+SELECT i, COUNT(*) FROM integers_parquet GROUP BY ALL ORDER BY ALL
+----
+0	49999000
+1	1000
+
+query I
+SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_parquet');
+----
+true
+
+# verify that loading in separate SQL statements within the same transaction generates the same size table
+statement ok
+CREATE TABLE integers_batched_load(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+loop i 0 50
+
+query I
+INSERT INTO integers_batched_load SELECT CASE WHEN i%50000=0 THEN 1 ELSE 0 END AS i FROM range(1000000) tbl(i);
+----
+1000000
+
+endloop
+
+statement ok
+COMMIT
+
+query I
+SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_batched_load');
+----
+true
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM integers_batched_load
+----
+50000000	50000000	1000
+
+# now with NULL values
+statement ok
+CREATE TABLE integers_batched_load_nulls(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+loop i 0 50
+
+query I
+INSERT INTO integers_batched_load_nulls SELECT CASE WHEN i%50000=0 THEN 1 ELSE NULL END AS i FROM range(1000000) tbl(i);
+----
+1000000
+
+endloop
+
+statement ok
+COMMIT
+
+# NULLs are not RLE compressed yet - even with block colocation this takes a high number of blocks
+query I
+SELECT COUNT(DISTINCT block_id)<=35 FROM pragma_storage_info('integers_batched_load_nulls');
+----
+true
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM integers_batched_load_nulls
+----
+50000000	1000	1000

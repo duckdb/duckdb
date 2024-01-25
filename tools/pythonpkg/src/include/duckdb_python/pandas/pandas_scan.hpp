@@ -52,6 +52,9 @@ public:
 	static py::object PandasReplaceCopiedNames(const py::object &original_df);
 
 	static void PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out);
+
+	static void PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                            const TableFunction &function);
 };
 
 } // namespace duckdb

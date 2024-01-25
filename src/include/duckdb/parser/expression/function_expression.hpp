@@ -53,21 +53,19 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equal(const FunctionExpression *a, const FunctionExpression *b);
+	static bool Equal(const FunctionExpression &a, const FunctionExpression &b);
 	hash_t Hash() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 	void Verify() const override;
 
 public:
 	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>
-	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
-	                       bool distinct = false, BASE *filter = nullptr, ORDER_MODIFIER *order_bys = nullptr,
-	                       bool export_state = false, bool add_alias = false) {
+	static string ToString(const T &entry, const string &catalog, const string &schema, const string &function_name,
+	                       bool is_operator = false, bool distinct = false, BASE *filter = nullptr,
+	                       ORDER_MODIFIER *order_bys = nullptr, bool export_state = false, bool add_alias = false) {
 		if (is_operator) {
 			// built-in operator
 			D_ASSERT(!distinct);
@@ -84,7 +82,14 @@ public:
 			}
 		}
 		// standard function call
-		string result = schema.empty() ? function_name : schema + "." + function_name;
+		string result;
+		if (!catalog.empty()) {
+			result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		}
+		if (!schema.empty()) {
+			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		}
+		result += function_name;
 		result += "(";
 		if (distinct) {
 			result += "DISTINCT ";
@@ -92,7 +97,7 @@ public:
 		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
 			return child->alias.empty() || !add_alias
 			           ? child->ToString()
-			           : KeywordHelper::WriteOptionallyQuoted(child->alias) + " := " + child->ToString();
+			           : StringUtil::Format("%s := %s", SQLIdentifier(child->alias), child->ToString());
 		});
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {
@@ -120,5 +125,8 @@ public:
 
 		return result;
 	}
+
+private:
+	FunctionExpression();
 };
 } // namespace duckdb

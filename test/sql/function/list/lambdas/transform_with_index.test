@@ -1,0 +1,134 @@
+# name: test/sql/function/list/lambdas/transform_with_index.test
+# description: Test the list_transform function with an index parameter
+# group: [lambdas]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT list_transform([1, 2, 3], x -> list_transform([4, 5, 6], (y, y_i) -> x + y + y_i));
+----
+[[6, 8, 10], [7, 9, 11], [8, 10, 12]]
+
+query I
+SELECT list_transform(['abc'], (x, i) -> x[i + 1]);
+----
+[b]
+
+query I
+SELECT list_filter([1, 2, 1], (x, y) -> x >= y);
+----
+[1, 2]
+
+query I
+SELECT list_transform([1, 2, 3], x -> list_transform([4, 5, 6], y -> list_transform([7, 8, 9], (z, i) -> x + y + z + i)));
+----
+[[[13, 15, 17], [14, 16, 18], [15, 17, 19]], [[14, 16, 18], [15, 17, 19], [16, 18, 20]], [[15, 17, 19], [16, 18, 20], [17, 19, 21]]]
+
+
+query I
+SELECT list_transform([10, 20, 30], (x, i) -> x + i);
+----
+[11, 22, 33]
+
+query I
+SELECT list_transform([1, 2, 3, 4, 5, 6], (x, i) -> x * i);
+----
+[1, 4, 9, 16, 25, 36]
+
+query I
+SELECT list_transform([6, 5, 4, 3, 2, 1], (x, i) -> x * i);
+----
+[6, 10, 12, 12, 10, 6]
+
+query I
+SELECT list_transform([1, NULL, 3, 4, 5, 6], (x, i) -> x + i);
+----
+[2, NULL, 6, 8, 10, 12]
+
+query I
+SELECT list_transform(NULL, (x, i) -> x + i);
+----
+NULL
+
+query I
+SELECT list_transform(['1', '2', '3', '4'], (x, i) -> (x || ' + ' || CAST(i AS string)));
+----
+[1 + 1, 2 + 2, 3 + 3, 4 + 4]
+
+query I
+SELECT list_transform([1,2,3,4,5], (x, i) -> (x * 10 / i));
+----
+[10.0, 10.0, 10.0, 10.0, 10.0]
+
+
+# tests with column references
+
+statement ok
+CREATE TABLE tbl(a int[]);
+
+statement ok
+INSERT INTO tbl VALUES ([5, 4, 3]), ([1, 2, 3]), (NULL), ([NULL, 101, 12]);
+
+query I
+SELECT list_transform(a, (x, i) -> x + i) FROM tbl;
+----
+[6, 6, 6]
+[2, 4, 6]
+NULL
+[NULL, 103, 15]
+
+query I
+SELECT list_transform(a, (x, i) -> x + i + list_any_value(a)) FROM tbl;
+----
+[11, 11, 11]
+[3, 5, 7]
+NULL
+[NULL, 204, 116]
+
+statement ok
+DROP TABLE tbl;
+
+statement ok
+CREATE TABLE tbl(a int[], b int, c int);
+
+statement ok
+INSERT INTO tbl VALUES ([5,4,3], 5, 10), ([1,2,3], 7, 14), (NULL, 9, 18), ([10,NULL,12], 11, 22);
+
+query I
+SELECT list_transform(a, (x, i) -> (c / b ) * (x + i)) FROM tbl;
+----
+[12.0, 12.0, 12.0]
+[4.0, 8.0, 12.0]
+NULL
+[22.0, NULL, 30.0]
+
+# test very large lists
+
+query I transform list
+SELECT range(1, 20000, 2);
+----
+
+query I transform list
+SELECT list_transform(range(10000), (x, i) -> x + i);
+----
+
+query I
+SELECT list_transform([1, 2, 3], (x, x_i) -> list_transform([4, 5, 6], y -> x + y + x_i));
+----
+[[6, 7, 8], [8, 9, 10], [10, 11, 12]]
+
+query I
+SELECT list_transform([1, 2, 3], (x, x_i) -> list_transform([4, 5, 6], (y, y_i) -> x + y + x_i + y_i));
+----
+[[7, 9, 11], [9, 11, 13], [11, 13, 15]]
+
+query I
+SELECT list_transform([1, 2, 3], (x, i) -> list_transform([4, 5, 6], y -> list_transform([7, 8, 9], z -> x + y + z + i)));
+----
+[[[13, 14, 15], [14, 15, 16], [15, 16, 17]], [[15, 16, 17], [16, 17, 18], [17, 18, 19]], [[17, 18, 19], [18, 19, 20], [19, 20, 21]]]
+
+query I
+SELECT list_transform([1, 2, 3], x -> list_transform([4, 5, 6], (y, i) -> list_transform([7, 8, 9], z -> x + y + z + i)));
+----
+[[[13, 14, 15], [15, 16, 17], [17, 18, 19]], [[14, 15, 16], [16, 17, 18], [18, 19, 20]], [[15, 16, 17], [17, 18, 19], [19, 20, 21]]]

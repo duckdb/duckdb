@@ -1,0 +1,173 @@
+# name: test/sql/types/nested/map/test_map_concat.test
+# group: [map]
+
+#statement ok
+#pragma enable_verification;
+
+# Basic use, 2 maps, same type, no nulls
+query I
+select map_concat(map([3,4,5], ['a', 'b', 'c']), map([1], ['d']));
+----
+{3=a, 4=b, 5=c, 1=d}
+
+# Appending an empty map to a non-empty map
+query I
+select map_concat(map([3,4,5], ['a', 'b', 'c']), map([], []));
+----
+{3=a, 4=b, 5=c}
+
+# Appending two empty maps
+query I
+select map_concat(map([], []), map([], []))
+----
+{}
+
+# Appending a non empty map to an empty map
+query I
+select map_concat(map([], []), map([3,4,5], ['a', 'b', 'c']));
+----
+{3=a, 4=b, 5=c}
+
+# Appending NULL to an empty map
+query I
+select map_concat(map([], []), NULL);
+----
+{}
+
+# Appending NULL to NULL
+query I
+select map_concat(NULL, NULL);
+----
+NULL
+
+# Appending NULL to a non-empty map
+query I
+select map_concat(map([1], [1]), NULL);
+----
+{1=1}
+
+# More than 2 inputs
+query I
+select map_concat(
+	map([3,4,5], ['a', 'b', 'c']),
+	map([3,4,5], ['a', 'b', 'c']),
+	map([3,4,5], ['a', 'b', 'd'])
+);
+----
+{3=a, 4=b, 5=d}
+
+# Less than 2 inputs
+statement error
+select map_concat();
+----
+Invalid Input Error: The provided amount of arguments is incorrect, please provide 2 or more maps
+
+# Less than 2 inputs
+statement error
+select map_concat(map([], []));
+----
+Invalid Input Error: The provided amount of arguments is incorrect, please provide 2 or more maps
+
+statement ok
+create table tbl(
+	x map(BIGINT, VARCHAR),
+	y map(BIGINT, VARCHAR),
+	z map(BIGINT, VARCHAR),
+);
+
+statement ok
+insert into tbl values
+(
+	map([3,4,2], ['abc', 'over_twelve_characters', 'input']),
+	map([3,1,5,2], ['cba', 'a', 'b', 'c']),
+	map([3,7,6], ['1', NULL, '123'])
+),
+(
+	map([42, 1, 0], ['tiny', 'small', 'bigger']),
+	map([0, 42, 1], ['tiny', 'small', 'bigger']),
+	map([1], ['this is a long string'])
+),
+(
+	map([5, 1337, 0], ['long', 'longer', 'longest']),
+	map([], []),
+	NULL
+);
+
+query I
+select map_concat(x, y, z) from tbl;
+----
+{3=1, 4=over_twelve_characters, 2=c, 1=a, 5=b, 7=NULL, 6=123}
+{42=small, 1=this is a long string, 0=tiny}
+{5=long, 1337=longer, 0=longest}
+
+query I
+select map_concat(x, y, z) from tbl where rowid != 0;
+----
+{42=small, 1=this is a long string, 0=tiny}
+{5=long, 1337=longer, 0=longest}
+
+query I map_concat(x, y, z) from tbl where rowid == 1;
+----
+{42=small, 1=this is a long string, 0=tiny}
+
+statement ok
+drop table tbl;
+
+statement ok
+create table tbl as select
+	map(lower_range, lower_range) as c1,
+	map(upper_range, upper_range) as c2 from (
+		select
+			range(3000) as lower_range,
+			[i + 3000 for i in range(3000)] as upper_range
+	)
+
+query I nosort result1
+select map_concat(c1, c2) from tbl;
+----
+
+query I nosort result1
+select map(range(6000), range(6000));
+----
+
+statement ok
+drop table tbl;
+
+statement ok
+create table tbl as select
+	map([i], [i]) as c1,
+	map([i + 1], [i + 1]) as c2 from (
+		select * from range(3000) tbl(i)
+	)
+
+query I nosort result2
+select map_concat(c1, c2) from tbl;
+----
+
+query I nosort result2
+select map(range(i, i+2), range(i, i+2)) from (
+	select * from range(3000) tbl(i)
+);
+----
+
+query I nosort result3
+select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[]) tbl(c1) where c1 != [] and c1 != [NULL]
+----
+
+query I nosort result3
+select map_concat(val, val, val) from (
+	select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[]) tbl(c1) where c1 != [] and c1 != [NULL]
+)
+----
+
+statement ok
+prepare q1 as select map_concat($1, $2, $3);
+
+query I
+execute q1(
+	MAP([1,2,7], ['a', 'b', 'non_inlined_string']),
+	MAP([], []),
+	MAP([2,3,4,5], ['a', 'b', 'c', 'd'])
+)
+----
+{1=a, 2=a, 7=non_inlined_string, 3=b, 4=c, 5=d}

@@ -44,11 +44,11 @@ void Event::AddDependency(Event &event) {
 	total_dependencies++;
 	event.parents.push_back(weak_ptr<Event>(shared_from_this()));
 #ifdef DEBUG
-	event.parents_raw.push_back(this);
+	event.parents_raw.push_back(*this);
 #endif
 }
 
-const vector<Event *> &Event::GetParentsVerification() const {
+const vector<reference<Event>> &Event::GetParentsVerification() const {
 	D_ASSERT(parents.size() == parents_raw.size());
 	return parents_raw;
 }
@@ -72,7 +72,7 @@ void Event::InsertEvent(shared_ptr<Event> replacement_event) {
 	executor.AddEvent(std::move(replacement_event));
 }
 
-void Event::SetTasks(vector<unique_ptr<Task>> tasks) {
+void Event::SetTasks(vector<shared_ptr<Task>> tasks) {
 	auto &ts = TaskScheduler::GetScheduler(executor.context);
 	D_ASSERT(total_tasks == 0);
 	D_ASSERT(!tasks.empty());

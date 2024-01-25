@@ -1,0 +1,35 @@
+# name: test/sql/update/string_update_transaction_local_7348.test
+# description: Issue #7348 - crash when updating transaction local storage
+# group: [update]
+
+statement ok
+BEGIN;
+
+statement ok
+CREATE TABLE t1(a VARCHAR(256) PRIMARY KEY, b INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES('    4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 2+1);
+
+statement ok
+INSERT INTO t1 VALUES('   34-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 18);
+
+statement ok
+INSERT INTO t1 SELECT b, b+1 FROM t1 WHERE b<5;
+
+query II
+FROM t1
+----
+    4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ	3
+   34-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ	18
+3	4
+
+statement ok
+UPDATE t1 SET a = CONCAT(a, 'x') WHERE b%2=0;
+
+query II
+FROM t1
+----
+    4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ	3
+   34-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZx	18
+3x	4

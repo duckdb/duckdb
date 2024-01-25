@@ -54,6 +54,8 @@ RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row) {
 		return TryCastCInternal<timestamp_t, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_HUGEINT:
 		return TryCastCInternal<hugeint_t, RESULT_TYPE, OP>(result, col, row);
+	case DUCKDB_TYPE_UHUGEINT:
+		return TryCastCInternal<uhugeint_t, RESULT_TYPE, OP>(result, col, row);
 	case DUCKDB_TYPE_DECIMAL:
 		return TryCastDecimalCInternal<RESULT_TYPE>(result, col, row);
 	case DUCKDB_TYPE_INTERVAL:

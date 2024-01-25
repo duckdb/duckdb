@@ -4,6 +4,8 @@
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
+#include "duckdb/main/extension_entries.hpp"
 #include "sqllogic_parser.hpp"
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -13,7 +15,13 @@ namespace duckdb {
 
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
-	config->options.load_extensions = false;
+	config->options.allow_unredacted_secrets = true;
+
+	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
+	if (!env_var) {
+		config->options.load_extensions = false;
+		config->options.autoload_known_extensions = false;
+	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -94,8 +102,17 @@ void SQLLogicTestRunner::Reconnect() {
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");
 	}
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	con->Query("SET pivot_filter_threshold=0");
+#endif
 	if (enable_verification) {
 		con->EnableQueryVerification();
+	}
+	// Set the local extension repo for autoinstalling extensions
+	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
+	if (env_var) {
+		config->options.autoload_known_extensions = true;
+		auto res1 = con->Query("SET autoinstall_extension_repository='" + string(env_var) + "'");
 	}
 }
 
@@ -165,6 +182,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("usmallint");
 		result.push_back("uinteger");
 		result.push_back("ubigint");
+		result.push_back("uhugeint");
 		collection = true;
 	}
 	if (is_numeric) {
@@ -198,7 +216,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
-	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
+	if (script.find("test/sqlite/select") != string::npos) {
+		original_sqlite_test = true;
+	}
+	if (script.find("third_party/sqllogictest") != string::npos) {
 		original_sqlite_test = true;
 	}
 
@@ -367,18 +388,14 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() != 1) {
 				parser.Fail("mode requires one parameter");
 			}
-			if (token.parameters[0] == "output_hash") {
-				output_hash_mode = true;
-			} else if (token.parameters[0] == "output_result") {
-				output_result_mode = true;
-			} else if (token.parameters[0] == "debug") {
-				debug_mode = true;
-			} else if (token.parameters[0] == "skip") {
+			string parameter = token.parameters[0];
+			if (parameter == "skip") {
 				skip_level++;
-			} else if (token.parameters[0] == "unskip") {
+			} else if (parameter == "unskip") {
 				skip_level--;
 			} else {
-				parser.Fail("unrecognized mode: %s", token.parameters[0]);
+				auto command = make_uniq<ModeCommand>(*this, std::move(parameter));
+				ExecuteCommand(std::move(command));
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_SET) {
 			if (token.parameters.size() < 1) {
@@ -514,15 +531,35 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else if (param == "skip_reload") {
 				skip_reload = true;
+			} else if (param == "noalternativeverify") {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				return;
+#endif
+			} else if (param == "no_extension_autoloading") {
+				if (config->options.autoload_known_extensions) {
+					return;
+				}
 			} else {
-				auto result = ExtensionHelper::LoadExtension(*db, param);
-				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
-					// add the extension to the list of loaded extensions
-					extensions.insert(param);
-				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-					parser.Fail("unknown extension type: %s", token.parameters[0]);
-				} else if (result == ExtensionLoadResult::NOT_LOADED) {
-					// extension known but not build: skip this test
+				bool excluded_from_autoloading = true;
+				for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
+					if (ext == param) {
+						excluded_from_autoloading = false;
+						break;
+					}
+				}
+
+				if (!config->options.autoload_known_extensions) {
+					auto result = ExtensionHelper::LoadExtension(*db, param);
+					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
+						// add the extension to the list of loaded extensions
+						extensions.insert(param);
+					} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+						parser.Fail("unknown extension type: %s", token.parameters[0]);
+					} else if (result == ExtensionLoadResult::NOT_LOADED) {
+						// extension known but not build: skip this test
+						return;
+					}
+				} else if (excluded_from_autoloading) {
 					return;
 				}
 			}

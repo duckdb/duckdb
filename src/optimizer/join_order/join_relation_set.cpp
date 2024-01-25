@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 
@@ -35,7 +36,7 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 	return false;
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unique_ptr<idx_t[]> relations, idx_t count) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
 	// now look it up in the tree
 	reference<JoinRelationTreeNode> info(root);
 	for (idx_t i = 0; i < count; i++) {
@@ -59,15 +60,15 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unique_ptr<idx_t[]> rel
 //! Create or get a JoinRelationSet from a single node with the given index
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
 	// create a sorted vector of the relations
-	auto relations = unique_ptr<idx_t[]>(new idx_t[1]);
+	auto relations = make_unsafe_uniq_array<idx_t>(1);
 	relations[0] = index;
 	idx_t count = 1;
 	return GetJoinRelation(std::move(relations), count);
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &bindings) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
-	unique_ptr<idx_t[]> relations = bindings.empty() ? nullptr : unique_ptr<idx_t[]>(new idx_t[bindings.size()]);
+	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_uniq_array<idx_t>(bindings.size());
 	idx_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
@@ -77,7 +78,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &b
 }
 
 JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelationSet &right) {
-	auto relations = unique_ptr<idx_t[]>(new idx_t[left.count + right.count]);
+	auto relations = make_unsafe_uniq_array<idx_t>(left.count + right.count);
 	idx_t count = 0;
 	// move through the left and right relations, eliminating duplicates
 	idx_t i = 0, j = 0;
@@ -94,16 +95,12 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 				relations[count++] = left.relations[i];
 			}
 			break;
-		} else if (left.relations[i] == right.relations[j]) {
-			// equivalent, add only one of the two pairs
-			relations[count++] = left.relations[i];
-			i++;
-			j++;
 		} else if (left.relations[i] < right.relations[j]) {
 			// left is smaller, progress left and add it to the set
 			relations[count++] = left.relations[i];
 			i++;
 		} else {
+			D_ASSERT(left.relations[i] > right.relations[j]);
 			// right is smaller, progress right and add it to the set
 			relations[count++] = right.relations[j];
 			j++;
@@ -113,7 +110,7 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 }
 
 // JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinRelationSet *right) {
-// 	auto relations = unique_ptr<idx_t[]>(new idx_t[left->count]);
+// 	auto relations = unsafe_unique_array<idx_t>(new idx_t[left->count]);
 // 	idx_t count = 0;
 // 	// move through the left and right relations
 // 	idx_t i = 0, j = 0;
@@ -142,5 +139,24 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 // 	}
 // 	return GetJoinRelation(std::move(relations), count);
 // }
+
+static string JoinRelationTreeNodeToString(const JoinRelationTreeNode *node) {
+	string result = "";
+	if (node->relation) {
+		result += node->relation.get()->ToString() + "\n";
+	}
+	for (auto &child : node->children) {
+		result += JoinRelationTreeNodeToString(child.second.get());
+	}
+	return result;
+}
+
+string JoinRelationSetManager::ToString() const {
+	return JoinRelationTreeNodeToString(&root);
+}
+
+void JoinRelationSetManager::Print() {
+	Printer::Print(ToString());
+}
 
 } // namespace duckdb

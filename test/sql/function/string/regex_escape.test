@@ -1,0 +1,99 @@
+# name: test/sql/function/string/regex_escape.test
+# description: regex escape test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test the example
+query T
+SELECT regexp_escape('https://duckdb.org');
+----
+https\:\/\/duckdb\.org
+
+# no special chars
+query T
+SELECT regexp_escape('abc123ABC');
+----
+abc123ABC
+
+# metacharacters
+query T
+SELECT regexp_escape('a.b[c]*');
+----
+a\.b\[c\]\*
+
+# whitespaces
+query T
+SELECT regexp_escape('a b c');
+----
+a\ b\ c
+
+# new line character
+query T
+SELECT regexp_escape('\n');
+----
+\\n
+
+query T
+SELECT regexp_escape('line1\nline2');
+----
+line1\\nline2
+
+# unicode character
+query T
+SELECT regexp_escape('@');
+----
+\@
+
+# backslashes
+query T
+SELECT regexp_escape('path\to\wonderland');
+----
+path\\to\\wonderland
+
+# more special characters
+query T
+SELECT regexp_escape('$()*+.?[\]^{|}-');
+----
+\$\(\)\*\+\.\?\[\\\]\^\{\|\}\-
+
+# mode output_hash
+
+# test a table of 1000 strings with special characters
+statement ok
+CREATE TABLE tbl (c VARCHAR(255));
+
+statement ok
+INSERT INTO tbl SELECT 'a)*.?[\]b^{2.+_c' FROM generate_series(1, 500);
+
+statement ok
+INSERT INTO tbl(c) SELECT '1?ch@racter$' FROM generate_series(1, 500);
+
+query I
+SELECT regexp_escape(c) FROM tbl;
+----
+1000 values hashing to d9c29c89fadac59fb2be2397a94af1ee
+
+query I
+WITH cte AS (
+    SELECT c
+    FROM tbl
+    LIMIT 500
+)
+SELECT sum(cast(regexp_escape(c) = 'a\)\*\.\?\[\\\]b\^\{2\.\+_c' as int))
+FROM cte
+----
+500
+
+query I
+WITH cte AS (
+    SELECT c
+    FROM tbl
+    OFFSET 500 LIMIT 500
+)
+SELECT sum(cast(regexp_escape(c) = '1\?ch\@racter\$' as int))
+FROM cte
+----
+500
+

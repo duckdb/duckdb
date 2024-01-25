@@ -2,10 +2,10 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/core_functions/scalar/string_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -24,8 +24,7 @@ struct StringSplitInput {
 			ListVector::SetListSize(result_list, offset + list_idx);
 			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
 		}
-		FlatVector::GetData<string_t>(result_child)[list_entry] =
-		    StringVector::AddString(result_child, split_data, split_size);
+		FlatVector::GetData<string_t>(result_child)[list_entry] = string_t(split_data, split_size);
 	}
 };
 
@@ -36,7 +35,7 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find((const unsigned char *)input_data, input_size, (const unsigned char *)delim_data,
+		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data),
 		                         delim_size);
 	}
 };
@@ -45,7 +44,7 @@ struct ConstantRegexpStringSplit {
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		D_ASSERT(data);
-		auto regex = (duckdb_re2::RE2 *)data;
+		auto regex = reinterpret_cast<duckdb_re2::RE2 *>(data);
 		duckdb_re2::StringPiece match;
 		if (!regex->Match(duckdb_re2::StringPiece(input_data, input_size), 0, input_size, RE2::UNANCHORED, &match, 1)) {
 			return DConstants::INVALID_INDEX;
@@ -109,11 +108,11 @@ template <class OP>
 static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
 	UnifiedVectorFormat input_data;
 	args.data[0].ToUnifiedFormat(args.size(), input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	UnifiedVectorFormat delim_data;
 	args.data[1].ToUnifiedFormat(args.size(), delim_data);
-	auto delims = (string_t *)delim_data.data;
+	auto delims = UnifiedVectorFormat::GetData<string_t>(delim_data);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
@@ -153,6 +152,8 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+
+	StringVector::AddHeapReference(child_entry, args.data[0]);
 }
 
 static void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {

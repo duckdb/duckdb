@@ -15,6 +15,10 @@
 #include "duckdb/main/error_manager.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+#include "autocomplete_extension.hpp"
+#endif
+#include "shell_extension.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -38,7 +42,7 @@ static char *sqlite3_strdup(const char *str);
 
 struct sqlite3_string_buffer {
 	//! String data
-	duckdb::unique_ptr<char[]> data;
+	duckdb::unsafe_unique_array<char> data;
 	//! String length
 	int data_len;
 };
@@ -100,6 +104,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 	try {
 		pDb = new sqlite3();
 		DBConfig config;
+		config.SetOptionByName("duckdb_api", "cli");
 		config.options.access_mode = AccessMode::AUTOMATIC;
 		if (flags & SQLITE_OPEN_READONLY) {
 			config.options.access_mode = AccessMode::READ_ONLY;
@@ -107,12 +112,20 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_UNSIGNED_EXTENSIONS) {
 			config.options.allow_unsigned_extensions = true;
 		}
+		if (flags & DUCKDB_UNREDACTED_SECRETS) {
+			config.options.allow_unredacted_secrets = true;
+		}
+
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,
 		    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
 		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+		pDb->db->LoadExtension<AutocompleteExtension>();
+#endif
+		pDb->db->LoadExtension<ShellExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
@@ -559,7 +572,7 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
 			auto &str_val = StringValue::Get(val);
-			entry.data = duckdb::unique_ptr<char[]>(new char[str_val.size() + 1]);
+			entry.data = duckdb::make_unsafe_uniq_array<char>(str_val.size() + 1);
 			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
 			entry.data_len = str_val.length();
 		}
@@ -584,7 +597,7 @@ const void *sqlite3_column_blob(sqlite3_stmt *pStmt, int iCol) {
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
 			auto &str_val = StringValue::Get(val);
-			entry.data = duckdb::unique_ptr<char[]>(new char[str_val.size() + 1]);
+			entry.data = duckdb::make_unsafe_uniq_array<char>(str_val.size() + 1);
 			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
 			entry.data_len = str_val.length();
 		}
@@ -688,7 +701,7 @@ int sqlite3_bind_blob(sqlite3_stmt *stmt, int idx, const void *val, int length, 
 	if (length < 0) {
 		blob = Value::BLOB(string((const char *)val));
 	} else {
-		blob = Value::BLOB((const_data_ptr_t)val, length);
+		blob = Value::BLOB(const_data_ptr_cast(val), length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
@@ -1521,7 +1534,7 @@ SQLITE_API void sqlite3_result_blob64(sqlite3_context *context, const void *blob
 	}
 	context->result.type = SQLiteTypeValue::BLOB;
 	context->result.str = string((char *)blob, n_bytes);
-	if (xDel) {
+	if (xDel && xDel != SQLITE_TRANSIENT) {
 		xDel((void *)blob);
 	}
 }

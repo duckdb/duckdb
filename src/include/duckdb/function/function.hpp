@@ -49,17 +49,17 @@ struct FunctionData {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 	// FIXME: this function should be removed in the future
 	template <class TARGET>
 	TARGET &CastNoConst() const {
-		return (TARGET &)*this;
+		return const_cast<TARGET &>(reinterpret_cast<const TARGET &>(*this));
 	}
 };
 
@@ -96,10 +96,11 @@ public:
 
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
-	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments);
+	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
+	                                      const LogicalType &varargs = LogicalType::INVALID);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
-	                                      const LogicalType &return_type);
+	                                      const LogicalType &varargs, const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
 	                                      const named_parameter_type_map_t &named_parameters);

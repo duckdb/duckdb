@@ -25,14 +25,18 @@ if old_file is None or new_file is None:
     exit(1)
 
 con = duckdb.connect()
-old_timings_l = con.execute(f"SELECT name, median(time) FROM read_csv_auto('{old_file}') t(name, nrun, time) GROUP BY ALL ORDER BY ALL").fetchall()
-new_timings_l = con.execute(f"SELECT name, median(time) FROM read_csv_auto('{new_file}') t(name, nrun, time) GROUP BY ALL ORDER BY ALL").fetchall()
+old_timings_l = con.execute(
+    f"SELECT name, median(time) FROM read_csv_auto('{old_file}') t(name, nrun, time) GROUP BY ALL ORDER BY ALL"
+).fetchall()
+new_timings_l = con.execute(
+    f"SELECT name, median(time) FROM read_csv_auto('{new_file}') t(name, nrun, time) GROUP BY ALL ORDER BY ALL"
+).fetchall()
 
 old_timings = {}
 new_timings = {}
 
 for entry in old_timings_l:
-    name  = entry[0]
+    name = entry[0]
     timing = entry[1]
     old_timings[name] = timing
 
@@ -55,10 +59,12 @@ for key in test_keys:
 
 return_code = 0
 if len(slow_keys) > 0:
-    print('''====================================================
+    print(
+        '''====================================================
 ==============  REGRESSIONS DETECTED   =============
 ====================================================
-''')
+'''
+    )
     return_code = 1
     for key in slow_keys:
         new_timing = new_timings[key]
@@ -68,28 +74,36 @@ if len(slow_keys) > 0:
         print(f"New timing: {new_timing}")
         print("")
 
-    print('''====================================================
+    print(
+        '''====================================================
 ==================  New Timings   ==================
 ====================================================
-''')
+'''
+    )
     with open(new_file, 'r') as f:
         print(f.read())
-    print('''====================================================
+    print(
+        '''====================================================
 ==================  Old Timings   ==================
 ====================================================
-''')
+'''
+    )
     with open(old_file, 'r') as f:
         print(f.read())
 else:
-    print('''====================================================
+    print(
+        '''====================================================
 ============== NO REGRESSIONS DETECTED  =============
 ====================================================
-''')
+'''
+    )
 
-print('''====================================================
+print(
+    '''====================================================
 =================== ALL TIMINGS  ===================
 ====================================================
-''')
+'''
+)
 for key in test_keys:
     new_timing = new_timings[key]
     old_timing = old_timings[key]

@@ -20,8 +20,10 @@ enum class VerificationType : uint8_t {
 	DESERIALIZED,
 	PARSED,
 	UNOPTIMIZED,
+	NO_OPERATOR_CACHING,
 	PREPARED,
 	EXTERNAL,
+	FETCH_ROW_AS_SCAN,
 
 	INVALID
 };
@@ -59,7 +61,15 @@ public:
 		return false;
 	}
 
+	virtual bool DisableOperatorCaching() const {
+		return false;
+	}
+
 	virtual bool ForceExternal() const {
+		return false;
+	}
+
+	virtual bool ForceFetchRow() const {
 		return false;
 	}
 };

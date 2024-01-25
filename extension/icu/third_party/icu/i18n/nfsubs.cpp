@@ -1310,10 +1310,8 @@ NumeratorSubstitution::doParse(const UnicodeString& text,
         // compute the 'effective' base and prescale the value down
         int64_t n = result.getLong(status); // force conversion!
         int64_t d = 1;
-        int32_t pow = 0;
         while (d <= n) {
             d *= 10;
-            ++pow;
         }
         // now add the zeros
         while (zeroCount > 0) {

@@ -1,3 +1,5 @@
+add_subdirectory(dependency)
+
 add_library_unity(
   duckdb_catalog_entries
   OBJECT
@@ -7,7 +9,7 @@ add_library_unity(
   duck_table_entry.cpp
   type_catalog_entry.cpp
   index_catalog_entry.cpp
-  scalar_macro_catalog_entry.cpp
+  macro_catalog_entry.cpp
   pragma_function_catalog_entry.cpp
   schema_catalog_entry.cpp
   sequence_catalog_entry.cpp

@@ -1,16 +1,14 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_any_join.hpp"
-#include "duckdb/planner/operator/logical_create_index.hpp"
-#include "duckdb/planner/operator/logical_delim_join.hpp"
-#include "duckdb/planner/operator/logical_insert.hpp"
-
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
 
 namespace duckdb {
 
@@ -20,8 +18,7 @@ ColumnBindingResolver::ColumnBindingResolver() {
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// special case: comparison join
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		// first get the bindings of the LHS and resolve the LHS expressions
@@ -29,17 +26,48 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.left);
 		}
-		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-			// visit the duplicate eliminated columns on the LHS, if any
-			auto &delim_join = op.Cast<LogicalDelimJoin>();
-			for (auto &expr : delim_join.duplicate_eliminated_columns) {
-				VisitExpression(&expr);
-			}
+		// visit the duplicate eliminated columns on the LHS, if any
+		for (auto &expr : comp_join.duplicate_eliminated_columns) {
+			VisitExpression(&expr);
 		}
 		// then get the bindings of the RHS and resolve the RHS expressions
 		VisitOperator(*comp_join.children[1]);
 		for (auto &cond : comp_join.conditions) {
 			VisitExpression(&cond.right);
+		}
+		// finally update the bindings with the result bindings of the join
+		bindings = op.GetColumnBindings();
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
+		// depending on whether the delim join has been flipped, get the appropriate bindings
+		if (comp_join.delim_flipped) {
+			VisitOperator(*comp_join.children[1]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.right);
+			}
+		} else {
+			VisitOperator(*comp_join.children[0]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.left);
+			}
+		}
+		// visit the duplicate eliminated columns
+		for (auto &expr : comp_join.duplicate_eliminated_columns) {
+			VisitExpression(&expr);
+		}
+		// now get the other side
+		if (comp_join.delim_flipped) {
+			VisitOperator(*comp_join.children[0]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.left);
+			}
+		} else {
+			VisitOperator(*comp_join.children[1]);
+			for (auto &cond : comp_join.conditions) {
+				VisitExpression(&cond.right);
+			}
 		}
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
@@ -55,6 +83,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		if (any_join.join_type == JoinType::SEMI || any_join.join_type == JoinType::ANTI) {
 			auto right_bindings = op.children[1]->GetColumnBindings();
 			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
+		}
+		if (any_join.join_type == JoinType::RIGHT_SEMI || any_join.join_type == JoinType::RIGHT_ANTI) {
+			throw InternalException("RIGHT SEMI/ANTI any join not supported yet");
 		}
 		VisitOperatorExpressions(op);
 		return;
@@ -95,10 +126,17 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			bindings = op.GetColumnBindings();
 			return;
 		}
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
+		auto &ext_op = op.Cast<LogicalExtensionOperator>();
+		ext_op.ResolveColumnBindings(*this, bindings);
+		return;
 	}
 	default:
 		break;
 	}
+
 	// general case
 	// first visit the children of this operator
 	VisitOperatorChildren(op);

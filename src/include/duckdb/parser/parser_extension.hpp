@@ -17,7 +17,7 @@ namespace duckdb {
 //! The ParserExtensionInfo holds static information relevant to the parser extension
 //! It is made available in the parse_function, and will be kept alive as long as the database system is kept alive
 struct ParserExtensionInfo {
-	DUCKDB_API virtual ~ParserExtensionInfo() {
+	virtual ~ParserExtensionInfo() {
 	}
 };
 
@@ -29,7 +29,7 @@ enum class ParserExtensionResultType : uint8_t { PARSE_SUCCESSFUL, DISPLAY_ORIGI
 //! The ParserExtensionParseData holds the result of a successful parse step
 //! It will be passed along to the subsequent plan function
 struct ParserExtensionParseData {
-	DUCKDB_API virtual ~ParserExtensionParseData() {
+	virtual ~ParserExtensionParseData() {
 	}
 
 	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;

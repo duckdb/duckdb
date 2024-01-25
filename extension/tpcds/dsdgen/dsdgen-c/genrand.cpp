@@ -38,7 +38,7 @@
 #include "porting.h"
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef WIN32
+#ifdef _WIN32
 #include <search.h>
 #include <limits.h>
 #endif

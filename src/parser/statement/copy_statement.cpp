@@ -86,7 +86,7 @@ string CopyStatement::ToString() const {
 		D_ASSERT(!select_statement);
 		result += TablePart(*info);
 		result += " FROM";
-		result += StringUtil::Format(" '%s'", info->file_path);
+		result += StringUtil::Format(" %s", SQLString(info->file_path));
 		result += CopyOptionsToString(info->format, info->options);
 	} else {
 		if (select_statement) {
@@ -96,7 +96,7 @@ string CopyStatement::ToString() const {
 			result += TablePart(*info);
 		}
 		result += " TO ";
-		result += StringUtil::Format("'%s'", info->file_path);
+		result += StringUtil::Format("%s", SQLString(info->file_path));
 		result += CopyOptionsToString(info->format, info->options);
 	}
 	return result;

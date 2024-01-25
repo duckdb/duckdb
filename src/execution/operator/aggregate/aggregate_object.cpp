@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -21,7 +22,8 @@ AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
 
 AggregateObject::AggregateObject(BoundWindowExpression &window)
     : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
-                      AlignValue(window.aggregate->state_size()), AggregateType::NON_DISTINCT,
+                      AlignValue(window.aggregate->state_size()),
+                      window.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
                       window.return_type.InternalType(), window.filter_expr.get()) {
 }
 

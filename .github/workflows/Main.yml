@@ -5,24 +5,33 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
-  pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
+      - '!tools/odbc/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
 
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/odbc/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
+
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -31,23 +40,13 @@ env:
 jobs:
  linux-debug:
     name: Linux Debug
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-
     env:
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       BUILD_VISUALIZER: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_ICU: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_PARQUET: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
-      BUILD_JEMALLOC: 1
       GEN: ninja
 
     steps:
@@ -63,21 +62,27 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
       run:  make debug
 
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: bash
+      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+
+    - name: Test DUCKDB_INSTALL_LIB variable
+      run: echo $DUCKDB_INSTALL_LIB
+
     - name: Test
       shell: bash
-      run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
-          make unittestci
+      run: make unittestci
 
 
  force-storage:
     name: Force Storage
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -94,6 +99,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      RUN_SLOW_VERIFIERS: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -108,7 +114,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -120,6 +126,7 @@ jobs:
 
  force-restart:
     name: Force Restart
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -150,7 +157,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -160,133 +167,9 @@ jobs:
       shell: bash
       run: build/reldebug/test/unittest --force-reload --force-storage
 
- no-string-inline:
-    name: No String Inline / Destroy Unpinned Blocks
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      DISABLE_STRING_INLINE: 1
-      DESTROY_UNPINNED_BLOCKS: 1
-      ALTERNATIVE_VERIFY: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make debug
-
-    - name: Test
-      shell: bash
-      run: build/debug/test/unittest
-
-
- storage-initialization:
-    name: Storage Initialization Verification
-    needs: linux-debug
-    runs-on: ubuntu-20.04
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make debug
-
-    - name: Test
-      shell: bash
-      run: python3 scripts/test_zero_initialize.py
-
- threadsan:
-    name: Thread Sanitizer
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_JEMALLOC: 1
-      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: THREADSAN=1 make reldebug
-
-    - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
-
-
  valgrind:
     name: Valgrind
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -309,7 +192,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -321,6 +204,7 @@ jobs:
 
  docs:
     name: Website Docs
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     steps:
@@ -343,72 +227,9 @@ jobs:
         cd duckdb-web
         python3 scripts/generate_docs.py ..
 
-
- sqllogic:
-    name: Sqllogic tests
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-# Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
-    - name: Build
-      shell: bash
-      run: make release
-
-    - name: Test
-      shell: bash
-      run: make sqlite
-
- expanded:
-    name: Expanded
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
-      DISABLE_UNITY: 1
-      DISABLE_PARQUET: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: ./.github/actions/swap_space
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make debug
-
-
-
  odbc:
     name: ODBC
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     needs: linux-debug
     env:
@@ -446,17 +267,11 @@ jobs:
         cmake -DNANODBC_DISABLE_TESTS=OFF ..
         cmake --build .
 
-    - name: Install psqlodbc
-      shell: bash
-      run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make debug)
-
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -469,10 +284,6 @@ jobs:
     - name: Test nanodbc
       shell: bash
       run: ./tools/odbc/test/run_nanodbc_tests.sh
-
-    - name: Test psqlodbc
-      shell: bash
-      run: ./tools/odbc/test/run_psqlodbc_tests.sh
 
     - name: Test isql
       shell: bash

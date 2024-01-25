@@ -25,6 +25,8 @@ public:
 
 	//! The type of set operation
 	SetOperationType setop_type = SetOperationType::NONE;
+	//! whether the ALL modifier was used or not
+	bool setop_all = false;
 	//! The left side of the set operation
 	unique_ptr<QueryNode> left;
 	//! The right side of the set operation
@@ -43,12 +45,10 @@ public:
 	unique_ptr<QueryNode> Copy() const override;
 
 	//! Serializes a QueryNode to a stand-alone binary blob
-	void Serialize(FieldWriter &writer) const override;
 	//! Deserializes a blob back into a QueryNode
-	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

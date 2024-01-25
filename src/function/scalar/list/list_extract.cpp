@@ -1,12 +1,14 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
@@ -32,7 +34,7 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 
 	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
 	// should have gone with GetValue perhaps
-	auto child_data = (T *)child_format.data;
+	auto child_data = UnifiedVectorFormat::GetData<T>(child_format);
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
 		auto offsets_index = offsets_data.sel->get_index(i);
@@ -44,8 +46,8 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 			result_mask.SetInvalid(i);
 			continue;
 		}
-		auto list_entry = ((list_entry_t *)list_data.data)[list_index];
-		auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
+		auto list_entry = (UnifiedVectorFormat::GetData<list_entry_t>(list_data))[list_index];
+		auto offsets_entry = (UnifiedVectorFormat::GetData<int64_t>(offsets_data))[offsets_index];
 
 		// 1-based indexing
 		if (offsets_entry == 0) {
@@ -56,7 +58,7 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 
 		idx_t child_offset;
 		if (offsets_entry < 0) {
-			if ((idx_t)-offsets_entry > list_entry.length) {
+			if (offsets_entry < -int64_t(list_entry.length)) {
 				result_mask.SetInvalid(i);
 				continue;
 			}
@@ -112,6 +114,9 @@ static void ExecuteListExtractInternal(const idx_t count, UnifiedVectorFormat &l
 		break;
 	case PhysicalType::UINT64:
 		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
+		break;
+	case PhysicalType::UINT128:
+		ListExtractTemplate<uhugeint_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case PhysicalType::FLOAT:
 		ListExtractTemplate<float>(count, list, offsets, child_vector, list_size, result);
@@ -203,9 +208,14 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
 	// list extract returns the child type of the list as return type
-	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
+	auto child_type = ListType::GetChildType(arguments[0]->return_type);
+
+	bound_function.return_type = child_type;
+	bound_function.arguments[0] = LogicalType::LIST(child_type);
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 

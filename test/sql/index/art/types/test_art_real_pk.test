@@ -1,0 +1,51 @@
+# name: test/sql/index/art/types/test_art_real_pk.test
+# description: Test ART REAL key type for a primary key
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE numbers(i REAL PRIMARY KEY, j INTEGER)
+
+# insert two conflicting pairs at the same time
+statement error
+INSERT INTO numbers VALUES (3.45, 4), (3.45, 5)
+----
+
+# insert unique values
+statement ok
+INSERT INTO numbers VALUES (3.45, 4), (2.2, 5)
+
+query RI
+SELECT * FROM numbers
+----
+3.450000	4
+2.200000	5
+
+# insert a duplicate value as part of a chain of values
+statement error
+INSERT INTO numbers VALUES (6, 6), (3.45, 4);
+----
+
+# now insert just the first value
+statement ok
+INSERT INTO numbers VALUES (6, 6);
+
+query RI
+SELECT * FROM numbers
+----
+3.450000	4
+2.200000	5
+6.000000	6
+
+# insert NULL value in PRIMARY KEY is not allowed
+statement error
+INSERT INTO numbers VALUES (NULL, 4);
+----
+
+# update NULL is also not allowed
+statement error
+UPDATE numbers SET i=NULL;
+----
+

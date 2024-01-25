@@ -25,13 +25,18 @@ public:
 	bool return_chunk;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
 	idx_t EstimateCardinality(ClientContext &context) override;
 	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;
 	void ResolveTypes() override;
+
+private:
+	LogicalDelete(ClientContext &context, const unique_ptr<CreateInfo> &table_info);
 };
 } // namespace duckdb

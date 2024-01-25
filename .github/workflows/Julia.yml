@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
@@ -15,25 +15,31 @@ on:
       - 'test/**'
       - 'tools/**'
       - '!tools/juliapkg/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Julia.yml'
+
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
       - '!tools/juliapkg/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Julia.yml'
 
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 jobs:
   format_check:
     name: Julia Format Check
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -54,6 +60,7 @@ jobs:
 
   main_julia:
     name: Julia ${{ matrix.version }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -61,11 +68,17 @@ jobs:
         version:
           - '1.6'
           - '1.7'
+          - '1'
           - 'nightly'
         os:
           - ubuntu-latest
         arch:
           - x64
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+        exclude:
+          - isRelease: false
+            version: '1.6'
     steps:
       - uses: actions/checkout@v3
         with:
@@ -80,7 +93,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.version }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build DuckDB
         shell: bash
@@ -95,4 +108,4 @@ jobs:
           export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
           ls $JULIA_DUCKDB_LIBRARY
           cd tools/juliapkg
-          julia -e "import Pkg; Pkg.activate(\".\"); Pkg.instantiate(); include(\"test/runtests.jl\")"
+          julia --project -e "import Pkg; Pkg.test()"

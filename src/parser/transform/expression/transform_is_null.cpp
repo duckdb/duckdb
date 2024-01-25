@@ -4,17 +4,18 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformNullTest(duckdb_libpgquery::PGNullTest *root) {
-	D_ASSERT(root);
-	auto arg = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->arg));
-	if (root->argisrow) {
+unique_ptr<ParsedExpression> Transformer::TransformNullTest(duckdb_libpgquery::PGNullTest &root) {
+	auto arg = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(root.arg));
+	if (root.argisrow) {
 		throw NotImplementedException("IS NULL argisrow");
 	}
-	ExpressionType expr_type = (root->nulltesttype == duckdb_libpgquery::PG_IS_NULL)
+	ExpressionType expr_type = (root.nulltesttype == duckdb_libpgquery::PG_IS_NULL)
 	                               ? ExpressionType::OPERATOR_IS_NULL
 	                               : ExpressionType::OPERATOR_IS_NOT_NULL;
 
-	return unique_ptr<ParsedExpression>(new OperatorExpression(expr_type, std::move(arg)));
+	auto result = make_uniq<OperatorExpression>(expr_type, std::move(arg));
+	result->query_location = root.location;
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -323,6 +323,7 @@ typedef enum PGNodeTag {
 	T_PGClosePortalStmt,
 	T_PGClusterStmt,
 	T_PGCopyStmt,
+	T_PGCopyDatabaseStmt,
 	T_PGCreateStmt,
 	T_PGDefineStmt,
 	T_PGDropStmt,
@@ -363,6 +364,7 @@ typedef enum PGNodeTag {
 	T_PGReindexStmt,
 	T_PGCheckPointStmt,
 	T_PGCreateSchemaStmt,
+	T_PGCreateSecretStmt,
 	T_PGAlterDatabaseStmt,
 	T_PGAlterDatabaseSetStmt,
 	T_PGAlterRoleSetStmt,
@@ -377,6 +379,7 @@ typedef enum PGNodeTag {
 	T_PGDeallocateStmt,
 	T_PGDeclareCursorStmt,
 	T_PGCreateTableSpaceStmt,
+	T_PGDropSecretStmt,
 	T_PGDropTableSpaceStmt,
 	T_PGAlterObjectDependsStmt,
 	T_PGAlterObjectSchemaStmt,
@@ -426,7 +429,6 @@ typedef enum PGNodeTag {
 	T_PGImportStmt,
 	T_PGAttachStmt,
 	T_PGDetachStmt,
-	T_PGCreateDatabaseStmt,
 	T_PGUseStmt,
 
 	/*
@@ -813,5 +815,14 @@ typedef enum PGOnConflictActionAlias {
 	PG_ONCONFLICT_ALIAS_REPLACE, /* INSERT OR REPLACE */
 	PG_ONCONFLICT_ALIAS_IGNORE   /* INSERT OR IGNORE */
 } PGOnConflictActionAlias;
+
+/*
+ * PGInsertByNameOrPosition
+ *    "INSERT BY [POSITION|NAME]
+ */
+typedef enum PGInsertColumnOrder {
+	PG_INSERT_BY_POSITION,    /* INSERT BY POSITION (default behavior) */
+	PG_INSERT_BY_NAME,        /* INSERT BY NAME */
+} PGInsertColumnOrder;
 
 }

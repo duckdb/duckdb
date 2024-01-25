@@ -27,20 +27,12 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 	ss << std::endl;
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, FileOpener *opener, stringstream &ss, const string &path) {
+static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-	                          FileLockType::WRITE_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
+	                          FileLockType::WRITE_LOCK);
 	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
 	handle.reset();
-}
-
-static void WriteValueAsSQL(stringstream &ss, Value &val) {
-	if (val.type().IsNumeric()) {
-		ss << val.ToString();
-	} else {
-		ss << "'" << val.ToString() << "'";
-	}
 }
 
 static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info, ExportedTableData &exported_table,
@@ -51,15 +43,15 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
 
-	ss << KeywordHelper::WriteOptionallyQuoted(exported_table.table_name) << " FROM '" << exported_table.file_path
-	   << "' (";
+	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");
+	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name), SQLString(file_path));
 
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {
 		// insert default csv options, if not specified
 		if (info.options.find("header") == info.options.end()) {
-			info.options["header"].push_back(Value::INTEGER(0));
+			info.options["header"].push_back(Value::INTEGER(1));
 		}
 		if (info.options.find("delimiter") == info.options.end() && info.options.find("sep") == info.options.end() &&
 		    info.options.find("delim") == info.options.end()) {
@@ -70,9 +62,16 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		}
 	}
 	for (auto &copy_option : info.options) {
+		if (copy_option.first == "force_quote") {
+			continue;
+		}
+		if (copy_option.second.empty()) {
+			// empty options are interpreted as TRUE
+			copy_option.second.push_back(true);
+		}
 		ss << ", " << copy_option.first << " ";
 		if (copy_option.second.size() == 1) {
-			WriteValueAsSQL(ss, copy_option.second[0]);
+			ss << copy_option.second[0].ToSQLString();
 		} else {
 			// FIXME handle multiple options
 			throw NotImplementedException("FIXME: serialize list of options");
@@ -96,80 +95,83 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
-void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<ExportSourceState>();
-	if (state.finished) {
-		return;
-	}
-
-	auto &ccontext = context.client;
-	auto &fs = FileSystem::GetFileSystem(ccontext);
-	auto *opener = FileSystem::GetFileOpener(ccontext);
-
-	// gather all catalog types to export
-	vector<reference<CatalogEntry>> schemas;
-	vector<reference<CatalogEntry>> custom_types;
-	vector<reference<CatalogEntry>> sequences;
-	vector<reference<CatalogEntry>> tables;
-	vector<reference<CatalogEntry>> views;
-	vector<reference<CatalogEntry>> indexes;
-	vector<reference<CatalogEntry>> macros;
-
-	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
+void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schema_list,
+                                    ExportEntries &result) {
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
 		if (!schema.internal) {
-			schemas.push_back(schema);
+			result.schemas.push_back(schema);
 		}
-		schema.Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
 			if (entry.type != CatalogType::TABLE_ENTRY) {
-				views.push_back(entry);
+				result.views.push_back(entry);
+			}
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				result.tables.push_back(entry);
 			}
 		});
-		schema.Scan(context.client, CatalogType::SEQUENCE_ENTRY,
-		            [&](CatalogEntry &entry) { sequences.push_back(entry); });
-		schema.Scan(context.client, CatalogType::TYPE_ENTRY,
-		            [&](CatalogEntry &entry) { custom_types.push_back(entry); });
-		schema.Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
-		schema.Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(context, CatalogType::SEQUENCE_ENTRY,
+		            [&](CatalogEntry &entry) { result.sequences.push_back(entry); });
+		schema.Scan(context, CatalogType::TYPE_ENTRY,
+		            [&](CatalogEntry &entry) { result.custom_types.push_back(entry); });
+		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { result.indexes.push_back(entry); });
+		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
-				macros.push_back(entry);
+				result.macros.push_back(entry);
 			}
 		});
-		schema.Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(context, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
-				macros.push_back(entry);
+				result.macros.push_back(entry);
 			}
 		});
 	}
+}
+
+SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<ExportSourceState>();
+	if (state.finished) {
+		return SourceResultType::FINISHED;
+	}
+
+	auto &ccontext = context.client;
+	auto &fs = FileSystem::GetFileSystem(ccontext);
+
+	// gather all catalog types to export
+	ExportEntries entries;
+
+	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
+	ExtractEntries(context.client, schema_list, entries);
 
 	// consider the order of tables because of foreign key constraint
+	entries.tables.clear();
 	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		tables.push_back(exported_tables.data[i].entry);
+		entries.tables.push_back(exported_tables.data[i].entry);
 	}
 
 	// order macro's by timestamp so nested macro's are imported nicely
-	sort(macros.begin(), macros.end(), [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
-		return lhs.get().oid < rhs.get().oid;
-	});
+	sort(entries.macros.begin(), entries.macros.end(),
+	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
+		     return lhs.get().oid < rhs.get().oid;
+	     });
 
 	// write the schema.sql file
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
 
 	stringstream ss;
-	WriteCatalogEntries(ss, schemas);
-	WriteCatalogEntries(ss, custom_types);
-	WriteCatalogEntries(ss, sequences);
-	WriteCatalogEntries(ss, tables);
-	WriteCatalogEntries(ss, views);
-	WriteCatalogEntries(ss, indexes);
-	WriteCatalogEntries(ss, macros);
+	WriteCatalogEntries(ss, entries.schemas);
+	WriteCatalogEntries(ss, entries.custom_types);
+	WriteCatalogEntries(ss, entries.sequences);
+	WriteCatalogEntries(ss, entries.tables);
+	WriteCatalogEntries(ss, entries.views);
+	WriteCatalogEntries(ss, entries.indexes);
+	WriteCatalogEntries(ss, entries.macros);
 
-	WriteStringStreamToFile(fs, opener, ss, fs.JoinPath(info->file_path, "schema.sql"));
+	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
@@ -178,15 +180,16 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		auto exported_table_info = exported_tables.data[i].table_data;
 		WriteCopyStatement(fs, load_ss, *info, exported_table_info, function);
 	}
-	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));
+	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                    DataChunk &input) const {
+SinkResultType PhysicalExport::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	// nop
 	return SinkResultType::NEED_MORE_INPUT;
 }

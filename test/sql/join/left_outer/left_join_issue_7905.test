@@ -1,0 +1,47 @@
+# name: test/sql/join/left_outer/left_join_issue_7905.test
+# description: Issue #7905: DuckDB fails with INTERNAL Error: Logical column index 11 out of range
+# group: [left_outer]
+
+statement ok
+CREATE TABLE a(a1 VARCHAR);
+
+statement ok
+CREATE TABLE b(
+  b1 VARCHAR,
+  b2 TIMESTAMP,
+  b3 TIMESTAMP,
+  b4 VARCHAR,
+  b5 VARCHAR,
+  b6 VARCHAR,
+  b7 TIMESTAMP,
+  b8 TIMESTAMP,
+  b9 VARCHAR,
+  b10 VARCHAR,
+  b11 VARCHAR,
+  b12 VARCHAR,
+  b13 VARCHAR,
+  b14 VARCHAR,
+);
+
+statement ok
+INSERT INTO b VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+
+statement ok
+CREATE TABLE c(
+  c1 VARCHAR,
+);
+
+statement ok
+CREATE TABLE d(
+  d1 VARCHAR,
+  d2 VARCHAR,
+);
+
+statement ok
+SELECT *
+FROM a
+LEFT JOIN b ON b.b14 = a.a1 
+LEFT JOIN c ON b.b13 = c.c1
+  LEFT JOIN d ON b.b12 = d.d1
+  WHERE d.d2 IN ('');

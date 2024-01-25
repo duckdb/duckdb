@@ -21,7 +21,7 @@ bool INetFunctions::CastVarcharToINET(Vector &source, Vector &result, idx_t coun
 	auto address_data = FlatVector::GetData<hugeint_t>(*entries[1]);
 	auto mask_data = FlatVector::GetData<uint16_t>(*entries[2]);
 
-	auto input = (string_t *)vdata.data;
+	auto input = UnifiedVectorFormat::GetData<string_t>(vdata);
 	bool success = true;
 	for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 		auto idx = vdata.sel->get_index(i);

@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <cstring>
 
@@ -23,41 +23,41 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct Equals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return left == right;
 	}
 };
 struct NotEquals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return !Equals::Operation(left, right);
 	}
 };
 
 struct GreaterThan {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return left > right;
 	}
 };
 
 struct GreaterThanEquals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return !GreaterThan::Operation(right, left);
 	}
 };
 
 struct LessThan {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return GreaterThan::Operation(right, left);
 	}
 };
 
 struct LessThanEquals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return !GreaterThan::Operation(left, right);
 	}
 };
@@ -143,6 +143,42 @@ struct DistinctLessThanEquals {
 };
 
 //===--------------------------------------------------------------------===//
+// Comparison Operator Wrappers (so (Not)DistinctFrom have the same API)
+//===--------------------------------------------------------------------===//
+template <class OP>
+struct ComparisonOperationWrapper {
+	static constexpr const bool COMPARE_NULL = false;
+
+	template <class T>
+	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+		if (right_null || left_null) {
+			return false;
+		}
+		return OP::template Operation<T>(left, right);
+	}
+};
+
+template <>
+struct ComparisonOperationWrapper<DistinctFrom> {
+	static constexpr const bool COMPARE_NULL = true;
+
+	template <class T>
+	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+		return DistinctFrom::template Operation<T>(left, right, left_null, right_null);
+	}
+};
+
+template <>
+struct ComparisonOperationWrapper<NotDistinctFrom> {
+	static constexpr const bool COMPARE_NULL = true;
+
+	template <class T>
+	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+		return NotDistinctFrom::template Operation<T>(left, right, left_null, right_null);
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // Specialized Boolean Comparison Operators
 //===--------------------------------------------------------------------===//
 template <>
@@ -172,10 +208,6 @@ inline bool Equals::Operation(const interval_t &left, const interval_t &right) {
 template <>
 inline bool GreaterThan::Operation(const interval_t &left, const interval_t &right) {
 	return Interval::GreaterThan(left, right);
-}
-
-inline bool operator<(const interval_t &lhs, const interval_t &rhs) {
-	return LessThan::Operation(lhs, rhs);
 }
 
 //===--------------------------------------------------------------------===//

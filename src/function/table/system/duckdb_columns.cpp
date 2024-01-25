@@ -131,8 +131,10 @@ public:
 	}
 	const Value ColumnDefault(idx_t col) override {
 		auto &column = entry.GetColumn(LogicalIndex(col));
-		if (column.DefaultValue()) {
-			return Value(column.DefaultValue()->ToString());
+		if (column.Generated()) {
+			return Value(column.GeneratedExpression().ToString());
+		} else if (column.HasDefaultValue()) {
+			return Value(column.DefaultValue().ToString());
 		}
 		return Value();
 	}

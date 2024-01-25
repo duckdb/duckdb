@@ -85,7 +85,7 @@ SortedBlock::SortedBlock(BufferManager &buffer_manager, GlobalSortState &state)
 }
 
 idx_t SortedBlock::Count() const {
-	idx_t count = std::accumulate(radix_sorting_data.begin(), radix_sorting_data.end(), 0,
+	idx_t count = std::accumulate(radix_sorting_data.begin(), radix_sorting_data.end(), (idx_t)0,
 	                              [](idx_t a, const unique_ptr<RowDataBlock> &b) { return a + b->count; });
 	if (!sort_layout.all_constant) {
 		D_ASSERT(count == blob_sorting_data->Count());
@@ -373,9 +373,8 @@ static idx_t GetBlockCountWithEmptyCheck(const GlobalSortState &gss) {
 
 SBIterator::SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p)
     : sort_layout(gss.sort_layout), block_count(GetBlockCountWithEmptyCheck(gss)), block_capacity(gss.block_capacity),
-      cmp_size(sort_layout.comparison_size), entry_size(sort_layout.entry_size), all_constant(sort_layout.all_constant),
-      external(gss.external), cmp(ComparisonValue(comparison)), scan(gss.buffer_manager, gss), block_ptr(nullptr),
-      entry_ptr(nullptr) {
+      entry_size(sort_layout.entry_size), all_constant(sort_layout.all_constant), external(gss.external),
+      cmp(ComparisonValue(comparison)), scan(gss.buffer_manager, gss), block_ptr(nullptr), entry_ptr(nullptr) {
 
 	scan.sb = gss.sorted_blocks[0].get();
 	scan.block_idx = block_count;

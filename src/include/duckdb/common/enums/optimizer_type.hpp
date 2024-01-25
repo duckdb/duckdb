@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -28,11 +29,14 @@ enum class OptimizerType : uint32_t {
 	COMMON_AGGREGATE,
 	COLUMN_LIFETIME,
 	TOP_N,
+	COMPRESSED_MATERIALIZATION,
+	DUPLICATE_GROUPS,
 	REORDER_FILTER,
 	EXTENSION
 };
 
 string OptimizerTypeToString(OptimizerType type);
 OptimizerType OptimizerTypeFromString(const string &str);
+vector<string> ListAllOptimizers();
 
 } // namespace duckdb

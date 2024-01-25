@@ -14,6 +14,7 @@ CREATE TABLE person (
     name text,
     current_car car
 );
+----
 
 statement ok
 CREATE TABLE person (
@@ -26,6 +27,7 @@ INSERT INTO person VALUES ('Moe', 'happy');
 
 statement error
 INSERT INTO person VALUES ('Moe', 'diego');
+----
 
 query TT
 select * from person
@@ -45,6 +47,10 @@ Mark	sad
 
 query TT
 select * from person where current_mood > 'sad'
+----
+
+query TT
+select * from person where current_mood < 'sad'
 ----
 Moe	happy
 Pedro	ok
@@ -93,6 +99,7 @@ CREATE TABLE aliens (
     name text,
     current_mood mood
 );
+----
 
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
@@ -173,11 +180,11 @@ statement ok
 INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
 
 query II
-select count(*), current_mood from person group by current_mood
+select count(*), current_mood from person group by current_mood order by all
 ----
 1	ok
-2	sad
 1	happy
+2	sad
 
 query II
 select name, current_mood from person order by current_mood
@@ -217,6 +224,7 @@ ok
 
 statement error
 SELECT CAST ('bla' as mood)
+----
 
 query I
 SELECT TRY_CAST ('bla' as mood)

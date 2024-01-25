@@ -109,11 +109,11 @@ unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType typ
 template <class T>
 bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	using CHIMP_TYPE = typename ChimpType<T>::type;
-	auto &analyze_state = (ChimpAnalyzeState<T> &)state;
+	auto &analyze_state = state.Cast<ChimpAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (CHIMP_TYPE *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<CHIMP_TYPE>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		analyze_state.WriteValue(data[idx], vdata.validity.RowIsValid(idx));
@@ -123,7 +123,7 @@ bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template <class T>
 idx_t ChimpFinalAnalyze(AnalyzeState &state) {
-	auto &chimp = (ChimpAnalyzeState<T> &)state;
+	auto &chimp = state.Cast<ChimpAnalyzeState<T>>();
 	// Finish the last "segment"
 	chimp.StartNewSegment();
 	// Multiply the final size to factor in the extra cost of decompression time

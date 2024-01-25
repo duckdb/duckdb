@@ -51,11 +51,9 @@ private:
 	void SetSQLDescDataPtr(DescRecord &apd_record, SQLPOINTER data_ptr);
 
 	SQLLEN *GetSQLDescIndicatorPtr(DescRecord &apd_record, idx_t set_idx = 0);
-	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
 	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value);
 
 	SQLLEN *GetSQLDescOctetLengthPtr(DescRecord &apd_record, idx_t set_idx = 0);
-	void SetSQLDescOctetLengthPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
 
 private:
 	OdbcHandleStmt *stmt;
@@ -63,7 +61,7 @@ private:
 	OdbcHandleDesc *cur_apd;
 
 	//! a pool of allocated parameters during SQLPutData for character data
-	vector<duckdb::unique_ptr<char[]>> pool_allocated_ptr;
+	vector<duckdb::unsafe_unique_array<char>> pool_allocated_ptr;
 	//! Index of the
 	idx_t paramset_idx;
 	idx_t cur_paramset_idx;

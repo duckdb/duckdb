@@ -4,30 +4,40 @@
 
 namespace duckdb {
 
-unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
-	if (stmt->pivot) {
-		return TransformPivotStatement(stmt);
+unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt &select) {
+	if (select.pivot) {
+		return TransformPivotStatement(select);
 	} else {
-		return TransformSelectInternal(stmt);
+		return TransformSelectInternal(select);
 	}
 }
 
-unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGNode *node, bool is_select) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(node);
+unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGSelectStmt &select, bool is_select) {
 	auto result = make_uniq<SelectStatement>();
 
 	// Both Insert/Create Table As uses this.
 	if (is_select) {
-		if (stmt->intoClause) {
+		if (select.intoClause) {
 			throw ParserException("SELECT INTO not supported!");
 		}
-		if (stmt->lockingClause) {
+		if (select.lockingClause) {
 			throw ParserException("SELECT locking clause is not supported!");
 		}
 	}
 
-	result->node = TransformSelectNode(stmt);
+	result->node = TransformSelectNode(select);
 	return result;
+}
+
+unique_ptr<SelectStatement> Transformer::TransformSelect(optional_ptr<duckdb_libpgquery::PGNode> node, bool is_select) {
+	switch (node->type) {
+	case duckdb_libpgquery::T_PGVariableShowSelectStmt:
+		return TransformShowSelect(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(*node));
+	case duckdb_libpgquery::T_PGVariableShowStmt:
+		return TransformShow(PGCast<duckdb_libpgquery::PGVariableShowStmt>(*node));
+	default:
+		return TransformSelect(PGCast<duckdb_libpgquery::PGSelectStmt>(*node), is_select);
+	}
 }
 
 } // namespace duckdb

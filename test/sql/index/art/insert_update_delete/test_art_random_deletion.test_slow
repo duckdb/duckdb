@@ -1,0 +1,51 @@
+# name: test/sql/index/art/insert_update_delete/test_art_random_deletion.test_slow
+# description: Test ART index with a random deletion
+# group: [insert_update_delete]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+CREATE INDEX i_index ON integers using art(i);
+
+loop i 0 2048
+
+statement ok
+INSERT INTO integers VALUES (${i} * ${i});
+
+query I
+select COUNT(*) - ${i} - 1 FROM integers WHERE i >= 0;
+----
+0
+
+endloop
+
+# test that the insertions worked
+
+query I
+select COUNT(*) FROM integers WHERE i >= 0;
+----
+2048
+
+# delete data in a random order
+
+loop i 0 2048
+
+# delete one integer, randomly selected
+
+statement ok
+DELETE FROM integers WHERE i=(SELECT i FROM integers ORDER BY RANDOM() LIMIT 1);
+
+# verify the table count
+
+query I
+SELECT COUNT(*) + ${i} + 1 FROM integers
+----
+2048
+
+query I
+SELECT COUNT(*) + ${i} + 1 FROM integers WHERE i>= 0
+----
+2048
+
+endloop

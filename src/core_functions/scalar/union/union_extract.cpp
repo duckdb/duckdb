@@ -20,7 +20,7 @@ public:
 		return make_uniq<UnionExtractBindData>(key, index, type);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const UnionExtractBindData &)other_p;
+		auto &other = other_p.Cast<UnionExtractBindData>();
 		return key == other.key && index == other.index && type == other.type;
 	}
 };

@@ -36,14 +36,16 @@ enum class PythonObjectType {
 	MemoryView,
 	Bytes,
 	List,
+	Tuple,
 	Dict,
 	NdArray,
 	NdDatetime,
+	Value
 };
 
 PythonObjectType GetPythonObjectType(py::handle &ele);
 
-bool TryTransformPythonNumeric(Value &res, py::handle ele);
+bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN);
 bool DictionaryHasMapFormat(const PyDictionary &dict);
 Value TransformPythonValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN,
                            bool nan_as_null = true);

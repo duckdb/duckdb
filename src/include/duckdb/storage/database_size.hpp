@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -19,6 +20,12 @@ struct DatabaseSize {
 	idx_t used_blocks = 0;
 	idx_t bytes = 0;
 	idx_t wal_size = 0;
+};
+
+struct MetadataBlockInfo {
+	block_id_t block_id;
+	idx_t total_blocks;
+	vector<idx_t> free_list;
 };
 
 } // namespace duckdb

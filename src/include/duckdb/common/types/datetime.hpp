@@ -81,12 +81,56 @@ struct dtime_t { // NOLINT
 	};
 
 	// special values
-	static inline dtime_t allballs() {
+	static inline dtime_t allballs() { // NOLINT
 		return dtime_t(0);
 	} // NOLINT
 };
 
-struct dtime_tz_t : public dtime_t {};
+struct dtime_tz_t { // NOLINT
+	static constexpr const int TIME_BITS = 40;
+	static constexpr const int OFFSET_BITS = 24;
+	static constexpr const uint64_t OFFSET_MASK = ~uint64_t(0) >> TIME_BITS;
+	static constexpr const int32_t MAX_OFFSET = 16 * 60 * 60 - 1; // ±15:59:59
+	static constexpr const int32_t MIN_OFFSET = -MAX_OFFSET;
+
+	uint64_t bits;
+
+	dtime_tz_t() = default;
+
+	inline dtime_tz_t(dtime_t t, int32_t offset)
+	    : bits((uint64_t(t.micros) << OFFSET_BITS) | uint64_t(MAX_OFFSET - offset)) {
+	}
+	explicit inline dtime_tz_t(uint64_t bits_p) : bits(bits_p) {
+	}
+
+	inline dtime_t time() const { // NOLINT
+		return dtime_t(bits >> OFFSET_BITS);
+	}
+
+	inline int32_t offset() const { // NOLINT
+		return MAX_OFFSET - int32_t(bits & OFFSET_MASK);
+	}
+
+	// comparison operators
+	inline bool operator==(const dtime_tz_t &rhs) const {
+		return bits == rhs.bits;
+	};
+	inline bool operator!=(const dtime_tz_t &rhs) const {
+		return bits != rhs.bits;
+	};
+	inline bool operator<=(const dtime_tz_t &rhs) const {
+		return bits <= rhs.bits;
+	};
+	inline bool operator<(const dtime_tz_t &rhs) const {
+		return bits < rhs.bits;
+	};
+	inline bool operator>(const dtime_tz_t &rhs) const {
+		return bits > rhs.bits;
+	};
+	inline bool operator>=(const dtime_tz_t &rhs) const {
+		return bits >= rhs.bits;
+	};
+};
 
 } // namespace duckdb
 
@@ -100,11 +144,12 @@ struct hash<duckdb::dtime_t> {
 		return hash<int64_t>()((int64_t)k);
 	}
 };
+
 template <>
 struct hash<duckdb::dtime_tz_t> {
 	std::size_t operator()(const duckdb::dtime_tz_t &k) const {
 		using std::hash;
-		return hash<int64_t>()((int64_t)k);
+		return hash<int64_t>()(k.bits);
 	}
 };
 } // namespace std

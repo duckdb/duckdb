@@ -6,11 +6,14 @@ require skip_reload
 
 require fts
 
+require noalternativeverify
+
 statement ok
 PRAGMA enable_verification
 
 statement error
 PRAGMA drop_fts_index('test')
+----
 
 statement ok
 CREATE SCHEMA fts_main_test
@@ -27,6 +30,7 @@ INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2'
 # non-existant parameters should yield an error
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body', nonexistant_param='dummy')
+----
 
 # test different stemmer
 statement ok
@@ -35,9 +39,10 @@ PRAGMA create_fts_index('documents', 'id', 'body', stemmer='turkish')
 # cannot overwrite without supplying the 'overwrite' param
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body')
+----
 
 statement ok
-PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=true)
 
 # drop and re-create
 statement ok
@@ -45,6 +50,7 @@ PRAGMA drop_fts_index('documents')
 
 statement error
 PRAGMA create_fts_index('documents', 'id', 'body', stopwords='nonexistant_stopwords_table')
+----
 
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body', stopwords='english')

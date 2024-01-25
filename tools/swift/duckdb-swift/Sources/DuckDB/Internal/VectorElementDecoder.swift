@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -57,12 +57,13 @@ fileprivate struct VectorElementDataDecoder: Decoder {
   }
   
   let codingPath: [CodingKey]
-  let userInfo = [CodingUserInfoKey : Any]()
   let element: Vector.Element
+  let userInfo: [CodingUserInfoKey : Any]
   
   init(element: Vector.Element, codingPath: [CodingKey] = []) {
     self.codingPath = codingPath
     self.element = element
+    self.userInfo = [CodingUserInfoKeys.logicalTypeCodingUserInfoKey: element.logicalType]
   }
   
   func container<Key: CodingKey>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> {
@@ -126,6 +127,10 @@ extension VectorElementDataDecoder {
       element.unwrapNull()
     }
     
+    func decode(_ type: Int.Type) throws -> Int {
+      try attemptDecode { try element.unwrap(type) }
+    }
+    
     func decode(_ type: Int8.Type) throws -> Int8 {
       try attemptDecode { try element.unwrap(type) }
     }
@@ -139,6 +144,10 @@ extension VectorElementDataDecoder {
     }
     
     func decode(_ type: Int64.Type) throws -> Int64 {
+      try attemptDecode { try element.unwrap(type) }
+    }
+    
+    func decode(_ type: UInt.Type) throws -> UInt {
       try attemptDecode { try element.unwrap(type) }
     }
     
@@ -175,6 +184,10 @@ extension VectorElementDataDecoder {
     func decode(_ type: IntHuge.Type) throws -> IntHuge {
       try attemptDecode { try element.unwrap(type) }
     }
+
+	func decode(_ type: UIntHuge.Type) throws -> UIntHuge {
+      try attemptDecode { try element.unwrap(type) }
+    }
     
     func decode(_ type: Decimal.Type) throws -> Decimal {
       try attemptDecode { try element.unwrap(type) }
@@ -196,6 +209,10 @@ extension VectorElementDataDecoder {
       try attemptDecode { try element.unwrap(type) }
     }
     
+    func decode(_ type: TimeTz.Type) throws -> TimeTz {
+      try attemptDecode { try element.unwrap(type) }
+    }
+
     func decode(_ type: Timestamp.Type) throws -> Timestamp {
       try attemptDecode { try element.unwrap(type) }
     }
@@ -210,6 +227,8 @@ extension VectorElementDataDecoder {
       switch type {
       case is IntHuge.Type:
         return try decode(IntHuge.self) as! T
+      case is UIntHuge.Type:
+        return try decode(UIntHuge.self) as! T
       case is Decimal.Type:
         return try decode(Decimal.self) as! T
       case is Data.Type:
@@ -224,6 +243,8 @@ extension VectorElementDataDecoder {
         return try decode(Timestamp.self) as! T
       case is Interval.Type:
         return try decode(Interval.self) as! T
+      case is TimeTz.Type:
+        return try decode(TimeTz.self) as! T
       default:
         return try T(from: decoder)
       }

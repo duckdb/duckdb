@@ -1,0 +1,54 @@
+# name: test/sql/types/nested/array/array_large.test
+# group: [array]
+
+# Test large arrays (> VECTOR_SIZE elements)
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE t1 (a INT[4096]);
+
+statement ok
+INSERT INTO t1 VALUES (range(0, 4096));
+
+# Round-trip test
+query I
+SELECT list_sum(a::INT[]) == list_sum(range(0, 4096)) FROM t1;
+----
+true
+
+# Large child lists
+statement ok
+CREATE TABLE t2 AS SELECT array_value(a) AS i FROM range(0, 4096) r(a);
+
+query I
+SELECT sum(i[1]) FROM t2;
+----
+8386560
+
+statement ok
+CREATE TABLE t3 AS SELECT array_value(a, a+1) AS i FROM range(0, 4096) r(a);
+
+query I
+SELECT sum(i[1]) == 8386560 AND sum(i[2]) == 8390656 FROM t3;
+----
+true
+
+# Test with some nulls interpersed
+statement ok
+CREATE OR REPLACE TABLE t4 AS SELECT * FROM range(0, 4096) as r(a);
+
+statement ok
+UPDATE t4 SET a = NULL WHERE a % 2 = 0;
+
+statement ok
+CREATE TABLE t5 AS SELECT array_value(a) AS i FROM t4;
+
+query I
+SELECT sum(i[1]) FROM t5;
+----
+4194304

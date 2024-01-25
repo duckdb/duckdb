@@ -1,0 +1,21 @@
+# name: test/optimizer/joins/many_joins_and_one_non_reorderable_join.test
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [joins]
+
+statement ok
+Create table test0 as select * from range(1000);
+
+statement ok
+Create table test1 as select * from range(100);
+
+statement ok
+Create table test2 as select * from range(100);
+
+statement ok
+Create table test3 as select * from range(100);
+
+statement ok
+Create table test4 as select * from range(400);
+
+statement ok
+Select * from test0 LEFT JOIN (Select test1.range as the_range from test1, test2, test3) other ON other.the_range = test0.range;

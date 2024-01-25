@@ -4,6 +4,8 @@
 
 require skip_reload
 
+require no_extension_autoloading
+
 statement error
 SELECT get_substrait("select 1");
 ----

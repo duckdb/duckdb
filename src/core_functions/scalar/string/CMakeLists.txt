@@ -5,6 +5,7 @@ add_library_unity(
   bar.cpp
   chr.cpp
   damerau_levenshtein.cpp
+  format_bytes.cpp
   hamming.cpp
   hex.cpp
   instr.cpp
@@ -14,12 +15,16 @@ add_library_unity(
   levenshtein.cpp
   md5.cpp
   pad.cpp
+  parse_path.cpp
   printf.cpp
+  regexp_escape.cpp
   repeat.cpp
   replace.cpp
   reverse.cpp
+  sha256.cpp
   starts_with.cpp
   string_split.cpp
+  to_base.cpp
   translate.cpp
   trim.cpp
   unicode.cpp)

@@ -1,0 +1,110 @@
+# name: test/sql/storage/compression/constant/constant_columns.test_slow
+# description: Test storage of constant columns (columns that all have the same value)
+# group: [constant]
+
+# load the DB from disk
+load __TEST_DIR__/constant_columns.db
+
+# simple constant
+statement ok
+CREATE TABLE integers AS SELECT 1 i FROM range(1000000)
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers
+----
+1	1	1	1000000	1000000
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers WHERE i=1
+----
+1	1	1	1000000	1000000
+
+restart
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM integers
+----
+1	1	1	1000000	1000000
+
+# constant null
+statement ok
+CREATE TABLE nulls AS SELECT NULL i FROM range(1000000)
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM nulls
+----
+NULL	NULL	NULL	1000000	0
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM nulls WHERE i IS NULL
+----
+NULL	NULL	NULL	1000000	0
+
+restart
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM nulls
+----
+NULL	NULL	NULL	1000000	0
+
+# mix of constant and non-constant
+statement ok
+CREATE TABLE mixed_table AS SELECT CASE WHEN i < 1000000 then 1 else i end i FROM range(2000000) tbl(i)
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_table
+----
+1	1999999	2000000	2000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_table WHERE i=1
+----
+1	1	1000000	1000000
+
+restart
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_table
+----
+1	1999999	2000000	2000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_table WHERE i=1
+----
+1	1	1000000	1000000
+
+# mix of constant and non-constant NULL
+statement ok
+CREATE TABLE mixed_nulls AS SELECT CASE WHEN i < 1000000 then 1 else NULL end i FROM range(2000000) tbl(i)
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_nulls
+----
+1	1	2000000	1000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_nulls WHERE i=1
+----
+1	1	1000000	1000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_nulls WHERE i IS NULL
+----
+NULL	NULL	1000000	0
+
+restart
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_nulls
+----
+1	1	2000000	1000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_nulls WHERE i=1
+----
+1	1	1000000	1000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM mixed_nulls WHERE i IS NULL
+----
+NULL	NULL	1000000	0

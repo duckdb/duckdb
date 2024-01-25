@@ -7,10 +7,30 @@
 
 namespace duckdb {
 
+static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
+	if (!verifier.materialized_result) {
+		return;
+	}
+	auto &result = *verifier.materialized_result;
+	if (!result.HasError()) {
+		return;
+	}
+	auto &error = result.GetErrorObject();
+	if (error.Type() == ExceptionType::INTERNAL) {
+		error.Throw();
+	}
+}
+
 PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
                                           unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
+
+#ifdef DUCKDB_RUN_SLOW_VERIFIERS
+	bool run_slow_verifiers = true;
+#else
+	bool run_slow_verifiers = false;
+#endif
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:
 	// Copy() of statements and expressions
@@ -23,12 +43,28 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	const auto &stmt = *statement;
 	vector<unique_ptr<StatementVerifier>> statement_verifiers;
 	unique_ptr<StatementVerifier> prepared_statement_verifier;
+
+	// Base Statement verifiers: these are the verifiers we enable for regular builds
 	if (config.query_verification_enabled) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
 	}
+
+	// This verifier is enabled explicitly OR by enabling run_slow_verifiers
+	if (config.verify_fetch_row || (run_slow_verifiers && config.query_verification_enabled)) {
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt));
+	}
+
+	// For the DEBUG_ASYNC build we enable this extra verifier
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	if (config.query_verification_enabled) {
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt));
+	}
+#endif
+
+	// Verify external always needs to be explicitly enabled and is never part of default verifier set
 	if (config.verify_external) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
 	}
@@ -76,6 +112,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		if (!failed) {
 			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
 			statement_verifiers.push_back(std::move(prepared_statement_verifier));
+		} else {
+			// If it does fail, let's make sure it's not an internal exception
+			ThrowIfExceptionIsInternal(*prepared_statement_verifier);
 		}
 	} else {
 		if (ValidChecker::IsInvalidated(*db)) {

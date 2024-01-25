@@ -1,7 +1,12 @@
 #include "duckdb/storage/table/table_index_list.hpp"
+
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/unknown_index.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
@@ -10,15 +15,71 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	indexes.push_back(std::move(index));
 }
 
-void TableIndexList::RemoveIndex(Index &index) {
+void TableIndexList::RemoveIndex(const string &name) {
 	lock_guard<mutex> lock(indexes_lock);
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry.get() == &index) {
+		if (index_entry->name == name) {
 			indexes.erase(indexes.begin() + index_idx);
 			break;
 		}
+	}
+}
+
+void TableIndexList::CommitDrop(const string &name) {
+	lock_guard<mutex> lock(indexes_lock);
+
+	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+		auto &index_entry = indexes[index_idx];
+		if (index_entry->name == name) {
+			index_entry->CommitDrop();
+			break;
+		}
+	}
+}
+
+bool TableIndexList::NameIsUnique(const string &name) {
+	lock_guard<mutex> lock(indexes_lock);
+
+	// only cover PK, FK, and UNIQUE, which are not (yet) catalog entries
+	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+		auto &index_entry = indexes[index_idx];
+		if (index_entry->IsPrimary() || index_entry->IsForeign() || index_entry->IsUnique()) {
+			if (index_entry->name == name) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &table_info) {
+	lock_guard<mutex> lock(indexes_lock);
+	for (auto &index : indexes) {
+		if (!index->IsUnknown()) {
+			continue;
+		}
+
+		auto &unknown_index = index->Cast<UnknownIndex>();
+		auto &index_type_name = unknown_index.GetIndexType();
+
+		// Do we know the type of this index now?
+		auto index_type = context.db->config.GetIndexTypes().FindByName(index_type_name);
+		if (!index_type) {
+			continue;
+		}
+
+		// Swap this with a new index
+		auto &create_info = unknown_index.GetCreateInfo();
+		auto &storage_info = unknown_index.GetStorageInfo();
+
+		auto index_instance = index_type->create_instance(create_info.index_name, create_info.constraint_type,
+		                                                  create_info.column_ids, unknown_index.unbound_expressions,
+		                                                  *table_info.table_io_manager, table_info.db, storage_info);
+
+		index = std::move(index_instance);
 	}
 }
 
@@ -54,7 +115,7 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, Data
 	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
 	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
-	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
+	// check whether the chunk can be inserted or deleted into the referenced table storage
 	auto index = FindForeignKeyIndex(fk_keys, fk_type);
 	if (!index) {
 		throw InternalException("Internal Foreign Key error: could not find index to verify...");
@@ -79,12 +140,15 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<BlockPointer> TableIndexList::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
-	vector<BlockPointer> blocks_info;
+vector<IndexStorageInfo> TableIndexList::GetStorageInfos() {
+
+	vector<IndexStorageInfo> index_storage_infos;
 	for (auto &index : indexes) {
-		blocks_info.emplace_back(index->Serialize(writer));
+		auto index_storage_info = index->GetStorageInfo(false);
+		D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
+		index_storage_infos.push_back(index_storage_info);
 	}
-	return blocks_info;
+	return index_storage_infos;
 }
 
 } // namespace duckdb

@@ -283,9 +283,9 @@ struct TableMacroExtractor {
 	}
 
 	static Value GetMacroDefinition(TableMacroCatalogEntry &entry, idx_t offset) {
-		if (entry.function->type == MacroType::SCALAR_MACRO) {
-			auto &func = entry.function->Cast<ScalarMacroFunction>();
-			return func.expression->ToString();
+		if (entry.function->type == MacroType::TABLE_MACRO) {
+			auto &func = entry.function->Cast<TableMacroFunction>();
+			return func.query_node->ToString();
 		}
 		return Value();
 	}
@@ -456,7 +456,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 }
 
 void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBFunctionsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBFunctionsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

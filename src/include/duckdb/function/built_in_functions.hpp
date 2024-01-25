@@ -52,11 +52,13 @@ private:
 	void RegisterReadFunctions();
 	void RegisterTableFunctions();
 	void RegisterArrowFunctions();
+	void RegisterSnifferFunction();
 
 	// aggregates
 	void RegisterDistributiveAggregates();
 
 	// scalar functions
+	void RegisterCompressedMaterializationFunctions();
 	void RegisterGenericFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();

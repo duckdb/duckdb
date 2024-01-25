@@ -27,7 +27,7 @@ public:
 	}
 
 	//! The start row id of this chunk
-	const idx_t start;
+	idx_t start;
 	//! The amount of entries in this storage chunk
 	atomic<idx_t> count;
 	//! The next segment after this one

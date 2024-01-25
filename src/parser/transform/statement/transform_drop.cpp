@@ -1,17 +1,16 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGNode *node) {
-	auto stmt = (duckdb_libpgquery::PGDropStmt *)(node);
+unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStmt &stmt) {
 	auto result = make_uniq<DropStatement>();
 	auto &info = *result->info.get();
-	D_ASSERT(stmt);
-	if (stmt->objects->length != 1) {
+	if (stmt.objects->length != 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	switch (stmt->removeType) {
+	switch (stmt.removeType) {
 	case duckdb_libpgquery::PG_OBJECT_TABLE:
 		info.type = CatalogType::TABLE_ENTRY;
 		break;
@@ -36,52 +35,65 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGNode *n
 	case duckdb_libpgquery::PG_OBJECT_TYPE:
 		info.type = CatalogType::TYPE_ENTRY;
 		break;
-	case duckdb_libpgquery::PG_OBJECT_DATABASE:
-		info.type = CatalogType::DATABASE_ENTRY;
-		break;
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}
 
-	switch (stmt->removeType) {
-	case duckdb_libpgquery::PG_OBJECT_TYPE: {
-		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects;
-		auto target = (duckdb_libpgquery::PGTypeName *)(view_list->head->data.ptr_value);
-		info.name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(target->names->tail->data.ptr_value)->val.str);
-		break;
-	}
+	switch (stmt.removeType) {
 	case duckdb_libpgquery::PG_OBJECT_SCHEMA: {
-		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects->head->data.ptr_value;
+		auto view_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects->head->data.ptr_value);
 		if (view_list->length == 2) {
-			info.catalog = ((duckdb_libpgquery::PGValue *)view_list->head->data.ptr_value)->val.str;
-			info.name = ((duckdb_libpgquery::PGValue *)view_list->head->next->data.ptr_value)->val.str;
+			info.catalog = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->data.ptr_value)->val.str;
+			info.name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->next->data.ptr_value)->val.str;
 		} else if (view_list->length == 1) {
-			info.name = ((duckdb_libpgquery::PGValue *)view_list->head->data.ptr_value)->val.str;
+			info.name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->data.ptr_value)->val.str;
 		} else {
 			throw ParserException("Expected \"catalog.schema\" or \"schema\"");
 		}
 		break;
 	}
 	default: {
-		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects->head->data.ptr_value;
+		auto view_list = PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects->head->data.ptr_value);
 		if (view_list->length == 3) {
-			info.catalog = ((duckdb_libpgquery::PGValue *)view_list->head->data.ptr_value)->val.str;
-			info.schema = ((duckdb_libpgquery::PGValue *)view_list->head->next->data.ptr_value)->val.str;
-			info.name = ((duckdb_libpgquery::PGValue *)view_list->head->next->next->data.ptr_value)->val.str;
+			info.catalog = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->data.ptr_value)->val.str;
+			info.schema = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->next->data.ptr_value)->val.str;
+			info.name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->next->next->data.ptr_value)->val.str;
 		} else if (view_list->length == 2) {
-			info.schema = ((duckdb_libpgquery::PGValue *)view_list->head->data.ptr_value)->val.str;
-			info.name = ((duckdb_libpgquery::PGValue *)view_list->head->next->data.ptr_value)->val.str;
+			info.schema = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->data.ptr_value)->val.str;
+			info.name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->next->data.ptr_value)->val.str;
 		} else if (view_list->length == 1) {
-			info.name = ((duckdb_libpgquery::PGValue *)view_list->head->data.ptr_value)->val.str;
+			info.name = PGPointerCast<duckdb_libpgquery::PGValue>(view_list->head->data.ptr_value)->val.str;
 		} else {
 			throw ParserException("Expected \"catalog.schema.name\", \"schema.name\"or \"name\"");
 		}
 		break;
 	}
 	}
-	info.cascade = stmt->behavior == duckdb_libpgquery::PGDropBehavior::PG_DROP_CASCADE;
-	info.if_not_found = TransformOnEntryNotFound(stmt->missing_ok);
+	info.cascade = stmt.behavior == duckdb_libpgquery::PGDropBehavior::PG_DROP_CASCADE;
+	info.if_not_found = TransformOnEntryNotFound(stmt.missing_ok);
 	return std::move(result);
+}
+
+unique_ptr<DropStatement> Transformer::TransformDropSecret(duckdb_libpgquery::PGDropSecretStmt &stmt) {
+	auto result = make_uniq<DropStatement>();
+
+	auto persist_type = EnumUtil::FromString<SecretPersistType>(StringUtil::Upper(stmt.persist_type));
+
+	result->info->type = CatalogType::SECRET_ENTRY;
+	result->info->name = stmt.secret_name;
+	result->info->if_not_found = stmt.missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+
+	// When TEMPORARY type is passed explicitly, we are deleting from the temp storage
+	if (persist_type == SecretPersistType::TEMPORARY) {
+		if (!string(stmt.secret_storage).empty()) {
+			throw ParserException("Can not combine TEMPORARY with specifying a storage for drop secret");
+		}
+		result->info->schema = SecretManager::TEMPORARY_STORAGE_NAME;
+	} else {
+		result->info->schema = stmt.secret_storage;
+	}
+
+	return result;
 }
 
 } // namespace duckdb

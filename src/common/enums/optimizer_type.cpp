@@ -25,6 +25,8 @@ static DefaultOptimizerType internal_optimizer_types[] = {
     {"common_aggregate", OptimizerType::COMMON_AGGREGATE},
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"top_n", OptimizerType::TOP_N},
+    {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
+    {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},
     {"reorder_filter", OptimizerType::REORDER_FILTER},
     {"extension", OptimizerType::EXTENSION},
     {nullptr, OptimizerType::INVALID}};
@@ -36,6 +38,14 @@ string OptimizerTypeToString(OptimizerType type) {
 		}
 	}
 	throw InternalException("Invalid optimizer type");
+}
+
+vector<string> ListAllOptimizers() {
+	vector<string> result;
+	for (idx_t i = 0; internal_optimizer_types[i].name; i++) {
+		result.push_back(internal_optimizer_types[i].name);
+	}
+	return result;
 }
 
 OptimizerType OptimizerTypeFromString(const string &str) {

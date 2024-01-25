@@ -3,6 +3,9 @@
 # group: [list]
 
 statement ok
+PRAGMA enable_verification;
+
+statement ok
 PRAGMA default_order='ASC';
 
 statement ok
@@ -39,32 +42,39 @@ foreach func_name list_sort list_reverse_sort
 
 statement error
 SELECT ${func_name}()
+----
 
 statement error
 SELECT ${func_name}(*)
+----
 
 statement error
 SELECT ${func_name}([1, 2], 2)
+----
 
 statement error
 SELECT ${func_name}([1, 2], 'DESC', 2)
+----
 
 statement error 
 SELECT ${func_name}([1, 2], 2, 2)
+----
 
 endloop
 
 statement error
 SELECT list_sort([1, 2], 'NULLS FIRST')
+----
 
 # test incorrect parameter type
 
 foreach func_name list_sort list_reverse_sort
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 
 statement error
 SELECT ${func_name}(NULL::${type})
+----
 
 endloop
 
@@ -126,18 +136,23 @@ NULL
 
 statement error
 SELECT list_sort(l, l, l)
+----
 
 statement error
 SELECT list_sort(l, 'ASC', l)
+----
 
 statement error
 SELECT list_reverse_sort(l, l)
+----
 
 statement error
 SELECT list_reverse_sort(l, 'DESC')
+----
 
 statement error
 SELECT list_reverse_sort(l, 'DESC', 'NULLS FIRST')
+----
 
 # test aliases
 
@@ -228,7 +243,7 @@ SELECT list_sort([NULL::VARCHAR])
 [NULL]
 
 # INTEGER types
-foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint
 
 query I
 SELECT list_sort([1::${type}, NULL, 2::${type}])
@@ -393,6 +408,58 @@ query IIII
 select k, v, map(k,v), map(k,v)[(array_sort(k,'DESC'))[1]] from (values ([1,2,3,4],[2,3,4,5])) as t(k,v);
 ----
 [1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	[5]
+
+# bug fixes test for #7614
+
+query II
+select id, list(distinct foo order by foo) from (
+  values (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by all
+order by id;
+----
+1	[10, 15]
+2	[10]
+
+query II
+select id, list(distinct foo order by foo) from (
+  values (1, '10'), (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by id
+order by id;
+----
+1	[10, 15]
+2	[10]
+
+query II
+select id, list(foo order by foo) from (
+  values (1, '10'), (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by id
+order by id;
+----
+1	[10, 10, 15]
+2	[10]
+
+query II
+select id, list(distinct foo order by foo) from (
+  values (1, '10'), (1, '10'), (1, '15'), (2, '10')
+) v (id, foo)
+group by id
+order by id;
+----
+1	[10, 15]
+2	[10]
+
+query II
+select id, list(distinct foo order by bar) from (
+  values (1, '10', 2), (1, '15', 1), (2, '10', 1)
+) v (id, foo, bar)
+group by all
+order by id;
+----
+1	[15, 10]
+2	[10]
 
 # bug fixes test for #5694
 

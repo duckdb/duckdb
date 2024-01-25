@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -20,8 +21,6 @@
 namespace duckdb {
 
 class CastFunctionSet;
-class Deserializer;
-class Serializer;
 struct GetCastFunctionInput;
 struct ExtraValueInfo;
 
@@ -32,6 +31,7 @@ class Value {
 	friend struct StructValue;
 	friend struct ListValue;
 	friend struct UnionValue;
+	friend struct ArrayValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -85,6 +85,7 @@ public:
 	//! Create a Numeric value of the specified type with the specified value
 	DUCKDB_API static Value Numeric(const LogicalType &type, int64_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, hugeint_t value);
+	DUCKDB_API static Value Numeric(const LogicalType &type, uhugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	DUCKDB_API static Value BOOLEAN(int8_t value);
@@ -106,6 +107,8 @@ public:
 	DUCKDB_API static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	DUCKDB_API static Value HUGEINT(hugeint_t value);
+	//! Create a uhugeint Value from a specified value
+	DUCKDB_API static Value UHUGEINT(uhugeint_t value);
 	//! Create a uuid Value from a specified value
 	DUCKDB_API static Value UUID(const string &value);
 	//! Create a uuid Value from a specified value
@@ -120,7 +123,7 @@ public:
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
-	DUCKDB_API static Value TIMETZ(dtime_t time);
+	DUCKDB_API static Value TIMETZ(dtime_tz_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
@@ -151,6 +154,7 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
+	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
 	//! Create a list value with the given entries, list type is inferred from children
 	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
@@ -158,15 +162,25 @@ public:
 	DUCKDB_API static Value LIST(const LogicalType &child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(const LogicalType &child_type);
+	//! Create an array value with the given entries. Array type is inferred from children
+	//! Cannot be called with an empty list, use either EMPTYARRAY or ARRAY with a type instead
+	DUCKDB_API static Value ARRAY(vector<Value> values);
+	// Create an array value with the given entries
+	DUCKDB_API static Value ARRAY(const LogicalType &type, vector<Value> values);
+	//! Create an empty array of the given type and size
+	DUCKDB_API static Value EMPTYARRAY(const LogicalType &type, uint32_t size);
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
+	//! Create a map value with the given entries
+	DUCKDB_API static Value MAP(const LogicalType &key_type, const LogicalType &value_type, vector<Value> keys,
+	                            vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	DUCKDB_API static Value BLOB(const_data_ptr_t data, idx_t len);
-	DUCKDB_API static Value BLOB_RAW(const string &data) { // NOLINT
-		return Value::BLOB((const_data_ptr_t)data.c_str(), data.size());
+	static Value BLOB_RAW(const string &data) { // NOLINT
+		return Value::BLOB(const_data_ptr_cast(data.c_str()), data.size());
 	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);
@@ -177,7 +191,10 @@ public:
 	template <class T>
 	T GetValue() const;
 	template <class T>
-	static Value CreateValue(T value);
+	static Value CreateValue(T value) {
+		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		return Value(nullptr);
+	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
@@ -222,10 +239,8 @@ public:
 
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static Value FormatDeserialize(FormatDeserializer &deserializer);
 	//! Deserializes a Value from a blob
-	DUCKDB_API static Value Deserialize(Deserializer &source);
+	DUCKDB_API static Value Deserialize(Deserializer &deserializer);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators
@@ -293,12 +308,14 @@ private:
 		uint32_t uinteger;
 		uint64_t ubigint;
 		hugeint_t hugeint;
+		uhugeint_t uhugeint;
 		float float_;   // NOLINT
 		double double_; // NOLINT
 		uintptr_t pointer;
 		uint64_t hash;
 		date_t date;
 		dtime_t time;
+		dtime_tz_t timetz;
 		timestamp_t timestamp;
 		interval_t interval;
 	} value_; // NOLINT
@@ -355,6 +372,10 @@ struct UBigIntValue {
 	DUCKDB_API static uint64_t Get(const Value &value);
 };
 
+struct UhugeIntValue {
+	DUCKDB_API static uhugeint_t Get(const Value &value);
+};
+
 struct FloatValue {
 	DUCKDB_API static float Get(const Value &value);
 };
@@ -391,9 +412,14 @@ struct ListValue {
 	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
 };
 
+struct ArrayValue {
+	DUCKDB_API static const vector<Value> &GetChildren(const Value &value);
+};
+
 struct UnionValue {
 	DUCKDB_API static const Value &GetValue(const Value &value);
 	DUCKDB_API static uint8_t GetTag(const Value &value);
+	DUCKDB_API static const LogicalType &GetType(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally
@@ -422,6 +448,8 @@ template <>
 Value DUCKDB_API Value::CreateValue(int64_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(hugeint_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uhugeint_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
@@ -474,6 +502,8 @@ DUCKDB_API uint64_t Value::GetValue() const;
 template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
+DUCKDB_API uhugeint_t Value::GetValue() const;
+template <>
 DUCKDB_API string Value::GetValue() const;
 template <>
 DUCKDB_API float Value::GetValue() const;
@@ -502,6 +532,8 @@ template <>
 DUCKDB_API int64_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API hugeint_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API uhugeint_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API uint8_t Value::GetValueUnsafe() const;
 template <>

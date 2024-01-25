@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/scalar/strftime.hpp
+// duckdb/function/scalar/strftime_format.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -52,7 +52,14 @@ enum class StrTimeSpecifier : uint8_t {
 	LOCALE_APPROPRIATE_DATE_AND_TIME =
 	    29, // %c - Locale’s appropriate date and time representation. (Mon Sep 30 07:06:05 2013)
 	LOCALE_APPROPRIATE_DATE = 30, // %x - Locale’s appropriate date representation. (09/30/13)
-	LOCALE_APPROPRIATE_TIME = 31  // %X - Locale’s appropriate time representation. (07:06:05)
+	LOCALE_APPROPRIATE_TIME = 31, // %X - Locale’s appropriate time representation. (07:06:05)
+	NANOSECOND_PADDED = 32, // %n - Nanosecond as a decimal number, zero-padded on the left. (000000000 - 999999999)
+	// Python 3.6 ISO directives https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+	YEAR_ISO =
+	    33, // %G - ISO 8601 year with century representing the year that contains the greater part of the ISO week
+	WEEKDAY_ISO = 34,     // %u - ISO 8601 weekday as a decimal number where 1 is Monday (1..7)
+	WEEK_NUMBER_ISO = 35, // %V - ISO 8601 week as a decimal number with Monday as the first day of the week.
+	                      // Week 01 is the week containing Jan 4. (01..53)
 };
 
 struct StrTimeFormat {
@@ -65,6 +72,11 @@ public:
 	inline bool HasFormatSpecifier(StrTimeSpecifier s) const {
 		return std::find(specifiers.begin(), specifiers.end(), s) != specifiers.end();
 	}
+	//! If the string format is empty
+	DUCKDB_API bool Empty() const;
+
+	//! The full format specifier, for error messages
+	string format_specifier;
 
 protected:
 	//! The format specifiers
@@ -118,12 +130,17 @@ protected:
 
 struct StrpTimeFormat : public StrTimeFormat {
 public:
+	StrpTimeFormat();
+
 	//! Type-safe parsing argument
 	struct ParseResult {
 		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
 		string tz;
 		string error_message;
 		idx_t error_position = DConstants::INVALID_INDEX;
+
+		bool is_special;
+		date_t special;
 
 		date_t ToDate();
 		timestamp_t ToTimestamp();
@@ -135,26 +152,31 @@ public:
 	};
 
 public:
-	//! The full format specifier, for error messages
-	string format_specifier;
-
-public:
+	bool operator!=(const StrpTimeFormat &other) const {
+		return format_specifier != other.format_specifier;
+	}
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
-	DUCKDB_API bool Parse(string_t str, ParseResult &result);
+	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
 
-	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message);
-	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
+	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
 
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
+
+	void Serialize(Serializer &serializer) const;
+	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
-	                           idx_t collection_count);
+	                           idx_t collection_count) const;
+
+private:
+	explicit StrpTimeFormat(const string &format_string);
 };
 
 } // namespace duckdb

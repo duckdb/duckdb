@@ -1,0 +1,91 @@
+# name: test/sql/copy/parquet/writer/list_of_bools.test_slow
+# description: Parquet write list of bools
+# group: [writer]
+
+require parquet
+
+# big list of bools
+statement ok
+CREATE TABLE list_of_bools AS
+     SELECT LIST(i%2==0) l FROM range(1373) tbl(i)
+     UNION ALL
+     SELECT [true, false, NULL, false, true]
+     UNION ALL
+     SELECT []
+     UNION ALL
+     SELECT NULL
+     UNION ALL
+     SELECT LIST(i%3==0) l FROM range(9937) tbl(i)
+     UNION ALL
+     SELECT [true, false, NULL, false, true]
+
+query III
+SELECT COUNT(*), COUNT(b), SUM(CASE WHEN b THEN 1 ELSE 0 END)
+FROM (SELECT unnest(l) b FROM list_of_bools)
+----
+11320	11318	4004
+
+statement ok
+COPY list_of_bools TO '__TEST_DIR__/list_of_bools.parquet' (FORMAT PARQUET)
+
+query III
+SELECT COUNT(*), COUNT(b), SUM(CASE WHEN b THEN 1 ELSE 0 END)
+FROM (SELECT unnest(l) b FROM '__TEST_DIR__/list_of_bools.parquet')
+----
+11320	11318	4004
+
+# many lists of integers
+statement ok
+CREATE TABLE many_ints AS
+	SELECT [1, 0, 1] AS l FROM range(1373)
+	UNION ALL
+	SELECT []
+	UNION ALL
+	SELECT NULL
+	UNION ALL
+	SELECT [1, 0, NULL, 0, 1]
+	UNION ALL
+    SELECT [1, 0, NULL, 1] l FROM range(9937) tbl(i)
+
+query III
+SELECT COUNT(*), COUNT(b), SUM(b)
+FROM (SELECT unnest(l) b FROM many_ints)
+----
+43872	33934	22622
+
+statement ok
+COPY many_ints TO '__TEST_DIR__/many_ints.parquet' (FORMAT PARQUET)
+
+query III
+SELECT COUNT(*), COUNT(b), SUM(b)
+FROM (SELECT unnest(l) b FROM '__TEST_DIR__/many_ints.parquet')
+----
+43872	33934	22622
+
+# many lists of bools
+statement ok
+CREATE TABLE many_bools AS
+	SELECT [true, false, true] AS l FROM range(1373)
+	UNION ALL
+	SELECT []
+	UNION ALL
+	SELECT NULL
+	UNION ALL
+	SELECT [true, false, NULL, false, true]
+	UNION ALL
+    SELECT [true, false, NULL, true] l FROM range(9937) tbl(i)
+
+query III
+SELECT COUNT(*), COUNT(b), SUM(CASE WHEN b THEN 1 ELSE 0 END)
+FROM (SELECT unnest(l) b FROM many_bools)
+----
+43872	33934	22622
+
+statement ok
+COPY many_bools TO '__TEST_DIR__/many_bools.parquet' (FORMAT PARQUET)
+
+query III
+SELECT COUNT(*), COUNT(b), SUM(CASE WHEN b THEN 1 ELSE 0 END)
+FROM (SELECT unnest(l) b FROM '__TEST_DIR__/many_bools.parquet')
+----
+43872	33934	22622

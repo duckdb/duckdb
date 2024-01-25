@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -25,19 +25,19 @@ public:
 	ColumnDataAppendState append_state;
 };
 
-SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                                   LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
-	lstate.collection->Append(lstate.append_state, input);
+SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
+	lstate.collection->Append(lstate.append_state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalMaterializedCollector::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                            LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<MaterializedCollectorGlobalState>();
-	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
+SinkCombineResultType PhysicalMaterializedCollector::Combine(ExecutionContext &context,
+                                                             OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<MaterializedCollectorGlobalState>();
+	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
 	if (lstate.collection->Count() == 0) {
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	lock_guard<mutex> l(gstate.glock);
@@ -46,6 +46,8 @@ void PhysicalMaterializedCollector::Combine(ExecutionContext &context, GlobalSin
 	} else {
 		gstate.collection->Combine(*lstate.collection);
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(ClientContext &context) const {

@@ -31,14 +31,37 @@ class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
 class RowGroupSegmentTree;
+struct TableScanOptions;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -70,9 +93,11 @@ struct ColumnScanState {
 	vector<unique_ptr<SegmentScanState>> previous_states;
 	//! The last read offset in the child state (used for LIST columns only)
 	idx_t last_offset = 0;
+	//! Contains TableScan level config for scanning
+	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(const LogicalType &type);
+	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
@@ -99,7 +124,7 @@ public:
 	//! The maximum row within the row group
 	idx_t max_row_group_row;
 	//! Child column scans
-	unique_ptr<ColumnScanState[]> column_scans;
+	unsafe_unique_array<ColumnScanState> column_scans;
 	//! Row group segment tree
 	RowGroupSegmentTree *row_groups;
 	//! The total maximum row index
@@ -109,15 +134,21 @@ public:
 
 public:
 	void Initialize(const vector<LogicalType> &types);
-	const vector<column_t> &GetColumnIds();
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
+	TableScanOptions &GetOptions();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
 	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
 
 private:
 	TableScanState &parent;
+};
+
+struct TableScanOptions {
+	//! Test config that forces fetching rows one by one instead of regular scans
+	bool force_fetch_row = false;
 };
 
 class TableScanState {
@@ -128,17 +159,19 @@ public:
 	CollectionScanState table_state;
 	//! Transaction-local scan state
 	CollectionScanState local_state;
+	//! Options for scanning
+	TableScanOptions options;
 
 public:
-	void Initialize(vector<column_t> column_ids, TableFilterSet *table_filters = nullptr);
+	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
 
-	const vector<column_t> &GetColumnIds();
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 
 private:
 	//! The column identifiers of the scan
-	vector<column_t> column_ids;
+	vector<storage_t> column_ids;
 	//! The table filters (if any)
 	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)

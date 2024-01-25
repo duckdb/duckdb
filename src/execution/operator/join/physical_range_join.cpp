@@ -5,6 +5,8 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -40,13 +42,15 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 	keys.Reset();
 	executor.Execute(input, keys);
 
+	// Do not operate on primary key directly to avoid modifying the input chunk
+	Vector primary = keys.data[0];
 	// Count the NULLs so we can exclude them later
-	has_null += MergeNulls(op.conditions);
+	has_null += MergeNulls(primary, op.conditions);
 	count += keys.size();
 
 	//	Only sort the primary key
 	DataChunk join_head;
-	join_head.data.emplace_back(keys.data[0]);
+	join_head.data.emplace_back(primary);
 	join_head.SetCardinality(keys.size());
 
 	// Sink the data into the local sort state
@@ -72,7 +76,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(LocalSortedTable &ltable) {
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
-	found_match = unique_ptr<bool[]>(new bool[Count()]);
+	found_match = make_unsafe_uniq_array<bool>(Count());
 	memset(found_match.get(), 0, sizeof(bool) * Count());
 }
 
@@ -124,7 +128,7 @@ public:
 		auto &ts = TaskScheduler::GetScheduler(context);
 		idx_t num_threads = ts.NumberOfThreads();
 
-		vector<unique_ptr<Task>> iejoin_tasks;
+		vector<shared_ptr<Task>> iejoin_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 			iejoin_tasks.push_back(make_uniq<RangeJoinMergeTask>(shared_from_this(), context, table));
 		}
@@ -159,16 +163,16 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 	}
 }
 
-PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
-                                     unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                     idx_t estimated_cardinality)
+PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type,
+                                     unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+                                     vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
     : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?
 	if (conditions.size() > 1) {
-		auto conditions_p = std::move(conditions);
-		conditions.resize(conditions_p.size());
+		vector<JoinCondition> conditions_p(conditions.size());
+		std::swap(conditions_p, conditions);
 		idx_t range_position = 0;
 		idx_t other_position = conditions_p.size();
 		for (idx_t i = 0; i < conditions_p.size(); ++i) {
@@ -188,9 +192,33 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType t
 
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
+
+	//	Fill out the left projection map.
+	left_projection_map = op.left_projection_map;
+	if (left_projection_map.empty()) {
+		const auto left_count = children[0]->types.size();
+		left_projection_map.reserve(left_count);
+		for (column_t i = 0; i < left_count; ++i) {
+			left_projection_map.emplace_back(i);
+		}
+	}
+	//	Fill out the right projection map.
+	right_projection_map = op.right_projection_map;
+	if (right_projection_map.empty()) {
+		const auto right_count = children[1]->types.size();
+		right_projection_map.reserve(right_count);
+		for (column_t i = 0; i < right_count; ++i) {
+			right_projection_map.emplace_back(i);
+		}
+	}
+
+	//	Construct the unprojected type layout from the children's types
+	unprojected_types = children[0]->GetTypes();
+	auto &types = children[1]->GetTypes();
+	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
-idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {
+idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vector<JoinCondition> &conditions) {
 	// Merge the validity masks of the comparison keys into the primary
 	// Return the number of NULLs in the resulting chunk
 	D_ASSERT(keys.ColumnCount() > 0);
@@ -203,11 +231,18 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		}
 	}
 
-	auto &primary = keys.data[0];
 	if (all_constant == keys.data.size()) {
 		//	Either all NULL or no NULLs
+		if (ConstantVector::IsNull(primary)) {
+			// Primary is already NULL
+			return count;
+		}
 		for (auto &v : keys.data) {
 			if (ConstantVector::IsNull(v)) {
+				// Create a new validity mask to avoid modifying original mask
+				auto &pvalidity = ConstantVector::Validity(primary);
+				ValidityMask pvalidity_copy = ConstantVector::Validity(primary);
+				pvalidity.Copy(pvalidity_copy, count);
 				ConstantVector::SetNull(primary, true);
 				return count;
 			}
@@ -217,6 +252,10 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		//	Flatten the primary, as it will need to merge arbitrary validity masks
 		primary.Flatten(count);
 		auto &pvalidity = FlatVector::Validity(primary);
+		// Make a copy of validity to avoid modifying original mask
+		ValidityMask pvalidity_copy = FlatVector::Validity(primary);
+		pvalidity.Copy(pvalidity_copy, count);
+
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
@@ -264,6 +303,18 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 	} else {
 		return count - VectorOperations::CountNotNull(primary, count);
 	}
+}
+
+void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const {
+	const auto left_projected = left_projection_map.size();
+	for (idx_t i = 0; i < left_projected; ++i) {
+		result.data[i].Reference(chunk.data[left_projection_map[i]]);
+	}
+	const auto left_width = children[0]->types.size();
+	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
+		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
+	}
+	result.SetCardinality(chunk);
 }
 
 BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,

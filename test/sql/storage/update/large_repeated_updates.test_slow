@@ -1,0 +1,105 @@
+# name: test/sql/storage/update/large_repeated_updates.test_slow
+# description: Test repeated updates on big table
+# group: [update]
+
+# load the DB from disk
+load __TEST_DIR__/updates_large_repeated.db
+
+statement ok
+begin transaction;
+
+statement ok
+create table integers as select * from generate_series(0, 10000000, 1) tbl(i);
+
+query I
+select sum(i) from integers
+----
+50000005000000
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000015000001
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000025000002
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000035000003
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000045000004
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000055000005
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000065000006
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000075000007
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000085000008
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000095000009
+
+statement ok
+update integers set i=i+1;
+
+query I
+select sum(i) from integers
+----
+50000105000010
+
+statement ok
+commit;
+
+query I
+select sum(i) from integers
+----
+50000105000010

@@ -20,6 +20,7 @@
  * will fill a supplied 16-byte array with the digest.
  */
 #include "duckdb/common/crypto/md5.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,7 @@ static void ByteReverse(unsigned char *buf, unsigned longs) {
 	uint32_t t;
 	do {
 		t = (uint32_t)((unsigned)buf[3] << 8 | buf[2]) << 16 | ((unsigned)buf[1] << 8 | buf[0]);
-		*(uint32_t *)buf = t;
+		*reinterpret_cast<uint32_t *>(buf) = t;
 		buf += 4;
 	} while (--longs);
 }
@@ -174,7 +175,7 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 		}
 		memcpy(p, input, t);
 		ByteReverse(in, 16);
-		MD5Transform(buf, (uint32_t *)in);
+		MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
 		input += t;
 		len -= t;
 	}
@@ -184,7 +185,7 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 	while (len >= 64) {
 		memcpy(in, input, 64);
 		ByteReverse(in, 16);
-		MD5Transform(buf, (uint32_t *)in);
+		MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
 		input += 64;
 		len -= 64;
 	}
@@ -217,7 +218,7 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 		/* Two lots of padding:  Pad the first block to 64 bytes */
 		memset(p, 0, count);
 		ByteReverse(in, 16);
-		MD5Transform(buf, (uint32_t *)in);
+		MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
 
 		/* Now fill the next block with 56 bytes */
 		memset(in, 0, 56);
@@ -228,29 +229,18 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 	ByteReverse(in, 14);
 
 	/* Append length in bits and transform */
-	((uint32_t *)in)[14] = bits[0];
-	((uint32_t *)in)[15] = bits[1];
+	(reinterpret_cast<uint32_t *>(in))[14] = bits[0];
+	(reinterpret_cast<uint32_t *>(in))[15] = bits[1];
 
-	MD5Transform(buf, (uint32_t *)in);
-	ByteReverse((unsigned char *)buf, 4);
+	MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
+	ByteReverse(reinterpret_cast<unsigned char *>(buf), 4);
 	memcpy(out_digest, buf, 16);
-}
-
-void MD5Context::DigestToBase16(const_data_ptr_t digest, char *zbuf) {
-	static char const HEX_CODES[] = "0123456789abcdef";
-	int i, j;
-
-	for (j = i = 0; i < 16; i++) {
-		int a = digest[i];
-		zbuf[j++] = HEX_CODES[(a >> 4) & 0xf];
-		zbuf[j++] = HEX_CODES[a & 0xf];
-	}
 }
 
 void MD5Context::FinishHex(char *out_digest) {
 	data_t digest[MD5_HASH_LENGTH_BINARY];
 	Finish(digest);
-	DigestToBase16(digest, out_digest);
+	duckdb_mbedtls::MbedTlsWrapper::ToBase16(reinterpret_cast<char *>(digest), out_digest, MD5_HASH_LENGTH_BINARY);
 }
 
 string MD5Context::FinishHex() {
@@ -260,7 +250,7 @@ string MD5Context::FinishHex() {
 }
 
 void MD5Context::Add(const char *data) {
-	MD5Update((const_data_ptr_t)data, strlen(data));
+	MD5Update(const_data_ptr_cast(data), strlen(data));
 }
 
 } // namespace duckdb

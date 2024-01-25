@@ -63,6 +63,14 @@ public:
 		LoadAllSegments(l);
 		return std::move(nodes);
 	}
+	vector<SegmentNode<T>> MoveSegments() {
+		auto l = Lock();
+		return MoveSegments(l);
+	}
+	idx_t GetSegmentCount() {
+		auto l = Lock();
+		return nodes.size();
+	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
 	T *GetSegmentByIndex(int64_t index) {
 		auto l = Lock();
@@ -241,6 +249,20 @@ public:
 
 	SegmentIterationHelper Segments() {
 		return SegmentIterationHelper(*this);
+	}
+
+	void Reinitialize() {
+		if (nodes.empty()) {
+			return;
+		}
+		idx_t offset = nodes[0].node->start;
+		for (auto &entry : nodes) {
+			if (entry.node->start != offset) {
+				throw InternalException("In SegmentTree::Reinitialize - gap found between nodes!");
+			}
+			entry.row_start = offset;
+			offset += entry.node->count;
+		}
 	}
 
 protected:

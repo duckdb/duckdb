@@ -1,0 +1,90 @@
+# name: test/sql/index/art/create_drop/test_art_many_versions.test
+# description: Test ART index creation with many versions
+# group: [create_drop]
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+PRAGMA enable_verification
+
+# insert the values [1...20001]
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+INSERT INTO integers SELECT * FROM range(1, 20001, 1)
+
+# now start a transaction in con2
+statement ok con2
+BEGIN TRANSACTION
+
+# increment values by 1
+statement ok con1
+UPDATE integers SET i=i+1
+
+# now start a transaction in con3
+statement ok con3
+BEGIN TRANSACTION
+
+# increment values by 1 again
+statement ok con1
+UPDATE integers SET i=i+1
+
+# now start a transaction in con4
+statement ok con4
+BEGIN TRANSACTION
+
+# increment values by 1 again
+statement ok con1
+UPDATE integers SET i=i+1
+
+# create an index, this fails because we have outstanding updates
+statement error con1
+CREATE INDEX i_index ON integers using art(i)
+----
+
+# con2
+query R con2
+SELECT SUM(i) FROM integers
+----
+200010000.000000
+
+query R con2
+SELECT SUM(i) FROM integers WHERE i > 0
+----
+200010000.000000
+
+# con3
+query R con3
+SELECT SUM(i) FROM integers
+----
+200030000.000000
+
+query R con3
+SELECT SUM(i) FROM integers WHERE i > 0
+----
+200030000.000000
+
+# con4
+query R con4
+SELECT SUM(i) FROM integers
+----
+200050000.000000
+
+query R con4
+SELECT SUM(i) FROM integers WHERE i > 0
+----
+200050000.000000
+
+# total sum
+query R con1
+SELECT SUM(i) FROM integers
+----
+200070000.000000
+
+query R con1
+SELECT SUM(i) FROM integers WHERE i > 0
+----
+200070000.000000
+

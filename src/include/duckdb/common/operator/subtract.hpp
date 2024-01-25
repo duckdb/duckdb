@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/type_util.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,7 @@ struct interval_t;
 struct date_t;
 struct timestamp_t;
 struct dtime_t;
+struct dtime_tz_t;
 
 struct SubtractOperator {
 	template <class TA, class TB, class TR>
@@ -37,7 +39,7 @@ int64_t SubtractOperator::Operation(date_t left, date_t right);
 template <>
 date_t SubtractOperator::Operation(date_t left, int32_t right);
 template <>
-date_t SubtractOperator::Operation(date_t left, interval_t right);
+timestamp_t SubtractOperator::Operation(date_t left, interval_t right);
 template <>
 timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right);
 template <>
@@ -69,14 +71,16 @@ template <>
 bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result);
 template <>
 bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
 
 struct SubtractOperatorOverflowCheck {
 	template <class TA, class TB, class TR>
-	DUCKDB_API static inline TR Operation(TA left, TB right) {
+	static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TrySubtractOperator::Operation(left, right, result)) {
-			throw OutOfRangeException("Overflow in subtraction of %s (%d - %d)!", TypeIdToString(GetTypeId<TA>()), left,
-			                          right);
+			throw OutOfRangeException("Overflow in subtraction of %s (%s - %s)!", TypeIdToString(GetTypeId<TA>()),
+			                          NumericHelper::ToString(left), NumericHelper::ToString(right));
 		}
 		return result;
 	}
@@ -121,5 +125,8 @@ struct SubtractTimeOperator {
 
 template <>
 dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right);
+
+template <>
+dtime_tz_t SubtractTimeOperator::Operation(dtime_tz_t left, interval_t right);
 
 } // namespace duckdb

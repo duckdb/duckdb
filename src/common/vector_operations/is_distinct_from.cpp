@@ -1,3 +1,4 @@
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
@@ -11,7 +12,7 @@ struct DistinctBinaryLambdaWrapper {
 };
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static void DistinctExecuteGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+static void DistinctExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                        RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
                                        const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lmask,
                                        ValidityMask &rmask, ValidityMask &result_mask) {
@@ -49,8 +50,8 @@ static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		DistinctExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
-		    (LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
-		    rdata.validity, FlatVector::Validity(result));
+		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
+		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result));
 	}
 }
 
@@ -66,7 +67,7 @@ static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t c
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 static inline idx_t
-DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                           const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                           ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -105,7 +106,7 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 }
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
 static inline idx_t
-DistinctSelectGenericLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                    const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                    const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                    ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -124,7 +125,7 @@ DistinctSelectGenericLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__re
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static inline idx_t
-DistinctSelectGenericLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                 const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                 const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                 ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -145,9 +146,9 @@ static idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionV
 	left.ToUnifiedFormat(count, ldata);
 	right.ToUnifiedFormat(count, rdata);
 
-	return DistinctSelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data,
-	                                                                  ldata.sel, rdata.sel, sel, count, ldata.validity,
-	                                                                  rdata.validity, true_sel, false_sel);
+	return DistinctSelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>(
+	    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata), ldata.sel,
+	    rdata.sel, sel, count, ldata.validity, rdata.validity, true_sel, false_sel);
 }
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
@@ -543,7 +544,7 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 
 static void PositionListCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
                                const SelectionVector &slice_sel, const idx_t count) {
-	const auto data = (const list_entry_t *)vdata.data;
+	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 	for (idx_t i = 0; i < count; ++i) {
 		const auto slice_idx = slice_sel.get_index(i);
 
@@ -564,10 +565,12 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	ListVector::GetEntry(left).Flatten(ListVector::GetListSize(left));
-	ListVector::GetEntry(right).Flatten(ListVector::GetListSize(right));
-	Vector lchild(ListVector::GetEntry(left), lcursor, count);
-	Vector rchild(ListVector::GetEntry(right), rcursor, count);
+	Vector lentry_flattened(ListVector::GetEntry(left));
+	Vector rentry_flattened(ListVector::GetEntry(right));
+	lentry_flattened.Flatten(ListVector::GetListSize(left));
+	rentry_flattened.Flatten(ListVector::GetListSize(right));
+	Vector lchild(lentry_flattened, lcursor, count);
+	Vector rchild(rentry_flattened, rcursor, count);
 
 	// To perform the positional comparison, we use a vectorisation of the following algorithm:
 	// bool CompareLists(T *left, idx_t nleft, T *right, nright) {
@@ -586,11 +589,11 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	// Get pointers to the list entries
 	UnifiedVectorFormat lvdata;
 	left.ToUnifiedFormat(count, lvdata);
-	const auto ldata = (const list_entry_t *)lvdata.data;
+	const auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(lvdata);
 
 	UnifiedVectorFormat rvdata;
 	right.ToUnifiedFormat(count, rvdata);
-	const auto rdata = (const list_entry_t *)rvdata.data;
+	const auto rdata = UnifiedVectorFormat::GetData<list_entry_t>(rvdata);
 
 	// In order to reuse the comparators, we have to track what passed and failed internally.
 	// To do that, we need local SVs that we then merge back into the real ones after every pass.
@@ -669,6 +672,119 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	return match_count;
 }
 
+static void PositionArrayCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
+                                const SelectionVector &slice_sel, const idx_t count, idx_t array_size) {
+	for (idx_t i = 0; i < count; ++i) {
+		const auto slice_idx = slice_sel.get_index(i);
+		const auto lidx = vdata.sel->get_index(slice_idx);
+		const auto offset = array_size * lidx;
+		cursor.set_index(i, offset + pos);
+	}
+}
+
+template <class OP>
+static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const SelectionVector &sel,
+                                 OptionalSelection &true_opt, OptionalSelection &false_opt) {
+	if (count == 0) {
+		return count;
+	}
+
+	// FIXME: This function can probably be optimized since we know the array size is fixed for every entry.
+
+	D_ASSERT(ArrayType::GetSize(left.GetType()) == ArrayType::GetSize(right.GetType()));
+	auto array_size = ArrayType::GetSize(left.GetType());
+
+	// Create dictionary views of the children so we can vectorise the positional comparisons.
+	SelectionVector lcursor(count);
+	SelectionVector rcursor(count);
+
+	Vector lentry_flattened(ArrayVector::GetEntry(left));
+	Vector rentry_flattened(ArrayVector::GetEntry(right));
+	lentry_flattened.Flatten(ArrayVector::GetTotalSize(left));
+	rentry_flattened.Flatten(ArrayVector::GetTotalSize(right));
+	Vector lchild(lentry_flattened, lcursor, count);
+	Vector rchild(rentry_flattened, rcursor, count);
+
+	// Get pointers to the list entries
+	UnifiedVectorFormat lvdata;
+	left.ToUnifiedFormat(count, lvdata);
+
+	UnifiedVectorFormat rvdata;
+	right.ToUnifiedFormat(count, rvdata);
+
+	// In order to reuse the comparators, we have to track what passed and failed internally.
+	// To do that, we need local SVs that we then merge back into the real ones after every pass.
+	SelectionVector slice_sel(count);
+	for (idx_t i = 0; i < count; ++i) {
+		slice_sel.set_index(i, i);
+	}
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
+
+	idx_t match_count = 0;
+	for (idx_t pos = 0; count > 0; ++pos) {
+		// Set up the cursors for the current position
+		PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
+		PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+
+		// Tie-break the pairs where one of the LISTs is exhausted.
+		idx_t true_count = 0;
+		idx_t false_count = 0;
+		idx_t maybe_count = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto slice_idx = slice_sel.get_index(i);
+			if (array_size == pos) {
+				const auto idx = sel.get_index(slice_idx);
+				if (PositionComparator::TieBreak<OP>(array_size, array_size)) {
+					true_opt.Append(true_count, idx);
+				} else {
+					false_opt.Append(false_count, idx);
+				}
+			} else {
+				true_sel.set_index(maybe_count++, slice_idx);
+			}
+		}
+		true_opt.Advance(true_count);
+		false_opt.Advance(false_count);
+		match_count += true_count;
+
+		// Redensify the list cursors
+		if (maybe_count < count) {
+			count = maybe_count;
+			DensifyNestedSelection(true_sel, count, slice_sel);
+			PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
+			PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+		}
+
+		// Find everything that definitely matches
+		true_count = PositionComparator::Definite<OP>(lchild, rchild, slice_sel, count, &true_sel, false_sel);
+		if (true_count) {
+			false_count = count - true_count;
+			ExtractNestedSelection(false_count ? true_sel : slice_sel, true_count, sel, true_opt);
+			match_count += true_count;
+
+			// Redensify the list cursors
+			count -= true_count;
+			DensifyNestedSelection(false_sel, count, slice_sel);
+			PositionArrayCursor(lcursor, lvdata, pos, slice_sel, count, array_size);
+			PositionArrayCursor(rcursor, rvdata, pos, slice_sel, count, array_size);
+		}
+
+		// Find what might match on the next position
+		true_count = PositionComparator::Possible<OP>(lchild, rchild, slice_sel, count, true_sel, &false_sel);
+		false_count = count - true_count;
+		ExtractNestedSelection(true_count ? false_sel : slice_sel, false_count, sel, false_opt);
+
+		if (false_count) {
+			DensifyNestedSelection(true_sel, true_count, slice_sel);
+		}
+		count = true_count;
+	}
+
+	return match_count;
+}
+
 template <class OP, class OPNESTED>
 static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVector *sel, const idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -698,10 +814,18 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVe
 	auto unknown =
 	    DistinctSelectNotNull<OP>(l_not_null, r_not_null, count, match_count, *sel, maybe_vec, true_opt, false_opt);
 
-	if (PhysicalType::LIST == left.GetType().InternalType()) {
+	switch (left.GetType().InternalType()) {
+	case PhysicalType::LIST:
 		match_count += DistinctSelectList<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
-	} else {
+		break;
+	case PhysicalType::STRUCT:
 		match_count += DistinctSelectStruct<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
+		break;
+	case PhysicalType::ARRAY:
+		match_count += DistinctSelectArray<OPNESTED>(l_not_null, r_not_null, unknown, maybe_vec, true_opt, false_opt);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for DISTINCT");
 	}
 
 	// Copy the buffered selections to the output selections
@@ -756,6 +880,9 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 	case PhysicalType::INT128:
 		TemplatedDistinctExecute<hugeint_t, OP>(left, right, result, count);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedDistinctExecute<uhugeint_t, OP>(left, right, result, count);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedDistinctExecute<float, OP>(left, right, result, count);
 		break;
@@ -770,6 +897,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 		break;
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT:
+	case PhysicalType::ARRAY:
 		NestedDistinctExecute<OP>(left, right, result, count);
 		break;
 	default:
@@ -801,6 +929,8 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 		return DistinctSelect<uint64_t, uint64_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::INT128:
 		return DistinctSelect<hugeint_t, hugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::UINT128:
+		return DistinctSelect<uhugeint_t, uhugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::FLOAT:
 		return DistinctSelect<float, float, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:
@@ -811,6 +941,7 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 		return DistinctSelect<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
 		return DistinctSelectNested<OP, OPNESTED>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InternalException("Invalid type for distinct selection");
@@ -900,15 +1031,15 @@ idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const Sele
 // true := A < B with nulls being minimal
 idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                    SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanNullsFirst, duckdb::DistinctLessThan>(
-	    left, right, sel, count, true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst, duckdb::DistinctGreaterThan>(
+	    right, left, sel, count, true_sel, false_sel);
 }
 
 // true := A <= B with nulls being maximal
 idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanEquals>(right, left, sel, count, true_sel,
-	                                                                           false_sel);
+	return count -
+	       TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(left, right, sel, count, false_sel, true_sel);
 }
 
 // true := A != B with nulls being equal, inputs selected

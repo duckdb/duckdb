@@ -8,37 +8,37 @@ namespace duckdb {
 
 struct SumSetOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->Initialize();
+	static void Initialize(STATE &state) {
+		state.Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		target->Combine(source);
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.Combine(source);
 	}
 	template <class STATE>
-	static void AddValues(STATE *state, idx_t count) {
-		state->isset = true;
+	static void AddValues(STATE &state, idx_t count) {
+		state.isset = true;
 	}
 };
 
 struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = Hugeint::Convert(state->value);
+			target = Hugeint::Convert(state.value);
 		}
 	}
 };
 
 struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 };
@@ -46,11 +46,11 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 template <class ADD_OPERATOR>
 struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 };
@@ -60,11 +60,11 @@ using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
 struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 };

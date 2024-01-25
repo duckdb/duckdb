@@ -1,0 +1,404 @@
+# name: test/sql/join/inner/test_join_is_distinct.test
+# description: Test using two join predicates, of which one is IS DISTINCT
+# group: [inner]
+
+# issue #8328
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE tbl (col0 INTEGER, col1 INTEGER);
+
+statement ok
+INSERT INTO tbl VALUES (1, 0), (1, 1);
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+0	1
+1	0
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+0	1
+1	0
+
+statement ok
+INSERT INTO tbl VALUES (1, 0), (1, 1);
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+0	1
+0	1
+0	1
+0	1
+1	0
+1	0
+1	0
+1	0
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+0	1
+0	1
+0	1
+0	1
+1	0
+1	0
+1	0
+1	0
+
+# same but with structs
+statement ok
+CREATE TABLE tbl_s (col0 STRUCT(x INTEGER), col1 STRUCT(x INTEGER));
+
+statement ok
+INSERT INTO tbl_s VALUES ({x: 1}, {x: 0}), ({x: 1}, {x: 1});
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s x JOIN tbl_s y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+{'x': 0}	{'x': 1}
+{'x': 1}	{'x': 0}
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s x JOIN tbl_s y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+{'x': 0}	{'x': 1}
+{'x': 1}	{'x': 0}
+
+statement ok
+INSERT INTO tbl_s VALUES ({x: 1}, {x: 0}), ({x: 1}, {x: 1});
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s x JOIN tbl_s y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': 1}
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': 0}
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s x JOIN tbl_s y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': 1}
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': 0}
+
+# same but with lists
+statement ok
+CREATE TABLE tbl_l (col0 INTEGER[], col1 INTEGER[]);
+
+statement ok
+INSERT INTO tbl_l VALUES ([1], [0]), ([1], [1]);
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l x JOIN tbl_l y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+[0]	[1]
+[1]	[0]
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l x JOIN tbl_l y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+[0]	[1]
+[1]	[0]
+
+statement ok
+INSERT INTO tbl_l VALUES ([1], [0]), ([1], [1]);
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l x JOIN tbl_l y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+[0]	[1]
+[0]	[1]
+[0]	[1]
+[0]	[1]
+[1]	[0]
+[1]	[0]
+[1]	[0]
+[1]	[0]
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l x JOIN tbl_l y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+[0]	[1]
+[0]	[1]
+[0]	[1]
+[0]	[1]
+[1]	[0]
+[1]	[0]
+[1]	[0]
+[1]	[0]
+
+query IIII
+WITH abc AS (
+	SELECT * FROM (
+    	VALUES (1, 'x'), (1, 'x'), (1, '0'), (1, '0')
+    ) AS tbl(col0, col1)
+)
+SELECT x.col0 AS c1, x.col1 AS c2, y.col0 AS c3, y.col1 AS c4
+FROM abc x JOIN abc y ON x.col0 = y.col0
+	AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY c1, c2, c3, c4;
+----
+1	0	1	x
+1	0	1	x
+1	0	1	x
+1	0	1	x
+1	x	1	0
+1	x	1	0
+1	x	1	0
+1	x	1	0
+
+# tests with NULLs
+
+statement ok
+CREATE TABLE tbl_null (col0 INTEGER, col1 INTEGER);
+
+statement ok
+INSERT INTO tbl_null VALUES (1, 0), (1, 1), (1, NULL), (NULL, 1), (0, NULL), (NULL, 0), (NULL, NULL);
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1, y.col1;
+----
+0	1
+0	NULL
+1	0
+1	NULL
+NULL	0
+NULL	1
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+0	1
+1	0
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND (x.col1 IS NOT DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+0	0
+1	1
+NULL	NULL
+NULL	NULL
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND x.col1 = y.col1
+ORDER BY x.col1;
+----
+0	0
+1	1
+
+# similar but with structs
+statement ok
+CREATE TABLE tbl_s_null (col0 STRUCT(x INTEGER), col1 STRUCT(x INTEGER));
+
+statement ok
+INSERT INTO tbl_s_null VALUES ({x: 1}, {x: 0}), ({x: 1}, {x: 1}), ({x: 1}, NULL), ({x: 1}, {x: NULL});
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1, y.col1 NULLS LAST;
+----
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': NULL}
+{'x': 0}	NULL
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': NULL}
+{'x': 1}	NULL
+{'x': NULL}	{'x': 0}
+{'x': NULL}	{'x': 1}
+{'x': NULL}	NULL
+NULL	{'x': 0}
+NULL	{'x': 1}
+NULL	{'x': NULL}
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1.x, y.col1.x NULLS LAST;
+----
+{'x': 0}	{'x': 1}
+{'x': 0}	{'x': NULL}
+{'x': 1}	{'x': 0}
+{'x': 1}	{'x': NULL}
+{'x': NULL}	{'x': 0}
+{'x': NULL}	{'x': 1}
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
+ON x.col0 = y.col0 AND x.col1 > y.col1
+ORDER BY x.col1.x, y.col1.x NULLS LAST;
+----
+{'x': 1}	{'x': 0}
+{'x': NULL}	{'x': 0}
+{'x': NULL}	{'x': 1}
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
+ON x.col0 = y.col0 AND (x.col1 IS NOT DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+{'x': 0}	{'x': 0}
+{'x': 1}	{'x': 1}
+{'x': NULL}	{'x': NULL}
+NULL	NULL
+
+query II
+SELECT x.col1, y.col1 FROM tbl_s_null x JOIN tbl_s_null y
+ON x.col0 = y.col0 AND x.col1 = y.col1
+ORDER BY x.col1;
+----
+{'x': 0}	{'x': 0}
+{'x': 1}	{'x': 1}
+{'x': NULL}	{'x': NULL}
+
+# same but with lists
+
+statement ok
+CREATE TABLE tbl_l_null (col0 INTEGER[], col1 INTEGER[]);
+
+statement ok
+INSERT INTO tbl_l_null VALUES ([1], [0]), ([1], [1]), ([1], NULL), ([1], [NULL]);
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l_null x JOIN tbl_l_null y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1, y.col1;
+----
+[0]	[1]
+[0]	[NULL]
+[0]	NULL
+[1]	[0]
+[1]	[NULL]
+[1]	NULL
+[NULL]	[0]
+[NULL]	[1]
+[NULL]	NULL
+NULL	[0]
+NULL	[1]
+NULL	[NULL]
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l_null x JOIN tbl_l_null y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1, y.col1 NULLS LAST;
+----
+[0]	[1]
+[0]	[NULL]
+[1]	[0]
+[1]	[NULL]
+[NULL]	[0]
+[NULL]	[1]
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l_null x JOIN tbl_l_null y
+ON x.col0 = y.col0 AND (x.col1 IS NOT DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+[0]	[0]
+[1]	[1]
+[NULL]	[NULL]
+NULL	NULL
+
+query II
+SELECT x.col1, y.col1 FROM tbl_l_null x JOIN tbl_l_null y
+ON x.col0 = y.col0 AND x.col1 = y.col1
+ORDER BY x.col1;
+----
+[0]	[0]
+[1]	[1]
+[NULL]	[NULL]
+
+# duckdb-r issue 8
+
+statement ok
+create table tb1 as select range*2 as a from range(100);
+
+statement ok
+create table tb2 as select range*4 as a from range(100);
+
+statement ok
+insert into tb2 (select NULL from range(20));
+
+statement ok
+insert into tb1 (select NULL from range(20));
+
+query I
+SELECT count(*) FROM tb1 AS lhs ANTI JOIN tb2 AS rhs ON (lhs.a IS DISTINCT FROM rhs.a);
+----
+0
+
+# and some coverage
+statement ok
+create or replace table tb1 as select range*2 as a, range*50 as b from range(2);
+
+statement ok
+create or replace table tb2 as select range*4 as a, range*500 as b  from range(2);
+
+statement ok
+insert into tb2 (select NULL, NULL from range(2));
+
+statement ok
+insert into tb1 (select NULL, NULL from range(2));
+
+query II
+SELECT lhs.a, rhs.a FROM tb1 AS lhs LEFT JOIN tb2 AS rhs ON (lhs.a IS DISTINCT FROM rhs.a) ORDER BY ALL;
+----
+0	4
+0	NULL
+0	NULL
+2	0
+2	4
+2	NULL
+2	NULL
+NULL	0
+NULL	0
+NULL	4
+NULL	4

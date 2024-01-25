@@ -1,11 +1,13 @@
 #include "duckdb/common/hive_partitioning.hpp"
 
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "re2/re2.h"
 
@@ -63,7 +65,10 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 // 	- s3://bucket/var1=value1/bla/bla/var2=value2
 //  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
-const string HivePartitioning::REGEX_STRING = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
+const string &HivePartitioning::RegexString() {
+	static string REGEX = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]*)";
+	return REGEX;
+}
 
 std::map<string, string> HivePartitioning::Parse(const string &filename, duckdb_re2::RE2 &regex) {
 	std::map<string, string> result;
@@ -78,7 +83,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename, duckdb_
 }
 
 std::map<string, string> HivePartitioning::Parse(const string &filename) {
-	duckdb_re2::RE2 regex(REGEX_STRING);
+	duckdb_re2::RE2 regex(RegexString());
 	return Parse(filename, regex);
 }
 
@@ -86,12 +91,15 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
                                               vector<unique_ptr<Expression>> &filters,
-                                              unordered_map<string, column_t> &column_map, idx_t table_index,
+                                              unordered_map<string, column_t> &column_map, LogicalGet &get,
                                               bool hive_enabled, bool filename_enabled) {
+
 	vector<string> pruned_files;
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
-	duckdb_re2::RE2 regex(REGEX_STRING);
+	unordered_set<idx_t> filters_applied_to_files;
+	duckdb_re2::RE2 regex(RegexString());
+	auto table_index = get.table_index;
 
 	if ((!filename_enabled && !hive_enabled) || filters.empty()) {
 		return;
@@ -121,11 +129,11 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
-			}
-
-			// Use filter combiner to determine that this filter makes
-			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
-				should_prune_file = true;
+				// convert the filter to a table filter.
+				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+					get.extra_info.file_filters += filter->ToString();
+					filters_applied_to_files.insert(j);
+				}
 			}
 		}
 
@@ -183,7 +191,7 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 	input.ToUnifiedFormat(count, format);
 
 	const auto &sel = *format.sel;
-	const auto data = (T *)format.data;
+	const auto data = UnifiedVectorFormat::GetData<T>(format);
 	const auto &validity = format.validity;
 
 	const auto &type = input.GetType();
@@ -253,6 +261,9 @@ static void GetHivePartitionValuesTypeSwitch(Vector &input, vector<HivePartition
 		break;
 	case PhysicalType::UINT64:
 		TemplatedGetHivePartitionValues<uint64_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedGetHivePartitionValues<uhugeint_t>(input, keys, col_idx, count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedGetHivePartitionValues<float>(input, keys, col_idx, count);

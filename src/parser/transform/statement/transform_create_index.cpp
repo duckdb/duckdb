@@ -1,29 +1,18 @@
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/statement/create_statement.hpp"
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
-static IndexType StringToIndexType(const string &str) {
-	string upper_str = StringUtil::Upper(str);
-	if (upper_str == "INVALID") {
-		return IndexType::INVALID;
-	} else if (upper_str == "ART") {
-		return IndexType::ART;
-	} else {
-		throw ConversionException("No IndexType conversion from string '%s'", upper_str);
-	}
-	return IndexType::INVALID;
-}
-
-vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckdb_libpgquery::PGList *list,
+vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckdb_libpgquery::PGList &list,
                                                                            const string &relation_name) {
 	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto cell = list->head; cell != nullptr; cell = cell->next) {
-		auto index_element = (duckdb_libpgquery::PGIndexElem *)cell->data.ptr_value;
+	for (auto cell = list.head; cell != nullptr; cell = cell->next) {
+		auto index_element = PGPointerCast<duckdb_libpgquery::PGIndexElem>(cell->data.ptr_value);
 		if (index_element->collation) {
 			throw NotImplementedException("Index with collation not supported yet!");
 		}
@@ -43,33 +32,48 @@ vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckd
 	return expressions;
 }
 
-unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGIndexStmt *>(node);
-	D_ASSERT(stmt);
+unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery::PGIndexStmt &stmt) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateIndexInfo>();
-	if (stmt->unique) {
+	if (stmt.unique) {
 		info->constraint_type = IndexConstraintType::UNIQUE;
 	} else {
 		info->constraint_type = IndexConstraintType::NONE;
 	}
 
-	info->on_conflict = TransformOnConflict(stmt->onconflict);
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
+	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
 
-	info->expressions = TransformIndexParameters(stmt->indexParams, stmt->relation->relname);
+	info->index_type = StringUtil::Upper(string(stmt.accessMethod));
 
-	info->index_type = StringToIndexType(string(stmt->accessMethod));
-	auto tableref = make_uniq<BaseTableRef>();
-	tableref->table_name = stmt->relation->relname;
-	if (stmt->relation->schemaname) {
-		tableref->schema_name = stmt->relation->schemaname;
+	if (stmt.relation->schemaname) {
+		info->schema = stmt.relation->schemaname;
 	}
-	info->table = std::move(tableref);
-	if (stmt->idxname) {
-		info->index_name = stmt->idxname;
+	if (stmt.relation->catalogname) {
+		info->catalog = stmt.relation->catalogname;
+	}
+	info->table = stmt.relation->relname;
+	if (stmt.idxname) {
+		info->index_name = stmt.idxname;
 	} else {
-		throw NotImplementedException("Index without a name not supported yet!");
+		throw NotImplementedException("Please provide an index name, e.g., CREATE INDEX my_name ...");
 	}
+
+	// Parse the options list
+	if (stmt.options) {
+		duckdb_libpgquery::PGListCell *cell;
+		for_each_cell(cell, stmt.options->head) {
+			auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
+			Value val;
+			if (def_elem->arg) {
+				val = TransformValue(*PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg))->value;
+			} else {
+				val = Value::BOOLEAN(true);
+			}
+			info->options[StringUtil::Lower(def_elem->defname)] = std::move(val);
+		}
+	}
+
 	for (auto &expr : info->expressions) {
 		info->parsed_expressions.emplace_back(expr->Copy());
 	}

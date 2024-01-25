@@ -18,21 +18,35 @@ namespace duckdb {
 enum class PragmaType : uint8_t { PRAGMA_STATEMENT, PRAGMA_CALL };
 
 struct PragmaInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::PRAGMA_INFO;
+
+public:
+	PragmaInfo() : ParseInfo(TYPE) {
+	}
+
 	//! Name of the PRAGMA statement
 	string name;
 	//! Parameter list (if any)
-	vector<Value> parameters;
+	vector<unique_ptr<ParsedExpression>> parameters;
 	//! Named parameter list (if any)
-	named_parameter_map_t named_parameters;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> named_parameters;
 
 public:
 	unique_ptr<PragmaInfo> Copy() const {
 		auto result = make_uniq<PragmaInfo>();
 		result->name = name;
-		result->parameters = parameters;
-		result->named_parameters = named_parameters;
+		for (auto &param : parameters) {
+			result->parameters.push_back(param->Copy());
+		}
+		for (auto &entry : named_parameters) {
+			result->named_parameters.insert(make_pair(entry.first, entry.second->Copy()));
+		}
 		return result;
 	}
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

@@ -1,0 +1,124 @@
+#
+# Reusable workflow that deploys the artifacts produced by .github/workflows/_extension_distribution.yml
+#
+# Note: this workflow can be used to deploy an extension from a GH artifact. It is intended for Out-of-tree
+#       extensions that live the duckdb GitHub organisation (only repo's within the same organisation can share secrets
+#       through reusable workflows)
+
+
+name: Extension Deployment
+on:
+  workflow_call:
+    inputs:
+      # The name of the extension
+      extension_name:
+        required: true
+        type: string
+      # DuckDB version to build against
+      duckdb_version:
+        required: true
+        type: string
+      # ';' separated list of architectures to exclude, for example: 'linux_amd64;osx_arm64'
+      exclude_archs:
+        required: false
+        type: string
+        default: ""
+      # Whether to upload this deployment as the latest. This may overwrite a previous deployment.
+      deploy_latest:
+        required: false
+        type: boolean
+        default: false
+      # Whether to upload this deployment under a versioned path. These will not be deleted automatically
+      deploy_versioned:
+        required: false
+        type: boolean
+        default: false
+      # Postfix added to artifact names. Can be used to guarantee unique names when this workflow is called multiple times
+      artifact_postfix:
+        required: false
+        type: string
+        default: ""
+      # Override the default deploy script with a custom script
+      deploy_script:
+        required: false
+        type: string
+        default: "./duckdb/scripts/extension-upload-single.sh"
+      # Override the default matrix parse script with a custom script
+      matrix_parse_script:
+        required: false
+        type: string
+        default: "./duckdb/scripts/modify_distribution_matrix.py"
+
+jobs:
+  generate_matrix:
+    name: Generate matrix
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_matrix: ${{ steps.parse-matrices.outputs.deploy_matrix }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+
+      - name: Checkout DuckDB to version
+        run: |
+          cd duckdb
+          git checkout ${{ inputs.duckdb_version }}
+
+      - id: parse-matrices
+        run: |
+          cat ./duckdb/.github/config/distribution_matrix.json > distribution_matrix.json
+          grep wasm distribution_matrix.json || (head -n -1 ./duckdb/.github/config/distribution_matrix.json > distribution_matrix.json && echo ',"wasm":{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_threads","vcpkg_triplet":"wasm32-emscripten"}]}}' >> distribution_matrix.json)
+          python3 ${{ inputs.matrix_parse_script }} --input distribution_matrix.json --deploy_matrix --output deploy_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
+          deploy_matrix="`cat deploy_matrix.json`"
+          echo deploy_matrix=$deploy_matrix >> $GITHUB_OUTPUT
+          echo `cat $GITHUB_OUTPUT`
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: generate_matrix
+    if: ${{ needs.generate_matrix.outputs.deploy_matrix != '{}' && needs.generate_matrix.outputs.deploy_matrix != '' }}
+    strategy:
+      matrix: ${{fromJson(needs.generate_matrix.outputs.deploy_matrix)}}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+
+      - name: Checkout DuckDB to version
+        run: |
+          cd duckdb
+          git checkout ${{ inputs.duckdb_version }}
+
+      - uses: actions/download-artifact@v2
+        with:
+          name: ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}${{startsWith(matrix.duckdb, 'wasm') && '.wasm' || ''}}
+          path: |
+            /tmp/extension
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_ORG_DEPLOY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_ORG_DEPLOY_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.S3_DUCKDB_ORG_REGION }}
+          BUCKET_NAME: ${{ secrets.S3_DUCKDB_ORG_BUCKET }}
+          DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.S3_DUCKDB_ORG_EXTENSION_SIGNING_PK }}
+          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
+        run: |
+          pwd
+          python3 -m pip install pip awscli
+          git config --global --add safe.directory '*'
+          cd duckdb
+          git fetch --tags
+          export DUCKDB_VERSION=`git tag --points-at HEAD`
+          export DUCKDB_VERSION=${DUCKDB_VERSION:=`git log -1 --format=%h`}
+          cd ..
+          git fetch --tags
+          export EXT_VERSION=`git tag --points-at HEAD`
+          export EXT_VERSION=${EXT_VERSION:=`git log -1 --format=%h`}
+          ${{ inputs.deploy_script }} ${{ inputs.extension_name }} $EXT_VERSION $DUCKDB_VERSION ${{ matrix.duckdb_arch }} $BUCKET_NAME ${{inputs.deploy_latest || 'true' && 'false'}} ${{inputs.deploy_versioned || 'true' && 'false'}}

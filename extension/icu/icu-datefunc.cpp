@@ -5,10 +5,18 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include "unicode/ucal.h"
+
 namespace duckdb {
 
 ICUDateFunc::BindData::BindData(const BindData &other)
     : tz_setting(other.tz_setting), cal_setting(other.cal_setting), calendar(other.calendar->clone()) {
+}
+
+ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_setting_p)
+    : tz_setting(tz_setting_p), cal_setting(cal_setting_p) {
+
+	InitCalendar();
 }
 
 ICUDateFunc::BindData::BindData(ClientContext &context) {
@@ -16,16 +24,22 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
 		tz_setting = tz_value.ToString();
 	}
-	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_setting)));
 
-	string cal_id("@calendar=");
 	Value cal_value;
 	if (context.TryGetCurrentSetting("Calendar", cal_value)) {
 		cal_setting = cal_value.ToString();
-		cal_id += cal_setting;
 	} else {
-		cal_id += "gregorian";
+		cal_setting = "gregorian";
 	}
+
+	InitCalendar();
+}
+
+void ICUDateFunc::BindData::InitCalendar() {
+	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_setting)));
+
+	string cal_id("@calendar=");
+	cal_id += cal_setting;
 
 	icu::Locale locale(cal_id.c_str());
 
@@ -34,10 +48,17 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	if (U_FAILURE(success)) {
 		throw Exception("Unable to create ICU calendar.");
 	}
+
+	//	Postgres always assumes times are given in the proleptic Gregorian calendar.
+	//	ICU defaults to the Gregorian change in 1582, so we reset the change to the minimum date
+	//	so that all dates are proleptic Gregorian.
+	//	The only error here is if we have a non-Gregorian calendar,
+	//	and we just ignore that and hope for the best...
+	ucal_setGregorianChange((UCalendar *)calendar.get(), U_DATE_MIN, &success); // NOLINT
 }
 
 bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
-	auto &other = (const ICUDateFunc::BindData &)other_p;
+	auto &other = other_p.Cast<const BindData>();
 	return *calendar == *other.calendar;
 }
 

@@ -3,7 +3,9 @@ if(NOT CLANG_TIDY)
 endif()
 add_subdirectory(extension)
 add_subdirectory(relation)
+add_subdirectory(secret)
 add_subdirectory(settings)
+add_subdirectory(chunk_scan_state)
 
 if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
@@ -18,9 +20,12 @@ add_library_unity(
   client_context.cpp
   client_data.cpp
   client_verify.cpp
+  connection_manager.cpp
+  chunk_scan_state.cpp
   config.cpp
   connection.cpp
   database.cpp
+  database_path_and_type.cpp
   database_manager.cpp
   db_instance_cache.cpp
   error_manager.cpp

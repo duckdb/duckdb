@@ -15,7 +15,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StatsBindData &)other_p;
+		auto &other = other_p.Cast<StatsBindData>();
 		return stats == other.stats;
 	}
 };

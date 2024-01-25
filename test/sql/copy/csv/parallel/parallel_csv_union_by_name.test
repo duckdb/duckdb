@@ -8,6 +8,7 @@ SET default_null_order='nulls_first';
 statement ok
 PRAGMA verify_parallelism
 
+
 query IIII
 SELECT id, value, a, part
 FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
@@ -97,3 +98,4 @@ Sunday
 NULL
 NULL
 NULL
+

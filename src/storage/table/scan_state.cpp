@@ -55,7 +55,7 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-const vector<column_t> &CollectionScanState::GetColumnIds() {
+const vector<storage_t> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 
@@ -65,6 +65,10 @@ TableFilterSet *CollectionScanState::GetFilters() {
 
 AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
 	return parent.GetAdaptiveFilter();
+}
+
+TableScanOptions &CollectionScanState::GetOptions() {
+	return parent.options;
 }
 
 ParallelCollectionScanState::ParallelCollectionScanState()

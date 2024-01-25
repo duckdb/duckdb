@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp
+// duckdb/catalog/catalog_entry/duck_table_entry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -38,6 +38,8 @@ public:
 	void CommitDrop();
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
+
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo() override;
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 

@@ -42,7 +42,7 @@ VariableShowStmt:
 				n->is_summary = 0;
 				$$ = (PGNode *) n;
 			}
-		| show_or_describe ALL
+		| show_or_describe ALL opt_tables
 			{
 				PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 				n->name = (char*) "__show_tables_expanded";
@@ -58,7 +58,11 @@ VariableShowStmt:
 			}
 		;
 
-show_or_describe: SHOW | DESCRIBE
+describe_or_desc: DESCRIBE | DESC_P
+
+show_or_describe: SHOW | describe_or_desc
+
+opt_tables: TABLES | /* empty */
 
 var_name:	ColId								{ $$ = $1; }
 			| var_name '.' ColId

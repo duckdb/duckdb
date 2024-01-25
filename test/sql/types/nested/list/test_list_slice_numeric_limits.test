@@ -1,0 +1,104 @@
+# name: test/sql/types/nested/list/test_list_slice_numeric_limits.test
+# description: List slicing tests for numeric limits
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT ([1,2,3,4,5,6])[-9223372036854775808:5];
+----
+[1, 2, 3, 4, 5]
+
+query I
+SELECT ([1,2,3,4,5,6])[-9223372036854775808:5:2];
+----
+[1, 3, 5]
+
+query I
+SELECT ([1,2,3,4,5,6])[1:9223372036854775807];
+----
+[1, 2, 3, 4, 5, 6]
+
+query I
+SELECT ([1,2,3,4,5,6])[1:9223372036854775807:2];
+----
+[1, 3, 5]
+
+query I
+SELECT ([1,2,3,4,5,6])[9223372036854775807:9223372036854775807];
+----
+[]
+
+query I
+SELECT ([1,2,3,4,5,6])[9223372036854775807:-9223372036854775808];
+----
+[]
+
+query I
+SELECT ([1,2,3,4,5,6])[9223372036854775807:-9223372036854775808:-1];
+----
+[6, 5, 4, 3, 2, 1]
+
+query I
+SELECT ([1,2,3,4,5,6])[-9223372036854775808 + 1:5];
+----
+[1, 2, 3, 4, 5]
+
+statement ok
+CREATE TABLE tbl (a INT[], start  bigint, stop bigint, step bigint);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], -9223372036854775808, 9223372036854775807, -1);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], -9223372036854775808 + 1, 9223372036854775807 - 1, -1);
+
+query I
+SELECT a[-9223372036854775808:9223372036854775807:step] FROM tbl;
+----
+[]
+[]
+
+query I
+SELECT a[start:stop:step] FROM tbl;
+----
+[]
+[]
+
+statement ok
+DROP TABLE tbl;
+
+statement ok
+create table tbl (a int[], start bigint, stop bigint, step bigint);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], -9223372036854775808 + 1, 9223372036854775807 - 1, -1);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], 1, 5, 9223372036854775807);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], 1, 5, -9223372036854775808);
+
+query I
+SELECT a[start:stop:step] FROM tbl;
+----
+[]
+[1]
+[]
+
+query I
+SELECT ([1,2,3,4,5])[-9223372036854775808 + 1:9223372036854775807 - 1:-1];
+----
+[]
+
+query I
+SELECT ([1,2,3,4,5])[1:5:9223372036854775807];
+----
+[1]
+
+query I
+SELECT ([1,2,3,4,5])[1:5:-9223372036854775808];
+----
+[]

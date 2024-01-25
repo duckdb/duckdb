@@ -1,0 +1,14 @@
+# name: test/sql/binder/alias_error_10057.test
+# description: Test old_implicit_cast setting
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+with test_data as (
+  select 'foo' as a
+)
+select test_data.foobar as new_column from test_data where new_column is not null;
+----
+foobar

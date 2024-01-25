@@ -1,0 +1,37 @@
+# name: test/sql/attach/attach_home_directory.test
+# description: Test resolution of ATTACH with home directory
+# group: [attach]
+
+# FIXME: ATTACH does not correctly receive the FileOpener of the client
+mode skip
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/home_dir.db' AS s1
+
+statement ok
+CREATE TABLE s1.integers AS FROM range(10) t(i);
+
+query I
+SELECT SUM(i) FROM s1.integers
+----
+45
+
+statement ok
+DETACH s1
+
+statement ok
+SET home_directory='__TEST_DIR__'
+
+statement ok
+ATTACH '~/home_dir.db' AS s1
+
+query I
+SELECT SUM(i) FROM s1.integers
+----
+45
+
+statement ok
+DETACH s1

@@ -123,6 +123,10 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
     : Command(runner), definition(std::move(definition_p)) {
 }
 
+ModeCommand::ModeCommand(SQLLogicTestRunner &runner, string parameter_p)
+    : Command(runner), parameter(std::move(parameter_p)) {
+}
+
 struct ParallelExecuteContext {
 	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
@@ -269,12 +273,11 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.con->context->config = client_config;
 
 	runner.con->BeginTransaction();
-	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths);
+	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths, CatalogSetPathType::SET_SCHEMAS);
 	runner.con->Commit();
 	if (!low_query_writer_path.empty()) {
-		runner.con->context->client_data->log_query_writer =
-		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
-		                                  1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
+		runner.con->context->client_data->log_query_writer = make_uniq<BufferedFileWriter>(
+		    FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path, 1 << 1 | 1 << 5);
 	}
 }
 
@@ -283,6 +286,21 @@ void ReconnectCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw std::runtime_error("Cannot reconnect in parallel");
 	}
 	runner.Reconnect();
+}
+
+void ModeCommand::ExecuteInternal(ExecuteContext &context) const {
+	if (parameter == "output_hash") {
+		runner.output_hash_mode = true;
+	} else if (parameter == "output_result") {
+		runner.output_result_mode = true;
+	} else if (parameter == "no_output") {
+		runner.output_hash_mode = false;
+		runner.output_result_mode = false;
+	} else if (parameter == "debug") {
+		runner.debug_mode = true;
+	} else {
+		throw std::runtime_error("unrecognized mode: " + parameter);
+	}
 }
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {

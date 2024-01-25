@@ -2,23 +2,24 @@
 # description: TPCH JSON round trip
 # group: [json]
 
-# TODO: implement COPY functions for JSON and do all tables more easily, we just do Q1 for now with from_json
-
 require tpch
 
 require json
 
 statement ok
+start transaction;
+
+statement ok
 call dbgen(sf=1)
 
 statement ok
-copy (select to_json(lineitem) from lineitem) to '__TEST_DIR__/lineitem.json' (format csv, quote '')
+copy lineitem to '__TEST_DIR__/lineitem.json'
 
 statement ok
-drop table lineitem
+rollback;
 
 statement ok
-create table lineitem_struct as select from_json(json, '{
+create view lineitem_struct as select from_json(json, '{
 "l_orderkey":"INTEGER",
 "l_partkey":"INTEGER",
 "l_suppkey":"INTEGER",

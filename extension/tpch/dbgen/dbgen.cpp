@@ -246,7 +246,7 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	append_info.appender->EndRow();
 }
 
-static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
+static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
                     idx_t offset = 0) {
 	order_t o;
 	supplier_t supp;
@@ -255,6 +255,9 @@ static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBG
 	code_t code;
 
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
+		if (count % 1000 == 0 && context.interrupted) {
+			throw InterruptException();
+		}
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
 		case LINE:
@@ -415,8 +418,9 @@ const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::VARCHAR)};
 
 template <class T>
-static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
+static void CreateTPCHTable(ClientContext &context, string catalog_name, string schema, string suffix) {
 	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = catalog_name;
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
@@ -425,19 +429,19 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(i)));
 	}
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 	catalog.CreateTable(context, std::move(info));
 }
 
-void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, string suffix) {
-	CreateTPCHTable<RegionInfo>(context, schema, suffix);
-	CreateTPCHTable<NationInfo>(context, schema, suffix);
-	CreateTPCHTable<SupplierInfo>(context, schema, suffix);
-	CreateTPCHTable<CustomerInfo>(context, schema, suffix);
-	CreateTPCHTable<PartInfo>(context, schema, suffix);
-	CreateTPCHTable<PartsuppInfo>(context, schema, suffix);
-	CreateTPCHTable<OrdersInfo>(context, schema, suffix);
-	CreateTPCHTable<LineitemInfo>(context, schema, suffix);
+void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string catalog, string schema, string suffix) {
+	CreateTPCHTable<RegionInfo>(context, catalog, schema, suffix);
+	CreateTPCHTable<NationInfo>(context, catalog, schema, suffix);
+	CreateTPCHTable<SupplierInfo>(context, catalog, schema, suffix);
+	CreateTPCHTable<CustomerInfo>(context, catalog, schema, suffix);
+	CreateTPCHTable<PartInfo>(context, catalog, schema, suffix);
+	CreateTPCHTable<PartsuppInfo>(context, catalog, schema, suffix);
+	CreateTPCHTable<OrdersInfo>(context, catalog, schema, suffix);
+	CreateTPCHTable<LineitemInfo>(context, catalog, schema, suffix);
 }
 
 void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
@@ -465,8 +469,8 @@ void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
 	}
 }
 
-void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix, int children_p,
-                                int current_step) {
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string catalog_name, string schema,
+                                string suffix, int children_p, int current_step) {
 	if (flt_scale == 0) {
 		return;
 	}
@@ -529,7 +533,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
 	auto append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
 	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
@@ -557,11 +561,11 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 				skip(i, children, part_offset, dbgen_ctx);
 				if (rowcnt > 0) {
 					// generate part of the table
-					gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
+					gen_tbl(context, (int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
 				}
 			} else {
 				// generate full table
-				gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+				gen_tbl(context, (int)i, rowcnt, append_info.get(), &dbgen_ctx);
 			}
 		}
 	}

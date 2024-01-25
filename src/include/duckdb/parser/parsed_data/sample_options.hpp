@@ -17,6 +17,7 @@ namespace duckdb {
 
 enum class SampleMethod : uint8_t { SYSTEM_SAMPLE = 0, BERNOULLI_SAMPLE = 1, RESERVOIR_SAMPLE = 2 };
 
+// **DEPRECATED**: Use EnumUtil directly instead.
 string SampleMethodToString(SampleMethod method);
 
 struct SampleOptions {
@@ -26,11 +27,9 @@ struct SampleOptions {
 	int64_t seed = -1;
 
 	unique_ptr<SampleOptions> Copy();
-	void Serialize(Serializer &serializer);
-	static unique_ptr<SampleOptions> Deserialize(Deserializer &source);
 	static bool Equals(SampleOptions *a, SampleOptions *b);
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<SampleOptions> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<SampleOptions> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

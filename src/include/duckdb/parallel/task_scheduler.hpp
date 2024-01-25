@@ -39,7 +39,7 @@ class TaskScheduler {
 	constexpr static int64_t TASK_TIMEOUT_USECS = 5000;
 
 public:
-	TaskScheduler(DatabaseInstance &db);
+	explicit TaskScheduler(DatabaseInstance &db);
 	~TaskScheduler();
 
 	DUCKDB_API static TaskScheduler &GetScheduler(ClientContext &context);
@@ -47,9 +47,9 @@ public:
 
 	unique_ptr<ProducerToken> CreateProducer();
 	//! Schedule a task to be executed by the task scheduler
-	void ScheduleTask(ProducerToken &producer, unique_ptr<Task> task);
+	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
-	bool GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task);
+	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
 	void ExecuteForever(atomic<bool> *marker);
 	//! Run tasks until `marker` is set to false, `max_tasks` have been completed, or until there are no more tasks
@@ -67,6 +67,12 @@ public:
 	//! Send signals to n threads, signalling for them to wake up and attempt to execute a task
 	void Signal(idx_t n);
 
+	//! Yield to other threads
+	static void YieldThread();
+
+	//! Set the allocator flush threshold
+	void SetAllocatorFlushTreshold(idx_t threshold);
+
 private:
 	void SetThreadsInternal(int32_t n);
 
@@ -80,6 +86,8 @@ private:
 	vector<unique_ptr<SchedulerThread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped
 	vector<unique_ptr<atomic<bool>>> markers;
+	//! The threshold after which to flush the allocator after completing a task
+	atomic<idx_t> allocator_flush_threshold;
 };
 
 } // namespace duckdb

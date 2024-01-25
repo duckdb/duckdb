@@ -1,0 +1,28 @@
+# name: test/sql/window/test_window_wide_frame.test_slow
+# description: Test wide temporal range frames
+# group: [window]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+select setseed(0.618033)
+
+statement ok
+CREATE TABLE flog AS
+	SELECT (random() * 100)::INTEGER AS laufzeit
+	, TIMESTAMP '2020-10-15 16:45:00' + INTERVAL (random() * 15 * 60) SECOND AS "timestamp"
+	FROM range(26000);
+
+query III
+select timestamp
+, median(laufzeit) over w
+, count(*) over w
+from flog
+window w as (order by timestamp asc range between interval 55 seconds preceding and interval 58 seconds following)
+order by 3 desc
+limit 1;
+----
+2020-10-15 16:58:10.318385	50.000000	3363

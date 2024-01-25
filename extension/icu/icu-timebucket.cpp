@@ -6,6 +6,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -75,30 +76,27 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToDaysCommon(int32_t bucket_width_days, const timestamp_t ts,
 	                                                       const timestamp_t origin, icu::Calendar *calendar) {
-		static part_trunc_t trunc_days = TruncationFactory(DatePartSpecifier::DAY);
-		static part_sub_t sub_days = SubtractFactory(DatePartSpecifier::DAY);
+		const auto sub_days = SubtractFactory(DatePartSpecifier::DAY);
 
-		uint64_t tmp_micros = SetTime(calendar, ts);
-		trunc_days(calendar, tmp_micros);
-		timestamp_t truncated_ts = GetTimeUnsafe(calendar, tmp_micros);
-
-		int64_t ts_days = sub_days(calendar, origin, truncated_ts);
+		int64_t ts_days = sub_days(calendar, origin, ts);
 		int64_t result_days = (ts_days / bucket_width_days) * bucket_width_days;
 		if (result_days < NumericLimits<int32_t>::Minimum() || result_days > NumericLimits<int32_t>::Maximum()) {
 			throw OutOfRangeException("Timestamp out of range");
 		}
-		if (ts_days < 0 && ts_days % bucket_width_days != 0) {
-			result_days =
-			    SubtractOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(result_days, bucket_width_days);
+		timestamp_t bucket = Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
+		if (ts < bucket) {
+			D_ASSERT(ts < origin);
+			bucket = Add(calendar, bucket, interval_t {0, -bucket_width_days, 0});
+			D_ASSERT(ts > bucket);
 		}
 
-		return Add(calendar, origin, interval_t {0, static_cast<int32_t>(result_days), 0});
+		return bucket;
 	}
 
 	static inline timestamp_t WidthConvertibleToMonthsCommon(int32_t bucket_width_months, const timestamp_t ts,
 	                                                         const timestamp_t origin, icu::Calendar *calendar) {
-		static part_trunc_t trunc_months = TruncationFactory(DatePartSpecifier::MONTH);
-		static part_sub_t sub_months = SubtractFactory(DatePartSpecifier::MONTH);
+		const auto trunc_months = TruncationFactory(DatePartSpecifier::MONTH);
+		const auto sub_months = SubtractFactory(DatePartSpecifier::MONTH);
 
 		uint64_t tmp_micros = SetTime(calendar, ts);
 		trunc_months(calendar, tmp_micros);
@@ -126,7 +124,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 2);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
@@ -139,7 +137,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		TernaryExecutor::Execute<TA, TB, TC, TR>(
@@ -153,7 +151,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return WidthConvertibleToMicrosCommon(bucket_width.micros, ts, origin, calendar);
 		}
 	};
@@ -163,7 +161,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return WidthConvertibleToDaysCommon(bucket_width.days, ts, origin, calendar);
 		}
 	};
@@ -173,7 +171,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
 			return WidthConvertibleToMonthsCommon(bucket_width.months, ts, origin, calendar);
 		}
 	};
@@ -200,7 +198,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return Add(calendar,
 			           WidthConvertibleToMicrosCommon(bucket_width.micros, Sub(calendar, ts, offset), origin, calendar),
 			           offset);
@@ -213,7 +211,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return Add(calendar,
 			           WidthConvertibleToDaysCommon(bucket_width.days, Sub(calendar, ts, offset), origin, calendar),
 			           offset);
@@ -226,7 +224,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
 			return Add(calendar,
 			           WidthConvertibleToMonthsCommon(bucket_width.months, Sub(calendar, ts, offset), origin, calendar),
 			           offset);
@@ -358,7 +356,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 2);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 		SetTimeZone(calendar, string_t("UTC"));
@@ -414,7 +412,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 		SetTimeZone(calendar, string_t("UTC"));
@@ -479,7 +477,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 		SetTimeZone(calendar, string_t("UTC"));
@@ -547,7 +545,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -613,7 +611,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		}
 	}
 
-	static void AddTimeBucketFunction(ClientContext &context) {
+	static void AddTimeBucketFunction(DatabaseInstance &db) {
 		ScalarFunctionSet set("time_bucket");
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP_TZ,
 		                               ICUTimeBucketFunction, Bind));
@@ -623,15 +621,12 @@ struct ICUTimeBucket : public ICUDateFunc {
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketOriginFunction, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR},
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
-
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		ExtensionUtil::AddFunctionOverload(db, set);
 	}
 };
 
-void RegisterICUTimeBucketFunctions(ClientContext &context) {
-	ICUTimeBucket::AddTimeBucketFunction(context);
+void RegisterICUTimeBucketFunctions(DatabaseInstance &db) {
+	ICUTimeBucket::AddTimeBucketFunction(db);
 }
 
 } // namespace duckdb

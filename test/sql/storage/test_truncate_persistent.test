@@ -1,0 +1,35 @@
+# name: test/sql/storage/test_truncate_persistent.test
+# description: Test storage of truncate
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/test_store_truncate.db
+
+statement ok
+CREATE TABLE test AS FROM range(250000) t(i);
+
+statement ok
+DELETE FROM test WHERE i < 150000
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM test
+----
+100000
+
+statement ok
+TRUNCATE test
+
+query I
+SELECT COUNT(*) FROM test
+----
+0
+
+restart
+
+query I
+SELECT COUNT(*) FROM test
+----
+0

@@ -8,17 +8,18 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/parser/group_by_node.hpp"
-#include "duckdb/execution/radix_partitioned_hashtable.hpp"
-#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
+#include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/radix_partitioned_hashtable.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
 class ClientContext;
 class BufferManager;
+class PhysicalHashAggregate;
 
 struct HashAggregateGroupingData {
 public:
@@ -67,7 +68,7 @@ public:
 	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
-	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
+	                      vector<unsafe_vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
 
 	//! The grouping sets
 	GroupedAggregateData grouped_aggregate_data;
@@ -80,8 +81,8 @@ public:
 	vector<LogicalType> input_group_types;
 
 	// Filters given to Sink and friends
-	vector<idx_t> non_distinct_filter;
-	vector<idx_t> distinct_filter;
+	unsafe_vector<idx_t> non_distinct_filter;
+	unsafe_vector<idx_t> distinct_filter;
 
 	unordered_map<Expression *, size_t> filter_indexes;
 
@@ -90,8 +91,9 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+
+	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -106,11 +108,10 @@ public:
 
 public:
 	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 	SinkFinalizeType FinalizeInternal(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate,
 	                                  bool check_distinct) const;
 
@@ -143,13 +144,12 @@ private:
 	SinkFinalizeType FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  GlobalSinkState &gstate) const;
 	//! Combine the distinct aggregates
-	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
+	void CombineDistinct(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	//! Sink the distinct aggregates for a single grouping
-	void SinkDistinctGrouping(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                          DataChunk &input, idx_t grouping_idx) const;
+	void SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+	                          idx_t grouping_idx) const;
 	//! Sink the distinct aggregates
-	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                  DataChunk &input) const;
+	void SinkDistinct(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	//! Create groups in the main ht for groups that would otherwise get filtered out completely
 	SinkResultType SinkGroupsOnly(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                              DataChunk &input) const;

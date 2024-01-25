@@ -31,7 +31,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			UnifiedVectorFormat vdata;
 			input.ToUnifiedFormat(args.size(), vdata);
 
-			auto input_data = (string_t *)vdata.data;
+			auto input_data = UnifiedVectorFormat::GetData<string_t>(vdata);
 			// now add the length of each vector to the result length
 			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = vdata.sel->get_index(i);
@@ -77,7 +77,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			UnifiedVectorFormat idata;
 			input.ToUnifiedFormat(args.size(), idata);
 
-			auto input_data = (string_t *)idata.data;
+			auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
 			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = idata.sel->get_index(i);
 				if (!idata.validity.RowIsValid(idx)) {
@@ -114,11 +114,14 @@ static void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &resu
 	    });
 }
 
-static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel,
+static void TemplatedConcatWS(DataChunk &args, const string_t *sep_data, const SelectionVector &sep_sel,
                               const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
-	auto orrified_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[args.ColumnCount() - 1]);
+
+	// we overallocate here, but this is important for static analysis
+	auto orrified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(args.ColumnCount());
+
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 		args.data[col_idx].ToUnifiedFormat(args.size(), orrified_data[col_idx - 1]);
 	}
@@ -127,7 +130,7 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 		auto &idata = orrified_data[col_idx - 1];
 
-		auto input_data = (string_t *)idata.data;
+		auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
@@ -157,7 +160,7 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 	// now that the empty space for the strings has been allocated, perform the concatenation
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 		auto &idata = orrified_data[col_idx - 1];
-		auto input_data = (string_t *)idata.data;
+		auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
@@ -206,7 +209,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 		// no null values
 		auto sel = FlatVector::IncrementalSelectionVector();
-		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, *sel, args.size(), result);
+		TemplatedConcatWS(args, UnifiedVectorFormat::GetData<string_t>(vdata), *vdata.sel, *sel, args.size(), result);
 		return;
 	}
 	default: {
@@ -221,10 +224,20 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 				not_null_vector.set_index(not_null_count++, i);
 			}
 		}
-		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, not_null_vector, not_null_count, result);
+		TemplatedConcatWS(args, UnifiedVectorFormat::GetData<string_t>(vdata), *vdata.sel, not_null_vector,
+		                  not_null_count, result);
 		return;
 	}
 	}
+}
+
+static unique_ptr<FunctionData> BindConcatFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	for (auto &arg : bound_function.arguments) {
+		arg = LogicalType::VARCHAR;
+	}
+	bound_function.varargs = LogicalType::VARCHAR;
+	return nullptr;
 }
 
 void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
@@ -243,14 +256,15 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// e.g.:
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
-	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatFunction);
-	concat.varargs = LogicalType::VARCHAR;
+	ScalarFunction concat =
+	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::VARCHAR, ConcatFunction, BindConcatFunction);
+	concat.varargs = LogicalType::ANY;
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat);
 
 	ScalarFunctionSet concat_op("||");
 	concat_op.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatOperator));
+	    ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::VARCHAR, ConcatOperator, BindConcatFunction));
 	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
 	concat_op.AddFunction(ListConcatFun::GetFunction());
 	for (auto &fun : concat_op.functions) {
@@ -258,9 +272,9 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 	set.AddFunction(concat_op);
 
-	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                          LogicalType::VARCHAR, ConcatWSFunction);
-	concat_ws.varargs = LogicalType::VARCHAR;
+	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::ANY},
+	                                          LogicalType::VARCHAR, ConcatWSFunction, BindConcatFunction);
+	concat_ws.varargs = LogicalType::ANY;
 	concat_ws.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat_ws);
 }

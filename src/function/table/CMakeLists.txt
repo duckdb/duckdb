@@ -1,5 +1,6 @@
 add_subdirectory(system)
 add_subdirectory(version)
+add_subdirectory(arrow)
 add_library_unity(
   duckdb_func_table
   OBJECT
@@ -12,6 +13,7 @@ add_library_unity(
   repeat_row.cpp
   copy_csv.cpp
   read_csv.cpp
+  sniff_csv.cpp
   system_functions.cpp
   summary.cpp
   table_scan.cpp

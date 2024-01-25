@@ -1,0 +1,40 @@
+# name: test/sql/pivot/pivot_errors.test
+# description: Test pivot errors
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(i INT, j VARCHAR);
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING SUM(test.i);
+----
+PIVOT expression cannot contain qualified columns
+
+statement ok
+SET pivot_filter_threshold=0
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING current_date();
+----
+current_date is not an aggregate function
+
+statement ok
+SET pivot_filter_threshold=100
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING current_date();
+----
+current_date is not an aggregate function
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING sum(41) over ();
+----
+must be an aggregate
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING sum(sum(41) over ());
+----
+cannot contain window functions

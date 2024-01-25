@@ -1,5 +1,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -67,7 +69,10 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	for (idx_t i = 0; i < column_stats.size(); i++) {
-		column_stats[i]->Merge(*other.column_stats[i]);
+		if (column_stats[i]) {
+			D_ASSERT(other.column_stats[i]);
+			column_stats[i]->Merge(*other.column_stats[i]);
+		}
 	}
 }
 
@@ -99,17 +104,25 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 	}
 }
 
-void TableStatistics::Serialize(Serializer &serializer) {
-	for (auto &stats : column_stats) {
-		stats->Serialize(serializer);
-	}
+void TableStatistics::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(100, "column_stats", column_stats);
 }
 
-void TableStatistics::Deserialize(Deserializer &source, ColumnList &columns) {
-	for (auto &col : columns.Physical()) {
-		auto stats = ColumnStatistics::Deserialize(source, col.GetType());
-		column_stats.push_back(std::move(stats));
-	}
+void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
+	auto physical_columns = columns.Physical();
+
+	auto iter = physical_columns.begin();
+	deserializer.ReadList(100, "column_stats", [&](Deserializer::List &list, idx_t i) {
+		auto &col = *iter;
+		iter.operator++();
+
+		auto type = col.GetType();
+		deserializer.Set<LogicalType &>(type);
+
+		column_stats.push_back(list.ReadElement<shared_ptr<ColumnStatistics>>());
+
+		deserializer.Unset<LogicalType>();
+	});
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

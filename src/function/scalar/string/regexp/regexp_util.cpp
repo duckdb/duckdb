@@ -69,9 +69,13 @@ void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &t
 		throw InvalidInputException("Regex options field must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
-		ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
+	if (options_str.IsNull()) {
+		throw InvalidInputException("Regex options field must not be NULL");
 	}
+	if (options_str.type().id() != LogicalTypeId::VARCHAR) {
+		throw InvalidInputException("Regex options field must be a string");
+	}
+	ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
 }
 
 } // namespace regexp_util

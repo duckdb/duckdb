@@ -3,7 +3,8 @@
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <algorithm>
 #include <stdlib.h>
@@ -21,15 +22,17 @@ struct ReservoirQuantileState {
 		if (new_len <= len) {
 			return;
 		}
+		T *old_v = v;
 		v = (T *)realloc(v, new_len * sizeof(T));
 		if (!v) {
+			free(old_v);
 			throw InternalException("Memory allocation failure");
 		}
 		len = new_len;
 	}
 
 	void ReplaceElement(T &input) {
-		v[r_samp->min_entry] = input;
+		v[r_samp->min_weighted_entry_index] = input;
 		r_samp->ReplaceElement();
 	}
 
@@ -38,8 +41,8 @@ struct ReservoirQuantileState {
 			v[pos++] = element;
 			r_samp->InitializeReservoir(pos, len);
 		} else {
-			D_ASSERT(r_samp->next_index >= r_samp->current_count);
-			if (r_samp->next_index == r_samp->current_count) {
+			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_entries_to_skip_b4_next_sample);
+			if (r_samp->next_index_to_sample == r_samp->num_entries_to_skip_b4_next_sample) {
 				ReplaceElement(element);
 			}
 		}
@@ -47,6 +50,8 @@ struct ReservoirQuantileState {
 };
 
 struct ReservoirQuantileBindData : public FunctionData {
+	ReservoirQuantileBindData() {
+	}
 	ReservoirQuantileBindData(double quantile_p, int32_t sample_size_p)
 	    : quantiles(1, quantile_p), sample_size(sample_size_p) {
 	}
@@ -64,18 +69,18 @@ struct ReservoirQuantileBindData : public FunctionData {
 		return quantiles == other.quantiles && sample_size == other.sample_size;
 	}
 
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
-		D_ASSERT(bind_data_p);
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
-		writer.WriteList<double>(bind_data->quantiles);
-		writer.WriteField<int32_t>(bind_data->sample_size);
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const AggregateFunction &function) {
+		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
+		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
+		serializer.WriteProperty(101, "sample_size", bind_data.sample_size);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
-	                                            AggregateFunction &bound_function) {
-		auto quantiles = reader.ReadRequiredList<double>();
-		auto sample_size = reader.ReadRequired<int32_t>();
-		return make_uniq<ReservoirQuantileBindData>(std::move(quantiles), sample_size);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+		auto result = make_uniq<ReservoirQuantileBindData>();
+		deserializer.ReadProperty(100, "quantiles", result->quantiles);
+		deserializer.ReadProperty(101, "sample_size", result->sample_size);
+		return std::move(result);
 	}
 
 	vector<double> quantiles;
@@ -84,61 +89,59 @@ struct ReservoirQuantileBindData : public FunctionData {
 
 struct ReservoirQuantileOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->v = nullptr;
-		state->len = 0;
-		state->pos = 0;
-		state->r_samp = nullptr;
+	static void Initialize(STATE &state) {
+		state.v = nullptr;
+		state.len = 0;
+		state.pos = 0;
+		state.r_samp = nullptr;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *data, ValidityMask &mask,
-	                      idx_t idx) {
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
-		D_ASSERT(bind_data);
-		if (state->pos == 0) {
-			state->Resize(bind_data->sample_size);
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		auto &bind_data = unary_input.input.bind_data->template Cast<ReservoirQuantileBindData>();
+		if (state.pos == 0) {
+			state.Resize(bind_data.sample_size);
 		}
-		if (!state->r_samp) {
-			state->r_samp = new BaseReservoirSampling();
+		if (!state.r_samp) {
+			state.r_samp = new BaseReservoirSampling();
 		}
-		D_ASSERT(state->v);
-		state->FillReservoir(bind_data->sample_size, data[idx]);
+		D_ASSERT(state.v);
+		state.FillReservoir(bind_data.sample_size, input);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (source.pos == 0) {
 			return;
 		}
-		if (target->pos == 0) {
-			target->Resize(source.len);
+		if (target.pos == 0) {
+			target.Resize(source.len);
 		}
-		if (!target->r_samp) {
-			target->r_samp = new BaseReservoirSampling();
+		if (!target.r_samp) {
+			target.r_samp = new BaseReservoirSampling();
 		}
 		for (idx_t src_idx = 0; src_idx < source.pos; src_idx++) {
-			target->FillReservoir(target->len, source.v[src_idx]);
+			target.FillReservoir(target.len, source.v[src_idx]);
 		}
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->v) {
-			free(state->v);
-			state->v = nullptr;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.v) {
+			free(state.v);
+			state.v = nullptr;
 		}
-		if (state->r_samp) {
-			delete state->r_samp;
-			state->r_samp = nullptr;
+		if (state.r_samp) {
+			delete state.r_samp;
+			state.r_samp = nullptr;
 		}
 	}
 
@@ -148,21 +151,20 @@ struct ReservoirQuantileOperation {
 };
 
 struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
-	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, TARGET_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
-			mask.SetInvalid(idx);
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.pos == 0) {
+			finalize_data.ReturnNull();
 			return;
 		}
-		D_ASSERT(state->v);
-		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
-		auto v_t = state->v;
-		D_ASSERT(bind_data->quantiles.size() == 1);
-		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[0]);
-		std::nth_element(v_t, v_t + offset, v_t + state->pos);
-		target[idx] = v_t[offset];
+		D_ASSERT(state.v);
+		D_ASSERT(finalize_data.input.bind_data);
+		auto &bind_data = finalize_data.input.bind_data->template Cast<ReservoirQuantileBindData>();
+		auto v_t = state.v;
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		auto offset = (idx_t)((double)(state.pos - 1) * bind_data.quantiles[0]);
+		std::nth_element(v_t, v_t + offset, v_t + state.pos);
+		target = v_t[offset];
 	}
 };
 
@@ -207,69 +209,35 @@ AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 
 template <class CHILD_TYPE>
 struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
-
-	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result_list, AggregateInputData &aggr_input_data, STATE *state, RESULT_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
-			mask.SetInvalid(idx);
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.pos == 0) {
+			finalize_data.ReturnNull();
 			return;
 		}
 
-		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
+		D_ASSERT(finalize_data.input.bind_data);
+		auto &bind_data = finalize_data.input.bind_data->template Cast<ReservoirQuantileBindData>();
 
-		auto &result = ListVector::GetEntry(result_list);
-		auto ridx = ListVector::GetListSize(result_list);
-		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
+		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto ridx = ListVector::GetListSize(finalize_data.result);
+		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
-		auto v_t = state->v;
+		auto v_t = state.v;
 		D_ASSERT(v_t);
 
-		auto &entry = target[idx];
+		auto &entry = target;
 		entry.offset = ridx;
-		entry.length = bind_data->quantiles.size();
+		entry.length = bind_data.quantiles.size();
 		for (size_t q = 0; q < entry.length; ++q) {
-			const auto &quantile = bind_data->quantiles[q];
-			auto offset = (idx_t)((double)(state->pos - 1) * quantile);
-			std::nth_element(v_t, v_t + offset, v_t + state->pos);
+			const auto &quantile = bind_data.quantiles[q];
+			auto offset = (idx_t)((double)(state.pos - 1) * quantile);
+			std::nth_element(v_t, v_t + offset, v_t + state.pos);
 			rdata[ridx + q] = v_t[offset];
 		}
 
-		ListVector::SetListSize(result_list, entry.offset + entry.length);
-	}
-
-	template <class STATE_TYPE, class RESULT_TYPE>
-	static void FinalizeList(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, // NOLINT
-	                         idx_t offset) {
-		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-
-		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
-
-		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ListVector::Reserve(result, bind_data->quantiles.size());
-
-			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			auto &mask = ConstantVector::Validity(result);
-			Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[0], rdata, mask, 0);
-		} else {
-			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			ListVector::Reserve(result, (offset + count) * bind_data->quantiles.size());
-
-			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-			auto &mask = FlatVector::Validity(result);
-			for (idx_t i = 0; i < count; i++) {
-				Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata, mask, i + offset);
-			}
-		}
-
-		result.Verify(count);
+		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);
 	}
 };
 
@@ -279,8 +247,8 @@ static AggregateFunction ReservoirQuantileListAggregate(const LogicalType &input
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	    OP::template FinalizeList<STATE, RESULT_TYPE>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>, nullptr,
-	    AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>,
+	    nullptr, AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>

@@ -1,0 +1,308 @@
+# name: test/sql/projection/test_coalesce.test_slow
+# description: Test COALESCE expression
+# group: [projection]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+foreach type <numeric> DECIMAL(4,0) DECIMAL(9,0) DECIMAL(18,0) DECIMAL(38,0)
+
+statement ok
+DROP TABLE IF EXISTS exprtest
+
+statement ok
+CREATE TABLE exprtest (a ${type}, b ${type})
+
+statement ok
+INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, 0)
+
+# COALESCE
+statement error
+SELECT COALESCE()
+----
+
+query I
+SELECT COALESCE(NULL)
+----
+NULL
+
+query I
+SELECT COALESCE(42::${type})
+----
+42
+
+query I
+SELECT COALESCE(a) FROM exprtest
+----
+42
+43
+NULL
+45
+
+query I
+SELECT COALESCE(NULL, NULL, 42, 43)
+----
+42
+
+query I
+SELECT COALESCE(NULL, NULL, 42)
+----
+42
+
+query I
+SELECT COALESCE(42, NULL, 43)
+----
+42
+
+query I
+SELECT COALESCE(NULL, NULL, NULL)
+----
+NULL
+
+query I
+SELECT COALESCE(a, b) FROM exprtest
+----
+42
+43
+1
+45
+
+query I
+SELECT COALESCE(NULL, NULL, NULL, a, NULL, b) FROM exprtest
+----
+42
+43
+1
+45
+
+# OR/AND
+query II
+SELECT * FROM exprtest WHERE b=1 OR COALESCE(a, b)=42 ORDER BY 1
+----
+NULL	1
+42	10
+
+query II
+SELECT * FROM exprtest WHERE COALESCE(a, b)=1 OR COALESCE(a, b)=43 OR COALESCE(a, b)=45 ORDER BY 1
+----
+NULL	1
+43	100
+45	0
+
+query II
+SELECT * FROM exprtest WHERE COALESCE(a, b)=1 OR COALESCE(a, b)=42 OR COALESCE(a, b)=43 OR COALESCE(a, b)=45 ORDER BY 1
+----
+NULL	1
+42	10
+43	100
+45	0
+
+query II
+SELECT * FROM exprtest WHERE b=1 AND COALESCE(a, b)=1 ORDER BY 1
+----
+NULL	1
+
+query II
+SELECT * FROM exprtest WHERE (b=1 AND COALESCE(a, b)=1) OR (b=100 AND COALESCE(a, b)=43) ORDER BY 1
+----
+NULL	1
+43	100
+
+endloop
+
+# test COALESCE on strings
+statement ok
+CREATE TABLE strings(n VARCHAR, s VARCHAR);
+
+statement ok
+INSERT INTO strings (s) VALUES ('thisisalongstring'), ('thisisalsoalongstring'), ('hello'), ('world'), ('duckduckduckduckduck'), (NULL)
+
+query I
+SELECT COALESCE(n, s) FROM strings
+----
+thisisalongstring
+thisisalsoalongstring
+hello
+world
+duckduckduckduckduck
+NULL
+
+query I
+SELECT COALESCE(n, n, n, n, n, n, n, n, n, n, s, n, n, n, n, n, n, n) FROM strings
+----
+thisisalongstring
+thisisalsoalongstring
+hello
+world
+duckduckduckduckduck
+NULL
+
+query I
+SELECT COALESCE(n, n, n, n, n, n, n, n, n, n, s, n, n, n, n, n, n, n, 'default') FROM strings
+----
+thisisalongstring
+thisisalsoalongstring
+hello
+world
+duckduckduckduckduck
+default
+
+query I
+SELECT COALESCE(n, n, n, n, n, n, n, n, n, n, s, n, n, n, n, n, n, n) FROM strings WHERE s NOT LIKE 'this%'
+----
+hello
+world
+duckduckduckduckduck
+
+statement ok
+CREATE TABLE multistrings AS SELECT * FROM
+	(
+		VALUES
+			(NULL, NULL, NULL, NULL, NULL, NULL),
+			('thisisalongstring', NULL, NULL, NULL, NULL, NULL),
+			(NULL, 'thisisalsoalongstring', NULL, NULL, NULL, NULL),
+			(NULL, NULL, 'hello', NULL, NULL, NULL),
+			(NULL, NULL, NULL, 'world', NULL, NULL),
+			(NULL, NULL, NULL, NULL, 'duckduckduckduckduck', NULL),
+			(NULL, NULL, NULL, NULL, NULL, NULL)
+	) tbl(s1, s2, s3, s4, s5);
+
+query I
+SELECT COALESCE(s1, s2, s3, s4, s5) FROM multistrings;
+----
+NULL
+thisisalongstring
+thisisalsoalongstring
+hello
+world
+duckduckduckduckduck
+NULL
+
+query I
+SELECT COALESCE(s5, s4, s3, s2, s1) FROM multistrings;
+----
+NULL
+thisisalongstring
+thisisalsoalongstring
+hello
+world
+duckduckduckduckduck
+NULL
+
+query I
+SELECT COALESCE(s5, s4, s3, s2, s1) FROM multistrings WHERE COALESCE(s5, s4, s3, s2, s1) IS NOT NULL
+----
+thisisalongstring
+thisisalsoalongstring
+hello
+world
+duckduckduckduckduck
+
+# lists
+statement ok
+CREATE TABLE multilists AS SELECT * FROM
+	(
+		VALUES
+			(NULL, NULL, NULL, NULL, NULL, NULL),
+			([1, 2, 3], NULL, NULL, NULL, NULL, NULL),
+			(NULL, [4, 5, 6, 7, 8, 9], NULL, NULL, NULL, NULL),
+			(NULL, NULL, [], NULL, NULL, NULL),
+			(NULL, NULL, NULL, [10, 11, NULL, 13, 14, 15, 16], NULL, NULL),
+			(NULL, NULL, NULL, NULL, [NULL, 18, NULL, 20], NULL),
+			(NULL, NULL, NULL, NULL, NULL, NULL)
+	) tbl(s1, s2, s3, s4, s5);
+
+query I
+SELECT COALESCE(s1, s2, s3, s4, s5) FROM multilists;
+----
+NULL
+[1, 2, 3]
+[4, 5, 6, 7, 8, 9]
+[]
+[10, 11, NULL, 13, 14, 15, 16]
+[NULL, 18, NULL, 20]
+NULL
+
+query I
+SELECT COALESCE(s5, s4, s3, s2, s1) FROM multilists;
+----
+NULL
+[1, 2, 3]
+[4, 5, 6, 7, 8, 9]
+[]
+[10, 11, NULL, 13, 14, 15, 16]
+[NULL, 18, NULL, 20]
+NULL
+
+query I
+SELECT COALESCE(s5, s4, s3, s2, s1) FROM multilists WHERE COALESCE(s5, s4, s3, s2, s1) IS NOT NULL
+----
+[1, 2, 3]
+[4, 5, 6, 7, 8, 9]
+[]
+[10, 11, NULL, 13, 14, 15, 16]
+[NULL, 18, NULL, 20]
+
+statement ok
+CREATE TABLE nestedtypes AS SELECT * FROM
+	(
+		VALUES
+			(NULL, NULL, NULL, NULL, NULL, NULL),
+			([NULL, [NULL, NULL]]::STRUCT(x INTEGER[])[][], NULL, NULL, NULL, NULL, NULL),
+			(NULL, [[{'x': [3, 4]}], [{'x': [17]}, {'x': [22, NULL]}]], NULL, NULL, NULL, NULL),
+			(NULL, NULL, [[], [], []]::STRUCT(x INTEGER[])[][], NULL, NULL, NULL),
+			(NULL, NULL, NULL, [[{'x': NULL}], NULL, [NULL, NULL], []]::STRUCT(x INTEGER[])[][], NULL, NULL),
+			(NULL, NULL, NULL, NULL, [[{'x': [10, 12, 13, 14, 15]}], [{'x': [NULL]}, NULL]], NULL),
+			(NULL, NULL, NULL, NULL, NULL, NULL)
+	) tbl(s1, s2, s3, s4, s5);
+
+query I
+SELECT COALESCE(s1, s2, s3, s4, s5) FROM nestedtypes;
+----
+NULL
+[NULL, [NULL, NULL]]
+[[{'x': [3, 4]}], [{'x': [17]}, {'x': [22, NULL]}]]
+[[], [], []]
+[[{'x': NULL}], NULL, [NULL, NULL], []]
+[[{'x': [10, 12, 13, 14, 15]}], [{'x': [NULL]}, NULL]]
+NULL
+
+query I
+SELECT COALESCE(s5, s4, s3, s2, s1) FROM nestedtypes;
+----
+NULL
+[NULL, [NULL, NULL]]
+[[{'x': [3, 4]}], [{'x': [17]}, {'x': [22, NULL]}]]
+[[], [], []]
+[[{'x': NULL}], NULL, [NULL, NULL], []]
+[[{'x': [10, 12, 13, 14, 15]}], [{'x': [NULL]}, NULL]]
+NULL
+
+query I
+SELECT COALESCE(s5, s4, s3, s2, s1) FROM nestedtypes WHERE COALESCE(s5, s4, s3, s2, s1) IS NOT NULL
+----
+[NULL, [NULL, NULL]]
+[[{'x': [3, 4]}], [{'x': [17]}, {'x': [22, NULL]}]]
+[[], [], []]
+[[{'x': NULL}], NULL, [NULL, NULL], []]
+[[{'x': [10, 12, 13, 14, 15]}], [{'x': [NULL]}, NULL]]
+
+query I
+SELECT UNNEST(COALESCE(s5, s4, s3, s2, s1)) FROM nestedtypes
+----
+NULL
+[NULL, NULL]
+[{'x': [3, 4]}]
+[{'x': [17]}, {'x': [22, NULL]}]
+[]
+[]
+[]
+[{'x': NULL}]
+NULL
+[NULL, NULL]
+[]
+[{'x': [10, 12, 13, 14, 15]}]
+[{'x': [NULL]}, NULL]

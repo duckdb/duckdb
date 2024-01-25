@@ -55,7 +55,7 @@ public:
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);
 #endif
-			value.pointer.ptr = (char *)data;
+			value.pointer.ptr = (char *)data; // NOLINT
 		}
 	}
 	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
@@ -69,22 +69,30 @@ public:
 	}
 
 	const char *GetData() const {
-		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+		return IsInlined() ? const_char_ptr_cast(value.inlined.inlined) : value.pointer.ptr;
 	}
 	const char *GetDataUnsafe() const {
 		return GetData();
 	}
 
 	char *GetDataWriteable() const {
-		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
+		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr; // NOLINT
 	}
 
 	const char *GetPrefix() const {
-		return value.pointer.prefix;
+		return value.inlined.inlined;
+	}
+
+	char *GetPrefixWriteable() const {
+		return (char *)value.inlined.inlined;
 	}
 
 	idx_t GetSize() const {
 		return value.inlined.length;
+	}
+
+	bool Empty() const {
+		return value.inlined.length == 0;
 	}
 
 	string GetString() const {
@@ -93,6 +101,11 @@ public:
 
 	explicit operator string() const {
 		return GetString();
+	}
+
+	char *GetPointer() const {
+		D_ASSERT(!IsInlined());
+		return value.pointer.ptr;
 	}
 
 	void SetPointer(char *new_ptr) {
@@ -104,13 +117,11 @@ public:
 		// set trailing NULL byte
 		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = GetSize(); i < INLINE_BYTES; i++) {
-				value.inlined.inlined[i] = '\0';
-			}
+			memset(value.inlined.inlined + GetSize(), 0, INLINE_BYTES - GetSize());
 		} else {
 			// copy the data into the prefix
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			auto dataptr = (char *)GetData();
+			auto dataptr = GetData();
 			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);
@@ -128,15 +139,15 @@ public:
 				return false;
 			return (memcmp(a.GetData(), b.GetData(), a.GetSize()) == 0);
 #endif
-			uint64_t A = Load<uint64_t>((const_data_ptr_t)&a);
-			uint64_t B = Load<uint64_t>((const_data_ptr_t)&b);
+			uint64_t A = Load<uint64_t>(const_data_ptr_cast(&a));
+			uint64_t B = Load<uint64_t>(const_data_ptr_cast(&b));
 			if (A != B) {
 				// Either length or prefix are different -> not equal
 				return false;
 			}
 			// they have the same length and same prefix!
-			A = Load<uint64_t>((const_data_ptr_t)&a + 8u);
-			B = Load<uint64_t>((const_data_ptr_t)&b + 8u);
+			A = Load<uint64_t>(const_data_ptr_cast(&a) + 8u);
+			B = Load<uint64_t>(const_data_ptr_cast(&b) + 8u);
 			if (A == B) {
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
 				return true;
@@ -159,8 +170,8 @@ public:
 			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			uint32_t A = Load<uint32_t>((const_data_ptr_t)left.GetPrefix());
-			uint32_t B = Load<uint32_t>((const_data_ptr_t)right.GetPrefix());
+			uint32_t A = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
+			uint32_t B = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
 
 			// Utility to move 0xa1b2c3d4 into 0xd4c3b2a1, basically inverting the order byte-a-byte
 			auto bswap = [](uint32_t v) -> uint32_t {

@@ -15,6 +15,7 @@ CREATE SEQUENCE seq;
 # cannot create duplicate sequence
 statement error
 CREATE SEQUENCE seq;
+----
 
 # ignore errors if sequence already exists
 statement ok
@@ -93,6 +94,7 @@ NULL
 # can't create a sequence that already exists
 statement error
 CREATE SEQUENCE seq;
+----
 
 # drop the sequence
 statement ok
@@ -101,6 +103,7 @@ DROP SEQUENCE seq;
 # can't drop non-existing sequence
 statement error
 DROP SEQUENCE seq;
+----
 
 # but doesn't fail with IF EXISTS
 statement ok
@@ -162,6 +165,7 @@ SELECT nextval('seq')
 # max value exceeded
 statement error
 SELECT nextval('seq')
+----
 
 statement ok
 DROP SEQUENCE seq;
@@ -262,6 +266,7 @@ SELECT currval('seq')
 
 statement error
 SELECT nextval('seq')
+----
 
 query I
 SELECT currval('seq')
@@ -292,6 +297,7 @@ SELECT nextval('seq')
 
 statement error
 SELECT nextval('seq')
+----
 
 statement ok
 DROP SEQUENCE seq;
@@ -364,10 +370,12 @@ DROP SEQUENCE seq;
 # min_value defaults to 1, setting start to -1 gives start < min_value
 statement error
 CREATE SEQUENCE seq INCREMENT 1 START -1 CYCLE;
+----
 
 # max_value defaults to -1, setting start to 1 gives start > max_value
 statement error
 CREATE SEQUENCE seq INCREMENT -1 START 1 CYCLE;
+----
 
 # sequences in schemas
 statement ok
@@ -406,26 +414,32 @@ SELECT currval('"a"."seq"'), currval('"b".seq');
 # unterminated quotes
 statement error
 SELECT nextval('"a"."seq');
+----
 
 # too many separators
 statement error
 SELECT nextval('a.b.c.d');
+----
 
 # start exceeds max value
 statement error
 CREATE SEQUENCE seq MAXVALUE 5 START WITH 6;
+----
 
 # start preceeds min value
 statement error
 CREATE SEQUENCE seq MINVALUE 5 START WITH 4;
+----
 
 # min value bigger than max
 statement error
 CREATE SEQUENCE seq MINVALUE 7 MAXVALUE 5;
+----
 
 # increment must not be 0
 statement error
 CREATE SEQUENCE seq INCREMENT 0;
+----
 
 statement ok
 CREATE SEQUENCE seq;
@@ -484,6 +498,7 @@ INSERT INTO strings VALUES ('nonexistant_seq')
 
 statement error
 SELECT s, nextval(s) FROM strings
+----
 
 # currval causes error for new sequence
 statement ok
@@ -491,30 +506,38 @@ CREATE SEQUENCE fresh;
 
 statement error
 select currval('fresh');
+----
 
 # convert inputs into varchar if that's not the case
 statement error
 select nextval(1 + 1);
+----
 
 statement error
 select currval(true);
+----
 
 # max value specified more than once
 statement error
 CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
+----
 
 # min value specified more than once
 statement error
 CREATE SEQUENCE wrongseq MINVALUE 10 MINVALUE 2;
+----
 
 # start value specified more than once
 statement error
 CREATE SEQUENCE wrongseq START 13 START WITH 3;
+----
 
 # cycle value specified more than once
 statement error
 CREATE SEQUENCE wrongseq CYCLE MAXVALUE 2 MINVALUE 1 NO CYCLE;
+----
 
 # increment value specified more than once
 statement error
 CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;
+----

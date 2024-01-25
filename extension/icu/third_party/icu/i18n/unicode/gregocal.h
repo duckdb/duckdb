@@ -141,7 +141,7 @@ U_NAMESPACE_BEGIN
  *     cout << "DST_OFFSET: " << (calendar->get( UCAL_DST_OFFSET, success )/(60*60*1000)) << endl; // in hours
  *
  *     if (U_FAILURE(success)) {
- *         cout << "An error occured. success=" << u_errorName(success) << endl;
+ *         cout << "An error occurred. success=" << u_errorName(success) << endl;
  *     }
  *
  *     delete ids;

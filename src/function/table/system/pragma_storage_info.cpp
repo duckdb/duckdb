@@ -22,7 +22,7 @@ struct PragmaStorageFunctionData : public TableFunctionData {
 	}
 
 	TableCatalogEntry &table_entry;
-	TableStorageInfo storage_info;
+	vector<ColumnSegmentInfo> column_segments_info;
 };
 
 struct PragmaStorageOperatorData : public GlobalTableFunctionState {
@@ -76,13 +76,16 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("segment_info");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->storage_info = table_entry.GetStorageInfo(context);
+	result->column_segments_info = table_entry.GetColumnSegmentInfo();
 	return std::move(result);
 }
 
@@ -95,8 +98,8 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 	auto &data = data_p.global_state->Cast<PragmaStorageOperatorData>();
 	idx_t count = 0;
 	auto &columns = bind_data.table_entry.GetColumns();
-	while (data.offset < bind_data.storage_info.column_segments.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = bind_data.storage_info.column_segments[data.offset++];
+	while (data.offset < bind_data.column_segments_info.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = bind_data.column_segments_info[data.offset++];
 
 		idx_t col_idx = 0;
 		// row_group_id
@@ -133,6 +136,8 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 		}
+		// segment_info
+		output.SetValue(col_idx++, count, Value(entry.segment_info));
 		count++;
 	}
 	output.SetCardinality(count);

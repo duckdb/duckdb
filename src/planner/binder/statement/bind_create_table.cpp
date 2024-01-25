@@ -19,6 +19,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 #include <algorithm>
 
@@ -211,10 +212,13 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
-		if (column.DefaultValue()) {
+		if (column.HasDefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
-			auto default_copy = column.DefaultValue()->Copy();
+			auto default_copy = column.DefaultValue().Copy();
+			if (default_copy->HasParameter()) {
+				throw BinderException("DEFAULT values cannot contain parameters");
+			}
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
 			default_binder.target_type = column.Type();
 			bound_default = default_binder.Bind(default_copy);
@@ -256,6 +260,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
+		base.query.reset();
 		result->query = std::move(query_obj.plan);
 
 		// construct the set of columns based on the names and types of the query
@@ -291,12 +296,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
 		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog);
-		// We add a catalog dependency
-		auto type_dependency = EnumType::GetCatalog(column.Type());
-		if (type_dependency) {
-			// Only if the USER comes from a create type
-			result->dependencies.AddDependency(*type_dependency);
-		}
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;
@@ -307,17 +306,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = info->Cast<CreateTableInfo>();
 	auto &schema = BindCreateSchema(base);
 	return BindCreateTableInfo(std::move(info), schema);
-}
-
-vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry &table, CreateIndexInfo &info) {
-	auto index_binder = IndexBinder(*this, this->context, &table, &info);
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(info.expressions.size());
-	for (auto &expr : info.expressions) {
-		expressions.push_back(index_binder.Bind(expr));
-	}
-
-	return expressions;
 }
 
 } // namespace duckdb

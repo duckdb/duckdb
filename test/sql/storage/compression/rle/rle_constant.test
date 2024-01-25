@@ -1,0 +1,69 @@
+# name: test/sql/storage/compression/rle/rle_constant.test
+# description: Test RLE where we can emit ConstantVectors when scanning
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+require vector_size 2048
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+# simple RLE with few values
+statement ok
+CREATE TABLE test (a INTEGER);
+
+# Produces two full vectors from one run
+statement ok
+INSERT INTO test select 0 from range(4096);
+
+# Produces one full vector from one run
+statement ok
+INSERT INTO test select 1 from range(2048);
+
+# Dito
+statement ok
+INSERT INTO test select 2 from range(2048);
+
+# These do not fully fill the Vector, so they don't produce ConstantVectors
+statement ok
+INSERT INTO test select 3 from range(1024)
+
+statement ok
+INSERT INTO test select 4 from range(1024)
+
+statement ok
+INSERT INTO test select 5 from range(512)
+
+statement ok
+INSERT INTO test select 6 from range(512)
+
+statement ok
+INSERT INTO test select 7 from range(512)
+
+statement ok
+INSERT INTO test select 8 from range(512)
+
+statement ok
+checkpoint;
+
+
+# Some of them produce constant vectors, but not all
+query I
+select distinct on (types) vector_type(a) as types from test order by all;
+----
+CONSTANT_VECTOR
+FLAT_VECTOR
+
+# The first 4 vectors are constant
+query I
+select distinct on (types) types from (select vector_type(a) from test limit 8192) tbl(types)
+----
+CONSTANT_VECTOR
+
+# The other vectors are not constant
+query I
+select distinct on (types) types from (select vector_type(a) from test offset 8192) tbl(types)
+----
+FLAT_VECTOR

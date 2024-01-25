@@ -87,6 +87,13 @@
         "type": "aggregate_function"
     },
     {
+        "name": "kurtosis_pop",
+        "parameters": "x",
+        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction",
+        "example": "",
+        "type": "aggregate_function"
+    },
+    {
         "name": "min",
         "parameters": "arg",
         "description": "Returns the minimum value present in arg.",
@@ -118,9 +125,9 @@
         "name": "string_agg",
         "parameters": "str,arg",
         "description": "Concatenates the column string values with an optional separator.",
-        "example": "string_agg(A, '-)",
+        "example": "string_agg(A, '-')",
         "type": "aggregate_function_set",
-        "aliases": ["group_concat"]
+        "aliases": ["group_concat","listagg"]
     },
     {
         "name": "sum",

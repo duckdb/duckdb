@@ -52,7 +52,7 @@ public:
 				NumericStats::Update<VALUE_TYPE>(state_wrapper->current_segment->stats.statistics, value);
 			}
 
-			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));
+			state_wrapper->WriteValue(Load<EXACT_TYPE>(const_data_ptr_cast(&value)));
 		}
 	};
 
@@ -73,7 +73,7 @@ public:
 	idx_t group_idx = 0;
 	uint16_t packed_data[PatasPrimitives::PATAS_GROUP_SIZE];
 
-	// Ptr to next free spot in segment;
+	// Ptr to next free spot in segment
 	data_ptr_t segment_data;
 	data_ptr_t metadata_ptr;
 	uint32_t next_group_byte_index_start = PatasPrimitives::HEADER_SIZE;
@@ -138,7 +138,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);

@@ -35,7 +35,8 @@ public:
 	DBConfig config;
 
 public:
-	BufferPool &GetBufferPool();
+	BufferPool &GetBufferPool() const;
+	DUCKDB_API SecretManager &GetSecretManager();
 	DUCKDB_API BufferManager &GetBufferManager();
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
@@ -54,13 +55,12 @@ public:
 
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
-	//! Get the database extension type from a given path
-	string ExtractDatabaseType(string &path);
-	unique_ptr<AttachedDatabase> CreateAttachedDatabase(AttachInfo &info, const string &type, AccessMode access_mode);
+	unique_ptr<AttachedDatabase> CreateAttachedDatabase(const AttachInfo &info, const string &type,
+	                                                    AccessMode access_mode);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
-	void CreateDatabase(const string &database_type);
+	void CreateMainDatabase();
 
 	void Configure(DBConfig &config);
 

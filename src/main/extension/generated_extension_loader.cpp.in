@@ -1,0 +1,25 @@
+#include "duckdb/main/extension/generated_extension_loader.hpp"
+
+namespace duckdb{
+
+//! Looks through the CMake-generated list of extensions that are linked into DuckDB currently to try load <extension>
+bool TryLoadLinkedExtension(DuckDB &db, const string &extension) {
+
+${EXT_LOADER_BODY}
+    return false;
+}
+
+const vector<string>& LinkedExtensions(){
+    static vector<string> VEC = {${EXT_NAME_VECTOR_INITIALIZER}
+    };
+    return VEC;
+}
+
+
+const vector<string>& LoadedExtensionTestPaths(){
+    static vector<string> VEC = {${EXT_TEST_PATH_INITIALIZER}
+    };
+    return VEC;
+}
+
+}

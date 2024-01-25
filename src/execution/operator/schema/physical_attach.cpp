@@ -1,41 +1,24 @@
 #include "duckdb/execution/operator/schema/physical_attach.hpp"
-#include "duckdb/parser/parsed_data/attach_info.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Source
+// Helper
 //===--------------------------------------------------------------------===//
-class AttachSourceState : public GlobalSourceState {
-public:
-	AttachSourceState() : finished(false) {
-	}
 
-	bool finished;
-};
+void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, string &db_type,
+                  string &unrecognized_option) {
 
-unique_ptr<GlobalSourceState> PhysicalAttach::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<AttachSourceState>();
-}
-
-void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<AttachSourceState>();
-	if (state.finished) {
-		return;
-	}
-	// parse the options
-	auto &config = DBConfig::GetConfig(context.client);
-	AccessMode access_mode = config.options.access_mode;
-	string type;
-	string unrecognized_option;
 	for (auto &entry : info->options) {
+
 		if (entry.first == "readonly" || entry.first == "read_only") {
 			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
@@ -43,55 +26,81 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
-		} else if (entry.first == "readwrite" || entry.first == "read_write") {
+			continue;
+		}
+
+		if (entry.first == "readwrite" || entry.first == "read_write") {
 			auto read_only = !BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
 			if (read_only) {
 				access_mode = AccessMode::READ_ONLY;
 			} else {
 				access_mode = AccessMode::READ_WRITE;
 			}
-		} else if (entry.first == "type") {
-			type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
-		} else if (unrecognized_option.empty()) {
+			continue;
+		}
+
+		if (entry.first == "type") {
+			// extract the database type
+			db_type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
+			continue;
+		}
+
+		// we allow unrecognized options
+		if (unrecognized_option.empty()) {
 			unrecognized_option = entry.first;
 		}
 	}
-	auto &db = DatabaseInstance::GetDatabase(context.client);
-	if (type.empty()) {
-		// try to extract type from path
-		type = db.ExtractDatabaseType(info->path);
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
+	// parse the options
+	auto &config = DBConfig::GetConfig(context.client);
+	AccessMode access_mode = config.options.access_mode;
+	string db_type;
+	string unrecognized_option;
+	ParseOptions(info, access_mode, db_type, unrecognized_option);
+
+	// get the name and path of the database
+	auto &name = info->name;
+	auto &path = info->path;
+	if (db_type.empty()) {
+		DBPathAndType::ExtractExtensionPrefix(path, db_type);
 	}
-	if (!type.empty()) {
-		type = ExtensionHelper::ApplyExtensionAlias(type);
-	}
-	if (type.empty() && !unrecognized_option.empty()) {
-		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+	if (name.empty()) {
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		name = AttachedDatabase::ExtractDatabaseName(path, fs);
 	}
 
-	// if we are loading a database type from an extension - check if that extension is loaded
-	if (!type.empty()) {
-		if (!db.ExtensionIsLoaded(type)) {
-			ExtensionHelper::LoadExternalExtension(context.client, type);
+	// check ATTACH IF NOT EXISTS
+	auto &db_manager = DatabaseManager::Get(context.client);
+	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+		// constant-time lookup in the catalog for the db name
+		auto existing_db = db_manager.GetDatabase(context.client, name);
+		if (existing_db) {
+
+			if ((existing_db->IsReadOnly() && access_mode == AccessMode::READ_WRITE) ||
+			    (!existing_db->IsReadOnly() && access_mode == AccessMode::READ_ONLY)) {
+
+				auto existing_mode = existing_db->IsReadOnly() ? AccessMode::READ_ONLY : AccessMode::READ_WRITE;
+				auto existing_mode_str = EnumUtil::ToString(existing_mode);
+				auto attached_mode = EnumUtil::ToString(access_mode);
+				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
+				                      name, existing_mode_str, attached_mode);
+			}
+
+			return SourceResultType::FINISHED;
 		}
 	}
 
-	// attach the database
-	auto &name = info->name;
-	const auto &path = info->path;
-
-	if (name.empty()) {
-		name = AttachedDatabase::ExtractDatabaseName(path);
-	}
-	auto &db_manager = DatabaseManager::Get(context.client);
-	auto existing_db = db_manager.GetDatabaseFromPath(context.client, path);
-	if (existing_db) {
-		throw BinderException("Database \"%s\" is already attached with alias \"%s\"", path, existing_db->GetName());
-	}
-	auto new_db = db.CreateAttachedDatabase(*info, type, access_mode);
-	new_db->Initialize();
-
-	db_manager.AddDatabase(context.client, std::move(new_db));
-	state.finished = true;
+	// get the database type and attach the database
+	db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
+	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
+	attached_db->Initialize();
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

@@ -7,7 +7,7 @@ bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().DataFrame());
+	return py::isinstance(object, import_cache.polars.DataFrame());
 }
 
 bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
@@ -15,7 +15,7 @@ bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().LazyFrame());
+	return py::isinstance(object, import_cache.polars.LazyFrame());
 }
 
 bool PandasDataFrame::check_(const py::handle &object) { // NOLINT
@@ -23,7 +23,7 @@ bool PandasDataFrame::check_(const py::handle &object) { // NOLINT
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.pandas().DataFrame());
+	return py::isinstance(object, import_cache.pandas.DataFrame());
 }
 
 bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
@@ -37,7 +37,7 @@ bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
 		return false;
 	}
 
-	auto arrow_dtype = import_cache.pandas().core.arrays.arrow.dtype.ArrowDtype();
+	auto arrow_dtype = import_cache.pandas.ArrowDtype();
 	for (auto &dtype : dtypes) {
 		if (py::isinstance(dtype, arrow_dtype)) {
 			return true;
@@ -48,7 +48,7 @@ bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
 
 bool PolarsDataFrame::check_(const py::handle &object) { // NOLINT
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache.polars().DataFrame());
+	return py::isinstance(object, import_cache.polars.DataFrame());
 }
 
 } // namespace duckdb

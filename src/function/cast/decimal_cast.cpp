@@ -207,7 +207,7 @@ struct DecimalCastInput {
 struct StringCastFromDecimalOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (DecimalCastInput *)dataptr;
+		auto data = reinterpret_cast<DecimalCastInput *>(dataptr);
 		return StringCastFromDecimal::Operation<INPUT_TYPE>(input, data->width, data->scale, data->result);
 	}
 };
@@ -247,6 +247,8 @@ BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const Logica
 		return FromDecimalCast<uint64_t>;
 	case LogicalTypeId::HUGEINT:
 		return FromDecimalCast<hugeint_t>;
+	case LogicalTypeId::UHUGEINT:
+		return FromDecimalCast<uhugeint_t>;
 	case LogicalTypeId::DECIMAL: {
 		// decimal to decimal cast
 		// first we need to figure out the source and target internal types

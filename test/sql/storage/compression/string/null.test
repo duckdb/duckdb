@@ -5,6 +5,9 @@
 # load the DB from disk
 load __TEST_DIR__/test_rle.db
 
+statement ok
+pragma enable_verification
+
 foreach compression fsst dictionary
 
 foreach enable_fsst_vector true false
@@ -76,6 +79,9 @@ query III
 SELECT COUNT(*), COUNT(i::INT), SUM(i::INT) FROM nulls
 ----
 70006	6	9
+
+statement ok
+CHECKPOINT
 
 query I
 SELECT lower(compression)='${compression}' FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1

@@ -1,20 +1,23 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/transaction/local_storage.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -76,6 +79,9 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		auto &tsgs = gstate->Cast<TableScanGlobalState>();
 		result->all_columns.Initialize(context.client, tsgs.scanned_types);
 	}
+
+	result->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+
 	return std::move(result);
 }
 
@@ -116,6 +122,8 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 	auto &state = data_p.local_state->Cast<TableScanLocalState>();
 	auto &transaction = DuckTransaction::Get(context, bind_data.table.catalog);
 	auto &storage = bind_data.table.GetStorage();
+
+	state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 	do {
 		if (bind_data.is_create_index) {
 			storage.CreateIndexScan(state.scan_state, output,
@@ -180,8 +188,9 @@ idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_da
 	return 0;
 }
 
-BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
-	return BindInfo(ScanType::TABLE);
+BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	return BindInfo(bind_data.table);
 }
 
 void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
@@ -207,7 +216,7 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 	Vector row_ids;
 	ColumnFetchState fetch_state;
 	TableScanState local_storage_state;
-	vector<column_t> column_ids;
+	vector<storage_t> column_ids;
 	bool finished;
 };
 
@@ -215,12 +224,18 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	data_ptr_t row_id_data = nullptr;
 	if (!bind_data.result_ids.empty()) {
-		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
+		row_id_data = (data_ptr_t)&bind_data.result_ids[0]; // NOLINT - this is not pretty
 	}
 	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
-	result->column_ids = input.column_ids;
-	result->local_storage_state.Initialize(input.column_ids, input.filters.get());
+
+	result->local_storage_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
+
+	result->column_ids.reserve(input.column_ids.size());
+	for (auto &id : input.column_ids) {
+		result->column_ids.push_back(GetStorageIndex(bind_data.table, id));
+	}
+	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
 
 	result->finished = false;
@@ -277,120 +292,67 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	if (bind_data.is_index_scan) {
 		return;
 	}
+	if (!get.table_filters.filters.empty()) {
+		// if there were filters before we can't convert this to an index scan
+		return;
+	}
+	if (!get.projection_ids.empty()) {
+		// if columns were pruned by RemoveUnusedColumns we can't convert this to an index scan,
+		// because index scan does not support filter_prune (yet)
+		return;
+	}
 	if (filters.empty()) {
 		// no indexes or no filters: skip the pushdown
 		return;
 	}
+
+	// Lazily initialize any unknown indexes that might have been loaded by an extension
+	storage.info->InitializeIndexes(context);
+
 	// behold
 	storage.info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
 
-		if (index.unbound_expressions.size() > 1) {
+		if (index.IsUnknown()) {
+			// unknown index: skip
+			return false;
+		}
+
+		if (index.index_type != ART::TYPE_NAME) {
+			// only ART indexes are supported for now
+			return false;
+		}
+
+		auto &art_index = index.Cast<ART>();
+
+		if (art_index.unbound_expressions.size() > 1) {
 			// NOTE: index scans are not (yet) supported for compound index keys
 			return false;
 		}
 
-		auto index_expression = index.unbound_expressions[0]->Copy();
+		auto index_expression = art_index.unbound_expressions[0]->Copy();
 		bool rewrite_possible = true;
-		RewriteIndexExpression(index, get, *index_expression, rewrite_possible);
+		RewriteIndexExpression(art_index, get, *index_expression, rewrite_possible);
 		if (!rewrite_possible) {
 			// could not rewrite!
 			return false;
 		}
 
-		Value low_value, high_value, equal_value;
-		ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 		// try to find a matching index for any of the filter expressions
+		auto &transaction = Transaction::Get(context, bind_data.table.catalog);
+
 		for (auto &filter : filters) {
-			auto &expr = *filter;
-
-			// create a matcher for a comparison with a constant
-			ComparisonExpressionMatcher matcher;
-			// match on a comparison type
-			matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
-			// match on a constant comparison with the indexed expression
-			matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(*index_expression));
-			matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
-
-			matcher.policy = SetMatcher::Policy::UNORDERED;
-
-			vector<reference<Expression>> bindings;
-			if (matcher.Match(expr, bindings)) {
-				// range or equality comparison with constant value
-				// we can use our index here
-				// bindings[0] = the expression
-				// bindings[1] = the index expression
-				// bindings[2] = the constant
-				auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
-				auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
-				auto comparison_type = comparison.type;
-				if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
-					// the expression is on the right side, we flip them around
-					comparison_type = FlipComparisonExpression(comparison_type);
-				}
-				if (comparison_type == ExpressionType::COMPARE_EQUAL) {
-					// equality value
-					// equality overrides any other bounds so we just break here
-					equal_value = constant_value;
-					break;
-				} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-				           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-					// greater than means this is a lower bound
-					low_value = constant_value;
-					low_comparison_type = comparison_type;
+			auto index_state = art_index.TryInitializeScan(transaction, *index_expression, *filter);
+			if (index_state != nullptr) {
+				if (art_index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
+					// use an index scan!
+					bind_data.is_index_scan = true;
+					get.function = TableScanFunction::GetIndexScanFunction();
 				} else {
-					// smaller than means this is an upper bound
-					high_value = constant_value;
-					high_comparison_type = comparison_type;
+					bind_data.result_ids.clear();
 				}
-			} else if (expr.type == ExpressionType::COMPARE_BETWEEN) {
-				// BETWEEN expression
-				auto &between = expr.Cast<BoundBetweenExpression>();
-				if (!between.input->Equals(index_expression.get())) {
-					// expression doesn't match the current index expression
-					continue;
-				}
-				if (between.lower->type != ExpressionType::VALUE_CONSTANT ||
-				    between.upper->type != ExpressionType::VALUE_CONSTANT) {
-					// not a constant comparison
-					continue;
-				}
-				low_value = (between.lower->Cast<BoundConstantExpression>()).value;
-				low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
-				                                              : ExpressionType::COMPARE_GREATERTHAN;
-				high_value = (between.upper->Cast<BoundConstantExpression>()).value;
-				high_comparison_type = between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
-				                                               : ExpressionType::COMPARE_LESSTHAN;
-				break;
+				return true;
 			}
-		}
-		if (!equal_value.IsNull() || !low_value.IsNull() || !high_value.IsNull()) {
-			// we can scan this index using this predicate: try a scan
-			auto &transaction = Transaction::Get(context, bind_data.table.catalog);
-			unique_ptr<IndexScanState> index_state;
-			if (!equal_value.IsNull()) {
-				// equality predicate
-				index_state =
-				    index.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
-			} else if (!low_value.IsNull() && !high_value.IsNull()) {
-				// two-sided predicate
-				index_state = index.InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
-				                                                high_comparison_type);
-			} else if (!low_value.IsNull()) {
-				// less than predicate
-				index_state = index.InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
-			} else {
-				D_ASSERT(!high_value.IsNull());
-				index_state = index.InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
-			}
-			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
-				// use an index scan!
-				bind_data.is_index_scan = true;
-				get.function = TableScanFunction::GetIndexScanFunction();
-			} else {
-				bind_data.result_ids.clear();
-			}
-			return true;
 		}
 		return false;
 	});
@@ -402,35 +364,30 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
-static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                               const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-
-	writer.WriteString(bind_data.table.schema.name);
-	writer.WriteString(bind_data.table.name);
-	writer.WriteField<bool>(bind_data.is_index_scan);
-	writer.WriteField<bool>(bind_data.is_create_index);
-	writer.WriteList<row_t>(bind_data.result_ids);
-	writer.WriteString(bind_data.table.schema.catalog.GetName());
+	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
+	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
+	serializer.WriteProperty(102, "table", bind_data.table.name);
+	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
+	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
+	serializer.WriteProperty(105, "result_ids", bind_data.result_ids);
 }
 
-static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, FieldReader &reader,
-                                                     TableFunction &function) {
-	auto schema_name = reader.ReadRequired<string>();
-	auto table_name = reader.ReadRequired<string>();
-	auto is_index_scan = reader.ReadRequired<bool>();
-	auto is_create_index = reader.ReadRequired<bool>();
-	auto result_ids = reader.ReadRequiredList<row_t>();
-	auto catalog_name = reader.ReadField<string>(INVALID_CATALOG);
-
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, table_name);
+static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
+	auto catalog = deserializer.ReadProperty<string>(100, "catalog");
+	auto schema = deserializer.ReadProperty<string>(101, "schema");
+	auto table = deserializer.ReadProperty<string>(102, "table");
+	auto &catalog_entry =
+	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
-		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
+		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}
-
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
-	result->is_index_scan = is_index_scan;
-	result->is_create_index = is_create_index;
-	result->result_ids = std::move(result_ids);
+	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
+	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
+	deserializer.ReadProperty(105, "result_ids", result->result_ids);
 	return std::move(result);
 }
 
@@ -447,6 +404,7 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.get_batch_index = nullptr;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = false;
+	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
@@ -463,22 +421,13 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_batch_index = TableScanGetBatchIndex;
-	scan_function.get_batch_info = TableScanGetBindInfo;
+	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
-}
-
-optional_ptr<TableCatalogEntry> TableScanFunction::GetTableEntry(const TableFunction &function,
-                                                                 const optional_ptr<FunctionData> bind_data_p) {
-	if (function.function != TableScanFunc || !bind_data_p) {
-		return nullptr;
-	}
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	return &bind_data.table;
 }
 
 void TableScanFunction::RegisterFunction(BuiltinFunctions &set) {

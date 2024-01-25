@@ -18,7 +18,7 @@ struct Base64DecodeOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto result_size = Blob::FromBase64Size(input);
 		auto result_blob = StringVector::EmptyString(result, result_size);
-		Blob::FromBase64(input, (data_ptr_t)result_blob.GetDataWriteable(), result_size);
+		Blob::FromBase64(input, data_ptr_cast(result_blob.GetDataWriteable()), result_size);
 		result_blob.Finalize();
 		return result_blob;
 	}

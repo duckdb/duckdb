@@ -1,0 +1,115 @@
+# name: test/sql/cte/materialized/test_recursive_cte_union_all_materialized.test
+# description: Test Recursive Common Table Expressions UNION ALL (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+# simple recursive CTE
+query I
+with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3) select * from t
+----
+1
+2
+3
+
+# simple recursive CTE with an alias
+query I
+with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t as m where m.x < 3) select * from t
+----
+1
+2
+3
+
+# recursive CTE with multiple references and aliases
+query I
+with recursive t as MATERIALIZED (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t
+----
+1
+2
+4
+
+# strings and multiple columns
+query IT
+with recursive t as MATERIALIZED (select 1 as x, 'hello' as y union all select x+1, y || '-' || 'hello' from t where x < 3) select * from t;
+----
+1	hello
+2	hello-hello
+3	hello-hello-hello
+
+# referencing same CTE multiple times
+query I
+with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3) select min(a1.x) from t a1, t a2;
+----
+1
+
+# nested uncorrelated subquery
+query I
+with recursive t as MATERIALIZED (select 1 as x union all select x+(SELECT 1) from t where x < 3) select * from t;
+----
+1
+2
+3
+
+# use with recursive in table creation
+statement ok
+create table integers as with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3) select * from t;
+
+# more complex uncorrelated subquery
+query I
+with recursive t as MATERIALIZED (select (select min(x) from integers) as x union all select x+1 from t where x < 3) select * from t;
+----
+1
+2
+3
+
+# aggregate function
+query I
+with recursive t as MATERIALIZED (select 1 as x union all select sum(x+1) AS x from t where x < 3 group by x) select * from t
+----
+1
+2
+3
+
+# recursive CTE with table-producing function
+query I
+WITH RECURSIVE t AS MATERIALIZED (
+	SELECT 1 AS i
+	UNION ALL
+	SELECT j
+	FROM t, generate_series(0, 10, 1) series(j)
+	WHERE j=i+1
+)
+SELECT * FROM t;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+# order by is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 order by x) select * from t
+----
+
+# limit is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 LIMIT 1) select * from t
+----
+
+# offset is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 OFFSET 1) select * from t
+----
+
+# offset is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union all select x+1 from t where x < 3 LIMIT 1 OFFSET 1) select * from t
+----
+
