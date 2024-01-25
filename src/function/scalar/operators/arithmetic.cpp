@@ -886,6 +886,18 @@ struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 	}
 
+	// 16 bit division optimisation
+	static libdivide::divider<int16_t> OptimisedRight(DivideOperator _, int16_t right) {
+		return libdivide::divider<int16_t>(right);
+	}
+
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
+	                                      libdivide::divider<int16_t> right) {
+		return DivideOperator::template Operation<LEFT_TYPE, libdivide::divider<int16_t>, RESULT_TYPE>(left, right);
+	}
+
+	// 32 bit division optimisation
 	static libdivide::divider<int32_t> OptimisedRight(DivideOperator _, int32_t right) {
 		return libdivide::divider<int32_t>(right);
 	}
@@ -896,7 +908,7 @@ struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 		return DivideOperator::template Operation<LEFT_TYPE, libdivide::divider<int32_t>, RESULT_TYPE>(left, right);
 	}
 
-
+	// 64 bit division optimisation
 	static libdivide::divider<int64_t> OptimisedRight(DivideOperator _, int64_t right) {
 		return libdivide::divider<int64_t>(right);
 	}
@@ -943,7 +955,7 @@ struct BinaryZeroIsNullWrapper : ConstRightOptOperatorWrapper{
 	}
 };
 
-struct BinaryNumericDivideHugeintWrapper :ConstRightOptOperatorWrapper {
+struct BinaryNumericDivideHugeintWrapper :NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
@@ -954,11 +966,6 @@ struct BinaryNumericDivideHugeintWrapper :ConstRightOptOperatorWrapper {
 		} else {
 			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 		}
-	}
-
-	template <class OP, class RIGHT_TYPE>
-	static RIGHT_TYPE OptimisedRight(OP _, RIGHT_TYPE right) {
-		return right;
 	}
 
 	template <class FUNC, class LEFT_TYPE, class RIGHT_TYPE>
