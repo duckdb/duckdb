@@ -122,7 +122,7 @@ static bool HasNonReorderableChild(LogicalOperator &op) {
 		}
 		tmp = tmp->children[0].get();
 		if (tmp->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			if (!JoinIsReorderable(op)) {
+			if (!JoinIsReorderable(*tmp)) {
 				return true;
 			}
 		}
@@ -152,7 +152,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = op->Cast<LogicalComparisonJoin>();
 		if (JoinIsReorderable(*op)) {
 			// extract join conditions from inner join
 			filter_operators.push_back(*op);
