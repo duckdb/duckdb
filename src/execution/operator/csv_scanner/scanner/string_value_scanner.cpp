@@ -106,7 +106,7 @@ void StringValueResult::HandleOverLimitRows() {
 	cur_col_id = 0;
 }
 
-void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size) {
+void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
 	//	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == null_str) {
 	//		bool empty = false;
 	//		if (cur_col_id < state_machine.options.force_not_null.size()) {
@@ -133,40 +133,12 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	default:
-		static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t(value_ptr, size);
-		break;
-	}
-	cur_col_id++;
-}
-
-void StringValueResult::AddValueToVector(string_t &value, bool allocate) {
-	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == null_str) {
-		bool empty = false;
-		if (cur_col_id < state_machine.options.force_not_null.size()) {
-			empty = state_machine.options.force_not_null[cur_col_id];
-		}
-		if (empty) {
-			if (cur_col_id >= number_of_columns) {
-				HandleOverLimitRows();
-			}
-			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
-		} else {
-			if (cur_col_id == number_of_columns) {
-				// We check for a weird case, where we ignore an extra value, if it is a null value
-				return;
-			}
-			validity_mask[cur_col_id]->SetInvalid(number_of_rows);
-		}
-	} else {
-		if (cur_col_id >= number_of_columns) {
-			HandleOverLimitRows();
-		}
 		if (allocate) {
-			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] =
-			    StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], value);
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows]  = StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], string_t(value_ptr,size));
 		} else {
-			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = value;
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t(value_ptr, size);
 		}
+		break;
 	}
 	cur_col_id++;
 }
@@ -647,7 +619,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		value = string_t(overbuffer_string.c_str(), overbuffer_string.size());
 	}
 	if (!states.IsNotSet()) {
-		result.AddValueToVector(value, true);
+		result.AddValueToVector(value.GetData(),value.GetSize(), true);
 	}
 	if (states.NewRow() && !states.IsNotSet()) {
 		result.AddRowInternal();
