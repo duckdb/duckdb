@@ -286,6 +286,11 @@ SELECT '0x0__F_F_F'::INT
 Conversion Error: Could not convert string '0x0__F_F_F' to INT32
 
 
+# Test decimals keep their width
+query IIII
+SELECT typeof(10.00), typeof(10.0_0), typeof(1_0.00), typeof(1_0.0_0);
+----
+DECIMAL(4,2)	DECIMAL(4,2)	DECIMAL(4,2)	DECIMAL(4,2)
 
 
 query I
