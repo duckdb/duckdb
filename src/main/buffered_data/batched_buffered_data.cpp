@@ -136,16 +136,11 @@ PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &r
 }
 
 void BatchedBufferedData::CompleteBatch(idx_t batch) {
-	// printf("COMPLETE BATCH: batch: %llu\n", batch);
-	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
-	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
-
 	auto it = in_progress_batches.find(batch);
 	if (it == in_progress_batches.end()) {
 		return;
 	}
 
-	Printer::Print(StringUtil::Format("BATCH %d COMPLETED", batch));
 	auto &buffered_chunks = it->second;
 	buffered_chunks.completed = true;
 }

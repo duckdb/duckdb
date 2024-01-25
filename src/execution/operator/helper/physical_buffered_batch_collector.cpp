@@ -67,7 +67,6 @@ SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &co
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
 	auto new_index = lstate.BatchIndex();
 
-	printf("NEXT BATCH: stored: %llu | new: %llu | lstate %p\n", batch, new_index, (void *)&lstate);
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.CompleteBatch(batch);
 	lstate.current_batch = new_index;
@@ -88,7 +87,6 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 	auto batch = lstate.current_batch;
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
 
-	printf("BATCH COMPLETED: stored: %llu | lstate %p\n", batch, (void *)&lstate);
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.CompleteBatch(batch);
 	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
