@@ -127,8 +127,6 @@ public:
 private:
 	void Initialize() override;
 
-	void Process() override;
-
 	void FinalizeChunkProcess() override;
 
 	//! Function used to process values that go over the first buffer, extra allocation might be necessary

@@ -454,25 +454,25 @@ bool Executor::ResultCollectorIsBlocked() {
 	for (auto &kv : to_be_rescheduled_tasks) {
 		auto &task = kv.second;
 		if (task->Type() != TaskType::EXECUTOR) {
-			return false;
+			continue;
 		}
 		auto &executor_task = dynamic_cast<ExecutorTask &>(*task);
 		if (!executor_task.IsPipelineTask()) {
-			return false;
+			continue;
 		}
 		auto &pipeline_task = dynamic_cast<PipelineTask &>(executor_task);
 		auto &pipeline_executor = pipeline_task.GetPipelineExecutor();
 		if (!pipeline_executor.RemainingSinkChunk()) {
 			// This indicates whether the Sink was blocked
 			// All blocked tasks have to be Sinks in the final pipeline
-			return false;
+			continue;
 		}
 		// At least one of the blocked tasks is connected to a result collector
 		// This task could be the only task that could unblock the other non-result-collector tasks
 		// To prevent a scenario where we halt indefinitely, we return here so it can be unblocked by a call to Fetch
 		return true;
 	}
-	return true;
+	return false;
 }
 
 void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {

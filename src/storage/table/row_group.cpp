@@ -125,7 +125,10 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void ColumnScanState::Initialize(const LogicalType &type) {
+void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options) {
+	// Register the options in the state
+	scan_options = options;
+
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		// validity - nothing to initialize
 		return;
@@ -135,19 +138,23 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 		auto &struct_children = StructType::GetChildTypes(type);
 		child_states.resize(struct_children.size() + 1);
 		for (idx_t i = 0; i < struct_children.size(); i++) {
-			child_states[i + 1].Initialize(struct_children[i].second);
+			child_states[i + 1].Initialize(struct_children[i].second, options);
 		}
+		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
 		child_states.resize(2);
-		child_states[1].Initialize(ListType::GetChildType(type));
+		child_states[1].Initialize(ListType::GetChildType(type), options);
+		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::ARRAY) {
 		// validity + array child
 		child_states.resize(2);
-		child_states[1].Initialize(ArrayType::GetChildType(type));
+		child_states[0].scan_options = options;
+		child_states[1].Initialize(ArrayType::GetChildType(type), options);
 	} else {
 		// validity
 		child_states.resize(1);
+		child_states[0].scan_options = options;
 	}
 }
 
@@ -158,7 +165,7 @@ void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
-		column_scans[i].Initialize(types[column_ids[i]]);
+		column_scans[i].Initialize(types[column_ids[i]], &GetOptions());
 	}
 }
 
@@ -181,6 +188,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
+			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
@@ -209,6 +217,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state) {
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScan(state.column_scans[i]);
+			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
