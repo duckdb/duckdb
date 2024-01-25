@@ -69,7 +69,7 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 	if (!result) {
 		switch (info.on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException("Schema with name %s already exists!", info.schema);
+			throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, info.schema);
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
@@ -97,7 +97,7 @@ void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	ModifyCatalog();
 	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
 		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", info.name);
+			throw CatalogException::MissingEntry(CatalogType::SCHEMA_ENTRY, info.name, string());
 		}
 	}
 }

@@ -17,6 +17,7 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const string &
 												name, did_you_mean));
 
 	result.catalog_exception_type = CatalogExceptionType::MISSING_ENTRY;
+	result.extra_info["name"] = name;
 	result.extra_info["type"] = CatalogTypeToString(type);
 	if (!suggestion.empty()) {
 		result.extra_info["candidates"] = suggestion;
@@ -31,6 +32,7 @@ CatalogException CatalogException::MissingEntry(const string &type, const string
 	CatalogException result(context.FormatError("unrecognized %s \"%s\"\n%s", type,
 												name, StringUtil::CandidatesErrorMessage(suggestions, name, "Did you mean")));
 	result.catalog_exception_type = CatalogExceptionType::MISSING_ENTRY;
+	result.extra_info["name"] = name;
 	result.extra_info["type"] = type;
 	if (!suggestions.empty()) {
 		result.extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
@@ -38,6 +40,14 @@ CatalogException CatalogException::MissingEntry(const string &type, const string
 	if (context.query_location != DConstants::INVALID_INDEX) {
 		result.extra_info["position"] = to_string(context.query_location);
 	}
+	return result;
+}
+
+CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const string &name, QueryErrorContext context) {
+	CatalogException result(context.FormatError("%s with name \"%s\" already exists!", CatalogTypeToString(type), name));
+	result.catalog_exception_type = CatalogExceptionType::ENTRY_ALREADY_EXISTS;
+	result.extra_info["name"] = name;
+	result.extra_info["type"] = CatalogTypeToString(type);
 	return result;
 }
 
