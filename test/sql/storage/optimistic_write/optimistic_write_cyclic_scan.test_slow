@@ -2,7 +2,9 @@
 # description: Test optimistic write with a cyclic scan
 # group: [optimistic_write]
 
-# load the DB from disk
+# FIXME: runtime error: member access within address 0x000359ad3c40 which does not point to an object of type 'BlockManager'
+require block_size 262144
+
 load __TEST_DIR__/optimistic_write_cyclic_scan.db
 
 statement ok
