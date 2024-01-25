@@ -143,7 +143,15 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
 		} else {
 			// we have filters, create a join node
-			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+			auto chosen_filter = node.info->filters.at(0);
+			for (idx_t i = 0; i < node.info->filters.size(); i++) {
+				if (node.info->filters.at(i)->join_type == JoinType::INNER) {
+					chosen_filter = node.info->filters.at(i);
+					break;
+				}
+			}
+
+			auto join = make_uniq<LogicalComparisonJoin>(chosen_filter->join_type);
 			// Here we optimize build side probe side. Our build side is the right side
 			// So the right plans should have lower cardinalities.
 			join->children.push_back(std::move(left.op));
@@ -166,6 +174,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				auto &comparison = condition->Cast<BoundComparisonExpression>();
 
 				// we need to figure out which side is which by looking at the relations available to us
+				// This will also automatically place relations for semi joins and anti joins on the correct side.
+				// left/right (build side/probe side) optimizations happen later.
 				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);

@@ -102,6 +102,19 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 	}
 }
 
+static bool JoinIsReorderable(LogicalOperator &op) {
+	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+	auto &join = op.Cast<LogicalComparisonJoin>();
+	switch (join.join_type) {
+	case JoinType::INNER:
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool HasNonReorderableChild(LogicalOperator &op) {
 	LogicalOperator *tmp = &op;
 	while (tmp->children.size() == 1) {
@@ -110,8 +123,7 @@ static bool HasNonReorderableChild(LogicalOperator &op) {
 		}
 		tmp = tmp->children[0].get();
 		if (tmp->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = tmp->Cast<LogicalComparisonJoin>();
-			if (join.join_type != JoinType::INNER) {
+			if (!JoinIsReorderable(op)) {
 				return true;
 			}
 		}
@@ -142,7 +154,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
-		if (join.join_type == JoinType::INNER) {
+		if (JoinIsReorderable(*op)) {
 			// extract join conditions from inner join
 			filter_operators.push_back(*op);
 		} else {
@@ -312,7 +324,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
-			D_ASSERT(join.join_type == JoinType::INNER);
+			D_ASSERT(JoinIsReorderable(op));
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {
 				auto comparison =
@@ -322,7 +334,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					unordered_set<idx_t> bindings;
 					ExtractBindings(*comparison, bindings);
 					auto &set = set_manager.GetJoinRelation(bindings);
-					auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size());
+					auto filter_info =
+					    make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}
