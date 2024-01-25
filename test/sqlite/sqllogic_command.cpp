@@ -177,8 +177,10 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	LoopDefinition loop_def = definition;
 	loop_def.loop_idx = definition.loop_start;
 	if (loop_def.is_parallel) {
-		if (context.is_parallel || !context.running_loops.empty()) {
-			throw std::runtime_error("Nested parallel loop commands not allowed");
+		for (auto &running_loop : context.running_loops) {
+			if (running_loop.is_parallel) {
+				throw std::runtime_error("Nested parallel loop commands not allowed");
+			}
 		}
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
