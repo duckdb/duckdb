@@ -57,6 +57,24 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 
 SinkNextBatchType PhysicalBufferedBatchCollector::NextBatch(ExecutionContext &context,
                                                             OperatorSinkNextBatchInput &input) const {
+
+	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
+	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
+
+	lock_guard<mutex> l(gstate.glock);
+
+	auto batch = lstate.current_batch;
+	auto min_batch_index = lstate.GetMinimumBatchIndex();
+	auto new_index = lstate.BatchIndex();
+
+	printf("NEXT BATCH: stored: %llu | new: %llu | lstate %p\n", batch, new_index, (void *)&lstate);
+	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
+	buffered_data.CompleteBatch(batch);
+	lstate.current_batch = new_index;
+	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
+	// We might want to block here if 'current_batch_tuple_count' has already reached the threshold
+	// So we don't completely disregard the BUFFER_SIZE we set
+	buffered_data.UpdateMinBatchIndex(min_batch_index);
 	return SinkNextBatchType::READY;
 }
 
@@ -70,7 +88,7 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 	auto batch = lstate.current_batch;
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
 
-	// printf("BATCH COMPLETED: current: %llu\n", batch);
+	printf("BATCH COMPLETED: stored: %llu | lstate %p\n", batch, (void *)&lstate);
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
 	buffered_data.CompleteBatch(batch);
 	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'

@@ -304,7 +304,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 
 	auto &table = gstate.table;
-	auto batch_index = lstate.partition_info.batch_index.GetIndex();
+	auto batch_index = lstate.partition_info.BatchIndex();
 	if (lstate.current_collection) {
 		if (lstate.current_index == batch_index) {
 			throw InternalException("NextBatch called with the same batch index?");
@@ -312,7 +312,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.MinimumBatchIndex(),
 		                     std::move(lstate.current_collection), lstate.writer, &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
 	}
@@ -327,7 +327,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
-	auto batch_index = lstate.partition_info.batch_index.GetIndex();
+	auto batch_index = lstate.partition_info.BatchIndex();
 	if (!lstate.current_collection) {
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
@@ -364,7 +364,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	if (lstate.current_collection->GetTotalRows() > 0) {
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.MinimumBatchIndex(),
 		                     std::move(lstate.current_collection));
 	}
 	{

@@ -30,18 +30,6 @@ bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
 
 bool BatchedBufferedData::BufferIsFull() {
 	lock_guard<mutex> lock(glock);
-	if (min_batch == 0) {
-		// This is highly unlikely to happen
-		// But it's possible that a Sink has to be unblocked before a min batch index is assigned
-		// After a Sink has been blocked once, the second time around it'll reach this method
-
-		// TODO: maybe check the `other_batches_tuple_count` to make sure we're not flooding it
-		// Actually, no we can't do that
-		// If this returns true, and we reach Scan with an empty 'batches' queue, we will mark the result as finished
-		// Which should never happen if the min_batch is still 0
-		return false;
-	}
-
 	bool min_filled = current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE;
 	bool others_filled = other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE;
 	if (batches.empty()) {
@@ -84,13 +72,7 @@ void BatchedBufferedData::UnblockSinks() {
 
 void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 	lock_guard<mutex> lock(glock);
-	if (min_batch_index <= min_batch) {
-		// This batch index is outdated or already processed
-		// Just verify that there are no "in progress" chunks left for this batch index
-		D_ASSERT(!in_progress_batches.count(min_batch_index));
-		return;
-	}
-	min_batch = min_batch_index;
+	min_batch = MaxValue(min_batch, min_batch_index);
 	// printf("UPDATE MIN BATCH: min_batch: %llu\n", min_batch);
 	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
 	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
@@ -100,6 +82,11 @@ void BatchedBufferedData::UpdateMinBatchIndex(idx_t min_batch_index) {
 		auto batch = it.first;
 		auto &buffered_chunks = it.second;
 		if (batch > min_batch) {
+			// This batch is still in progress, can not be fetched from yet
+			break;
+		}
+		if (batch != min_batch && !buffered_chunks.completed) {
+			// We haven't completed this batch yet
 			break;
 		}
 		D_ASSERT(buffered_chunks.completed || batch == min_batch);
@@ -158,6 +145,7 @@ void BatchedBufferedData::CompleteBatch(idx_t batch) {
 		return;
 	}
 
+	Printer::Print(StringUtil::Format("BATCH %d COMPLETED", batch));
 	auto &buffered_chunks = it->second;
 	buffered_chunks.completed = true;
 }

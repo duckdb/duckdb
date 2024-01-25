@@ -82,7 +82,7 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	auto &state = input.local_state.Cast<BatchCopyToLocalState>();
 	if (!state.collection) {
 		state.InitializeCollection(context.client, *this);
-		state.batch_index = state.partition_info.batch_index.GetIndex();
+		state.batch_index = state.partition_info.BatchIndex();
 	}
 	state.rows_copied += chunk.size();
 	state.collection->Append(state.append_state, chunk);
@@ -183,11 +183,11 @@ SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
-		auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
-		PrepareBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
+		auto min_batch_index = lstate.partition_info.MinimumBatchIndex();
+		PrepareBatchData(context.client, gstate_p, state.BatchIndex(), std::move(state.collection));
 		FlushBatchData(context.client, gstate_p, min_batch_index);
 	}
-	state.batch_index = lstate.partition_info.batch_index.GetIndex();
+	state.batch_index = lstate.partition_info.BatchIndex();
 
 	state.InitializeCollection(context.client, *this);
 	return SinkNextBatchType::READY;

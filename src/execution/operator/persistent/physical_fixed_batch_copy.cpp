@@ -129,7 +129,7 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
 	if (!state.collection) {
 		state.InitializeCollection(context.client, *this);
-		state.batch_index = state.partition_info.batch_index.GetIndex();
+		state.batch_index = state.partition_info.BatchIndex();
 	}
 	state.rows_copied += chunk.size();
 	state.collection->Append(state.append_state, chunk);
@@ -458,16 +458,16 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
-		auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
+		auto min_batch_index = lstate.partition_info.MinimumBatchIndex();
 		// push the raw batch data into the set of unprocessed batches
-		AddRawBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
+		AddRawBatchData(context.client, gstate_p, state.BatchIndex(), std::move(state.collection));
 		// attempt to repartition to our desired batch size
 		RepartitionBatches(context.client, gstate_p, min_batch_index);
 		// execute a single batch task
 		ExecuteTask(context.client, gstate_p);
 		FlushBatchData(context.client, gstate_p, min_batch_index);
 	}
-	state.batch_index = lstate.partition_info.batch_index.GetIndex();
+	state.batch_index = lstate.partition_info.BatchIndex();
 
 	state.InitializeCollection(context.client, *this);
 	return SinkNextBatchType::READY;
