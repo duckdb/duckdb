@@ -16,16 +16,15 @@ namespace duckdb {
 
 class TerminalProgressBarDisplay : public ProgressBarDisplay {
 public:
-	TerminalProgressBarDisplay() {
-	}
-	~TerminalProgressBarDisplay() override {
-	}
+	TerminalProgressBarDisplay() = default;
+	~TerminalProgressBarDisplay() override = default;
 
 public:
 	void Update(double percentage) override;
 	void Finish() override;
 
 private:
+	int32_t rendered_percentage = -1;
 	static constexpr const idx_t PARTIAL_BLOCK_COUNT = UnicodeBar::PartialBlocksCount();
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *PROGRESS_EMPTY = " ";
@@ -43,7 +42,8 @@ private:
 	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
 
 private:
-	void PrintProgressInternal(int percentage);
+	static int32_t NormalizePercentage(double percentage);
+	void PrintProgressInternal(int32_t percentage);
 };
 
 } // namespace duckdb

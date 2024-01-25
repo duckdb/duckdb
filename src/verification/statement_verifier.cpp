@@ -10,6 +10,7 @@
 #include "duckdb/verification/prepared_statement_verifier.hpp"
 #include "duckdb/verification/unoptimized_statement_verifier.hpp"
 #include "duckdb/verification/no_operator_caching_verifier.hpp"
+#include "duckdb/verification/fetch_row_verifier.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,8 @@ unique_ptr<StatementVerifier> StatementVerifier::Create(VerificationType type, c
 		return PreparedStatementVerifier::Create(statement_p);
 	case VerificationType::EXTERNAL:
 		return ExternalStatementVerifier::Create(statement_p);
+	case VerificationType::FETCH_ROW_AS_SCAN:
+		return FetchRowVerifier::Create(statement_p);
 	case VerificationType::INVALID:
 	default:
 		throw InternalException("Invalid statement verification type!");
@@ -108,6 +111,7 @@ bool StatementVerifier::Run(
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.enable_caching_operators = !DisableOperatorCaching();
 	context.config.force_external = ForceExternal();
+	context.config.force_fetch_row = ForceFetchRow();
 	try {
 		auto result = run(query, std::move(statement));
 		if (result->HasError()) {
