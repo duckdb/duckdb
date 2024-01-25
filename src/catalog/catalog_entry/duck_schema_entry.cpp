@@ -77,6 +77,7 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 
 	auto result = make_uniq<DuckSchemaEntry>(catalog, cast_info);
 
+
 	return std::move(result);
 }
 

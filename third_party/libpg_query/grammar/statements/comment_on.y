@@ -12,6 +12,14 @@ CommentOnStmt:
 					n->value = $6;
 					$$ = (PGNode *)n;
 				}
+            | COMMENT ON COLUMN a_expr IS comment_value
+                {
+                    PGCommentOnStmt *n = makeNode(PGCommentOnStmt);
+                    n->object_type = PG_OBJECT_COLUMN;
+                    n->column_expr = $4;
+                    n->value = $6;
+                    $$ = (PGNode *)n;
+                }
 		;
 
 comment_value:
@@ -30,7 +38,6 @@ comment_on_type_any_name:
 			| MATERIALIZED VIEW						{ $$ = PG_OBJECT_MATVIEW; }
 			| INDEX									{ $$ = PG_OBJECT_INDEX; }
 			| COLLATION								{ $$ = PG_OBJECT_COLLATION; }
-			| COLUMN								{ $$ = PG_OBJECT_COLUMN; }
 			| CONVERSION_P							{ $$ = PG_OBJECT_CONVERSION; }
 			| SCHEMA								{ $$ = PG_OBJECT_SCHEMA; }
 			| STATISTICS							{ $$ = PG_OBJECT_STATISTIC_EXT; }

@@ -2199,5 +2199,7 @@ typedef struct PGCommentOnStmt {
 	PGObjectType object_type; 	/* object type */
 	PGRangeVar *name;         /* the object to comment on */
 	PGNode *value;				/* the comment: a string or NULL*/
+	PGNode *column_expr;
 } PGCommentOnStmt;
+
 }

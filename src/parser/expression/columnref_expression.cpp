@@ -51,6 +51,19 @@ const string &ColumnRefExpression::GetTableName() const {
 	return column_names[0];
 }
 
+const string &ColumnRefExpression::GetSchemaName() const {
+	D_ASSERT(column_names.size() >= 3 && column_names.size() <= 4);
+	if (column_names.size() == 4) {
+		return column_names[1];
+	}
+	return column_names[0];
+}
+
+const string &ColumnRefExpression::GetCatalogName() const {
+	D_ASSERT(column_names.size() == 4);
+	return column_names[0];
+}
+
 string ColumnRefExpression::GetName() const {
 	return !alias.empty() ? alias : column_names.back();
 }
