@@ -87,7 +87,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 
 void StringValueResult::HandleOverLimitRows() {
 	auto csv_error =
-	    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id);
+	    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id+1);
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
 	error_handler.Error(lines_per_batch, csv_error);
 	// If we get here we need to remove the last line
@@ -631,6 +631,10 @@ bool StringValueScanner::MoveToNextBuffer() {
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 			    states.IsNotSet()) {
+				if (result.cur_col_id > 0){
+					result.number_of_rows++;
+				}
+				result.cur_col_id = 0;
 				return false;
 			} else if (states.NewValue()) {
 				lines_read++;
@@ -723,7 +727,7 @@ void StringValueScanner::SetStart() {
 	}
 	// We have to look for a new line that fits our schema
 	// 1. We walk until the next new line
-	bool line_found = true;
+	bool line_found;
 	unique_ptr<StringValueScanner> scan_finder;
 	do {
 		SkipUntilNewLine();
@@ -778,7 +782,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		bool moved = MoveToNextBuffer();
 		if (cur_buffer_handle) {
-			if (moved && result.cur_col_id < result.number_of_rows) {
+			if (moved && result.cur_col_id < result.number_of_columns && result.cur_col_id > 0) {
 				ProcessExtraRow();
 			} else if (!moved) {
 				ProcessExtraRow();
