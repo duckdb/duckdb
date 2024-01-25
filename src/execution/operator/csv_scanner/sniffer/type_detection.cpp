@@ -204,7 +204,7 @@ void CSVSniffer::DetectTypes() {
 		// Parse chunk and read csv with info candidate
 		auto &tuples = candidate->ParseChunk();
 		idx_t row_idx = 0;
-		if (tuples.NumberOfRows() > 1 &&
+		if (tuples.number_of_rows > 1 &&
 		    (!options.dialect_options.header.IsSetByUser() ||
 		     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
@@ -212,7 +212,7 @@ void CSVSniffer::DetectTypes() {
 		}
 		// First line where we start our type detection
 		const idx_t start_idx_detection = row_idx;
-		for (; row_idx < tuples.NumberOfRows(); row_idx++) {
+		for (; row_idx < tuples.number_of_rows; row_idx++) {
 			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
 				auto &col_type_candidates = info_sql_types_candidates[col_idx];
 				// col_type_candidates can't be empty since anything in a CSV file should at least be a string

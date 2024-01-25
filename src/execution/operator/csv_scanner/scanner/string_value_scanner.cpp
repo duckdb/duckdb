@@ -745,7 +745,7 @@ void StringValueScanner::SetStart() {
 		                                            make_shared<CSVErrorHandler>(true), iterator, 1);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
-		if (tuples.Empty() || tuples.Size() != state_machine->options.dialect_options.num_cols) {
+		if (tuples.number_of_rows != 1) {
 			line_found = false;
 			// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
 			// Or if columns don't match, this is not the correct start, we need to skip until the next new line

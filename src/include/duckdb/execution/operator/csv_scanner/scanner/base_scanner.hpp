@@ -20,9 +20,6 @@ class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
 
-	idx_t Size();
-	bool Empty();
-
 	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result) {
 		result.quoted = true;
