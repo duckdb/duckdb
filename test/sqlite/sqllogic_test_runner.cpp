@@ -388,18 +388,14 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() != 1) {
 				parser.Fail("mode requires one parameter");
 			}
-			if (token.parameters[0] == "output_hash") {
-				output_hash_mode = true;
-			} else if (token.parameters[0] == "output_result") {
-				output_result_mode = true;
-			} else if (token.parameters[0] == "debug") {
-				debug_mode = true;
-			} else if (token.parameters[0] == "skip") {
+			string parameter = token.parameters[0];
+			if (parameter == "skip") {
 				skip_level++;
-			} else if (token.parameters[0] == "unskip") {
+			} else if (parameter == "unskip") {
 				skip_level--;
 			} else {
-				parser.Fail("unrecognized mode: %s", token.parameters[0]);
+				auto command = make_uniq<ModeCommand>(*this, std::move(parameter));
+				ExecuteCommand(std::move(command));
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_SET) {
 			if (token.parameters.size() < 1) {

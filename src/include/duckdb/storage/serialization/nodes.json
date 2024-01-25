@@ -620,6 +620,10 @@
       {"id": 129,
         "name": "sniffer_user_mismatch_error",
         "type": "string"
+      },
+      {"id": 130,
+        "name": "parallel",
+        "type": "bool"
       }
     ],
     "pointer_type": "none"

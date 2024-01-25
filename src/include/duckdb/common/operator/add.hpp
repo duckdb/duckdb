@@ -41,9 +41,9 @@ timestamp_t AddOperator::Operation(dtime_tz_t left, date_t right);
 template <>
 interval_t AddOperator::Operation(interval_t left, interval_t right);
 template <>
-date_t AddOperator::Operation(date_t left, interval_t right);
+timestamp_t AddOperator::Operation(date_t left, interval_t right);
 template <>
-date_t AddOperator::Operation(interval_t left, date_t right);
+timestamp_t AddOperator::Operation(interval_t left, date_t right);
 template <>
 timestamp_t AddOperator::Operation(timestamp_t left, interval_t right);
 template <>

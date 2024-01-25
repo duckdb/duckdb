@@ -694,6 +694,10 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "ESCAPE";
 	case CSVState::INVALID:
 		return "INVALID";
+	case CSVState::NOT_SET:
+		return "NOT_SET";
+	case CSVState::QUOTED_NEW_LINE:
+		return "QUOTED_NEW_LINE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -724,6 +728,12 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return CSVState::INVALID;
+	}
+	if (StringUtil::Equals(value, "NOT_SET")) {
+		return CSVState::NOT_SET;
+	}
+	if (StringUtil::Equals(value, "QUOTED_NEW_LINE")) {
+		return CSVState::QUOTED_NEW_LINE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1075,6 +1085,10 @@ const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
 		return "COMPRESSION_CHIMP";
 	case CompressionType::COMPRESSION_PATAS:
 		return "COMPRESSION_PATAS";
+	case CompressionType::COMPRESSION_ALP:
+		return "COMPRESSION_ALP";
+	case CompressionType::COMPRESSION_ALPRD:
+		return "COMPRESSION_ALPRD";
 	case CompressionType::COMPRESSION_COUNT:
 		return "COMPRESSION_COUNT";
 	default:
@@ -1113,6 +1127,12 @@ CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COMPRESSION_PATAS")) {
 		return CompressionType::COMPRESSION_PATAS;
+	}
+	if (StringUtil::Equals(value, "COMPRESSION_ALP")) {
+		return CompressionType::COMPRESSION_ALP;
+	}
+	if (StringUtil::Equals(value, "COMPRESSION_ALPRD")) {
+		return CompressionType::COMPRESSION_ALPRD;
 	}
 	if (StringUtil::Equals(value, "COMPRESSION_COUNT")) {
 		return CompressionType::COMPRESSION_COUNT;
@@ -5960,6 +5980,8 @@ const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
 		return "CONJUNCTION_OR";
 	case TableFilterType::CONJUNCTION_AND:
 		return "CONJUNCTION_AND";
+	case TableFilterType::STRUCT_EXTRACT:
+		return "STRUCT_EXTRACT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5981,6 +6003,9 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CONJUNCTION_AND")) {
 		return TableFilterType::CONJUNCTION_AND;
+	}
+	if (StringUtil::Equals(value, "STRUCT_EXTRACT")) {
+		return TableFilterType::STRUCT_EXTRACT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6455,6 +6480,8 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
 		return "PREPARED";
 	case VerificationType::EXTERNAL:
 		return "EXTERNAL";
+	case VerificationType::FETCH_ROW_AS_SCAN:
+		return "FETCH_ROW_AS_SCAN";
 	case VerificationType::INVALID:
 		return "INVALID";
 	default:
@@ -6487,6 +6514,9 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "EXTERNAL")) {
 		return VerificationType::EXTERNAL;
+	}
+	if (StringUtil::Equals(value, "FETCH_ROW_AS_SCAN")) {
+		return VerificationType::FETCH_ROW_AS_SCAN;
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return VerificationType::INVALID;

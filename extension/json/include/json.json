@@ -147,6 +147,12 @@
         "name": "maximum_sample_files",
         "type": "idx_t",
         "default": 32
+      },
+      {
+        "id": 115,
+        "name": "convert_strings_to_integers",
+        "type": "bool",
+        "default": false
       }
     ],
     "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]

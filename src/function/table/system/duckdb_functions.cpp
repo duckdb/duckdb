@@ -283,9 +283,9 @@ struct TableMacroExtractor {
 	}
 
 	static Value GetMacroDefinition(TableMacroCatalogEntry &entry, idx_t offset) {
-		if (entry.function->type == MacroType::SCALAR_MACRO) {
-			auto &func = entry.function->Cast<ScalarMacroFunction>();
-			return func.expression->ToString();
+		if (entry.function->type == MacroType::TABLE_MACRO) {
+			auto &func = entry.function->Cast<TableMacroFunction>();
+			return func.query_node->ToString();
 		}
 		return Value();
 	}
