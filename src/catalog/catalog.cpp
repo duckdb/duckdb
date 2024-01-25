@@ -562,13 +562,11 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		bool qualify_database;
 		bool qualify_schema;
 		FindMinimalQualification(context, catalog_name, schema_name, qualify_database, qualify_schema);
-		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName(qualify_database, qualify_schema) + "\"?";
+		did_you_mean = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
 	} else if (entry.Found()) {
-		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
+		did_you_mean = entry.name;
 	}
-
-	return CatalogException(error_context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
-	                                                  entry_name, did_you_mean));
+	return CatalogException::MissingEntry(type, entry_name, did_you_mean, error_context);
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type,

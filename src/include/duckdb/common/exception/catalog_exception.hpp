@@ -9,8 +9,16 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
+
+enum class CatalogExceptionType : uint8_t {
+	INVALID = 0,
+	MISSING_ENTRY = 1
+};
 
 class CatalogException : public StandardException {
 public:
@@ -19,6 +27,13 @@ public:
 	template <typename... Args>
 	explicit CatalogException(const string &msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
 	}
+
+	static CatalogException MissingEntry(CatalogType type, const string &name, const string &suggestion, QueryErrorContext context = QueryErrorContext());
+
+private:
+	CatalogExceptionType catalog_exception_type;
+	CatalogType catalog_type;
+	unordered_map<string, string> extra_info;
 };
 
 } // namespace duckdb
