@@ -11,14 +11,18 @@ patch_pattern = f"{directory}*.patch"
 # Find patch files matching the pattern
 patches = glob.glob(patch_pattern)
 
+
 def raise_error(error_msg):
     sys.stderr.write(error_message + '\n')
     sys.exit(1)
 
+
 patches = os.listdir(directory)
 for patch in patches:
     if not patch.endswith('.patch'):
-        raise_error(f'Patch file {patch} found in directory {directory} does not end in ".patch" - rename the patch file')
+        raise_error(
+            f'Patch file {patch} found in directory {directory} does not end in ".patch" - rename the patch file'
+        )
 
 
 # Exit if no patches are found
@@ -33,4 +37,6 @@ if not patches:
 # Apply each patch file using git apply
 for patch in patches:
     print(f"Applying patch: {patch}\n")
-    subprocess.run(["git", "apply", "--ignore-space-change", "--ignore-whitespace", os.path.join(directory, patch)], check=True)
+    subprocess.run(
+        ["git", "apply", "--ignore-space-change", "--ignore-whitespace", os.path.join(directory, patch)], check=True
+    )
