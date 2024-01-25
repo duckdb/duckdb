@@ -769,13 +769,13 @@ struct SortKeyFun {
 		data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
 		Vector addresses(LogicalType::POINTER, reinterpret_cast<data_ptr_t>(data_pointers));
 
-		//	Allocate the strings and point into them
+		//	Allocate the key blobs and point into them
 		const auto key_size = sort_layout.entry_size;
 		auto rdata = FlatVector::GetData<string_t>(result);
 		for (idx_t i = 0; i < count; ++i) {
-			auto blob = StringVector::EmptyString(result, key_size);
+			auto &blob = rdata[i];
+			blob = StringVector::EmptyString(result, key_size);
 			data_pointers[i] = reinterpret_cast<data_ptr_t>(blob.GetDataWriteable());
-			rdata[i] = blob;
 		}
 
 		//	Scatter the keys
@@ -801,8 +801,10 @@ struct SortKeyFun {
 			arguments.emplace_back(order.expression->return_type);
 		}
 
-		return ScalarFunction("sort_key", arguments, LogicalTypeId::BLOB, Execute, nullptr, nullptr, nullptr,
-		                      InitLocalState);
+		auto fun = ScalarFunction("sort_key", arguments, LogicalTypeId::BLOB, Execute, nullptr, nullptr, nullptr,
+		                          InitLocalState);
+		fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+		return fun;
 	}
 
 	static unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<BoundOrderByNode> &orders) {
@@ -865,10 +867,10 @@ struct CompareAggregateState {
 		compare_bind.function.initialize(val);
 	}
 
-	inline int Compare(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator, const string_t &right_key) {
+	inline bool LessThan(CompareAggregateBindData &compare_bind, ArenaAllocator &allocator, const string_t &right_key) {
 		if (!val) {
 			Initialize(compare_bind, allocator);
-			return -1; // Uninitialized is before all keys
+			return true; // Uninitialized is before all keys
 		} else {
 			return key < right_key;
 		}
@@ -899,8 +901,7 @@ struct CompareAggregateState {
 		} else if (!val) {
 			std::swap(*this, other);
 		} else {
-			const auto cmp = Compare(compare_bind, allocator, other.key);
-			if (cmp < 0) {
+			if (LessThan(compare_bind, allocator, other.key)) {
 				//	Our key is smaller, so update
 				std::swap(*this, other);
 			}
@@ -950,8 +951,7 @@ struct CombineAggregateFunction {
 
 			const auto kidx = kvdata.sel->get_index(i);
 			const auto right_key = kdata[kidx];
-			const auto cmp = state->Compare(compare_bind, allocator, right_key);
-			if (cmp < 0) {
+			if (state->LessThan(compare_bind, allocator, right_key)) {
 				//	Old key is smaller, so update
 				best_idx = i;
 				state->UpdateKey(allocator, right_key);
@@ -1017,8 +1017,7 @@ struct CombineAggregateFunction {
 
 			const auto sidx = svdata.sel->get_index(i);
 			auto state = sdata[sidx];
-			const auto cmp = state->Compare(compare_bind, allocator, right_key);
-			if (cmp < 0) {
+			if (state->LessThan(compare_bind, allocator, right_key)) {
 				//	Old key is smaller, so update
 				child_state_ptrs[nsel] = state->val;
 				seldata[nsel++] = i;
