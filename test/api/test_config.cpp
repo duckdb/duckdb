@@ -38,3 +38,23 @@ TEST_CASE("Test DB config configuration", "[api]") {
 		}
 	}
 }
+
+TEST_CASE("Test user_agent", "[api]") {
+	{
+		// Default duckdb_api is cpp
+		DuckDB db(nullptr);
+		Connection con(db);
+		auto res = con.Query("PRAGMA user_agent");
+		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
+	}
+	{
+		// The latest provided duckdb_api is used
+		DBConfig config;
+		config.SetOptionByName("duckdb_api", "capi");
+		config.SetOptionByName("duckdb_api", "go");
+		DuckDB db("", &config);
+		Connection con(db);
+		auto res = con.Query("PRAGMA user_agent");
+		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
+	}
+}

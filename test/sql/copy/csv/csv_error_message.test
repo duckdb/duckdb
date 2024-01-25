@@ -16,12 +16,7 @@ Column at position: 0 Set type: INTEGER Sniffed type: VARCHAR
 statement error
 SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=True, auto_detect=false)
 ----
-line 105
-
-statement error
-SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=True, parallel = false, auto_detect=false)
-----
-line 105
+Line: 105
 
 statement ok
 COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '__TEST_DIR__/int_parse_error.csv' (HEADER 0, DELIMITER '|')
@@ -29,9 +24,5 @@ COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '_
 statement error
 SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)
 ----
-line 104
+Line: 104
 
-statement error
-SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False, parallel = false, auto_detect=false)
-----
-line 104

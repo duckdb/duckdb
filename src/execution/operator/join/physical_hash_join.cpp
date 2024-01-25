@@ -19,24 +19,57 @@ namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   const vector<idx_t> &left_projection_map,
-                                   const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
-                                   idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats)
+                                   const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
+                                   vector<LogicalType> delim_types, idx_t estimated_cardinality,
+                                   PerfectHashJoinStats perfect_join_stats)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(std::move(delim_types)),
-      perfect_join_statistics(std::move(perfect_join_stats)) {
+      delim_types(std::move(delim_types)), perfect_join_statistics(std::move(perfect_join_stats)) {
+	D_ASSERT(left_projection_map.empty());
 
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 
-	D_ASSERT(left_projection_map.empty());
-	for (auto &condition : conditions) {
+	// Collect condition types, and which conditions are just references (so we won't duplicate them in the payload)
+	unordered_map<idx_t, idx_t> build_columns_in_conditions;
+	for (idx_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
+		auto &condition = conditions[cond_idx];
 		condition_types.push_back(condition.left->return_type);
+		if (condition.right->GetExpressionClass() == ExpressionClass::BOUND_REF) {
+			build_columns_in_conditions.emplace(condition.right->Cast<BoundReferenceExpression>().index, cond_idx);
+		}
 	}
 
-	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
-	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
-		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
+	// For ANTI, SEMI and MARK join, we only need to store the keys, so for these the payload/RHS types are empty
+	if (join_type == JoinType::ANTI || join_type == JoinType::SEMI || join_type == JoinType::MARK) {
+		return;
+	}
+
+	auto &rhs_input_types = children[1]->GetTypes();
+
+	// Create a projection map for the RHS (if it was empty), for convenience
+	auto right_projection_map_copy = right_projection_map;
+	if (right_projection_map_copy.empty()) {
+		right_projection_map_copy.reserve(rhs_input_types.size());
+		for (idx_t i = 0; i < rhs_input_types.size(); i++) {
+			right_projection_map_copy.emplace_back(i);
+		}
+	}
+
+	// Now fill payload expressions/types and RHS columns/types
+	for (auto &rhs_col : right_projection_map_copy) {
+		auto &rhs_col_type = rhs_input_types[rhs_col];
+
+		auto it = build_columns_in_conditions.find(rhs_col);
+		if (it == build_columns_in_conditions.end()) {
+			// This rhs column is not a join key
+			payload_column_idxs.push_back(rhs_col);
+			payload_types.push_back(rhs_col_type);
+			rhs_output_columns.push_back(condition_types.size() + payload_types.size() - 1);
+		} else {
+			// This rhs column is a join key
+			rhs_output_columns.push_back(it->second);
+		}
+		rhs_output_types.push_back(rhs_col_type);
 	}
 }
 
@@ -99,35 +132,37 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : build_executor(context) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : join_key_executor(context) {
 		auto &allocator = BufferAllocator::Get(context);
-		if (!op.right_projection_map.empty()) {
-			build_chunk.Initialize(allocator, op.build_types);
-		}
+
 		for (auto &cond : op.conditions) {
-			build_executor.AddExpression(*cond.right);
+			join_key_executor.AddExpression(*cond.right);
 		}
 		join_keys.Initialize(allocator, op.condition_types);
 
-		hash_table = op.InitializeHashTable(context);
+		if (!op.payload_types.empty()) {
+			payload_chunk.Initialize(allocator, op.payload_types);
+		}
 
+		hash_table = op.InitializeHashTable(context);
 		hash_table->GetSinkCollection().InitializeAppendState(append_state);
 	}
 
 public:
 	PartitionedTupleDataAppendState append_state;
 
-	DataChunk build_chunk;
+	ExpressionExecutor join_key_executor;
 	DataChunk join_keys;
-	ExpressionExecutor build_executor;
+
+	DataChunk payload_chunk;
 
 	//! Thread-local HT
 	unique_ptr<JoinHashTable> hash_table;
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
-	auto result =
-	    make_uniq<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
+	auto result = make_uniq<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, payload_types,
+	                                       join_type, rhs_output_columns);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
@@ -141,7 +176,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
 			auto &info = result->correlated_mark_join_info;
 
-			vector<LogicalType> payload_types;
+			vector<LogicalType> delim_payload_types;
 			vector<BoundAggregateExpression *> correlated_aggregates;
 			unique_ptr<BoundAggregateExpression> aggr;
 
@@ -152,7 +187,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
-			payload_types.push_back(aggr->return_type);
+			delim_payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto count_fun = CountFun::GetFunction();
@@ -162,15 +197,15 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
-			payload_types.push_back(aggr->return_type);
+			delim_payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto &allocator = BufferAllocator::Get(context);
 			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(context, allocator, delim_types,
-			                                                              payload_types, correlated_aggregates);
+			                                                              delim_payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
 			info.group_chunk.Initialize(allocator, delim_types);
-			info.result_chunk.Initialize(allocator, payload_types);
+			info.result_chunk.Initialize(allocator, delim_payload_types);
 		}
 	}
 	return result;
@@ -189,27 +224,23 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
-	lstate.build_executor.Execute(chunk, lstate.join_keys);
+	lstate.join_key_executor.Execute(chunk, lstate.join_keys);
 
 	// build the HT
 	auto &ht = *lstate.hash_table;
-	if (!right_projection_map.empty()) {
-		// there is a projection map: fill the build chunk with the projected columns
-		lstate.build_chunk.Reset();
-		lstate.build_chunk.SetCardinality(chunk);
-		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			lstate.build_chunk.data[i].Reference(chunk.data[right_projection_map[i]]);
-		}
-		ht.Build(lstate.append_state, lstate.join_keys, lstate.build_chunk);
-	} else if (!build_types.empty()) {
-		// there is not a projected map: place the entire right chunk in the HT
-		ht.Build(lstate.append_state, lstate.join_keys, chunk);
-	} else {
+	if (payload_types.empty()) {
 		// there are only keys: place an empty chunk in the payload
-		lstate.build_chunk.SetCardinality(chunk.size());
-		ht.Build(lstate.append_state, lstate.join_keys, lstate.build_chunk);
+		lstate.payload_chunk.SetCardinality(chunk.size());
+		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
+	} else {
+		// there are payload columns
+		lstate.payload_chunk.Reset();
+		lstate.payload_chunk.SetCardinality(chunk);
+		for (idx_t i = 0; i < payload_column_idxs.size(); i++) {
+			lstate.payload_chunk.data[i].Reference(chunk.data[payload_column_idxs[i]]);
+		}
+		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -222,7 +253,7 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 		gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(*this, lstate.build_executor, "build_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.join_key_executor, "join_key_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
 	return SinkCombineResultType::FINISHED;

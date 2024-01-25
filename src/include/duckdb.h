@@ -128,6 +128,10 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_UNION,
 	// duckdb_bit
 	DUCKDB_TYPE_BIT,
+	// duckdb_time_tz
+	DUCKDB_TYPE_TIME_TZ,
+	// duckdb_timestamp
+	DUCKDB_TYPE_TIMESTAMP_TZ,
 } duckdb_type;
 
 //! Days are stored as days since 1970-01-01
@@ -154,6 +158,16 @@ typedef struct {
 	int8_t sec;
 	int32_t micros;
 } duckdb_time_struct;
+
+//! TIME_TZ is stored as 40 bits for int64_t micros, and 24 bits for int32_t offset
+typedef struct {
+	uint64_t bits;
+} duckdb_time_tz;
+
+typedef struct {
+	duckdb_time time;
+	int32_t offset;
+} duckdb_time_tz_struct;
 
 //! Timestamps are stored as microseconds since 1970-01-01
 //! Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
@@ -350,7 +364,6 @@ typedef enum {
 	DUCKDB_STATEMENT_TYPE_DROP,
 	DUCKDB_STATEMENT_TYPE_EXPORT,
 	DUCKDB_STATEMENT_TYPE_PRAGMA,
-	DUCKDB_STATEMENT_TYPE_SHOW,
 	DUCKDB_STATEMENT_TYPE_VACUUM,
 	DUCKDB_STATEMENT_TYPE_CALL,
 	DUCKDB_STATEMENT_TYPE_SET,
@@ -902,6 +915,26 @@ Decompose a `duckdb_time` object into hour, minute, second and microsecond (stor
 * returns: The `duckdb_time_struct` with the decomposed elements.
 */
 DUCKDB_API duckdb_time_struct duckdb_from_time(duckdb_time time);
+
+/*!
+Create a `duckdb_time_tz` object from micros and a timezone offset.
+
+* micros: The microsecond component of the time.
+* offset: The timezone offset component of the time.
+* returns: The `duckdb_time_tz` element.
+*/
+DUCKDB_API duckdb_time_tz duckdb_create_time_tz(int64_t micros, int32_t offset);
+
+/*!
+Decompose a TIME_TZ objects into micros and a timezone offset.
+
+Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
+
+* micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+* out_micros: The microsecond component of the time.
+* out_offset: The timezone offset component of the time.
+*/
+DUCKDB_API duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz micros);
 
 /*!
 Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).

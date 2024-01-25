@@ -156,5 +156,34 @@
     "base": "ExtraTypeInfo",
     "enum": "GENERIC_TYPE_INFO",
     "custom_switch_code": "result = make_shared<ExtraTypeInfo>(type);\nbreak;"
+  },
+  {
+    "class": "AnyTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ANY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "target_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "cast_score",
+        "type": "idx_t"
+      }
+    ]
+  },
+  {
+    "class": "IntegerLiteralTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "INTEGER_LITERAL_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "constant_value",
+        "type": "Value"
+      }
+    ]
   }
 ]

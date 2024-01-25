@@ -160,6 +160,10 @@ FROM VALUES (0), (1), (2), (10) AS tab(col);
 ----
 [0, 1, 1, 1, 1, 1, 2, 2, 10, 10, 10]
 
+query I
+SELECT quantile_disc(42::UTINYINT, 0.5);
+----
+42
 
 # Invalid use
 statement error

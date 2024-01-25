@@ -32,10 +32,14 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::DOUBLE;
 	case DUCKDB_TYPE_TIMESTAMP:
 		return LogicalTypeId::TIMESTAMP;
+	case DUCKDB_TYPE_TIMESTAMP_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_DATE:
 		return LogicalTypeId::DATE;
 	case DUCKDB_TYPE_TIME:
 		return LogicalTypeId::TIME;
+	case DUCKDB_TYPE_TIME_TZ:
+		return LogicalTypeId::TIME_TZ;
 	case DUCKDB_TYPE_VARCHAR:
 		return LogicalTypeId::VARCHAR;
 	case DUCKDB_TYPE_BLOB:
@@ -85,8 +89,9 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	case LogicalTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		return DUCKDB_TYPE_TIMESTAMP;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return DUCKDB_TYPE_TIMESTAMP_TZ;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return DUCKDB_TYPE_TIMESTAMP_S;
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -96,8 +101,9 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return DUCKDB_TYPE_TIME;
+	case LogicalTypeId::TIME_TZ:
+		return DUCKDB_TYPE_TIME_TZ;
 	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
 	case LogicalTypeId::BLOB:
@@ -216,8 +222,6 @@ duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
 		return DUCKDB_STATEMENT_TYPE_EXPORT;
 	case duckdb::StatementType::PRAGMA_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_PRAGMA;
-	case duckdb::StatementType::SHOW_STATEMENT:
-		return DUCKDB_STATEMENT_TYPE_SHOW;
 	case duckdb::StatementType::VACUUM_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_VACUUM;
 	case duckdb::StatementType::CALL_STATEMENT:

@@ -34,11 +34,19 @@ public:
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
 
-	vector<idx_t> right_projection_map;
-	//! The types of the keys
+	//! The types of the join keys
 	vector<LogicalType> condition_types;
-	//! The types of all conditions
-	vector<LogicalType> build_types;
+
+	//! The indices for getting the payload columns
+	vector<idx_t> payload_column_idxs;
+	//! The types of the payload columns
+	vector<LogicalType> payload_types;
+
+	//! Positions of the RHS columns that need to output
+	vector<idx_t> rhs_output_columns;
+	//! The types of the output
+	vector<LogicalType> rhs_output_types;
+
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
 	//! Used in perfect hash join
