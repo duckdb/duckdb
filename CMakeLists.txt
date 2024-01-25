@@ -660,7 +660,7 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD AND
           COMMAND
           ${CMAKE_COMMAND} -E make_directory "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
           COMMAND
-          ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/extension/*/*.duckdb_extension${EXTENSION_POSTFIX}" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp"
+          cp "${CMAKE_BINARY_DIR}/extension/*/*.duckdb_extension${EXTENSION_POSTFIX}" "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}/tmp/."
           COMMAND
           cd "${LOCAL_EXTENSION_REPO}/${DUCKDB_NORMALIZED_VERSION}" && rm -rf "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && mv tmp "$$(cat" "${CMAKE_BINARY_DIR}/duckdb_platform_out)" && cd ../..
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
