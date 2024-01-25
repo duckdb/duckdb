@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"

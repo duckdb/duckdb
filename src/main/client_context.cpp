@@ -42,6 +42,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 

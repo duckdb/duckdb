@@ -1,6 +1,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/timestamp.hpp"

@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"

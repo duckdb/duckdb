@@ -1,6 +1,6 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/string_util.hpp"
-
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {

@@ -155,15 +155,6 @@ public:
 	}
 };
 
-class ParserException : public StandardException {
-public:
-	DUCKDB_API explicit ParserException(const string &msg);
-
-	template <typename... Args>
-	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
-	}
-};
-
 class PermissionException : public StandardException {
 public:
 	DUCKDB_API explicit PermissionException(const string &msg);
@@ -171,45 +162,6 @@ public:
 	template <typename... Args>
 	explicit PermissionException(const string &msg, Args... params)
 	    : PermissionException(ConstructMessage(msg, params...)) {
-	}
-};
-
-class BinderException : public StandardException {
-public:
-	DUCKDB_API explicit BinderException(const string &msg);
-
-	template <typename... Args>
-	explicit BinderException(const string &msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
-	}
-};
-
-class ConversionException : public Exception {
-public:
-	DUCKDB_API explicit ConversionException(const string &msg);
-
-	template <typename... Args>
-	explicit ConversionException(const string &msg, Args... params)
-	    : ConversionException(ConstructMessage(msg, params...)) {
-	}
-};
-
-class TransactionException : public Exception {
-public:
-	DUCKDB_API explicit TransactionException(const string &msg);
-
-	template <typename... Args>
-	explicit TransactionException(const string &msg, Args... params)
-	    : TransactionException(ConstructMessage(msg, params...)) {
-	}
-};
-
-class NotImplementedException : public Exception {
-public:
-	DUCKDB_API explicit NotImplementedException(const string &msg);
-
-	template <typename... Args>
-	explicit NotImplementedException(const string &msg, Args... params)
-	    : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -280,6 +232,16 @@ public:
 	template <typename... Args>
 	explicit MissingExtensionException(const string &msg, Args... params)
 	    : MissingExtensionException(ConstructMessage(msg, params...)) {
+	}
+};
+
+class NotImplementedException : public Exception {
+public:
+	DUCKDB_API explicit NotImplementedException(const string &msg);
+
+	template <typename... Args>
+	explicit NotImplementedException(const string &msg, Args... params)
+			: NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
 

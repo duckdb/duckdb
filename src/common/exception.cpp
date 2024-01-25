@@ -2,7 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/exception/list.hpp"
 
 #ifdef DUCKDB_CRASH_ON_ASSERT
 #include "duckdb/common/printer.hpp"

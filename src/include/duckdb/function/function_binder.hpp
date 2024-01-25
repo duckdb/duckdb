@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 

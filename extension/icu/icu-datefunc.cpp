@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "unicode/ucal.h"
 
 namespace duckdb {
