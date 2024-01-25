@@ -10,7 +10,8 @@ namespace duckdb {
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
                                      Allocator &buffer_allocator, idx_t result_size_p, idx_t buffer_position,
-                                     CSVErrorHandler &error_hander_p, CSVIterator &iterator_p, bool store_line_size_p)
+                                     CSVErrorHandler &error_hander_p, CSVIterator &iterator_p, bool store_line_size_p,
+                                     vector<LogicalType> &types)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
       null_str(state_machine.options.null_str), result_size(result_size_p), error_handler(error_hander_p),
@@ -26,8 +27,21 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	// Current Result information
 	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle.actual_size};
 	pre_previous_line_start = previous_line_start;
+	vector<LogicalType> parse_types;
+	if (types.empty()) {
+		parse_types = {number_of_columns, LogicalType::VARCHAR};
+	} else {
+		for (auto &type : types) {
+			if (StringValueScanner::CanDirectlyCast(type)) {
+				parse_types.emplace_back(type);
+			} else {
+				parse_types.emplace_back(LogicalType::VARCHAR);
+			}
+		}
+	}
+
 	// Initialize Parse Chunk
-	parse_chunk.Initialize(buffer_allocator, {number_of_columns, LogicalType::VARCHAR}, result_size);
+	parse_chunk.Initialize(buffer_allocator, parse_types, result_size);
 	for (auto &col : parse_chunk.data) {
 		vector_ptr.push_back(FlatVector::GetData<string_t>(col));
 		validity_mask.push_back(&FlatVector::Validity(col));
@@ -87,7 +101,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 
 void StringValueResult::HandleOverLimitRows() {
 	auto csv_error =
-	    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id+1);
+	    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id + 1);
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
 	error_handler.Error(lines_per_batch, csv_error);
 	// If we get here we need to remove the last line
@@ -254,12 +268,13 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 
 StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary,
-                                       idx_t result_size)
+                                       const shared_ptr<CSVErrorHandler> &error_handler, vector<LogicalType> types_p,
+                                       CSVIterator boundary, idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, boundary), scanner_idx(scanner_idx_p),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
-             buffer_manager->context.client_data->debug_set_max_line_length) {
+             buffer_manager->context.client_data->debug_set_max_line_length, types_p),
+      types(types_p) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
@@ -315,7 +330,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		auto &parse_vector = parse_chunk.data[col_idx];
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
-		if (type.id() == LogicalTypeId::VARCHAR) {
+		if (CanDirectlyCast(type)) {
 			// target type is varchar: no need to convert
 			// reinterpret rather than reference, so we can deal with user-defined types
 			result_vector.Reinterpret(parse_vector);
@@ -606,7 +621,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		lines_read++;
 	}
 	if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-		result.EmptyLine(result,iterator.pos.buffer_pos);
+		result.EmptyLine(result, iterator.pos.buffer_pos);
 	}
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
@@ -634,7 +649,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 			    states.IsNotSet()) {
-				if (result.cur_col_id == result.number_of_columns){
+				if (result.cur_col_id == result.number_of_columns) {
 					result.number_of_rows++;
 				}
 				result.cur_col_id = 0;
@@ -719,6 +734,16 @@ void StringValueScanner::SkipUntilNewLine() {
 	}
 }
 
+bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void StringValueScanner::SetStart() {
 	if (iterator.pos.buffer_idx == 0 && iterator.pos.buffer_pos == 0) {
 		// This means this is the very first buffer
@@ -739,7 +764,7 @@ void StringValueScanner::SetStart() {
 			return;
 		}
 		scan_finder = make_uniq<StringValueScanner>(0, buffer_manager, state_machine,
-		                                            make_shared<CSVErrorHandler>(true), iterator, 1);
+		                                            make_shared<CSVErrorHandler>(true), types, iterator, 1);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
 		if (tuples.number_of_rows != 1) {

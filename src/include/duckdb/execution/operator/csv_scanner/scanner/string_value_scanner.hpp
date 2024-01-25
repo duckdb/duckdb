@@ -39,7 +39,8 @@ class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
 	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
-	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size);
+	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
+	                  vector<LogicalType> &types);
 
 	//! Information on the vector
 	vector<string_t *> vector_ptr;
@@ -86,6 +87,9 @@ public:
 	inline bool AddRowInternal();
 
 	void HandleOverLimitRows();
+
+	void AddValueToVector(string_t &value, char *buffer_ptr, idx_t size);
+
 	void AddValueToVector(string_t &value, bool allocate = false);
 
 	Value GetValue(idx_t row_idx, idx_t col_idx);
@@ -98,8 +102,8 @@ class StringValueScanner : public BaseScanner {
 public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary = {},
-	                   idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   const shared_ptr<CSVErrorHandler> &error_handler, vector<LogicalType> types = {},
+	                   CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	~StringValueScanner() {
 	}
@@ -116,6 +120,9 @@ public:
 
 	//! Creates a new string with all escaped values removed
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
+
+	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
+	static bool CanDirectlyCast(const LogicalType &type);
 
 	const idx_t scanner_idx;
 
@@ -142,6 +149,7 @@ private:
 	void SetStart();
 
 	StringValueResult result;
+	vector<LogicalType> types;
 
 	//! Pointer to the previous buffer handle, necessary for overbuffer values
 	unique_ptr<CSVBufferHandle> previous_buffer_handle;

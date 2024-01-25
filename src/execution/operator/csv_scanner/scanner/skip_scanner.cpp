@@ -58,6 +58,6 @@ void SkipScanner::Initialize() {
 }
 
 void SkipScanner::FinalizeChunkProcess() {
-	//nop
+	// nop
 }
 } // namespace duckdb

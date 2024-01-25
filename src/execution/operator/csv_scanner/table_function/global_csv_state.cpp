@@ -70,7 +70,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		}
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
-		                                  current_file->error_handler, current_boundary);
+		                                  current_file->error_handler, current_file->types, current_boundary);
 		csv_scanner->csv_file_scan = current_file;
 		return csv_scanner;
 	}
@@ -83,7 +83,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	auto &current_file = *file_scans.back();
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
-	                                  current_file.error_handler, current_boundary);
+	                                  current_file.error_handler, current_file.types, current_boundary);
 	csv_scanner->csv_file_scan = file_scans.back();
 	// We then produce the next boundary
 	if (!current_boundary.Next(*current_file.buffer_manager)) {
