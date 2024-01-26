@@ -54,7 +54,23 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, boo
 	}
 	// set the entry in the map
 	has_correlated_expressions[op] = has_correlation;
+
+	// If we detect correlation in a materialized or recursive CTE, the entire right side of the operator
+	// needs to be marked as correlated. Otherwise, function PushDownDependentJoinInternal does not do the
+	// right thing.
+	if(op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE || op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		if(has_correlation) {
+			MarkSubtreeCorrelated(op->children[1].get());
+		}
+	}
 	return has_correlation;
+}
+
+void FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator *op) {
+	has_correlated_expressions[op] = true;
+	for(auto &child : op->children) {
+		MarkSubtreeCorrelated(child.get());
+	}
 }
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {
@@ -576,10 +592,74 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		throw BinderException("Recursive CTEs not (yet) supported in correlated subquery");
+		auto &setop = plan->Cast<LogicalRecursiveCTE>();
+
+#ifdef DEBUG
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+#endif
+		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+		base_binding.table_index = setop.table_index;
+		base_binding.column_index = setop.column_count;
+		plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
+		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
+		rewriter.VisitOperator(*plan);
+
+		RewriteCorrelatedExpressions recursive_rewriter(this->base_binding, correlated_map, lateral_depth + 1, true);
+		recursive_rewriter.VisitOperator(*plan->children[0]);
+		recursive_rewriter.VisitOperator(*plan->children[1]);
+
+#ifdef DEBUG
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+#endif
+		// we have to refer to the recursive CTE index now
+		base_binding.table_index = setop.table_index;
+		base_binding.column_index = setop.column_count;
+		setop.column_count += correlated_columns.size();
+
+		for(auto &c : this->correlated_columns) {
+			setop.types.push_back(c.type);
+		}
+		return plan;
+
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
-		throw BinderException("Materialized CTEs not (yet) supported in correlated subquery");
+		auto &setop = plan->Cast<LogicalMaterializedCTE>();
+
+#ifdef DEBUG
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+#endif
+		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+		base_binding.table_index = setop.table_index;
+		base_binding.column_index = setop.column_count;
+		plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
+		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
+		rewriter.VisitOperator(*plan);
+
+		RewriteCorrelatedExpressions recursive_rewriter(this->base_binding, correlated_map, lateral_depth + 1, true);
+		recursive_rewriter.VisitOperator(*plan->children[0]);
+		recursive_rewriter.VisitOperator(*plan->children[1]);
+
+#ifdef DEBUG
+		plan->children[0]->ResolveOperatorTypes();
+		plan->children[1]->ResolveOperatorTypes();
+#endif
+
+		return plan;
+	}
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		auto &cteref = plan->Cast<LogicalCTERef>();
+		// Read correlated columns from CTE_SCAN instead of from DELIM_SCAN
+		base_binding.table_index = cteref.table_index;
+		base_binding.column_index = cteref.types.size();
+		// Add types of correlated column to CTE_SCAN
+		for(auto &c : this->correlated_columns) {
+			cteref.types.push_back(c.type);
+			cteref.chunk_types.push_back(c.type);
+		}
+		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		throw BinderException("Nested lateral joins or lateral joins in correlated subqueries are not (yet) supported");
