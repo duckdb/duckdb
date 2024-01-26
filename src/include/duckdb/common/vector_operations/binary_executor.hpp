@@ -27,14 +27,14 @@ struct DefaultNullCheckOperator {
 
 struct ConstRightOptOperatorWrapper {
 	template <class RIGHT_TYPE>
-	const static inline bool OptimiseConstRight(RIGHT_TYPE) {
+	static inline bool OptimiseConstRight(RIGHT_TYPE) {
 		return true;
 	}
 };
 
 struct NoOptOperatorWrapper {
 	template <class RIGHT_TYPE>
-	const static inline bool OptimiseConstRight(RIGHT_TYPE) {
+	static inline bool OptimiseConstRight(RIGHT_TYPE) {
 		return false;
 	}
 
