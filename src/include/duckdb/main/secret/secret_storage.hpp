@@ -54,6 +54,10 @@ public:
 		return true;
 	}
 
+	virtual bool Persistent() const {
+		return persistent;
+	}
+
 protected:
 	//! Helper function to select the best matching secret within a storage. Tie-breaks within a storage are broken
 	//! by secret name by default.

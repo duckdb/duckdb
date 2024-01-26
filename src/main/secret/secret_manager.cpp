@@ -1,3 +1,5 @@
+#include "duckdb/main/secret/secret_manager.hpp"
+
 #include "duckdb/catalog/catalog_entry/secret_function_entry.hpp"
 #include "duckdb/catalog/catalog_entry/secret_type_entry.hpp"
 #include "duckdb/common/common.hpp"
@@ -13,7 +15,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/operator/logical_create_secret.hpp"
@@ -363,8 +364,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 		matches.push_back(*storage_lookup.get());
 	} else {
 		for (const auto &storage_ref : GetSecretStorages()) {
-			if (persist_type == SecretPersistType::PERSISTENT &&
-			    storage_ref.get().GetName() == TEMPORARY_STORAGE_NAME) {
+			if ((persist_type == SecretPersistType::PERSISTENT) == storage_ref.get().Persistent()) {
 				continue;
 			}
 			auto lookup = storage_ref.get().GetSecretByName(transaction, name);
