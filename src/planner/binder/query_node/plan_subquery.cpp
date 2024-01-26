@@ -434,7 +434,7 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	auto plan_columns = dependent_join->GetColumnBindings();
 
 	// in case of a materialized CTE, the output is defined by the second children operator
-	if(dependent_join->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+	if (dependent_join->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 		plan_columns = dependent_join->children[1]->GetColumnBindings();
 	}
 

@@ -46,7 +46,7 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
-//		return children[1]->SourceOrder() != OrderPreservationType::FIXED_ORDER;
+		//		return children[1]->SourceOrder() != OrderPreservationType::FIXED_ORDER;
 	}
 
 	bool SinkOrderDependent() const override {

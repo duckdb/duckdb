@@ -187,7 +187,7 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			auto dep = dependency.lock();
 			D_ASSERT(dep);
 			auto event_map_entry = event_map.find(*dep);
-			if(event_map_entry == event_map.end()) {
+			if (event_map_entry == event_map.end()) {
 				continue;
 			}
 			D_ASSERT(event_map_entry != event_map.end());

@@ -25,8 +25,7 @@ PhysicalCTE::~PhysicalCTE() {
 //===--------------------------------------------------------------------===//
 class CTEGlobalState : public GlobalSinkState {
 public:
-	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op)
-	    : working_table_ref(op.working_table.get()) {
+	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op) : working_table_ref(op.working_table.get()) {
 	}
 	optional_ptr<ColumnDataCollection> working_table_ref;
 
