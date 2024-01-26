@@ -53,6 +53,10 @@ public:
 		throw InternalException("Cannot reschedule task of base Task class");
 	}
 
+	virtual bool TaskBlockedOnResult() const {
+		return false;
+	}
+
 protected:
 	Task(TaskType type) : type(type) {
 	}
@@ -72,9 +76,6 @@ public:
 public:
 	void Deschedule() override;
 	void Reschedule() override;
-	virtual bool IsPipelineTask() const {
-		return false;
-	}
 
 public:
 	Executor &executor;

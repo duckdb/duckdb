@@ -36,7 +36,7 @@ public:
 
 public:
 	const PipelineExecutor &GetPipelineExecutor() const;
-	bool IsPipelineTask() const override;
+	bool TaskBlockedOnResult() const override;
 
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
