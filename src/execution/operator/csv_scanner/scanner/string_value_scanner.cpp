@@ -108,70 +108,95 @@ void StringValueResult::HandleOverLimitRows() {
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
-	//	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && value == null_str) {
-	//		bool empty = false;
-	//		if (cur_col_id < state_machine.options.force_not_null.size()) {
-	//			empty = state_machine.options.force_not_null[cur_col_id];
-	//		}
-	//		if (empty) {
-	//			if (cur_col_id >= number_of_columns) {
-	//				HandleOverLimitRows();
-	//			}
-	//			static_cast<string_t*>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
-	//		} else {
-	//			if (cur_col_id == number_of_columns) {
-	//				// We check for a weird case, where we ignore an extra value, if it is a null value
-	//				return;
-	//			}
-	//			validity_mask[cur_col_id]->SetInvalid(number_of_rows);
-	//		}
-	//	}
+	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted && size == null_str.GetSize())) {
+		bool is_null = true;
+
+		char *null_str_ptr = null_str.GetPointer();
+		for (idx_t i = 0; i < size; i++) {
+			if (null_str_ptr[i] != value_ptr[i]) {
+				is_null = false;
+				break;
+			}
+		}
+		if (is_null) {
+			bool empty = false;
+			if (cur_col_id < state_machine.options.force_not_null.size()) {
+				empty = state_machine.options.force_not_null[cur_col_id];
+			}
+			if (empty) {
+				if (cur_col_id >= number_of_columns) {
+					HandleOverLimitRows();
+				}
+				static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
+			} else {
+				if (cur_col_id == number_of_columns) {
+					// We check for a weird case, where we ignore an extra value, if it is a null value
+					return;
+				}
+				validity_mask[cur_col_id]->SetInvalid(number_of_rows);
+			}
+			cur_col_id++;
+			return;
+		}
+	}
 	if (cur_col_id >= number_of_columns) {
 		HandleOverLimitRows();
 	}
+	bool success = true;
 	switch (parse_types[cur_col_id].id()) {
 	case LogicalTypeId::TINYINT:
-		TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success =
+		    TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::SMALLINT:
-		TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false);
 		break;
 	case LogicalTypeId::INTEGER:
-		TrySimpleIntegerCast(value_ptr, size, static_cast<int32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int32_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false);
 		break;
 	case LogicalTypeId::BIGINT:
-		TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false);
 		break;
 	case LogicalTypeId::UTINYINT:
-		TrySimpleIntegerCast<uint8_t, false>(value_ptr, size,
-		                                     static_cast<uint8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast<uint8_t, false>(
+		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::USMALLINT:
-		TrySimpleIntegerCast<uint16_t, false>(value_ptr, size,
-		                                      static_cast<uint16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast<uint16_t, false>(
+		    value_ptr, size, static_cast<uint16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UINTEGER:
-		TrySimpleIntegerCast<uint32_t, false>(value_ptr, size,
-		                                      static_cast<uint32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast<uint32_t, false>(
+		    value_ptr, size, static_cast<uint32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UBIGINT:
-		TrySimpleIntegerCast<uint64_t, false>(value_ptr, size,
-		                                      static_cast<uint64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast<uint64_t, false>(
+		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::DOUBLE:
-		TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[cur_col_id])[number_of_rows], false,
-		                      state_machine.options.decimal_separator[0]);
+		success = TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[cur_col_id])[number_of_rows],
+		                                false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::FLOAT:
-		TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[cur_col_id])[number_of_rows], false,
-		                     state_machine.options.decimal_separator[0]);
+		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false, state_machine.options.decimal_separator[0]);
 		break;
-	case LogicalTypeId::DATE:
-		static_cast<date_t *>(vector_ptr[cur_col_id])[number_of_rows] = Date::FromCString(value_ptr, size, false);
+	case LogicalTypeId::DATE: {
+		idx_t pos;
+		bool special;
+		success = Date::TryConvertDate(value_ptr, size, pos,
+		                               static_cast<date_t *>(vector_ptr[cur_col_id])[number_of_rows], special, false);
 		break;
-	case LogicalTypeId::TIMESTAMP:
-		static_cast<timestamp_t *>(vector_ptr[cur_col_id])[number_of_rows] = Timestamp::FromCString(value_ptr, size);
+	}
+	case LogicalTypeId::TIMESTAMP: {
+		success = Timestamp::TryConvertTimestamp(value_ptr, size,
+		                                         static_cast<timestamp_t *>(vector_ptr[cur_col_id])[number_of_rows]) !=
+		          TimestampCastResult::SUCCESS;
 		break;
+	}
 	default:
 		if (allocate) {
 			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] =
@@ -180,6 +205,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t(value_ptr, size);
 		}
 		break;
+	}
+	if (!success) {
+		// We had a casting error
 	}
 	cur_col_id++;
 }
