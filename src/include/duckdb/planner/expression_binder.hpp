@@ -36,7 +36,7 @@ struct DummyBinding;
 
 struct BoundColumnReferenceInfo {
 	string name;
-	idx_t query_location;
+	optional_idx query_location;
 };
 
 struct BindResult {

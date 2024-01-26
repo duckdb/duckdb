@@ -7,13 +7,13 @@
 
 namespace duckdb {
 
-string QueryErrorContext::Format(const string &query, const string &error_message, int error_loc,
+string QueryErrorContext::Format(const string &query, const string &error_message, optional_idx error_loc,
                                  bool add_line_indicator) {
-	if (error_loc < 0 || size_t(error_loc) >= query.size()) {
+	if (!error_loc.IsValid()) {
 		// no location in query provided
 		return error_message;
 	}
-	idx_t error_location = idx_t(error_loc);
+	idx_t error_location = error_loc.GetIndex();
 	// count the line numbers until the error location
 	// and set the start position as the first character of that line
 	idx_t start_pos = 0;
@@ -115,7 +115,7 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 
 string QueryErrorContext::FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
 	string error_message = values.empty() ? msg : ExceptionFormatValue::Format(msg, values);
-	if (!statement || query_location >= statement->query.size()) {
+	if (!statement) {
 		// no statement provided or query location out of range
 		return error_message;
 	}

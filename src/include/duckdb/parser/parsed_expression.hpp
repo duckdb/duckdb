@@ -13,6 +13,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 class Deserializer;
@@ -34,7 +35,7 @@ public:
 	}
 
 	//! The location in the query (if any)
-	idx_t query_location = DConstants::INVALID_INDEX;
+	optional_idx query_location;
 
 public:
 	bool IsAggregate() const override;

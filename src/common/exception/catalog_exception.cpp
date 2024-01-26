@@ -15,15 +15,12 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const string &
 	}
 	CatalogException result(context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
 												name, did_you_mean));
-	// FIXME: use InitializeExtraInfo
-	result.extra_info["error_subtype"] = "MISSING_ENTRY";
+	result.InitializeExtraInfo("MISSING_ENTRY", context.query_location);
+
 	result.extra_info["name"] = name;
 	result.extra_info["type"] = CatalogTypeToString(type);
 	if (!suggestion.empty()) {
 		result.extra_info["candidates"] = suggestion;
-	}
-	if (context.query_location != DConstants::INVALID_INDEX) {
-		result.extra_info["position"] = to_string(context.query_location);
 	}
 	return result;
 }
@@ -31,23 +28,19 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const string &
 CatalogException CatalogException::MissingEntry(const string &type, const string &name, const vector<string> &suggestions, QueryErrorContext context) {
 	CatalogException result(context.FormatError("unrecognized %s \"%s\"\n%s", type,
 												name, StringUtil::CandidatesErrorMessage(suggestions, name, "Did you mean")));
-	// FIXME: use InitializeExtraInfo
+	result.InitializeExtraInfo("MISSING_ENTRY", context.query_location);
 	result.extra_info["error_subtype"] = "MISSING_ENTRY";
 	result.extra_info["name"] = name;
 	result.extra_info["type"] = type;
 	if (!suggestions.empty()) {
 		result.extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
 	}
-	if (context.query_location != DConstants::INVALID_INDEX) {
-		result.extra_info["position"] = to_string(context.query_location);
-	}
 	return result;
 }
 
 CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const string &name, QueryErrorContext context) {
 	CatalogException result(context.FormatError("%s with name \"%s\" already exists!", CatalogTypeToString(type), name));
-	// FIXME: use InitializeExtraInfo
-	result.extra_info["error_subtype"] = "ENTRY_ALREADY_EXISTS";
+	result.InitializeExtraInfo("ENTRY_ALREADY_EXISTS", optional_idx());
 	result.extra_info["name"] = name;
 	result.extra_info["type"] = CatalogTypeToString(type);
 	return result;
