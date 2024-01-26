@@ -30,7 +30,7 @@ string StreamQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		result += "[[BUFFERED RESULT]]";
+		result += "[[STREAM RESULT]]";
 	} else {
 		result = GetError() + "\n";
 	}
