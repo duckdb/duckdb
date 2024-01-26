@@ -14,6 +14,10 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 		return error_message;
 	}
 	idx_t error_location = error_loc.GetIndex();
+	if (error_location >= query.size()) {
+		// out of bounds
+		return error_message;
+	}
 	// count the line numbers until the error location
 	// and set the start position as the first character of that line
 	idx_t start_pos = 0;
