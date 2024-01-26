@@ -16,6 +16,16 @@ namespace duckdb {
 
 struct FilterInfo;
 
+struct DenomInfo {
+	DenomInfo(unordered_set<idx_t> numerator_relations, double filter_strength, double denominator)
+	    : numerator_relations(numerator_relations), filter_strength(filter_strength), denominator(denominator) {
+	}
+
+	unordered_set<idx_t> numerator_relations;
+	double filter_strength;
+	double denominator;
+};
+
 struct RelationsToTDom {
 	//! column binding sets that are equivalent in a join plan.
 	//! if you have A.x = B.y and B.y = C.z, then one set is {A.x, B.y, C.z}.
@@ -35,9 +45,11 @@ struct RelationsToTDom {
 
 struct Subgraph2Denominator {
 	unordered_set<idx_t> relations;
+	unordered_set<idx_t> numerator_relations;
 	double denom;
+	double numerator_filter_strength;
 
-	Subgraph2Denominator() : relations(), denom(1) {};
+	Subgraph2Denominator() : relations(), numerator_relations(), denom(1), numerator_filter_strength(1) {};
 };
 
 class CardinalityHelper {
@@ -82,6 +94,9 @@ public:
 	void PrintRelationToTdomInfo();
 
 private:
+	double GetNumerator(unordered_set<idx_t> set);
+	DenomInfo GetDenominator(JoinRelationSet &set);
+
 	bool SingleColumnFilter(FilterInfo &filter_info);
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
