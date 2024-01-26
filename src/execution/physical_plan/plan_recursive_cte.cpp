@@ -45,6 +45,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 				throw InvalidInputException("Referenced materialized CTE does not exist.");
 			}
 			chunk_scan->collection = cte->second.get();
+			materialized_cte->second.push_back(*chunk_scan.get());
 
 			return std::move(chunk_scan);
 		}
@@ -60,6 +61,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 	    cte->second.get()->Types(), PhysicalOperatorType::RECURSIVE_CTE_SCAN, op.estimated_cardinality, op.cte_index);
 
 	chunk_scan->collection = cte->second.get();
+
 	return std::move(chunk_scan);
 }
 
