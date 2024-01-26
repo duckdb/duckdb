@@ -129,8 +129,29 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		HandleOverLimitRows();
 	}
 	switch (parse_types[cur_col_id].id()) {
+	case LogicalTypeId::TINYINT:
+		TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::SMALLINT:
+		TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::INTEGER:
+		TrySimpleIntegerCast(value_ptr, size, static_cast<int32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
 	case LogicalTypeId::BIGINT:
 		TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::UTINYINT:
+		TrySimpleIntegerCast<uint8_t,false>(value_ptr, size, static_cast<uint8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::USMALLINT:
+		TrySimpleIntegerCast<uint16_t,false>(value_ptr, size, static_cast<uint16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::UINTEGER:
+		TrySimpleIntegerCast<uint32_t,false>(value_ptr, size, static_cast<uint32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::UBIGINT:
+		TrySimpleIntegerCast<uint64_t,false>(value_ptr, size, static_cast<uint64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	default:
 		if (allocate) {
@@ -740,9 +761,19 @@ void StringValueScanner::SkipUntilNewLine() {
 }
 
 bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
+
 	switch (type.id()) {
-	case LogicalTypeId::VARCHAR:
+		// All Integers (Except HugeInt
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+		// Varchar doesn't really need casting
+	case LogicalType::VARCHAR:
 		return true;
 	default:
 		return false;
