@@ -230,7 +230,7 @@ select comment from duckdb_functions() where function_name='test_macro';
 NULL
 
 statement ok
-COMMENT ON FUNCTION test_macro IS 'very gezellige macro'
+COMMENT ON MACRO test_macro IS 'very gezellige macro'
 
 query I
 select comment from duckdb_functions() where function_name='test_macro';

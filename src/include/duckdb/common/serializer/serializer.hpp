@@ -85,21 +85,6 @@ public:
 		OnOptionalPropertyEnd(true);
 	}
 
-	// Specialization for Value (default Value comparison throws when comparing nulls)
-	template <>
-	void WritePropertyWithDefault<Value>(const field_id_t field_id, const char *tag, const Value &value,
-	                                     const Value &&default_value) {
-		// If current value is default, don't write it
-		if (!serialize_default_values && ValueOperations::NotDistinctFrom(value, default_value)) {
-			OnOptionalPropertyBegin(field_id, tag, false);
-			OnOptionalPropertyEnd(false);
-			return;
-		}
-		OnOptionalPropertyBegin(field_id, tag, true);
-		WriteValue(value);
-		OnOptionalPropertyEnd(true);
-	}
-
 	// Special case: data_ptr_T
 	void WriteProperty(const field_id_t field_id, const char *tag, const_data_ptr_t ptr, idx_t count) {
 		OnPropertyBegin(field_id, tag);
@@ -311,6 +296,11 @@ protected:
 // We need to special case vector<bool> because elements of vector<bool> cannot be referenced
 template <>
 void Serializer::WriteValue(const vector<bool> &vec);
+
+// Specialization for Value (default Value comparison throws when comparing nulls)
+template <>
+void Serializer::WritePropertyWithDefault<Value>(const field_id_t field_id, const char *tag, const Value &value,
+                                     const Value &&default_value);
 
 // List Impl
 template <class FUNC>
