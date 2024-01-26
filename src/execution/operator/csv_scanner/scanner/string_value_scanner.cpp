@@ -32,7 +32,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	if (!csv_file_scan) {
 		parse_types = {number_of_columns, LogicalType::VARCHAR};
 	} else {
-		for (auto &type : csv_file_scan->GetTypes()) {
+		for (auto &type : csv_file_scan->types) {
 			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
 				parse_types.emplace_back(type);
 			} else {
@@ -217,7 +217,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	if (!success) {
 		// We had a casting error, we push it here because we can only error when finishing the line read.
-		cast_errors[cur_col_id]=std::string(value_ptr, size);
+		cast_errors[cur_col_id] = std::string(value_ptr, size);
 	}
 	cur_col_id++;
 }
@@ -243,19 +243,20 @@ bool StringValueResult::AddRowInternal() {
 		// Recreate row for rejects-table
 		vector<Value> row;
 		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-			if (cast_errors.find(col) != cast_errors.end()){
+			if (cast_errors.find(col) != cast_errors.end()) {
 				row.push_back(cast_errors[col]);
-			} else{
+			} else {
 				row.push_back(parse_chunk.GetValue(col, number_of_rows));
 			}
 		}
-		for (auto& cast_error: cast_errors){
+		for (auto &cast_error : cast_errors) {
 			std::ostringstream error;
 			// Casting Error Message
 			error << "Could not convert string\"" << cast_error.second << "\" to \'"
-				  << parse_types[cur_col_id].ToString() << "\'";
+			      << parse_types[cur_col_id].ToString() << "\'";
 			auto error_string = error.str();
-			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string, cast_error.first,row);
+			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
+			                                     cast_error.first, row);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
 			error_handler.Error(lines_per_batch, csv_error);
 		}
@@ -380,9 +381,9 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 
 StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary,
-                                       idx_t result_size)
-    : BaseScanner(buffer_manager, state_machine, error_handler, boundary), scanner_idx(scanner_idx_p),
+                                       const shared_ptr<CSVErrorHandler> &error_handler,
+                                       shared_ptr<CSVFileScan> csv_file_scan, CSVIterator boundary, idx_t result_size)
+    : BaseScanner(buffer_manager, state_machine, error_handler, csv_file_scan, boundary), scanner_idx(scanner_idx_p),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan) {
@@ -494,8 +495,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 					row.push_back(parse_chunk.GetValue(col, line_error));
 				}
-				auto csv_error =
-				    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, row);
+				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
+				                                     error_message, col_idx, row);
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
 				error_handler->Error(lines_per_batch, csv_error);
@@ -844,7 +845,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
                                          const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options) {
 
 	switch (type.id()) {
-		// All Integers (Except HugeInt
+		// All Integers (Except HugeInt)
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -897,7 +898,7 @@ void StringValueScanner::SetStart() {
 			return;
 		}
 		scan_finder = make_uniq<StringValueScanner>(0, buffer_manager, state_machine,
-		                                            make_shared<CSVErrorHandler>(true), iterator, 1);
+		                                            make_shared<CSVErrorHandler>(true), csv_file_scan, iterator, 1);
 		auto &tuples = scan_finder->ParseChunk();
 		line_found = true;
 		if (tuples.number_of_rows != 1) {
