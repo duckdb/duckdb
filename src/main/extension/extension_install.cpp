@@ -48,8 +48,8 @@ duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	// exception if the home directory does not exist, don't create whatever we think is home
 	if (!fs.DirectoryExists(home_directory)) {
 		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-				  "home_directory='/path/to/dir' option.",
-				  home_directory);
+		                  "home_directory='/path/to/dir' option.",
+		                  home_directory);
 	}
 	string res = home_directory;
 	res = fs.JoinPath(res, ".duckdb");
