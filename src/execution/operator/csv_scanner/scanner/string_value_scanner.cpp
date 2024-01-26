@@ -3,7 +3,8 @@
 #include "duckdb/execution/operator/csv_scanner/scanner/skip_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
 #include "duckdb/main/client_data.hpp"
-
+#include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -142,20 +143,33 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UTINYINT:
-		TrySimpleIntegerCast<uint8_t,false>(value_ptr, size, static_cast<uint8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		TrySimpleIntegerCast<uint8_t, false>(value_ptr, size,
+		                                     static_cast<uint8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::USMALLINT:
-		TrySimpleIntegerCast<uint16_t,false>(value_ptr, size, static_cast<uint16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		TrySimpleIntegerCast<uint16_t, false>(value_ptr, size,
+		                                      static_cast<uint16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UINTEGER:
-		TrySimpleIntegerCast<uint32_t,false>(value_ptr, size, static_cast<uint32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		TrySimpleIntegerCast<uint32_t, false>(value_ptr, size,
+		                                      static_cast<uint32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UBIGINT:
-		TrySimpleIntegerCast<uint64_t,false>(value_ptr, size, static_cast<uint64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		TrySimpleIntegerCast<uint64_t, false>(value_ptr, size,
+		                                      static_cast<uint64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::DOUBLE:
+		TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[cur_col_id])[number_of_rows], false,
+		                      state_machine.options.decimal_separator[0]);
+		break;
+	case LogicalTypeId::FLOAT:
+		TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[cur_col_id])[number_of_rows], false,
+		                      state_machine.options.decimal_separator[0]);
 		break;
 	default:
 		if (allocate) {
-			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows]  = StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], string_t(value_ptr,size));
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] =
+			    StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], string_t(value_ptr, size));
 		} else {
 			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t(value_ptr, size);
 		}
@@ -640,7 +654,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 		value = string_t(overbuffer_string.c_str(), overbuffer_string.size());
 	}
 	if (!states.IsNotSet()) {
-		result.AddValueToVector(value.GetData(),value.GetSize(), true);
+		result.AddValueToVector(value.GetData(), value.GetSize(), true);
 	}
 	if (states.NewRow() && !states.IsNotSet()) {
 		result.AddRowInternal();
@@ -771,6 +785,8 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::UBIGINT:
 		// Varchar doesn't really need casting
 	case LogicalType::VARCHAR:

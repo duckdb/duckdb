@@ -11,7 +11,7 @@
 #include "add.hpp"
 #include "multiply.hpp"
 #include "subtract.hpp"
-# include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 template <typename T>
@@ -429,4 +429,4 @@ static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, b
 	return false;
 }
 
-}
+} // namespace duckdb

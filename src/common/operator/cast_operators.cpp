@@ -25,6 +25,7 @@
 #include "fmt/format.h"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
 
 #include <cctype>
 #include <cmath>
@@ -997,44 +998,6 @@ bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
 	return TrySimpleIntegerCast<uint64_t, false>(input.GetData(), input.GetSize(), result, strict);
 }
 
-template <class T, char decimal_separator = '.'>
-static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
-	// skip any spaces at the start
-	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
-		buf++;
-		len--;
-	}
-	if (len == 0) {
-		return false;
-	}
-	if (*buf == '+') {
-		if (strict) {
-			// plus is not allowed in strict mode
-			return false;
-		}
-		buf++;
-		len--;
-	}
-	if (strict && len >= 2) {
-		if (buf[0] == '0' && StringUtil::CharacterIsDigit(buf[1])) {
-			// leading zeros are not allowed in strict mode
-			return false;
-		}
-	}
-	auto endptr = buf + len;
-	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result, decimal_separator);
-	if (parse_result.ec != std::errc()) {
-		return false;
-	}
-	auto current_end = parse_result.ptr;
-	if (!strict) {
-		while (current_end < endptr && StringUtil::CharacterIsSpace(*current_end)) {
-			current_end++;
-		}
-	}
-	return current_end == endptr;
-}
-
 template <>
 bool TryCast::Operation(string_t input, float &result, bool strict) {
 	return TryDoubleCast<float>(input.GetData(), input.GetSize(), result, strict);
@@ -1047,7 +1010,7 @@ bool TryCast::Operation(string_t input, double &result, bool strict) {
 
 template <>
 bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message, bool strict) {
-	if (!TryDoubleCast<float, ','>(input.GetData(), input.GetSize(), result, strict)) {
+	if (!TryDoubleCast<float>(input.GetData(), input.GetSize(), result, strict, ',')) {
 		HandleCastError::AssignError(StringUtil::Format("Could not cast string to float: \"%s\"", input.GetString()),
 		                             error_message);
 		return false;
@@ -1057,7 +1020,7 @@ bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result,
 
 template <>
 bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message, bool strict) {
-	if (!TryDoubleCast<double, ','>(input.GetData(), input.GetSize(), result, strict)) {
+	if (!TryDoubleCast<double>(input.GetData(), input.GetSize(), result, strict, ',')) {
 		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"", input.GetString()),
 		                             error_message);
 		return false;

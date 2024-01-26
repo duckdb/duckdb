@@ -73,6 +73,7 @@ public:
 	bool quoted_new_line = false;
 
 	vector<LogicalType> parse_types;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
