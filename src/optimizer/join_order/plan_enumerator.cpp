@@ -114,14 +114,7 @@ void PlanEnumerator::GenerateCrossProducts() {
 unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                     const vector<reference<NeighborInfo>> &possible_connections,
                                                     JoinNode &left, JoinNode &right) {
-	// for the hash join we want the right side (build side) to have the smallest cardinality
-	// also just a heuristic but for now...
-	// FIXME: we should probably actually benchmark that as well
-	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = nullptr;
-	if (left.set.ToString() == "[0, 2]" && right.set.ToString() == "[1]") {
-		auto wat = 0;
-	}
 	// cross products are techincally still connections, but the filter expression is a null_ptr
 	if (!possible_connections.empty()) {
 		best_connection = &possible_connections.back().get();
@@ -131,12 +124,10 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 		if (!filter_binding->left_set || !filter_binding->right_set) {
 			continue;
 		}
-		bool left_subset = JoinRelationSet::IsSubset(left.set, *filter_binding->left_set);
-		bool right_subset = JoinRelationSet::IsSubset(right.set, *filter_binding->right_set);
-		bool other_left_subset = JoinRelationSet::IsSubset(left.set, *filter_binding->right_set);
-		bool other_right_subset = JoinRelationSet::IsSubset(right.set, *filter_binding->left_set);
-		if ((left_subset && right_subset) || (other_left_subset && other_right_subset)) {
-			join_type = filter_binding->join_type;
+		join_type = filter_binding->join_type;
+		// prefer joining on semi and anti joins as they have a higher chance of being more
+		// selective
+		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 			break;
 		}
 	}

@@ -174,9 +174,14 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				auto &comparison = condition->Cast<BoundComparisonExpression>();
 
 				// we need to figure out which side is which by looking at the relations available to us
-				// This will also automatically place relations for semi joins and anti joins on the correct side.
 				// left/right (build side/probe side) optimizations happen later.
 				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
+				// If the left and right set are inverted AND it is a semi or anti join
+				// swap left and right children back.
+				if (invert && (f->join_type == JoinType::SEMI || f->join_type == JoinType::ANTI)) {
+					std::swap(left, right);
+					invert = false;
+				}
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
 				cond.comparison = condition->type;
