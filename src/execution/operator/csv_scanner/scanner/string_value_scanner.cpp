@@ -118,10 +118,9 @@ void StringValueResult::HandleOverLimitRows() {
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
-	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted && size == null_str.GetSize())) {
+	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && size == null_str.GetSize()) {
 		bool is_null = true;
-
-		char *null_str_ptr = null_str.GetPointer();
+		auto null_str_ptr = null_str.GetData();
 		for (idx_t i = 0; i < size; i++) {
 			if (null_str_ptr[i] != value_ptr[i]) {
 				is_null = false;
@@ -203,7 +202,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		success = Timestamp::TryConvertTimestamp(value_ptr, size,
-		                                         static_cast<timestamp_t *>(vector_ptr[cur_col_id])[number_of_rows]) !=
+		                                         static_cast<timestamp_t *>(vector_ptr[cur_col_id])[number_of_rows]) ==
 		          TimestampCastResult::SUCCESS;
 		break;
 	}
@@ -217,18 +216,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		break;
 	}
 	if (!success) {
-		// We had a casting error
-		std::ostringstream error;
-		// Casting Error Message
-		error << "Could not convert string\"" << std::string(value_ptr, size) << "\" to \'"
-		      << parse_types[cur_col_id].ToString() << "\'";
-		auto error_string = error.str();
-		auto csv_error = CSVError::CastError(state_machine.options, names[cur_col_id], error_string, cur_col_id);
-		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
-		error_handler.Error(lines_per_batch, csv_error);
-		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
-		// row
-		casting_error = true;
+		// We had a casting error, we push it here because we can only error when finishing the line read.
+		cast_errors[cur_col_id]=std::string(value_ptr, size);
 	}
 	cur_col_id++;
 }
@@ -249,10 +238,31 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 }
 
 bool StringValueResult::AddRowInternal() {
-	if (casting_error) {
+	if (!cast_errors.empty()) {
 		// A wild casting error appears
+		// Recreate row for rejects-table
+		vector<Value> row;
+		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+			if (cast_errors.find(col) != cast_errors.end()){
+				row.push_back(cast_errors[col]);
+			} else{
+				row.push_back(parse_chunk.GetValue(col, number_of_rows));
+			}
+		}
+		for (auto& cast_error: cast_errors){
+			std::ostringstream error;
+			// Casting Error Message
+			error << "Could not convert string\"" << cast_error.second << "\" to \'"
+				  << parse_types[cur_col_id].ToString() << "\'";
+			auto error_string = error.str();
+			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string, cast_error.first,row);
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
+			error_handler.Error(lines_per_batch, csv_error);
+		}
+		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
+		// row
 		// Cleanup this line and continue
-		casting_error = false;
+		cast_errors.clear();
 		cur_col_id = 0;
 		return false;
 	}
@@ -485,7 +495,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					row.push_back(parse_chunk.GetValue(col, line_error));
 				}
 				auto csv_error =
-				    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx);
+				    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, row);
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
 				error_handler->Error(lines_per_batch, csv_error);
@@ -502,7 +512,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
 					}
 					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx);
+					                                     error_message, col_idx, row);
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
 					error_handler->Error(lines_per_batch, csv_error);

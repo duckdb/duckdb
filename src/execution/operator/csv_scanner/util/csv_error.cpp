@@ -63,8 +63,8 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p)
     : error_message(std::move(error_message_p)), type(type_p) {
 }
 
-CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p)
-    : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p) {
+CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p)
+    : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), row(std::move(row_p)) {
 }
 
 CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
@@ -88,7 +88,7 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 }
 
 CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
-                             idx_t &column_idx) {
+                             idx_t column_idx, vector<Value> &row) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\"." << std::endl;
@@ -97,7 +97,7 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx);
+	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row);
 }
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size) {

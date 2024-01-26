@@ -74,7 +74,7 @@ public:
 
 	vector<LogicalType> parse_types;
 	vector<string> names;
-	bool casting_error = false;
+	unordered_map<idx_t, string> cast_errors;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 
