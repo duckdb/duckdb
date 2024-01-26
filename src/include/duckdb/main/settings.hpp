@@ -16,6 +16,8 @@ class ClientContext;
 class DatabaseInstance;
 struct DBConfig;
 
+const string GetDefaultUserAgent();
+
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
@@ -402,6 +404,15 @@ struct MaximumMemorySetting {
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct OldImplicitCasting {
+	static constexpr const char *Name = "old_implicit_casting";
+	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);

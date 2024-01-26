@@ -56,6 +56,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"debug_force_external", {Value(true)}},
 	    {"debug_force_no_cross_product", {Value(true)}},
 	    {"debug_force_external", {Value(true)}},
+	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},

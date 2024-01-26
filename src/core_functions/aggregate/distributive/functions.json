@@ -87,6 +87,13 @@
         "type": "aggregate_function"
     },
     {
+        "name": "kurtosis_pop",
+        "parameters": "x",
+        "description": "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction",
+        "example": "",
+        "type": "aggregate_function"
+    },
+    {
         "name": "min",
         "parameters": "arg",
         "description": "Returns the minimum value present in arg.",

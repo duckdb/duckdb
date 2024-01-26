@@ -201,6 +201,9 @@ endif
 ifeq (${FORCE_ASYNC_SINK_SOURCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASYNC_SINK_SOURCE=1
 endif
+ifeq (${RUN_SLOW_VERIFIERS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DRUN_SLOW_VERIFIERS=1
+endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
@@ -399,7 +402,7 @@ sqlsmith: debug
 # works both on executable, libraries (-> .duckdb_extension) and on WebAssembly
 bloaty/bloaty:
 	git clone https://github.com/google/bloaty.git
-	cd bloaty && git submodule update --init --recursive && cmake -B build -G Ninja -S . && cmake --build build
+	cd bloaty && git submodule update --init --recursive && cmake -Bm build -G Ninja -S . && cmake --build build
 	mv bloaty/build/bloaty bloaty/bloaty
 
 bloaty: reldebug bloaty/bloaty

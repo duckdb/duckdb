@@ -21,6 +21,8 @@ struct SecretEntry;
 
 //! Base class for SecretStorage API
 class SecretStorage {
+	friend class SecretManager;
+
 public:
 	SecretStorage(const string &name) : storage_name(name), persistent(false) {};
 	virtual ~SecretStorage() = default;

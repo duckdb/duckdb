@@ -19,6 +19,7 @@ void Transformer::TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, Quer
 		order_modifier->orders = std::move(orders);
 		node.modifiers.push_back(std::move(order_modifier));
 	}
+
 	if (stmt.limitCount || stmt.limitOffset) {
 		if (stmt.limitCount && stmt.limitCount->type == duckdb_libpgquery::T_PGLimitPercent) {
 			auto limit_percent_modifier = make_uniq<LimitPercentModifier>();

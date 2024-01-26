@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-string QueryErrorContext::Format(const string &query, const string &error_message, int error_loc) {
+string QueryErrorContext::Format(const string &query, const string &error_message, int error_loc,
+                                 bool add_line_indicator) {
 	if (error_loc < 0 || size_t(error_loc) >= query.size()) {
 		// no location in query provided
 		return error_message;
@@ -90,7 +91,10 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 			break;
 		}
 	}
-	string line_indicator = "LINE " + to_string(line_number) + ": ";
+	string line_indicator;
+	if (add_line_indicator) {
+		line_indicator = "LINE " + to_string(line_number) + ": ";
+	}
 	string begin_trunc = truncate_beginning ? "..." : "";
 	string end_trunc = truncate_end ? "..." : "";
 

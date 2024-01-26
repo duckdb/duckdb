@@ -1,6 +1,6 @@
-from xmlrpc.client import DateTime
 import duckdb
-import os
+from pytest import raises
+from duckdb import NotImplementedException, InvalidInputException
 from duckdb.value.constant import (
     Value,
     NullValue,
@@ -147,7 +147,7 @@ class TestValue(object):
             con.execute('select $1', [value]).fetchall()
 
     @pytest.mark.parametrize(
-        'test',
+        'target_type,test_value,expected_conversion_success',
         [
             (TINYINT, 0, True),
             (TINYINT, 255, False),
@@ -183,17 +183,15 @@ class TestValue(object):
             (HUGEINT, 12334214123, True),
         ],
     )
-    def test_numeric_values(self, test):
-        target_type = test[0]
-        test_value = test[1]
-        expected_conversion_success = test[2]
-
+    def test_numeric_values(self, target_type, test_value, expected_conversion_success):
         value = Value(test_value, target_type)
         con = duckdb.connect()
 
-        try:
-            res = con.execute('select typeof(a) from (select $1) tbl(a)', [value]).fetchall()
-            assert expected_conversion_success == True
+        work = lambda: con.execute('select typeof(a) from (select $1) tbl(a)', [value]).fetchall()
+
+        if expected_conversion_success:
+            res = work()
             assert str(target_type) == res[0][0]
-        except:
-            assert expected_conversion_success == False
+        else:
+            with raises((NotImplementedException, InvalidInputException)):
+                work()

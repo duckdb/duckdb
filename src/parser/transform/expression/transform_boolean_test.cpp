@@ -6,31 +6,46 @@
 
 namespace duckdb {
 
+static unique_ptr<ParsedExpression> TransformBooleanTestInternal(unique_ptr<ParsedExpression> argument,
+                                                                 ExpressionType comparison_type, bool comparison_value,
+                                                                 idx_t query_location) {
+	auto bool_value = make_uniq<ConstantExpression>(Value::BOOLEAN(comparison_value));
+	bool_value->query_location = query_location;
+	// we cast the argument to bool to remove ambiguity wrt function binding on the comparision
+	auto cast_argument = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(argument));
+
+	auto result = make_uniq<ComparisonExpression>(comparison_type, std::move(cast_argument), std::move(bool_value));
+	result->query_location = query_location;
+	return std::move(result);
+}
+
+static unique_ptr<ParsedExpression> TransformBooleanTestIsNull(unique_ptr<ParsedExpression> argument,
+                                                               ExpressionType operator_type, idx_t query_location) {
+	auto result = make_uniq<OperatorExpression>(operator_type, std::move(argument));
+	result->query_location = query_location;
+	return std::move(result);
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformBooleanTest(duckdb_libpgquery::PGBooleanTest &node) {
 	auto argument = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(node.arg));
 
-	auto expr_true = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
-	auto expr_false = make_uniq<ConstantExpression>(Value::BOOLEAN(false));
-	// we cast the argument to bool to remove ambiguity wrt function binding on the comparision
-	auto cast_argument = make_uniq<CastExpression>(LogicalType::BOOLEAN, argument->Copy());
-
 	switch (node.booltesttype) {
 	case duckdb_libpgquery::PGBoolTestType::PG_IS_TRUE:
-		return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, std::move(cast_argument),
-		                                       std::move(expr_true));
+		return TransformBooleanTestInternal(std::move(argument), ExpressionType::COMPARE_NOT_DISTINCT_FROM, true,
+		                                    node.location);
 	case duckdb_libpgquery::PGBoolTestType::IS_NOT_TRUE:
-		return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, std::move(cast_argument),
-		                                       std::move(expr_true));
+		return TransformBooleanTestInternal(std::move(argument), ExpressionType::COMPARE_DISTINCT_FROM, true,
+		                                    node.location);
 	case duckdb_libpgquery::PGBoolTestType::IS_FALSE:
-		return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, std::move(cast_argument),
-		                                       std::move(expr_false));
+		return TransformBooleanTestInternal(std::move(argument), ExpressionType::COMPARE_NOT_DISTINCT_FROM, false,
+		                                    node.location);
 	case duckdb_libpgquery::PGBoolTestType::IS_NOT_FALSE:
-		return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, std::move(cast_argument),
-		                                       std::move(expr_false));
+		return TransformBooleanTestInternal(std::move(argument), ExpressionType::COMPARE_DISTINCT_FROM, false,
+		                                    node.location);
 	case duckdb_libpgquery::PGBoolTestType::IS_UNKNOWN: // IS NULL
-		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, std::move(argument));
+		return TransformBooleanTestIsNull(std::move(argument), ExpressionType::OPERATOR_IS_NULL, node.location);
 	case duckdb_libpgquery::PGBoolTestType::IS_NOT_UNKNOWN: // IS NOT NULL
-		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(argument));
+		return TransformBooleanTestIsNull(std::move(argument), ExpressionType::OPERATOR_IS_NOT_NULL, node.location);
 	default:
 		throw NotImplementedException("Unknown boolean test type %d", node.booltesttype);
 	}

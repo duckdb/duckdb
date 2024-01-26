@@ -18,6 +18,10 @@
 
 namespace duckdb {
 
+const string GetDefaultUserAgent() {
+	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
+}
+
 //===--------------------------------------------------------------------===//
 // Access Mode
 //===--------------------------------------------------------------------===//
@@ -912,6 +916,22 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Old Implicit Casting
+//===--------------------------------------------------------------------===//
+void OldImplicitCasting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.old_implicit_casting = input.GetValue<bool>();
+}
+
+void OldImplicitCasting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.old_implicit_casting = DBConfig().options.old_implicit_casting;
+}
+
+Value OldImplicitCasting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.old_implicit_casting);
+}
+
+//===--------------------------------------------------------------------===//
 // Password Setting
 //===--------------------------------------------------------------------===//
 void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1266,14 +1286,14 @@ void DuckDBApiSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
-	config.options.duckdb_api += " " + new_value;
+	config.options.duckdb_api = new_value;
 }
 
 void DuckDBApiSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
-	config.options.duckdb_api = DBConfig().options.duckdb_api;
+	config.options.duckdb_api = GetDefaultUserAgent();
 }
 
 Value DuckDBApiSetting::GetSetting(ClientContext &context) {

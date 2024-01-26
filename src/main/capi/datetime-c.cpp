@@ -28,6 +28,10 @@ duckdb_date duckdb_to_date(duckdb_date_struct date) {
 	return result;
 }
 
+bool duckdb_is_finite_date(duckdb_date date) {
+	return Date::IsFinite(date_t(date.days));
+}
+
 duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	int32_t hour, minute, second, micros;
 	Time::Convert(dtime_t(time.micros), hour, minute, second, micros);
@@ -38,6 +42,20 @@ duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	result.sec = second;
 	result.micros = micros;
 	return result;
+}
+
+duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz input) {
+	duckdb::dtime_tz_t time(input.bits);
+	duckdb_time_tz_struct result;
+	result.time.micros = time.time().micros;
+	result.offset = time.offset();
+	return result;
+}
+
+duckdb_time_tz duckdb_create_time_tz(int64_t micros, int32_t offset) {
+	duckdb_time_tz time;
+	time.bits = duckdb::dtime_tz_t(duckdb::dtime_t(micros), offset).bits;
+	return time;
 }
 
 duckdb_time duckdb_to_time(duckdb_time_struct time) {
@@ -70,4 +88,8 @@ duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts) {
 	duckdb_timestamp result;
 	result.micros = Timestamp::FromDatetime(date, time).value;
 	return result;
+}
+
+bool duckdb_is_finite_timestamp(duckdb_timestamp ts) {
+	return Timestamp::IsFinite(timestamp_t(ts.micros));
 }

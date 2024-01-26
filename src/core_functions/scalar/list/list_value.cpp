@@ -7,6 +7,7 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/parser/query_error_context.hpp"
 
 namespace duckdb {
 
@@ -36,10 +37,28 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
-	LogicalType child_type = arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type;
+	LogicalType child_type =
+	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
+		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
+		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
+			string list_arguments = "Full list: ";
+			idx_t error_index = list_arguments.size();
+			for (idx_t k = 0; k < arguments.size(); k++) {
+				if (k > 0) {
+					list_arguments += ", ";
+				}
+				if (k == i) {
+					error_index = list_arguments.size();
+				}
+				list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+			}
+			auto error = StringUtil::Format("Cannot create a list of types %s and %s - an explicit cast is required",
+			                                child_type.ToString(), arg_type.ToString());
+			throw BinderException(QueryErrorContext::Format(list_arguments, error, int(error_index), false));
+		}
 	}
+	child_type = LogicalType::NormalizeType(child_type);
 
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;
