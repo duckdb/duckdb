@@ -4214,16 +4214,15 @@ public class TestDuckDBJDBC {
         try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
              PreparedStatement s = connection.prepareStatement("select ?")) {
             s.setObject(1, "YWJj".getBytes());
-            byte[] out = null;
+            String out = null;
 
             try (ResultSet rs = s.executeQuery()) {
                 while (rs.next()) {
-                    InputStream e = rs.getBlob(1).getBinaryStream();
-                    out = JdbcUtils.readAllBytes(e);
+                    out = blob_to_string(rs.getBlob(1));
                 }
             }
 
-            assertEquals(new String(out), "YWJj");
+            assertEquals(out, "YWJj");
         }
     }
 
