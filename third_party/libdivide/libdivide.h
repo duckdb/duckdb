@@ -7,6 +7,8 @@
 // libdivide is dual-licensed under the Boost or zlib licenses.
 // You may use libdivide under the terms of either of these.
 // See LICENSE.txt for more details.
+// 
+// This version has been altered to use the the duckdb_libdivide c++ namespace
 
 #ifndef LIBDIVIDE_H
 #define LIBDIVIDE_H
@@ -110,7 +112,7 @@
 #endif
 
 #ifdef __cplusplus
-namespace libdivide {
+namespace duckdb_libdivide {
 #endif
 
 // pack divider structs to prevent compilers from padding.

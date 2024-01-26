@@ -887,36 +887,36 @@ struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 	}
 
 	// 16 bit division optimisation
-	static libdivide::divider<int16_t> OptimisedRight(DivideOperator _, int16_t right) {
-		return libdivide::divider<int16_t>(right);
+	static duckdb_libdivide::divider<int16_t> OptimisedRight(DivideOperator _, int16_t right) {
+		return duckdb_libdivide::divider<int16_t>(right);
 	}
 
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
-	                                      libdivide::divider<int16_t> right) {
-		return DivideOperator::template Operation<LEFT_TYPE, libdivide::divider<int16_t>, RESULT_TYPE>(left, right);
+	                                      duckdb_libdivide::divider<int16_t> right) {
+		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int16_t>, RESULT_TYPE>(left, right);
 	}
 
 	// 32 bit division optimisation
-	static libdivide::divider<int32_t> OptimisedRight(DivideOperator _, int32_t right) {
-		return libdivide::divider<int32_t>(right);
+	static duckdb_libdivide::divider<int32_t> OptimisedRight(DivideOperator _, int32_t right) {
+		return duckdb_libdivide::divider<int32_t>(right);
 	}
 
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
-	                                      libdivide::divider<int32_t> right) {
-		return DivideOperator::template Operation<LEFT_TYPE, libdivide::divider<int32_t>, RESULT_TYPE>(left, right);
+	                                      duckdb_libdivide::divider<int32_t> right) {
+		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int32_t>, RESULT_TYPE>(left, right);
 	}
 
 	// 64 bit division optimisation
-	static libdivide::divider<int64_t> OptimisedRight(DivideOperator _, int64_t right) {
-		return libdivide::divider<int64_t>(right);
+	static duckdb_libdivide::divider<int64_t> OptimisedRight(DivideOperator _, int64_t right) {
+		return duckdb_libdivide::divider<int64_t>(right);
 	}
 
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
-	                                      libdivide::divider<int64_t> right) {
-		return DivideOperator::template Operation<LEFT_TYPE, libdivide::divider<int64_t>, RESULT_TYPE>(left, right);
+	                                      duckdb_libdivide::divider<int64_t> right) {
+		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int64_t>, RESULT_TYPE>(left, right);
 	}
 
 	static bool AddsNulls() {
