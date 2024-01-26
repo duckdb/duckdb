@@ -95,7 +95,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	}
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins =
+	has_unplanned_dependent_joins = has_unplanned_dependent_joins ||
 	    node.left_binder->has_unplanned_dependent_joins || node.right_binder->has_unplanned_dependent_joins;
 
 	// create actual logical ops for setops
