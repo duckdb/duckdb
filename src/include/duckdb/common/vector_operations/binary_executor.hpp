@@ -24,7 +24,6 @@ struct DefaultNullCheckOperator {
 	}
 };
 
-
 struct ConstRightOptOperatorWrapper {
 	template <class RIGHT_TYPE>
 	static inline bool OptimiseConstRight(RIGHT_TYPE) {
@@ -44,7 +43,7 @@ struct NoOptOperatorWrapper {
 	}
 };
 
-struct BinaryStandardOperatorWrapper: NoOptOperatorWrapper {
+struct BinaryStandardOperatorWrapper : NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
@@ -65,7 +64,7 @@ struct BinaryStandardOperatorWrapper: NoOptOperatorWrapper {
 	}
 };
 
-struct BinarySingleArgumentOperatorWrapper: NoOptOperatorWrapper {
+struct BinarySingleArgumentOperatorWrapper : NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE>(left, right);
@@ -86,7 +85,7 @@ struct BinarySingleArgumentOperatorWrapper: NoOptOperatorWrapper {
 	}
 };
 
-struct BinaryLambdaWrapper:NoOptOperatorWrapper {
+struct BinaryLambdaWrapper : NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return fun(left, right);
@@ -107,7 +106,7 @@ struct BinaryLambdaWrapper:NoOptOperatorWrapper {
 	}
 };
 
-struct BinaryLambdaWrapperWithNulls:NoOptOperatorWrapper {
+struct BinaryLambdaWrapperWithNulls : NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return fun(left, right, mask, idx);

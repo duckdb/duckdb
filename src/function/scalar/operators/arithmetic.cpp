@@ -1,3 +1,4 @@
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
@@ -9,10 +10,9 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/enum_util.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "libdivide.h"
 
 #include <limits>
@@ -853,7 +853,7 @@ interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 	return left;
 }
 
-struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
+struct BinaryNumericDivideWrapper : ConstRightOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
@@ -894,7 +894,8 @@ struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
 	                                      duckdb_libdivide::divider<int16_t> right) {
-		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int16_t>, RESULT_TYPE>(left, right);
+		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int16_t>, RESULT_TYPE>(left,
+		                                                                                                      right);
 	}
 
 	// 32 bit division optimisation
@@ -905,7 +906,8 @@ struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
 	                                      duckdb_libdivide::divider<int32_t> right) {
-		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int32_t>, RESULT_TYPE>(left, right);
+		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int32_t>, RESULT_TYPE>(left,
+		                                                                                                      right);
 	}
 
 	// 64 bit division optimisation
@@ -916,7 +918,8 @@ struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE OptimisedOperation(DivideOperator _, FUNC fun, LEFT_TYPE left,
 	                                      duckdb_libdivide::divider<int64_t> right) {
-		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int64_t>, RESULT_TYPE>(left, right);
+		return DivideOperator::template Operation<LEFT_TYPE, duckdb_libdivide::divider<int64_t>, RESULT_TYPE>(left,
+		                                                                                                      right);
 	}
 
 	static bool AddsNulls() {
@@ -924,7 +927,7 @@ struct BinaryNumericDivideWrapper :ConstRightOptOperatorWrapper {
 	}
 };
 
-struct BinaryZeroIsNullWrapper : ConstRightOptOperatorWrapper{
+struct BinaryZeroIsNullWrapper : ConstRightOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (right == 0) {
@@ -955,7 +958,7 @@ struct BinaryZeroIsNullWrapper : ConstRightOptOperatorWrapper{
 	}
 };
 
-struct BinaryNumericDivideHugeintWrapper :NoOptOperatorWrapper {
+struct BinaryNumericDivideHugeintWrapper : NoOptOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (left == NumericLimits<LEFT_TYPE>::Minimum() && right == -1) {
