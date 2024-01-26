@@ -24,6 +24,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -158,6 +159,36 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 					order.orders = std::move(new_orders);
 				}
 			}
+#if 0
+			// When this verification is enabled, replace ORDER BY x, y with ORDER BY create_sort_key(x, y)
+			// note that we don't enable this during actual verification since it doesn't always work
+			// e.g. it breaks EXPLAIN output on queries
+			bool can_replace = true;
+			for (auto &order_node : order.orders) {
+				if (order_node.expression->type == ExpressionType::VALUE_CONSTANT) {
+					// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
+					can_replace = false;
+					break;
+				}
+			}
+			if (!order_binder.HasExtraList()) {
+				// we can only do the replacement when we can order by elements that are not in the selection list
+				can_replace = false;
+			}
+			if (can_replace) {
+				vector<unique_ptr<ParsedExpression>> sort_key_parameters;
+				for (auto &order_node : order.orders) {
+					sort_key_parameters.push_back(std::move(order_node.expression));
+					auto type = config.ResolveOrder(order_node.type);
+					auto null_order = config.ResolveNullOrder(type, order_node.null_order);
+					string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
+					sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+				}
+				order.orders.clear();
+				auto create_sort_key = make_uniq<FunctionExpression>("create_sort_key", std::move(sort_key_parameters));
+				order.orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(create_sort_key));
+			}
+#endif
 			for (auto &order_node : order.orders) {
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
