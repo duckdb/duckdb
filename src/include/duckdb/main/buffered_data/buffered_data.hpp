@@ -34,8 +34,11 @@ public:
 };
 
 class BufferedData {
+protected:
+	enum class Type { SIMPLE };
+
 public:
-	BufferedData(shared_ptr<ClientContext> context) : context(context) {
+	BufferedData(Type type, shared_ptr<ClientContext> context) : type(type), context(context) {
 	}
 	virtual ~BufferedData() {
 	}
@@ -54,7 +57,25 @@ public:
 		context = nullptr;
 	}
 
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != type) {
+			throw InternalException("Failed to cast buffered data to type - buffered data type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != type) {
+			throw InternalException("Failed to cast buffered data to type - buffered data type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
 protected:
+	Type type;
 	shared_ptr<ClientContext> context;
 	//! Protect against populate/fetch race condition
 	mutex glock;
