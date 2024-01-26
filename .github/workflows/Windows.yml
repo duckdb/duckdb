@@ -234,6 +234,12 @@ jobs:
    runs-on: windows-latest
    needs: win-release-64
    steps:
+     - name: Keep \n line endings
+       shell: bash
+       run: |
+         git config --global core.autocrlf false
+         git config --global core.eol lf
+
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0

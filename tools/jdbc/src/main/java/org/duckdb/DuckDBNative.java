@@ -13,7 +13,7 @@ import java.sql.SQLException;
 import java.util.Properties;
 import java.math.BigDecimal;
 
-public class DuckDBNative {
+class DuckDBNative {
     static {
         try {
             String os_name = "";

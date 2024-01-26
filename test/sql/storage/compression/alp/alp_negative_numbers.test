@@ -11,7 +11,8 @@ PRAGMA force_compression='uncompressed'
 # Create a table with random doubles of limited precision compressed as Uncompressed
 # This data should achieve x6 compression ratio
 statement ok
-create table random_double as select round(cos(1 / (random() + 0.001)), 5)::DOUBLE * -1 as data from range(1024) tbl(i);
+create table random_double as select round(cos(1 / (random() + 0.001)), 5)::DOUBLE * -1 as data from range(1023) tbl(i);
+insert into random_double values (-0.0::DOUBLE);
 
 statement ok
 checkpoint

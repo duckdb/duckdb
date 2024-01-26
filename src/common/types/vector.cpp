@@ -161,7 +161,7 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 	cache.ResetFromCache(*this);
 }
 
-void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
+void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		Reference(other);
 		return;
@@ -196,7 +196,7 @@ void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 	}
 }
 
-void Vector::Slice(Vector &other, const SelectionVector &sel, idx_t count) {
+void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {
 	Reference(other);
 	Slice(sel, count);
 }
