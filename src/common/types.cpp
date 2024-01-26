@@ -1223,6 +1223,16 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 	return child_types[index].first;
 }
 
+idx_t StructType::GetChildIndexUnsafe(const LogicalType &type, const string &name) {
+	auto &child_types = StructType::GetChildTypes(type);
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		if (StringUtil::CIEquals(child_types[i].first, name)) {
+			return i;
+		}
+	}
+	throw InternalException("Could not find child with name \"%s\" in struct type \"%s\"", name, type.ToString());
+}
+
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }

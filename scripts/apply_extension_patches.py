@@ -2,6 +2,7 @@
 import sys
 import glob
 import subprocess
+import os
 
 # Get the directory and construct the patch file pattern
 directory = sys.argv[1]
@@ -10,17 +11,32 @@ patch_pattern = f"{directory}*.patch"
 # Find patch files matching the pattern
 patches = glob.glob(patch_pattern)
 
+
+def raise_error(error_msg):
+    sys.stderr.write(error_message + '\n')
+    sys.exit(1)
+
+
+patches = os.listdir(directory)
+for patch in patches:
+    if not patch.endswith('.patch'):
+        raise_error(
+            f'Patch file {patch} found in directory {directory} does not end in ".patch" - rename the patch file'
+        )
+
+
 # Exit if no patches are found
 if not patches:
     error_message = (
         f"\nERROR: Extension patching enabled, but no patches found in '{directory}'. "
         "Please make sure APPLY_PATCHES is only enabled when there are actually patches present. "
-        "See .github/patches/extensions/README.md for more details.\n"
+        "See .github/patches/extensions/README.md for more details."
     )
-    sys.stderr.write(error_message)
-    sys.exit(1)
+    raise_error(error_message)
 
 # Apply each patch file using git apply
 for patch in patches:
-    print(f"Applying patch: {patch}")
-    subprocess.run(["git", "apply", "--ignore-space-change", "--ignore-whitespace", patch])
+    print(f"Applying patch: {patch}\n")
+    subprocess.run(
+        ["git", "apply", "--ignore-space-change", "--ignore-whitespace", os.path.join(directory, patch)], check=True
+    )
