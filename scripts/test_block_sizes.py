@@ -22,10 +22,11 @@ def replace_in_file(fname, regex, replace):
 current_dir = os.getcwd()
 build_dir = os.path.join(os.getcwd(), 'build', 'release')
 
+# run the fast tests and all storage-related tests
+# with a block size of 16KB and a standard vector size
 block_size = 16384
-vector_size = 2048
 print("TESTING BLOCK_ALLOC_SIZE=%d" % (block_size,))
-print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
+print("TESTING STANDARD_VECTOR_SIZE")
 
 replace_in_file(
     'src/include/duckdb/storage/storage_info.hpp',
@@ -33,16 +34,13 @@ replace_in_file(
     'constexpr static idx_t BLOCK_ALLOC_SIZE = %d' % (block_size,),
 )
 
-replace_in_file(
-    'src/include/duckdb/common/vector_size.hpp',
-    r'#define STANDARD_VECTOR_SIZE \w+',
-    '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
-)
-
 execute_system_command('rm -rf build')
 execute_system_command('make relassert')
-execute_system_command('python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"')
+execute_system_command('build/relassert/test/unittest')
+execute_system_command('build/relassert/test/unittest "test/sql/storage/*"')
 
+# run the fast tests and all storage-related tests
+# with a block size of 16KB and a vector size of 512
 vector_size = 512
 print("TESTING BLOCK_ALLOC_SIZE=%d" % (block_size,))
 print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
@@ -56,3 +54,4 @@ replace_in_file(
 execute_system_command('rm -rf build')
 execute_system_command('make relassert')
 execute_system_command('build/relassert/test/unittest')
+execute_system_command('build/relassert/test/unittest "test/sql/storage/*"')
