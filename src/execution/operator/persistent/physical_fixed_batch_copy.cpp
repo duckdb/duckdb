@@ -460,7 +460,7 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		// start flushing data
 		auto min_batch_index = lstate.partition_info.MinimumBatchIndex();
 		// push the raw batch data into the set of unprocessed batches
-		AddRawBatchData(context.client, gstate_p, state.BatchIndex(), std::move(state.collection));
+		AddRawBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
 		// attempt to repartition to our desired batch size
 		RepartitionBatches(context.client, gstate_p, min_batch_index);
 		// execute a single batch task
