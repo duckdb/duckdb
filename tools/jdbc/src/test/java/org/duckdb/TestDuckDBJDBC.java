@@ -1,19 +1,8 @@
-package org.duckdb.test;
-
-import org.duckdb.DuckDBAppender;
-import org.duckdb.DuckDBColumnType;
-import org.duckdb.DuckDBConnection;
-import org.duckdb.DuckDBDriver;
-import org.duckdb.DuckDBResultSet;
-import org.duckdb.DuckDBResultSetMetaData;
-import org.duckdb.DuckDBStruct;
-import org.duckdb.DuckDBTimestamp;
-import org.duckdb.JsonNode;
-import org.duckdb.TestExtensionTypes;
-import org.duckdb.Util;
+package org.duckdb;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -4229,7 +4218,8 @@ public class TestDuckDBJDBC {
 
             try (ResultSet rs = s.executeQuery()) {
                 while (rs.next()) {
-                    out = Util.readAllBytes(rs.getBlob(1).getBinaryStream());
+                    InputStream e = rs.getBlob(1).getBinaryStream();
+                    out = JdbcUtils.readAllBytes(e);
                 }
             }
 
