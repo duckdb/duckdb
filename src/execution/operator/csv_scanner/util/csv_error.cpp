@@ -63,8 +63,8 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p)
     : error_message(std::move(error_message_p)), type(type_p) {
 }
 
-CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p)
-    : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), row(std::move(row_p)) {
+CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p)
+    : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p) {
 }
 
 CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
@@ -87,26 +87,17 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 	return CSVError(exception, CSVErrorType::COLUMN_NAME_TYPE_MISMATCH);
 }
 
-CSVError CSVError::CastError(const CSVReaderOptions &options, DataChunk &parse_chunk, idx_t chunk_row,
-                             string &column_name, string &cast_error, idx_t &column_idx, vector<Value> &row) {
+CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
+                             idx_t &column_idx) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\"." << std::endl;
 	// What was the cast error
 	error << cast_error << std::endl;
-	// What is the problematic CSV Line
-	error << "Problematic CSV Line:" << std::endl;
-	for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-		// error << parse_chunk.GetValue(column_idx, chunk_row).ToString();
-		if (col < parse_chunk.ColumnCount() - 1) {
-			// we are not in the last line, add the delimiter
-			error << options.dialect_options.state_machine_options.delimiter.GetValue();
-		}
-	}
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row);
+	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx);
 }
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size) {
@@ -138,16 +129,7 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options) {
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
                                            idx_t vector_line_start, idx_t current_column) {
 	std::ostringstream error;
-	// What is the problematic CSV Line
 	error << "Value with unterminated quote found." << std::endl;
-	error << "Problematic CSV Line (Up to unquoted value):" << std::endl;
-	for (; vector_line_start < current_column; vector_line_start++) {
-		error << vector_ptr[vector_line_start].GetString();
-		if (vector_line_start < current_column - 1) {
-			// we are not in the last line, add the delimiter
-			error << options.dialect_options.state_machine_options.delimiter.GetValue();
-		}
-	}
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
@@ -160,16 +142,6 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
 	      << std::endl;
-	// What is the problematic CSV Line
-	error << "Problematic CSV Line:" << std::endl;
-	error << "Consider using the \'null_padding\' or \'ignore_errors\' options." << std::endl;
-	for (; vector_line_start < actual_columns; vector_line_start++) {
-		if (vector_line_start < actual_columns - 1) {
-			// we are not in the last line, add the delimiter
-			error << options.dialect_options.state_machine_options.delimiter.GetValue();
-		}
-	}
-	error << std::endl;
 	// What were the options
 	error << options.ToString();
 	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT);

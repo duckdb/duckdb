@@ -40,7 +40,7 @@ public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
 	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
 	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
-	                  vector<LogicalType> &types);
+	                  shared_ptr<CSVFileScan> csv_file_scan);
 
 	//! Information on the vector
 	vector<void *> vector_ptr;
@@ -73,6 +73,10 @@ public:
 	bool quoted_new_line = false;
 
 	vector<LogicalType> parse_types;
+	vector<string> names;
+	bool casting_error = false;
+
+	shared_ptr<CSVFileScan> csv_file_scan;
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -103,8 +107,8 @@ class StringValueScanner : public BaseScanner {
 public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler, vector<LogicalType> types = {},
-	                   CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary = {},
+	                   idx_t result_size = STANDARD_VECTOR_SIZE);
 
 	~StringValueScanner() {
 	}
