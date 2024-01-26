@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -48,6 +49,9 @@ public:
 	const DataChunk &GetInputs() const {
 		return inputs;
 	}
+	const ValidityMask &GetFilterMask() const {
+		return filter_mask;
+	}
 
 	//	Build
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
@@ -58,15 +62,16 @@ public:
 	virtual void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	                      idx_t row_idx) const = 0;
 
-protected:
-	AggregateObject aggr;
+	//! A description of the aggregator
+	const AggregateObject aggr;
 	//! The result type of the window function
-	LogicalType result_type;
-
+	const LogicalType result_type;
 	//! The cardinality of the partition
 	const idx_t partition_count;
 	//! The size of a single aggregate state
 	const idx_t state_size;
+
+protected:
 	//! Partition data chunk
 	DataChunk inputs;
 
@@ -80,6 +85,18 @@ protected:
 public:
 	//! The window exclusion clause
 	const WindowExcludeMode exclude_mode;
+};
+
+// Used for validation
+class WindowNaiveAggregator : public WindowAggregator {
+public:
+	WindowNaiveAggregator(AggregateObject aggr, const LogicalType &result_type_p,
+	                      const WindowExcludeMode exclude_mode_p, idx_t partition_count);
+	~WindowNaiveAggregator() override;
+
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx) const override;
 };
 
 class WindowConstantAggregator : public WindowAggregator {
@@ -169,6 +186,49 @@ public:
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 16;
+};
+
+class WindowDistinctAggregator : public WindowAggregator {
+public:
+	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	class DistinctSortTree;
+
+	WindowDistinctAggregator(AggregateObject aggr, const LogicalType &result_type,
+	                         const WindowExcludeMode exclude_mode_p, idx_t count, ClientContext &context);
+	~WindowDistinctAggregator() override;
+
+	//	Build
+	void Sink(DataChunk &args_chunk, SelectionVector *filter_sel, idx_t filtered) override;
+	void Finalize(const FrameStats &stats) override;
+
+	//	Evaluate
+	unique_ptr<WindowAggregatorState> GetLocalState() const override;
+	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+	              idx_t row_idx) const override;
+
+	ClientContext &context;
+	ArenaAllocator allocator;
+
+	//	Single threaded sorting for now
+	GlobalSortStatePtr global_sort;
+	LocalSortState local_sort;
+	idx_t payload_pos;
+	idx_t memory_per_thread;
+
+	vector<LogicalType> payload_types;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
+
+	//! The merge sort tree for the aggregate.
+	unique_ptr<DistinctSortTree> merge_sort_tree;
+
+	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
+	unsafe_unique_array<data_t> levels_flat_native;
+	//! For each level, the starting location in the levels_flat_native array
+	vector<idx_t> levels_flat_start;
+
+	//! The total number of internal nodes of the tree, stored in levels_flat_native
+	idx_t internal_nodes;
 };
 
 } // namespace duckdb

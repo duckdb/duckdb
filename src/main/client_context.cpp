@@ -41,6 +41,7 @@
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -880,6 +881,15 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
                                                            bool allow_stream_result) {
 	auto lock = LockContext();
+
+	try {
+		InitialCleanup(*lock);
+	} catch (const Exception &ex) {
+		return make_uniq<PendingQueryResult>(PreservedError(ex));
+	} catch (std::exception &ex) {
+		return make_uniq<PendingQueryResult>(PreservedError(ex));
+	}
+
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;
 	return PendingQueryInternal(*lock, std::move(statement), parameters);

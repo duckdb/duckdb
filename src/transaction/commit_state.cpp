@@ -171,6 +171,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::PRAGMA_FUNCTION_ENTRY:
 	case CatalogType::COLLATION_ENTRY:
 	case CatalogType::DEPENDENCY_ENTRY:
+	case CatalogType::SECRET_ENTRY:
+	case CatalogType::SECRET_TYPE_ENTRY:
+	case CatalogType::SECRET_FUNCTION_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:
@@ -269,6 +272,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
+
 		if (HAS_LOG) {
 			// push the catalog update to the WAL
 			WriteCatalogEntry(*catalog_entry, data + sizeof(CatalogEntry *));

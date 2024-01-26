@@ -13,7 +13,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
 
 namespace duckdb {
 class AttachedDatabase;

@@ -73,7 +73,7 @@ public:
 	idx_t group_idx = 0;
 	uint16_t packed_data[PatasPrimitives::PATAS_GROUP_SIZE];
 
-	// Ptr to next free spot in segment;
+	// Ptr to next free spot in segment
 	data_ptr_t segment_data;
 	data_ptr_t metadata_ptr;
 	uint32_t next_group_byte_index_start = PatasPrimitives::HEADER_SIZE;

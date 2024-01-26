@@ -34,6 +34,24 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #undef FILE_CREATE // woo mingw
 #endif
 
+// includes for giving a better error message on lock conflicts
+#if defined(__linux__) || defined(__APPLE__)
+#include <pwd.h>
+#endif
+
+#if defined(__linux__)
+#include <libgen.h>
+// See e.g.:
+// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
+#elif defined(__APPLE__)
+#include <TargetConditionals.h>                             // NOLINT
+#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
+#include <libproc.h>                                        // NOLINT
+#endif                                                      // NOLINT
+#elif defined(_WIN32)
+#include <RestartManager.h>
+#endif
+
 namespace duckdb {
 
 static void AssertValidFileFlags(uint8_t flags) {
@@ -162,6 +180,88 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
+#if __APPLE__ && !TARGET_OS_IPHONE
+
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+
+	string process_name, process_owner;
+	// try to find out more about the process holding the lock
+	struct proc_bsdshortinfo proc;
+	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
+	    PROC_PIDT_SHORTBSDINFO_SIZE) {
+		process_name = proc.pbsi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
+		// try to get actual name of conflicting process owner
+		auto pw = getpwuid(proc.pbsi_uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	}
+	// try to get a better process name (full path)
+	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
+	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
+		// somehow could not get the path, lets use some sensible fallback
+		process_name = full_exec_path;
+	}
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
+}
+
+#elif __linux__
+
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	if (pid == getpid()) {
+		return "Lock is already held in current process, likely another DuckDB instance";
+	}
+	string process_name, process_owner;
+
+	try {
+		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
+		auto cmdline = cmdline_file->ReadLine();
+		process_name = basename(const_cast<char *>(cmdline.c_str()));
+	} catch (Exception &) {
+		// ignore
+	}
+
+	// we would like to provide a full path to the executable if possible but we might not have rights
+	{
+		char exe_target[PATH_MAX];
+		memset(exe_target, '\0', PATH_MAX);
+		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
+		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
+		if (readlink_n > 0) {
+			process_name = exe_target;
+		}
+	}
+
+	// try to find out who created that process
+	try {
+		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
+		auto uid = std::stoi(loginuid_file->ReadLine());
+		auto pw = getpwuid(uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	} catch (Exception &) {
+		// ignore
+	}
+
+	return StringUtil::Format("Conflicting lock is held in %s%s",
+	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
+	                                                : StringUtil::Format("PID %d", pid),
+	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
+}
+
+#else
+static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
+	return "";
+}
+#endif
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -234,7 +334,26 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
 			if (rc == -1) {
-				throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
+				string message;
+				// try to find out who is holding the lock using F_GETLK
+				rc = fcntl(fd, F_GETLK, &fl);
+				if (rc == -1) { // fnctl does not want to help us
+					message = strerror(errno);
+				} else {
+					message = AdditionalProcessInfo(*this, fl.l_pid);
+				}
+
+				if (lock_type == FileLockType::WRITE_LOCK) {
+					// maybe we can get a read lock instead and tell this to the user.
+					fl.l_type = F_RDLCK;
+					rc = fcntl(fd, F_SETLK, &fl);
+					if (rc != -1) { // success!
+						message += ". However, you would be able to open this database in read-only mode, e.g. by "
+						           "using the -readonly parameter in the CLI";
+					}
+				}
+				message += ". See also https://duckdb.org/faq#how-does-duckdb-handle-concurrency";
+				throw IOException("Could not set lock on file \"%s\": %s", path, message);
 			}
 		}
 	}
@@ -515,6 +634,68 @@ public:
 	};
 };
 
+static string AdditionalLockInfo(const std::wstring path) {
+	// try to find out if another process is holding the lock
+
+	// init of the somewhat obscure "Windows Restart Manager"
+	// see also https://devblogs.microsoft.com/oldnewthing/20120217-00/?p=8283
+
+	DWORD session, status, reason;
+	WCHAR session_key[CCH_RM_SESSION_KEY + 1] = {0};
+
+	status = RmStartSession(&session, 0, session_key);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+
+	PCWSTR path_ptr = path.c_str();
+	status = RmRegisterResources(session, 1, &path_ptr, 0, NULL, 0, NULL);
+	if (status != ERROR_SUCCESS) {
+		return "";
+	}
+	UINT process_info_size_needed, process_info_size;
+
+	// we first call with nProcInfo = 0 to find out how much to allocate
+	process_info_size = 0;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, NULL, &reason);
+	if (status != ERROR_MORE_DATA || process_info_size_needed == 0) {
+		return "";
+	}
+
+	// allocate
+	auto process_info_buffer = duckdb::unique_ptr<RM_PROCESS_INFO[]>(new RM_PROCESS_INFO[process_info_size_needed]);
+	auto process_info = process_info_buffer.get();
+
+	// now call again to get actual data
+	process_info_size = process_info_size_needed;
+	status = RmGetList(session, &process_info_size_needed, &process_info_size, process_info, &reason);
+	if (status != ERROR_SUCCESS || process_info_size == 0) {
+		return "";
+	}
+
+	string conflict_string = "File is already open in ";
+
+	for (UINT process_idx = 0; process_idx < process_info_size; process_idx++) {
+		string process_name = WindowsUtil::UnicodeToUTF8(process_info[process_idx].strAppName);
+		auto pid = process_info[process_idx].Process.dwProcessId;
+
+		// find out full path if possible
+		HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		if (process) {
+			WCHAR full_path[MAX_PATH];
+			DWORD full_path_size = MAX_PATH;
+			if (QueryFullProcessImageNameW(process, 0, full_path, &full_path_size) && full_path_size <= MAX_PATH) {
+				process_name = WindowsUtil::UnicodeToUTF8(full_path);
+			}
+			CloseHandle(process);
+		}
+		conflict_string += StringUtil::Format("\n%s (PID %d)", process_name, pid);
+	}
+
+	RmEndSession(session);
+	return conflict_string;
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -556,6 +737,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
+
+		auto better_error = AdditionalLockInfo(unicode_path);
+		if (!better_error.empty()) {
+			throw IOException(better_error);
+		}
+
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);

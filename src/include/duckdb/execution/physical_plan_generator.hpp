@@ -59,6 +59,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateTable &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateIndex &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateSecret &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCrossProduct &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelete &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimGet &op);
@@ -87,7 +88,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSample &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalReset &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalShow &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUnnest &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);

@@ -1,0 +1,19 @@
+diff --git a/test/sql/test_substrait_tpch.test b/test/sql/test_substrait_tpch.test
+index ffa2666..10f815b 100644
+--- a/test/sql/test_substrait_tpch.test
++++ b/test/sql/test_substrait_tpch.test
+@@ -2,6 +2,14 @@
+ # description: Test get_substrait with TPC-H queries
+ # group: [sql]
+ 
++# test skipped since PR https://github.com/duckdb/duckdb/pull/9993
++# the PR re-introduces DelimJoins in TPC-H again for performance reasons
++# if there is a selection in the duplicate-eliminated side, we keep the DelimJoin
++# this is checked in Deliminator::HasSelection
++# if this function returns false, all DelimJoins are removed from TPC-H
++
++mode skip
++
+ require substrait
+ 
+ require tpch

@@ -119,7 +119,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				error = "Unnamed parameters cannot come after named parameters";
 				return false;
 			}
-			arguments.emplace_back(sql_type);
+			arguments.emplace_back(constant.IsNull() ? LogicalType::SQLNULL : sql_type);
 			parameters.emplace_back(std::move(constant));
 		} else {
 			named_parameters[parameter_name] = std::move(constant);
@@ -154,14 +154,6 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
 			auto &arrow_bind = bind_data->Cast<PyTableFunctionData>();
 			arrow_bind.external_dependency = std::move(external_dependency);
-		}
-		if (table_function.name == "read_csv" || table_function.name == "read_csv_auto") {
-			auto &csv_bind = bind_data->Cast<ReadCSVData>();
-			if (csv_bind.single_threaded) {
-				table_function.extra_info = "(Single-Threaded)";
-			} else {
-				table_function.extra_info = "(Multi-Threaded)";
-			}
 		}
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",

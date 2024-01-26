@@ -9,12 +9,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 root = "../.."
-local_scheme = {env = "SETUPTOOLS_SCM_LOCAL_SCHEME", default = "no-local-version"}
+local_scheme = "no-local-version"
 
 ### CI Builwheel configurations ###
 
 # Default config runs all tests and requires at least one extension to be tested against
 [tool.cibuildwheel]
+dependency-versions = "latest"
 environment = "PIP_CONSTRAINT='build-constraints.txt'"
 before-build = 'pip install oldest-supported-numpy'
 before-test = 'pip install --prefer-binary pandas pytest-timeout mypy "psutil>=5.9.0" "requests>=2.26" fsspec   && (pip install --prefer-binary "pyarrow>=8.0" || true) && (pip install --prefer-binary "torch" || true) && (pip install --prefer-binary "polars" || true) && (pip install --prefer-binary "adbc_driver_manager" || true) && (pip install --prefer-binary "tensorflow" || true)'
@@ -37,4 +38,5 @@ select = "*aarch64*"
 test-command = "python -m pytest {project}/tests/fast --verbose"
 
 [tool.cibuildwheel.windows]
+archs = ["AMD64"]
 test-command = "python -m pytest {project}/tests/fast --verbose"

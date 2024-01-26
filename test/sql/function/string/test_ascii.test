@@ -38,7 +38,7 @@ SELECT ASCII('Ä')
 196
 
 query I
-SELECT ASCII(5)
+SELECT ASCII('5')
 ----
 53
 

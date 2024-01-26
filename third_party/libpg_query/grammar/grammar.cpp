@@ -370,6 +370,12 @@ insertSelectOptions(PGSelectStmt *stmt,
 					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
+	if (stmt->type != T_PGSelectStmt) {
+		ereport(ERROR,
+				(errcode(PG_ERRCODE_SYNTAX_ERROR),
+						errmsg("DESCRIBE/SHOW/SUMMARIZE with CTE/ORDER BY/... not allowed - wrap the statement in a subquery instead"),
+						parser_errposition(exprLocation((PGNode *) stmt))));
+	}
 	Assert(IsA(stmt, PGSelectStmt));
 
 	/*

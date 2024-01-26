@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -165,6 +165,12 @@ extension ResultSet {
   ) -> @Sendable (DBInt) -> IntHuge? {
     transformer(forColumn: columnIndex, to: type, fromType: .hugeint) { try? $0.unwrap(type) }
   }
+
+  func transformer(
+    forColumn columnIndex: DBInt, to type: UIntHuge.Type
+  ) -> @Sendable (DBInt) -> UIntHuge? {
+    transformer(forColumn: columnIndex, to: type, fromType: .uhugeint) { try? $0.unwrap(type) }
+  }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: String.Type
@@ -183,6 +189,12 @@ extension ResultSet {
   ) -> @Sendable (DBInt) -> Time? {
     transformer(forColumn: columnIndex, to: type, fromType: .time) { try? $0.unwrap(type) }
   }
+
+  func transformer(
+    forColumn columnIndex: DBInt, to type: TimeTz.Type
+  ) -> @Sendable (DBInt) -> TimeTz? {
+    transformer(forColumn: columnIndex, to: type, fromType: .timeTz) { try? $0.unwrap(type) }
+  }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Date.Type
@@ -193,7 +205,7 @@ extension ResultSet {
   func transformer(
     forColumn columnIndex: DBInt, to type: Timestamp.Type
   ) -> @Sendable (DBInt) -> Timestamp? {
-    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampTz, .timestampNS]
     return transformer(
       forColumn: columnIndex, to: type, fromTypes: .init(columnTypes)
     ) { try? $0.unwrap(type) }

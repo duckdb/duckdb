@@ -266,7 +266,7 @@ unique_ptr<CompressionState> ChimpInitCompression(ColumnDataCheckpointer &checkp
 
 template <class T>
 void ChimpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (ChimpCompressionState<T> &)state_p;
+	auto &state = state_p.Cast<ChimpCompressionState<T>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -274,7 +274,7 @@ void ChimpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) 
 
 template <class T>
 void ChimpFinalizeCompress(CompressionState &state_p) {
-	auto &state = (ChimpCompressionState<T> &)state_p;
+	auto &state = state_p.Cast<ChimpCompressionState<T>>();
 	state.Finalize();
 }
 

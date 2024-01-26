@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -716,6 +717,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		break;
 	case PhysicalType::UINT64:
 		function = ColumnDataCopy<uint64_t>;
+		break;
+	case PhysicalType::UINT128:
+		function = ColumnDataCopy<uhugeint_t>;
 		break;
 	case PhysicalType::FLOAT:
 		function = ColumnDataCopy<float>;

@@ -37,7 +37,7 @@ public:
 	bool HasDependencies() const {
 		return total_dependencies != 0;
 	}
-	const vector<Event *> &GetParentsVerification() const;
+	const vector<reference<Event>> &GetParentsVerification() const;
 
 	void CompleteDependency();
 
@@ -79,7 +79,7 @@ protected:
 	//! The events that depend on this event to run
 	vector<weak_ptr<Event>> parents;
 	//! Raw pointers to the parents (used for verification only)
-	vector<Event *> parents_raw;
+	vector<reference<Event>> parents_raw;
 
 	//! Whether or not the event is finished executing
 	atomic<bool> finished;
