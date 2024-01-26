@@ -705,7 +705,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			auto &type_entry = type_entry_p->Cast<TypeCatalogEntry>();
 
 			auto inner_type = type_entry.user_type;
-			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
 		} else {
 			SetCatalogLookupCallback(dependency_callback);
