@@ -621,9 +621,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		base_binding.column_index = setop.column_count;
 		setop.column_count += correlated_columns.size();
 
-		for (auto &c : this->correlated_columns) {
-			setop.types.push_back(c.type);
-		}
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
@@ -657,10 +654,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto &cteref = plan->Cast<LogicalCTERef>();
 		// Read correlated columns from CTE_SCAN instead of from DELIM_SCAN
 		base_binding.table_index = cteref.table_index;
-		base_binding.column_index = cteref.types.size();
+		base_binding.column_index = cteref.chunk_types.size();
 		// Add types of correlated column to CTE_SCAN
 		for (auto &c : this->correlated_columns) {
-			cteref.types.push_back(c.type);
 			cteref.chunk_types.push_back(c.type);
 		}
 		return plan;
