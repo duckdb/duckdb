@@ -184,7 +184,7 @@ SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
 		// we finished processing this batch
 		// start flushing data
 		auto min_batch_index = lstate.partition_info.MinimumBatchIndex();
-		PrepareBatchData(context.client, gstate_p, state.BatchIndex(), std::move(state.collection));
+		PrepareBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
 		FlushBatchData(context.client, gstate_p, min_batch_index);
 	}
 	state.batch_index = lstate.partition_info.BatchIndex();
