@@ -4227,6 +4227,6 @@ public class TestDuckDBJDBC {
     }
 
     public static void main(String[] args) throws Exception {
-        System.exit(runTests(args, TestDuckDBJDBC.class) + runTests(args, TestExtensionTypes.class));
+        System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }
 }
