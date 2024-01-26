@@ -40,7 +40,7 @@ public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
 	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
 	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
-	                  shared_ptr<CSVFileScan> csv_file_scan);
+	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
 
 	//! Information on the vector
 	vector<void *> vector_ptr;
@@ -55,7 +55,8 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
-	const string_t null_str;
+	const char *null_str_ptr;
+	const idx_t null_str_size;
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
@@ -77,6 +78,7 @@ public:
 	unordered_map<idx_t, string> cast_errors;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
+	idx_t &lines_read;
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);

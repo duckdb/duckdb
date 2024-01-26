@@ -12,11 +12,12 @@ namespace duckdb {
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
                                      Allocator &buffer_allocator, idx_t result_size_p, idx_t buffer_position,
                                      CSVErrorHandler &error_hander_p, CSVIterator &iterator_p, bool store_line_size_p,
-                                     shared_ptr<CSVFileScan> csv_file_scan_p)
+                                     shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
-      null_str(state_machine.options.null_str), result_size(result_size_p), error_handler(error_hander_p),
-      iterator(iterator_p), store_line_size(store_line_size_p), csv_file_scan(csv_file_scan_p) {
+      null_str_ptr(state_machine.options.null_str.c_str()), null_str_size(state_machine.options.null_str.size()),
+      result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
+      store_line_size(store_line_size_p), csv_file_scan(csv_file_scan_p), lines_read(lines_read_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
 
@@ -38,6 +39,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 			} else {
 				parse_types.emplace_back(LogicalType::VARCHAR);
 			}
+		}
+		while (parse_types.size() < number_of_columns) {
+			// This can happen if we have sneaky null columns at the end that we wish to ignore
+			parse_types.emplace_back(LogicalType::VARCHAR);
 		}
 	}
 	// Fill out Names
@@ -118,9 +123,8 @@ void StringValueResult::HandleOverLimitRows() {
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
-	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && size == null_str.GetSize()) {
+	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && size == null_str_size) {
 		bool is_null = true;
-		auto null_str_ptr = null_str.GetData();
 		for (idx_t i = 0; i < size; i++) {
 			if (null_str_ptr[i] != value_ptr[i]) {
 				is_null = false;
@@ -246,18 +250,18 @@ bool StringValueResult::AddRowInternal() {
 			if (cast_errors.find(col) != cast_errors.end()) {
 				row.push_back(cast_errors[col]);
 			} else {
-				row.push_back(parse_chunk.GetValue(col, number_of_rows));
+				row.push_back(parse_chunk.data[col].GetValue(number_of_rows));
 			}
 		}
 		for (auto &cast_error : cast_errors) {
 			std::ostringstream error;
 			// Casting Error Message
 			error << "Could not convert string\"" << cast_error.second << "\" to \'"
-			      << parse_types[cur_col_id].ToString() << "\'";
+			      << parse_types[cast_error.first].ToString() << "\'";
 			auto error_string = error.str();
 			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
 			                                     cast_error.first, row);
-			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
 			error_handler.Error(lines_per_batch, csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -359,7 +363,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 		result.last_position++;
 	}
 	if (result.parse_chunk.ColumnCount() == 1) {
-		if (result.null_str.Empty()) {
+		if (result.null_str_size == 0) {
 			bool empty = false;
 			if (!result.state_machine.options.force_not_null.empty()) {
 				empty = result.state_machine.options.force_not_null[0];
@@ -386,7 +390,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
     : BaseScanner(buffer_manager, state_machine, error_handler, csv_file_scan, boundary), scanner_idx(scanner_idx_p),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
-             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan) {
+             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read) {
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
@@ -865,7 +869,6 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
 			return false;
 		}
 	case LogicalTypeId::TIMESTAMP:
-		// We can only internally cast YYYY-MM-DD
 		if (format_options.at(LogicalTypeId::TIMESTAMP).GetValue().format_specifier == "%Y-%m-%d %H:%M:%S") {
 			return true;
 		} else {
