@@ -24,6 +24,7 @@
 #include "fast_float/fast_float.h"
 #include "fmt/format.h"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/operator/integer_cast_operator.hpp"
 
 #include <cctype>
 #include <cmath>
