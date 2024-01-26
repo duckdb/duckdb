@@ -1,4 +1,5 @@
 #include <string>
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
