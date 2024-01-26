@@ -46,7 +46,6 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
-		//		return children[1]->SourceOrder() != OrderPreservationType::FIXED_ORDER;
 	}
 
 	bool SinkOrderDependent() const override {
@@ -54,7 +53,7 @@ public:
 	}
 
 	bool RequiresBatchIndex() const override {
-		return false; // Must be true, when ordering is required
+		return false;
 	}
 
 	string ParamsToString() const override;
