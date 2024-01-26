@@ -10,36 +10,7 @@ namespace duckdb {
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 
-	auto &input = args.data[0];
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
-	// Copy the list validity
-	FlatVector::SetValidity(result, input_data.validity);
-
-	// Copy the struct validity
-	UnifiedVectorFormat input_struct_data;
-	ListVector::GetEntry(input).ToUnifiedFormat(count, input_struct_data);
-	auto &result_struct = ListVector::GetEntry(result);
-	FlatVector::SetValidity(result_struct, input_struct_data.validity);
-
-	// Set the right vector type
-	result.SetVectorType(input.GetVectorType());
-
-	// Copy the list size
-	auto list_size = ListVector::GetListSize(input);
-	ListVector::SetListSize(result, list_size);
-
-	// Copy the list buffer (the list_entry_t data)
-	result.CopyBuffer(input);
-
-	auto &input_keys = MapVector::GetKeys(input);
-	auto &result_keys = MapVector::GetKeys(result);
-	result_keys.Reinterpret(input_keys);
-
-	auto &input_values = MapVector::GetValues(input);
-	auto &result_values = MapVector::GetValues(result);
-	result_values.Reinterpret(input_values);
-
+	MapUtil::ReinterpretMap(result, args.data[0], count);
 	MapVector::MapConversionVerify(result, count);
 	result.Verify(count);
 
