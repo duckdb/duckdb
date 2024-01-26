@@ -102,19 +102,6 @@ void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	}
 }
 
-void DuckCatalog::AlterSchema(ClientContext &context, AlterInfo &info) {
-	D_ASSERT(!info.name.empty());
-	D_ASSERT(info.type == AlterType::SET_COMMENT);
-
-	ModifyCatalog();
-	CatalogTransaction transaction(*this, context);
-	if (!schemas->AlterEntry(transaction, info.name, info)) {
-		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", info.name);
-		}
-	}
-}
-
 void DuckCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	DropSchema(GetCatalogTransaction(context), info);
 }

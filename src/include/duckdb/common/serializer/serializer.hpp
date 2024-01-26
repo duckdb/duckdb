@@ -15,6 +15,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
 
@@ -75,6 +76,21 @@ public:
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
 		// If current value is default, don't write it
 		if (!serialize_default_values && (value == default_value)) {
+			OnOptionalPropertyBegin(field_id, tag, false);
+			OnOptionalPropertyEnd(false);
+			return;
+		}
+		OnOptionalPropertyBegin(field_id, tag, true);
+		WriteValue(value);
+		OnOptionalPropertyEnd(true);
+	}
+
+	// Specialization for Value (default Value comparison throws when comparing nulls)
+	template <>
+	void WritePropertyWithDefault<Value>(const field_id_t field_id, const char *tag, const Value &value,
+	                                     const Value &&default_value) {
+		// If current value is default, don't write it
+		if (!serialize_default_values && ValueOperations::NotDistinctFrom(value, default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
 			OnOptionalPropertyEnd(false);
 			return;

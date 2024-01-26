@@ -207,9 +207,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &drop_not_null_info = table_info.Cast<DropNotNullInfo>();
 		return DropNotNull(context, drop_not_null_info);
 	}
-	case AlterTableType::ALTER_COLUMN_COMMENT: {
-		auto &column_comment_info = table_info.Cast<AlterColumnCommentInfo>();
-		return AlterColumnComment(context, column_comment_info);
+	case AlterTableType::SET_COLUMN_COMMENT: {
+		auto &column_comment_info = table_info.Cast<SetColumnCommentInfo>();
+		return SetColumnComment(context, column_comment_info);
 	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
@@ -653,8 +653,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	return std::move(result);
 }
 
-// TODO DEDUPLICATE?
-unique_ptr<CatalogEntry> DuckTableEntry::AlterColumnComment(ClientContext &context, AlterColumnCommentInfo &info) {
+unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context, SetColumnCommentInfo &info) {
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	auto default_idx = GetColumnIndex(info.column_name);
 	if (default_idx.index == COLUMN_IDENTIFIER_ROW_ID) {

@@ -1,5 +1,5 @@
 # name: test/sql/catalog/comment_on.test
-# description: Test COMMENT ON to add comments to catalog entries
+# description: Test COMMENT ON to add comments to various catalog entries
 # group: [catalog]
 
 load __TEST_DIR__/comment_on.db
@@ -51,6 +51,12 @@ select comment from duckdb_tables() where table_name='test_table';
 ----
 NULL
 
+# Check table is still functioning
+query I
+SELECT * FROM test_table
+----
+1
+
 ### Comment on view
 statement ok
 CREATE VIEW test_view as SELECT 1 as test_view_column
@@ -74,6 +80,15 @@ query I
 select comment from duckdb_views() where view_name='test_view';
 ----
 very gezellige view
+
+# Check view is still functioning
+query I
+SELECT * FROM test_view
+----
+1
+
+statement ok
+DROP VIEW test_view
 
 ### Comment on indices
 statement ok
@@ -99,7 +114,16 @@ select comment from duckdb_indexes() where index_name='test_index';
 ----
 very gezellige index
 
-### Comment on sequences TODO: copy
+# Check index is still functioning
+query I
+SELECT * FROM test_table WHERE test_table_column=1
+----
+1
+
+statement ok
+DROP INDEX test_index;
+
+### Comment on sequences
 statement ok
 CREATE SEQUENCE test_sequence;
 
@@ -123,29 +147,14 @@ select comment from duckdb_sequences() where sequence_name='test_sequence';
 ----
 very gezellige sequence
 
-### Comment on schemas
-statement ok
-CREATE SCHEMA test_schema;
-
+# Check sequence is still functioning
 query I
-select comment from duckdb_schemas() where schema_name='test_schema';
+SELECT nextval('test_sequence')
 ----
-NULL
+1
 
 statement ok
-COMMENT ON SCHEMA test_schema IS 'very gezellige schema'
-
-query I
-select comment from duckdb_schemas() where schema_name='test_schema';
-----
-very gezellige schema
-
-restart
-
-query I
-select comment from duckdb_schemas() where schema_name='test_schema';
-----
-very gezellige schema
+DROP SEQUENCE test_sequence
 
 ### Comment on types
 statement ok
@@ -171,33 +180,43 @@ select comment from duckdb_types() where type_name='test_type';
 ----
 very gezellige type
 
+# Check type is still functioning
+query I
+SELECT 1::test_type as val;
+----
+1
+
+statement ok
+DROP TYPE test_type
 
 ### Comment on column
-statement ok
-CREATE TABLE test_table_2 AS SELECT 1 as test_table_2_column;
 
 query I
 select comment from duckdb_columns() where column_name='test_table_column';
 ----
 NULL
 
-query I
-select comment from duckdb_columns() where column_name='test_table_2_column';
-----
-NULL
-
 statement ok
-COMMENT ON COLUMN test_table_2.test_table_2_column IS 'very gezellige column'
+COMMENT ON COLUMN test_table.test_table_column IS 'very gezellige column'
 
 query I
-select comment from duckdb_columns() where column_name='test_table_2_column';
+select comment from duckdb_columns() where column_name='test_table_column';
 ----
 very gezellige column
 
 restart
 
 query I
-select comment from duckdb_columns() where column_name='test_table_2_column';
+select comment from duckdb_columns() where column_name='test_table_column';
+----
+very gezellige column
+
+# Comment persists rename
+statement ok
+ALTER TABLE test_table RENAME COLUMN test_table_column TO test_table_column_renamed
+
+query I
+select comment from duckdb_columns() where column_name='test_table_column_renamed';
 ----
 very gezellige column
 
@@ -225,6 +244,15 @@ select comment from duckdb_functions() where function_name='test_macro';
 ----
 very gezellige macro
 
+# Check macro is still functioning
+query I
+SELECT test_macro(1,2);
+----
+3
+
+statement ok
+DROP MACRO test_macro
+
 ### Comment on function (alias for scalar macro)
 statement ok
 CREATE FUNCTION test_function(a, b) AS a + b
@@ -251,7 +279,7 @@ very gezellige function
 
 ### Comment on TABLE MACRO
 statement ok
-CREATE MACRO test_table_macro(a,b) as TABLE select a,b from test_tbl;
+CREATE MACRO test_table_macro(a,b) as TABLE select a,b;
 
 query I
 select comment from duckdb_functions() where function_name='test_table_macro';
@@ -273,8 +301,26 @@ select comment from duckdb_functions() where function_name='test_table_macro';
 ----
 very gezellige table macro
 
+# Check table macro is still functioning
+query II
+from test_table_macro(1,2);
+----
+1	2
+
+statement ok
+DROP MACRO TABLE test_table_macro
+
 ### Comment on DATABASE
 statement error
 COMMENT ON DATABASE blabla IS 'bloebloe'
 ----
-Not implemented Error: Adding comments to databases in not implemented
+Not implemented Error: Adding comments to databases is not implemented
+
+### Comment on schemas
+statement error
+COMMENT ON SCHEMA blabla IS 'bloebloe'
+----
+Not implemented Error: Adding comments to schemas is not implemented
+
+statement ok
+DROP TABLE test_table

@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
-	IndexDataTableInfo(shared_ptr<DataTableInfo>& info_p, const string &index_name_p);
+	IndexDataTableInfo(shared_ptr<DataTableInfo> &info_p, const string &index_name_p);
 	~IndexDataTableInfo();
 
 	//! Pointer to the DataTableInfo
@@ -42,7 +42,7 @@ public:
 	string GetSchemaName() const override;
 	string GetTableName() const override;
 
-	DataTableInfo& GetDataTableInfo() const;
+	DataTableInfo &GetDataTableInfo() const;
 
 	//! Drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
 	void CommitDrop();

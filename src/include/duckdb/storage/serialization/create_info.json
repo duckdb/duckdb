@@ -47,7 +47,8 @@
       {
         "id": 107,
         "name": "comment",
-        "type": "Value"
+        "type": "Value",
+        "default": "Value()"
       }
     ]
   },

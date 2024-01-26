@@ -831,11 +831,6 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 	ModifyCatalog();
 
-	if (info.GetCatalogType() == CatalogType::SCHEMA_ENTRY) {
-		AlterSchema(context, info);
-		return;
-	}
-
 	auto lookup = LookupEntry(context, info.GetCatalogType(), info.schema, info.name, info.if_not_found);
 
 	if (!lookup.Found()) {

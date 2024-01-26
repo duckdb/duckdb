@@ -353,11 +353,6 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	read_lock.unlock();
 	write_lock.unlock();
 
-	// For metadata-only alters we don't need to check dependencies: the object did not change
-	if (alter_info.type == AlterType::SET_COMMENT) {
-		return true;
-	}
-
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	catalog.GetDependencyManager().AlterObject(transaction, *entry, *new_entry);
 

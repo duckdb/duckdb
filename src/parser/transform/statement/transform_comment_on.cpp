@@ -16,7 +16,9 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 		auto transformed_expr = TransformExpression(stmt.column_expr);
 
 		if (transformed_expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
-			throw ParserException("Unexpected expression found, expected column reference to comment on (e.g. 'schema.table.column'), found '%s'", transformed_expr->ToString());
+			throw ParserException("Unexpected expression found, expected column reference to comment on (e.g. "
+			                      "'schema.table.column'), found '%s'",
+			                      transformed_expr->ToString());
 		}
 
 		auto colref_expr = transformed_expr->Cast<ColumnRefExpression>();
@@ -27,7 +29,8 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 		qualified_name.catalog = colref_expr.column_names.size() > 3 ? colref_expr.GetCatalogName() : "";
 
 		if (colref_expr.column_names.size() < 2 || qualified_name.name.empty()) {
-			throw ParserException("Specifying a table is required. eg. COMMENT ON COLUMN table1.col1 IS 'comment value'");
+			throw ParserException(
+			    "Specifying a table is required. eg. COMMENT ON COLUMN table1.col1 IS 'comment value'");
 		}
 	}
 
@@ -46,9 +49,6 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 	switch (stmt.object_type) {
 	case duckdb_libpgquery::PG_OBJECT_TABLE:
 		type = CatalogType::TABLE_ENTRY;
-		break;
-	case duckdb_libpgquery::PG_OBJECT_SCHEMA:
-		type = CatalogType::SCHEMA_ENTRY;
 		break;
 	case duckdb_libpgquery::PG_OBJECT_INDEX:
 		type = CatalogType::INDEX_ENTRY;
@@ -73,11 +73,9 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 	}
 
 	if (type != CatalogType::INVALID) {
-		info = make_uniq<SetCommentInfo>(type, qualified_name.catalog, qualified_name.schema,
-		                                 qualified_name.name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
+		info = make_uniq<SetCommentInfo>(type, qualified_name.catalog, qualified_name.schema, qualified_name.name,
+		                                 comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_COLUMN) {
-
-
 		// Special case: Table Column
 		AlterEntryData alter_entry_data;
 		alter_entry_data.catalog = qualified_name.catalog;
@@ -85,9 +83,11 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 		alter_entry_data.name = qualified_name.name;
 		alter_entry_data.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
 
- 		info = make_uniq<AlterColumnCommentInfo>(alter_entry_data, column_name, comment_value);
+		info = make_uniq<SetColumnCommentInfo>(alter_entry_data, column_name, comment_value);
 	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_DATABASE) {
-		throw NotImplementedException("Adding comments to databases in not implemented");
+		throw NotImplementedException("Adding comments to databases is not implemented");
+	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_SCHEMA) {
+		throw NotImplementedException("Adding comments to schemas is not implemented");
 	}
 
 	if (info) {

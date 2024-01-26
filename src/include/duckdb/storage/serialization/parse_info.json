@@ -217,9 +217,9 @@
     ]
   },
   {
-    "class": "AlterColumnCommentInfo",
+    "class": "SetColumnCommentInfo",
     "base": "AlterTableInfo",
-    "enum": "ALTER_COLUMN_COMMENT",
+    "enum": "SET_COLUMN_COMMENT",
     "members": [
       {
         "id": 400,

@@ -24,7 +24,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(104, "internal", internal);
 	serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
-	serializer.WriteProperty<Value>(107, "comment", comment);
+	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -35,7 +35,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto internal = deserializer.ReadPropertyWithDefault<bool>(104, "internal");
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
-	auto comment = deserializer.ReadProperty<Value>(107, "comment");
+	auto comment = deserializer.ReadPropertyWithDefault<Value>(107, "comment", Value());
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {

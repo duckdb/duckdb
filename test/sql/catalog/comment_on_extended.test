@@ -21,6 +21,7 @@ CREATE TABLE db1.s1.t1 AS SELECT 1 as c1
 statement ok
 CREATE TABLE db2.s2.t2 AS SELECT 2 as c2
 
+# some extra tables to index on (since we can not comment on tables with dependencies)
 statement ok
 CREATE TABLE db1.s1.t3 AS SELECT 3 as c3
 

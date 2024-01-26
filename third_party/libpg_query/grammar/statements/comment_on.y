@@ -26,7 +26,6 @@ comment_value:
 			Sconst			                { $$ = makeStringConst($1, @1); }
 			| NULL_P					    { $$ = makeNullAConst(@1); }
 
-// TODO ensure these match what we support?
 comment_on_type_any_name:
 			TABLE									{ $$ = PG_OBJECT_TABLE; }
 			| SEQUENCE								{ $$ = PG_OBJECT_SEQUENCE; }
@@ -35,15 +34,7 @@ comment_on_type_any_name:
 			| MACRO TABLE                           { $$ = PG_OBJECT_TABLE_MACRO; }
 			| VIEW									{ $$ = PG_OBJECT_VIEW; }
 			| DATABASE								{ $$ = PG_OBJECT_DATABASE; }
-			| MATERIALIZED VIEW						{ $$ = PG_OBJECT_MATVIEW; }
 			| INDEX									{ $$ = PG_OBJECT_INDEX; }
-			| COLLATION								{ $$ = PG_OBJECT_COLLATION; }
-			| CONVERSION_P							{ $$ = PG_OBJECT_CONVERSION; }
 			| SCHEMA								{ $$ = PG_OBJECT_SCHEMA; }
-			| STATISTICS							{ $$ = PG_OBJECT_STATISTIC_EXT; }
-			| TEXT_P SEARCH PARSER					{ $$ = PG_OBJECT_TSPARSER; }
-			| TEXT_P SEARCH DICTIONARY				{ $$ = PG_OBJECT_TSDICTIONARY; }
-			| TEXT_P SEARCH TEMPLATE				{ $$ = PG_OBJECT_TSTEMPLATE; }
-			| TEXT_P SEARCH CONFIGURATION			{ $$ = PG_OBJECT_TSCONFIGURATION; }
 			| TYPE_P								{ $$ = PG_OBJECT_TYPE; }
 		;

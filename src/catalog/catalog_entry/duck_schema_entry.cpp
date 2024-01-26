@@ -64,9 +64,8 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 }
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
-    : SchemaCatalogEntry(catalog, info),
-      tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)), indexes(catalog), table_functions(catalog),
-      copy_functions(catalog), pragma_functions(catalog),
+    : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
+      indexes(catalog), table_functions(catalog), copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
       types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }
@@ -76,7 +75,6 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 	auto &cast_info = info_copy->Cast<CreateSchemaInfo>();
 
 	auto result = make_uniq<DuckSchemaEntry>(catalog, cast_info);
-
 
 	return std::move(result);
 }
@@ -249,12 +247,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransact
 
 void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
 	CatalogType type = info.GetCatalogType();
-
-	if (type == CatalogType::SCHEMA_ENTRY) {
-		// This is an alter request on the schema itself
-		D_ASSERT(info.type == AlterType::SET_COMMENT);
-		comment = info.Cast<SetCommentInfo>().comment_value;
-	}
 
 	auto &set = GetCatalogSet(type);
 	auto transaction = GetCatalogTransaction(context);

@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-CommentOnInfo::CommentOnInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), name(""), comment(Value()) {
+CommentOnInfo::CommentOnInfo()
+    : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), name(""), comment(Value()) {
 }
 
 unique_ptr<CommentOnInfo> CommentOnInfo::Copy() const {

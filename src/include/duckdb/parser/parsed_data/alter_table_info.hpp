@@ -42,7 +42,7 @@ public:
 //===--------------------------------------------------------------------===//
 struct SetCommentInfo : public AlterInfo {
 	SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog, string entry_schema, string entry_name,
-	                    Value new_comment_value_p, OnEntryNotFound if_not_found);
+	               Value new_comment_value_p, OnEntryNotFound if_not_found);
 
 	CatalogType entry_catalog_type;
 	Value comment_value;
@@ -71,7 +71,7 @@ enum class AlterTableType : uint8_t {
 	FOREIGN_KEY_CONSTRAINT = 7,
 	SET_NOT_NULL = 8,
 	DROP_NOT_NULL = 9,
-	ALTER_COLUMN_COMMENT = 10
+	SET_COLUMN_COMMENT = 10
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -208,11 +208,11 @@ private:
 };
 
 //===--------------------------------------------------------------------===//
-// AlterColumnCommentInfo
+// SetColumnCommentInfo
 //===--------------------------------------------------------------------===//
-struct AlterColumnCommentInfo : public AlterTableInfo {
-	AlterColumnCommentInfo(AlterEntryData data, string column_name, Value comment_value);
-	~AlterColumnCommentInfo() override;
+struct SetColumnCommentInfo : public AlterTableInfo {
+	SetColumnCommentInfo(AlterEntryData data, string column_name, Value comment_value);
+	~SetColumnCommentInfo() override;
 
 	//! The column name to alter
 	string column_name;
@@ -228,10 +228,8 @@ public:
 		return column_name;
 	};
 
-	explicit AlterColumnCommentInfo();
+	explicit SetColumnCommentInfo();
 };
-
-
 
 //===--------------------------------------------------------------------===//
 // SetDefaultInfo

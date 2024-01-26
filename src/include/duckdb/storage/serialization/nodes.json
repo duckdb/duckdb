@@ -285,6 +285,12 @@
         "id": 104,
         "name": "compression_type",
         "type": "duckdb::CompressionType"
+      },
+      {
+        "id": 105,
+        "name": "comment",
+        "type": "Value",
+        "default": "Value()"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],
