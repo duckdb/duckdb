@@ -32,7 +32,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		parse_types = {number_of_columns, LogicalType::VARCHAR};
 	} else {
 		for (auto &type : types) {
-			if (StringValueScanner::CanDirectlyCast(type)) {
+			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
 				parse_types.emplace_back(type);
 			} else {
 				parse_types.emplace_back(LogicalType::VARCHAR);
@@ -163,8 +163,14 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		                      state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::FLOAT:
-		TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[cur_col_id])[number_of_rows], false,
-		                      state_machine.options.decimal_separator[0]);
+		TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[cur_col_id])[number_of_rows], false,
+		                     state_machine.options.decimal_separator[0]);
+		break;
+	case LogicalTypeId::DATE:
+		static_cast<date_t *>(vector_ptr[cur_col_id])[number_of_rows] = Date::FromCString(value_ptr, size, false);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		static_cast<timestamp_t *>(vector_ptr[cur_col_id])[number_of_rows] = Timestamp::FromCString(value_ptr, size);
 		break;
 	default:
 		if (allocate) {
@@ -370,7 +376,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		auto &parse_vector = parse_chunk.data[col_idx];
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
-		if (CanDirectlyCast(type)) {
+		if (CanDirectlyCast(type, state_machine->options.dialect_options.date_format)) {
 			// target type is varchar: no need to convert
 			// reinterpret rather than reference, so we can deal with user-defined types
 			result_vector.Reinterpret(parse_vector);
@@ -393,11 +399,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				success =
 				    CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format, parse_vector,
 				                                    result_vector, parse_chunk.size(), error_message);
-			} else if (state_machine->options.decimal_separator != "." &&
-			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
-				success =
-				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
-				                                                 parse_chunk.size(), error_message, type, line_error);
 			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
 				success = CSVCast::TryCastDecimalVectorCommaSeparated(
 				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), error_message, type);
@@ -774,7 +775,8 @@ void StringValueScanner::SkipUntilNewLine() {
 	}
 }
 
-bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
+bool StringValueScanner::CanDirectlyCast(const LogicalType &type,
+                                         const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options) {
 
 	switch (type.id()) {
 		// All Integers (Except HugeInt
@@ -785,10 +787,24 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type) {
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::UBIGINT:
-		// Varchar doesn't really need casting
+		return true;
+	case LogicalTypeId::DATE:
+		// We can only internally cast YYYY-MM-DD
+		if (format_options.at(LogicalTypeId::DATE).GetValue().format_specifier == "%Y-%m-%d") {
+			return true;
+		} else {
+			return false;
+		}
+	case LogicalTypeId::TIMESTAMP:
+		// We can only internally cast YYYY-MM-DD
+		if (format_options.at(LogicalTypeId::TIMESTAMP).GetValue().format_specifier == "%Y-%m-%d %H:%M:%S") {
+			return true;
+		} else {
+			return false;
+		}
 	case LogicalType::VARCHAR:
 		return true;
 	default:
