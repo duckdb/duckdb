@@ -44,8 +44,6 @@ SELECT count(*) from duckdb_columns() where comment IS NOT NULL;
 ----
 0
 
-mode skip
-
 ### Tables with fully qualified names
 statement ok
 COMMENT ON TABLE db1.s1.t1 IS 'very gezellige table 1'
@@ -80,8 +78,6 @@ select database_name, schema_name, comment from duckdb_indexes() where index_nam
 ----
 db1	s1	very gezellige index 1
 db2	s2	very gezellige index 2
-
-mode unskip
 
 ### Fully qualified column
 
