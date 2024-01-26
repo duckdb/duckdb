@@ -71,6 +71,7 @@ public:
 	LinePosition pre_previous_line_start;
 	bool store_line_size = false;
 	bool added_last_line = false;
+	bool quoted_new_line = false;
 	//! Last result position where a new row started
 	idx_t last_row_pos = 0;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
@@ -81,7 +82,9 @@ public:
 	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(StringValueResult &result);
-
+	//! Handles QuotedNewline State
+	static inline void QuotedNewLine(StringValueResult &result);
+	void NullPaddingQuotedNewlineCheck();
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();

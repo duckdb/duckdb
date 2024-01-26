@@ -7,6 +7,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -483,6 +484,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		return TemplatedNullSelection<true>(sel, approved_tuple_count, mask);
 	case TableFilterType::IS_NOT_NULL:
 		return TemplatedNullSelection<false>(sel, approved_tuple_count, mask);
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		// Apply the filter on the child vector
+		auto &child_vec = StructVector::GetEntries(result)[struct_filter.child_idx];
+		auto &child_mask = FlatVector::Validity(*child_vec);
+		return FilterSelection(sel, *child_vec, *struct_filter.child_filter, approved_tuple_count, child_mask);
+	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}

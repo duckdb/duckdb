@@ -210,10 +210,10 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
-void StandardColumnData::DeserializeColumn(Deserializer &deserializer) {
-	ColumnData::DeserializeColumn(deserializer);
-	deserializer.ReadObject(101, "validity",
-	                        [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+void StandardColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
+	ColumnData::DeserializeColumn(deserializer, target_stats);
+	deserializer.ReadObject(
+	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
 }
 
 void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

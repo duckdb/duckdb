@@ -212,10 +212,13 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 	return std::move(checkpoint_state);
 }
 
-void ArrayColumnData::DeserializeColumn(Deserializer &deserializer) {
-	deserializer.ReadObject(101, "validity", [&](Deserializer &source) { validity.DeserializeColumn(source); });
+void ArrayColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
+	deserializer.ReadObject(101, "validity",
+	                        [&](Deserializer &source) { validity.DeserializeColumn(source, target_stats); });
+
+	auto &child_stats = ArrayStats::GetChildStats(target_stats);
 	deserializer.ReadObject(102, "child_column",
-	                        [&](Deserializer &source) { child_column->DeserializeColumn(source); });
+	                        [&](Deserializer &source) { child_column->DeserializeColumn(source, child_stats); });
 	this->count = validity.count;
 }
 

@@ -462,7 +462,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	return checkpoint_state;
 }
 
-void ColumnData::DeserializeColumn(Deserializer &deserializer) {
+void ColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
 	// load the data pointers for the column
 	deserializer.Set<DatabaseInstance &>(info.db.GetDatabase());
 	deserializer.Set<LogicalType &>(type);
@@ -478,9 +478,11 @@ void ColumnData::DeserializeColumn(Deserializer &deserializer) {
 	for (auto &data_pointer : data_pointers) {
 		// Update the count and statistics
 		this->count += data_pointer.tuple_count;
-		if (stats) {
-			stats->statistics.Merge(data_pointer.statistics);
-		}
+
+		// Merge the statistics. If this is a child column, the target_stats reference will point into the parents stats
+		// otherwise if this is a top level column, `stats->statistics` == `target_stats`
+
+		target_stats.Merge(data_pointer.statistics);
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
@@ -493,12 +495,11 @@ void ColumnData::DeserializeColumn(Deserializer &deserializer) {
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                               idx_t start_row, ReadStream &source, const LogicalType &type,
-                                               optional_ptr<ColumnData> parent) {
-	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, parent);
+                                               idx_t start_row, ReadStream &source, const LogicalType &type) {
+	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);
 	BinaryDeserializer deserializer(source);
 	deserializer.Begin();
-	entry->DeserializeColumn(deserializer);
+	entry->DeserializeColumn(deserializer, entry->stats->statistics);
 	deserializer.End();
 	return entry;
 }
