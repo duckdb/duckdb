@@ -21,7 +21,7 @@ except ImportError as e:
 
 try:
     ver = subprocess.check_output(('black', '--version'), text=True)
-    if '24.' not in ver:
+    if int(ver.split(' ')[1].split('.')[0]) < 24:
         print('you need to run `pip install "black>=24"`', ver)
         exit(-1)
 except Exception as e:
