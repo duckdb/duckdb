@@ -8,14 +8,14 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	string error;
+	PreservedError error;
 	for (auto &check : expr.case_checks) {
 		BindChild(check.when_expr, depth, error);
 		BindChild(check.then_expr, depth, error);
 	}
 	BindChild(expr.else_expr, depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
 	// figure out the result type of the CASE expression

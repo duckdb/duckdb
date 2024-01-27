@@ -622,7 +622,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
                                         QueryErrorContext error_context) {
 	auto res = TryLookupEntry(context, type, schema, name, if_not_found, error_context);
 
-	if (res.error) {
+	if (res.error.HasError()) {
 		res.error.Throw();
 	}
 
@@ -697,7 +697,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 		}
 	}
 
-	if (lookup_entry.error) {
+	if (lookup_entry.error.HasError()) {
 		lookup_entry.error.Throw();
 	}
 
@@ -721,7 +721,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 		}
 	}
 
-	if (result.error) {
+	if (result.error.HasError()) {
 		result.error.Throw();
 	}
 

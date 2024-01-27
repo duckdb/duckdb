@@ -663,7 +663,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			} catch (std::exception &ex) {
 				error = PreservedError(ex);
 			}
-			if (error) {
+			if (error.HasError()) {
 				// error in verifying query
 				return make_uniq<PendingQueryResult>(error);
 			}
@@ -684,7 +684,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			} catch (std::exception &ex) {
 				error = PreservedError(ex);
 			}
-			if (error) {
+			if (error.HasError()) {
 				// error in verifying query
 				return make_uniq<PendingQueryResult>(error);
 			}

@@ -28,10 +28,10 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 		return json_bind_result;
 	}
 
-	return BindResult("failed to bind function, either: " + lambda_bind_result.error +
+	return BindResult("failed to bind function, either: " + lambda_bind_result.error.RawMessage() +
 	                  "\n"
 	                  " or: " +
-	                  json_bind_result.error);
+	                  json_bind_result.error.RawMessage());
 }
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
@@ -108,15 +108,15 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
 
 	// bind the children of the function expression
-	string error;
+	PreservedError error;
 
 	// bind of each child
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		BindChild(function.children[i], depth, error);
 	}
 
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -134,7 +134,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	unique_ptr<Expression> result =
 	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
-		throw BinderException(binder.FormatError(function, error));
+		throw BinderException(binder.FormatError(function, error.Message()));
 	}
 	return BindResult(std::move(result));
 }
@@ -160,10 +160,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	D_ASSERT(function.children[1]->GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	// bind the list parameter
-	string error;
+	PreservedError error;
 	BindChild(function.children[0], depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 
 	// get the logical type of the children of the list
@@ -221,7 +221,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	unique_ptr<Expression> result =
 	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
-		throw BinderException(binder.FormatError(function, error));
+		throw BinderException(binder.FormatError(function, error.Message()));
 	}
 
 	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();

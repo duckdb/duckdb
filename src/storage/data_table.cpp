@@ -894,7 +894,7 @@ PreservedError DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &ch
 		} catch (std::exception &ex) {
 			error = PreservedError(ex);
 		}
-		if (error) {
+		if (error.HasError()) {
 			append_failed = true;
 			return true;
 		}

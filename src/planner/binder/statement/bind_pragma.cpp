@@ -30,10 +30,11 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 	// bind the pragma function
 	auto &entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name);
 	FunctionBinder function_binder(context);
-	string error;
+	PreservedError error;
 	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, params, error);
 	if (bound_idx == DConstants::INVALID_INDEX) {
-		throw BinderException(error_context.FormatError(error));
+		D_ASSERT(error.HasError());
+		throw BinderException(error_context.FormatError(error.Message()));
 	}
 	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
 	// bind and check named params

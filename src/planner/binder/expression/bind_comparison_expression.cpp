@@ -200,11 +200,11 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	string error;
+	PreservedError error;
 	BindChild(expr.left, depth, error);
 	BindChild(expr.right, depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 
 	// the children have been successfully resolved

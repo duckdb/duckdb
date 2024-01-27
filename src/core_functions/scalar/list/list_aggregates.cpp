@@ -464,7 +464,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	}
 
 	// find a matching aggregate function
-	string error;
+	PreservedError error;
 	vector<LogicalType> types;
 	types.push_back(child_type);
 	// push any extra arguments into the type list
@@ -475,7 +475,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	FunctionBinder function_binder(context);
 	auto best_function_idx = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
-		throw BinderException("No matching aggregate function\n%s", error);
+		throw BinderException("No matching aggregate function\n%s", error.Message());
 	}
 
 	// found a matching function, bind it as an aggregate

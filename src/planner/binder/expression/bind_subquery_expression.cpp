@@ -66,9 +66,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	// now bind the child node of the subquery
 	if (expr.child) {
 		// first bind the children of the subquery, if any
-		string error = Bind(expr.child, depth);
-		if (!error.empty()) {
-			return BindResult(error);
+		auto error = Bind(expr.child, depth);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
 		}
 	}
 	// both binding the child and binding the subquery was successful

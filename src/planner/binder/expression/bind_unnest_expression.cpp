@@ -34,7 +34,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (depth > 0) {
 		return BindResult(binder.FormatError(function, "UNNEST() for correlated expressions is not supported yet"));
 	}
-	string error;
+	PreservedError error;
 	if (function.children.empty()) {
 		return BindResult(binder.FormatError(function, "UNNEST() requires a single argument"));
 	}
@@ -54,8 +54,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			}
 			auto alias = function.children[i]->alias;
 			BindChild(function.children[i], depth, error);
-			if (!error.empty()) {
-				return BindResult(error);
+			if (error.HasError()) {
+				return BindResult(std::move(error));
 			}
 			auto &const_child = BoundExpression::GetExpression(*function.children[i]);
 			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
@@ -84,7 +84,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	}
 	unnest_level++;
 	BindChild(function.children[0], depth, error);
-	if (!error.empty()) {
+	if (error.HasError()) {
 		// failed to bind
 		// try to bind correlated columns manually
 		auto result = BindCorrelatedColumns(function.children[0], error);

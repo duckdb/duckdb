@@ -463,7 +463,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	}
 
 	if (result.HasError()) {
-		result.error = binder.FormatError(col_ref_p, result.error);
+		result.SetError(binder.FormatError(col_ref_p, result.error.Message()));
 		return result;
 	}
 

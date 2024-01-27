@@ -11,6 +11,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
@@ -42,17 +43,24 @@ struct BoundColumnReferenceInfo {
 struct BindResult {
 	BindResult() {
 	}
-	explicit BindResult(string error) : error(error) {
+	explicit BindResult(const Exception &ex) : error(ex) {
+	}
+	explicit BindResult(const string &error_msg) : error(ExceptionType::BINDER, error_msg) {
+	}
+	explicit BindResult(PreservedError error) : error(std::move(error)) {
 	}
 	explicit BindResult(unique_ptr<Expression> expr) : expression(std::move(expr)) {
 	}
 
-	bool HasError() {
-		return !error.empty();
+	bool HasError() const {
+		return error.HasError();
+	}
+	void SetError(const string &error_message) {
+		error = PreservedError(ExceptionType::BINDER, error_message);
 	}
 
 	unique_ptr<Expression> expression;
-	string error;
+	PreservedError error;
 };
 
 class ExpressionBinder {
@@ -81,7 +89,7 @@ public:
 		return bound_columns;
 	}
 
-	string Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
+	PreservedError Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
 	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
@@ -109,9 +117,9 @@ public:
 	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
-	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message);
+	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, PreservedError error_message);
 
-	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
+	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, PreservedError &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
 	static bool ContainsNullType(const LogicalType &type);

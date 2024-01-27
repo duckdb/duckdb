@@ -7,15 +7,18 @@
 
 namespace duckdb {
 
-PreservedError::PreservedError() : initialized(false) {
+PreservedError::PreservedError() : initialized(false), type(ExceptionType::INVALID) {
 }
 
 PreservedError::PreservedError(const Exception &exception)
     : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.RawMessage())) {
 }
 
+PreservedError::PreservedError(ExceptionType type, const string &message) :
+	initialized(true), type(type), raw_message(SanitizeErrorMessage(message)) {}
+
 PreservedError::PreservedError(const string &message)
-    : initialized(true), type(ExceptionType::INVALID), raw_message(SanitizeErrorMessage(message)) {
+    : PreservedError(ExceptionType::INVALID, message) {
 	// Given a message in the form: 	xxxxx Error: yyyyy
 	// Try to match xxxxxxx with known error so to potentially reconstruct the original error type
 	auto position_semicolon = raw_message.find(':');
@@ -66,10 +69,6 @@ const ExceptionType &PreservedError::Type() const {
 PreservedError &PreservedError::AddToMessage(const string &prepended_message) {
 	raw_message = prepended_message + raw_message;
 	return *this;
-}
-
-PreservedError::operator bool() const {
-	return initialized;
 }
 
 bool PreservedError::operator==(const PreservedError &other) const {

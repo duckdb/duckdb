@@ -103,11 +103,11 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	auto &bound = BoundExpression::GetExpression(*expr);
 	children.emplace_back(std::move(bound));
 
-	string error;
+	PreservedError error;
 	FunctionBinder function_binder(context);
 	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
 	if (!function) {
-		throw BinderException(error);
+		error.Throw();
 	}
 	bound = std::move(function);
 	return bound->return_type;
@@ -133,7 +133,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
 	this->inside_window = true;
-	string error;
+	PreservedError error;
 	for (auto &child : window.children) {
 		BindChild(child, depth, error);
 	}
@@ -165,9 +165,9 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.default_expr, depth, error);
 
 	this->inside_window = false;
-	if (!error.empty()) {
+	if (error.HasError()) {
 		// failed to bind children of window function
-		return BindResult(error);
+		return BindResult(std::move(error));
 	}
 
 	//	Restore any collation expressions
@@ -215,11 +215,11 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
-		string error;
+		PreservedError error;
 		FunctionBinder function_binder(context);
 		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
-			throw BinderException(binder.FormatError(window, error));
+			throw BinderException(binder.FormatError(window, error.Message()));
 		}
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func.functions.GetFunctionByOffset(best_function);

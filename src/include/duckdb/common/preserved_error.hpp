@@ -20,6 +20,8 @@ public:
 	//! From std::exception
 	PreservedError(const std::exception &ex) : PreservedError(ex.what()) {
 	}
+	//! From a raw string and exception type
+	DUCKDB_API explicit PreservedError(ExceptionType type, const string &raw_message);
 	//! From a raw string
 	DUCKDB_API explicit PreservedError(const string &raw_message);
 	//! From an Exception
@@ -34,9 +36,14 @@ public:
 	DUCKDB_API PreservedError &AddToMessage(const string &prepended_message);
 	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message();
-	//! Let's us do things like 'if (error)'
-	DUCKDB_API operator bool() const;
+	DUCKDB_API const string &RawMessage() {
+		return raw_message;
+	}
 	DUCKDB_API bool operator==(const PreservedError &other) const;
+
+	inline bool HasError() const {
+		return initialized;
+	}
 
 private:
 	//! Whether this PreservedError contains an exception or not

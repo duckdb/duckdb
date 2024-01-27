@@ -26,12 +26,12 @@ void BaseQueryResult::ThrowError(const string &prepended_message) const {
 }
 
 void BaseQueryResult::SetError(PreservedError error) {
-	success = !error;
+	success = !error.HasError();
 	this->error = std::move(error);
 }
 
 bool BaseQueryResult::HasError() const {
-	D_ASSERT((bool)error == !success);
+	D_ASSERT(error.HasError() == !success);
 	return !success;
 }
 
