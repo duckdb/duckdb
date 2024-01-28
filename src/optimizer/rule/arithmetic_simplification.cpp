@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -63,6 +64,14 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			} else if (constant.value == 0) {
 				// divide by 0, replace with NULL
 				return make_uniq<BoundConstantExpression>(Value(root.return_type));
+			} else {
+				string error;
+				FunctionBinder binder(rewriter.context);
+				auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, "divide_by_const", std::move(root.children), error, false);
+				if (!function) {
+					throw BinderException(error);
+				}
+				return function;
 			}
 		}
 	} else {

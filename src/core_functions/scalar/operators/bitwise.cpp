@@ -1,7 +1,7 @@
-#include "duckdb/core_functions/scalar/operators_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/core_functions/scalar/operators_functions.hpp"
 
 namespace duckdb {
 
