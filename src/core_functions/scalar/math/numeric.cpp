@@ -1,20 +1,20 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "libdivide.h"
 
 #include <cmath>
-#include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include <errno.h>
 #include <type_traits>
 
@@ -1364,6 +1364,7 @@ static void ConstRHSDivideOperationFast(DataChunk &args, ExpressionState &state,
 		validity.SetInvalid(args.data.size());
 		return;
 	}
+
 	validity.Copy(FlatVector::Validity(args.data[0]), args.data.size());
 	duckdb_libdivide::divider<RHS> optimised_rhs = duckdb_libdivide::divider<RHS>(rhs);
 	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(args.data[0], result, args.size(),
@@ -1381,33 +1382,26 @@ static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
 	case LogicalTypeId::TINYINT:
 		return ConstRHSDivideOperation<int8_t, int8_t, int8_t>;
 	case LogicalTypeId::SMALLINT:
-		function = &ConstRHSDivideOperationFast<int16_t, int16_t, int16_t>;
-		break;
+		return ConstRHSDivideOperationFast<int16_t, int16_t, int16_t>;
 	case LogicalTypeId::INTEGER:
-		function = &ConstRHSDivideOperationFast<int32_t, int32_t, int32_t>;
-		break;
+		return ConstRHSDivideOperationFast<int32_t, int32_t, int32_t>;
 	case LogicalTypeId::BIGINT:
-		function = &ConstRHSDivideOperationFast<int64_t, int64_t, int64_t>;
-		break;
+		return ConstRHSDivideOperationFast<int64_t, int64_t, int64_t>;
 	case LogicalTypeId::HUGEINT:
 		return ConstRHSDivideOperation<hugeint_t, hugeint_t, hugeint_t>;
 	case LogicalTypeId::UTINYINT:
 		return ConstRHSDivideOperation<uint8_t, uint8_t, uint8_t>;
 	case LogicalTypeId::USMALLINT:
-		function = &ConstRHSDivideOperationFast<uint16_t, uint16_t, uint16_t>;
-		break;
+		return ConstRHSDivideOperationFast<uint16_t, uint16_t, uint16_t>;
 	case LogicalTypeId::UINTEGER:
-		function = &ConstRHSDivideOperationFast<uint32_t, uint32_t, uint32_t>;
-		break;
+		return ConstRHSDivideOperationFast<uint32_t, uint32_t, uint32_t>;
 	case LogicalTypeId::UBIGINT:
-		function = &ConstRHSDivideOperationFast<uint64_t, uint64_t, uint64_t>;
-		break;
+		return ConstRHSDivideOperationFast<uint64_t, uint64_t, uint64_t>;
 	case LogicalTypeId::UHUGEINT:
 		return ConstRHSDivideOperation<uhugeint_t, uhugeint_t, uhugeint_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunction");
 	}
-	return function;
 }
 
 ScalarFunctionSet ConstRHSDivideFun::GetFunctions() {
