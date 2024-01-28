@@ -261,6 +261,7 @@ regular_scan:
 			// semicolon: restart suggestion flow
 			suggest_state = SuggestionState::SUGGEST_KEYWORD;
 			suggested_keywords.clear();
+			last_pos = pos + 1;
 			continue;
 		}
 		if (StringUtil::CharacterIsSpace(sql[pos]) || StringUtil::CharacterIsOperator(sql[pos])) {
@@ -320,6 +321,10 @@ process_word : {
 	} else {
 		suggested_keywords.erase(next_word);
 	}
+	if (std::all_of(next_word.begin(), next_word.end(), ::isdigit)) {
+		// Numbers are OK
+		suggested_keywords.clear();
+	}
 	seen_word = false;
 	last_pos = pos;
 	goto regular_scan;
@@ -355,6 +360,10 @@ standard_suggestion:
 	if (last_pos > sql.size()) {
 		D_ASSERT(false);
 		throw NotImplementedException("last_pos out of range");
+	}
+	if (std::all_of(last_word.begin(), last_word.end(), ::isdigit)) {
+		// Numbers are OK
+		suggestions.clear();
 	}
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
 }
