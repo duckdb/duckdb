@@ -73,7 +73,7 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
-	vector<LogicalType> parse_types;
+	unique_ptr<LogicalTypeId[]> parse_types;
 	vector<string> names;
 	unordered_map<idx_t, string> cast_errors;
 
@@ -97,7 +97,7 @@ public:
 
 	void HandleOverLimitRows();
 
-	void AddValueToVector(const char *buffer_ptr, const idx_t size, bool allocate = false);
+	inline void AddValueToVector(const char *buffer_ptr, const idx_t size, bool allocate = false);
 
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 

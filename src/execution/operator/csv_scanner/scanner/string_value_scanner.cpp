@@ -30,19 +30,28 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle.actual_size};
 	pre_previous_line_start = previous_line_start;
 	// Fill out Parse Types
+	vector<LogicalType> logical_types;
+	parse_types = unique_ptr<LogicalTypeId[]> (new LogicalTypeId[number_of_columns]);
 	if (!csv_file_scan) {
-		parse_types = {number_of_columns, LogicalType::VARCHAR};
+		for (idx_t  i = 0; i < number_of_columns; i++){
+			parse_types[i] = LogicalTypeId::VARCHAR;
+			logical_types.emplace_back(LogicalType::VARCHAR);
+		}
 	} else {
-		for (auto &type : csv_file_scan->types) {
+		for (idx_t  i = 0; i < csv_file_scan->types.size(); i++) {
+			auto& type = csv_file_scan->types[i];
 			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
-				parse_types.emplace_back(type);
+				parse_types[i] = type.id();
+				logical_types.emplace_back(type);
 			} else {
-				parse_types.emplace_back(LogicalType::VARCHAR);
+				parse_types[i] = LogicalTypeId::VARCHAR;
+				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
-		while (parse_types.size() < number_of_columns) {
+		for (idx_t i = csv_file_scan->types.size(); i < number_of_columns; i ++){
 			// This can happen if we have sneaky null columns at the end that we wish to ignore
-			parse_types.emplace_back(LogicalType::VARCHAR);
+			parse_types[i] = LogicalTypeId::VARCHAR;
+			logical_types.emplace_back(LogicalType::VARCHAR);
 		}
 	}
 	// Fill out Names
@@ -56,7 +65,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	}
 
 	// Initialize Parse Chunk
-	parse_chunk.Initialize(buffer_allocator, parse_types, result_size);
+	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
 	for (auto &col : parse_chunk.data) {
 		vector_ptr.push_back(FlatVector::GetData<string_t>(col));
 		validity_mask.push_back(&FlatVector::Validity(col));
@@ -123,7 +132,8 @@ void StringValueResult::HandleOverLimitRows() {
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
-	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted) && size == null_str_size) {
+	if (size == null_str_size){
+			if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 		bool is_null = true;
 		for (idx_t i = 0; i < size; i++) {
 			if (null_str_ptr[i] != value_ptr[i]) {
@@ -152,11 +162,13 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			return;
 		}
 	}
+
+	}
 	if (cur_col_id >= number_of_columns) {
 		HandleOverLimitRows();
 	}
 	bool success = true;
-	switch (parse_types[cur_col_id].id()) {
+	switch (parse_types[cur_col_id]) {
 	case LogicalTypeId::TINYINT:
 		success =
 		    TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
@@ -256,8 +268,8 @@ bool StringValueResult::AddRowInternal() {
 		for (auto &cast_error : cast_errors) {
 			std::ostringstream error;
 			// Casting Error Message
-			error << "Could not convert string\"" << cast_error.second << "\" to \'"
-			      << parse_types[cast_error.first].ToString() << "\'";
+			error << "Could not convert string \"" << cast_error.second << "\" to \'"
+			      << LogicalTypeIdToString(parse_types[cast_error.first]) << "\'";
 			auto error_string = error.str();
 			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
 			                                     cast_error.first, row);
