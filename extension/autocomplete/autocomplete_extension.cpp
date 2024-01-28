@@ -82,7 +82,7 @@ static vector<string> InitialKeywords() {
 	return vector<string> {"SELECT",     "INSERT",   "DELETE",  "UPDATE",  "CREATE",   "DROP",      "COPY",
 	                       "ALTER",      "WITH",     "EXPORT",  "BEGIN",   "VACUUM",   "PREPARE",   "EXECUTE",
 	                       "DEALLOCATE", "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE", "LOAD",
-	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL",    "FROM"};
+	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL",    "FROM",     "PIVOT",     "UNPIVOT"};
 }
 
 static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
@@ -238,7 +238,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	next_keyword_map["INSERT"] = {"INTO", "VALUES", "SELECT", "DEFAULT"};
 	next_keyword_map["DELETE"] = {"FROM", "WHERE", "USING"};
 	next_keyword_map["UPDATE"] = {"SET", "WHERE"};
-	next_keyword_map["CREATE"] = {"TABLE", "SCHEMA", "VIEW", "SEQUENCE", "MACRO", "FUNCTION"};
+	next_keyword_map["CREATE"] = {"TABLE", "SCHEMA", "VIEW", "SEQUENCE", "MACRO", "FUNCTION", "SECRET", "TYPE"};
 	next_keyword_map["DROP"] = next_keyword_map["CREATE"];
 	next_keyword_map["ALTER"] = {"TABLE", "VIEW", "ADD", "DROP", "COLUMN", "SET", "TYPE", "DEFAULT", "DATA", "RENAME"};
 
