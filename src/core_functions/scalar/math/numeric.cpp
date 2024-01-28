@@ -1343,13 +1343,13 @@ static void ConstRHSDivideOperation(DataChunk &args, ExpressionState &state, Vec
 		return;
 	}
 	validity.Copy(FlatVector::Validity(args.data[0]), args.data.size());
-	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(args.data[0], result, args.size(),
-	                                             [&](LHS lhs, ValidityMask &validity, idx_t idx) {
-													if (std::is_signed<RHS>() && rhs == RHS(-1) && lhs == NumericLimits<LHS>::Minimum()) {
-														validity.SetInvalid(args.data.size());
-													}
-													return lhs / rhs;
-												 });
+	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(
+	    args.data[0], result, args.size(), [&](LHS lhs, ValidityMask &validity, idx_t idx) {
+		    if (std::is_signed<RHS>() && rhs == RHS(-1) && lhs == NumericLimits<LHS>::Minimum()) {
+			    validity.SetInvalid(args.data.size());
+		    }
+		    return lhs / rhs;
+	    });
 }
 
 template <class LHS, class RHS, class RESULT>
@@ -1366,13 +1366,13 @@ static void ConstRHSDivideOperationFast(DataChunk &args, ExpressionState &state,
 	}
 
 	duckdb_libdivide::divider<RHS> optimised_rhs = duckdb_libdivide::divider<RHS>(rhs);
-	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(args.data[0], result, args.size(),
-	                                             [&](LHS lhs, ValidityMask &validity, idx_t idx) {
-													if (std::is_signed<RHS>() && rhs == RHS(-1) && lhs == NumericLimits<LHS>::Minimum()) {
-														throw OutOfRangeException("Overflow in division of %d / %d", lhs, rhs);
-		                                            }
-													return lhs / optimised_rhs;
-												  });
+	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(
+	    args.data[0], result, args.size(), [&](LHS lhs, ValidityMask &validity, idx_t idx) {
+		    if (std::is_signed<RHS>() && rhs == RHS(-1) && lhs == NumericLimits<LHS>::Minimum()) {
+			    throw OutOfRangeException("Overflow in division of %d / %d", lhs, rhs);
+		    }
+		    return lhs / optimised_rhs;
+	    });
 }
 
 static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
