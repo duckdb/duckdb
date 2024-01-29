@@ -115,7 +115,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                     const vector<reference<NeighborInfo>> &possible_connections,
                                                     JoinNode &left, JoinNode &right) {
 	optional_ptr<NeighborInfo> best_connection = nullptr;
-	// cross products are techincally still connections, but the filter expression is a null_ptr
+	// cross products are technically still connections, but the filter expression is a null_ptr
 	if (!possible_connections.empty()) {
 		best_connection = &possible_connections.back().get();
 	}

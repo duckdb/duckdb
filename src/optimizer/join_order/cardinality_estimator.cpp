@@ -134,6 +134,7 @@ void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
 		if (subgraph->relations.count(find_me) >= 1) {
 			for (auto &relation : subgraph->relations) {
 				merge_to.relations.insert(relation);
+				merge_to.numerator_relations.insert(relation);
 			}
 			// remove the relations so this subgraph
 			// can be deleted from the subgraph2Denominator array
