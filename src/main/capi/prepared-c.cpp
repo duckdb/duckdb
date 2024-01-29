@@ -35,7 +35,6 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 		wrapper->error = ex.what();
 	} catch (...) {
 		wrapper->error = "Unknown error in duckdb_extract_statements";
-		return DuckDBError;
 	}
 
 	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
