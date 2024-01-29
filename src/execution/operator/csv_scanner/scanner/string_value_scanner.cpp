@@ -150,6 +150,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 				if (cur_col_id >= number_of_columns) {
 					HandleOverLimitRows();
 				}
+				if (parse_types[cur_col_id] != LogicalTypeId::VARCHAR){
+					// If it is not a varchar, empty values are not accepted, we must error.
+					cast_errors[cur_col_id] = std::string("");
+				}
 				static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
 			} else {
 				if (cur_col_id == number_of_columns) {
