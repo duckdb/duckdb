@@ -1174,7 +1174,7 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 			}
 			partition_by_values.emplace_back(Value(py::str(field)));
 		}
-		options["partition_by"] = {Value::LIST(partition_by_values)};
+		options["partition_by"] = {partition_by_values};
 	}
 
 	auto write_csv = rel->WriteCSVRel(filename, std::move(options));
