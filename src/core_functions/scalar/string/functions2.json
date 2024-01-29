@@ -1,0 +1,7 @@
+    // {
+    //     "name": "regexp_extract",
+    //     "parameters": "string,pattern,[idx]",
+    //     "description": "If string contains the regexp pattern, returns the capturing group specified by optional parameter idx",
+    //     "example": "regexp_extract('hello_world', '([a-z ]+)_?', 1)",
+    //     "type": "scalar_function"
+    // },

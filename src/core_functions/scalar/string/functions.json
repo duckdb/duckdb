@@ -344,5 +344,40 @@
         "example": "regexp_escape('https://duckdb.org')",
         "struct": "RegexpEscapeFun",
         "type": "scalar_function"
+    },
+    {
+        "name": "regexp_extract",
+        "parameters": "string,pattern,name_list",
+        "description": "If string contains the regexp pattern, returns the capturing groups as a struct with corresponding names from name_list",
+        "example": "regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])",
+        "type": "scalar_function"
+    },
+    {
+        "name": "regexp_extract_all",
+        "parameters": "string,regex,[group]",
+        "description": "Split the string along the regex and extract all occurrences of group",
+        "example": "regexp_extract_all('hello_world', '([a-z ]+)_?', 1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "regexp_full_match",
+        "parameters": "string, regex",
+        "description": "Returns true if the entire string matches the regex",
+        "example": "regexp_full_match('anabanana', '(an)')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "regexp_matches",
+        "parameters": "string, pattern",
+        "description": "Returns true if  string contains the regexp pattern, false otherwise",
+        "example": "regexp_matches('anabanana', '(an)')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "regexp_replace",
+        "parameters": "string, pattern, replacement",
+        "description": "If string contains the regexp pattern, replaces the matching part with replacement",
+        "example": "regexp_replace('hello', '[lo]', '-')",
+        "type": "scalar_function"
     }
 ]
