@@ -12,6 +12,8 @@
 #include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
+#include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/operator/double_cast_operator.hpp"
 
 namespace duckdb {
 
@@ -43,8 +45,8 @@ public:
 	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
 
 	//! Information on the vector
-	vector<void *> vector_ptr;
-	vector<ValidityMask *> validity_mask;
+	unsafe_vector<void *> vector_ptr;
+	unsafe_vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
 	idx_t last_position;
@@ -73,7 +75,7 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
-	unique_ptr<LogicalTypeId[]> parse_types;
+	unsafe_unique_array<LogicalTypeId> parse_types;
 	vector<string> names;
 	unordered_map<idx_t, string> cast_errors;
 
@@ -97,7 +99,116 @@ public:
 
 	void HandleOverLimitRows();
 
-	inline void AddValueToVector(const char *buffer_ptr, const idx_t size, bool allocate = false);
+	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false){
+	if (size == null_str_size){
+			if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+		bool is_null = true;
+		for (idx_t i = 0; i < size; i++) {
+			if (null_str_ptr[i] != value_ptr[i]) {
+				is_null = false;
+				break;
+			}
+		}
+		if (is_null) {
+			bool empty = false;
+			if (cur_col_id < state_machine.options.force_not_null.size()) {
+				empty = state_machine.options.force_not_null[cur_col_id];
+			}
+			if (empty) {
+				if (cur_col_id >= number_of_columns) {
+					HandleOverLimitRows();
+				}
+				if (parse_types[cur_col_id] != LogicalTypeId::VARCHAR){
+					// If it is not a varchar, empty values are not accepted, we must error.
+					cast_errors[cur_col_id] = std::string("");
+				}
+				static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
+			} else {
+				if (cur_col_id == number_of_columns) {
+					// We check for a weird case, where we ignore an extra value, if it is a null value
+					return;
+				}
+				validity_mask[cur_col_id]->SetInvalid(number_of_rows);
+			}
+			cur_col_id++;
+			return;
+		}
+	}
+
+	}
+	if (cur_col_id >= number_of_columns) {
+		HandleOverLimitRows();
+	}
+	bool success = true;
+	switch (parse_types[cur_col_id]) {
+	case LogicalTypeId::TINYINT:
+		success =
+		    TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::SMALLINT:
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false);
+		break;
+	case LogicalTypeId::INTEGER:
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int32_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false);
+		break;
+	case LogicalTypeId::BIGINT:
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false);
+		break;
+	case LogicalTypeId::UTINYINT:
+		success = TrySimpleIntegerCast<uint8_t, false>(
+		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::USMALLINT:
+		success = TrySimpleIntegerCast<uint16_t, false>(
+		    value_ptr, size, static_cast<uint16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::UINTEGER:
+		success = TrySimpleIntegerCast<uint32_t, false>(
+		    value_ptr, size, static_cast<uint32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::UBIGINT:
+		success = TrySimpleIntegerCast<uint64_t, false>(
+		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		break;
+	case LogicalTypeId::DOUBLE:
+		success = TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[cur_col_id])[number_of_rows],
+		                                false, state_machine.options.decimal_separator[0]);
+		break;
+	case LogicalTypeId::FLOAT:
+		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[cur_col_id])[number_of_rows],
+		                               false, state_machine.options.decimal_separator[0]);
+		break;
+	case LogicalTypeId::DATE: {
+		idx_t pos;
+		bool special;
+		success = Date::TryConvertDate(value_ptr, size, pos,
+		                               static_cast<date_t *>(vector_ptr[cur_col_id])[number_of_rows], special, false);
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP: {
+		success = Timestamp::TryConvertTimestamp(value_ptr, size,
+		                                         static_cast<timestamp_t *>(vector_ptr[cur_col_id])[number_of_rows]) ==
+		          TimestampCastResult::SUCCESS;
+		break;
+	}
+	default:
+		if (allocate) {
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] =
+			    StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], string_t(value_ptr, size));
+		} else {
+			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t(value_ptr, size);
+		}
+		break;
+	}
+	if (!success) {
+		// We had a casting error, we push it here because we can only error when finishing the line read.
+		cast_errors[cur_col_id] = std::string(value_ptr, size);
+	}
+	cur_col_id++;
+}
 
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
