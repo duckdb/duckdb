@@ -38,13 +38,13 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 			logical_types.emplace_back(LogicalType::VARCHAR);
 		}
 	} else {
-		if (csv_file_scan->types.size() > number_of_columns) {
+		if (csv_file_scan->file_types.size() > number_of_columns) {
 			throw InvalidInputException(
 			    "Mismatch between the number of columns (%d) in the CSV file and what is expected in the scanner (%d).",
-			    number_of_columns, csv_file_scan->types.size());
+			    number_of_columns, csv_file_scan->file_types.size());
 		}
-		for (idx_t i = 0; i < csv_file_scan->types.size(); i++) {
-			auto &type = csv_file_scan->types[i];
+		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
+			auto &type = csv_file_scan->file_types[i];
 			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
 				parse_types[i] = type.id();
 				logical_types.emplace_back(type);
@@ -53,7 +53,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
-		for (idx_t i = csv_file_scan->types.size(); i < number_of_columns; i++) {
+		for (idx_t i = csv_file_scan->file_types.size(); i < number_of_columns; i++) {
 			// This can happen if we have sneaky null columns at the end that we wish to ignore
 			parse_types[i] = LogicalTypeId::VARCHAR;
 			logical_types.emplace_back(LogicalType::VARCHAR);
@@ -66,7 +66,18 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 			names.emplace_back(name);
 		}
 	} else {
-		names = csv_file_scan->names;
+		names = csv_file_scan->file_names;
+		bool projecting_columns = false;
+		idx_t i = 0;
+		for (auto& col_idx: csv_file_scan->projected_columns){
+			projected_columns[col_idx]=i;
+			if (col_idx != i){
+				projecting_columns = true;
+			}
+		}
+		if (!projecting_columns && projected_columns.size() == number_of_columns){
+			projected_columns.clear();
+		}
 	}
 
 	// Initialize Parse Chunk
@@ -78,6 +89,14 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
+	idx_t chunk_col_id = cur_col_id;
+	if (!projected_columns.empty()){
+		if (projected_columns.find(cur_col_id) == projected_columns.end()){
+			cur_col_id++;
+			return;
+		}
+		chunk_col_id = projected_columns[cur_col_id];
+	}
 	if (size == null_str_size) {
 		if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 			bool is_null = true;
@@ -89,102 +108,102 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			}
 			if (is_null) {
 				bool empty = false;
-				if (cur_col_id < state_machine.options.force_not_null.size()) {
-					empty = state_machine.options.force_not_null[cur_col_id];
+				if (chunk_col_id < state_machine.options.force_not_null.size()) {
+					empty = state_machine.options.force_not_null[chunk_col_id];
 				}
 				if (empty) {
-					if (cur_col_id >= number_of_columns) {
+					if (chunk_col_id >= number_of_columns) {
 						HandleOverLimitRows();
 					}
-					if (parse_types[cur_col_id] != LogicalTypeId::VARCHAR) {
+					if (parse_types[chunk_col_id] != LogicalTypeId::VARCHAR) {
 						// If it is not a varchar, empty values are not accepted, we must error.
-						cast_errors[cur_col_id] = std::string("");
+						cast_errors[chunk_col_id] = std::string("");
 					}
-					static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t();
+					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
-					if (cur_col_id == number_of_columns) {
+					if (chunk_col_id == number_of_columns) {
 						// We check for a weird case, where we ignore an extra value, if it is a null value
 						return;
 					}
-					validity_mask[cur_col_id]->SetInvalid(number_of_rows);
+					validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
 				}
-				cur_col_id++;
+				chunk_col_id++;
 				return;
 			}
 		}
 	}
-	if (cur_col_id >= number_of_columns) {
+	if (chunk_col_id >= number_of_columns) {
 		HandleOverLimitRows();
 	}
 	bool success = true;
-	switch (parse_types[cur_col_id]) {
+	switch (parse_types[chunk_col_id]) {
 	case LogicalTypeId::TINYINT:
 		success =
-		    TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		    TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::SMALLINT:
-		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false);
 		break;
 	case LogicalTypeId::INTEGER:
-		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int32_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false);
 		break;
 	case LogicalTypeId::BIGINT:
-		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[cur_col_id])[number_of_rows],
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false);
 		break;
 	case LogicalTypeId::UTINYINT:
 		success = TrySimpleIntegerCast<uint8_t, false>(
-		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint8_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::USMALLINT:
 		success = TrySimpleIntegerCast<uint16_t, false>(
-		    value_ptr, size, static_cast<uint16_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint16_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UINTEGER:
 		success = TrySimpleIntegerCast<uint32_t, false>(
-		    value_ptr, size, static_cast<uint32_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint32_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UBIGINT:
 		success = TrySimpleIntegerCast<uint64_t, false>(
-		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[cur_col_id])[number_of_rows], false);
+		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::DOUBLE:
-		success = TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[cur_col_id])[number_of_rows],
+		success = TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                                false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::FLOAT:
-		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[cur_col_id])[number_of_rows],
+		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::DATE: {
 		idx_t pos;
 		bool special;
 		success = Date::TryConvertDate(value_ptr, size, pos,
-		                               static_cast<date_t *>(vector_ptr[cur_col_id])[number_of_rows], special, false);
+		                               static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		success = Timestamp::TryConvertTimestamp(value_ptr, size,
-		                                         static_cast<timestamp_t *>(vector_ptr[cur_col_id])[number_of_rows]) ==
+		                                         static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
 		          TimestampCastResult::SUCCESS;
 		break;
 	}
 	default:
 		if (allocate) {
-			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] =
-			    StringVector::AddStringOrBlob(parse_chunk.data[cur_col_id], string_t(value_ptr, size));
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
+			    StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], string_t(value_ptr, size));
 		} else {
-			static_cast<string_t *>(vector_ptr[cur_col_id])[number_of_rows] = string_t(value_ptr, size);
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t(value_ptr, size);
 		}
 		break;
 	}
 	if (!success) {
 		// We had a casting error, we push it here because we can only error when finishing the line read.
-		cast_errors[cur_col_id] = std::string(value_ptr, size);
+		cast_errors[chunk_col_id] = std::string(value_ptr, size);
 	}
-	cur_col_id++;
+	chunk_col_id++;
 }
 
 Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {

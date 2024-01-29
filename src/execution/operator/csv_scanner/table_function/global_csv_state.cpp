@@ -36,7 +36,6 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 		current_boundary = CSVIterator(0, 0, 0, 0, buffer_size);
 	}
-	int x = 0;
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
