@@ -17,8 +17,6 @@
 
 namespace duckdb {
 
-enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };
-
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -45,9 +43,6 @@ public:
 	//! when collecting a sample in parallel, we want to know how many values each thread has seen
 	//! so we can collect the samples from the thread local states in a uniform manner
 	idx_t num_entries_seen_total;
-
-	void Serialize(Serializer &serializer) const;
-	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
 };
 
 class BlockingSample {
@@ -56,10 +51,6 @@ public:
 	}
 	virtual ~BlockingSample() {
 	}
-
-	static constexpr const SampleType TYPE = SampleType::BLOCKING_SAMPLE;
-	//! The sample type
-	SampleType type;
 
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
@@ -76,44 +67,10 @@ public:
 protected:
 	//! The reservoir sampling
 	RandomEngine &random;
-
-
-public:
-	template <class TARGET>
-	TARGET &Cast() {
-		if (type != TARGET::TYPE && TARGET::TYPE != SampleType::BLOCKING_SAMPLE) {
-			throw InternalException("Failed to cast sample to type - sample type mismatch");
-		}
-		return reinterpret_cast<TARGET &>(*this);
-	}
-
-	template <class TARGET>
-	const TARGET &Cast() const {
-		if (type != TARGET::TYPE && TARGET::TYPE != SampleType::BLOCKING_SAMPLE) {
-			throw InternalException("Failed to cast sample to type - sample type mismatch");
-		}
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
-
-class ReservoirChunk {
-public:
-	ReservoirChunk() {
-	}
-
-	DataChunk chunk;
-	void Serialize(Serializer &serializer) const;
-	static unique_ptr<ReservoirChunk> Deserialize(Deserializer &deserializer);
-
-	unique_ptr<ReservoirChunk> Copy();
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
-public:
-	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
-
 public:
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed);
 
@@ -125,17 +82,12 @@ public:
 	unique_ptr<DataChunk> GetChunk() override;
 	void Finalize() override;
 
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
-
 private:
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
 	void InitializeReservoir(DataChunk &input);
 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
 	idx_t FillReservoir(DataChunk &input);
-
-	DataChunk &Chunk();
 
 public:
 	Allocator &allocator;
@@ -145,15 +97,12 @@ public:
 	idx_t sample_count;
 	bool reservoir_initialized;
 	//! The current reservoir
-	unique_ptr<ReservoirChunk> reservoir_chunk;
+	unique_ptr<DataChunk> reservoir_chunk;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
 class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
-
-public:
-	static constexpr const SampleType TYPE = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
 
 public:
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
@@ -182,9 +131,6 @@ private:
 	idx_t current_count = 0;
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to GetChunk();
 	bool is_finalized;
-
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

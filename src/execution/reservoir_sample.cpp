@@ -4,21 +4,18 @@
 
 namespace duckdb {
 
-void ReservoirChunk::Serialize(Serializer &serializer) const {
-	chunk.Serialize(serializer);
+
+void BlockingSample::Serialize(Serializer &serializer) const {
 }
 
-unique_ptr<ReservoirChunk> ReservoirChunk::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<ReservoirChunk>();
-	result->chunk.Deserialize(deserializer);
-	return result;
+
+unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
+	return nullptr;
 }
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
-    : BlockingSample(seed), allocator(allocator), sample_count(sample_count) {
-	type = SampleType::RESERVOIR_SAMPLE;
+    : BlockingSample(seed), allocator(allocator), sample_count(sample_count), reservoir_initialized(false) {
 }
-
 
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0) {
@@ -30,17 +27,17 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	// Output: A reservoir R with a size m
 	// 1: The first m items of V are inserted into R
 	// first we need to check if the reservoir already has "m" elements
-	if (!reservoir_chunk || Chunk().size() < sample_count) {
+	if (!reservoir_chunk || reservoir_chunk->size() < sample_count) {
 		if (FillReservoir(input) == 0) {
 			// entire chunk was consumed by reservoir
 			return;
 		}
 	}
 	D_ASSERT(reservoir_chunk);
-	D_ASSERT(Chunk().size() == sample_count);
+	D_ASSERT(reservoir_chunk->size() == sample_count);
 	// Initialize the weights if they have not been already
 	if (base_reservoir_sample.reservoir_weights.empty()) {
-		base_reservoir_sample.InitializeReservoir(Chunk().size(), sample_count);
+		base_reservoir_sample.InitializeReservoir(reservoir_chunk->size(), sample_count);
 	}
 	// find the position of next_index_to_sample relative to number of seen entries (num_entries_to_skip_b4_next_sample)
 	idx_t remaining = input.size();
@@ -62,52 +59,47 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 }
 
 unique_ptr<DataChunk> ReservoirSample::GetChunk() {
-	if (!reservoir_chunk || Chunk().size() == 0) {
+	if (!reservoir_chunk || reservoir_chunk->size() == 0) {
 		return nullptr;
 	}
-	auto collected_sample_count = Chunk().size();
-	idx_t return_chunk_size = STANDARD_VECTOR_SIZE;
-	if (collected_sample_count <= STANDARD_VECTOR_SIZE) {
-		return_chunk_size = collected_sample_count;
+	auto collected_sample_count = reservoir_chunk->size();
+	if (collected_sample_count > STANDARD_VECTOR_SIZE) {
+		// get from the back to avoid creating two selection vectors
+		// one to return the first STANDARD_VECTOR_SIZE
+		// another to replace the reservoir_chunk with the first STANDARD VECTOR SIZE missing
+		auto ret = make_uniq<DataChunk>();
+		auto samples_remaining = collected_sample_count - STANDARD_VECTOR_SIZE;
+		auto reservoir_types = reservoir_chunk->GetTypes();
+		SelectionVector sel(STANDARD_VECTOR_SIZE);
+		for (idx_t i = samples_remaining; i < collected_sample_count; i++) {
+			sel.set_index(i - samples_remaining, i);
+		}
+		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
+		ret->Slice(*reservoir_chunk, sel, STANDARD_VECTOR_SIZE);
+		ret->SetCardinality(STANDARD_VECTOR_SIZE);
+		// reduce capacity and cardinality of the sample data chunk
+		reservoir_chunk->SetCardinality(samples_remaining);
+		return ret;
 	}
-
-	// get from the back to avoid creating two selection vectors
-	// one to return the first STANDARD_VECTOR_SIZE
-	// another to replace the reservoir_chunk with the first STANDARD VECTOR SIZE missing
-	auto ret = make_uniq<DataChunk>();
-	auto samples_remaining = collected_sample_count - return_chunk_size;
-	auto reservoir_types = Chunk().GetTypes();
-	SelectionVector sel(return_chunk_size);
-	for (idx_t i = samples_remaining; i < collected_sample_count; i++) {
-		sel.set_index(i - samples_remaining, i);
-	}
-	ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), return_chunk_size);
-	ret->Slice(Chunk(), sel, return_chunk_size);
-	ret->SetCardinality(return_chunk_size);
-	// reduce capacity and cardinality of the sample data chunk
-	Chunk().SetCardinality(samples_remaining);
-	if (samples_remaining == 0) {
-		reservoir_chunk = nullptr;
-	}
-	return ret;
+	return std::move(reservoir_chunk);
 }
 
 void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight) {
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item vi
-	D_ASSERT(input.ColumnCount() == Chunk().ColumnCount());
+	D_ASSERT(input.ColumnCount() == reservoir_chunk->ColumnCount());
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		Chunk().SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
+		reservoir_chunk->SetValue(col_idx, base_reservoir_sample.min_weighted_entry_index,
 		                          input.GetValue(col_idx, index_in_chunk));
 	}
 	base_reservoir_sample.ReplaceElement(with_weight);
 }
 
 void ReservoirSample::InitializeReservoir(DataChunk &input) {
-	reservoir_chunk = make_uniq<ReservoirChunk>();
-	Chunk().Initialize(allocator, input.GetTypes(), sample_count);
-	for (idx_t col_idx = 0; col_idx < Chunk().ColumnCount(); col_idx++) {
-		FlatVector::Validity(Chunk().data[col_idx]).Initialize(sample_count);
+	reservoir_chunk = make_uniq<DataChunk>();
+	reservoir_chunk->Initialize(allocator, input.GetTypes(), sample_count);
+	for (idx_t col_idx = 0; col_idx < reservoir_chunk->ColumnCount(); col_idx++) {
+		FlatVector::Validity(reservoir_chunk->data[col_idx]).Initialize(sample_count);
 	}
 	reservoir_initialized = true;
 }
@@ -115,7 +107,7 @@ void ReservoirSample::InitializeReservoir(DataChunk &input) {
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	idx_t chunk_count = input.size();
 	input.Flatten();
-	auto num_added_samples = reservoir_chunk ? Chunk().size() : 0;
+	auto num_added_samples = reservoir_chunk ? reservoir_chunk->size() : 0;
 	D_ASSERT(num_added_samples <= sample_count);
 
 	// required count is what we still need to add to the reservoir
@@ -133,7 +125,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	if (!reservoir_initialized) {
 		InitializeReservoir(input);
 	}
-	Chunk().Append(input, false, nullptr, required_count);
+	reservoir_chunk->Append(input, false, nullptr, required_count);
 	base_reservoir_sample.InitializeReservoir(required_count, sample_count);
 
 	// check if there are still elements remaining in the Input data chunk that should be
