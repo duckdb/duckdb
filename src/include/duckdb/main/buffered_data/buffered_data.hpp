@@ -38,7 +38,7 @@ protected:
 	enum class Type { SIMPLE };
 
 public:
-	BufferedData(Type type, shared_ptr<ClientContext> context) : type(type), context(context) {
+	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(context) {
 	}
 	virtual ~BufferedData() {
 	}

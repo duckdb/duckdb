@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-SimpleBufferedData::SimpleBufferedData(shared_ptr<ClientContext> context)
+SimpleBufferedData::SimpleBufferedData(weak_ptr<ClientContext> context)
     : BufferedData(BufferedData::Type::SIMPLE, std::move(context)) {
 	buffered_count = 0;
 }
