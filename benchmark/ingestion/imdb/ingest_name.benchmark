@@ -1,0 +1,6 @@
+# name: benchmark/ingestion/imdb/ingest_name.benchmark
+# description: benchmark ingestion of name
+# group: [imdb]
+
+template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
+table_name=name

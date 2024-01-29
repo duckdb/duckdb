@@ -1,0 +1,6 @@
+# name: benchmark/ingestion/imdb/ingest_complete_cast.benchmark
+# description: benchmark ingestion of complete_cast
+# group: [imdb]
+
+template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
+table_name=complete_cast

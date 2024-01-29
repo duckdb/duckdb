@@ -1,0 +1,6 @@
+# name: benchmark/ingestion/imdb/ingest_cast_info.benchmark
+# description: benchmark ingestion of cast_info
+# group: [imdb]
+
+template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
+table_name=cast_info

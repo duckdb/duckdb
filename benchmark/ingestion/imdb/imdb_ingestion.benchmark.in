@@ -1,0 +1,21 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [ingestion]
+
+name Q${table_name}
+group ingestion
+subgroup imdb
+
+require httpfs
+
+require parquet
+
+cache imdb.duckdb
+
+load benchmark/ingestion/imdb/load.sql
+
+run
+create table ${table_name}_ingested as select * from read_parquet('imdb_parquet/${table_name}.parquet');
+
+cleanup
+drop table ${table_name}_ingested;

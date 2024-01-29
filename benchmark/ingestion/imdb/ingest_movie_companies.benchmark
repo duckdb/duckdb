@@ -1,0 +1,6 @@
+# name: benchmark/ingestion/imdb/ingest_movie_companies.benchmark
+# description: benchmark ingestion of movie_companies
+# group: [imdb]
+
+template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
+table_name=movie_companies
