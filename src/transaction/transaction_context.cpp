@@ -45,9 +45,9 @@ void TransactionContext::Commit() {
 	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
-	string error = transaction->Commit();
-	if (!error.empty()) {
-		throw TransactionException("Failed to commit: %s", error);
+	auto error = transaction->Commit();
+	if (error.HasError()) {
+		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	}
 }
 

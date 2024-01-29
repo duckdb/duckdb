@@ -111,7 +111,7 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
 }
 
-string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
+PreservedError DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
@@ -142,10 +142,10 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 		if (storage_commit_state) {
 			storage_commit_state->FlushCommit();
 		}
-		return string();
+		return PreservedError();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
-		return ex.what();
+		return PreservedError(ex);
 	}
 }
 

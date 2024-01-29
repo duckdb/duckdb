@@ -18,14 +18,11 @@ public:
 	//! Not initialized, default constructor
 	DUCKDB_API PreservedError();
 	//! From std::exception
-	PreservedError(const std::exception &ex) : PreservedError(ex.what()) {
-	}
+	DUCKDB_API PreservedError(const std::exception &ex); // allow implicit construction from exception
 	//! From a raw string and exception type
 	DUCKDB_API explicit PreservedError(ExceptionType type, const string &raw_message);
 	//! From a raw string
 	DUCKDB_API explicit PreservedError(const string &raw_message);
-	//! From an Exception
-	DUCKDB_API PreservedError(const Exception &exception);
 
 public:
 	//! Throw the error
@@ -43,6 +40,9 @@ public:
 
 	inline bool HasError() const {
 		return initialized;
+	}
+	const unordered_map<string, string> &ExtraInfo() const {
+		return extra_info;
 	}
 
 private:

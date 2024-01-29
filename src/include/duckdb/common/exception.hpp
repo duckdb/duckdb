@@ -85,18 +85,13 @@ enum class ExceptionType {
 	AUTOLOAD = 40           // Thrown when an extension is used but not loaded
 };
 
-class Exception : public std::exception {
+class Exception : public std::runtime_error {
 public:
 	DUCKDB_API Exception(ExceptionType exception_type, const string &message);
 	DUCKDB_API Exception(ExceptionType exception_type, const string &message,
 	                     const unordered_map<string, string> &extra_info);
 
-	ExceptionType type;
-
 public:
-	DUCKDB_API const char *what() const noexcept override;
-	DUCKDB_API const string &RawMessage() const;
-
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
 	DUCKDB_API static ExceptionType StringToExceptionType(const string &type);
 	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message);
@@ -132,17 +127,6 @@ public:
 	static string FormatStackTrace(string message = "") {
 		return (message + "\n" + GetStackTrace());
 	}
-
-	const unordered_map<string, string> &GetExtraInfo() const {
-		return extra_info;
-	}
-
-protected:
-	unordered_map<string, string> extra_info;
-
-private:
-	string exception_message_;
-	string raw_message_;
 };
 
 //===--------------------------------------------------------------------===//

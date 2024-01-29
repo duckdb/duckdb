@@ -93,13 +93,11 @@ bool PreparedStatementVerifier::Run(
 			execute_result->ThrowError("Failed execute during verify: ");
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(execute_result));
-	} catch (const Exception &ex) {
-		if (ex.type != ExceptionType::PARAMETER_NOT_ALLOWED) {
-			materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
+	} catch (const std::exception &ex) {
+		PreservedError error(ex);
+		if (error.Type() != ExceptionType::PARAMETER_NOT_ALLOWED) {
+			materialized_result = make_uniq<MaterializedQueryResult>(std::move(error));
 		}
-		failed = true;
-	} catch (std::exception &ex) {
-		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 		failed = true;
 	}
 	run(string(), std::move(dealloc_statement));

@@ -10,33 +10,31 @@ namespace duckdb {
 PreservedError::PreservedError() : initialized(false), type(ExceptionType::INVALID) {
 }
 
-PreservedError::PreservedError(const Exception &exception)
-    : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.what())) {
-}
+PreservedError::PreservedError(const std::exception &ex) :
+	PreservedError(ex.what()) {}
 
 PreservedError::PreservedError(ExceptionType type, const string &message)
     : initialized(true), type(type), raw_message(SanitizeErrorMessage(message)) {
 }
 
-PreservedError::PreservedError(const string &message) : PreservedError(ExceptionType::INVALID, message) {
-	// Given a message in the form: 	xxxxx Error: yyyyy
-	// Try to match xxxxxxx with known error so to potentially reconstruct the original error type
-	auto position_semicolon = raw_message.find(':');
-	if (position_semicolon == std::string::npos) {
-		// Semicolon not found, bail out
+PreservedError::PreservedError(const string &message)
+	: initialized(true), type(ExceptionType::INVALID), raw_message(string()) {
+
+	// parse the constructed JSON
+	if (message.empty() || message[0] != '{') {
+		// not JSON! Use the message as a raw Exception message and leave type as uninitialized
+		raw_message = message;
 		return;
-	}
-	if (position_semicolon + 2 >= raw_message.size()) {
-		// Not enough characters afterward, bail out
-		return;
-	}
-	string err = raw_message.substr(0, position_semicolon);
-	string msg = raw_message.substr(position_semicolon + 2);
-	if (err.size() > 6 && err.substr(err.size() - 6) == " Error" && !msg.empty()) {
-		ExceptionType new_type = Exception::StringToExceptionType(err.substr(0, err.size() - 6));
-		if (new_type != type) {
-			type = new_type;
-			raw_message = msg;
+	} else {
+		auto info = StringUtil::ParseJSONMap(message);
+		for(auto &entry : info) {
+			if (entry.first == "exception_type") {
+				type = Exception::StringToExceptionType(entry.second);
+			} else if (entry.first == "exception_message") {
+				raw_message = SanitizeErrorMessage(entry.second);
+			} else {
+				extra_info[entry.first] = entry.second;
+			}
 		}
 	}
 }

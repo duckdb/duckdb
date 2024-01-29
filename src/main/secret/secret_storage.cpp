@@ -182,10 +182,13 @@ void LocalFileSecretStorage::RemoveSecret(CatalogTransaction transaction, const 
 	persistent_secrets.erase(secret);
 	try {
 		fs.RemoveFile(file);
-	} catch (IOException &e) {
-		throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
-		                  "instance. (original error: '%s')",
-		                  file, e.RawMessage());
+	} catch (std::exception &ex) {
+		PreservedError error(ex);
+		if (error.Type() == ExceptionType::IO) {
+			throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
+							  "instance. (original error: '%s')",
+							  file, error.RawMessage());
+		}
 	}
 }
 

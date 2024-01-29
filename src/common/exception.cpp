@@ -16,23 +16,24 @@
 namespace duckdb {
 
 Exception::Exception(ExceptionType exception_type, const string &message)
-    : std::exception(), type(exception_type), raw_message_(message) {
-	exception_message_ = ExceptionTypeToString(exception_type) + " Error: " + message;
+    : std::runtime_error(ToJSON(exception_type, message)) {
 }
 
 Exception::Exception(ExceptionType exception_type, const string &message,
                      const unordered_map<string, string> &extra_info)
-    : Exception(exception_type, message) {
-	this->extra_info = extra_info;
+    : std::runtime_error(ToJSON(exception_type, message, extra_info)) {
 }
 
-const char *Exception::what() const noexcept {
-	return exception_message_.c_str();
+
+string Exception::ToJSON(ExceptionType type, const string &message) {
+	unordered_map<string, string> extra_info;
+	return ToJSON(type, message, extra_info);
 }
 
-const string &Exception::RawMessage() const {
-	return raw_message_;
+string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
+	return StringUtil::ToJSONMap(type, message, extra_info);
 }
+
 
 bool Exception::UncaughtException() {
 #if __cplusplus >= 201703L
@@ -333,7 +334,7 @@ MissingExtensionException::MissingExtensionException(const string &msg)
 AutoloadException::AutoloadException(const string &extension_name, Exception &e)
     : Exception(ExceptionType::AUTOLOAD,
                 "An error occurred while trying to automatically install the required extension '" + extension_name +
-                    "':\n" + e.RawMessage()),
+                    "':\n" + PreservedError(e).RawMessage()),
       wrapped_exception(e) {
 }
 
