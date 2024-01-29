@@ -124,6 +124,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 		if (!filter_binding->left_set || !filter_binding->right_set) {
 			continue;
 		}
+
 		join_type = filter_binding->join_type;
 		// prefer joining on semi and anti joins as they have a higher chance of being more
 		// selective

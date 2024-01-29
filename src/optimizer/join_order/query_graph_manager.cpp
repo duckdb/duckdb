@@ -35,6 +35,8 @@ bool QueryGraphManager::Build(LogicalOperator &op) {
 	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
 	// Create the query_graph hyper edges
 	CreateHyperGraphEdges();
+	// DELETE BELOW
+	relation_manager.PrintRelationStats();
 	return true;
 }
 
