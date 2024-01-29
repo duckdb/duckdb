@@ -4,10 +4,8 @@
 
 namespace duckdb {
 
-
 void BlockingSample::Serialize(Serializer &serializer) const {
 }
-
 
 unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
 	return nullptr;

@@ -4,7 +4,6 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 
-
 namespace duckdb {
 
 void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTableData &data) {
