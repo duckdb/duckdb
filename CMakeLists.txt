@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 
-find_package (Python3)
+if(NOT CLANG_TIDY)
+  find_package(Python3)
+endif()
 
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
@@ -662,7 +664,7 @@ else()
   set(LOCAL_EXTENSION_REPO_DIR ${LOCAL_EXTENSION_REPO})
 endif()
 
-if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
+if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
   if (NOT Python3_FOUND)
     MESSAGE(STATUS "Could not find python3, create extension directory step will be skipped")
   else()
@@ -679,7 +681,7 @@ endif()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
-  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY})
+  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
     add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
   endif()
   # all parameters after output_directory
