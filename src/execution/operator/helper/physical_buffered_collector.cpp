@@ -14,6 +14,7 @@ PhysicalBufferedCollector::PhysicalBufferedCollector(PreparedStatementData &data
 class BufferedCollectorGlobalState : public GlobalSinkState {
 public:
 	mutex glock;
+	//! This is weak to avoid creating a cyclical reference
 	weak_ptr<ClientContext> context;
 	shared_ptr<BufferedData> buffered_data;
 };

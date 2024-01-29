@@ -80,6 +80,7 @@ public:
 
 protected:
 	Type type;
+	//! This is weak to avoid a cyclical reference
 	weak_ptr<ClientContext> context;
 	//! Protect against populate/fetch race condition
 	mutex glock;
