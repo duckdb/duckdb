@@ -286,9 +286,11 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	for (auto &match : subgraphs) {
 		denom *= match.denom;
 	}
-	// can happen if a table has cardinality 0, or a tdom is set to 0
-	if (denom == 0) {
-		denom = 1;
+	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
+	if (subgraphs.size() == 0 || denom == 0) {
+		// denominator is 1 and numerators are a cross product of cardinalities.
+		unordered_set<idx_t> numerator_relations(actual_set);
+		return DenomInfo(numerator_relations, 1, 1);
 	}
 	return DenomInfo(subgraphs.at(0).numerator_relations, subgraphs.at(0).numerator_filter_strength,
 	                 subgraphs.at(0).denom);

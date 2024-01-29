@@ -40,7 +40,7 @@ struct GenerateJoinRelation {
 //! but is also eventually transformed into a query edge.
 struct FilterInfo {
 	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index,
-	           JoinType join_type = JoinType::INVALID)
+	           JoinType join_type = JoinType::CROSS)
 	    : filter(std::move(filter)), set(set), filter_index(filter_index), join_type(join_type) {
 	}
 
