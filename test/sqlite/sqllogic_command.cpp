@@ -89,7 +89,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
-	// return connection->Query(context.sql_query);
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
 	if (result->type == QueryResultType::STREAM_RESULT) {
@@ -99,6 +99,9 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	}
+#else
+	return connection->Query(context.sql_query);
+#endif
 }
 
 void Command::Execute(ExecuteContext &context) const {
