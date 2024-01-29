@@ -199,8 +199,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			found_match = false;
 			vector<Subgraph2Denominator>::iterator it;
 			for (it = subgraphs.begin(); it != subgraphs.end(); it++) {
-				auto left_in = it->relations.count(filter->left_binding.table_index);
-				auto right_in = it->relations.count(filter->right_binding.table_index);
+				auto left_in = it->relations.count(filter->left_binding.table_index) > 0;
+				auto right_in = it->relations.count(filter->right_binding.table_index) > 0;
 				if (left_in && right_in) {
 					// if both left and right bindings are in the subgraph, continue.
 					// This means another filter is connecting relations already in the
@@ -223,11 +223,12 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					find_table = filter->left_binding.table_index;
 				}
 				auto next_subgraph = it + 1;
-				if (filter->join_type == JoinType::INNER) {
+				if (filter->join_type == JoinType::INNER || filter->join_type == JoinType::CROSS) {
 					// iterate through other subgraphs and merge.
 					FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
 					// Now insert the right binding and update denominator with the
 					// tdom of the filter
+					// insert find_table again in case there was no other subgraph.
 					it->relations.insert(find_table);
 					it->numerator_relations.insert(find_table);
 					UpdateDenom(*it, relation_2_tdom, filter);
@@ -235,13 +236,18 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					// don't insert relations into the numerator_relations.
 					auto left = it;
 					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
-					if (right_in) {
-						std::swap(left, right);
+					if (right != subgraphs.end()) {
+						if (right_in) {
+							std::swap(left, right);
+						}
+						for (auto &relation : right->relations) {
+							left->relations.insert(relation);
+						}
+						right->relations.clear();
+					} else {
+						D_ASSERT(!right_in);
+						left->relations.insert(find_table);
 					}
-					for (auto &relation : right->relations) {
-						left->relations.insert(relation);
-					}
-					right->relations.clear();
 					left->numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 				} else {
 					throw InternalException("whaat");
