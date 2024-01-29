@@ -81,9 +81,6 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	auto chunk = std::move(buffered_chunks.front());
 	buffered_chunks.pop();
 
-	// auto count = buffered_count.load();
-	// Printer::Print(StringUtil::Format("Buffer capacity: %d", count));
-
 	if (chunk) {
 		buffered_count -= chunk->size();
 	}
@@ -93,7 +90,6 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 void SimpleBufferedData::Append(unique_ptr<DataChunk> chunk) {
 	unique_lock<mutex> lock(glock);
 	buffered_count += chunk->size();
-	// printf("buffered_count: %llu\n", buffered_count.load());
 	buffered_chunks.push(std::move(chunk));
 }
 
