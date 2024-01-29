@@ -55,7 +55,7 @@ public:
 			return false;
 		}
 		auto c = context.lock();
-		return c != nullptr;
+		return c == nullptr;
 	}
 	void Close() {
 		context.reset();
