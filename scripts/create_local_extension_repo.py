@@ -9,9 +9,9 @@ import subprocess
 import glob
 import shutil
 
-if len(sys.argv) != 5:
+if len(sys.argv) != 6:
     print(
-        "Usage: scripts/create_local_extension_repo.py <duckdb_version> <duckdb_platform_out> <path/to/duckdb/build> <path/to/local_repo>"
+        "Usage: scripts/create_local_extension_repo.py <duckdb_version> <duckdb_platform_out> <path/to/duckdb/build> <path/to/local_repo> <postfix>"
     )
     exit(1)
 
@@ -19,6 +19,7 @@ duckdb_version = sys.argv[1]
 duckdb_platform_out = sys.argv[2]
 extension_path = sys.argv[3]
 dst_path = sys.argv[4]
+postfix = sys.argv[5]
 
 if os.name == 'nt':
     duckdb_platform_out = duckdb_platform_out.replace("/", "\\")
@@ -36,7 +37,7 @@ if not os.path.exists(dest_path):
     os.makedirs(dest_path)
 
 # Now copy over the extensions to the correct path
-glob_string = os.path.join(extension_path, 'extension', '*', '*.duckdb_extension')
+glob_string = os.path.join(extension_path, 'extension', '*', '*.' + postfix)
 
 print("Copying extensions into repository:")
 for file in glob.glob(glob_string):
