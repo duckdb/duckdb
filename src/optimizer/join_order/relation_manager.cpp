@@ -328,7 +328,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
-			D_ASSERT(JoinIsReorderable(op));
+			D_ASSERT(JoinIsReorderable(join));
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {
 				auto comparison =
@@ -340,6 +340,9 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info =
 					    make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
+					if (filter_info->join_type == JoinType::CROSS) {
+						filter_info->join_type = JoinType::INNER;
+					}
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}

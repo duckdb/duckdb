@@ -132,6 +132,9 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 			break;
 		}
 	}
+	if (join_type == JoinType::CROSS) {
+		auto wat = "sdisdf";
+	}
 	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right, join_type);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);

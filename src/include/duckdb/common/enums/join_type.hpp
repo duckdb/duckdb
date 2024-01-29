@@ -31,7 +31,7 @@ enum class JoinType : uint8_t {
 	                 // so that the build side can be the smaller table
 	RIGHT_ANTI = 10, // RIGHT ANTI join is created by the optimizer when the children of an anti join need to be
 	                 // switched so that the build side can be the smaller table
-	CROSS = 10
+	CROSS = 11
 };
 
 //! True if join is left or full outer join
