@@ -48,10 +48,10 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 statement ok
 CHECKPOINT;
 
-query I
-select total_blocks<10 from pragma_database_size();
-----
-true
+# ensure that the expected total storage size is the same as in the first iteration of the loop
+
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM integers
