@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-ExecutorTask::ExecutorTask(Executor &executor_p) : Task(TaskType::EXECUTOR), executor(executor_p) {
+ExecutorTask::ExecutorTask(Executor &executor_p) : Task(), executor(executor_p) {
 }
 
 ExecutorTask::ExecutorTask(ClientContext &context) : ExecutorTask(Executor::Get(context)) {

@@ -21,8 +21,6 @@ enum class TaskExecutionMode : uint8_t { PROCESS_ALL, PROCESS_PARTIAL };
 
 enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TASK_ERROR, TASK_BLOCKED };
 
-enum class TaskType : uint8_t { EXECUTOR, CHECKPOINTER };
-
 //! Generic parallel task
 class Task : public std::enable_shared_from_this<Task> {
 public:
@@ -30,10 +28,6 @@ public:
 	}
 
 public:
-	TaskType Type() const {
-		return type;
-	}
-
 	//! Execute the task in the specified execution mode
 	//! If mode is PROCESS_ALL, Execute should always finish processing and return TASK_FINISHED
 	//! If mode is PROCESS_PARTIAL, Execute can return TASK_NOT_FINISHED, in which case Execute will be called again
@@ -56,13 +50,6 @@ public:
 	virtual bool TaskBlockedOnResult() const {
 		return false;
 	}
-
-protected:
-	Task(TaskType type) : type(type) {
-	}
-
-private:
-	TaskType type;
 };
 
 //! Execute a task within an executor, including exception handling
