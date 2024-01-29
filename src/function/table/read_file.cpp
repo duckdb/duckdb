@@ -25,7 +25,7 @@ static unique_ptr<FunctionData> ReadFilesBind(ClientContext &context, TableFunct
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "arbitrary", FileGlobOptions::ALLOW_EMPTY);
 
 	return_types.push_back(LogicalType::VARCHAR);
-	names.push_back("file");
+	names.push_back("filename");
 	return_types.push_back(LogicalType::BLOB);
 	names.push_back("data");
 	return_types.push_back(LogicalType::BIGINT);
@@ -177,16 +177,15 @@ static unique_ptr<NodeStatistics> ReadFilesCardinality(ClientContext &context, c
 //------------------------------------------------------------------------------
 // Register
 //------------------------------------------------------------------------------
-TableFunction ReadFilesFunction::GetFunction() {
-	TableFunction read_files("read_files", {LogicalType::VARCHAR}, ReadFilesExecute, ReadFilesBind,
-	                         ReadFilesInitGlobal);
+TableFunction ReadFileFunction::GetFunction() {
+	TableFunction read_files("read_file", {LogicalType::VARCHAR}, ReadFilesExecute, ReadFilesBind, ReadFilesInitGlobal);
 	read_files.table_scan_progress = ReadFilesProgress;
 	read_files.cardinality = ReadFilesCardinality;
 	read_files.projection_pushdown = true;
 	return read_files;
 }
 
-void ReadFilesFunction::RegisterFunction(BuiltinFunctions &set) {
+void ReadFileFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(MultiFileReader::CreateFunctionSet(GetFunction()));
 }
 

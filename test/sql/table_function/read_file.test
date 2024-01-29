@@ -1,15 +1,15 @@
-# name: test/sql/table_function/read_files.test
+# name: test/sql/table_function/read_file.test
 # description: Test read_files function
 # group: [table_function]
 
 query IIII
-SELECT parse_path(file), size, file_system, data FROM read_files('test/sql/table_function/files/four.blob');
+SELECT parse_path(filename), size, file_system, data FROM read_file('test/sql/table_function/files/four.blob');
 ----
 [test, sql, table_function, files, four.blob]	178	LocalFileSystem	PK\x03\x04\x0A\x00\x00\x00\x00\x00\xACi=X\x14t\xCE\xC7\x0A\x00\x00\x00\x0A\x00\x00\x00\x09\x00\x1C\x00four.blobUT\x09\x00\x03c\x96\xB7ee\x96\xB7eux\x0B\x00\x01\x04\xF5\x01\x00\x00\x04\x14\x00\x00\x00F\xC3\xB6\xC3\xB6 B\xC3\xA4rPK\x01\x02\x1E\x03\x0A\x00\x00\x00\x00\x00\xACi=X\x14t\xCE\xC7\x0A\x00\x00\x00\x0A\x00\x00\x00\x09\x00\x18\x00\x00\x00\x00\x00\x01\x00\x00\x00\xA4\x81\x00\x00\x00\x00four.blobUT\x05\x00\x03c\x96\xB7eux\x0B\x00\x01\x04\xF5\x01\x00\x00\x04\x14\x00\x00\x00PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00O\x00\x00\x00M\x00\x00\x00\x00\x00
 
 
 query III
-SELECT size, parse_path(file), decode(data)  FROM read_files('test/sql/table_function/files/*.txt') ORDER BY file, size;
+SELECT size, parse_path(filename), decode(data)  FROM read_file('test/sql/table_function/files/*.txt') ORDER BY filename, size;
 ----
 12	[test, sql, table_function, files, one.txt]	Hello World!
 2	[test, sql, table_function, files, three.txt]	42
@@ -17,7 +17,7 @@ SELECT size, parse_path(file), decode(data)  FROM read_files('test/sql/table_fun
 
 # Test that the last_modified timestamp is reasonably correct
 query I
-SELECT last_modified > '2024-01-01' AND last_modified < '2500-01-01' FROM read_files('test/sql/table_function/files/*');
+SELECT last_modified > '2024-01-01' AND last_modified < '2500-01-01' FROM read_file('test/sql/table_function/files/*');
 ----
 true
 true

@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-struct ReadFilesFunction {
+struct ReadFileFunction {
 	static TableFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
