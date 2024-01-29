@@ -443,7 +443,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		return query_result;
 	} catch (std::exception &ex) {
 		auto error = PreservedError(ex);
-		if (Exception::InvalidatesTransaction(error.Type())) {
+		if (!Exception::InvalidatesTransaction(error.Type())) {
 			invalidate_transaction = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
 			// fatal exceptions invalidate the entire database

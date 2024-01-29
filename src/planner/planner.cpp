@@ -71,6 +71,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			if (!this->plan) {
 				throw;
 			}
+		} else {
+			throw;
 		}
 	}
 	this->properties = binder->properties;
