@@ -223,7 +223,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
 		auto cmdline = cmdline_file->ReadLine();
 		process_name = basename(const_cast<char *>(cmdline.c_str()));
-	} catch (Exception &) {
+	} catch (std::exception &) {
 		// ignore
 	}
 
@@ -246,7 +246,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 		if (pw) {
 			process_owner = pw->pw_name;
 		}
-	} catch (Exception &) {
+	} catch (std::exception &) {
 		// ignore
 	}
 

@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-CatalogException::CatalogException(const string &msg) : StandardException(ExceptionType::CATALOG, msg) {
+CatalogException::CatalogException(const string &msg) : Exception(ExceptionType::CATALOG, msg) {
 }
 
 CatalogException::CatalogException(const string &msg, const unordered_map<string, string> &extra_info)
-    : StandardException(ExceptionType::CATALOG, msg, extra_info) {
+    : Exception(ExceptionType::CATALOG, msg, extra_info) {
 }
 
 CatalogException CatalogException::MissingEntry(CatalogType type, const string &name, const string &suggestion,

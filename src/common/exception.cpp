@@ -41,6 +41,30 @@ bool Exception::UncaughtException() {
 #endif
 }
 
+bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
+	switch(exception_type) {
+	case ExceptionType::BINDER:
+	case ExceptionType::CATALOG:
+	case ExceptionType::CONNECTION:
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+	case ExceptionType::PARSER:
+	case ExceptionType::PERMISSION:
+		return false;
+	default:
+		return true;
+	}
+}
+
+bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
+	switch(exception_type) {
+	case ExceptionType::INTERNAL:
+	case ExceptionType::FATAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
 string Exception::GetStackTrace(int max_depth) {
 #ifdef DUCKDB_DEBUG_STACKTRACE
 	string result;
@@ -213,15 +237,6 @@ unordered_map<string, string> Exception::InitializeExtraInfo(const string &subty
 	return result;
 }
 
-StandardException::StandardException(ExceptionType exception_type, const string &message)
-    : Exception(exception_type, message) {
-}
-
-StandardException::StandardException(ExceptionType exception_type, const string &message,
-                                     const unordered_map<string, string> &extra_info)
-    : Exception(exception_type, message, extra_info) {
-}
-
 CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
@@ -304,10 +319,10 @@ NotImplementedException::NotImplementedException(const string &msg) : Exception(
 OutOfRangeException::OutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
-ConnectionException::ConnectionException(const string &msg) : StandardException(ExceptionType::CONNECTION, msg) {
+ConnectionException::ConnectionException(const string &msg) : Exception(ExceptionType::CONNECTION, msg) {
 }
 
-PermissionException::PermissionException(const string &msg) : StandardException(ExceptionType::PERMISSION, msg) {
+PermissionException::PermissionException(const string &msg) : Exception(ExceptionType::PERMISSION, msg) {
 }
 
 SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {
@@ -319,7 +334,7 @@ ConstraintException::ConstraintException(const string &msg) : Exception(Exceptio
 DependencyException::DependencyException(const string &msg) : Exception(ExceptionType::DEPENDENCY, msg) {
 }
 
-BinderException::BinderException(const string &msg) : StandardException(ExceptionType::BINDER, msg) {
+BinderException::BinderException(const string &msg) : Exception(ExceptionType::BINDER, msg) {
 }
 
 IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
@@ -329,11 +344,10 @@ MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
 }
 
-AutoloadException::AutoloadException(const string &extension_name, Exception &e)
+AutoloadException::AutoloadException(const string &extension_name, const string &message)
     : Exception(ExceptionType::AUTOLOAD,
                 "An error occurred while trying to automatically install the required extension '" + extension_name +
-                    "':\n" + PreservedError(e).RawMessage()),
-      wrapped_exception(e) {
+                    "':\n" + message) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
@@ -348,7 +362,7 @@ InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
 }
 
-InternalException::InternalException(const string &msg) : FatalException(ExceptionType::INTERNAL, msg) {
+InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
 #ifdef DUCKDB_CRASH_ON_ASSERT
 	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg);
 	abort();
@@ -362,7 +376,7 @@ OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(Except
 }
 
 ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)
-    : StandardException(ExceptionType::PARAMETER_NOT_ALLOWED, msg) {
+    : Exception(ExceptionType::PARAMETER_NOT_ALLOWED, msg) {
 }
 
 ParameterNotResolvedException::ParameterNotResolvedException()

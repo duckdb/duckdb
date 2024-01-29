@@ -133,8 +133,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		try {
 			RunStatementInternal(lock, explain_q, std::move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
+			PreservedError error(ex);
 			interrupted = false;
-			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
+			return PreservedError("EXPLAIN failed but query did not (" + error.RawMessage() + ")");
 		} // LCOV_EXCL_STOP
 
 #ifdef DUCKDB_VERIFY_BOX_RENDERER

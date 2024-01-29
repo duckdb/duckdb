@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-class BinderException : public StandardException {
+class BinderException : public Exception {
 public:
 	DUCKDB_API explicit BinderException(const string &msg);
 

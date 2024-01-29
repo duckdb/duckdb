@@ -12,8 +12,6 @@ void PipelineEvent::Schedule() {
 	try {
 		pipeline->Schedule(event);
 		D_ASSERT(total_tasks > 0);
-	} catch (Exception &ex) {
-		executor.PushError(PreservedError(ex));
 	} catch (std::exception &ex) {
 		executor.PushError(PreservedError(ex));
 	} catch (...) { // LCOV_EXCL_START

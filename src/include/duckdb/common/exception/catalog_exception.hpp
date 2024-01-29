@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-class CatalogException : public StandardException {
+class CatalogException : public Exception {
 public:
 	DUCKDB_API explicit CatalogException(const string &msg);
 	DUCKDB_API explicit CatalogException(const string &msg, const unordered_map<string, string> &extra_info);

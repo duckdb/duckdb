@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class ParserException : public StandardException {
+class ParserException : public Exception {
 public:
 	DUCKDB_API explicit ParserException(const string &msg);
 

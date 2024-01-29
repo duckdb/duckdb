@@ -26,8 +26,6 @@ void ExecutorTask::Reschedule() {
 TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
 	try {
 		return ExecuteTask(mode);
-	} catch (Exception &ex) {
-		executor.PushError(PreservedError(ex));
 	} catch (std::exception &ex) {
 		executor.PushError(PreservedError(ex));
 	} catch (...) { // LCOV_EXCL_START

@@ -667,8 +667,6 @@ public:
 			ExecuteTask();
 			checkpoint_state.FinishTask();
 			return TaskExecutionResult::TASK_FINISHED;
-		} catch (Exception &ex) {
-			checkpoint_state.PushError(PreservedError(ex));
 		} catch (std::exception &ex) {
 			checkpoint_state.PushError(PreservedError(ex));
 		} catch (...) { // LCOV_EXCL_START

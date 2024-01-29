@@ -112,6 +112,9 @@ public:
 	DUCKDB_API static string ToJSON(ExceptionType type, const string &message,
 	                                const unordered_map<string, string> &extra_info);
 
+	DUCKDB_API static bool InvalidatesTransaction(ExceptionType exception_type);
+	DUCKDB_API static bool InvalidatesDatabase(ExceptionType exception_type);
+
 	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
@@ -132,15 +135,7 @@ public:
 //===--------------------------------------------------------------------===//
 // Exception derived classes
 //===--------------------------------------------------------------------===//
-//! Exceptions that are StandardExceptions do NOT invalidate the current transaction when thrown
-class StandardException : public Exception {
-public:
-	DUCKDB_API StandardException(ExceptionType exception_type, const string &message);
-	DUCKDB_API StandardException(ExceptionType exception_type, const string &message,
-	                             const unordered_map<string, string> &extra_info);
-};
-
-class ConnectionException : public StandardException {
+class ConnectionException : public Exception {
 public:
 	DUCKDB_API explicit ConnectionException(const string &msg);
 
@@ -150,7 +145,7 @@ public:
 	}
 };
 
-class PermissionException : public StandardException {
+class PermissionException : public Exception {
 public:
 	DUCKDB_API explicit PermissionException(const string &msg);
 
@@ -242,15 +237,7 @@ public:
 
 class AutoloadException : public Exception {
 public:
-	DUCKDB_API explicit AutoloadException(const string &extension_name, Exception &e);
-
-	template <typename... Args>
-	explicit AutoloadException(const string &extension_name, Exception &e, Args... params)
-	    : AutoloadException(ConstructMessage(extension_name, e, params...)) {
-	}
-
-protected:
-	Exception &wrapped_exception;
+	DUCKDB_API explicit AutoloadException(const string &extension_name, const string &message);
 };
 
 class SerializationException : public Exception {
@@ -294,7 +281,7 @@ protected:
 	}
 };
 
-class InternalException : public FatalException {
+class InternalException : public Exception {
 public:
 	DUCKDB_API explicit InternalException(const string &msg);
 
@@ -348,7 +335,7 @@ public:
 	    const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
-class ParameterNotAllowedException : public StandardException {
+class ParameterNotAllowedException : public Exception {
 public:
 	DUCKDB_API explicit ParameterNotAllowedException(const string &msg);
 

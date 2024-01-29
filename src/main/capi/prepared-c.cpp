@@ -21,6 +21,7 @@ using duckdb::StringUtil;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
 using duckdb::Value;
+using duckdb::PreservedError;
 
 idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
                                 duckdb_extracted_statements *out_extracted_statements) {
@@ -31,8 +32,9 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	try {
 		wrapper->statements = conn->ExtractStatements(query);
-	} catch (const duckdb::ParserException &e) {
-		wrapper->error = e.what();
+	} catch (const std::exception &ex) {
+		PreservedError error(ex);
+		wrapper->error = error.RawMessage();
 	}
 
 	*out_extracted_statements = (duckdb_extracted_statements)wrapper;

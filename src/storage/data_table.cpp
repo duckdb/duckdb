@@ -298,8 +298,9 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 	} catch (InternalException &ex) {
 		throw;
 	} catch (std::exception &ex) {
+		PreservedError error(ex);
 		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
-		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
+		                          col.Type().ToString(), col.GeneratedExpression().ToString(), error.RawMessage());
 	}
 }
 
@@ -310,7 +311,8 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
-		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, ex.what());
+		PreservedError error(ex);
+		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, error.RawMessage());
 	} catch (...) { // LCOV_EXCL_START
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
 	} // LCOV_EXCL_STOP
@@ -889,8 +891,6 @@ PreservedError DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &ch
 	indexes.Scan([&](Index &index) {
 		try {
 			error = index.Append(chunk, row_identifiers);
-		} catch (Exception &ex) {
-			error = PreservedError(ex);
 		} catch (std::exception &ex) {
 			error = PreservedError(ex);
 		}

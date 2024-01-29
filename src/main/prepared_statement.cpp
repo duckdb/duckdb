@@ -105,7 +105,7 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 
 	try {
 		VerifyParameters(named_values, named_param_map);
-	} catch (const Exception &ex) {
+	} catch (const std::exception &ex) {
 		return make_uniq<PendingQueryResult>(PreservedError(ex));
 	}
 

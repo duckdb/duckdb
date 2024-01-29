@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
+ParserException::ParserException(const string &msg) : Exception(ExceptionType::PARSER, msg) {
 }
 
 ParserException ParserException::SyntaxError(const string &query, const string &error_message,

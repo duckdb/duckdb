@@ -11,6 +11,7 @@ using duckdb::interval_t;
 using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
+using duckdb::PreservedError;
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {
@@ -27,7 +28,8 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
 	try {
 		wrapper->appender = duckdb::make_uniq<Appender>(*conn, schema, table);
 	} catch (std::exception &ex) {
-		wrapper->error = ex.what();
+		PreservedError error(ex);
+		wrapper->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		wrapper->error = "Unknown create appender error";
@@ -61,7 +63,8 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	try {
 		function(*wrapper->appender);
 	} catch (std::exception &ex) {
-		wrapper->error = ex.what();
+		PreservedError error(ex);
+		wrapper->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		wrapper->error = "Unknown error";
@@ -98,7 +101,8 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	try {
 		appender_instance->appender->Append<T>(value);
 	} catch (std::exception &ex) {
-		appender_instance->error = ex.what();
+		PreservedError error(ex);
+		appender_instance->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) {
 		return DuckDBError;
