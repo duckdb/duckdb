@@ -5,6 +5,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/function/table/files.hpp"
 
 namespace duckdb {
 
