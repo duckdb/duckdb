@@ -69,7 +69,7 @@ public:
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
 
-	//! Apply any known extension aliases
+	//! Apply any known extension aliases, return the lowercase name
 	static string ApplyExtensionAlias(string extension_name);
 
 	static string GetExtensionName(const string &extension);

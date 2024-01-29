@@ -31,7 +31,7 @@ string ExtensionHelper::ApplyExtensionAlias(string extension_name) {
 			return internal_aliases[index].extension;
 		}
 	}
-	return extension_name;
+	return lname;
 }
 
 } // namespace duckdb
