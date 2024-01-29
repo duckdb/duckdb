@@ -2163,4 +2163,30 @@ typedef struct PGUseStmt {
 } PGUseStmt;
 
 
+/* ----------------------
+ *		Create Secret Statement
+ * ----------------------
+ */
+typedef struct PGCreateSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;                 /* the optional storage type of the secret */
+	PGList *scope;                        /* optionally the scopes of the secret */
+	PGList *options;                      /* Secret options */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
+} PGCreateSecretStmt;
+
+
+/* ----------------------
+ *		Drop Secret Statement
+ * ----------------------
+ */
+typedef struct PGDropSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;
+	bool missing_ok;
+} PGDropSecretStmt;
 }

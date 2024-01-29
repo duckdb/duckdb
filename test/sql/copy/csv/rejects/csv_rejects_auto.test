@@ -50,15 +50,13 @@ SELECT * FROM read_csv_auto(
 ----
 REJECTS_LIMIT: cannot be negative
 
-foreach PARALLEL true false
 
 query III
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*) FROM read_csv_auto(
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=3000,
     rejects_table='csv_rejects_table',
-    ignore_errors=true,
-	parallel=${PARALLEL});
+    ignore_errors=true);
 ----
 VARCHAR	VARCHAR	11048
 
@@ -71,8 +69,7 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=1,
     rejects_table='csv_rejects_table',
-    ignore_errors=true,
-	parallel=${PARALLEL});
+    ignore_errors=true);
 ----
 BIGINT	VARCHAR	11044	11044	2
 
@@ -96,8 +93,7 @@ SELECT SUM(COL1) FROM read_csv_auto(
     ignore_errors=true,
 	sample_size=1,
     rejects_table='csv_rejects_table',
-    rejects_recovery_columns=['COL2'],
-	parallel=${PARALLEL});
+    rejects_recovery_columns=['COL2']);
 ----
 5230
 
@@ -112,8 +108,7 @@ SELECT SUM(COL1) FROM read_csv_auto(
     ignore_errors=true,
 	sample_size=1,
     rejects_table='csv_rejects_table',
-    rejects_recovery_columns=['COL2'],
-	parallel=${PARALLEL});
+    rejects_recovery_columns=['COL2']);
 ----
 5418
 
@@ -128,8 +123,7 @@ SELECT SUM(COL1) FROM read_csv_auto(
     ignore_errors=true,
 	sample_size=1,
     rejects_table='csv_rejects_table',
-    rejects_recovery_columns=['COL2'],
-	parallel=${PARALLEL});
+    rejects_recovery_columns=['COL2']);
 ----
 4151
 
@@ -144,8 +138,7 @@ SELECT SUM(COL1) FROM read_csv_auto(
     ignore_errors=true,
 	sample_size=1,
     rejects_table='csv_rejects_table',
-    rejects_recovery_columns=['COL2'],
-	parallel=${PARALLEL});
+    rejects_recovery_columns=['COL2']);
 ----
 14799
 
@@ -170,8 +163,7 @@ SELECT SUM(num) FROM read_csv_auto(
 	header=true,
 	ignore_errors=true,
 	sample_size=1,
-	rejects_table='csv_rejects_table',
-	parallel=${PARALLEL});
+	rejects_table='csv_rejects_table')
 ----
 2464
 
@@ -189,7 +181,7 @@ CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
 
 statement ok
 COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half1.csv' 
-WITH (HEADER, IGNORE_ERRORS TRUE, PARALLEL ${PARALLEL}, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
+WITH (HEADER, IGNORE_ERRORS TRUE, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
 
 query I
 SELECT SUM(col1) FROM tbl1;
@@ -214,8 +206,7 @@ SELECT SUM(num) FROM read_csv_auto(
 	header=true,
 	ignore_errors=true,
 	sample_size=1,
-	rejects_table='csv_rejects_table',
-	parallel=${PARALLEL});
+	rejects_table='csv_rejects_table');
 ----
 2542
 
@@ -232,7 +223,7 @@ CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
 
 statement ok
 COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half2.csv' 
-WITH (HEADER, IGNORE_ERRORS TRUE, PARALLEL ${PARALLEL}, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
+WITH (HEADER, IGNORE_ERRORS TRUE,  SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
 
 query I
 SELECT SUM(col1) FROM tbl1;
@@ -256,7 +247,7 @@ CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
 
 statement ok
 COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half2.csv' 
-WITH (HEADER, IGNORE_ERRORS TRUE, PARALLEL ${PARALLEL}, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table', REJECTS_LIMIT 1337);
+WITH (HEADER, IGNORE_ERRORS TRUE, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table', REJECTS_LIMIT 1337);
 
 query I
 SELECT SUM(col1) FROM tbl1;
@@ -274,5 +265,3 @@ DROP TABLE csv_rejects_table;
 statement ok
 DROP TABLE tbl1;
 
-
-endloop PARALLEL

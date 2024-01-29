@@ -97,6 +97,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"sqlite_attach", "sqlite_scanner"},
     {"sqlite_scan", "sqlite_scanner"},
     {"sqlsmith", "sqlsmith"},
+    {"shapefile_meta", "spatial"},
     {"st_area", "spatial"},
     {"st_area_spheroid", "spatial"},
     {"st_asgeojson", "spatial"},
@@ -153,6 +154,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_makeenvelope", "spatial"},
     {"st_makeline", "spatial"},
     {"st_makepolygon", "spatial"},
+    {"st_makevalid", "spatial"},
     {"st_ngeometries", "spatial"},
     {"st_ninteriorrings", "spatial"},
     {"st_normalize", "spatial"},
@@ -171,9 +173,12 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_pointn", "spatial"},
     {"st_pointonsurface", "spatial"},
     {"st_polygon2dfromwkb", "spatial"},
+    {"st_quadkey", "spatial"},
     {"st_reverse", "spatial"},
     {"st_read", "spatial"},
+    {"st_read_meta", "spatial"},
     {"st_readosm", "spatial"},
+    {"st_readshp", "spatial"},
     {"st_reduceprecision", "spatial"},
     {"st_removerepeatedpoints", "spatial"},
     {"st_simplify", "spatial"},
@@ -218,6 +223,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_debug_show_queries", "postgres_scanner"},
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
+    {"pg_connection_cache", "postgres_scanner"},
     {"pg_connection_limit", "postgres_scanner"},
     {"pg_pages_per_task", "postgres_scanner"},
     {"pg_array_as_varchar", "postgres_scanner"},
@@ -276,8 +282,8 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
     {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},
-    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"r2://", "httpfs"} // , {"azure://", "azure"}
-};                                                                     // END_OF_EXTENSION_FILE_PREFIXES
+    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"gs://", "httpfs"}, {"r2://", "httpfs"} // , {"azure://", "azure"}
+}; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -291,6 +297,18 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
                                                              {".json?", "json"},
                                                              {".ndjson?", ".jsonl?"},
                                                              {".jsonl?", ".ndjson?"}}; // EXTENSION_FILE_CONTAINS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
+    {"s3", "httpfs"}, {"r2", "httpfs"}, {"gcs", "httpfs"}, {"azure", "azure"}}; // EXTENSION_SECRET_TYPES
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
+    {"s3/config", "httpfs"},        {"gcs/config", "httpfs"},           {"r2/config", "httpfs"},
+    {"s3/credential_chain", "aws"}, {"gcs/credential_chain", "aws"},    {"r2/credential_chain", "aws"},
+    {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     //    "azure",

@@ -115,10 +115,13 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <signal.h>
 #include "linenoise.h"
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
 #include <vector>
+#include "duckdb_shell_wrapper.h"
+#include "sqlite3.h"
 #ifdef __MVS__
 #include <strings.h>
 #include <sys/time.h>
@@ -129,7 +132,7 @@
 #define DISABLE_HIGHLIGHT
 #endif
 
-#define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
+#define LINENOISE_DEFAULT_HISTORY_MAX_LEN 1000
 #define LINENOISE_MAX_LINE                20480
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
@@ -138,7 +141,7 @@ static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 
 static struct termios orig_termios; /* In order to restore at exit.*/
 static int rawmode = 0;             /* For atexit() function to check if restore is needed*/
-static int mlmode = 0;              /* Multi line mode. Default is single line. */
+static int mlmode = 1;              /* Multi line mode. Default is multi line. */
 static int atexit_registered = 0;   /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
@@ -162,7 +165,7 @@ static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033
                                   {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
 static std::string bold = "\033[1m";
 static std::string underline = "\033[4m";
-static std::string keyword = "\033[32m\033[1m";
+static std::string keyword = "\033[32m";
 static std::string constant = "\033[33m";
 static std::string reset = "\033[00m";
 #endif
@@ -171,6 +174,11 @@ struct searchMatch {
 	size_t history_index;
 	size_t match_start;
 	size_t match_end;
+};
+
+struct TerminalSize {
+	int ws_col = 0;
+	int ws_row = 0;
 };
 
 /* The linenoiseState structure represents the state during line editing.
@@ -184,12 +192,16 @@ struct linenoiseState {
 	const char *prompt;                      /* Prompt to display. */
 	size_t plen;                             /* Prompt length. */
 	size_t pos;                              /* Current cursor position. */
-	size_t oldpos;                           /* Previous refresh cursor position. */
+	size_t old_cursor_rows;                  /* Previous refresh cursor position. */
 	size_t len;                              /* Current edited line length. */
-	size_t cols;                             /* Number of columns in terminal. */
+	size_t y_scroll;                         /* The y scroll position (multiline mode) */
+	TerminalSize ws;                         /* Terminal size */
 	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
 	int history_index;                       /* The history index we are currently editing. */
+	bool clear_screen;                       /* Whether we are clearing the screen */
 	bool search;                             /* Whether or not we are searching our history */
+	bool render;                             /* Whether or not to re-render */
+	bool has_more_data;                      /* Whether or not there is more data available in the buffer (copy+paste)*/
 	std::string search_buf;                  //! The search buffer
 	std::vector<searchMatch> search_matches; //! The set of search matches in our history
 	size_t search_index;                     //! The current match index
@@ -215,6 +227,7 @@ enum KEY_ACTION {
 	CTRL_T = 20,    /* Ctrl-t */
 	CTRL_U = 21,    /* Ctrl+u */
 	CTRL_W = 23,    /* Ctrl+w */
+	CTRL_Z = 26,    /* Ctrl+z */
 	ESC = 27,       /* Escape */
 	BACKSPACE = 127 /* Backspace */
 };
@@ -222,6 +235,7 @@ enum KEY_ACTION {
 static void linenoiseAtExit(void);
 int linenoiseHistoryAdd(const char *line);
 static void refreshLine(struct linenoiseState *l);
+static int hasMoreData(int fd);
 
 /* Debugging macro. */
 #if 0
@@ -243,9 +257,6 @@ FILE *lndebug_fp = NULL;
 /* Set if to use or not the multi line mode. */
 void linenoiseSetMultiLine(int ml) {
 	mlmode = ml;
-	if (ml) {
-		keyword = "\033[32m";
-	}
 }
 
 /* Return true if the terminal name is in the list of terminals we know are
@@ -281,8 +292,11 @@ static int enableRawMode(int fd) {
 	raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
 	/* output modes - disable post processing */
 	raw.c_oflag &= ~(OPOST);
+#ifndef __MVS__
 	/* control modes - set 8 bit chars */
-	raw.c_cflag |= (CS8);
+	raw.c_iflag |= IUTF8;
+#endif
+	raw.c_cflag |= CS8;
 	/* local modes - choing off, canonical off, no extended functions,
 	 * no signal chars (^Z,^C) */
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
@@ -308,72 +322,142 @@ static void disableRawMode(int fd) {
 		rawmode = 0;
 }
 
-/* Use the ESC [6n escape sequence to query the horizontal cursor position
+static int parseInt(const char *s, int *offset = nullptr) {
+	int result = 0;
+	int idx;
+	for (idx = 0; s[idx]; idx++) {
+		char c = s[idx];
+		if (c < '0' || c > '9') {
+			break;
+		}
+		result = result * 10 + c - '0';
+		if (result > 1000000) {
+			result = 1000000;
+		}
+	}
+	if (offset) {
+		*offset = idx;
+	}
+	return result;
+}
+
+static int tryParseEnv(const char *env_var) {
+	char *s;
+	s = getenv(env_var);
+	if (!s) {
+		return 0;
+	}
+	return parseInt(s);
+}
+
+/* Use the ESC [6n escape sequence to query the cursor position
  * and return it. On error -1 is returned, on success the position of the
  * cursor. */
-static int getCursorPosition(int ifd, int ofd) {
+static TerminalSize getCursorPosition(int ifd, int ofd) {
+	TerminalSize ws;
+
 	char buf[32];
-	int cols, rows;
 	unsigned int i = 0;
 
 	/* Report cursor location */
-	if (write(ofd, "\x1b[6n", 4) != 4)
-		return -1;
+	if (write(ofd, "\x1b[6n", 4) != 4) {
+		return ws;
+	}
 
 	/* Read the response: ESC [ rows ; cols R */
 	while (i < sizeof(buf) - 1) {
-		if (read(ifd, buf + i, 1) != 1)
+		if (read(ifd, buf + i, 1) != 1) {
 			break;
-		if (buf[i] == 'R')
+		}
+		if (buf[i] == 'R') {
 			break;
+		}
 		i++;
 	}
 	buf[i] = '\0';
 
 	/* Parse it. */
-	if (buf[0] != ESC || buf[1] != '[')
-		return -1;
-	if (sscanf(buf + 2, "%d;%d", &rows, &cols) != 2)
-		return -1;
-	return cols;
+	if (buf[0] != ESC || buf[1] != '[') {
+		return ws;
+	}
+	int offset = 2;
+	int new_offset;
+	ws.ws_row = parseInt(buf + offset, &new_offset);
+	offset += new_offset;
+	if (buf[offset] != ';') {
+		return ws;
+	}
+	offset++;
+	ws.ws_col = parseInt(buf + offset);
+	return ws;
+}
+
+static TerminalSize tryMeasureTerminalSize(int ifd, int ofd) {
+	/* ioctl() failed. Try to query the terminal itself. */
+	TerminalSize start, result;
+
+	/* Get the initial position so we can restore it later. */
+	start = getCursorPosition(ifd, ofd);
+	if (!start.ws_col) {
+		return result;
+	}
+
+	/* Go to bottom-right margin */
+	if (write(ofd, "\x1b[999;999f", 10) != 10) {
+		return result;
+	}
+	result = getCursorPosition(ifd, ofd);
+	if (!result.ws_col) {
+		return result;
+	}
+
+	/* Restore position. */
+	char seq[32];
+	snprintf(seq, 32, "\x1b[%d;%df", start.ws_row, start.ws_col);
+	if (write(ofd, seq, strlen(seq)) == -1) {
+		/* Can't recover... */
+	}
+	return result;
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80
  * if it fails. */
-static int getColumns(int ifd, int ofd) {
-	struct winsize ws;
+static TerminalSize getTerminalSize(int ifd, int ofd) {
+	TerminalSize result;
 
-	if (ioctl(1, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-		/* ioctl() failed. Try to query the terminal itself. */
-		int start, cols;
-
-		/* Get the initial position so we can restore it later. */
-		start = getCursorPosition(ifd, ofd);
-		if (start == -1)
-			goto failed;
-
-		/* Go to right margin and get position. */
-		if (write(ofd, "\x1b[999C", 6) != 6)
-			goto failed;
-		cols = getCursorPosition(ifd, ofd);
-		if (cols == -1)
-			goto failed;
-
-		/* Restore position. */
-		if (cols > start) {
-			char seq[32];
-			snprintf(seq, 32, "\x1b[%dD", cols - start);
-			if (write(ofd, seq, strlen(seq)) == -1) {
-				/* Can't recover... */
-			}
-		}
-		return cols;
-	} else {
-		return ws.ws_col;
+	// try ioctl first
+	{
+		struct winsize ws;
+		ioctl(1, TIOCGWINSZ, &ws);
+		result.ws_col = ws.ws_col;
+		result.ws_row = ws.ws_row;
 	}
-
-failed:
-	return 80;
+	// try ROWS and COLUMNS env variables
+	if (!result.ws_col) {
+		result.ws_col = tryParseEnv("COLUMNS");
+	}
+	if (!result.ws_row) {
+		result.ws_row = tryParseEnv("ROWS");
+	}
+	// if those fail measure the size by moving the cursor to the corner and fetching the position
+	if (!result.ws_col || !result.ws_row) {
+		TerminalSize measured_size = tryMeasureTerminalSize(ifd, ofd);
+		lndebug("measured size col %d,row %d -- ", measured_size.ws_row, measured_size.ws_col);
+		if (measured_size.ws_row) {
+			result.ws_row = measured_size.ws_row;
+		}
+		if (measured_size.ws_col) {
+			result.ws_col = measured_size.ws_col;
+		}
+	}
+	// if all else fails use defaults (80,24)
+	if (!result.ws_col) {
+		result.ws_col = 80;
+	}
+	if (!result.ws_row) {
+		result.ws_row = 24;
+	}
+	return result;
 }
 
 /* Clear the screen. Used to handle ctrl+l */
@@ -539,12 +623,12 @@ static void abFree(struct abuf *ab) {
  * to the right of the prompt. */
 void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 	char seq[64];
-	if (hintsCallback && plen + l->len < l->cols) {
+	if (hintsCallback && plen + l->len < size_t(l->ws.ws_col)) {
 		int color = -1, bold = 0;
 		char *hint = hintsCallback(l->buf, &color, &bold);
 		if (hint) {
 			int hintlen = strlen(hint);
-			int hintmaxlen = l->cols - (plen + l->len);
+			int hintmaxlen = l->ws.ws_col - (plen + l->len);
 			if (hintlen > hintmaxlen)
 				hintlen = hintmaxlen;
 			if (bold == 1 && color == -1)
@@ -868,7 +952,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	size_t render_pos = 0;
 	std::string highlight_buffer;
 
-	renderText(render_pos, buf, len, l->pos, l->cols, plen, highlight_buffer, enableHighlighting);
+	renderText(render_pos, buf, len, l->pos, l->ws.ws_col, plen, highlight_buffer, enableHighlighting);
 
 	abInit(&ab);
 	/* Cursor to left edge */
@@ -938,50 +1022,118 @@ static void refreshSearch(struct linenoiseState *l) {
 			search_prompt += "> ";
 		}
 	}
-
-	char seq[64];
-	size_t plen = linenoiseComputeRenderWidth(search_prompt.c_str(), search_prompt.size());
-	int fd = l->ofd;
-	char *buf;
-	size_t len;
-	size_t cols = l->cols;
-	struct abuf ab;
-	size_t render_pos = 0;
-	std::string highlight_buffer;
-
-	if (!no_matches) {
+	auto oldHighlighting = enableHighlighting;
+	linenoiseState clone = *l;
+	l->prompt = (char *)search_prompt.c_str();
+	l->plen = search_prompt.size();
+	if (no_matches || l->search_buf.empty()) {
+		// if there are no matches render the no_matches_text
+		l->buf = (char *)no_matches_text.c_str();
+		l->len = no_matches_text.size();
+		l->pos = 0;
+		// don't highlight the "no_matches" text
+		enableHighlighting = false;
+	} else {
 		// if there are matches render the current history item
 		auto search_match = l->search_matches[l->search_index];
 		auto history_index = search_match.history_index;
 		auto cursor_position = search_match.match_end;
-		buf = history[history_index];
-		len = strlen(history[history_index]);
-		renderText(render_pos, buf, len, cursor_position, cols, plen, highlight_buffer, enableHighlighting,
-		           &search_match);
+		l->buf = history[history_index];
+		l->len = strlen(history[history_index]);
+		l->pos = cursor_position;
 	}
+	refreshLine(l);
 
-	abInit(&ab);
-	/* Cursor to left edge */
-	snprintf(seq, 64, "\r");
-	abAppend(&ab, seq, strlen(seq));
-	/* Write the prompt and the current buffer content */
-	abAppend(&ab, search_prompt.c_str(), search_prompt.size());
-	if (no_matches) {
-		abAppend(&ab, no_matches_text.c_str(), no_matches_text.size());
-	} else {
-		abAppend(&ab, buf, len);
+	enableHighlighting = oldHighlighting;
+	l->buf = clone.buf;
+	l->len = clone.len;
+	l->pos = clone.pos;
+	l->prompt = clone.prompt;
+	l->plen = clone.plen;
+}
+
+bool isNewline(char c) {
+	return c == '\r' || c == '\n';
+}
+
+void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) {
+	if (isNewline(l->buf[cpos])) {
+		// newline! move to next line
+		rows++;
+		cols = 0;
+		cpos++;
+		if (l->buf[cpos - 1] == '\r' && cpos < l->len && l->buf[cpos] == '\n') {
+			cpos++;
+		}
+		return;
 	}
-	/* Show hits if any. */
-	refreshShowHints(&ab, l, plen);
-	/* Erase to right */
-	snprintf(seq, 64, "\x1b[0K");
-	abAppend(&ab, seq, strlen(seq));
-	/* Move cursor to original position. */
-	snprintf(seq, 64, "\r\x1b[%dC", (int)(render_pos + plen));
-	abAppend(&ab, seq, strlen(seq));
-	if (write(fd, ab.b, ab.len) == -1) {
-	} /* Can't recover from write error. */
-	abFree(&ab);
+	int sz;
+	int char_render_width;
+	if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
+		char_render_width = 1;
+		cpos++;
+	} else {
+		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
+		cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
+	}
+	if (cols + char_render_width > l->ws.ws_col) {
+		// exceeded l->cols, move to next row
+		rows++;
+		cols = char_render_width;
+	}
+	cols += char_render_width;
+}
+
+void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_row, int &out_col, int &rows,
+                         int &cols) {
+	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
+	out_row = -1;
+	out_col = 0;
+	rows = 1;
+	cols = plen;
+	size_t cpos = 0;
+	while (cpos < l->len) {
+		if (cols >= l->ws.ws_col && !isNewline(l->buf[cpos])) {
+			rows++;
+			cols = 0;
+		}
+		if (out_row < 0 && cpos >= target_pos) {
+			out_row = rows;
+			out_col = cols;
+		}
+		nextPosition(l, cpos, rows, cols);
+	}
+	if (target_pos == l->len) {
+		out_row = rows;
+		out_col = cols;
+	}
+}
+
+size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_col) {
+	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
+	int rows = 1;
+	int cols = plen;
+	size_t last_cpos = 0;
+	size_t cpos = 0;
+	while (cpos < l->len) {
+		if (cols >= l->ws.ws_col) {
+			rows++;
+			cols = 0;
+		}
+		if (rows > target_row) {
+			// we have skipped our target row - that means "target_col" was out of range for this row
+			// return the last position within the target row
+			return last_cpos;
+		}
+		if (rows == target_row) {
+			last_cpos = cpos;
+		}
+		if (rows == target_row && cols == target_col) {
+			return cpos;
+		}
+		nextPosition(l, cpos, rows, cols);
+	}
+	return cpos;
 }
 
 /* Multi line low level line refresh.
@@ -989,43 +1141,84 @@ static void refreshSearch(struct linenoiseState *l) {
  * Rewrite the currently edited line accordingly to the buffer content,
  * cursor position, and number of columns of the terminal. */
 static void refreshMultiLine(struct linenoiseState *l) {
+	if (!l->render) {
+		return;
+	}
 	char seq[64];
 	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
-	int total_len = linenoiseComputeRenderWidth(l->buf, l->len);
-	int cursor_old_pos = linenoiseComputeRenderWidth(l->buf, l->oldpos);
-	int cursor_pos = linenoiseComputeRenderWidth(l->buf, l->pos);
-	int rows = (plen + total_len + l->cols - 1) / l->cols;  /* rows used by current buf. */
-	int rpos = (plen + cursor_old_pos + l->cols) / l->cols; /* cursor relative row. */
-	int rpos2;                                              /* rpos after refresh. */
-	int col;                                                /* colum position, zero-based. */
-	int old_rows = l->maxrows;
+	// utf8 in prompt, get render width
+	int rows, cols;
+	int new_cursor_row, new_cursor_x;
+	positionToColAndRow(l, l->pos, new_cursor_row, new_cursor_x, rows, cols);
+	int col; /* colum position, zero-based. */
+	int old_rows = l->maxrows ? l->maxrows : 1;
 	int fd = l->ofd, j;
 	struct abuf ab;
 	std::string highlight_buffer;
 	auto buf = l->buf;
 	auto len = l->len;
+	if (l->clear_screen) {
+		l->old_cursor_rows = 0;
+		old_rows = 0;
+		l->clear_screen = false;
+	}
+	if (rows > l->ws.ws_row) {
+		// the text does not fit in the terminal (too many rows)
+		// enable scrolling mode
+		// check if, given the current y_scroll, the cursor is visible
+		// display range is [y_scroll, y_scroll + ws.ws_row]
+		if (new_cursor_row < int(l->y_scroll) + 1) {
+			l->y_scroll = new_cursor_row - 1;
+		} else if (new_cursor_row > int(l->y_scroll) + int(l->ws.ws_row)) {
+			l->y_scroll = new_cursor_row - l->ws.ws_row;
+		}
+		// display only characters up to the current scroll position
+		int start, end;
+		if (l->y_scroll == 0) {
+			start = 0;
+		} else {
+			start = colAndRowToPosition(l, l->y_scroll + 1, 0);
+		}
+		if (int(l->y_scroll) + int(l->ws.ws_row) >= rows) {
+			end = len;
+		} else {
+			end = colAndRowToPosition(l, l->y_scroll + l->ws.ws_row, 99999);
+		}
+		new_cursor_row -= l->y_scroll;
+		buf += start;
+		len = end - start;
+		lndebug("truncate to rows %d - %d (render bytes %d to %d)", l->y_scroll, l->y_scroll + l->ws.ws_row, start,
+		        end);
+		rows = l->ws.ws_row;
+	} else {
+		l->y_scroll = 0;
+	}
 
 	/* Update maxrows if needed. */
 	if (rows > (int)l->maxrows) {
 		l->maxrows = rows;
 	}
 
-	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
 #ifndef DISABLE_HIGHLIGHT
+	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
+		searchMatch *match = nullptr;
+		if (l->search_index < l->search_matches.size()) {
+			match = &l->search_matches[l->search_index];
+		}
 		if (enableHighlighting) {
-			highlight_buffer = highlightText(buf, len, 0, len);
+			highlight_buffer = highlightText(buf, len, 0, len, match);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}
-#endif
 	}
+#endif
 
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
 	abInit(&ab);
-	if (old_rows - rpos > 0) {
-		lndebug("go down %d", old_rows - rpos);
-		snprintf(seq, 64, "\x1b[%dB", old_rows - rpos);
+	if (old_rows - l->old_cursor_rows > 0) {
+		lndebug("go down %d", old_rows - l->old_cursor_rows);
+		snprintf(seq, 64, "\x1b[%dB", old_rows - int(l->old_cursor_rows));
 		abAppend(&ab, seq, strlen(seq));
 	}
 
@@ -1042,7 +1235,9 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	abAppend(&ab, seq, strlen(seq));
 
 	/* Write the prompt and the current buffer content */
-	abAppend(&ab, l->prompt, strlen(l->prompt));
+	if (l->y_scroll == 0) {
+		abAppend(&ab, l->prompt, strlen(l->prompt));
+	}
 	abAppend(&ab, buf, len);
 
 	/* Show hints if any. */
@@ -1050,29 +1245,40 @@ static void refreshMultiLine(struct linenoiseState *l) {
 
 	/* If we are at the very end of the screen with our prompt, we need to
 	 * emit a newline and move the prompt to the first column. */
-	if (l->pos && l->pos == len && (cursor_pos + plen) % l->cols == 0) {
+	lndebug("l->pos > 0 %d", l->pos > 0 ? 1 : 0);
+	lndebug("l->pos == len %d", l->pos == l->len ? 1 : 0);
+	lndebug("new_cursor_x == l->cols %d", new_cursor_x == l->ws.ws_col ? 1 : 0);
+	if (l->pos > 0 && l->pos == l->len && new_cursor_x == l->ws.ws_col) {
 		lndebug("<newline>", 0);
 		abAppend(&ab, "\n", 1);
 		snprintf(seq, 64, "\r");
 		abAppend(&ab, seq, strlen(seq));
 		rows++;
-		if (rows > (int)l->maxrows)
+		new_cursor_row++;
+		new_cursor_x = 0;
+		if (rows > (int)l->maxrows) {
 			l->maxrows = rows;
+		}
 	}
+	lndebug("render %d rows (old rows %d)", rows, old_rows);
 
 	/* Move cursor to right position. */
-	rpos2 = (plen + cursor_pos + l->cols) / l->cols; /* current cursor relative row. */
-	lndebug("rpos2 %d", rpos2);
+	lndebug("new_cursor_row %d", new_cursor_row);
+	lndebug("new_cursor_x %d", new_cursor_x);
+	lndebug("l->len %d", l->len);
+	lndebug("l->old_cursor_rows %d", l->old_cursor_rows);
+	lndebug("l->pos %d", l->pos);
+	lndebug("max cols %d", l->ws.ws_col);
 
 	/* Go up till we reach the expected positon. */
-	if (rows - rpos2 > 0) {
-		lndebug("go-up %d", rows - rpos2);
-		snprintf(seq, 64, "\x1b[%dA", rows - rpos2);
+	if (rows - new_cursor_row > 0) {
+		lndebug("go-up %d", rows - new_cursor_row);
+		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
 		abAppend(&ab, seq, strlen(seq));
 	}
 
 	/* Set column. */
-	col = (plen + (int)cursor_pos) % (int)l->cols;
+	col = new_cursor_x;
 	lndebug("set col %d", 1 + col);
 	if (col)
 		snprintf(seq, 64, "\r\x1b[%dC", col);
@@ -1081,7 +1287,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	abAppend(&ab, seq, strlen(seq));
 
 	lndebug("\n", 0);
-	l->oldpos = l->pos;
+	l->old_cursor_rows = new_cursor_row;
 
 	if (write(fd, ab.b, ab.len) == -1) {
 	} /* Can't recover from write error. */
@@ -1091,38 +1297,45 @@ static void refreshMultiLine(struct linenoiseState *l) {
 /* Calls the two low level functions refreshSingleLine() or
  * refreshMultiLine() according to the selected mode. */
 static void refreshLine(struct linenoiseState *l) {
-	if (mlmode)
+	if (mlmode) {
 		refreshMultiLine(l);
-	else
+	} else {
 		refreshSingleLine(l);
+	}
 }
 
 /* Insert the character 'c' at cursor current position.
  *
  * On error writing to the terminal -1 is returned, otherwise 0. */
-int linenoiseEditInsert(struct linenoiseState *l, char c) {
+void insertCharacter(struct linenoiseState *l, char c) {
 	if (l->len < l->buflen) {
 		if (l->len == l->pos) {
 			l->buf[l->pos] = c;
 			l->pos++;
 			l->len++;
 			l->buf[l->len] = '\0';
-			if ((!mlmode && l->plen + l->len < l->cols && !hintsCallback)) {
-				/* Avoid a full update of the line in the
-				 * trivial case. */
-				if (write(l->ofd, &c, 1) == -1)
-					return -1;
-			} else {
-				refreshLine(l);
-			}
 		} else {
 			memmove(l->buf + l->pos + 1, l->buf + l->pos, l->len - l->pos);
 			l->buf[l->pos] = c;
 			l->len++;
 			l->pos++;
 			l->buf[l->len] = '\0';
-			refreshLine(l);
 		}
+	}
+}
+
+int linenoiseEditInsert(struct linenoiseState *l, char c) {
+	if (l->has_more_data) {
+		l->render = false;
+	}
+	insertCharacter(l, c);
+	refreshLine(l);
+	return 0;
+}
+
+int linenoiseEditInsertMulti(struct linenoiseState *l, const char *c) {
+	for (size_t pos = 0; c[pos]; pos++) {
+		insertCharacter(l, c[pos]);
 	}
 	refreshLine(l);
 	return 0;
@@ -1187,6 +1400,48 @@ void linenoiseEditMoveWordRight(struct linenoiseState *l) {
 	refreshLine(l);
 }
 
+/* Move cursor one row up. */
+bool linenoiseEditMoveRowUp(struct linenoiseState *l) {
+	if (!mlmode) {
+		return false;
+	}
+	int rows, cols;
+	int cursor_row, cursor_col;
+	positionToColAndRow(l, l->pos, cursor_row, cursor_col, rows, cols);
+	if (cursor_row <= 1) {
+		return false;
+	}
+	// we can move the cursor a line up
+	lndebug("source pos %d", l->pos);
+	lndebug("move from row %d to row %d", cursor_row, cursor_row - 1);
+	cursor_row--;
+	l->pos = colAndRowToPosition(l, cursor_row, cursor_col);
+	lndebug("new pos %d", l->pos);
+	refreshLine(l);
+	return true;
+}
+
+/* Move cursor one row down. */
+bool linenoiseEditMoveRowDown(struct linenoiseState *l) {
+	if (!mlmode) {
+		return false;
+	}
+	int rows, cols;
+	int cursor_row, cursor_col;
+	positionToColAndRow(l, l->pos, cursor_row, cursor_col, rows, cols);
+	if (cursor_row >= rows) {
+		return false;
+	}
+	// we can move the cursor a line down
+	lndebug("source pos %d", l->pos);
+	lndebug("move from row %d to row %d", cursor_row, cursor_row + 1);
+	cursor_row++;
+	l->pos = colAndRowToPosition(l, cursor_row, cursor_col);
+	lndebug("new pos %d", l->pos);
+	refreshLine(l);
+	return true;
+}
+
 /* Move cursor to the start of the line. */
 void linenoiseEditMoveHome(struct linenoiseState *l) {
 	if (l->pos != 0) {
@@ -1225,6 +1480,9 @@ void linenoiseEditHistoryNext(struct linenoiseState *l, int dir) {
 		strncpy(l->buf, history[history_len - 1 - l->history_index], l->buflen);
 		l->buf[l->buflen - 1] = '\0';
 		l->len = l->pos = strlen(l->buf);
+		if (mlmode && dir == LINENOISE_HISTORY_NEXT) {
+			l->pos = colAndRowToPosition(l, 1, l->len);
+		}
 		refreshLine(l);
 	}
 }
@@ -1272,7 +1530,7 @@ void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
 }
 
 // returns true if there is more data available to read in a particular stream
-static int hasMoreData(int fd) {
+int hasMoreData(int fd) {
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
@@ -1454,7 +1712,7 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 		return acceptSearch(l, CTRL_U);
 	case CTRL_K: // accept search, clear after cursor
 		return acceptSearch(l, CTRL_K);
-	case CTRL_D: // accept saerch, delete a character
+	case CTRL_D: // accept search, delete a character
 		return acceptSearch(l, CTRL_D);
 	case CTRL_L:
 		linenoiseClearScreen();
@@ -1494,6 +1752,34 @@ static char linenoiseSearch(linenoiseState *l, char c) {
 	return 0;
 }
 
+static int allWhitespace(const char *z) {
+	for (; *z; z++) {
+		if (isspace((unsigned char)z[0]))
+			continue;
+		if (*z == '/' && z[1] == '*') {
+			z += 2;
+			while (*z && (*z != '*' || z[1] != '/')) {
+				z++;
+			}
+			if (*z == 0)
+				return 0;
+			z++;
+			continue;
+		}
+		if (*z == '-' && z[1] == '-') {
+			z += 2;
+			while (*z && *z != '\n') {
+				z++;
+			}
+			if (*z == 0)
+				return 1;
+			continue;
+		}
+		return 0;
+	}
+	return 1;
+}
+
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1513,12 +1799,17 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 	l.buflen = buflen;
 	l.prompt = prompt;
 	l.plen = strlen(prompt);
-	l.oldpos = l.pos = 0;
+	l.pos = 0;
+	l.old_cursor_rows = 1;
 	l.len = 0;
-	l.cols = getColumns(stdin_fd, stdout_fd);
+	l.ws = getTerminalSize(stdin_fd, stdout_fd);
 	l.maxrows = 0;
 	l.history_index = 0;
+	l.y_scroll = 0;
+	l.clear_screen = false;
 	l.search = false;
+	l.has_more_data = false;
+	l.render = true;
 
 	/* Buffer starts empty. */
 	l.buf[0] = '\0';
@@ -1538,6 +1829,20 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		nread = read(l.ifd, &c, 1);
 		if (nread <= 0)
 			return l.len;
+		l.has_more_data = hasMoreData(l.ifd);
+		l.render = true;
+		if (mlmode && !l.has_more_data) {
+			TerminalSize new_size = getTerminalSize(stdin_fd, stdout_fd);
+			if (new_size.ws_col != l.ws.ws_col || new_size.ws_row != l.ws.ws_row) {
+				// terminal resize! re-compute max lines
+				l.ws = new_size;
+				int rows, cols;
+				int cursor_row, cursor_col;
+				positionToColAndRow(&l, l.pos, cursor_row, cursor_col, rows, cols);
+				l.old_cursor_rows = cursor_row;
+				l.maxrows = rows;
+			}
+		}
 
 		if (l.search) {
 			char ret = linenoiseSearch(&l, c);
@@ -1553,7 +1858,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		 * there was an error reading from fd. Otherwise it will return the
 		 * character that should be handled next. */
 		if (c == 9 && completionCallback != NULL) {
-			if (hasMoreData(l.ifd)) {
+			if (l.has_more_data) {
 				// if there is more data, this tab character was added as part of copy-pasting data
 				continue;
 			}
@@ -1570,10 +1875,27 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		switch (c) {
 		case 10:
 		case ENTER: /* enter */
+			if (mlmode && l.len > 0) {
+				// check if this forms a complete SQL statement or not
+				l.buf[l.len] = '\0';
+				if (l.buf[0] != '.' && !allWhitespace(l.buf) && !sqlite3_complete(l.buf)) {
+					// not a complete SQL statement yet! continuation
+					// insert "\r\n"
+					if (linenoiseEditInsertMulti(&l, "\r\n")) {
+						return -1;
+					}
+					break;
+				}
+			}
 			history_len--;
 			free(history[history_len]);
 			if (mlmode) {
-				linenoiseEditMoveEnd(&l);
+				if (l.pos == l.len) {
+					// already at the end - only refresh
+					refreshLine(&l);
+				} else {
+					linenoiseEditMoveEnd(&l);
+				}
 			}
 			if (hintsCallback) {
 				/* Force a refresh without hints to leave the previous
@@ -1586,6 +1908,9 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			return (int)l.len;
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
+			if (mlmode) {
+				linenoiseEditMoveEnd(&l);
+			}
 			l.buf[0] = '\3';
 			// we keep track of whether or not the line was empty by writing \3 to the second position of the line
 			// this is because at a higher level we might want to know if we pressed ctrl c to clear the line
@@ -1615,6 +1940,12 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				free(history[history_len]);
 				return -1;
 			}
+			break;
+		case CTRL_Z: /* ctrl-z, suspends shell */
+			disableRawMode(STDIN_FILENO);
+			raise(SIGTSTP);
+			enableRawMode(STDIN_FILENO);
+			refreshLine(&l);
 			break;
 		case CTRL_T: /* ctrl-t, swaps current character with previous. */
 			if (l.pos > 0 && l.pos < l.len) {
@@ -1714,9 +2045,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				} else {
 					switch (seq[1]) {
 					case 'A': /* Up */
+						if (linenoiseEditMoveRowUp(&l)) {
+							break;
+						}
 						linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_PREV);
 						break;
 					case 'B': /* Down */
+						if (linenoiseEditMoveRowDown(&l)) {
+							break;
+						}
 						linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_NEXT);
 						break;
 					case 'C': /* Right */
@@ -1776,6 +2113,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
 			linenoiseClearScreen();
+			l.clear_screen = true;
 			refreshLine(&l);
 			break;
 		case CTRL_W: /* ctrl+w, delete previous word */
@@ -1970,10 +2308,12 @@ int linenoiseHistoryAdd(const char *line) {
 	linecopy = strdup(line);
 	if (!linecopy)
 		return 0;
-	// replace all newlines with spaces
-	for (auto ptr = linecopy; *ptr; ptr++) {
-		if (*ptr == '\n' || *ptr == '\r') {
-			*ptr = ' ';
+	if (!mlmode) {
+		// replace all newlines with spaces
+		for (auto ptr = linecopy; *ptr; ptr++) {
+			if (*ptr == '\n' || *ptr == '\r') {
+				*ptr = ' ';
+			}
 		}
 	}
 	if (history_len == history_max_len) {
@@ -2059,15 +2399,18 @@ int linenoiseHistorySave(const char *filename) {
  * on error -1 is returned. */
 int linenoiseHistoryLoad(const char *filename) {
 	FILE *fp = fopen(filename, "r");
-	char buf[LINENOISE_MAX_LINE];
+	char buf[LINENOISE_MAX_LINE + 1];
+	buf[LINENOISE_MAX_LINE] = '\0';
 
 	if (fp == NULL) {
 		return -1;
 	}
 
+	std::string result;
 	while (fgets(buf, LINENOISE_MAX_LINE, fp) != NULL) {
 		char *p;
 
+		// strip the newline first
 		p = strchr(buf, '\r');
 		if (!p) {
 			p = strchr(buf, '\n');
@@ -2075,7 +2418,22 @@ int linenoiseHistoryLoad(const char *filename) {
 		if (p) {
 			*p = '\0';
 		}
-		linenoiseHistoryAdd(buf);
+		if (result.empty() && buf[0] == '.') {
+			// if the first character is a dot this is a dot command
+			// add the full line to the history
+			linenoiseHistoryAdd(buf);
+			continue;
+		}
+		// else we are parsing a SQL statement
+		result += buf;
+		if (sqlite3_complete(result.c_str())) {
+			// this line contains a full SQL statement - add it to the history
+			linenoiseHistoryAdd(result.c_str());
+			result = std::string();
+			continue;
+		}
+		// the result does not contain a full SQL statement - add a newline deliminator and move on to the next line
+		result += "\r\n";
 	}
 	fclose(fp);
 

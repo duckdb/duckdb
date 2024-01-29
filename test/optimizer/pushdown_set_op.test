@@ -5,6 +5,7 @@
 statement ok
 PRAGMA explain_output = 'OPTIMIZED_ONLY'
 
+
 query II
 explain select 42 intersect select 42;
 ----

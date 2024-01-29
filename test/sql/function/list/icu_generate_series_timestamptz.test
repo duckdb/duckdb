@@ -105,16 +105,21 @@ SELECT range(start, stop, step) FROM (VALUES
 # mixed sign interval not supported
 statement error
 SELECT generate_series(timestamptz '2020-01-01', timestamptz '2020-06-01', interval '3' month - interval '3' day);
+----
 
 # Infinities will overflow or cause infinite loops so we ban them
 statement error
 SELECT generate_series('294247-01-10'::TIMESTAMPTZ, 'infinity'::TIMESTAMPTZ, INTERVAL '1 DAY');
+----
 
 statement error
 SELECT range('294247-01-10'::TIMESTAMPTZ, 'infinity'::TIMESTAMPTZ, INTERVAL '1 DAY');
+----
 
 statement error
 SELECT generate_series('-infinity'::TIMESTAMPTZ, '290309-12-22 (BC) 00:00:00'::TIMESTAMPTZ, INTERVAL '1 DAY');
+----
 
 statement error
 SELECT range('-infinity'::TIMESTAMPTZ, '290309-12-22 (BC) 00:00:00'::TIMESTAMPTZ, INTERVAL '1 DAY');
+----

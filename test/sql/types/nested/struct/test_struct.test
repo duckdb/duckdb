@@ -142,39 +142,51 @@ asdf
 
 statement error
 SELECT STRUCT_PACK() FROM struct_data
+----
 
 statement error
 SELECT STRUCT_PACK(e+1) FROM struct_data
+----
 
 statement error
 SELECT STRUCT_PACK(a := e, a := g) FROM struct_data
+----
 
 statement error
 SELECT STRUCT_PACK(e, e) FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT(e, 'e') FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT(e) FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT('e') FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT() FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'zz') FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g)) FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), g) FROM struct_data
+----
 
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42') FROM struct_data
+----
 
 statement ok
 CREATE TABLE test AS SELECT e, STRUCT_PACK(e) FROM struct_data

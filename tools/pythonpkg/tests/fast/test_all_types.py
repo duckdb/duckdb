@@ -111,6 +111,7 @@ class TestAllTypes(object):
         }
         adjusted_values = {
             'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
+            'time_tz': """CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS "time_tz" """,
         }
         min_datetime = datetime.datetime.min
         min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)
@@ -201,7 +202,11 @@ class TestAllTypes(object):
                 (None,),
             ],
             'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)],
-            'map': [({'key': [], 'value': []},), ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},), (None,)],
+            'map': [
+                ({'key': [], 'value': []},),
+                ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},),
+                (None,),
+            ],
             'time_tz': [(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)],
             'interval': [
                 (datetime.timedelta(0),),
@@ -439,6 +444,7 @@ class TestAllTypes(object):
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():
+        # - 'uhugeint'
         # - 'hugeint'
         # - 'dec_4_1'
         # - 'dec_9_4'
@@ -484,6 +490,12 @@ class TestAllTypes(object):
         replacement_values = {'interval': "INTERVAL '2 years'"}
         # We do not round trip enum types
         enum_types = {'small_enum', 'medium_enum', 'large_enum', 'double_array'}
+
+        # uhugeint currently not supported by arrow
+        skip_types = {'uhugeint'}
+        if cur_type in skip_types:
+            return
+
         conn = duckdb.connect()
         if cur_type in replacement_values:
             arrow_table = conn.execute("select " + replacement_values[cur_type]).arrow()

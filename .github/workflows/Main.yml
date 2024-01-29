@@ -13,6 +13,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
@@ -23,6 +24,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
@@ -66,11 +68,16 @@ jobs:
       shell: bash
       run:  make debug
 
+    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+      shell: bash
+      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+
+    - name: Test DUCKDB_INSTALL_LIB variable
+      run: echo $DUCKDB_INSTALL_LIB
+
     - name: Test
       shell: bash
-      run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
-          make unittestci
+      run: make unittestci
 
 
  force-storage:
@@ -92,6 +99,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      RUN_SLOW_VERIFIERS: 1
 
     steps:
     - uses: actions/checkout@v3

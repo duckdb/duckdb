@@ -98,8 +98,8 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 		Value new_key = TransformPythonValue(dict.keys.attr("__getitem__")(i));
 		Value new_value = TransformPythonValue(dict.values.attr("__getitem__")(i));
 
-		key_type = LogicalType::MaxLogicalType(key_type, new_key.type());
-		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
+		key_type = LogicalType::ForceMaxLogicalType(key_type, new_key.type());
+		value_type = LogicalType::ForceMaxLogicalType(value_type, new_value.type());
 
 		child_list_t<Value> struct_values;
 		struct_values.emplace_back(make_pair("key", std::move(new_key)));
@@ -141,8 +141,8 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 		Value new_key = ListValue::GetChildren(key_list)[i];
 		Value new_value = ListValue::GetChildren(value_list)[i];
 
-		key_type = LogicalType::MaxLogicalType(key_type, new_key.type());
-		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
+		key_type = LogicalType::ForceMaxLogicalType(key_type, new_key.type());
+		value_type = LogicalType::ForceMaxLogicalType(value_type, new_value.type());
 
 		child_list_t<Value> struct_values;
 		struct_values.emplace_back(make_pair("key", std::move(new_key)));
@@ -196,7 +196,7 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 	for (idx_t i = 0; i < size; i++) {
 		auto &child_type = list_target ? ListType::GetChildType(target_type) : LogicalType::UNKNOWN;
 		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
-		element_type = LogicalType::MaxLogicalType(element_type, new_value.type());
+		element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
 		values.push_back(std::move(new_value));
 	}
 
@@ -293,6 +293,13 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 		return TrySniffPythonNumeric(res, value);
 	case LogicalTypeId::HUGEINT: {
 		res = Value::HUGEINT(value);
+		return true;
+	}
+	case LogicalTypeId::UHUGEINT: {
+		if (value < 0) {
+			return false;
+		}
+		res = Value::UHUGEINT(value);
 		return true;
 	}
 	case LogicalTypeId::BIGINT: {

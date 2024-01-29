@@ -201,6 +201,9 @@ endif
 ifeq (${FORCE_ASYNC_SINK_SOURCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASYNC_SINK_SOURCE=1
 endif
+ifeq (${RUN_SLOW_VERIFIERS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DRUN_SLOW_VERIFIERS=1
+endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
@@ -269,20 +272,17 @@ release: ${EXTENSION_CONFIG_STEP}
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" && \
-	emmake make -j8 -Cbuild/wasm_mvp && \
-	cd build/wasm_mvp && bash ../../scripts/link-wasm-extensions.sh
+	emmake make -j8 -Cbuild/wasm_mvp
 
 wasm_eh: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_eh && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" && \
-	emmake make -j8 -Cbuild/wasm_eh && \
-	cd build/wasm_eh && bash ../../scripts/link-wasm-extensions.sh
+	emmake make -j8 -Cbuild/wasm_eh
 
 wasm_threads: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_threads && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads" && \
-	emmake make -j8 -Cbuild/wasm_threads && \
-	cd build/wasm_threads && bash ../../scripts/link-wasm-extensions.sh
+	emmake make -j8 -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
@@ -402,7 +402,7 @@ sqlsmith: debug
 # works both on executable, libraries (-> .duckdb_extension) and on WebAssembly
 bloaty/bloaty:
 	git clone https://github.com/google/bloaty.git
-	cd bloaty && git submodule update --init --recursive && cmake -B build -G Ninja -S . && cmake --build build
+	cd bloaty && git submodule update --init --recursive && cmake -Bm build -G Ninja -S . && cmake --build build
 	mv bloaty/build/bloaty bloaty/bloaty
 
 bloaty: reldebug bloaty/bloaty

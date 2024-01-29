@@ -29,7 +29,8 @@ public:
 	idx_t query_location;
 
 public:
-	DUCKDB_API static string Format(const string &query, const string &error_message, int error_location);
+	DUCKDB_API static string Format(const string &query, const string &error_message, int error_location,
+	                                bool add_line_indicator = true);
 
 	DUCKDB_API string FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 	template <class T, typename... Args>

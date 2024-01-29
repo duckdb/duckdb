@@ -11856,7 +11856,6 @@ static int shell_callback(
         if( (azArg[i]==0) || (aiType && aiType[i]==SQLITE_NULL) ){
           fputs("null",p->out);
         }else if( aiType && aiType[i]==SQLITE_FLOAT ){
-          char z[50];
           double r = sqlite3_column_double(p->pStmt, i);
           sqlite3_uint64 ur;
           memcpy(&ur,&r,sizeof(r));
@@ -11865,8 +11864,7 @@ static int shell_callback(
           }else if( ur==0xfff0000000000000LL ){
             raw_printf(p->out, "-1e999");
           }else{
-            sqlite3_snprintf(50,z,"%!.20g", r);
-            raw_printf(p->out, "%s", z);
+            utf8_printf(p->out, "%s", azArg[i]);
           }
         }else if( aiType && aiType[i]==SQLITE_BLOB && p->pStmt ){
           const void *pBlob = sqlite3_column_blob(p->pStmt, i);
@@ -12540,37 +12538,7 @@ static void bind_table_init(ShellState *p){
 ** tables.  The table must be in the TEMP schema.
 */
 static void bind_prepared_stmt(ShellState *pArg, sqlite3_stmt *pStmt){
-  int nVar;
-  int i;
-  int rc;
-  sqlite3_stmt *pQ = 0;
-
-  nVar = sqlite3_bind_parameter_count(pStmt);
-  if( nVar==0 ) return;  /* Nothing to do */
-  if( sqlite3_table_column_metadata(pArg->db, "TEMP", "sqlite_parameters",
-                                    "key", 0, 0, 0, 0, 0)!=SQLITE_OK ){
-    return; /* Parameter table does not exist */
-  }
-  rc = sqlite3_prepare_v2(pArg->db,
-          "SELECT value FROM temp.sqlite_parameters"
-          " WHERE key=?1", -1, &pQ, 0);
-  if( rc || pQ==0 ) return;
-  for(i=1; i<=nVar; i++){
-    char zNum[30];
-    const char *zVar = sqlite3_bind_parameter_name(pStmt, i);
-    if( zVar==0 ){
-      sqlite3_snprintf(sizeof(zNum),zNum,"?%d",i);
-      zVar = zNum;
-    }
-    sqlite3_bind_text(pQ, 1, zVar, -1, SQLITE_STATIC);
-    if( sqlite3_step(pQ)==SQLITE_ROW ){
-      sqlite3_bind_value(pStmt, i, sqlite3_column_value(pQ, 0));
-    }else{
-      sqlite3_bind_null(pStmt, i);
-    }
-    sqlite3_reset(pQ);
-  }
-  sqlite3_finalize(pQ);
+  return;
 }
 
 /*
@@ -19953,6 +19921,7 @@ static const char zOptions[] =
 #endif
   "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
+  "   -unredacted          allow printing unredacted secrets\n"
   "   -unsigned            allow loading of unsigned extensions\n"
   "   -version             show DuckDB version\n"
 #ifdef SQLITE_HAVE_ZLIB
@@ -20268,6 +20237,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.openMode = SHELL_OPEN_READONLY;
     }else if( strcmp(z,"-nofollow")==0 ){
       data.openFlags = SQLITE_OPEN_NOFOLLOW;
+    }else if( strcmp(z,"-unredacted")==0 ){
+      data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
     }else if( strcmp(z,"-unsigned")==0 ){
       data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_HAVE_ZLIB)
@@ -20418,6 +20389,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.scanstatsOn = 1;
     }else if( strcmp(z,"-unsigned")==0 ){
       data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
+    }else if( strcmp(z,"-unredacted")==0 ){
+      data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
     }else if( strcmp(z,"-backslash")==0 ){
       /* Undocumented command-line option: -backslash
       ** Causes C-style backslash escapes to be evaluated in SQL statements

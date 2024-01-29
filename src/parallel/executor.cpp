@@ -2,8 +2,8 @@
 
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
-#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -97,7 +97,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		// create events/stack for this pipeline
 		auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 
-		auto finish_group = meta_pipeline->GetFinishGroup(pipeline.get());
+		auto finish_group = meta_pipeline->GetFinishGroup(*pipeline);
 		if (finish_group) {
 			// this pipeline is part of a finish group
 			const auto group_entry = event_map.find(*finish_group.get());
@@ -112,7 +112,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 			// add pipeline stack to event map
 			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
-		} else if (meta_pipeline->HasFinishEvent(pipeline.get())) {
+		} else if (meta_pipeline->HasFinishEvent(*pipeline)) {
 			// this pipeline has its own finish event (despite going into the same sink - Finalize twice!)
 			auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
 			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
@@ -126,7 +126,6 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 			// add pipeline stack to event map
 			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
-
 		} else {
 			// no additional finish event
 			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
@@ -154,15 +153,16 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 			pipeline->ResetSource(true);
 		}
 
-		auto dependencies = meta_pipeline->GetDependencies(pipeline.get());
+		auto dependencies = meta_pipeline->GetDependencies(*pipeline);
 		if (!dependencies) {
 			continue;
 		}
 		auto root_entry = event_map.find(*pipeline);
 		D_ASSERT(root_entry != event_map.end());
 		auto &pipeline_stack = root_entry->second;
-		for (auto &dependency : *dependencies) {
-			auto event_entry = event_map.find(*dependency);
+		// iterate in reverse so the deepest dependencies are added first
+		for (auto it = dependencies->rbegin(); it != dependencies->rend(); ++it) {
+			auto event_entry = event_map.find(*it);
 			D_ASSERT(event_entry != event_map.end());
 			auto &dependency_stack = event_entry->second;
 			pipeline_stack.pipeline_event.AddDependency(dependency_stack.pipeline_event);
@@ -212,10 +212,10 @@ void Executor::ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipel
 void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 #ifdef DEBUG
 	const idx_t count = event_data.events.size();
-	vector<Event *> vertices;
+	vector<reference<Event>> vertices;
 	vertices.reserve(count);
 	for (const auto &event : event_data.events) {
-		vertices.push_back(event.get());
+		vertices.push_back(*event);
 	}
 	vector<bool> visited(count, false);
 	vector<bool> recursion_stack(count, false);
@@ -225,14 +225,14 @@ void Executor::VerifyScheduledEvents(const ScheduleEventData &event_data) {
 #endif
 }
 
-void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Event *> &vertices, vector<bool> &visited,
-                                             vector<bool> &recursion_stack) {
+void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<reference<Event>> &vertices,
+                                             vector<bool> &visited, vector<bool> &recursion_stack) {
 	D_ASSERT(!recursion_stack[vertex]); // this vertex is in the recursion stack: circular dependency!
 	if (visited[vertex]) {
 		return; // early out: we already visited this vertex
 	}
 
-	auto &parents = vertices[vertex]->GetParentsVerification();
+	auto &parents = vertices[vertex].get().GetParentsVerification();
 	if (parents.empty()) {
 		return; // early out: outgoing edges
 	}
@@ -243,7 +243,7 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Ev
 	for (auto parent : parents) {
 		idx_t i;
 		for (i = 0; i < count; i++) {
-			if (vertices[i] == parent) {
+			if (RefersToSameObject(vertices[i], parent)) {
 				adjacent.push_back(i);
 				break;
 			}
@@ -521,7 +521,7 @@ void Executor::Reset() {
 	root_pipeline_idx = 0;
 	completed_pipelines = 0;
 	total_pipelines = 0;
-	exceptions.clear();
+	error_manager.Reset();
 	pipelines.clear();
 	events.clear();
 	to_be_rescheduled_tasks.clear();
@@ -554,23 +554,18 @@ vector<LogicalType> Executor::GetTypes() {
 }
 
 void Executor::PushError(PreservedError exception) {
-	lock_guard<mutex> elock(error_lock);
+	// push the exception onto the stack
+	error_manager.PushError(std::move(exception));
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
-	// push the exception onto the stack
-	exceptions.push_back(std::move(exception));
 }
 
 bool Executor::HasError() {
-	lock_guard<mutex> elock(error_lock);
-	return !exceptions.empty();
+	return error_manager.HasError();
 }
 
 void Executor::ThrowException() {
-	lock_guard<mutex> elock(error_lock);
-	D_ASSERT(!exceptions.empty());
-	auto &entry = exceptions[0];
-	entry.Throw();
+	error_manager.ThrowException();
 }
 
 void Executor::Flush(ThreadContext &tcontext) {
@@ -584,6 +579,7 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 	vector<double> progress;
 	vector<idx_t> cardinality;
 	total_cardinality = 0;
+	current_cardinality = 0;
 	for (auto &pipeline : pipelines) {
 		double child_percentage;
 		idx_t child_cardinality;
@@ -595,15 +591,16 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 		cardinality.push_back(child_cardinality);
 		total_cardinality += child_cardinality;
 	}
-	current_cardinality = 0;
 	if (total_cardinality == 0) {
 		return true;
 	}
 	current_progress = 0;
 
 	for (size_t i = 0; i < progress.size(); i++) {
+		D_ASSERT(progress[i] <= 100);
 		current_cardinality += double(progress[i]) * double(cardinality[i]) / double(100);
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
+		D_ASSERT(current_cardinality <= total_cardinality);
 	}
 	return true;
 } // LCOV_EXCL_STOP

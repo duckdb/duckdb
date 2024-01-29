@@ -21,6 +21,7 @@ SELECT * FROM vw2
 
 statement error
 SELECT * FROM vw
+----
 
 statement ok
 ROLLBACK
@@ -33,6 +34,7 @@ SELECT * FROM vw;
 
 statement error
 SELECT * FROM vw2
+----
 
 statement ok
 BEGIN TRANSACTION;
@@ -51,6 +53,7 @@ SELECT * FROM vw2
 
 statement error
 SELECT * FROM vw
+----
 
 statement ok
 CREATE VIEW vw AS SELECT i+1 AS i FROM tbl
@@ -64,7 +67,9 @@ SELECT * FROM vw
 # cannot rename a system view
 statement error
 ALTER VIEW sqlite_master RENAME TO my_sqlite_master
+----
 
 # cannot rename a view that does not exist
 statement error
 ALTER VIEW nonexistingview RENAME TO my_new_view
+----

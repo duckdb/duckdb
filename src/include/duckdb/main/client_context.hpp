@@ -65,7 +65,7 @@ public:
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
 	friend class PendingQueryResult;
 	friend class StreamQueryResult;
-	friend class DuckTransactionManager;
+	friend class ConnectionManager;
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);

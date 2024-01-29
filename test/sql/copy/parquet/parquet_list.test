@@ -28,10 +28,11 @@ select count(*) from parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data
 # file does not exist
 statement error
 select count(*) from parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet', 'this/file/doesnot/exist/hopefully.parquet']);
+----
 
 # empty list
 statement error
-select count(*) from parquet_scan([]);
+select count(*) from parquet_scan([]::varchar[]);
 ----
 at least one file
 

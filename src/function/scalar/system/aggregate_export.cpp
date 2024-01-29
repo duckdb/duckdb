@@ -171,7 +171,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		memcpy(local_state.state_buffer0.get(), state0.GetData(), bind_data.state_size);
 		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
 
-		AggregateInputData aggr_input_data(nullptr, local_state.allocator);
+		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
 		result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()),

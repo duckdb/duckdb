@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -56,8 +57,8 @@ interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 }
 
 template <>
-date_t SubtractOperator::Operation(date_t left, interval_t right) {
-	return AddOperator::Operation<date_t, interval_t, date_t>(left, Interval::Invert(right));
+timestamp_t SubtractOperator::Operation(date_t left, interval_t right) {
+	return AddOperator::Operation<date_t, interval_t, timestamp_t>(left, Interval::Invert(right));
 }
 
 template <>
@@ -156,7 +157,13 @@ bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result
 template <>
 bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left;
-	return Hugeint::SubtractInPlace(result, right);
+	return Hugeint::TrySubtractInPlace(result, right);
+}
+
+template <>
+bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
+	result = left;
+	return Uhugeint::TrySubtractInPlace(result, right);
 }
 
 //===--------------------------------------------------------------------===//
@@ -194,7 +201,9 @@ bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t &result)
 
 template <>
 bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
-	result = left - right;
+	if (!TrySubtractOperator::Operation(left, right, result)) {
+		return false;
+	}
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}
@@ -217,6 +226,12 @@ template <>
 dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right) {
 	right.micros = -right.micros;
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
+}
+
+template <>
+dtime_tz_t SubtractTimeOperator::Operation(dtime_tz_t left, interval_t right) {
+	right.micros = -right.micros;
+	return AddTimeOperator::Operation<dtime_tz_t, interval_t, dtime_tz_t>(left, right);
 }
 
 } // namespace duckdb

@@ -112,8 +112,6 @@ public:
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
 
-	vector<unique_ptr<Expression>> BindCreateIndexExpressions(TableCatalogEntry &table, CreateIndexInfo &info);
-
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
@@ -255,7 +253,6 @@ private:
 	BoundStatement Bind(ExplainStatement &stmt);
 	BoundStatement Bind(VacuumStatement &stmt);
 	BoundStatement Bind(RelationStatement &stmt);
-	BoundStatement Bind(ShowStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(ExtensionStatement &stmt);
@@ -294,6 +291,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
+	unique_ptr<BoundTableRef> Bind(ShowRef &ref);
 
 	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,
@@ -330,7 +328,6 @@ private:
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
 	                       const vector<idx_t> &expansion_count = {});
 
-	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
@@ -375,6 +372,10 @@ private:
 	                                                   Catalog &to_database);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(CopyDatabaseStatement &stmt, Catalog &from_database,
 	                                                 Catalog &to_database);
+
+	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
+	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
+	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

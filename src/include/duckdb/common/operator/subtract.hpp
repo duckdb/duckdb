@@ -19,6 +19,7 @@ struct interval_t;
 struct date_t;
 struct timestamp_t;
 struct dtime_t;
+struct dtime_tz_t;
 
 struct SubtractOperator {
 	template <class TA, class TB, class TR>
@@ -38,7 +39,7 @@ int64_t SubtractOperator::Operation(date_t left, date_t right);
 template <>
 date_t SubtractOperator::Operation(date_t left, int32_t right);
 template <>
-date_t SubtractOperator::Operation(date_t left, interval_t right);
+timestamp_t SubtractOperator::Operation(date_t left, interval_t right);
 template <>
 timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right);
 template <>
@@ -70,6 +71,8 @@ template <>
 bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result);
 template <>
 bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
 
 struct SubtractOperatorOverflowCheck {
 	template <class TA, class TB, class TR>
@@ -122,5 +125,8 @@ struct SubtractTimeOperator {
 
 template <>
 dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right);
+
+template <>
+dtime_tz_t SubtractTimeOperator::Operation(dtime_tz_t left, interval_t right);
 
 } // namespace duckdb

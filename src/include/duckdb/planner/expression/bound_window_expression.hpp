@@ -40,6 +40,8 @@ public:
 	unique_ptr<Expression> filter_expr;
 	//! True to ignore NULL values
 	bool ignore_nulls;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
@@ -65,6 +67,10 @@ public:
 
 	string ToString() const override;
 
+	//! The number of ordering clauses the functions share
+	idx_t GetSharedOrders(const BoundWindowExpression &other) const;
+
+	bool PartitionsAreEquivalent(const BoundWindowExpression &other) const;
 	bool KeysAreCompatible(const BoundWindowExpression &other) const;
 	bool Equals(const BaseExpression &other) const override;
 

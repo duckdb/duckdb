@@ -1,7 +1,6 @@
 #include "duckdb/main/connection.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -30,7 +29,21 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 }
 
+Connection::Connection(Connection &&other) noexcept {
+	std::swap(context, other.context);
+	std::swap(warning_cb, other.warning_cb);
+}
+
+Connection &Connection::operator=(Connection &&other) noexcept {
+	std::swap(context, other.context);
+	std::swap(warning_cb, other.warning_cb);
+	return *this;
+}
+
 Connection::~Connection() {
+	if (!context) {
+		return;
+	}
 	ConnectionManager::Get(*context->db).RemoveConnection(*context);
 }
 

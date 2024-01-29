@@ -7,6 +7,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -131,7 +132,7 @@ void ColumnSegment::Resize(idx_t new_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	shared_ptr<BlockHandle> new_block;
-	auto new_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
+	auto new_handle = buffer_manager.Allocate(new_size, false, &new_block);
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);
@@ -439,6 +440,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 			                                 constant_filter.comparison_type, mask);
 			break;
 		}
+		case PhysicalType::UINT128: {
+			auto result_flat = FlatVector::GetData<uhugeint_t>(result);
+			auto predicate = UhugeIntValue::Get(constant_filter.constant);
+			FilterSelectionSwitch<uhugeint_t>(result_flat, predicate, sel, approved_tuple_count,
+			                                  constant_filter.comparison_type, mask);
+			break;
+		}
 		case PhysicalType::FLOAT: {
 			auto result_flat = FlatVector::GetData<float>(result);
 			auto predicate = FloatValue::Get(constant_filter.constant);
@@ -476,6 +484,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		return TemplatedNullSelection<true>(sel, approved_tuple_count, mask);
 	case TableFilterType::IS_NOT_NULL:
 		return TemplatedNullSelection<false>(sel, approved_tuple_count, mask);
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		// Apply the filter on the child vector
+		auto &child_vec = StructVector::GetEntries(result)[struct_filter.child_idx];
+		auto &child_mask = FlatVector::Validity(*child_vec);
+		return FilterSelection(sel, *child_vec, *struct_filter.child_filter, approved_tuple_count, child_mask);
+	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}

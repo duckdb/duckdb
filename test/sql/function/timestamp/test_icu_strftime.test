@@ -138,6 +138,9 @@ INSERT INTO formats VALUES
 	('%Y'),
 	('%y'),
 	('%y'),
+	('%V'),
+	('%G'),
+	('%u'),
 	(NULL),
 ;
 
@@ -195,6 +198,9 @@ XX2022-04-07 11:12:15XX2022-04-07XX11:12:15XX
 2022
 22
 22
+14
+2022
+4
 NULL
 
 #
@@ -276,6 +282,7 @@ NULL	NULL
 #
 statement error
 SELECT ts, strftime(ts, '%C') FROM timestamps;
+----
 
 #
 # Tests for fix of nr3 in list of https://github.com/duckdb/duckdb/issues/5984

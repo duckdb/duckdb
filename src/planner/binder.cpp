@@ -96,8 +96,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<ExplainStatement>());
 	case StatementType::VACUUM_STATEMENT:
 		return Bind(statement.Cast<VacuumStatement>());
-	case StatementType::SHOW_STATEMENT:
-		return Bind(statement.Cast<ShowStatement>());
 	case StatementType::CALL_STATEMENT:
 		return Bind(statement.Cast<CallStatement>());
 	case StatementType::EXPORT_STATEMENT:
@@ -194,7 +192,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::SUBQUERY:
 		result = Bind(ref.Cast<SubqueryRef>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		result = Bind(ref.Cast<EmptyTableRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
@@ -205,6 +203,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		break;
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
+		break;
+	case TableReferenceType::SHOW_REF:
+		result = Bind(ref.Cast<ShowRef>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
@@ -230,7 +231,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::TABLE_FUNCTION:
 		root = CreatePlan(ref.Cast<BoundTableFunction>());
 		break;
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
@@ -489,7 +490,9 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		result.types.push_back(result_type);
 		projection_expressions.push_back(std::move(expr));
 	}
-
+	if (new_returning_list.empty()) {
+		throw BinderException("RETURNING list is empty!");
+	}
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));
 	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());

@@ -15,6 +15,7 @@ namespace duckdb {
 
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
+	config->options.allow_unredacted_secrets = true;
 
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (!env_var) {
@@ -52,10 +53,6 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
-		// already in a loop: add it to the currently active loop
-		if (definition.is_parallel) {
-			throw std::runtime_error("concurrent loop must be the outer-most loop!");
-		}
 		active_loops.back()->loop_commands.push_back(std::move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
@@ -181,6 +178,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("usmallint");
 		result.push_back("uinteger");
 		result.push_back("ubigint");
+		result.push_back("uhugeint");
 		collection = true;
 	}
 	if (is_numeric) {
@@ -386,18 +384,14 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() != 1) {
 				parser.Fail("mode requires one parameter");
 			}
-			if (token.parameters[0] == "output_hash") {
-				output_hash_mode = true;
-			} else if (token.parameters[0] == "output_result") {
-				output_result_mode = true;
-			} else if (token.parameters[0] == "debug") {
-				debug_mode = true;
-			} else if (token.parameters[0] == "skip") {
+			string parameter = token.parameters[0];
+			if (parameter == "skip") {
 				skip_level++;
-			} else if (token.parameters[0] == "unskip") {
+			} else if (parameter == "unskip") {
 				skip_level--;
 			} else {
-				parser.Fail("unrecognized mode: %s", token.parameters[0]);
+				auto command = make_uniq<ModeCommand>(*this, std::move(parameter));
+				ExecuteCommand(std::move(command));
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_SET) {
 			if (token.parameters.size() < 1) {

@@ -521,7 +521,7 @@ public:
 	void FinishEvent() override;
 
 private:
-	void CreateGlobalSources();
+	idx_t CreateGlobalSources();
 
 private:
 	ClientContext &context;
@@ -556,9 +556,7 @@ private:
 };
 
 void HashAggregateDistinctFinalizeEvent::Schedule() {
-	CreateGlobalSources();
-
-	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	const auto n_threads = CreateGlobalSources();
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_threads; i++) {
 		tasks.push_back(make_uniq<HashAggregateDistinctFinalizeTask>(*pipeline, shared_from_this(), op, gstate));
@@ -566,11 +564,14 @@ void HashAggregateDistinctFinalizeEvent::Schedule() {
 	SetTasks(std::move(tasks));
 }
 
-void HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
+idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 	auto &aggregates = op.grouped_aggregate_data.aggregates;
 	global_source_states.reserve(op.groupings.size());
+
+	idx_t n_threads = 0;
 	for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 		auto &grouping = op.groupings[grouping_idx];
+		auto &distinct_state = *gstate.grouping_states[grouping_idx].distinct_state;
 		auto &distinct_data = *grouping.distinct_data;
 
 		vector<unique_ptr<GlobalSourceState>> aggregate_sources;
@@ -587,10 +588,13 @@ void HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 
 			auto table_idx = distinct_data.info.table_map.at(agg_idx);
 			auto &radix_table_p = distinct_data.radix_tables[table_idx];
+			n_threads += radix_table_p->MaxThreads(*distinct_state.radix_states[table_idx]);
 			aggregate_sources.push_back(radix_table_p->GetGlobalSourceState(context));
 		}
 		global_source_states.push_back(std::move(aggregate_sources));
 	}
+
+	return MaxValue<idx_t>(n_threads, 1);
 }
 
 void HashAggregateDistinctFinalizeEvent::FinishEvent() {
@@ -782,13 +786,13 @@ public:
 		}
 
 		auto &ht_state = op.sink_state->Cast<HashAggregateGlobalSinkState>();
-		idx_t partitions = 0;
+		idx_t threads = 0;
 		for (size_t sidx = 0; sidx < op.groupings.size(); ++sidx) {
 			auto &grouping = op.groupings[sidx];
 			auto &grouping_gstate = ht_state.grouping_states[sidx];
-			partitions += grouping.table_data.NumberOfPartitions(*grouping_gstate.table_state);
+			threads += grouping.table_data.MaxThreads(*grouping_gstate.table_state);
 		}
-		return MaxValue<idx_t>(1, partitions);
+		return MaxValue<idx_t>(1, threads);
 	}
 };
 
@@ -848,6 +852,17 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalSinkState>();
+	auto &gstate = gstate_p.Cast<HashAggregateGlobalSourceState>();
+	double total_progress = 0;
+	for (idx_t radix_idx = 0; radix_idx < groupings.size(); radix_idx++) {
+		total_progress += groupings[radix_idx].table_data.GetProgress(
+		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]);
+	}
+	return total_progress / double(groupings.size());
 }
 
 string PhysicalHashAggregate::ParamsToString() const {
