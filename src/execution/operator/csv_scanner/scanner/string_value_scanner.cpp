@@ -487,8 +487,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
 	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
-		auto &parse_vector = parse_chunk.data[c];
-		auto &result_vector = insert_chunk.data[c];
+		auto col_idx = c;
+		auto result_idx = reader_data.column_mapping[c];
+		if (col_idx >= parse_chunk.ColumnCount()) {
+			throw InvalidInputException("Mismatch between the schema of different files");
+		}
+		auto &parse_vector = parse_chunk.data[col_idx];
+		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
 		if (CanDirectlyCast(type, state_machine->options.dialect_options.date_format)) {
 			// target type is varchar: no need to convert
@@ -543,8 +548,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 					row.push_back(parse_chunk.GetValue(col, line_error));
 				}
-				auto csv_error =
-				    CSVError::CastError(state_machine->options, csv_file_scan->names[c], error_message, c, row);
+				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
+				                                     error_message, col_idx, row);
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
 				error_handler->Error(lines_per_batch, csv_error);
@@ -560,8 +565,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
 					}
-					auto csv_error =
-					    CSVError::CastError(state_machine->options, csv_file_scan->names[c], error_message, c, row);
+					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
+					                                     error_message, col_idx, row);
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
 					error_handler->Error(lines_per_batch, csv_error);

@@ -37,7 +37,7 @@ public:
 	void InitializeProjection();
 
 	//! Initialize the actual names and types to be scanned from the file
-	void InitializeFileNamesTypes();
+	void InitializeFileNamesTypes(const ReadCSVData &bind_data);
 	const string file_path;
 	//! File Index
 	idx_t file_idx;
