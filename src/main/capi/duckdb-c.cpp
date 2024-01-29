@@ -26,7 +26,7 @@ duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_conf
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		if (error) {
-			*error = strdup("Unknown error");
+			*error = strdup("Unknown error in duckdb_open_ext");
 		}
 		delete wrapper;
 		return DuckDBError;
@@ -56,6 +56,7 @@ duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
 	try {
 		connection = new Connection(*wrapper->database);
 	} catch (...) { // LCOV_EXCL_START
+		// FIXME: set error?
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 	*out = (duckdb_connection)connection;

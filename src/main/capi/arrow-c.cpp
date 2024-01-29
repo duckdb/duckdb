@@ -261,6 +261,7 @@ duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct
 		                                   duckdb::Value::POINTER((uintptr_t)FactoryGetSchema)})
 		    ->CreateView(table_name, true, false);
 	} catch (...) { // LCOV_EXCL_START
+		// FIXME: set error?
 		// Tried covering this in tests, but it proved harder than expected. At the time of writing:
 		// - Passing any name to `CreateView` worked without throwing an exception
 		// - Passing a null Arrow array worked without throwing an exception

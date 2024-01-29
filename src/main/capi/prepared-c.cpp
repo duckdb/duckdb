@@ -31,8 +31,11 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	try {
 		wrapper->statements = conn->ExtractStatements(query);
-	} catch (const duckdb::ParserException &e) {
-		wrapper->error = e.what();
+	} catch (std::exception &ex) {
+		wrapper->error = ex.what();
+	} catch (...) {
+		wrapper->error = "Unknown error in duckdb_extract_statements";
+		return DuckDBError;
 	}
 
 	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
@@ -288,6 +291,7 @@ duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, i
 		auto value = Value(val);
 		return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 	} catch (...) {
+		// FIXME: set error?
 		return DuckDBError;
 	}
 }
@@ -298,6 +302,7 @@ duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_state
 		auto value = Value(std::string(val, length));
 		return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 	} catch (...) {
+		// FIXME: set error?
 		return DuckDBError;
 	}
 }

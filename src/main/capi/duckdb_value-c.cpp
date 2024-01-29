@@ -75,6 +75,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	try {
 		*struct_value = duckdb::Value::STRUCT(ltype, unwrapped_values);
 	} catch (...) {
+		// FIXME: set error?
 		delete struct_value;
 		return nullptr;
 	}
@@ -98,6 +99,7 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 	try {
 		*list_value = duckdb::Value::LIST(ltype, unwrapped_values);
 	} catch (...) {
+		// FIXME: set error?
 		delete list_value;
 		return nullptr;
 	}

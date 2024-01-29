@@ -30,7 +30,7 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
 		wrapper->error = ex.what();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
-		wrapper->error = "Unknown create appender error";
+		wrapper->error = "Unknown error in duckdb_appender_create";
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
@@ -64,7 +64,7 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 		wrapper->error = ex.what();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
-		wrapper->error = "Unknown error";
+		wrapper->error = "Unknown error in duckdb_appender_run_function";
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
@@ -101,6 +101,7 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 		appender_instance->error = ex.what();
 		return DuckDBError;
 	} catch (...) {
+		appender_instance->error = "Unknown error in duckdb_append_internal";
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
