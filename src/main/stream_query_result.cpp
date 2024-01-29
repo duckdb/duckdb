@@ -16,7 +16,8 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
 	context = buffered_data->GetContext();
 }
 
-StreamQueryResult::~StreamQueryResult() {}
+StreamQueryResult::~StreamQueryResult() {
+}
 
 string StreamQueryResult::ToString() {
 	string result;

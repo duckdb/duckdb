@@ -75,6 +75,7 @@ public:
 
 	//! Set the allocator flush threshold
 	void SetAllocatorFlushTreshold(idx_t threshold);
+
 private:
 	void RelaunchThreadsInternal(int32_t n);
 

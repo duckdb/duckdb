@@ -384,6 +384,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
                                                           bool dry_run) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
+	bool invalidate_transaction = false;
 	try {
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
@@ -392,19 +393,26 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
 		return query_result;
+	} catch (StandardException &ex) {
+		result.SetError(PreservedError(ex));
+		invalidate_transaction = false;
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		result.SetError(PreservedError(ex));
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, ex.what());
+		invalidate_transaction = true;
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
+		invalidate_transaction = true;
 	} catch (std::exception &ex) {
 		result.SetError(PreservedError(ex));
+		invalidate_transaction = true;
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(PreservedError("Unhandled exception in ExecuteTaskInternal"));
+		invalidate_transaction = true;
 	} // LCOV_EXCL_STOP
-	EndQueryInternal(lock, false, true);
+	EndQueryInternal(lock, false, invalidate_transaction);
 	return PendingExecutionResult::EXECUTION_ERROR;
 }
 
