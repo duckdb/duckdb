@@ -653,24 +653,4 @@ unique_ptr<QueryResult> Executor::GetResult() {
 	return result_collector.GetResult(*result_collector.sink_state);
 }
 
-unique_ptr<DataChunk> Executor::FetchChunk() {
-	D_ASSERT(physical_plan);
-
-	auto chunk = make_uniq<DataChunk>();
-	root_executor->InitializeChunk(*chunk);
-	while (true) {
-		root_executor->ExecutePull(*chunk);
-		if (chunk->size() == 0) {
-			root_executor->PullFinalize();
-			if (NextExecutor()) {
-				continue;
-			}
-			break;
-		} else {
-			break;
-		}
-	}
-	return chunk;
-}
-
 } // namespace duckdb

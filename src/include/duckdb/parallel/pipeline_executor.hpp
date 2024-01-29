@@ -57,10 +57,6 @@ public:
 	void InitializeChunk(DataChunk &chunk);
 	//! Execute a pipeline without a sink, and retrieve a single DataChunk
 	//! Returns an empty chunk when finished.
-	void ExecutePull(DataChunk &result);
-	//! Called after depleting the source using ExecutePull
-	//! This flushes profiler states
-	void PullFinalize();
 
 	//! Registers the task in the interrupt_state to allow Source/Sink operators to block the task
 	void SetTaskForInterrupts(weak_ptr<Task> current_task);

@@ -16,15 +16,7 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
 	context = buffered_data->GetContext();
 }
 
-StreamQueryResult::~StreamQueryResult() {
-	if (!context) {
-		return;
-	}
-	// auto lock = context->LockContext();
-	// if (IsOpenInternal(*lock)) {
-	//	context->CleanupInternal(*lock, this);
-	//}
-}
+StreamQueryResult::~StreamQueryResult() {}
 
 string StreamQueryResult::ToString() {
 	string result;
