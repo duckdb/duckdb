@@ -148,7 +148,7 @@ public:
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
-	optional_ptr<Binding> GetBinding(const string &name, string &out_error);
+	optional_ptr<Binding> GetBinding(const string &name, PreservedError &out_error);
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);

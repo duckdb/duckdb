@@ -56,7 +56,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
 			// the schema is set - check if we can turn this the schema into a column ref
-			string error;
+			PreservedError error;
 			unique_ptr<ColumnRefExpression> colref;
 			if (function.catalog.empty()) {
 				colref = make_uniq<ColumnRefExpression>(function.schema);
@@ -64,7 +64,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 				colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
 			}
 			auto new_colref = QualifyColumnName(*colref, error);
-			bool is_col = error.empty() ? true : false;
+			bool is_col = !error.HasError();
 			bool is_col_alias = QualifyColumnAlias(*colref);
 
 			if (is_col || is_col_alias) {

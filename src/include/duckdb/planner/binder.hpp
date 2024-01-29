@@ -178,11 +178,11 @@ public:
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                            const string &schema = INVALID_SCHEMA);
 
-	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
+	bool HasMatchingBinding(const string &table_name, const string &column_name, PreservedError &error);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-	                        string &error_message);
+	                        PreservedError &error);
 	bool HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-	                        const string &column_name, string &error_message);
+	                        const string &column_name, PreservedError &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();

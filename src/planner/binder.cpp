@@ -353,25 +353,25 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-bool Binder::HasMatchingBinding(const string &table_name, const string &column_name, string &error_message) {
+bool Binder::HasMatchingBinding(const string &table_name, const string &column_name, PreservedError &error) {
 	string empty_schema;
-	return HasMatchingBinding(empty_schema, table_name, column_name, error_message);
+	return HasMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
 bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-                                string &error_message) {
+								PreservedError &error) {
 	string empty_catalog;
-	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error_message);
+	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
 bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-                                const string &column_name, string &error_message) {
+                                const string &column_name, PreservedError &error) {
 	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->alias) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
-		binding = bind_context.GetBinding(table_name, error_message);
+		binding = bind_context.GetBinding(table_name, error);
 	}
 
 	if (!binding) {
@@ -395,7 +395,7 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 	bool binding_found;
 	binding_found = binding->HasMatchingBinding(column_name);
 	if (!binding_found) {
-		error_message = binding->ColumnNotFoundError(column_name);
+		error = binding->ColumnNotFoundError(column_name);
 	}
 	return binding_found;
 }

@@ -99,11 +99,11 @@ public:
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
 	//! Returns a qualified column reference from a column name
-	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, PreservedError &error);
 	//! Returns a qualified column reference from a column reference with column_names.size() > 2
-	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, PreservedError &error);
 	//! Returns a qualified column reference from a column reference
-	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, PreservedError &error);
 	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
 	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
 	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
