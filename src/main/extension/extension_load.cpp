@@ -201,8 +201,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 
 	auto number_metadata_fields = std::stoi(metadata_field[0]);
-	D_ASSERT(number_metadata_fields == 4); // Currently hardcoded value
-	metadata_field.resize(number_metadata_fields);
+	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
+	metadata_field.resize(number_metadata_fields + 1);
 
 	auto filebase = fs.ExtractBaseName(filename);
 
