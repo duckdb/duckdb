@@ -354,7 +354,8 @@ SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &cont
 		Vector source_state(Value::POINTER(CastPointerToValue(lstate.state.aggregates[aggr_idx].get())));
 		Vector dest_state(Value::POINTER(CastPointerToValue(gstate.state.aggregates[aggr_idx].get())));
 
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), gstate.allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
 #ifdef DEBUG
 		gstate.state.counts[aggr_idx] += lstate.state.counts[aggr_idx];
@@ -424,6 +425,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 	auto &aggregates = op.aggregates;
 	auto &distinct_data = *op.distinct_data;
 
+	idx_t n_threads = 0;
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
 	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
@@ -443,10 +445,11 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		// Create global state for scanning
 		auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table_p = *distinct_data.radix_tables[table_idx];
+		n_threads += radix_table_p.MaxThreads(*gstate.distinct_state->radix_states[table_idx]);
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
+	n_threads = MaxValue<idx_t>(n_threads, 1);
 
-	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_threads; i++) {
 		tasks.push_back(
@@ -548,7 +551,8 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 		}
 
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
+		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(state.aggregates[agg_idx].get())));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(gstate.state.aggregates[agg_idx].get())));

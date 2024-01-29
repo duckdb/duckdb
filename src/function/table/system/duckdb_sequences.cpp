@@ -87,6 +87,7 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &seq = data.entries[data.offset++].get();
+		auto seq_data = seq.GetData();
 
 		// return values:
 		idx_t col = 0;
@@ -105,17 +106,17 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// temporary, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq.temporary));
 		// start_value, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.start_value));
+		output.SetValue(col++, count, Value::BIGINT(seq_data.start_value));
 		// min_value, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.min_value));
+		output.SetValue(col++, count, Value::BIGINT(seq_data.min_value));
 		// max_value, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.max_value));
+		output.SetValue(col++, count, Value::BIGINT(seq_data.max_value));
 		// increment_by, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.increment));
+		output.SetValue(col++, count, Value::BIGINT(seq_data.increment));
 		// cycle, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(seq.cycle));
+		output.SetValue(col++, count, Value::BOOLEAN(seq_data.cycle));
 		// last_value, BIGINT
-		output.SetValue(col++, count, seq.usage_count == 0 ? Value() : Value::BOOLEAN(seq.last_value));
+		output.SetValue(col++, count, seq_data.usage_count == 0 ? Value() : Value::BOOLEAN(seq_data.last_value));
 		// sql, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(seq.ToSQL()));
 

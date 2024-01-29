@@ -6,6 +6,9 @@
 load __TEST_DIR__/test_rle_nulls_edge_case.db
 
 statement ok
+pragma enable_verification
+
+statement ok
 PRAGMA force_compression = 'rle'
 
 statement ok

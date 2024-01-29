@@ -12,11 +12,12 @@ using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::SchemaElement;
 
 struct LogicalType;
+class ColumnReader;
 
 struct ParquetStatisticsUtils {
 
-	static unique_ptr<BaseStatistics> TransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type,
-	                                                            const ColumnChunk &column_chunk);
+	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ColumnReader &reader,
+	                                                            const vector<ColumnChunk> &columns);
 
 	static Value ConvertValue(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
 	                          const std::string &stats);

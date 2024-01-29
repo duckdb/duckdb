@@ -521,7 +521,7 @@ public:
 	void FinishEvent() override;
 
 private:
-	void CreateGlobalSources();
+	idx_t CreateGlobalSources();
 
 private:
 	ClientContext &context;
@@ -556,9 +556,7 @@ private:
 };
 
 void HashAggregateDistinctFinalizeEvent::Schedule() {
-	CreateGlobalSources();
-
-	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	const auto n_threads = CreateGlobalSources();
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_threads; i++) {
 		tasks.push_back(make_uniq<HashAggregateDistinctFinalizeTask>(*pipeline, shared_from_this(), op, gstate));
@@ -566,11 +564,14 @@ void HashAggregateDistinctFinalizeEvent::Schedule() {
 	SetTasks(std::move(tasks));
 }
 
-void HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
+idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 	auto &aggregates = op.grouped_aggregate_data.aggregates;
 	global_source_states.reserve(op.groupings.size());
+
+	idx_t n_threads = 0;
 	for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 		auto &grouping = op.groupings[grouping_idx];
+		auto &distinct_state = *gstate.grouping_states[grouping_idx].distinct_state;
 		auto &distinct_data = *grouping.distinct_data;
 
 		vector<unique_ptr<GlobalSourceState>> aggregate_sources;
@@ -587,10 +588,13 @@ void HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 
 			auto table_idx = distinct_data.info.table_map.at(agg_idx);
 			auto &radix_table_p = distinct_data.radix_tables[table_idx];
+			n_threads += radix_table_p->MaxThreads(*distinct_state.radix_states[table_idx]);
 			aggregate_sources.push_back(radix_table_p->GetGlobalSourceState(context));
 		}
 		global_source_states.push_back(std::move(aggregate_sources));
 	}
+
+	return MaxValue<idx_t>(n_threads, 1);
 }
 
 void HashAggregateDistinctFinalizeEvent::FinishEvent() {
