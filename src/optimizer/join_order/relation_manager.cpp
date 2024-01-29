@@ -103,16 +103,21 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 }
 
 static bool JoinIsReorderable(LogicalOperator &op) {
-	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
-	auto &join = op.Cast<LogicalComparisonJoin>();
-	switch (join.join_type) {
-	case JoinType::INNER:
-	case JoinType::SEMI:
-	case JoinType::ANTI:
+	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
-	default:
-		return false;
 	}
+	else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch (join.join_type) {
+		case JoinType::INNER:
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			return true;
+		default:
+			return false;
+		}
+	}
+	return false;
 }
 
 static bool HasNonReorderableChild(LogicalOperator &op) {
