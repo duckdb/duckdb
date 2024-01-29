@@ -153,13 +153,9 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 
 void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
 	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-		//		idx_t result_idx  = reader_data.column_ids[i];
-		//		if (options.file_options.filename || options.file_options.hive_partitioning||
-		// options.file_options.union_by_name){
-		idx_t result_idx = reader_data.column_ids[i];
-		//		}
-		file_names.emplace_back(bind_data.return_names[result_idx]);
-		file_types.emplace_back(bind_data.return_types[result_idx]);
+		idx_t result_idx  = reader_data.column_ids[i];
+		file_names.emplace_back(names[result_idx]);
+		file_types.emplace_back(types[result_idx]);
 		projected_columns.emplace_back(reader_data.column_ids[i]);
 	}
 
@@ -169,8 +165,10 @@ void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
 	}
 
 	// We need to be sure that our types are also following the cast_map
-	for (auto &cast_type : reader_data.cast_map) {
-		types[cast_type.first] = cast_type.second;
+	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+		if (reader_data.cast_map.find(reader_data.column_ids[i]) != reader_data.cast_map.end()){
+			file_types[i] = reader_data.cast_map[reader_data.column_ids[i]];
+		}
 	}
 }
 
