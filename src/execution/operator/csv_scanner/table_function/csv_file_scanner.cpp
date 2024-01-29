@@ -62,6 +62,11 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			MultiFileReader::InitializeReader(*this, options.file_options, bind_data.reader_bind,
 			                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
 			                                  file_path, context);
+			// We need to be sure that our types are also following the cast_map
+			for (auto &cast_type : reader_data.cast_map) {
+				types[cast_type.first] = cast_type.second;
+			}
+			int x = 0;
 			return;
 		}
 	}
@@ -84,6 +89,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 
 		MultiFileReader::InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 		                                  bind_data.return_names, column_ids, nullptr, file_path, context);
+		int x = 0;
 		return;
 	}
 	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
@@ -114,6 +120,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 
 	MultiFileReader::InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                  bind_data.return_names, column_ids, nullptr, file_path, context);
+	int x = 0;
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVReaderOptions &options_p)
