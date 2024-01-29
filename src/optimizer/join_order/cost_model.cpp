@@ -10,6 +10,7 @@ CostModel::CostModel(QueryGraphManager &query_graph_manager)
 
 double CostModel::ComputeCost(JoinNode &left, JoinNode &right, JoinType join_type) {
 	// TODO: need filter info here (like join type).
+	cardinality_estimator.PrintRelationToTdomInfo();
 	auto &combination = query_graph_manager.set_manager.Union(left.set, right.set);
 	auto join_card = cardinality_estimator.EstimateCardinalityWithSet<double>(combination);
 	auto join_cost = join_card;

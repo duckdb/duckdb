@@ -242,6 +242,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					}
 					right->relations.clear();
 					left->numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+				} else {
+					throw InternalException("whaat");
 				}
 				found_match = true;
 				break;
@@ -400,6 +402,7 @@ void CardinalityEstimator::PrintRelationToTdomInfo() {
 		Printer::Print(domain);
 	}
 }
+
 
 // LCOV_EXCL_STOP
 
