@@ -106,9 +106,11 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 		for (auto &f : functions.functions) {
 			candidate_str += "\t" + f.ToString() + "\n";
 		}
-		error = PreservedError(ExceptionType::BINDER, StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
-		                           "explicit type casts.\n\tCandidate functions:\n%s",
-		                           call_str, candidate_str));
+		error = PreservedError(
+		    ExceptionType::BINDER,
+		    StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
+		                       "explicit type casts.\n\tCandidate functions:\n%s",
+		                       call_str, candidate_str));
 		return candidate_functions;
 	}
 	candidate_functions.push_back(best_function);
@@ -128,9 +130,11 @@ idx_t FunctionBinder::MultipleCandidateException(const string &name, FunctionSet
 		T f = functions.GetFunctionByOffset(conf);
 		candidate_str += "\t" + f.ToString() + "\n";
 	}
-	error = PreservedError(ExceptionType::BINDER, StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
-	                           "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-	                           call_str, candidate_str));
+	error = PreservedError(
+	    ExceptionType::BINDER,
+	    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
+	                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
+	                       call_str, candidate_str));
 	return DConstants::INVALID_INDEX;
 }
 
@@ -174,7 +178,7 @@ idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functio
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
-								   PreservedError &error) {
+                                   PreservedError &error) {
 	vector<LogicalType> types;
 	for (auto &value : parameters) {
 		types.push_back(value.type());
@@ -278,8 +282,8 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const string &name,
-                                                          vector<unique_ptr<Expression>> children, PreservedError &error,
-                                                          bool is_operator, Binder *binder) {
+                                                          vector<unique_ptr<Expression>> children,
+                                                          PreservedError &error, bool is_operator, Binder *binder) {
 	// bind the function
 	auto &function =
 	    Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
@@ -289,8 +293,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogEntry &func,
-                                                          vector<unique_ptr<Expression>> children, PreservedError &error,
-                                                          bool is_operator, Binder *binder) {
+                                                          vector<unique_ptr<Expression>> children,
+                                                          PreservedError &error, bool is_operator, Binder *binder) {
 	// bind the function
 	idx_t best_function = BindFunction(func.name, func.functions, children, error);
 	if (best_function == DConstants::INVALID_INDEX) {

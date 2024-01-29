@@ -113,8 +113,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	// it's not, find candidates and error
 	auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 	string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-	error = PreservedError(ExceptionType::BINDER,
-	    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str));
+	error =
+	    PreservedError(ExceptionType::BINDER, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
+	                                                             column_name, candidate_str));
 	return nullptr;
 }
 
@@ -292,7 +293,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,
-																			 PreservedError &error) {
+                                                                             PreservedError &error) {
 
 	// two or more dots (i.e. "part1.part2.part3.part4...")
 	// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
@@ -329,7 +330,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(Col
 		struct_extract_start = 3;
 
 	} else if (binder.HasMatchingBinding(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2],
-										 error)) {
+	                                     error)) {
 		// part1 is a schema - the column reference is "schema.table.column"
 		// any additional fields are turned into struct_extract calls
 		result_expr = binder.bind_context.CreateColumnReference(col_ref.column_names[0], col_ref.column_names[1],

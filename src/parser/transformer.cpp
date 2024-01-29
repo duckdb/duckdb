@@ -234,7 +234,6 @@ unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode
 	return root;
 }
 
-
 void Transformer::SetQueryLocation(ParsedExpression &expr, int query_location) {
 	if (query_location < 0) {
 		return;

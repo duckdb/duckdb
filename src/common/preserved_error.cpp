@@ -11,14 +11,14 @@ PreservedError::PreservedError() : initialized(false), type(ExceptionType::INVAL
 }
 
 PreservedError::PreservedError(const Exception &exception)
-    : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.RawMessage())) {
+    : initialized(true), type(exception.type), raw_message(SanitizeErrorMessage(exception.what())) {
 }
 
-PreservedError::PreservedError(ExceptionType type, const string &message) :
-	initialized(true), type(type), raw_message(SanitizeErrorMessage(message)) {}
+PreservedError::PreservedError(ExceptionType type, const string &message)
+    : initialized(true), type(type), raw_message(SanitizeErrorMessage(message)) {
+}
 
-PreservedError::PreservedError(const string &message)
-    : PreservedError(ExceptionType::INVALID, message) {
+PreservedError::PreservedError(const string &message) : PreservedError(ExceptionType::INVALID, message) {
 	// Given a message in the form: 	xxxxx Error: yyyyy
 	// Try to match xxxxxxx with known error so to potentially reconstruct the original error type
 	auto position_semicolon = raw_message.find(':');

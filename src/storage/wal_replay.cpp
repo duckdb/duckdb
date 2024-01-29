@@ -649,7 +649,7 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		return;
 	}
 	if (!state.current_table) {
-		throw Exception("Corrupt WAL: insert without table");
+		throw InternalException("Corrupt WAL: insert without table");
 	}
 
 	// append to the current table

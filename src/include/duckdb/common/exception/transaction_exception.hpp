@@ -18,7 +18,7 @@ public:
 
 	template <typename... Args>
 	explicit TransactionException(const string &msg, Args... params)
-			: TransactionException(ConstructMessage(msg, params...)) {
+	    : TransactionException(ConstructMessage(msg, params...)) {
 	}
 };
 

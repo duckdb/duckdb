@@ -85,7 +85,7 @@ void RegisterExceptions(const py::module &m) {
 			auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(httpe.what()));
 
 			auto headers = py::dict();
-			for(auto &entry : httpe.GetExtraInfo()) {
+			for (auto &entry : httpe.GetExtraInfo()) {
 				if (entry.first == "status_code") {
 					e.attr("status_code") = std::stoi(entry.second);
 				} else if (entry.first == "response_body") {

@@ -128,12 +128,11 @@ void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requi
 	D_ASSERT(!active_query);
 	auto &db_inst = DatabaseInstance::GetDatabase(*this);
 	if (ValidChecker::IsInvalidated(db_inst)) {
-		throw FatalException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_DATABASE,
-		                                                   ValidChecker::InvalidatedMessage(db_inst)));
+		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));
 	}
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    ValidChecker::IsInvalidated(transaction.ActiveTransaction())) {
-		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
+		throw ErrorManager::InvalidatedTransaction(*this);
 	}
 	active_query = make_uniq<ActiveQueryContext>();
 	if (transaction.IsAutoCommit()) {
@@ -371,7 +370,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	D_ASSERT(active_query);
 	auto &statement = *statement_p;
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
-		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
+		throw ErrorManager::InvalidatedTransaction(*this);
 	}
 	auto &meta_transaction = MetaTransaction::Get(*this);
 	auto &manager = DatabaseManager::Get(*this);
@@ -381,7 +380,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 			throw InternalException("Database \"%s\" not found", modified_database);
 		}
 		if (entry->IsReadOnly()) {
-			throw Exception(StringUtil::Format(
+			throw InvalidInputException(StringUtil::Format(
 			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
@@ -493,7 +492,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 	auto statements = ParseStatementsInternal(*lock, query);
 	if (statements.size() != 1) {
-		throw Exception("ExtractPlan can only prepare a single statement");
+		throw InvalidInputException("ExtractPlan can only prepare a single statement");
 	}
 
 	unique_ptr<LogicalOperator> plan;
@@ -555,10 +554,10 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 		// first parse the query
 		auto statements = ParseStatementsInternal(*lock, query);
 		if (statements.empty()) {
-			throw Exception("No statement to prepare!");
+			throw InvalidInputException("No statement to prepare!");
 		}
 		if (statements.size() > 1) {
-			throw Exception("Cannot prepare multiple statements at once!");
+			throw InvalidInputException("Cannot prepare multiple statements at once!");
 		}
 		return PrepareInternal(*lock, std::move(statements[0]));
 	} catch (const Exception &ex) {
@@ -1014,11 +1013,11 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		    Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, description.schema, description.table);
 		// verify that the table columns and types match up
 		if (description.columns.size() != table_entry.GetColumns().PhysicalColumnCount()) {
-			throw Exception("Failed to append: table entry has different number of columns!");
+			throw InvalidInputException("Failed to append: table entry has different number of columns!");
 		}
 		for (idx_t i = 0; i < description.columns.size(); i++) {
 			if (description.columns[i].Type() != table_entry.GetColumns().GetColumn(PhysicalIndex(i)).Type()) {
-				throw Exception("Failed to append: table entry has different number of columns!");
+				throw InvalidInputException("Failed to append: table entry has different number of columns!");
 			}
 		}
 		table_entry.GetStorage().LocalAppend(table_entry, *this, collection);

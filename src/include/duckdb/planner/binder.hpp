@@ -153,10 +153,11 @@ public:
 	string FormatError(ParsedExpression &expr_context, const string &message);
 	string FormatError(TableRef &ref_context, const string &message);
 
-	string FormatErrorRecursive(optional_idx query_location, const string &message, vector<ExceptionFormatValue> &values);
+	string FormatErrorRecursive(optional_idx query_location, const string &message,
+	                            vector<ExceptionFormatValue> &values);
 	template <class T, typename... ARGS>
-	string FormatErrorRecursive(optional_idx query_location, const string &msg, vector<ExceptionFormatValue> &values, T param,
-	                            ARGS... params) {
+	string FormatErrorRecursive(optional_idx query_location, const string &msg, vector<ExceptionFormatValue> &values,
+	                            T param, ARGS... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}

@@ -123,7 +123,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
 		if (!result.left || !result.right) {
-			throw Exception("Failed to transform setop children.");
+			throw InternalException("Failed to transform setop children.");
 		}
 
 		result.setop_all = stmt.all;
@@ -141,7 +141,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			result.setop_type = SetOperationType::UNION_BY_NAME;
 			break;
 		default:
-			throw Exception("Unexpected setop type");
+			throw InternalException("Unexpected setop type");
 		}
 		if (stmt.sampleOptions) {
 			throw ParserException("SAMPLE clause is only allowed in regular SELECT statements");

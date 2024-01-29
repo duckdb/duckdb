@@ -650,7 +650,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
 	}
 	default:
-		throw Exception("Unrecognized type!");
+		throw InternalException("Unrecognized type!");
 	}
 	properties.return_type = StatementReturnType::NOTHING;
 	properties.allow_stream_result = false;

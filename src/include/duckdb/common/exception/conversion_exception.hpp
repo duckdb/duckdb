@@ -18,7 +18,7 @@ public:
 
 	template <typename... Args>
 	explicit ConversionException(const string &msg, Args... params)
-			: ConversionException(ConstructMessage(msg, params...)) {
+	    : ConversionException(ConstructMessage(msg, params...)) {
 	}
 };
 

@@ -41,12 +41,12 @@ public:
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns DConstants::INVALID_INDEX and sets error if none could be found
 	DUCKDB_API idx_t BindFunction(const string &name, TableFunctionSet &functions, const vector<LogicalType> &arguments,
-								  PreservedError &error);
+	                              PreservedError &error);
 	DUCKDB_API idx_t BindFunction(const string &name, TableFunctionSet &functions,
 	                              vector<unique_ptr<Expression>> &arguments, PreservedError &error);
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API idx_t BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
-								  PreservedError &error);
+	                              PreservedError &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, PreservedError &error,
@@ -83,7 +83,7 @@ private:
 
 	template <class T>
 	idx_t BindFunctionFromArguments(const string &name, FunctionSet<T> &functions, const vector<LogicalType> &arguments,
-									PreservedError &error);
+	                                PreservedError &error);
 
 	vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments);
 };

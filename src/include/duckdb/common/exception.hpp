@@ -84,12 +84,12 @@ enum class ExceptionType {
 	MISSING_EXTENSION = 39, // Thrown when an extension is used but not loaded
 	AUTOLOAD = 40           // Thrown when an extension is used but not loaded
 };
-class HTTPException;
 
 class Exception : public std::exception {
 public:
-	DUCKDB_API explicit Exception(const string &msg);
 	DUCKDB_API Exception(ExceptionType exception_type, const string &message);
+	DUCKDB_API Exception(ExceptionType exception_type, const string &message,
+	                     const unordered_map<string, string> &extra_info);
 
 	ExceptionType type;
 
@@ -109,6 +109,13 @@ public:
 		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
+
+	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const string &subtype,
+	                                                                    optional_idx error_location);
+
+	DUCKDB_API static string ToJSON(ExceptionType type, const string &message);
+	DUCKDB_API static string ToJSON(ExceptionType type, const string &message,
+	                                const unordered_map<string, string> &extra_info);
 
 	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
 
@@ -133,8 +140,6 @@ public:
 protected:
 	unordered_map<string, string> extra_info;
 
-	void InitializeExtraInfo(const string &subtype, optional_idx error_location);
-
 private:
 	string exception_message_;
 	string raw_message_;
@@ -143,11 +148,12 @@ private:
 //===--------------------------------------------------------------------===//
 // Exception derived classes
 //===--------------------------------------------------------------------===//
-
 //! Exceptions that are StandardExceptions do NOT invalidate the current transaction when thrown
 class StandardException : public Exception {
 public:
 	DUCKDB_API StandardException(ExceptionType exception_type, const string &message);
+	DUCKDB_API StandardException(ExceptionType exception_type, const string &message,
+	                             const unordered_map<string, string> &extra_info);
 };
 
 class ConnectionException : public StandardException {
@@ -246,7 +252,7 @@ public:
 
 	template <typename... Args>
 	explicit NotImplementedException(const string &msg, Args... params)
-			: NotImplementedException(ConstructMessage(msg, params...)) {
+	    : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
 

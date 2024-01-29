@@ -17,7 +17,6 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
-
 namespace duckdb {
 
 class Serializer {

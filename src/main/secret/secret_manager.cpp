@@ -580,11 +580,11 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	} catch (SerializationException &e) {
 		throw SerializationException("Failed to deserialize the persistent secret file: '%s'. The file maybe be "
 		                             "corrupt, please remove the file, restart and try again. (error message: '%s')",
-		                             secret_path, e.RawMessage());
+		                             secret_path, e.what());
 	} catch (IOException &e) {
 		throw IOException("Failed to open the persistent secret file: '%s'. Some other process may have removed it, "
 		                  "please restart and try again. (error message: '%s')",
-		                  secret_path, e.RawMessage());
+		                  secret_path, e.what());
 	}
 
 	throw SerializationException("Failed to deserialize secret '%s' from '%s': file appears empty! Please remove the "
