@@ -24,7 +24,6 @@ Exception::Exception(ExceptionType exception_type, const string &message,
     : std::runtime_error(ToJSON(exception_type, message, extra_info)) {
 }
 
-
 string Exception::ToJSON(ExceptionType type, const string &message) {
 	unordered_map<string, string> extra_info;
 	return ToJSON(type, message, extra_info);
@@ -33,7 +32,6 @@ string Exception::ToJSON(ExceptionType type, const string &message) {
 string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
 	return StringUtil::ToJSONMap(type, message, extra_info);
 }
-
 
 bool Exception::UncaughtException() {
 #if __cplusplus >= 201703L

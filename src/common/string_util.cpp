@@ -406,7 +406,7 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 }
 
 static void SkipSpaces(const string &message, idx_t &pos) {
-	for(; pos < message.size() && StringUtil::CharacterIsSpace(message[pos]); pos++) {
+	for (; pos < message.size() && StringUtil::CharacterIsSpace(message[pos]); pos++) {
 	}
 }
 
@@ -425,7 +425,7 @@ static string ParseJSONValue(const string &message, idx_t &pos) {
 		return result;
 	}
 	pos++;
-	for(; pos < message.size(); pos++) {
+	for (; pos < message.size(); pos++) {
 		if (message[pos] == '\\') {
 			// escape
 			pos++;
@@ -434,37 +434,36 @@ static string ParseJSONValue(const string &message, idx_t &pos) {
 				D_ASSERT(0);
 				return result;
 			}
-			switch(message[pos]) {
-				case '"':
-					result += '"';
-					break;
-				case 'r':
-					result += '\r';
-					break;
-				case 'n':
-					result += '\n';
-					break;
-				case 't':
-					result += '\t';
-					break;
-				case 'b':
-					result += '\b';
-					break;
-				case 'f':
-					result += '\f';
-					break;
-				case '0':
-					result += '\0';
-					break;
-				case '/':
-					result += '/';
-					break;
-				default:
-					// unsupported escape character
-					// NOTE: we do not support unicode escape sequences here
-					D_ASSERT(0);
-					result += message[pos];
-					break;
+			switch (message[pos]) {
+			case 'r':
+				result += '\r';
+				break;
+			case 'n':
+				result += '\n';
+				break;
+			case 't':
+				result += '\t';
+				break;
+			case 'b':
+				result += '\b';
+				break;
+			case 'f':
+				result += '\f';
+				break;
+			case '0':
+				result += '\0';
+				break;
+			case '\\':
+			case '"':
+			case '/':
+				result += message[pos];
+				break;
+			default:
+				// unsupported escape character
+				// NOTE: we do not support unicode escape sequences here
+				D_ASSERT(0);
+				result += message[pos];
+				break;
 			}
 		} else if (message[pos] == '"') {
 			// end of message
@@ -491,7 +490,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 		return result;
 	}
 	pos++;
-	while(true) {
+	while (true) {
 		SkipSpaces(json, pos);
 		if (MatchCharacter(json, pos, '}')) {
 			// end of object
@@ -526,36 +525,36 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 
 static void WriteJSONValue(const string &value, string &result) {
 	result += '"';
-	for(auto c : value) {
+	for (auto c : value) {
 		// check for characters we need to escape
-		switch(c) {
-			case '\0':
-				result += "\\0";
-				break;
-			case '\\':
-				result += "\\\\";
-				break;
-			case '\b':
-				result += "\\b";
-				break;
-			case '\f':
-				result += "\\f";
-				break;
-			case '\t':
-				result += "\\t";
-				break;
-			case '\r':
-				result += "\\r";
-				break;
-			case '\n':
-				result += "\\n";
-				break;
-			case '"':
-				result += "\\\"";
-				break;
-			default:
-				result += c;
-				break;
+		switch (c) {
+		case '\0':
+			result += "\\0";
+			break;
+		case '\\':
+			result += "\\\\";
+			break;
+		case '\b':
+			result += "\\b";
+			break;
+		case '\f':
+			result += "\\f";
+			break;
+		case '\t':
+			result += "\\t";
+			break;
+		case '\r':
+			result += "\\r";
+			break;
+		case '\n':
+			result += "\\n";
+			break;
+		case '"':
+			result += "\\\"";
+			break;
+		default:
+			result += c;
+			break;
 		}
 	}
 	result += '"';
@@ -576,7 +575,7 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	WriteJSONPair("exception_type", Exception::ExceptionTypeToString(type), result);
 	result += ",";
 	WriteJSONPair("exception_message", message, result);
-	for(auto &entry : map) {
+	for (auto &entry : map) {
 		result += ",";
 		WriteJSONPair(entry.first, entry.second, result);
 	}

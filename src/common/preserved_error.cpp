@@ -10,15 +10,15 @@ namespace duckdb {
 PreservedError::PreservedError() : initialized(false), type(ExceptionType::INVALID) {
 }
 
-PreservedError::PreservedError(const std::exception &ex) :
-	PreservedError(ex.what()) {}
+PreservedError::PreservedError(const std::exception &ex) : PreservedError(ex.what()) {
+}
 
 PreservedError::PreservedError(ExceptionType type, const string &message)
     : initialized(true), type(type), raw_message(SanitizeErrorMessage(message)) {
 }
 
 PreservedError::PreservedError(const string &message)
-	: initialized(true), type(ExceptionType::INVALID), raw_message(string()) {
+    : initialized(true), type(ExceptionType::INVALID), raw_message(string()) {
 
 	// parse the constructed JSON
 	if (message.empty() || message[0] != '{') {
@@ -27,7 +27,7 @@ PreservedError::PreservedError(const string &message)
 		return;
 	} else {
 		auto info = StringUtil::ParseJSONMap(message);
-		for(auto &entry : info) {
+		for (auto &entry : info) {
 			if (entry.first == "exception_type") {
 				type = Exception::StringToExceptionType(entry.second);
 			} else if (entry.first == "exception_message") {

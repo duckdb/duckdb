@@ -170,7 +170,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 			                          StringUtil::Lower(Exception::ExceptionTypeToString(error.Type())).c_str());
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_message", error.RawMessage().c_str());
 			// add extra info
-			for(auto &entry : error.ExtraInfo()) {
+			for (auto &entry : error.ExtraInfo()) {
 				yyjson_mut_obj_add_strcpy(doc, result_obj, entry.first.c_str(), entry.second.c_str());
 			}
 

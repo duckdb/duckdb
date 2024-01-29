@@ -58,7 +58,7 @@ Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 	return Transaction::Get(context, catalog.GetAttached());
 }
 
-	PreservedError MetaTransaction::Commit() {
+PreservedError MetaTransaction::Commit() {
 	PreservedError error;
 	// commit transactions in reverse order
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
