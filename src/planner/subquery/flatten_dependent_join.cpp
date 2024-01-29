@@ -68,7 +68,10 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, boo
 }
 
 void FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator *op) {
-	has_correlated_expressions[op] = true;
+	// Do not mark base table scans as correlated
+	if (op->type != LogicalOperatorType::LOGICAL_GET || op->children.size() == 1) {
+		has_correlated_expressions[op] = true;
+	}
 	for (auto &child : op->children) {
 		MarkSubtreeCorrelated(child.get());
 	}
