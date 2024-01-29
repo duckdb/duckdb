@@ -70,7 +70,7 @@ public:
 	static string ExtractExtensionPrefixFromPath(const string &path);
 
 	//! Apply any known extension aliases, return the lowercase name
-	static string ApplyExtensionAlias(string extension_name);
+	static string ApplyExtensionAlias(const string &extension_name);
 
 	static string GetExtensionName(const string &extension);
 	static bool IsFullPath(const string &extension);
