@@ -24,7 +24,7 @@ struct DemoSecretType {
 			scope = {""};
 		}
 		auto return_value = make_uniq<KeyValueSecret>(scope, input.type, input.provider, input.name);
-		return return_value;
+		return std::move(return_value);
 	}
 
 	static void RegisterDemoSecret(DatabaseInstance &instance, const string &type_name) {
