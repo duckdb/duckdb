@@ -403,7 +403,6 @@ void CardinalityEstimator::PrintRelationToTdomInfo() {
 	}
 }
 
-
 // LCOV_EXCL_STOP
 
 } // namespace duckdb
