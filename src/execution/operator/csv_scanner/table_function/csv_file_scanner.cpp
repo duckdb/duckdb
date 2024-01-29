@@ -155,7 +155,7 @@ void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
 	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
 		//		idx_t result_idx  = reader_data.column_ids[i];
 		//		if (options.file_options.filename || options.file_options.hive_partitioning||
-		//options.file_options.union_by_name){
+		// options.file_options.union_by_name){
 		idx_t result_idx = reader_data.column_ids[i];
 		//		}
 		file_names.emplace_back(bind_data.return_names[result_idx]);

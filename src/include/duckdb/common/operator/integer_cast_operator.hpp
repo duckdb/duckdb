@@ -190,7 +190,7 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		bool success = true;
 		if (state.decimal_digits == 1 && state.decimal >= 5) {
 			if (NEGATIVE) {
-				success = TryMultiplyOperator::Operation(tmp, (result_t)1, tmp);
+				success = TrySubtractOperator::Operation(tmp, (result_t)1, tmp);
 			} else {
 				success = TryAddOperator::Operation(tmp, (result_t)1, tmp);
 			}
