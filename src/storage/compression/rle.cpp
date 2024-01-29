@@ -132,8 +132,7 @@ struct RLECompressState : public CompressionState {
 	static idx_t MaxRLECount() {
 		auto entry_size = sizeof(T) + sizeof(rle_count_t);
 		auto entry_count = (Storage::BLOCK_SIZE - RLEConstants::RLE_HEADER_SIZE) / entry_size;
-		auto max_vector_count = entry_count / STANDARD_VECTOR_SIZE;
-		return max_vector_count * STANDARD_VECTOR_SIZE;
+		return entry_count;
 	}
 
 	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p)

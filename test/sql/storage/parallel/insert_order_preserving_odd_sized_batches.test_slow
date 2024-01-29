@@ -2,11 +2,15 @@
 # description: Test parallel order-preserving insert
 # group: [parallel]
 
+# for smaller block sizes, we see different numbers of distinct blocks
+# because the segment size is bound by the block size
+require block_size 262144
+
 require vector_size 512
 
-load __TEST_DIR__/insert_odd_sized_batches.db
-
 require parquet
+
+load __TEST_DIR__/insert_odd_sized_batches.db
 
 query I
 CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
@@ -15,7 +19,7 @@ CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
 
 # check the block count and median number of rows per row group
 query I
-SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers');
+SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers');
 ----
 true
 
@@ -50,7 +54,7 @@ SELECT * FROM integers_parquet LIMIT 5 OFFSET 773654
 773658
 
 query I
-SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_parquet');
+SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet');
 ----
 true
 
@@ -67,7 +71,7 @@ statement ok
 CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
 
 query I
-SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_parquet_no_order');
+SELECT COUNT(DISTINCT block_id) < 4 FROM pragma_storage_info('integers_parquet_no_order');
 ----
 true
 
