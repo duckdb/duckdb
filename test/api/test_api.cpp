@@ -309,6 +309,20 @@ TEST_CASE("Test fetch API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
 
+TEST_CASE("Test fetch API leak", "[api]") {
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
+	// remove connection with active stream result
+	auto result = conn->SendQuery("SELECT 42");
+	// close the connection
+	conn.reset();
+	// now try to fetch a chunk, this should not return a nullptr
+	auto chunk = result->Fetch();
+	REQUIRE(chunk);
+
+	db.reset();
+}
+
 TEST_CASE("Test fetch API robustness", "[api]") {
 	auto db = make_uniq<DuckDB>(nullptr);
 	auto conn = make_uniq<Connection>(*db);
