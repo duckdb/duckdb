@@ -277,8 +277,10 @@ void CSVSniffer::DetectTypes() {
 			for (auto &format_candidate : format_candidates) {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
-			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
-				best_header_row.emplace_back(tuples.GetValue(0, col_idx));
+			if (tuples.number_of_rows > 1) {
+				for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
+					best_header_row.emplace_back(tuples.GetValue(0, col_idx));
+				}
 			}
 		}
 	}
@@ -287,7 +289,7 @@ void CSVSniffer::DetectTypes() {
 		error_handler->Error(error);
 	}
 	// Assert that it's all good at this point.
-	D_ASSERT(best_candidate && !best_format_candidates.empty() && !best_header_row.empty());
+	D_ASSERT(best_candidate && !best_format_candidates.empty());
 }
 
 } // namespace duckdb

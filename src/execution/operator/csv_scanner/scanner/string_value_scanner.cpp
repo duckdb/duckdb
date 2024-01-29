@@ -135,6 +135,14 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	if (chunk_col_id >= number_of_columns) {
 		HandleOverLimitRows();
+		chunk_col_id = cur_col_id;
+		if (!projected_columns.empty()) {
+			if (projected_columns.find(cur_col_id) == projected_columns.end()) {
+				cur_col_id++;
+				return;
+			}
+			chunk_col_id = projected_columns[cur_col_id];
+		}
 	}
 	bool success = true;
 	switch (parse_types[chunk_col_id]) {
