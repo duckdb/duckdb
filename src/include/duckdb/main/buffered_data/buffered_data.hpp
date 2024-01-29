@@ -48,13 +48,17 @@ public:
 	virtual PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	shared_ptr<ClientContext> GetContext() {
-		return context;
+		return context.lock();
 	}
 	bool Closed() const {
-		return !context;
+		if (context.expired()) {
+			return false;
+		}
+		auto c = context.lock();
+		return c != nullptr;
 	}
 	void Close() {
-		context = nullptr;
+		context.reset();
 	}
 
 public:
@@ -76,7 +80,7 @@ public:
 
 protected:
 	Type type;
-	shared_ptr<ClientContext> context;
+	weak_ptr<ClientContext> context;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 };

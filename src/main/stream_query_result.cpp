@@ -20,8 +20,8 @@ StreamQueryResult::~StreamQueryResult() {
 	if (!context) {
 		return;
 	}
-	//auto lock = context->LockContext();
-	//if (IsOpenInternal(*lock)) {
+	// auto lock = context->LockContext();
+	// if (IsOpenInternal(*lock)) {
 	//	context->CleanupInternal(*lock, this);
 	//}
 }

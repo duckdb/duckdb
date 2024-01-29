@@ -29,6 +29,7 @@ private:
 
 public:
 	SimpleBufferedData(shared_ptr<ClientContext> context);
+	~SimpleBufferedData() override;
 
 public:
 	void Append(unique_ptr<DataChunk> chunk);

@@ -11,6 +11,9 @@ SimpleBufferedData::SimpleBufferedData(shared_ptr<ClientContext> context)
 	buffered_count = 0;
 }
 
+SimpleBufferedData::~SimpleBufferedData() {
+}
+
 void SimpleBufferedData::BlockSink(const BlockedSink &blocked_sink) {
 	lock_guard<mutex> lock(glock);
 	blocked_sinks.push(blocked_sink);
@@ -49,15 +52,16 @@ PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &re
 		return PendingExecutionResult::RESULT_READY;
 	}
 	UnblockSinks();
+	auto cc = context.lock();
 	// Let the executor run until the buffer is no longer empty
-	auto res = context->ExecuteTaskInternal(context_lock, result);
+	auto res = cc->ExecuteTaskInternal(context_lock, result);
 	while (!PendingQueryResult::IsFinished(res)) {
 		if (buffered_count >= BUFFER_SIZE) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
 		UnblockSinks();
-		res = context->ExecuteTaskInternal(context_lock, result);
+		res = cc->ExecuteTaskInternal(context_lock, result);
 	}
 	if (result.HasError()) {
 		Close();
