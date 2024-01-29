@@ -20,13 +20,13 @@ duckdb_platform_out = sys.argv[2]
 extension_path = sys.argv[3]
 dst_path = sys.argv[4]
 
-with open(duckdb_platform_out, 'r') as f:
-    duckdb_platform = [line.split(None, 1)[0] for line in f][0]
-
 if os.name == 'nt':
-    duckdb_path = duckdb_path.replace("/", "\\")
+    duckdb_platform_out = duckdb_platform_out.replace("/", "\\")
     extension_path = extension_path.replace("/", "\\")
     dst_path = dst_path.replace("/", "\\")
+
+with open(duckdb_platform_out, 'r') as f:
+    duckdb_platform = [line.split(None, 1)[0] for line in f][0]
 
 print(f"Paths as received: {extension_path}, {dst_path} + '/{duckdb_version}/{duckdb_platform}/")
 
