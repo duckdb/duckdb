@@ -53,11 +53,6 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
-		for (idx_t i = csv_file_scan->file_types.size(); i < number_of_columns; i++) {
-			// This can happen if we have sneaky null columns at the end that we wish to ignore
-			parse_types[i] = LogicalTypeId::VARCHAR;
-			logical_types.emplace_back(LogicalType::VARCHAR);
-		}
 	}
 	// Fill out Names
 	if (!csv_file_scan) {
@@ -69,14 +64,20 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		names = csv_file_scan->file_names;
 		bool projecting_columns = false;
 		idx_t i = 0;
-		for (auto& col_idx: csv_file_scan->projected_columns){
-			projected_columns[col_idx]=i;
-			if (col_idx != i){
+		for (auto &col_idx : csv_file_scan->projected_columns) {
+			projected_columns[col_idx] = i;
+			if (col_idx != i) {
 				projecting_columns = true;
 			}
+			i++;
 		}
-		if (!projecting_columns && projected_columns.size() == number_of_columns){
+		if (!projecting_columns && projected_columns.size() == number_of_columns) {
 			projected_columns.clear();
+			for (idx_t j = logical_types.size(); j < number_of_columns; j++) {
+				// This can happen if we have sneaky null columns at the end that we wish to ignore
+				parse_types[j] = LogicalTypeId::VARCHAR;
+				logical_types.emplace_back(LogicalType::VARCHAR);
+			}
 		}
 	}
 
@@ -90,8 +91,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
 	idx_t chunk_col_id = cur_col_id;
-	if (!projected_columns.empty()){
-		if (projected_columns.find(cur_col_id) == projected_columns.end()){
+	if (!projected_columns.empty()) {
+		if (projected_columns.find(cur_col_id) == projected_columns.end()) {
 			cur_col_id++;
 			return;
 		}
@@ -127,7 +128,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					}
 					validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
 				}
-				chunk_col_id++;
+				cur_col_id++;
 				return;
 			}
 		}
@@ -138,20 +139,20 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	bool success = true;
 	switch (parse_types[chunk_col_id]) {
 	case LogicalTypeId::TINYINT:
-		success =
-		    TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
+		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+		                               false);
 		break;
 	case LogicalTypeId::SMALLINT:
-		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                               false);
+		success = TrySimpleIntegerCast(value_ptr, size,
+		                               static_cast<int16_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::INTEGER:
-		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                               false);
+		success = TrySimpleIntegerCast(value_ptr, size,
+		                               static_cast<int32_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::BIGINT:
-		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                               false);
+		success = TrySimpleIntegerCast(value_ptr, size,
+		                               static_cast<int64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::UTINYINT:
 		success = TrySimpleIntegerCast<uint8_t, false>(
@@ -170,8 +171,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
 	case LogicalTypeId::DOUBLE:
-		success = TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                                false, state_machine.options.decimal_separator[0]);
+		success =
+		    TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
+		                          false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::FLOAT:
 		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[chunk_col_id])[number_of_rows],
@@ -185,8 +187,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP: {
-		success = Timestamp::TryConvertTimestamp(value_ptr, size,
-		                                         static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
+		success = Timestamp::TryConvertTimestamp(
+		              value_ptr, size, static_cast<timestamp_t *>(vector_ptr[chunk_col_id])[number_of_rows]) ==
 		          TimestampCastResult::SUCCESS;
 		break;
 	}
@@ -203,7 +205,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		// We had a casting error, we push it here because we can only error when finishing the line read.
 		cast_errors[chunk_col_id] = std::string(value_ptr, size);
 	}
-	chunk_col_id++;
+	cur_col_id++;
 }
 
 Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
@@ -477,13 +479,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
 	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
-		auto col_idx = reader_data.column_ids[c];
-		auto result_idx = reader_data.column_mapping[c];
-		if (col_idx >= parse_chunk.ColumnCount()) {
-			throw InvalidInputException("Mismatch between the schema of different files");
-		}
-		auto &parse_vector = parse_chunk.data[col_idx];
-		auto &result_vector = insert_chunk.data[result_idx];
+		auto &parse_vector = parse_chunk.data[c];
+		auto &result_vector = insert_chunk.data[c];
 		auto &type = result_vector.GetType();
 		if (CanDirectlyCast(type, state_machine->options.dialect_options.date_format)) {
 			// target type is varchar: no need to convert
@@ -538,8 +535,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 					row.push_back(parse_chunk.GetValue(col, line_error));
 				}
-				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-				                                     error_message, col_idx, row);
+				auto csv_error =
+				    CSVError::CastError(state_machine->options, csv_file_scan->names[c], error_message, c, row);
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
 				error_handler->Error(lines_per_batch, csv_error);
@@ -555,8 +552,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
 					}
-					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx, row);
+					auto csv_error =
+					    CSVError::CastError(state_machine->options, csv_file_scan->names[c], error_message, c, row);
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
 					error_handler->Error(lines_per_batch, csv_error);

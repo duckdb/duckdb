@@ -151,21 +151,24 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 	    make_shared<CSVStateMachine>(state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 }
 
-void CSVFileScan::InitializeFileNamesTypes(){
-	idx_t i =0;
-	for (auto& col_map: reader_data.column_mapping){
+void CSVFileScan::InitializeFileNamesTypes() {
+	idx_t i = 0;
+	for (auto &col_map : reader_data.column_mapping) {
 		idx_t col_idx = reader_data.column_ids[col_map];
 		file_names.emplace_back(names[col_idx]);
 		file_types.emplace_back(types[col_idx]);
 		projected_columns.emplace_back(col_idx);
 		i++;
 	}
+	if (reader_data.column_ids.empty()) {
+		file_names = names;
+		file_types = types;
+	}
 
 	// We need to be sure that our types are also following the cast_map
 	for (auto &cast_type : reader_data.cast_map) {
 		types[cast_type.first] = cast_type.second;
 	}
-
 }
 
 const string &CSVFileScan::GetFileName() {
