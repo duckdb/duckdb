@@ -127,6 +127,9 @@ SELECT used_blocks < 10 FROM pragma_database_size();
 statement ok
 INSERT INTO idx_tbl SELECT range, range, range FROM range(30000);
 
+statement ok
+checkpoint;
+
 query I
 SELECT used_blocks > 10 FROM pragma_database_size();
 ----
