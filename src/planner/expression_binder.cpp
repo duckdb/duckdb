@@ -255,6 +255,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 
 PreservedError ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
+	auto query_location = expr->query_location;
 	auto &expression = *expr;
 	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
@@ -267,6 +268,7 @@ PreservedError ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t 
 		return std::move(result.error);
 	}
 	// successfully bound: replace the node with a BoundExpression
+	result.expression->query_location = query_location;
 	expr = make_uniq<BoundExpression>(std::move(result.expression));
 	auto &be = expr->Cast<BoundExpression>();
 	be.alias = alias;

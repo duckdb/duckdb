@@ -20,6 +20,7 @@
 namespace duckdb {
 enum class PhysicalType : uint8_t;
 struct LogicalType;
+class Expression;
 class ParsedExpression;
 class QueryErrorContext;
 class TableRef;
@@ -107,6 +108,7 @@ public:
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
+	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const Expression &expr);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const ParsedExpression &expr);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const QueryErrorContext &error_context);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const TableRef &ref);
@@ -302,10 +304,15 @@ public:
 class InvalidInputException : public Exception {
 public:
 	DUCKDB_API explicit InvalidInputException(const string &msg);
+	DUCKDB_API explicit InvalidInputException(const string &msg, const unordered_map<string, string> &extra_info);
 
 	template <typename... Args>
 	explicit InvalidInputException(const string &msg, Args... params)
 	    : InvalidInputException(ConstructMessage(msg, params...)) {
+	}
+	template <typename... Args>
+	explicit InvalidInputException(Expression &expr, const string &msg, Args... params)
+			: InvalidInputException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 };
 

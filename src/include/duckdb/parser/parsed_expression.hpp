@@ -13,7 +13,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/expression_util.hpp"
-#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 class Deserializer;
@@ -33,9 +32,6 @@ public:
 	//! Create an Expression
 	ParsedExpression(ExpressionType type, ExpressionClass expression_class) : BaseExpression(type, expression_class) {
 	}
-
-	//! The location in the query (if any)
-	optional_idx query_location;
 
 public:
 	bool IsAggregate() const override;
