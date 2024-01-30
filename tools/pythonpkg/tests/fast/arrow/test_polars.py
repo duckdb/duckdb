@@ -17,12 +17,12 @@ class TestPolars(object):
             }
         )
         # scan plus return a polars dataframe
-        polars_result = duckdb.sql('SELECT * FROM df').pl()
+        polars_result = duckdb_cursor.sql('SELECT * FROM df').pl()
         pl_testing.assert_frame_equal(df, polars_result)
 
         # now do the same for a lazy dataframe
         lazy_df = df.lazy()
-        lazy_result = duckdb.sql('SELECT * FROM lazy_df').pl()
+        lazy_result = duckdb_cursor.sql('SELECT * FROM lazy_df').pl()
         pl_testing.assert_frame_equal(df, lazy_result)
 
         con = duckdb.connect()

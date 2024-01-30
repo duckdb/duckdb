@@ -5,7 +5,10 @@ import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Runner {
     static {
@@ -16,11 +19,12 @@ public class Runner {
         }
     }
 
-    public static int runTests(String[] args, Class<?> testClass) {
+    public static int runTests(String[] args, Class<?>... testClasses) {
         // Woo I can do reflection too, take this, JUnit!
-        Method[] methods = testClass.getMethods();
-
-        Arrays.sort(methods, Comparator.comparing(Method::getName));
+        List<Method> methods = Arrays.stream(testClasses)
+                                   .flatMap(clazz -> Arrays.stream(clazz.getMethods()))
+                                   .sorted(Comparator.comparing(Method::getName))
+                                   .collect(Collectors.toList());
 
         String specific_test = null;
         if (args.length >= 1) {
@@ -34,7 +38,7 @@ public class Runner {
                 if (specific_test != null && !m.getName().contains(specific_test)) {
                     continue;
                 }
-                System.out.print(m.getName() + " ");
+                System.out.print(m.getDeclaringClass().getSimpleName() + "#" + m.getName() + " ");
 
                 LocalDateTime start = LocalDateTime.now();
                 try {

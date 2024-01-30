@@ -95,8 +95,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		filename = address;
 #else
 
-		string local_path =
-		    !config.options.extension_directory.empty() ? config.options.extension_directory : fs.GetHomeDirectory();
+		string local_path = !config.options.extension_directory.empty() ? config.options.extension_directory
+		                                                                : ExtensionHelper::DefaultExtensionFolder(fs);
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);

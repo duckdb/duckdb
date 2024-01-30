@@ -82,7 +82,7 @@ static vector<string> InitialKeywords() {
 	return vector<string> {"SELECT",     "INSERT",   "DELETE",  "UPDATE",  "CREATE",   "DROP",      "COPY",
 	                       "ALTER",      "WITH",     "EXPORT",  "BEGIN",   "VACUUM",   "PREPARE",   "EXECUTE",
 	                       "DEALLOCATE", "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE", "LOAD",
-	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL",    "FROM"};
+	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL",    "FROM",     "PIVOT",     "UNPIVOT"};
 }
 
 static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
@@ -238,7 +238,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	next_keyword_map["INSERT"] = {"INTO", "VALUES", "SELECT", "DEFAULT"};
 	next_keyword_map["DELETE"] = {"FROM", "WHERE", "USING"};
 	next_keyword_map["UPDATE"] = {"SET", "WHERE"};
-	next_keyword_map["CREATE"] = {"TABLE", "SCHEMA", "VIEW", "SEQUENCE", "MACRO", "FUNCTION"};
+	next_keyword_map["CREATE"] = {"TABLE", "SCHEMA", "VIEW", "SEQUENCE", "MACRO", "FUNCTION", "SECRET", "TYPE"};
 	next_keyword_map["DROP"] = next_keyword_map["CREATE"];
 	next_keyword_map["ALTER"] = {"TABLE", "VIEW", "ADD", "DROP", "COLUMN", "SET", "TYPE", "DEFAULT", "DATA", "RENAME"};
 
@@ -261,6 +261,7 @@ regular_scan:
 			// semicolon: restart suggestion flow
 			suggest_state = SuggestionState::SUGGEST_KEYWORD;
 			suggested_keywords.clear();
+			last_pos = pos + 1;
 			continue;
 		}
 		if (StringUtil::CharacterIsSpace(sql[pos]) || StringUtil::CharacterIsOperator(sql[pos])) {
@@ -320,6 +321,10 @@ process_word : {
 	} else {
 		suggested_keywords.erase(next_word);
 	}
+	if (std::all_of(next_word.begin(), next_word.end(), ::isdigit)) {
+		// Numbers are OK
+		suggested_keywords.clear();
+	}
 	seen_word = false;
 	last_pos = pos;
 	goto regular_scan;
@@ -355,6 +360,10 @@ standard_suggestion:
 	if (last_pos > sql.size()) {
 		D_ASSERT(false);
 		throw NotImplementedException("last_pos out of range");
+	}
+	if (std::all_of(last_word.begin(), last_word.end(), ::isdigit)) {
+		// Numbers are OK
+		suggestions.clear();
 	}
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
 }
