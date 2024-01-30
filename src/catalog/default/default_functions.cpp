@@ -162,6 +162,9 @@ static DefaultMacro internal_macros[] = {
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
 
+    // storage helper functions
+    {DEFAULT_SCHEMA, "get_block_size", {"db_name"}, "(SELECT block_size FROM pragma_database_size() WHERE database_name = db_name)"},
+
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
