@@ -29,8 +29,6 @@ public:
 	[[noreturn]] DUCKDB_API void Throw(const string &prepended_message = "") const;
 	//! Get the internal exception type of the error
 	DUCKDB_API const ExceptionType &Type() const;
-	//! Allows adding addition information to the message
-	DUCKDB_API PreservedError &AddToMessage(const string &prepended_message);
 	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message();
 	DUCKDB_API const string &RawMessage() {

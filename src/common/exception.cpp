@@ -171,63 +171,6 @@ ExceptionType Exception::StringToExceptionType(const string &type) {
 	return ExceptionType::INVALID;
 }
 
-void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message) {
-	switch (type) {
-	case ExceptionType::OUT_OF_RANGE:
-		throw OutOfRangeException(message);
-	case ExceptionType::CONVERSION:
-		throw ConversionException(message); // FIXME: make a separation between Conversion/Cast exception?
-	case ExceptionType::INVALID_TYPE:
-		throw InvalidTypeException(message);
-	case ExceptionType::MISMATCH_TYPE:
-		throw TypeMismatchException(message);
-	case ExceptionType::TRANSACTION:
-		throw TransactionException(message);
-	case ExceptionType::NOT_IMPLEMENTED:
-		throw NotImplementedException(message);
-	case ExceptionType::CATALOG:
-		throw CatalogException(message);
-	case ExceptionType::CONNECTION:
-		throw ConnectionException(message);
-	case ExceptionType::PARSER:
-		throw ParserException(message);
-	case ExceptionType::PERMISSION:
-		throw PermissionException(message);
-	case ExceptionType::SYNTAX:
-		throw SyntaxException(message);
-	case ExceptionType::CONSTRAINT:
-		throw ConstraintException(message);
-	case ExceptionType::BINDER:
-		throw BinderException(message);
-	case ExceptionType::IO:
-		throw IOException(message);
-	case ExceptionType::SERIALIZATION:
-		throw SerializationException(message);
-	case ExceptionType::INTERRUPT:
-		throw InterruptException();
-	case ExceptionType::INTERNAL:
-		throw InternalException(message);
-	case ExceptionType::INVALID_INPUT:
-		throw InvalidInputException(message);
-	case ExceptionType::OUT_OF_MEMORY:
-		throw OutOfMemoryException(message);
-	case ExceptionType::PARAMETER_NOT_ALLOWED:
-		throw ParameterNotAllowedException(message);
-	case ExceptionType::PARAMETER_NOT_RESOLVED:
-		throw ParameterNotResolvedException();
-	case ExceptionType::FATAL:
-		throw FatalException(message);
-	case ExceptionType::DEPENDENCY:
-		throw DependencyException(message);
-	case ExceptionType::HTTP:
-		throw HTTPException(message);
-	case ExceptionType::MISSING_EXTENSION:
-		throw MissingExtensionException(message);
-	default:
-		throw Exception(type, message);
-	}
-}
-
 unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
 	unordered_map<string, string> result;
 	result["error_subtype"] = subtype;

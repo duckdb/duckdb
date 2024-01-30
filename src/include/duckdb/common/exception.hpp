@@ -94,7 +94,6 @@ public:
 public:
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
 	DUCKDB_API static ExceptionType StringToExceptionType(const string &type);
-	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message);
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {

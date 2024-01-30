@@ -1,0 +1,14 @@
+# name: test/sql/settings/errors_as_json.test
+# description: Test errors_as_json setting
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET errors_as_json=true
+
+statement error
+SELECT * FROM nonexistent_table
+----
+MISSING_ENTRY

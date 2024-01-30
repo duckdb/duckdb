@@ -54,19 +54,15 @@ void PreservedError::Throw(const string &prepended_message) const {
 	D_ASSERT(initialized);
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
-		Exception::ThrowAsTypeWithMessage(type, new_message);
+		throw Exception(type, new_message, extra_info);
+	} else {
+		throw Exception(type, raw_message, extra_info);
 	}
-	Exception::ThrowAsTypeWithMessage(type, raw_message);
 }
 
 const ExceptionType &PreservedError::Type() const {
 	D_ASSERT(initialized);
 	return this->type;
-}
-
-PreservedError &PreservedError::AddToMessage(const string &prepended_message) {
-	raw_message = prepended_message + raw_message;
-	return *this;
 }
 
 bool PreservedError::operator==(const PreservedError &other) const {
@@ -85,6 +81,7 @@ void PreservedError::ConvertErrorToJSON() {
 		return;
 	}
 	raw_message = StringUtil::ToJSONMap(type, raw_message, extra_info);
+	final_message = raw_message;
 }
 
 } // namespace duckdb
