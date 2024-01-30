@@ -444,7 +444,8 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler,
-                                       shared_ptr<CSVFileScan> csv_file_scan, CSVIterator boundary, idx_t result_size)
+                                       const shared_ptr<CSVFileScan> &csv_file_scan, CSVIterator boundary,
+                                       idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, csv_file_scan, boundary), scanner_idx(scanner_idx_p),
       result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
