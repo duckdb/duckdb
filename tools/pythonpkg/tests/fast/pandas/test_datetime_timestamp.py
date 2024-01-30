@@ -20,7 +20,7 @@ class TestDateTimeTimeStamp(object):
                 )
             }
         )
-        df_out = duckdb_cursor.sql(df_in, "df", "select * from df").df()
+        df_out = duckdb_cursor.sql("select * from df_in").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
@@ -45,7 +45,7 @@ class TestDateTimeTimeStamp(object):
         )
         print('original:', duckdb_time['0'].dtype)
         print('df_in:', df_in['0'].dtype)
-        df_out = duckdb_cursor.sql(df_in, "df", "select * from df").df()
+        df_out = duckdb_cursor.sql("select * from df_in").df()
         print('df_out:', df_out['0'].dtype)
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
@@ -69,7 +69,7 @@ class TestDateTimeTimeStamp(object):
                 )
             }
         )
-        df_out = duckdb_cursor.sql(df_in, "df", "select * from df").df()
+        df_out = duckdb_cursor.sql("select * from df_in").df()
         print(df_out)
         print(duckdb_time)
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
@@ -95,7 +95,7 @@ class TestDateTimeTimeStamp(object):
                 )
             }
         )
-        df_out = duckdb_cursor.sql(df_in, "df", "select * from df").df()
+        df_out = duckdb_cursor.sql("select * from df_in").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
     @pytest.mark.skipif(
@@ -120,5 +120,5 @@ class TestDateTimeTimeStamp(object):
                 )
             }
         )
-        df_out = duckdb_cursor.sql(df_in, "df", """select * from df""").df()
+        df_out = duckdb_cursor.sql("""select * from df_in""").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
