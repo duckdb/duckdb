@@ -152,7 +152,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 }
 
 void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
-	if (options.null_padding){
+	if (options.null_padding) {
 		// If we are null padding we do not yet support projection pushdown
 		file_names = names;
 		file_types = types;
@@ -175,11 +175,11 @@ void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
 		column_ids.insert(reader_data.column_ids[i]);
 	}
 
-	if (!column_ids.empty()){
+	if (!column_ids.empty()) {
 		// We might have to add recovery rejects column ids
-		for (idx_t  i = 0; i < options.rejects_recovery_column_ids.size(); i ++){
+		for (idx_t i = 0; i < options.rejects_recovery_column_ids.size(); i++) {
 			idx_t col_id = options.rejects_recovery_column_ids[i];
-			if (column_ids.find(col_id) == column_ids.end()){
+			if (column_ids.find(col_id) == column_ids.end()) {
 				// We have to insert this column in our projection
 				column_ids.insert(col_id);
 				file_names.emplace_back(options.rejects_recovery_columns[i]);

@@ -348,8 +348,8 @@ bool StringValueResult::AddRowInternal() {
 			}
 		} else {
 			// If we are not nullpadding this is an error
-			auto csv_error = CSVError::IncorrectColumnAmountError(
-			    state_machine.options, nullptr, number_of_columns, cur_col_id);
+			auto csv_error =
+			    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
 			error_handler.Error(lines_per_batch, csv_error);
 			// If we are here we ignore_errors, so we delete this line
@@ -449,6 +449,15 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read) {
 }
 
+StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
+                                       const shared_ptr<CSVStateMachine> &state_machine,
+                                       const shared_ptr<CSVErrorHandler> &error_handler)
+    : BaseScanner(buffer_manager, state_machine, error_handler, nullptr, {}), scanner_idx(0),
+      result(states, *state_machine, *cur_buffer_handle, Allocator::DefaultAllocator(), STANDARD_VECTOR_SIZE,
+             iterator.pos.buffer_pos, *error_handler, iterator,
+             buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read) {
+}
+
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
 	auto state_machine = make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                  CSVStateMachineCache::Get(context));
@@ -456,7 +465,7 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	state_machine->dialect_options.num_cols = options.dialect_options.num_cols;
 	state_machine->dialect_options.header = options.dialect_options.header;
 	auto buffer_manager = make_shared<CSVBufferManager>(context, options, options.file_path, 0);
-	auto scanner = make_uniq<StringValueScanner>(0, buffer_manager, state_machine, make_shared<CSVErrorHandler>());
+	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared<CSVErrorHandler>());
 	scanner->csv_file_scan = make_shared<CSVFileScan>(context, options.file_path, options);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
@@ -502,9 +511,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		auto &parse_vector = parse_chunk.data[col_idx];
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
-		if (CanDirectlyCast(type, state_machine->options.dialect_options.date_format)) {
-			// target type is varchar: no need to convert
-			// reinterpret rather than reference, so we can deal with user-defined types
+		auto &parse_type = parse_vector.GetType();
+		if (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR)) {
+			// reinterpret rather than reference
 			result_vector.Reinterpret(parse_vector);
 		} else {
 			string error_message;
@@ -525,6 +534,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				success =
 				    CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format, parse_vector,
 				                                    result_vector, parse_chunk.size(), error_message);
+			} else if (state_machine->options.decimal_separator != "." &&
+			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
+				success =
+				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
+				                                                 parse_chunk.size(), error_message, type, line_error);
 			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
 				success = CSVCast::TryCastDecimalVectorCommaSeparated(
 				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), error_message, type);
