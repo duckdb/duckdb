@@ -67,14 +67,21 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, boo
 	return has_correlation;
 }
 
-void FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator *op) {
+bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator *op) {
 	// Do not mark base table scans as correlated
-	if (op->type != LogicalOperatorType::LOGICAL_GET || op->children.size() == 1) {
-		has_correlated_expressions[op] = true;
-	}
+	bool has_correlation = false;
 	for (auto &child : op->children) {
-		MarkSubtreeCorrelated(child.get());
+		has_correlation |= MarkSubtreeCorrelated(child.get());
 	}
+	if (op->type != LogicalOperatorType::LOGICAL_GET || op->children.size() == 1) {
+		if(op->type == LogicalOperatorType::LOGICAL_CTE_REF) {
+			has_correlated_expressions[op] = true;
+			return true;
+		} else {
+			has_correlated_expressions[op] = has_correlation;
+		}
+	}
+	return has_correlation;
 }
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {

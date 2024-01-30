@@ -26,7 +26,7 @@ struct FlattenDependentJoins {
 	bool DetectCorrelatedExpressions(LogicalOperator *op, bool lateral = false, idx_t lateral_depth = 0);
 
 	//! Mark entire subtree of Logical Operators as correlated by adding them to the has_correlated_expressions map.
-	void MarkSubtreeCorrelated(LogicalOperator *op);
+	bool MarkSubtreeCorrelated(LogicalOperator *op);
 
 	//! Push the dependent join down a LogicalOperator
 	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan);
