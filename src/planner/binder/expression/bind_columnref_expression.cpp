@@ -429,7 +429,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
 		error.AddQueryLocation(col_ref_p);
-		error.Throw();
+		return BindResult(std::move(error));
 	}
 
 	expr->query_location = col_ref_p.query_location;
