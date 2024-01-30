@@ -806,7 +806,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     COMMAND
     echo 'extension_version\\x00' > extension_version_file
     COMMAND
-    ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> duckdb_platform_file duckdb_version_file extension_version_file
+    ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh ${TARGET_NAME} duckdb_platform_file duckdb_version_file extension_version_file
     )
 endfunction()
 
