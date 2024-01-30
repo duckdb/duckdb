@@ -1,2 +1,2 @@
-CALL dsdgen(sf=5);
+CALL dsdgen(sf=1);
 EXPORT DATABASE 'tpcds_parquet' (FORMAT PARQUET);

@@ -10,7 +10,7 @@ require tpcds
 
 require parquet
 
-cache tpcds_sf5.duckdb
+cache tpcds_sf1.duckdb
 
 load benchmark/ingestion/tpcds/load.sql
 
