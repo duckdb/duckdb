@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "add.hpp"
-#include "multiply.hpp"
-#include "subtract.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
