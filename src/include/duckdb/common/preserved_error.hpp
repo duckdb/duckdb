@@ -12,6 +12,8 @@
 #include "duckdb/common/string.hpp"
 
 namespace duckdb {
+class ParsedExpression;
+class TableRef;
 
 class PreservedError {
 public:
@@ -44,6 +46,9 @@ public:
 	}
 
 	DUCKDB_API void ConvertErrorToJSON();
+
+	DUCKDB_API void AddQueryLocation(const ParsedExpression &ref);
+	DUCKDB_API void AddQueryLocation(const TableRef &ref);
 
 private:
 	//! Whether this PreservedError contains an exception or not

@@ -245,14 +245,16 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	PreservedError error;
 	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
 	                                 error)) {
-		throw BinderException(FormatError(ref, error.Message()));
+		error.AddQueryLocation(ref);
+		error.Throw();
 	}
 
 	// select the function based on the input parameters
 	FunctionBinder function_binder(context);
 	idx_t best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
-		throw BinderException(FormatError(ref, error.Message()));
+		error.AddQueryLocation(ref);
+		error.Throw();
 	}
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx);
 

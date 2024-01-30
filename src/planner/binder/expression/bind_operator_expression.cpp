@@ -30,19 +30,17 @@ LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<uniqu
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
 			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type, op.type)) {
-				throw BinderException(binder.FormatError(
-				    op.query_location,
-				    "Cannot mix values of type %s and %s in %s clause - an explicit cast is required",
-				    max_type.ToString(), child_return.ToString(),
-				    op.type == ExpressionType::COMPARE_IN ? "IN" : "NOT IN"));
+				throw BinderException(op,
+				                      "Cannot mix values of type %s and %s in %s clause - an explicit cast is required",
+				                      max_type.ToString(), child_return.ToString(),
+				                      op.type == ExpressionType::COMPARE_IN ? "IN" : "NOT IN");
 			}
 		} else {
 			// If it's COALESCE operator, don't do extra adjustment.
 			if (!LogicalType::TryGetMaxLogicalType(context, max_type, child_return, max_type)) {
-				throw BinderException(binder.FormatError(
-				    op.query_location,
-				    "Cannot mix values of type %s and %s in COALESCE operator - an explicit cast is required",
-				    max_type.ToString(), child_return.ToString()));
+				throw BinderException(
+				    op, "Cannot mix values of type %s and %s in COALESCE operator - an explicit cast is required",
+				    max_type.ToString(), child_return.ToString());
 			}
 		}
 	}

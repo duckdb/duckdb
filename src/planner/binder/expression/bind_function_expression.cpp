@@ -47,11 +47,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		    Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, function.catalog, function.schema,
 		                      function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 		if (table_func) {
-			throw BinderException(binder.FormatError(
-			    function,
-			    StringUtil::Format("Function \"%s\" is a table function but it was used as a scalar function. This "
-			                       "function has to be called in a FROM clause (similar to a table).",
-			                       function.function_name)));
+			throw BinderException(function,
+			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
+			                      "function has to be called in a FROM clause (similar to a table).",
+			                      function.function_name);
 		}
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
@@ -134,7 +133,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	unique_ptr<Expression> result =
 	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
-		throw BinderException(binder.FormatError(function, error.Message()));
+		error.AddQueryLocation(function);
+		error.Throw();
 	}
 	return BindResult(std::move(result));
 }
@@ -221,7 +221,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	unique_ptr<Expression> result =
 	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
-		throw BinderException(binder.FormatError(function, error.Message()));
+		error.AddQueryLocation(function);
+		error.Throw();
 	}
 
 	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();
@@ -261,11 +262,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
                                            idx_t depth) {
-	return BindResult(binder.FormatError(expr, UnsupportedAggregateMessage()));
+	return BindResult(BinderException(expr, UnsupportedAggregateMessage()));
 }
 
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
-	return BindResult(binder.FormatError(expr, UnsupportedUnnestMessage()));
+	return BindResult(BinderException(expr, UnsupportedUnnestMessage()));
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {

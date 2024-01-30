@@ -150,24 +150,6 @@ public:
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
-	string FormatError(ParsedExpression &expr_context, const string &message);
-	string FormatError(TableRef &ref_context, const string &message);
-
-	string FormatErrorRecursive(optional_idx query_location, const string &message,
-	                            vector<ExceptionFormatValue> &values);
-	template <class T, typename... ARGS>
-	string FormatErrorRecursive(optional_idx query_location, const string &msg, vector<ExceptionFormatValue> &values,
-	                            T param, ARGS... params) {
-		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
-		return FormatErrorRecursive(query_location, msg, values, params...);
-	}
-
-	template <typename... ARGS>
-	string FormatError(optional_idx query_location, const string &msg, ARGS... params) {
-		vector<ExceptionFormatValue> values;
-		return FormatErrorRecursive(query_location, msg, values, params...);
-	}
-
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
 	                                          vector<PhysicalIndex> &columns);

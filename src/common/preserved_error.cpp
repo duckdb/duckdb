@@ -84,4 +84,12 @@ void PreservedError::ConvertErrorToJSON() {
 	final_message = raw_message;
 }
 
+void PreservedError::AddQueryLocation(const ParsedExpression &ref) {
+	Exception::SetQueryLocation(ref.query_location, extra_info);
+}
+
+void PreservedError::AddQueryLocation(const TableRef &ref) {
+	Exception::SetQueryLocation(ref.query_location, extra_info);
+}
+
 } // namespace duckdb

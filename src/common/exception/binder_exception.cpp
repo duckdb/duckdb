@@ -7,11 +7,11 @@ BinderException::BinderException(const string &msg) : Exception(ExceptionType::B
 }
 
 BinderException::BinderException(const string &msg, const unordered_map<string, string> &extra_info)
-		: Exception(ExceptionType::BINDER, msg, extra_info) {
+    : Exception(ExceptionType::BINDER, msg, extra_info) {
 }
 
 BinderException BinderException::ColumnNotFound(const string &name, const vector<string> &similar_bindings,
-										  QueryErrorContext context) {
+                                                QueryErrorContext context) {
 
 	auto extra_info = Exception::InitializeExtraInfo("COLUMN_NOT_FOUND", context.query_location);
 	string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
@@ -20,8 +20,7 @@ BinderException BinderException::ColumnNotFound(const string &name, const vector
 		extra_info["candidates"] = StringUtil::Join(similar_bindings, ",");
 	}
 	return BinderException(
-			context.FormatError("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str),
-			extra_info);
+	    context.FormatError("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str), extra_info);
 }
 
-}
+} // namespace duckdb

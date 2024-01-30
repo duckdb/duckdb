@@ -91,7 +91,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindPositionalReference(expr, depth, root_expression);
 	}
 	case ExpressionClass::STAR:
-		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
+		return BindResult(BinderException(expr_ref, "STAR expression is not supported here"));
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}

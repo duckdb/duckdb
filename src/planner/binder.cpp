@@ -425,20 +425,6 @@ const unordered_set<string> &Binder::GetTableNames() {
 	return root_binder->table_names;
 }
 
-string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
-	return FormatError(expr_context.query_location, message);
-}
-
-string Binder::FormatError(TableRef &ref_context, const string &message) {
-	return FormatError(ref_context.query_location, message);
-}
-
-string Binder::FormatErrorRecursive(optional_idx query_location, const string &message,
-                                    vector<ExceptionFormatValue> &values) {
-	QueryErrorContext context(root_statement, query_location);
-	return context.FormatErrorRecursive(message, values);
-}
-
 // FIXME: this is extremely naive
 void VerifyNotExcluded(ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {

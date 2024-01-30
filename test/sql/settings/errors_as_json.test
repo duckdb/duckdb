@@ -1,6 +1,6 @@
 # name: test/sql/settings/errors_as_json.test
 # description: Test errors_as_json setting
-# group: [binder]
+# group: [settings]
 
 statement ok
 PRAGMA enable_verification
@@ -12,3 +12,8 @@ statement error
 SELECT * FROM nonexistent_table
 ----
 MISSING_ENTRY
+
+statement error
+SELECT cbl FROM (VALUES (42)) t(col)
+----
+xx

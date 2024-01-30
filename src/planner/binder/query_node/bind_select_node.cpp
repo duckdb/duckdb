@@ -598,8 +598,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 					    "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
 					    "is not important.";
 				}
-				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
-				                                  bound_columns[0].name, bound_columns[0].name));
+				throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name,
+				                      bound_columns[0].name, bound_columns[0].name);
 			}
 		}
 	}

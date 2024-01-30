@@ -428,7 +428,8 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	PreservedError error;
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
-		return BindResult(binder.FormatError(col_ref_p, error.RawMessage()));
+		error.AddQueryLocation(col_ref_p);
+		error.Throw();
 	}
 
 	expr->query_location = col_ref_p.query_location;
@@ -460,7 +461,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	}
 
 	if (result.HasError()) {
-		result.SetError(binder.FormatError(col_ref_p, result.error.Message()));
+		result.error.AddQueryLocation(col_ref_p);
 		return result;
 	}
 

@@ -21,9 +21,21 @@ public:
 	template <typename... Args>
 	explicit BinderException(const string &msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
 	}
+	template <typename... Args>
+	explicit BinderException(const TableRef &ref, const string &msg, Args... params)
+	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(ref)) {
+	}
+	template <typename... Args>
+	explicit BinderException(const ParsedExpression &expr, const string &msg, Args... params)
+	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
+	}
+	template <typename... Args>
+	explicit BinderException(optional_idx error_location, const string &msg, Args... params)
+	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_location)) {
+	}
 
 	static BinderException ColumnNotFound(const string &name, const vector<string> &similar_bindings,
-										 QueryErrorContext context = QueryErrorContext());
+	                                      QueryErrorContext context = QueryErrorContext());
 };
 
 } // namespace duckdb

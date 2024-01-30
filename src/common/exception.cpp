@@ -3,6 +3,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception/list.hpp"
+#include "duckdb/parser/tableref.hpp"
 
 #ifdef DUCKDB_CRASH_ON_ASSERT
 #include "duckdb/common/printer.hpp"
@@ -171,13 +172,31 @@ ExceptionType Exception::StringToExceptionType(const string &type) {
 	return ExceptionType::INVALID;
 }
 
+unordered_map<string, string> Exception::InitializeExtraInfo(const ParsedExpression &expr) {
+	return InitializeExtraInfo(expr.query_location);
+}
+
+unordered_map<string, string> Exception::InitializeExtraInfo(const TableRef &ref) {
+	return InitializeExtraInfo(ref.query_location);
+}
+
+unordered_map<string, string> Exception::InitializeExtraInfo(optional_idx error_location) {
+	unordered_map<string, string> result;
+	SetQueryLocation(error_location, result);
+	return result;
+}
+
 unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
 	unordered_map<string, string> result;
 	result["error_subtype"] = subtype;
-	if (error_location.IsValid()) {
-		result["position"] = to_string(error_location.GetIndex());
-	}
+	SetQueryLocation(error_location, result);
 	return result;
+}
+
+void Exception::SetQueryLocation(optional_idx error_location, unordered_map<string, string> &extra_info) {
+	if (error_location.IsValid()) {
+		extra_info["position"] = to_string(error_location.GetIndex());
+	}
 }
 
 CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)

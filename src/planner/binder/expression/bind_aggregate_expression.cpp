@@ -207,7 +207,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	FunctionBinder function_binder(context);
 	idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
-		throw BinderException(binder.FormatError(aggr, error.Message()));
+		error.AddQueryLocation(aggr);
+		error.Throw();
 	}
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function);

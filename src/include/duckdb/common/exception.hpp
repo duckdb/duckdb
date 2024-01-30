@@ -20,6 +20,8 @@
 namespace duckdb {
 enum class PhysicalType : uint8_t;
 struct LogicalType;
+class ParsedExpression;
+class TableRef;
 struct hugeint_t;
 class optional_idx;
 
@@ -104,6 +106,9 @@ public:
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
+	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const ParsedExpression &expr);
+	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const TableRef &ref);
+	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(optional_idx error_location);
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const string &subtype,
 	                                                                    optional_idx error_location);
 
@@ -129,6 +134,8 @@ public:
 	static string FormatStackTrace(string message = "") {
 		return (message + "\n" + GetStackTrace());
 	}
+
+	DUCKDB_API static void SetQueryLocation(optional_idx error_location, unordered_map<string, string> &extra_info);
 };
 
 //===--------------------------------------------------------------------===//

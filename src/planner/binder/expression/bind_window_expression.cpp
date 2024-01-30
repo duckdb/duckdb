@@ -219,7 +219,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		FunctionBinder function_binder(context);
 		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
-			throw BinderException(binder.FormatError(window, error.Message()));
+			error.AddQueryLocation(window);
+			error.Throw();
 		}
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func.functions.GetFunctionByOffset(best_function);
