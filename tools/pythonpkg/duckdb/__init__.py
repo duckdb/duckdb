@@ -305,7 +305,6 @@ from .duckdb import (
 _exported_symbols.extend([
     "Error",
     "DataError",
-    "CastException",
     "ConversionException",
     "OutOfRangeException",
     "TypeMismatchException",
