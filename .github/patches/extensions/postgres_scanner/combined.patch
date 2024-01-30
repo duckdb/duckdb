@@ -1,0 +1,190 @@
+diff --git a/src/include/storage/postgres_transaction_manager.hpp b/src/include/storage/postgres_transaction_manager.hpp
+index 94427d5..b4ac2da 100644
+--- a/src/include/storage/postgres_transaction_manager.hpp
++++ b/src/include/storage/postgres_transaction_manager.hpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/transaction/transaction_manager.hpp"
+ #include "storage/postgres_catalog.hpp"
+ #include "storage/postgres_transaction.hpp"
++#include "duckdb/common/reference_map.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -18,16 +19,16 @@ class PostgresTransactionManager : public TransactionManager {
+ public:
+ 	PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &postgres_catalog);
+ 
+-	Transaction *StartTransaction(ClientContext &context) override;
+-	string CommitTransaction(ClientContext &context, Transaction *transaction) override;
+-	void RollbackTransaction(Transaction *transaction) override;
++	Transaction &StartTransaction(ClientContext &context) override;
++	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
++	void RollbackTransaction(Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+ 
+ private:
+ 	PostgresCatalog &postgres_catalog;
+ 	mutex transaction_lock;
+-	unordered_map<Transaction *, unique_ptr<PostgresTransaction>> transactions;
++	reference_map_t<Transaction, unique_ptr<PostgresTransaction>> transactions;
+ };
+ 
+ } // namespace duckdb
+diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
+index 01a034c..6017770 100644
+--- a/src/postgres_filter_pushdown.cpp
++++ b/src/postgres_filter_pushdown.cpp
+@@ -1,5 +1,6 @@
+ #include "postgres_filter_pushdown.hpp"
+ #include "duckdb/parser/keyword_helper.hpp"
++#include "duckdb/planner/filter/struct_filter.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -50,6 +51,12 @@ string PostgresFilterPushdown::TransformFilter(string &column_name, TableFilter
+ 		auto operator_string = TransformComparision(constant_filter.comparison_type);
+ 		return StringUtil::Format("%s %s %s", column_name, operator_string, constant_string);
+ 	}
++	case TableFilterType::STRUCT_EXTRACT: {
++		auto &struct_filter = filter.Cast<StructFilter>();
++		auto child_name = KeywordHelper::WriteQuoted(struct_filter.child_name);
++		auto new_name = column_name + "." + child_name;
++		return TransformFilter(new_name, *struct_filter.child_filter);
++	}
+ 	default:
+ 		throw InternalException("Unsupported table filter type");
+ 	}
+@@ -67,6 +74,11 @@ string PostgresFilterPushdown::TransformFilters(const vector<column_t> &column_i
+ 		}
+ 		auto column_name = KeywordHelper::WriteQuoted(names[column_ids[entry.first]], '"');
+ 		auto &filter = *entry.second;
++
++		if (filter.filter_type == TableFilterType::STRUCT_EXTRACT) {
++			column_name = StringUtil::Format("(%s)", column_name.c_str());
++		}
++
+ 		result += TransformFilter(column_name, filter);
+ 	}
+ 	return result;
+diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
+index 88786cf..bfd37ab 100644
+--- a/src/storage/postgres_table_set.cpp
++++ b/src/storage/postgres_table_set.cpp
+@@ -205,8 +205,8 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
+ 		}
+ 		if (column.Generated()) {
+ 			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
+-		} else if (column.DefaultValue()) {
+-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
++		} else if (column.HasDefaultValue()) {
++			ss << " DEFAULT(" << column.DefaultValue().ToString() << ")";
+ 		}
+ 	}
+ 	// print any extra constraints that still need to be printed
+diff --git a/src/storage/postgres_transaction_manager.cpp b/src/storage/postgres_transaction_manager.cpp
+index 6de4b5c..e1b89e6 100644
+--- a/src/storage/postgres_transaction_manager.cpp
++++ b/src/storage/postgres_transaction_manager.cpp
+@@ -7,26 +7,26 @@ PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, P
+     : TransactionManager(db_p), postgres_catalog(postgres_catalog) {
+ }
+ 
+-Transaction *PostgresTransactionManager::StartTransaction(ClientContext &context) {
++Transaction &PostgresTransactionManager::StartTransaction(ClientContext &context) {
+ 	auto transaction = make_uniq<PostgresTransaction>(postgres_catalog, *this, context);
+ 	transaction->Start();
+-	auto result = transaction.get();
++	auto &result = *transaction;
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions[result] = std::move(transaction);
+ 	return result;
+ }
+ 
+-string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
+-	auto postgres_transaction = (PostgresTransaction *)transaction;
+-	postgres_transaction->Commit();
++string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
++	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
++	postgres_transaction.Commit();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ 	return string();
+ }
+ 
+-void PostgresTransactionManager::RollbackTransaction(Transaction *transaction) {
+-	auto postgres_transaction = (PostgresTransaction *)transaction;
+-	postgres_transaction->Rollback();
++void PostgresTransactionManager::RollbackTransaction(Transaction &transaction) {
++	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
++	postgres_transaction.Rollback();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+ }
+diff --git a/test/sql/storage/attach_detach.test b/test/sql/storage/attach_detach.test
+index 7b7d19f..ba8168f 100644
+--- a/test/sql/storage/attach_detach.test
++++ b/test/sql/storage/attach_detach.test
+@@ -18,6 +18,7 @@ DETACH s1
+ 
+ statement error
+ SELECT * FROM s1.test
++----
+ 
+ statement ok
+ ATTACH 'dbname=postgresscanner' AS s1 (TYPE POSTGRES)
+diff --git a/test/sql/storage/attach_drop.test b/test/sql/storage/attach_drop.test
+index 8f1090c..90f6952 100644
+--- a/test/sql/storage/attach_drop.test
++++ b/test/sql/storage/attach_drop.test
+@@ -27,6 +27,7 @@ DROP TABLE simple.test
+ # verify the drop was successful
+ statement error
+ SELECT * FROM simple.test;
++----
+ 
+ statement error
+ DROP TABLE simple.testx
+@@ -34,4 +35,4 @@ DROP TABLE simple.testx
+ Table with name testx does not exist
+ 
+ statement ok
+-DROP TABLE IF EXISTS simple.testx
+\ No newline at end of file
++DROP TABLE IF EXISTS simple.testx
+diff --git a/test/sql/storage/attach_filter_pushdown.test b/test/sql/storage/attach_filter_pushdown.test
+index 17b92e2..25efe1a 100644
+--- a/test/sql/storage/attach_filter_pushdown.test
++++ b/test/sql/storage/attach_filter_pushdown.test
+@@ -20,3 +20,14 @@ query I
+ SELECT * FROM s1.filter_pushdown WHERE i=52525
+ ----
+ 52525
++
++query I
++SELECT * FROM s1.composites_of_composites WHERE b.k < 8
++----
++{'a': {'i': 1, 'j': 2}, 'k': 3}
++{'a': {'i': 4, 'j': 5}, 'k': 6}
++
++query I
++SELECT * FROM s1.composites_of_composites WHERE b.a.j = 5
++----
++{'a': {'i': 4, 'j': 5}, 'k': 6}
+\ No newline at end of file
+diff --git a/test/sql/storage/attach_views.test b/test/sql/storage/attach_views.test
+index e57b45d..0e12b54 100644
+--- a/test/sql/storage/attach_views.test
++++ b/test/sql/storage/attach_views.test
+@@ -34,9 +34,11 @@ cannot copy to view
+ # FIXME - error message here is not very descriptive
+ statement error
+ UPDATE v1 SET i=84
++----
+ 
+ statement error
+ DELETE FROM v1
++----
+ 
+ statement error
+ INSERT INTO v1 VALUES (1, 1);

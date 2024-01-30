@@ -1,20 +1,8 @@
-package org.duckdb.test;
-
-import org.duckdb.DuckDBAppender;
-import org.duckdb.DuckDBColumnType;
-import org.duckdb.DuckDBConnection;
-import org.duckdb.DuckDBDriver;
-import org.duckdb.DuckDBNative;
-import org.duckdb.DuckDBResultSet;
-import org.duckdb.DuckDBResultSetMetaData;
-import org.duckdb.DuckDBStruct;
-import org.duckdb.DuckDBTimestamp;
-import org.duckdb.JsonNode;
+package org.duckdb;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -38,7 +26,6 @@ import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -51,7 +38,6 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
@@ -62,7 +48,6 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
@@ -70,7 +55,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.logging.Logger;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
@@ -82,92 +66,21 @@ import static java.time.temporal.ChronoField.YEAR_OF_ERA;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static java.util.stream.Collectors.toMap;
 import static org.duckdb.DuckDBDriver.DUCKDB_USER_AGENT_PROPERTY;
 import static org.duckdb.DuckDBDriver.JDBC_STREAM_RESULTS;
+import static org.duckdb.test.Assertions.assertEquals;
+import static org.duckdb.test.Assertions.assertFalse;
+import static org.duckdb.test.Assertions.assertNotNull;
+import static org.duckdb.test.Assertions.assertNull;
+import static org.duckdb.test.Assertions.assertThrows;
+import static org.duckdb.test.Assertions.assertThrowsMaybe;
+import static org.duckdb.test.Assertions.assertTrue;
+import static org.duckdb.test.Assertions.fail;
+import static org.duckdb.test.Runner.runTests;
 
 public class TestDuckDBJDBC {
 
-    private static final String JDBC_URL = "jdbc:duckdb:";
-
-    private static void assertTrue(boolean val) throws Exception {
-        assertTrue(val, null);
-    }
-
-    private static void assertTrue(boolean val, String message) throws Exception {
-        if (!val) {
-            throw new Exception(message);
-        }
-    }
-
-    private static void assertFalse(boolean val) throws Exception {
-        assertTrue(!val);
-    }
-
-    private static void assertEquals(Object actual, Object expected) throws Exception {
-        Function<Object, String> getClass = (Object a) -> a == null ? "null" : a.getClass().toString();
-
-        String message = String.format("\"%s\" (of %s) should equal \"%s\" (of %s)", actual, getClass.apply(actual),
-                                       expected, getClass.apply(expected));
-        assertTrue(Objects.equals(actual, expected), message);
-    }
-
-    private static void assertNotNull(Object a) throws Exception {
-        assertFalse(a == null);
-    }
-
-    private static void assertNull(Object a) throws Exception {
-        assertEquals(a, null);
-    }
-
-    private static void assertEquals(double a, double b, double epsilon) throws Exception {
-        assertTrue(Math.abs(a - b) < epsilon);
-    }
-
-    private static void fail() throws Exception {
-        fail(null);
-    }
-
-    private static void fail(String s) throws Exception {
-        throw new Exception(s);
-    }
-
-    private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
-        return assertThrows(exception, thrower).getMessage();
-    }
-
-    private static <T extends Throwable> Throwable assertThrows(Class<T> exception, Thrower thrower) throws Exception {
-        try {
-            thrower.run();
-        } catch (Throwable e) {
-            assertEquals(e.getClass(), exception);
-            return e;
-        }
-        throw new Exception("Expected to throw " + exception.getName());
-    }
-
-    // Asserts we are either throwing the correct exception, or not throwing at all
-    private static <T extends Throwable> boolean assertThrowsMaybe(Thrower thrower, Class<T> exception)
-        throws Exception {
-        try {
-            thrower.run();
-            return true;
-        } catch (Throwable e) {
-            if (e.getClass().equals(exception)) {
-                return true;
-            } else {
-                throw new Exception("Unexpected exception: " + e.getClass().getName());
-            }
-        }
-    }
-
-    static {
-        try {
-            Class.forName("org.duckdb.DuckDBDriver");
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        }
-    }
+    public static final String JDBC_URL = "jdbc:duckdb:";
 
     private static void createTable(Connection conn) throws SQLException {
         try (Statement createStmt = conn.createStatement()) {
@@ -3711,45 +3624,6 @@ public class TestDuckDBJDBC {
         }
     }
 
-    public static void test_extension_type() throws Exception {
-        try (Connection connection = DriverManager.getConnection(JDBC_URL);
-             Statement stmt = connection.createStatement()) {
-
-            DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) connection);
-
-            try (ResultSet rs = stmt.executeQuery(
-                     "SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type, '\\xAA'::byte_test_type")) {
-                rs.next();
-                assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
-                assertEquals(rs.getObject(2), "\\xAA");
-            }
-        }
-    }
-
-    public static void test_extension_type_metadata() throws Exception {
-        try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement stmt = conn.createStatement();) {
-            DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) conn);
-
-            stmt.execute("CREATE TABLE test (foo test_type, bar byte_test_type);");
-            stmt.execute("INSERT INTO test VALUES ({\"hello\": 'foo', \"world\": 'bar'}, '\\xAA');");
-
-            try (ResultSet rs = stmt.executeQuery("SELECT * FROM test")) {
-                ResultSetMetaData meta = rs.getMetaData();
-                assertEquals(meta.getColumnCount(), 2);
-
-                assertEquals(meta.getColumnName(1), "foo");
-                assertEquals(meta.getColumnTypeName(1), "test_type");
-                assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
-                assertEquals(meta.getColumnClassName(1), "java.lang.String");
-
-                assertEquals(meta.getColumnName(2), "bar");
-                assertEquals(meta.getColumnTypeName(2), "byte_test_type");
-                assertEquals(meta.getColumnType(2), Types.JAVA_OBJECT);
-                assertEquals(meta.getColumnClassName(2), "java.lang.String");
-            }
-        }
-    }
-
     public static void test_getColumnClassName() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement();) {
             try (ResultSet rs = s.executeQuery("select * from test_all_types()")) {
@@ -4336,53 +4210,23 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_get_binary_stream() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement s = connection.prepareStatement("select ?")) {
+            s.setObject(1, "YWJj".getBytes());
+            String out = null;
+
+            try (ResultSet rs = s.executeQuery()) {
+                while (rs.next()) {
+                    out = blob_to_string(rs.getBlob(1));
+                }
+            }
+
+            assertEquals(out, "YWJj");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        // Woo I can do reflection too, take this, JUnit!
-        Method[] methods = TestDuckDBJDBC.class.getMethods();
-
-        Arrays.sort(methods, new Comparator<Method>() {
-            @Override
-            public int compare(Method o1, Method o2) {
-                return o1.getName().compareTo(o2.getName());
-            }
-        });
-
-        String specific_test = null;
-        if (args.length >= 1) {
-            specific_test = args[0];
-        }
-
-        boolean anySucceeded = false;
-        boolean anyFailed = false;
-        for (Method m : methods) {
-            if (m.getName().startsWith("test_")) {
-                if (specific_test != null && !m.getName().contains(specific_test)) {
-                    continue;
-                }
-                System.out.print(m.getName() + " ");
-
-                LocalDateTime start = LocalDateTime.now();
-                try {
-                    m.invoke(null);
-                    System.out.println("success in " + Duration.between(start, LocalDateTime.now()).getSeconds() +
-                                       " seconds");
-                } catch (Throwable t) {
-                    if (t instanceof InvocationTargetException) {
-                        t = t.getCause();
-                    }
-                    System.out.println("failed with " + t);
-                    t.printStackTrace(System.out);
-                    anyFailed = true;
-                }
-                anySucceeded = true;
-            }
-        }
-        if (!anySucceeded) {
-            System.out.println("No tests found that match " + specific_test);
-            System.exit(1);
-        }
-        System.out.println(anyFailed ? "FAILED" : "OK");
-
-        System.exit(anyFailed ? 1 : 0);
+        System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }
 }
