@@ -101,16 +101,11 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 	}
 	if (best_function == DConstants::INVALID_INDEX) {
 		// no matching function was found, throw an error
-		string call_str = Function::CallToString(name, arguments);
-		string candidate_str;
+		vector<string> candidates;
 		for (auto &f : functions.functions) {
-			candidate_str += "\t" + f.ToString() + "\n";
+			candidates.push_back(f.ToString());
 		}
-		error = PreservedError(
-		    ExceptionType::BINDER,
-		    StringUtil::Format("No function matches the given name and argument types '%s'. You might need to add "
-		                       "explicit type casts.\n\tCandidate functions:\n%s",
-		                       call_str, candidate_str));
+		error = PreservedError(BinderException::NoMatchingFunction(name, arguments, candidates));
 		return candidate_functions;
 	}
 	candidate_functions.push_back(best_function);

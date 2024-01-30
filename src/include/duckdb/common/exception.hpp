@@ -312,7 +312,7 @@ public:
 	}
 	template <typename... Args>
 	explicit InvalidInputException(Expression &expr, const string &msg, Args... params)
-			: InvalidInputException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
+	    : InvalidInputException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 };
 

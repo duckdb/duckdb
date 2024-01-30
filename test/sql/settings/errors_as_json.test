@@ -17,3 +17,8 @@ statement error
 SELECT cbl FROM (VALUES (42)) t(col)
 ----
 COLUMN_NOT_FOUND
+
+statement error
+select corr('hello', 'world')
+----
+NO_MATCHING_FUNCTION

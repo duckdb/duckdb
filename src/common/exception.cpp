@@ -172,7 +172,6 @@ ExceptionType Exception::StringToExceptionType(const string &type) {
 	return ExceptionType::INVALID;
 }
 
-
 unordered_map<string, string> Exception::InitializeExtraInfo(const Expression &expr) {
 	return InitializeExtraInfo(expr.query_location);
 }
@@ -340,8 +339,8 @@ InternalException::InternalException(const string &msg) : Exception(ExceptionTyp
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
-InvalidInputException::InvalidInputException(const string &msg, const unordered_map<string, string> &extra_info) :
-	Exception(ExceptionType::INVALID_INPUT, msg, extra_info) {
+InvalidInputException::InvalidInputException(const string &msg, const unordered_map<string, string> &extra_info)
+    : Exception(ExceptionType::INVALID_INPUT, msg, extra_info) {
 }
 
 OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(ExceptionType::OUT_OF_MEMORY, msg) {

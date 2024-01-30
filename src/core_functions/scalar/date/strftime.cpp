@@ -162,7 +162,8 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 			format.format_specifier = format_string;
 			string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException(*arguments[0], "Failed to parse format specifier %s: %s", format_string, error);
+				throw InvalidInputException(*arguments[0], "Failed to parse format specifier %s: %s", format_string,
+				                            error);
 			}
 			// If any format has UTC offsets, then we have to produce TSTZ
 			if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
