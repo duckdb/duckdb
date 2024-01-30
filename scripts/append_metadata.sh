@@ -9,6 +9,8 @@ if (($# >= 9)); then
   exit 1
 fi
 
+echo "$1"
+
 # 0 for custom section
 # 213 in hex = 531 in decimal, total lenght of what follows (1 + 16 + 2 + 8x32 + 256)
 # [1(continuation) + 0010011(payload) = \x93, 0(continuation) + 10(payload) = \x04]
@@ -35,6 +37,7 @@ done
 # Write provided fiedls (backwards)
 for ((i=$#; i>=2; i--))
 do
+  echo "${!i}"
   cat "${!i}" > "$1.add"
   cat "$1.empty_32" >> "$1.add"
   dd if="$1.add" of="$1.add_trunc" bs=32 count=1 &> /dev/null
@@ -42,7 +45,8 @@ do
 done
 
 # Write how many fields have been written during previous step
-  echo -n "$(($# - 1))" > "$1.add"
+  echo "$#"
+  echo -n "$#" > "$1.add"
   cat "$1.empty_32" >> "$1.add"
   dd if="$1.add" of="$1.add_trunc" bs=32 count=1 &> /dev/null
   cat "$1.add_trunc" >> "$1"
@@ -50,3 +54,4 @@ done
 cat "$1.empty_256" >> "$1"
 
 rm -f "$1.*"
+echo "$1"

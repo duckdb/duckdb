@@ -200,7 +200,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 	}
 
-	auto number_metadata_fields = std::stoi(metadata_field[0]);
+	auto number_metadata_fields = std::stoi(metadata_field[0]) - 1;
 	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
 	metadata_field.resize(number_metadata_fields + 1);
 
