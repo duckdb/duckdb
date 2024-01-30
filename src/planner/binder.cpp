@@ -359,13 +359,13 @@ bool Binder::HasMatchingBinding(const string &table_name, const string &column_n
 }
 
 bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-								ErrorData &error) {
+                                ErrorData &error) {
 	string empty_catalog;
 	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
 bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-								const string &column_name, ErrorData &error) {
+                                const string &column_name, ErrorData &error) {
 	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->alias) {

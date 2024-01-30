@@ -248,7 +248,7 @@ optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out
 		string candidate_str =
 		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
 		out_error = ErrorData(ExceptionType::BINDER,
-							  StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
+		                      StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
 		return nullptr;
 	}
 	return match->second.get();

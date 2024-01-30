@@ -44,7 +44,7 @@ add_library_unity(
   pipe_file_system.cpp
   local_file_system.cpp
   multi_file_reader.cpp
-        error_data.cpp
+  error_data.cpp
   printer.cpp
   radix_partitioning.cpp
   re2_regex.cpp

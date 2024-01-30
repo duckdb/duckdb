@@ -199,7 +199,7 @@ public:
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
-						 ErrorData &error);
+	                     ErrorData &error);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);

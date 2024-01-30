@@ -289,7 +289,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,
-																			 ErrorData &error) {
+                                                                             ErrorData &error) {
 
 	// two or more dots (i.e. "part1.part2.part3.part4...")
 	// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are

@@ -121,8 +121,8 @@ void LocalTableStorage::FlushBlocks() {
 }
 
 ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
-											 TableIndexList &index_list, const vector<LogicalType> &table_types,
-											 row_t &start_row) {
+                                             TableIndexList &index_list, const vector<LogicalType> &table_types,
+                                             row_t &start_row) {
 	// only need to scan for index append
 	// figure out which columns we need to scan for the set of indexes
 	auto columns = index_list.GetRequiredColumns();

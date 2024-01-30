@@ -30,7 +30,7 @@ static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function)
 }
 
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-										 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
+                                         unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
 	auto binder = Binder::CreateBinder(this->context, this, true);
 	unique_ptr<QueryNode> subquery_node;
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
@@ -52,10 +52,10 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 }
 
 bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-										 vector<unique_ptr<ParsedExpression>> &expressions,
-										 vector<LogicalType> &arguments, vector<Value> &parameters,
-										 named_parameter_map_t &named_parameters,
-										 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
+                                         vector<unique_ptr<ParsedExpression>> &expressions,
+                                         vector<LogicalType> &arguments, vector<Value> &parameters,
+                                         named_parameter_map_t &named_parameters,
+                                         unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
 	if (IsTableInTableOutFunction(table_function)) {
 		// special case binding for table-in table-out function
 		arguments.emplace_back(LogicalTypeId::TABLE);

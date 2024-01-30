@@ -76,7 +76,7 @@ int64_t FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vecto
 
 template <class T>
 vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
-														 const vector<LogicalType> &arguments, ErrorData &error) {
+                                                         const vector<LogicalType> &arguments, ErrorData &error) {
 	idx_t best_function = DConstants::INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> candidate_functions;
@@ -114,8 +114,8 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 
 template <class T>
 idx_t FunctionBinder::MultipleCandidateException(const string &name, FunctionSet<T> &functions,
-												 vector<idx_t> &candidate_functions,
-												 const vector<LogicalType> &arguments, ErrorData &error) {
+                                                 vector<idx_t> &candidate_functions,
+                                                 const vector<LogicalType> &arguments, ErrorData &error) {
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
@@ -135,7 +135,7 @@ idx_t FunctionBinder::MultipleCandidateException(const string &name, FunctionSet
 
 template <class T>
 idx_t FunctionBinder::BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
-												const vector<LogicalType> &arguments, ErrorData &error) {
+                                                const vector<LogicalType> &arguments, ErrorData &error) {
 	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
 	if (candidate_functions.empty()) {
 		// no candidates
@@ -158,22 +158,22 @@ idx_t FunctionBinder::BindFunctionFromArguments(const string &name, FunctionSet<
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
-								   const vector<LogicalType> &arguments, ErrorData &error) {
+                                   const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
-								   const vector<LogicalType> &arguments, ErrorData &error) {
+                                   const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
-								   const vector<LogicalType> &arguments, ErrorData &error) {
+                                   const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
-								   ErrorData &error) {
+                                   ErrorData &error) {
 	vector<LogicalType> types;
 	for (auto &value : parameters) {
 		types.push_back(value.type());
@@ -202,19 +202,19 @@ vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
-								   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+                                   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
-								   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+                                   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
 
 idx_t FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
-								   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+                                   vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
@@ -277,8 +277,8 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const string &name,
-														  vector<unique_ptr<Expression>> children,
-														  ErrorData &error, bool is_operator, Binder *binder) {
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+                                                          bool is_operator, Binder *binder) {
 	// bind the function
 	auto &function =
 	    Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
@@ -288,8 +288,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogEntry &func,
-														  vector<unique_ptr<Expression>> children,
-														  ErrorData &error, bool is_operator, Binder *binder) {
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+                                                          bool is_operator, Binder *binder) {
 	// bind the function
 	idx_t best_function = BindFunction(func.name, func.functions, children, error);
 	if (best_function == DConstants::INVALID_INDEX) {

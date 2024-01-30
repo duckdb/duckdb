@@ -53,9 +53,8 @@ bool Binding::HasMatchingBinding(const string &column_name) {
 }
 
 ErrorData Binding::ColumnNotFoundError(const string &column_name) const {
-	return ErrorData(
-	    ExceptionType::BINDER,
-	    StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias, column_name));
+	return ErrorData(ExceptionType::BINDER,
+	                 StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias, column_name));
 }
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -222,7 +221,7 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 
 ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
 	return ErrorData(ExceptionType::BINDER,
-					 StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name));
+	                 StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name));
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)

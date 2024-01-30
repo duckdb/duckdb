@@ -21,8 +21,7 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 	}
 }
 
-ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
-									 unique_ptr<SQLStatement> statement) {
+ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 

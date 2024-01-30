@@ -17,8 +17,7 @@ ErrorData::ErrorData(ExceptionType type, const string &message)
     : initialized(true), type(type), raw_message(SanitizeErrorMessage(message)) {
 }
 
-ErrorData::ErrorData(const string &message)
-    : initialized(true), type(ExceptionType::INVALID), raw_message(string()) {
+ErrorData::ErrorData(const string &message) : initialized(true), type(ExceptionType::INVALID), raw_message(string()) {
 
 	// parse the constructed JSON
 	if (message.empty() || message[0] != '{') {

@@ -512,7 +512,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	if (failed_index != DConstants::INVALID_INDEX) {
 		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
-											 AppendRowError(input, failed_index)));
+		                                     AppendRowError(input, failed_index)));
 	}
 
 #ifdef DEBUG

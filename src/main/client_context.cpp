@@ -846,7 +846,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 }
 
 bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query,
-									vector<unique_ptr<SQLStatement>> &result, ErrorData &error) {
+                                    vector<unique_ptr<SQLStatement>> &result, ErrorData &error) {
 	try {
 		InitialCleanup(lock);
 		// parse the query and transform it into a set of statements

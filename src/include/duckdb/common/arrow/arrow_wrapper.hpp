@@ -62,7 +62,7 @@ public:
 class ArrowUtil {
 public:
 	static bool TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
-							  idx_t &result_count, ErrorData &error);
+	                          idx_t &result_count, ErrorData &error);
 	static idx_t FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out);
 
 private:
