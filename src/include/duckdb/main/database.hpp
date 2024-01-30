@@ -26,9 +26,12 @@ class ObjectCache;
 struct AttachInfo;
 
 struct ExtensionInfo {
-	ExtensionInfo(const std::string& version) : extension_version(version) {}
-	ExtensionInfo() : ExtensionInfo("defaultme") {}
-	ExtensionInfo(const ExtensionInfo& x) : ExtensionInfo(x.extension_version) {}
+	ExtensionInfo(const std::string &version) : extension_version(version) {
+	}
+	ExtensionInfo() : ExtensionInfo("defaultme") {
+	}
+	ExtensionInfo(const ExtensionInfo &x) : ExtensionInfo(x.extension_version) {
+	}
 	std::string extension_version;
 };
 

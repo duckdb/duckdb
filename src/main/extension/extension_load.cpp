@@ -193,7 +193,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	std::reverse(metadata_field.begin(), metadata_field.end());
 
-	for (auto& m : metadata_field) {
+	for (auto &m : metadata_field) {
 		auto zero_pos = m.find_first_of((char)0);
 		if (zero_pos < m.size()) {
 			m.resize(zero_pos);
