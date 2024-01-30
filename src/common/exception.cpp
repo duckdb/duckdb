@@ -153,6 +153,20 @@ const HTTPException &Exception::AsHTTPException() const {
 	return *e;
 }
 
+bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
+	switch (exception_type) {
+	case ExceptionType::BINDER:
+	case ExceptionType::CATALOG:
+	case ExceptionType::CONNECTION:
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+	case ExceptionType::PARSER:
+	case ExceptionType::PERMISSION:
+		return false;
+	default:
+		return true;
+	}
+}
+
 void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message,
                                        const std::shared_ptr<Exception> &original) {
 	switch (type) {

@@ -402,6 +402,18 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, ex.what());
 		invalidate_transaction = true;
+	} catch (const InterruptException &ex) {
+		auto &executor = *active_query->executor;
+		if (!executor.HasError()) {
+			// Interrupted by the user
+			result.SetError(PreservedError(ex));
+			invalidate_transaction = true;
+		} else {
+			// Interrupted by an exception caused in a worker thread
+			auto error = executor.GetError();
+			invalidate_transaction = Exception::InvalidatesTransaction(error.Type());
+			result.SetError(error);
+		}
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
 		invalidate_transaction = true;
@@ -805,6 +817,12 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 			}
 			last_result->next = std::move(current_result);
 			last_result = last_result->next.get();
+		}
+		D_ASSERT(last_result);
+		if (last_result->HasError()) {
+			// Reset the interrupted flag, this was set by the task that found the error
+			// Next statements should not be bothered by that interruption
+			interrupted = false;
 		}
 	}
 	return result;

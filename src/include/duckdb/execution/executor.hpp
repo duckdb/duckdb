@@ -57,6 +57,8 @@ public:
 	//! Push a new error
 	void PushError(PreservedError exception);
 
+	PreservedError GetError();
+
 	//! True if an error has been thrown
 	bool HasError();
 	//! Throw the exception that was pushed using PushError.

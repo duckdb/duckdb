@@ -601,6 +601,10 @@ bool Executor::HasError() {
 	return error_manager.HasError();
 }
 
+PreservedError Executor::GetError() {
+	return error_manager.GetError();
+}
+
 void Executor::ThrowException() {
 	error_manager.ThrowException();
 }
