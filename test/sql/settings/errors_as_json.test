@@ -16,4 +16,4 @@ MISSING_ENTRY
 statement error
 SELECT cbl FROM (VALUES (42)) t(col)
 ----
-xx
+COLUMN_NOT_FOUND

@@ -60,6 +60,7 @@ protected:
 		type = other.type;
 		expression_class = other.expression_class;
 		alias = other.alias;
+		query_location = other.query_location;
 	}
 };
 
