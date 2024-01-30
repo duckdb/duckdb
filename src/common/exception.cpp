@@ -277,9 +277,6 @@ ConstraintException::ConstraintException(const string &msg) : Exception(Exceptio
 DependencyException::DependencyException(const string &msg) : Exception(ExceptionType::DEPENDENCY, msg) {
 }
 
-BinderException::BinderException(const string &msg) : Exception(ExceptionType::BINDER, msg) {
-}
-
 IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
 }
 
