@@ -84,22 +84,6 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
 			if (column_statistics && have_catalog_table_statistics) {
 				auto distinct_count = column_statistics->GetDistinctCount();
-				int64_t min_max_gap = distinct_count;
-				if (column_statistics->GetStatsType() == StatisticsType::NUMERIC_STATS &&
-				    NumericStats::HasMinMax(*column_statistics) && column_statistics->GetType().IsIntegral() &&
-				    base_table_cardinality > 0) {
-					auto col_type = column_statistics->GetType();
-					auto min = NumericStats::Min(*column_statistics);
-					auto max = NumericStats::Max(*column_statistics);
-					auto min_val = min.GetValue<int64_t>();
-					auto max_val = max.GetValue<int64_t>();
-					auto no_overflow =
-					    TrySubtractOperator::Operation<int64_t, int64_t, int64_t>(max_val, min_val, min_max_gap);
-					if (!no_overflow) {
-						min_max_gap = distinct_count;
-					}
-					distinct_count = min_max_gap < distinct_count ? min_max_gap : distinct_count;
-				}
 				auto column_distinct_count = DistinctCount({distinct_count, true});
 				return_stats.column_distinct_count.push_back(column_distinct_count);
 				return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
