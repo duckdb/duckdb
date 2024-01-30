@@ -349,7 +349,7 @@ bool StringValueResult::AddRowInternal() {
 		} else {
 			// If we are not nullpadding this is an error
 			auto csv_error = CSVError::IncorrectColumnAmountError(
-			    state_machine.options, static_cast<string_t *>(vector_ptr[cur_col_id]), number_of_columns, cur_col_id);
+			    state_machine.options, nullptr, number_of_columns, cur_col_id);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
 			error_handler.Error(lines_per_batch, csv_error);
 			// If we are here we ignore_errors, so we delete this line

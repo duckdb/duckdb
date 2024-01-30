@@ -152,6 +152,12 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 }
 
 void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
+	if (options.null_padding){
+		// If we are null padding we do not yet support projection pushdown
+		file_names = names;
+		file_types = types;
+		return;
+	}
 	if (reader_data.empty_columns && reader_data.column_ids.empty()) {
 		// This means that the columns from this file are irrelevant.
 		// just read the first column
