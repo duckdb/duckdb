@@ -40,7 +40,21 @@ const string ExtensionHelper::GetVersionDirectoryName() {
 }
 
 const vector<string> ExtensionHelper::PathComponents() {
-	return vector<string> {".duckdb", "extensions", GetVersionDirectoryName(), DuckDB::Platform()};
+	return vector<string> {GetVersionDirectoryName(), DuckDB::Platform()};
+}
+
+duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
+	string home_directory = fs.GetHomeDirectory();
+	// exception if the home directory does not exist, don't create whatever we think is home
+	if (!fs.DirectoryExists(home_directory)) {
+		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+		                  "home_directory='/path/to/dir' option.",
+		                  home_directory);
+	}
+	string res = home_directory;
+	res = fs.JoinPath(res, ".duckdb");
+	res = fs.JoinPath(res, "extensions");
+	return res;
 }
 
 string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
@@ -52,6 +66,10 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 		extension_directory = config.options.extension_directory;
 		// TODO this should probably live in the FileSystem
 		// convert random separators to platform-canonic
+	} else { // otherwise default to home
+		extension_directory = DefaultExtensionFolder(fs);
+	}
+	{
 		extension_directory = fs.ConvertSeparators(extension_directory);
 		// expand ~ in extension directory
 		extension_directory = fs.ExpandPath(extension_directory);
@@ -70,15 +88,6 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 				}
 			}
 		}
-	} else { // otherwise default to home
-		string home_directory = fs.GetHomeDirectory();
-		// exception if the home directory does not exist, don't create whatever we think is home
-		if (!fs.DirectoryExists(home_directory)) {
-			throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-			                  "home_directory='/path/to/dir' option.",
-			                  home_directory);
-		}
-		extension_directory = home_directory;
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
 

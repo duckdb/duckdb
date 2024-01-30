@@ -542,7 +542,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
-		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
+		int64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
 		return import_cache.datetime.timedelta()(py::arg("days") = days,
 		                                         py::arg("microseconds") = interval_value.micros);
 	}
