@@ -34,7 +34,7 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 		wrapper->statements = conn->ExtractStatements(query);
 	} catch (const std::exception &ex) {
 		PreservedError error(ex);
-		wrapper->error = error.RawMessage();
+		wrapper->error = error.Message();
 	}
 
 	*out_extracted_statements = (duckdb_extracted_statements)wrapper;
