@@ -476,7 +476,7 @@
     "pointer_type": "none",
     "constructor": ["value", "index"]
   },
-    {
+  {
     "class": "CSVOption<T>",
     "includes": [
       "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
@@ -597,7 +597,7 @@
         "name": "dialect_options.state_machine_options.escape",
         "type": "CSVOption<char>"
       },
-       {"id": 124,
+      {"id": 124,
         "name": "dialect_options.header",
         "type": "CSVOption<bool>"
       },
@@ -724,14 +724,14 @@
         "type": "int32_t"
       },
       {
-          "id": 2,
-          "name": "days",
-          "type": "int32_t"
+        "id": 2,
+        "name": "days",
+        "type": "int32_t"
       },
       {
-          "id": 3,
-          "name": "micros",
-          "type": "int64_t"
+        "id": 3,
+        "name": "micros",
+        "type": "int64_t"
       }
     ],
     "pointer_type": "none"
