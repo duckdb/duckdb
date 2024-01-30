@@ -5,7 +5,6 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/function/table/files.hpp"
 
 namespace duckdb {
 
@@ -276,7 +275,8 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	UnnestTableFunction::RegisterFunction(*this);
 	RepeatRowTableFunction::RegisterFunction(*this);
 	CSVSnifferFunction::RegisterFunction(*this);
-	ReadFileFunction::RegisterFunction(*this);
+	ReadBlobFunction::RegisterFunction(*this);
+	ReadTextFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb
