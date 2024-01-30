@@ -308,7 +308,6 @@ _exported_symbols.extend([
     "ConversionException",
     "OutOfRangeException",
     "TypeMismatchException",
-    "ValueOutOfRangeException",
     "FatalException",
     "IntegrityError",
     "ConstraintException",
