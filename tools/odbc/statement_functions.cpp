@@ -180,7 +180,7 @@ static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *hstmt, const duckdb::V
 		}
 		return SQL_SUCCESS;
 	} catch (std::exception &ex) {
-		duckdb::PreservedError parsed_error(ex);
+		duckdb::ErrorData parsed_error(ex);
 		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetInternalValue", parsed_error.RawMessage(),
 		                                   SQLStateType::ST_07006, hstmt->dbc->GetDataSourceName());
 	}
@@ -194,7 +194,7 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *hstmt, const duckdb::Valu
 		target = CAST_OP::template Operation<timestamp_t, TARGET_TYPE>(timestamp);
 		return true;
 	} catch (std::exception &ex) {
-		duckdb::PreservedError parsed_error(ex);
+		duckdb::ErrorData parsed_error(ex);
 		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "CastTimestampValue", parsed_error.RawMessage(),
 		                                   SQLStateType::ST_22007, hstmt->dbc->GetDataSourceName());
 	}

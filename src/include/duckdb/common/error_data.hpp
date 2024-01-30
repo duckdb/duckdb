@@ -54,7 +54,7 @@ public:
 	DUCKDB_API void AddQueryLocation(const TableRef &ref);
 
 private:
-	//! Whether this PreservedError contains an exception or not
+	//! Whether this ErrorData contains an exception or not
 	bool initialized;
 	//! The ExceptionType of the preserved exception
 	ExceptionType type;
