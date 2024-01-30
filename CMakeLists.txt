@@ -796,9 +796,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
       COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
       )
   endif()
-  add_custom_command(
-    TARGET ${TARGET_NAME}
-    POST_BUILD
+  add_custom_target(
+    ${TARGET_NAME}_metadated ALL
     COMMAND
     echo 'my1platform\\x00' > duckdb_platform_file
     COMMAND
@@ -807,7 +806,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     echo 'extension123_version\\x00' > extension_version_file
     COMMAND
     ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> duckdb_platform_file duckdb_version_file extension_version_file
-
     )
 endfunction()
 
