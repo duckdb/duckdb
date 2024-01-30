@@ -413,6 +413,12 @@
     ]
   },
   {
+    "class": "GenericDropInfo",
+    "base": "DropInfo",
+    "enum": ["TABLE_ENTRY","SCHEMA_ENTRY","INDEX_ENTRY","VIEW_ENTRY","SEQUENCE_ENTRY","MACRO_ENTRY","TABLE_MACRO_ENTRY","TYPE_ENTRY"],
+    "custom_switch_code": "result = make_uniq<DropInfo>();\nresult->type = type;\nbreak;"
+  },
+  {
     "class": "DropSecretInfo",
     "base": "DropInfo",
     "enum": "SECRET_ENTRY",

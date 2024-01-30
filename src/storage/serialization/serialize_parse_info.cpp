@@ -178,8 +178,40 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	auto allow_drop_internal = deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal");
 	unique_ptr<DropInfo> result;
 	switch (type) {
+	case CatalogType::INDEX_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
+		break;
+	case CatalogType::MACRO_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
+		break;
+	case CatalogType::SCHEMA_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
+		break;
 	case CatalogType::SECRET_ENTRY:
 		result = DropSecretInfo::Deserialize(deserializer);
+		break;
+	case CatalogType::SEQUENCE_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
+		break;
+	case CatalogType::TABLE_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
+		break;
+	case CatalogType::TABLE_MACRO_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
+		break;
+	case CatalogType::TYPE_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
+		break;
+	case CatalogType::VIEW_ENTRY:
+		result = make_uniq<DropInfo>();
+		result->type = type;
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of DropInfo!");
