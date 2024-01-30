@@ -800,11 +800,11 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    echo 'myplatform\\x00' > duckdb_platform_file
+    echo 'my1platform\\x00' > duckdb_platform_file
     COMMAND
-    echo 'duckdb_version\\x00' > duckdb_version_file
+    echo 'duckdb12_version\\x00' > duckdb_version_file
     COMMAND
-    echo 'extension_version\\x00' > extension_version_file
+    echo 'extension123_version\\x00' > extension_version_file
     COMMAND
     ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> duckdb_platform_file duckdb_version_file extension_version_file
 
