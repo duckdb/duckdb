@@ -152,8 +152,16 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 }
 
 void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
+	if (reader_data.empty_columns && reader_data.column_ids.empty()) {
+		// This means that the columns from this file are irrelevant.
+		// just read the first column
+		file_names.emplace_back("c_1");
+		file_types.emplace_back(LogicalType::VARCHAR);
+		projected_columns.emplace_back(0);
+		return;
+	}
 	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-		idx_t result_idx  = reader_data.column_ids[i];
+		idx_t result_idx = reader_data.column_ids[i];
 		file_names.emplace_back(names[result_idx]);
 		file_types.emplace_back(types[result_idx]);
 		projected_columns.emplace_back(reader_data.column_ids[i]);
@@ -166,7 +174,7 @@ void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
 
 	// We need to be sure that our types are also following the cast_map
 	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-		if (reader_data.cast_map.find(reader_data.column_ids[i]) != reader_data.cast_map.end()){
+		if (reader_data.cast_map.find(reader_data.column_ids[i]) != reader_data.cast_map.end()) {
 			file_types[i] = reader_data.cast_map[reader_data.column_ids[i]];
 		}
 	}

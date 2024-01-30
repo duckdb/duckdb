@@ -234,11 +234,18 @@ DataChunk &StringValueResult::ToChunk() {
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.escaped) {
+		idx_t chunk_col_id = result.cur_col_id;
+		if (!result.projected_columns.empty()) {
+			if (result.projected_columns.find(result.cur_col_id) == result.projected_columns.end()) {
+				result.cur_col_id++;
+				return;
+			}
+			chunk_col_id = result.projected_columns[result.cur_col_id];
+		}
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		auto value = StringValueScanner::RemoveEscape(
 		    result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2,
-		    result.state_machine.options.GetEscape()[0], result.parse_chunk.data[result.cur_col_id]);
-
+		    result.state_machine.options.GetEscape()[0], result.parse_chunk.data[chunk_col_id]);
 		result.AddValueToVector(value.GetData(), value.GetSize());
 	} else {
 		if (buffer_pos < result.last_position + 2) {
@@ -411,7 +418,7 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 	    result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 		result.last_position++;
 	}
-	if (result.parse_chunk.ColumnCount() == 1) {
+	if (result.number_of_columns == 1) {
 		if (result.null_str_size == 0) {
 			bool empty = false;
 			if (!result.state_machine.options.force_not_null.empty()) {
