@@ -227,11 +227,9 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		*ppStmt = stmt.release();
 		return SQLITE_OK;
-	} catch (const Exception &ex) {
-		db->last_error = PreservedError(ex);
-		return SQLITE_ERROR;
 	} catch (std::exception &ex) {
 		db->last_error = PreservedError(ex);
+		db->last_error.AddErrorLocation(query);
 		return SQLITE_ERROR;
 	}
 }
