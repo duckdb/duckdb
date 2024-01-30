@@ -20,7 +20,7 @@ public:
 	//! Not initialized, default constructor
 	DUCKDB_API ErrorData();
 	//! From std::exception
-	DUCKDB_API ErrorData(const std::exception &ex); // allow implicit construction from exception
+	DUCKDB_API ErrorData(const std::exception &ex); // NOLINT: allow implicit construction from exception
 	//! From a raw string and exception type
 	DUCKDB_API explicit ErrorData(ExceptionType type, const string &raw_message);
 	//! From a raw string
