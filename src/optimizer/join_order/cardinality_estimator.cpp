@@ -223,7 +223,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					find_table = filter->left_binding.table_index;
 				}
 				auto next_subgraph = it + 1;
-				if (filter->join_type == JoinType::INNER || filter->join_type == JoinType::CROSS) {
+				if (filter->join_type == JoinType::INNER) {
 					// iterate through other subgraphs and merge.
 					FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
 					// Now insert the right binding and update denominator with the
@@ -250,7 +250,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					}
 					left->numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 				} else {
-					throw InternalException("whaat");
+					// cross product.
+					it->relations.insert(find_table);
+					it->numerator_relations.insert(find_table);
+					// no denominator updates.
 				}
 				found_match = true;
 				break;

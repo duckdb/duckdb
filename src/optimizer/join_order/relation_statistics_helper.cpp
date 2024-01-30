@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -59,10 +60,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto cardinality_after_filters = base_table_cardinality;
 	unique_ptr<BaseStatistics> column_statistics;
 
-	auto table_thing = get.GetTable();
+	auto catlog_table = get.GetTable();
 	auto name = string("some table");
-	if (table_thing) {
-		name = table_thing->name;
+	if (catlog_table) {
+		name = catlog_table->name;
 		return_stats.table_name = name;
 	}
 
@@ -83,13 +84,20 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
 			if (column_statistics && have_catalog_table_statistics) {
 				auto distinct_count = column_statistics->GetDistinctCount();
-				idx_t min_max_gap = distinct_count;
+				int64_t min_max_gap = distinct_count;
 				if (column_statistics->GetStatsType() == StatisticsType::NUMERIC_STATS &&
-				    NumericStats::HasMinMax(*column_statistics) && column_statistics->GetType().IsIntegral()) {
+				    NumericStats::HasMinMax(*column_statistics) && column_statistics->GetType().IsIntegral() &&
+				    base_table_cardinality > 0) {
 					auto col_type = column_statistics->GetType();
 					auto min = NumericStats::Min(*column_statistics);
 					auto max = NumericStats::Max(*column_statistics);
-					min_max_gap = max.GetValue<int64_t>() - min.GetValue<int64_t>();
+					auto min_val = min.GetValue<int64_t>();
+					auto max_val = max.GetValue<int64_t>();
+					auto no_overflow =
+					    TrySubtractOperator::Operation<int64_t, int64_t, int64_t>(max_val, min_val, min_max_gap);
+					if (!no_overflow) {
+						min_max_gap = distinct_count;
+					}
 					distinct_count = min_max_gap < distinct_count ? min_max_gap : distinct_count;
 				}
 				auto column_distinct_count = DistinctCount({distinct_count, true});
