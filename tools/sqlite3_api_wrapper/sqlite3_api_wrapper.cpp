@@ -229,7 +229,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		return SQLITE_OK;
 	} catch (std::exception &ex) {
 		db->last_error = PreservedError(ex);
-		db->last_error.AddErrorLocation(query);
+		db->con->context->ProcessError(db->last_error, query);
 		return SQLITE_ERROR;
 	}
 }

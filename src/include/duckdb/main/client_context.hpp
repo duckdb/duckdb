@@ -193,6 +193,9 @@ public:
 	//! Returns true if execution of the current query is finished
 	DUCKDB_API bool ExecutionIsFinished();
 
+	//! Process an error for display to the user
+	DUCKDB_API void ProcessError(PreservedError &error, const string &query) const;
+
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,

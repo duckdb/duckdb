@@ -87,13 +87,17 @@ void ClientContext::Destroy() {
 	CleanupInternal(*lock);
 }
 
-template <class T>
-unique_ptr<T> ClientContext::ErrorResult(PreservedError error, const string &query) {
+void ClientContext::ProcessError(PreservedError &error, const string &query) const {
 	if (config.errors_as_json) {
 		error.ConvertErrorToJSON();
 	} else if (!query.empty()) {
 		error.AddErrorLocation(query);
 	}
+}
+
+template <class T>
+unique_ptr<T> ClientContext::ErrorResult(PreservedError error, const string &query) {
+	ProcessError(error, query);
 	return make_uniq<T>(std::move(error));
 }
 
