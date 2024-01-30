@@ -180,8 +180,8 @@ class TestValue(object):
             (HUGEINT, 9223372036854775807, True),
             (HUGEINT, 0, True),
             (HUGEINT, -1337, True),
-            (HUGEINT, 12334214123, True)
-        ]
+            (HUGEINT, 12334214123, True),
+        ],
     )
     def test_numeric_values(self, target_type, test_value, expected_conversion_success):
         value = Value(test_value, target_type)
