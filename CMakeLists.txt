@@ -1139,17 +1139,10 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                          ${PROJECT_BINARY_DIR})
-  if (WIN32)
-    add_custom_target(
+  add_custom_target(
           duckdb_platform ALL
-	  COMMAND duckdb_platform_binary > duckdb_platform_out
+          COMMAND duckdb_platform_binary > duckdb_platform_out
           )
-  else()
-    add_custom_target(
-          duckdb_platform ALL
-	  COMMAND duckdb_platform_binary > duckdb_platform_out
-          )
-  endif()
   add_dependencies(duckdb_platform duckdb_platform_binary)
 else()
   add_custom_target(
