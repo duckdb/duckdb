@@ -97,6 +97,7 @@ jobs:
       ENABLE_EXTENSION_AUTOINSTALL: 1
       OVERRIDE_JDBC_OS_ARCH: arm64
       JAVA_HOME: ../../jdk8u345-b01
+      DUCKDB_PLATFORM: linux_arm64
     steps:
       - uses: actions/checkout@v3
         with:
