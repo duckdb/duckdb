@@ -1,7 +1,6 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 
-#include "duckdb/catalog/catalog_entry/secret_function_entry.hpp"
-#include "duckdb/catalog/catalog_entry/secret_type_entry.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -14,12 +13,24 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/operator/logical_create_secret.hpp"
 
 namespace duckdb {
+
+SecretCatalogEntry::SecretCatalogEntry(unique_ptr<SecretEntry> secret_p, Catalog &catalog)
+    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, secret_p->secret->GetName()), secret(std::move(secret_p)) {
+	internal = true;
+}
+
+SecretCatalogEntry::SecretCatalogEntry(unique_ptr<const BaseSecret> secret_p, Catalog &catalog)
+    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, secret_p->GetName()) {
+	internal = true;
+	secret = make_uniq<SecretEntry>(std::move(secret_p));
+}
 
 const BaseSecret &SecretMatch::GetSecret() {
 	return *secret_entry.get()->secret;
@@ -30,10 +41,6 @@ constexpr const char *SecretManager::LOCAL_FILE_STORAGE_NAME;
 
 void SecretManager::Initialize(DatabaseInstance &db) {
 	lock_guard<mutex> lck(manager_lock);
-
-	auto &catalog = Catalog::GetSystemCatalog(db);
-	secret_functions = make_uniq<CatalogSet>(catalog);
-	secret_types = make_uniq<CatalogSet>(catalog);
 
 	// Construct default path
 	LocalFileSystem fs;
@@ -72,14 +79,8 @@ void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage)
 	secret_storages[storage->GetName()] = std::move(storage);
 }
 
-unique_ptr<BaseSecret> SecretManager::DeserializeSecret(CatalogTransaction transaction, Deserializer &deserializer) {
-	InitializeSecrets(transaction);
-	return DeserializeSecretInternal(transaction, deserializer);
-}
-
-// FIXME: use serialization scripts
-unique_ptr<BaseSecret> SecretManager::DeserializeSecretInternal(CatalogTransaction transaction,
-                                                                Deserializer &deserializer) {
+// FIXME: use serialization scripts?
+unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<string>(100, "type");
 	auto provider = deserializer.ReadProperty<string>(101, "provider");
 	auto name = deserializer.ReadProperty<string>(102, "name");
@@ -87,7 +88,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecretInternal(CatalogTransacti
 	deserializer.ReadList(103, "scope",
 	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
 
-	auto secret_type = LookupTypeInternal(transaction, type);
+	auto secret_type = LookupTypeInternal(type);
 
 	if (!secret_type.deserializer) {
 		throw InternalException(
@@ -97,31 +98,26 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecretInternal(CatalogTransacti
 	return secret_type.deserializer(deserializer, {scope, type, provider, name});
 }
 
-void SecretManager::RegisterSecretType(CatalogTransaction transaction, SecretType &type) {
-	auto &catalog = Catalog::GetSystemCatalog(*transaction.db);
-	auto entry = make_uniq<SecretTypeEntry>(catalog, type);
-	DependencyList l;
-	auto res = secret_types->CreateEntry(transaction, type.name, std::move(entry), l);
-	if (!res) {
+void SecretManager::RegisterSecretType(SecretType &type) {
+	lock_guard<mutex> lck(manager_lock);
+	auto lookup = secret_types.find(type.name);
+	if (lookup != secret_types.end()) {
 		throw InternalException("Attempted to register an already registered secret type: '%s'", type.name);
 	}
+	secret_types[type.name] = type;
 }
 
-void SecretManager::RegisterSecretFunction(CatalogTransaction transaction, CreateSecretFunction function,
+void SecretManager::RegisterSecretFunction(CreateSecretFunction function,
                                            OnCreateConflict on_conflict) {
-
-	auto entry = secret_functions->GetEntry(transaction, function.secret_type);
-	if (entry) {
-		auto &cast_entry = entry->Cast<CreateSecretFunctionEntry>();
-		cast_entry.function_set.AddFunction(function, on_conflict);
+	unique_lock<mutex> lck(manager_lock);
+	auto lookup = secret_functions.find(function.secret_type);
+	if (lookup != secret_functions.end()) {
+		lookup->second.AddFunction(function, on_conflict);
+		return;
 	}
-
 	CreateSecretFunctionSet new_set(function.secret_type);
 	new_set.AddFunction(function, OnCreateConflict::ERROR_ON_CONFLICT);
-	auto &catalog = Catalog::GetSystemCatalog(*transaction.db);
-	auto new_entry = make_uniq<CreateSecretFunctionEntry>(catalog, new_set, function.secret_type);
-	DependencyList l;
-	secret_functions->CreateEntry(transaction, function.secret_type, std::move(new_entry), l);
+	secret_functions.insert({function.secret_type, new_set});
 }
 
 optional_ptr<SecretEntry> SecretManager::RegisterSecret(CatalogTransaction transaction,
@@ -137,7 +133,7 @@ optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransacti
                                                                 OnCreateConflict on_conflict,
                                                                 SecretPersistType persist_type, const string &storage) {
 	//! Ensure we only create secrets for known types;
-	LookupTypeInternal(transaction, secret->GetType());
+	LookupTypeInternal(secret->GetType());
 
 	//! Handle default for persist type
 	if (persist_type == SecretPersistType::DEFAULT) {
@@ -181,32 +177,20 @@ optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransacti
 			throw InvalidInputException("Cannot create temporary secrets in a persistent secret storage!");
 		}
 	}
-	return backend->StoreSecret(transaction, std::move(secret), on_conflict);
+	return backend->StoreSecret(std::move(secret), on_conflict, &transaction);
 }
 
-optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(CatalogTransaction transaction,
-                                                                         const string &type, const string &provider) {
-	auto lookup = secret_functions->GetEntry(transaction, type);
+optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const string &type, const string &provider) {
+	lock_guard<mutex> lck(manager_lock);
+	auto lookup = secret_functions.find(type);
 
-	if (lookup) {
-		auto &cast_entry = lookup->Cast<CreateSecretFunctionEntry>();
-		if (cast_entry.function_set.ProviderExists(provider)) {
-			return &cast_entry.function_set.GetFunction(provider);
+	if (lookup != secret_functions.end()) {
+		if (lookup->second.ProviderExists(provider)) {
+			return &lookup->second.GetFunction(provider);
 		}
 	}
 
-	// Not found, try autoloading. TODO: with a refactor, we can make this work without a context
-	if (transaction.context) {
-		AutoloadExtensionForFunction(*transaction.context, type, provider);
-		lookup = secret_functions->GetEntry(transaction, type);
-
-		if (lookup) {
-			auto &cast_entry = lookup->Cast<CreateSecretFunctionEntry>();
-			if (cast_entry.function_set.ProviderExists(provider)) {
-				return &cast_entry.function_set.GetFunction(provider);
-			}
-		}
-	}
+	// TODO: restore autoloading here
 
 	return nullptr;
 }
@@ -219,12 +203,12 @@ optional_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, co
 	// Make a copy to set the provider to default if necessary
 	CreateSecretInput function_input {info.type, info.provider, info.storage_type, info.name, info.scope, info.options};
 	if (function_input.provider.empty()) {
-		auto secret_type = LookupTypeInternal(transaction, function_input.type);
+		auto secret_type = LookupTypeInternal(function_input.type);
 		function_input.provider = secret_type.default_provider;
 	}
 
 	// Lookup function
-	auto function_lookup = LookupFunctionInternal(transaction, function_input.type, function_input.provider);
+	auto function_lookup = LookupFunctionInternal(function_input.type, function_input.provider);
 	if (!function_lookup) {
 		throw InvalidInputException("Could not find CreateSecretFunction for type: '%s' and provider: '%s'", info.type,
 		                            info.provider);
@@ -252,13 +236,13 @@ BoundStatement SecretManager::BindCreateSecret(CatalogTransaction transaction, C
 
 	if (provider.empty()) {
 		default_provider = true;
-		auto secret_type = LookupTypeInternal(transaction, type);
+		auto secret_type = LookupTypeInternal(type);
 		provider = secret_type.default_provider;
 	}
 
 	string default_string = default_provider ? "default " : "";
 
-	auto function = LookupFunctionInternal(transaction, type, provider);
+	auto function = LookupFunctionInternal(type, provider);
 
 	if (!function) {
 		throw BinderException("Could not find create secret function for secret type '%s' with %sprovider '%s'", type,
@@ -304,7 +288,7 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 		if (!storage_ref.get().IncludeInLookups()) {
 			continue;
 		}
-		auto match = storage_ref.get().LookupSecret(transaction, path, type);
+		auto match = storage_ref.get().LookupSecret(path, type, &transaction);
 		if (match.HasMatch() && match.score > best_match_score) {
 			best_match = match.secret_entry.get();
 			best_match_score = match.score;
@@ -332,11 +316,11 @@ optional_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction tran
 			throw InvalidInputException("Unknown secret storage found: '%s'", storage);
 		}
 
-		return storage_lookup->GetSecretByName(transaction, name);
+		return storage_lookup->GetSecretByName(name, &transaction);
 	}
 
 	for (const auto &storage_ref : GetSecretStorages()) {
-		auto lookup = storage_ref.get().GetSecretByName(transaction, name);
+		auto lookup = storage_ref.get().GetSecretByName(name, &transaction);
 		if (lookup) {
 			if (found) {
 				throw InternalException(
@@ -374,7 +358,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 				continue;
 			}
 
-			auto lookup = storage_ref.get().GetSecretByName(transaction, name);
+			auto lookup = storage_ref.get().GetSecretByName(name, &transaction);
 			if (lookup) {
 				matches.push_back(storage_ref.get());
 			}
@@ -404,30 +388,21 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 		}
 		// Do nothing on OnEntryNotFound::RETURN_NULL...
 	} else {
-		matches[0].get().DropSecretByName(transaction, name, on_entry_not_found);
+		matches[0].get().DropSecretByName(name, on_entry_not_found, &transaction);
 	}
 }
 
-SecretType SecretManager::LookupType(CatalogTransaction transaction, const string &type) {
-	return LookupTypeInternal(transaction, type);
+SecretType SecretManager::LookupType(const string &type) {
+	return LookupTypeInternal(type);
 }
 
-SecretType SecretManager::LookupTypeInternal(CatalogTransaction transaction, const string &type) {
-
-	auto lookup = secret_types->GetEntry(transaction, type);
-	if (!lookup) {
-		// Retry with autoload TODO this can work without context
-		if (transaction.context) {
-			AutoloadExtensionForType(*transaction.context, type);
-
-			lookup = secret_types->GetEntry(transaction, type);
-			if (!lookup) {
-				throw InvalidInputException("Secret type '%s' not found", type);
-			}
-		}
+SecretType SecretManager::LookupTypeInternal(const string &type) {
+	unique_lock<mutex> lck(manager_lock);
+	auto lookup = secret_types.find(type);
+	if (lookup == secret_types.end()) {
+		// TODO autoload!
 	}
-
-	return lookup->Cast<SecretTypeEntry>().type;
+	return lookup->second;
 }
 
 vector<reference<SecretEntry>> SecretManager::AllSecrets(CatalogTransaction transaction) {
@@ -437,7 +412,7 @@ vector<reference<SecretEntry>> SecretManager::AllSecrets(CatalogTransaction tran
 
 	// Add results from all backends to the result set
 	for (const auto &backend : secret_storages) {
-		auto backend_result = backend.second->AllSecrets(transaction);
+		auto backend_result = backend.second->AllSecrets(&transaction);
 		for (const auto &it : backend_result) {
 			result.push_back(it);
 		}
@@ -563,8 +538,6 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	string base_secret_path = secret_manager.PersistentSecretPath();
 	string secret_path = fs.JoinPath(base_secret_path, entry_name + ".duckdb_secret");
 
-	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-
 	// Note each file should contain 1 secret
 	try {
 		auto file_reader = BufferedFileReader(fs, secret_path.c_str());
@@ -572,13 +545,13 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 			BinaryDeserializer deserializer(file_reader);
 
 			deserializer.Begin();
-			auto deserialized_secret = secret_manager.DeserializeSecret(transaction, deserializer);
+			auto deserialized_secret = secret_manager.DeserializeSecret(deserializer);
 			deserializer.End();
 
 			auto name = deserialized_secret->GetName();
-			auto entry = make_uniq<SecretEntry>(std::move(deserialized_secret), catalog, name);
-			entry->storage_mode = SecretManager::LOCAL_FILE_STORAGE_NAME;
-			entry->persist_type = SecretPersistType::PERSISTENT;
+			auto entry = make_uniq<SecretCatalogEntry>(std::move(deserialized_secret), catalog);
+			entry->secret->storage_mode = SecretManager::LOCAL_FILE_STORAGE_NAME;
+			entry->secret->persist_type = SecretPersistType::PERSISTENT;
 
 			// Finally: we remove the default entry from the persistent_secrets, otherwise we aren't able to drop it
 			// later
