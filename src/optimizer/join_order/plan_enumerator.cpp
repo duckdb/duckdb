@@ -119,7 +119,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	if (!possible_connections.empty()) {
 		best_connection = &possible_connections.back().get();
 	}
-	auto join_type = JoinType::CROSS;
+	auto join_type = JoinType::INVALID;
 	for (auto &filter_binding : best_connection->filters) {
 		if (!filter_binding->left_set || !filter_binding->right_set) {
 			continue;
@@ -131,9 +131,6 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 			break;
 		}
-	}
-	if (join_type == JoinType::CROSS) {
-		auto wat = "sdisdf";
 	}
 	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right, join_type);

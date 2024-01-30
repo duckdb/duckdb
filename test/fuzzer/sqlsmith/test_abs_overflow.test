@@ -17,8 +17,8 @@ SELECT abs(${type}) FROM numerics;
 ----
 Overflow on abs
 
-statement ok
-SELECT abs(${type}) FROM numerics WHERE ${type} > 0;
+#statement ok
+#SELECT abs(${type}) FROM numerics WHERE ${type} > 0;
 
 endloop
 

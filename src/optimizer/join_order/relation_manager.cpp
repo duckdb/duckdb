@@ -104,8 +104,7 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
-	}
-	else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
 		case JoinType::INNER:
@@ -335,9 +334,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info =
 					    make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size(), join.join_type);
-					if (filter_info->join_type == JoinType::CROSS) {
-						filter_info->join_type = JoinType::INNER;
-					}
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}
