@@ -352,7 +352,7 @@ void RegisterExceptions(const py::module &m) {
 			case ExceptionType::NOT_IMPLEMENTED:
 				throw PyNotImplementedException(error.Message());
 			default:
-				throw std::runtime_error(error.Message());
+				throw std::runtime_error(error.RawMessage());
 			}
 		}
 	});
