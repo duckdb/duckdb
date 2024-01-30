@@ -273,11 +273,9 @@ _exported_symbols.extend([
 from .duckdb import (
     Error,
     DataError,
-    CastException,
     ConversionException,
     OutOfRangeException,
     TypeMismatchException,
-    ValueOutOfRangeException,
     FatalException,
     IntegrityError,
     ConstraintException,

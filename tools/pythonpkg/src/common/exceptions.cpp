@@ -50,12 +50,9 @@ void RegisterExceptions(const py::module &m) {
 	// DataError
 	auto data_error = py::register_exception<DataError>(m, "DataError", error).ptr();
 	py::register_exception<OutOfRangeException>(m, "OutOfRangeException", data_error);
-	py::register_exception<CastException>(m, "CastException", data_error);
 	py::register_exception<ConversionException>(m, "ConversionException", data_error);
 	// no unknown type error, or decimal type
 	py::register_exception<TypeMismatchException>(m, "TypeMismatchException", data_error);
-	// no divide by zero error
-	py::register_exception<ValueOutOfRangeException>(m, "ValueOutOfRangeException", data_error);
 
 	// OperationalError
 	auto operational_error = py::register_exception<OperationalError>(m, "OperationalError", error).ptr();
@@ -82,7 +79,8 @@ void RegisterExceptions(const py::module &m) {
 			}
 		} catch (const std::exception &ex) {
 			duckdb::ErrorData error(ex);
-			if (error.Type() == ExceptionType::HTTP) {
+			switch(error.Type()) {
+			case ExceptionType::HTTP: {
 				// construct exception object
 				auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(error.Message()));
 
@@ -102,7 +100,8 @@ void RegisterExceptions(const py::module &m) {
 
 				// "throw" exception object
 				PyErr_SetObject(HTTP_EXCEPTION.ptr(), e.ptr());
-			} else {
+			}
+			default:
 				throw;
 			}
 		}
