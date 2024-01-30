@@ -604,7 +604,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 		input->release = nullptr;
 	} catch (std::exception &ex) {
 		if (error) {
-			::duckdb::PreservedError parsed_error(ex);
+			::duckdb::ErrorData parsed_error(ex);
 			error->message = strdup(parsed_error.RawMessage().c_str());
 		}
 		return ADBC_STATUS_INTERNAL;
@@ -712,7 +712,7 @@ AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::uniqu
 		input->release = nullptr;
 	} catch (std::exception &ex) {
 		if (error) {
-			::duckdb::PreservedError parsed_error(ex);
+			::duckdb::ErrorData parsed_error(ex);
 			error->message = strdup(parsed_error.RawMessage().c_str());
 		}
 		return ADBC_STATUS_INTERNAL;

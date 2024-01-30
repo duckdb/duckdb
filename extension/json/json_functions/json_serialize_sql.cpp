@@ -115,7 +115,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 			return StringVector::AddString(result, data, len);
 
 		} catch (std::exception &ex) {
-			PreservedError error(ex);
+			ErrorData error(ex);
 			yyjson_mut_obj_add_true(doc, result_obj, "error");
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_type",
 			                          StringUtil::Lower(Exception::ExceptionTypeToString(error.Type())).c_str());

@@ -54,7 +54,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string 
 	return make_uniq<FunctionExpression>(value_function, std::move(children));
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, PreservedError &error) {
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, ErrorData &error) {
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
 		// we are referencing a USING column
@@ -111,7 +111,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 
 	// it's not, find candidates and error
 	auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-	error = PreservedError(BinderException::ColumnNotFound(column_name, similar_bindings));
+	error = ErrorData(BinderException::ColumnNotFound(column_name, similar_bindings));
 	return nullptr;
 }
 
@@ -130,7 +130,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 			return;
 		}
 
-		PreservedError error;
+		ErrorData error;
 		auto new_expr = QualifyColumnName(col_ref, error);
 
 		if (new_expr) {
@@ -242,7 +242,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 	D_ASSERT(col_ref.column_names.size() <= 3);
 
 	// get a matching binding
-	PreservedError error;
+	ErrorData error;
 	auto &table_name = col_ref.column_names.back();
 	auto binding = binder.bind_context.GetBinding(table_name, error);
 
@@ -289,7 +289,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref,
-                                                                             PreservedError &error) {
+																			 ErrorData &error) {
 
 	// two or more dots (i.e. "part1.part2.part3.part4...")
 	// -> part1 is a catalog, part2 is a schema, part3 is a table, part4 is a column name, part 5 and beyond are
@@ -342,7 +342,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(Col
 
 	} else {
 		// part1 could be a column
-		PreservedError col_error;
+		ErrorData col_error;
 		result_expr = QualifyColumnName(col_ref.column_names[0], col_error);
 		if (!result_expr) {
 			// it is not! Try creating an implicit struct_pack
@@ -360,7 +360,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(Col
 	return result_expr;
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, PreservedError &error) {
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) {
 
 	// try binding as a lambda parameter
 	if (!col_ref.IsQualified()) {
@@ -400,7 +400,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		}
 
 		// otherwise check if we can turn this into a struct extract
-		PreservedError other_error;
+		ErrorData other_error;
 		auto qualified_col_ref = QualifyColumnName(col_ref.column_names[0], other_error);
 		if (qualified_col_ref) {
 			// we could: create a struct extract
@@ -425,7 +425,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
-	PreservedError error;
+	ErrorData error;
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
 		error.AddQueryLocation(col_ref_p);

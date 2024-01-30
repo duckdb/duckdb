@@ -184,7 +184,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
-		PreservedError error(ex);
+		ErrorData error(ex);
 		if (error.Type() == ExceptionType::SERIALIZATION) {
 			// serialization exception - torn WAL
 			// continue reading
@@ -230,7 +230,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
-		PreservedError error(ex);
+		ErrorData error(ex);
 		if (error.Type() != ExceptionType::SERIALIZATION) {
 			// FIXME: this should report a proper warning in the connection
 			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());

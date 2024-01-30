@@ -7,7 +7,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	PreservedError error;
+	ErrorData error;
 	for (idx_t i = 0; i < expr.children.size(); i++) {
 		BindChild(expr.children[i], depth, error);
 	}

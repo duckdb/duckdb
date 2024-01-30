@@ -16,7 +16,7 @@ using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
 using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
-using duckdb::PreservedError;
+using duckdb::ErrorData;
 using duckdb::QueryResultType;
 using duckdb::StringUtil;
 using duckdb::timestamp_t;
@@ -33,7 +33,7 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	try {
 		wrapper->statements = conn->ExtractStatements(query);
 	} catch (const std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		wrapper->error = error.Message();
 	}
 

@@ -87,7 +87,7 @@ public:
 			try {
 				bind_data = function.bind(context, function, children);
 			} catch (std::exception &ex) {
-				PreservedError error(ex);
+				ErrorData error(ex);
 				throw SerializationException("Error during bind of function in deserialization: %s",
 				                             error.RawMessage());
 			}

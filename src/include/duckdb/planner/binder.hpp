@@ -161,11 +161,11 @@ public:
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                            const string &schema = INVALID_SCHEMA);
 
-	bool HasMatchingBinding(const string &table_name, const string &column_name, PreservedError &error);
+	bool HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-	                        PreservedError &error);
+							ErrorData &error);
 	bool HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-	                        const string &column_name, PreservedError &error);
+							const string &column_name, ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
 	BindingMode GetBindingMode();
@@ -284,11 +284,11 @@ private:
 	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                                 unique_ptr<BoundSubqueryRef> &subquery, PreservedError &error);
+									 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
+									 vector<Value> &parameters, named_parameter_map_t &named_parameters,
+									 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-	                                 unique_ptr<BoundSubqueryRef> &subquery, PreservedError &error);
+									 unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error);
 	unique_ptr<LogicalOperator> BindTableFunction(TableFunction &function, vector<Value> parameters);
 	unique_ptr<LogicalOperator>
 	BindTableFunctionInternal(TableFunction &table_function, const string &function_name, vector<Value> parameters,

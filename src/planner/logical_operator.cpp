@@ -185,7 +185,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 		this->Serialize(serializer);
 		serializer.End();
 	} catch (NotImplementedException &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "
 		                              "be serializable: " +
 		                              error.RawMessage());

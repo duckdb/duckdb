@@ -48,7 +48,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
 	} catch (const std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		this->plan = nullptr;
 		if (error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED) {
 			// parameter types could not be resolved

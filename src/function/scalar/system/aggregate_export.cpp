@@ -213,7 +213,7 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	}
 	auto &aggr = func.Cast<AggregateFunctionCatalogEntry>();
 
-	PreservedError error;
+	ErrorData error;
 
 	FunctionBinder function_binder(context);
 	idx_t best_function =

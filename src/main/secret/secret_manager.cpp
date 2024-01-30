@@ -578,7 +578,7 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 			return std::move(entry);
 		}
 	} catch (std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		switch (error.Type()) {
 		case ExceptionType::SERIALIZATION:
 			throw SerializationException(

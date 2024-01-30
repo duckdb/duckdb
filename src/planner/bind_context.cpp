@@ -137,7 +137,7 @@ void BindContext::TransferUsingBinding(BindContext &current_context, optional_pt
 }
 
 string BindContext::GetActualColumnName(const string &binding_name, const string &column_name) {
-	PreservedError error;
+	ErrorData error;
 	auto binding = GetBinding(binding_name, error);
 	if (!binding) {
 		throw InternalException("No binding with name \"%s\": %s", binding_name, error.RawMessage());
@@ -162,7 +162,7 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 }
 
 unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
-	PreservedError error;
+	ErrorData error;
 
 	auto binding = GetBinding(table_name, error);
 	D_ASSERT(binding && !error.HasError());
@@ -196,7 +196,7 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &catalog_name, const string &schema_name,
                                                                 const string &table_name, const string &column_name) {
-	PreservedError error;
+	ErrorData error;
 	vector<string> names;
 	if (!catalog_name.empty()) {
 		names.push_back(catalog_name);
@@ -237,7 +237,7 @@ optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
-optional_ptr<Binding> BindContext::GetBinding(const string &name, PreservedError &out_error) {
+optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out_error) {
 	auto match = bindings.find(name);
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
@@ -247,8 +247,8 @@ optional_ptr<Binding> BindContext::GetBinding(const string &name, PreservedError
 		}
 		string candidate_str =
 		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
-		out_error = PreservedError(ExceptionType::BINDER,
-		                           StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
+		out_error = ErrorData(ExceptionType::BINDER,
+							  StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
 		return nullptr;
 	}
 	return match->second.get();
@@ -259,7 +259,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 		throw InternalException("Could not bind alias \"%s\"!", colref.GetColumnName());
 	}
 
-	PreservedError error;
+	ErrorData error;
 	auto binding = GetBinding(colref.GetTableName(), error);
 	if (!binding) {
 		return BindResult(std::move(error));
@@ -368,7 +368,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	} else {
 		// SELECT tbl.* case
 		// SELECT struct.* case
-		PreservedError error;
+		ErrorData error;
 		auto binding = GetBinding(expr.relation_name, error);
 		bool is_struct_ref = false;
 		if (!binding) {

@@ -196,7 +196,7 @@ void Parser::ParseQuery(const string &query) {
 			auto query_statements = SplitQueryStringIntoStatements(query);
 			auto stmt_loc = 0;
 			for (auto const &query_statement : query_statements) {
-				PreservedError another_parser_error;
+				ErrorData another_parser_error;
 				// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
 				{
 					PostgresParser another_parser;
@@ -215,7 +215,7 @@ void Parser::ParseQuery(const string &query) {
 						stmt_loc += query_statement.size();
 						continue;
 					} else {
-						another_parser_error = PreservedError(another_parser.error_message);
+						another_parser_error = ErrorData(another_parser.error_message);
 						another_parser_error.AddQueryLocation(another_parser.error_location - 1);
 					}
 				} // LCOV_EXCL_STOP

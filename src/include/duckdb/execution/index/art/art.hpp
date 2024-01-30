@@ -75,7 +75,7 @@ public:
 	}
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	PreservedError Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index without a constraint violation
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
@@ -85,7 +85,7 @@ public:
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert a chunk of entries into the index
-	PreservedError Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_identifiers);

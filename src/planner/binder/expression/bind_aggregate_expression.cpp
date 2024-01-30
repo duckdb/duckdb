@@ -86,7 +86,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
 	AggregateBinder aggregate_binder(binder, context);
-	PreservedError error;
+	ErrorData error;
 
 	// Now we bind the filter (if any)
 	if (aggr.filter) {

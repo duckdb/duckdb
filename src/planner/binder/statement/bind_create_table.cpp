@@ -171,7 +171,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto binder = Binder::CreateBinder(context);
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
-	PreservedError ignore;
+	ErrorData ignore;
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
 	D_ASSERT(table_binding && !ignore.HasError());
 

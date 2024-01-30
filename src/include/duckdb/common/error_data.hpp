@@ -15,16 +15,16 @@ namespace duckdb {
 class ParsedExpression;
 class TableRef;
 
-class PreservedError {
+class ErrorData {
 public:
 	//! Not initialized, default constructor
-	DUCKDB_API PreservedError();
+	DUCKDB_API ErrorData();
 	//! From std::exception
-	DUCKDB_API PreservedError(const std::exception &ex); // allow implicit construction from exception
+	DUCKDB_API ErrorData(const std::exception &ex); // allow implicit construction from exception
 	//! From a raw string and exception type
-	DUCKDB_API explicit PreservedError(ExceptionType type, const string &raw_message);
+	DUCKDB_API explicit ErrorData(ExceptionType type, const string &raw_message);
 	//! From a raw string
-	DUCKDB_API explicit PreservedError(const string &raw_message);
+	DUCKDB_API explicit ErrorData(const string &raw_message);
 
 public:
 	//! Throw the error
@@ -36,7 +36,7 @@ public:
 	DUCKDB_API const string &RawMessage() {
 		return raw_message;
 	}
-	DUCKDB_API bool operator==(const PreservedError &other) const;
+	DUCKDB_API bool operator==(const ErrorData &other) const;
 
 	inline bool HasError() const {
 		return initialized;

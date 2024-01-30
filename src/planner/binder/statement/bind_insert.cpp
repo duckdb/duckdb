@@ -324,7 +324,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		throw InternalException("Could not locate a table_index from the children of the insert");
 	}
 
-	PreservedError unused;
+	ErrorData unused;
 	auto original_binding = bind_context.GetBinding(table_alias, unused);
 	D_ASSERT(original_binding && !unused.HasError());
 

@@ -20,7 +20,7 @@ duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_conf
 		wrapper->database = duckdb::make_uniq<DuckDB>(path, db_config);
 	} catch (std::exception &ex) {
 		if (error) {
-			PreservedError parsed_error(ex);
+			ErrorData parsed_error(ex);
 			*error = strdup(parsed_error.RawMessage().c_str());
 		}
 		delete wrapper;

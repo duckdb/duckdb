@@ -34,7 +34,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (depth > 0) {
 		return BindResult(BinderException(function, "UNNEST() for correlated expressions is not supported yet"));
 	}
-	PreservedError error;
+	ErrorData error;
 	if (function.children.empty()) {
 		return BindResult(BinderException(function, "UNNEST() requires a single argument"));
 	}

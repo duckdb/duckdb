@@ -14,7 +14,7 @@ ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move
 }
 
 ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
-	PreservedError error;
+	ErrorData error;
 	FunctionBinder binder(context);
 	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
@@ -36,7 +36,7 @@ AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(
 
 AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
                                                                const vector<LogicalType> &arguments) {
-	PreservedError error;
+	ErrorData error;
 	FunctionBinder binder(context);
 	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {
@@ -72,7 +72,7 @@ TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fu
 }
 
 TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
-	PreservedError error;
+	ErrorData error;
 	FunctionBinder binder(context);
 	idx_t index = binder.BindFunction(name, *this, arguments, error);
 	if (index == DConstants::INVALID_INDEX) {

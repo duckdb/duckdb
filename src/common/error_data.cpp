@@ -1,4 +1,4 @@
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
 
 #include "duckdb/common/string_util.hpp"
@@ -7,17 +7,17 @@
 
 namespace duckdb {
 
-PreservedError::PreservedError() : initialized(false), type(ExceptionType::INVALID) {
+ErrorData::ErrorData() : initialized(false), type(ExceptionType::INVALID) {
 }
 
-PreservedError::PreservedError(const std::exception &ex) : PreservedError(ex.what()) {
+ErrorData::ErrorData(const std::exception &ex) : ErrorData(ex.what()) {
 }
 
-PreservedError::PreservedError(ExceptionType type, const string &message)
+ErrorData::ErrorData(ExceptionType type, const string &message)
     : initialized(true), type(type), raw_message(SanitizeErrorMessage(message)) {
 }
 
-PreservedError::PreservedError(const string &message)
+ErrorData::ErrorData(const string &message)
     : initialized(true), type(ExceptionType::INVALID), raw_message(string()) {
 
 	// parse the constructed JSON
@@ -39,18 +39,18 @@ PreservedError::PreservedError(const string &message)
 	}
 }
 
-const string &PreservedError::Message() {
+const string &ErrorData::Message() {
 	if (final_message.empty()) {
 		final_message = Exception::ExceptionTypeToString(type) + " Error: " + raw_message;
 	}
 	return final_message;
 }
 
-string PreservedError::SanitizeErrorMessage(string error) {
+string ErrorData::SanitizeErrorMessage(string error) {
 	return StringUtil::Replace(std::move(error), string("\0", 1), "\\0");
 }
 
-void PreservedError::Throw(const string &prepended_message) const {
+void ErrorData::Throw(const string &prepended_message) const {
 	D_ASSERT(initialized);
 	if (!prepended_message.empty()) {
 		string new_message = prepended_message + raw_message;
@@ -60,12 +60,12 @@ void PreservedError::Throw(const string &prepended_message) const {
 	}
 }
 
-const ExceptionType &PreservedError::Type() const {
+const ExceptionType &ErrorData::Type() const {
 	D_ASSERT(initialized);
 	return this->type;
 }
 
-bool PreservedError::operator==(const PreservedError &other) const {
+bool ErrorData::operator==(const ErrorData &other) const {
 	if (initialized != other.initialized) {
 		return false;
 	}
@@ -75,7 +75,7 @@ bool PreservedError::operator==(const PreservedError &other) const {
 	return raw_message == other.raw_message;
 }
 
-void PreservedError::ConvertErrorToJSON() {
+void ErrorData::ConvertErrorToJSON() {
 	if (raw_message.empty() || raw_message[0] == '{') {
 		// empty or already JSON
 		return;
@@ -84,7 +84,7 @@ void PreservedError::ConvertErrorToJSON() {
 	final_message = raw_message;
 }
 
-void PreservedError::AddErrorLocation(const string &query) {
+void ErrorData::AddErrorLocation(const string &query) {
 	auto entry = extra_info.find("position");
 	if (entry == extra_info.end()) {
 		return;
@@ -92,19 +92,19 @@ void PreservedError::AddErrorLocation(const string &query) {
 	raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
 }
 
-void PreservedError::AddQueryLocation(optional_idx query_location) {
+void ErrorData::AddQueryLocation(optional_idx query_location) {
 	Exception::SetQueryLocation(query_location, extra_info);
 }
 
-void PreservedError::AddQueryLocation(QueryErrorContext error_context) {
+void ErrorData::AddQueryLocation(QueryErrorContext error_context) {
 	AddQueryLocation(error_context.query_location);
 }
 
-void PreservedError::AddQueryLocation(const ParsedExpression &ref) {
+void ErrorData::AddQueryLocation(const ParsedExpression &ref) {
 	AddQueryLocation(ref.query_location);
 }
 
-void PreservedError::AddQueryLocation(const TableRef &ref) {
+void ErrorData::AddQueryLocation(const TableRef &ref) {
 	AddQueryLocation(ref.query_location);
 }
 

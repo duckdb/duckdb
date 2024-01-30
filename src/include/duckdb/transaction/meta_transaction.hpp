@@ -47,7 +47,7 @@ public:
 	Transaction &GetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
 
-	PreservedError Commit();
+	ErrorData Commit();
 	void Rollback();
 
 	idx_t GetActiveQuery();

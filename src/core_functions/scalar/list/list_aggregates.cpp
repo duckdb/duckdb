@@ -463,7 +463,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	}
 
 	// find a matching aggregate function
-	PreservedError error;
+	ErrorData error;
 	vector<LogicalType> types;
 	types.push_back(child_type);
 	// push any extra arguments into the type list

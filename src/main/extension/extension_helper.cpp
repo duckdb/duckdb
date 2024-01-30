@@ -229,7 +229,7 @@ void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &ex
 #endif
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (std::exception &e) {
-		PreservedError error(e);
+		ErrorData error(e);
 		throw AutoloadException(extension_name, error.RawMessage());
 	}
 }

@@ -11,7 +11,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	PreservedError error;
+	ErrorData error;
 	BindChild(expr.input, depth, error);
 	BindChild(expr.lower, depth, error);
 	BindChild(expr.upper, depth, error);

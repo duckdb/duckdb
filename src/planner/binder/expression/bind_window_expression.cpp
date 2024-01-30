@@ -103,7 +103,7 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	auto &bound = BoundExpression::GetExpression(*expr);
 	children.emplace_back(std::move(bound));
 
-	PreservedError error;
+	ErrorData error;
 	FunctionBinder function_binder(context);
 	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
 	if (!function) {
@@ -133,7 +133,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
 	this->inside_window = true;
-	PreservedError error;
+	ErrorData error;
 	for (auto &child : window.children) {
 		BindChild(child, depth, error);
 	}
@@ -215,7 +215,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
-		PreservedError error;
+		ErrorData error;
 		FunctionBinder function_binder(context);
 		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {

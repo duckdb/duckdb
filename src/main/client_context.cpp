@@ -5,7 +5,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/http_state.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -87,7 +87,7 @@ void ClientContext::Destroy() {
 	CleanupInternal(*lock);
 }
 
-void ClientContext::ProcessError(PreservedError &error, const string &query) const {
+void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	if (config.errors_as_json) {
 		error.ConvertErrorToJSON();
 	} else if (!query.empty()) {
@@ -96,7 +96,7 @@ void ClientContext::ProcessError(PreservedError &error, const string &query) con
 }
 
 template <class T>
-unique_ptr<T> ClientContext::ErrorResult(PreservedError error, const string &query) {
+unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	ProcessError(error, query);
 	return make_uniq<T>(std::move(error));
 }
@@ -118,7 +118,7 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 		}
 		return chunk;
 	} catch (std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		auto exception_type = error.Type();
 		if (!Exception::InvalidatesTransaction(exception_type)) {
 			// standard exceptions do not invalidate the current transaction
@@ -130,7 +130,7 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 		}
 		result.SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
-		result.SetError(PreservedError("Unhandled exception in FetchInternal"));
+		result.SetError(ErrorData("Unhandled exception in FetchInternal"));
 	} // LCOV_EXCL_STOP
 	CleanupInternal(lock, &result, invalidate_query);
 	return nullptr;
@@ -162,7 +162,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 }
 
-PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
+ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
 	client_data->profiler->EndQuery();
 
 	if (client_data->http_state) {
@@ -177,7 +177,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_progress.Initialize();
-	PreservedError error;
+	ErrorData error;
 	try {
 		if (transaction.HasActiveTransaction()) {
 			// Move the query profiler into the history
@@ -204,13 +204,13 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 			}
 		}
 	} catch (std::exception &ex) {
-		error = PreservedError(ex);
+		error = ErrorData(ex);
 		if (Exception::InvalidatesDatabase(error.Type())) {
 			auto &db_inst = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_inst, error.RawMessage());
 		}
 	} catch (...) { // LCOV_EXCL_START
-		error = PreservedError("Unhandled exception!");
+		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
 	return error;
 }
@@ -456,7 +456,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		}
 		return query_result;
 	} catch (std::exception &ex) {
-		auto error = PreservedError(ex);
+		auto error = ErrorData(ex);
 		if (!Exception::InvalidatesTransaction(error.Type())) {
 			invalidate_transaction = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
@@ -466,7 +466,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		}
 		result.SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
-		result.SetError(PreservedError("Unhandled exception in ExecuteTaskInternal"));
+		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
 	} // LCOV_EXCL_STOP
 	EndQueryInternal(lock, false, invalidate_transaction);
 	return PendingExecutionResult::EXECUTION_ERROR;
@@ -553,7 +553,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 		InitialCleanup(*lock);
 		return PrepareInternal(*lock, std::move(statement));
 	} catch (std::exception &ex) {
-		return ErrorResult<PreparedStatement>(PreservedError(ex), query);
+		return ErrorResult<PreparedStatement>(ErrorData(ex), query);
 	}
 }
 
@@ -573,7 +573,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 		}
 		return PrepareInternal(*lock, std::move(statements[0]));
 	} catch (std::exception &ex) {
-		return ErrorResult<PreparedStatement>(PreservedError(ex), query);
+		return ErrorResult<PreparedStatement>(ErrorData(ex), query);
 	}
 }
 
@@ -583,7 +583,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(Clien
 	try {
 		InitialCleanup(lock);
 	} catch (std::exception &ex) {
-		return ErrorResult<PendingQueryResult>(PreservedError(ex), query);
+		return ErrorResult<PendingQueryResult>(ErrorData(ex), query);
 	}
 	return PendingStatementOrPreparedStatementInternal(lock, query, nullptr, prepared, parameters);
 }
@@ -622,10 +622,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
 		                                          prepared->properties.parameter_count);
-		return ErrorResult<PendingQueryResult>(PreservedError(error_message), query);
+		return ErrorResult<PendingQueryResult>(ErrorData(error_message), query);
 	}
 	if (!prepared->properties.bound_all_parameters) {
-		return ErrorResult<PendingQueryResult>(PreservedError("Not all parameters were bound"), query);
+		return ErrorResult<PendingQueryResult>(ErrorData("Not all parameters were bound"), query);
 	}
 	// execute the prepared statement
 	return PendingPreparedStatement(lock, std::move(prepared), parameters);
@@ -662,11 +662,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		switch (statement->type) {
 		case StatementType::SELECT_STATEMENT: {
 			// in case this is a select query, we verify the original statement
-			PreservedError error;
+			ErrorData error;
 			try {
 				error = VerifyQuery(lock, query, std::move(statement));
 			} catch (std::exception &ex) {
-				error = PreservedError(ex);
+				error = ErrorData(ex);
 			}
 			if (error.HasError()) {
 				// error in verifying query
@@ -681,11 +681,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		case StatementType::DELETE_STATEMENT:
 		case StatementType::UPDATE_STATEMENT: {
 			Parser parser;
-			PreservedError error;
+			ErrorData error;
 			try {
 				parser.ParseQuery(statement->ToString());
 			} catch (std::exception &ex) {
-				error = PreservedError(ex);
+				error = ErrorData(ex);
 			}
 			if (error.HasError()) {
 				// error in verifying query
@@ -711,7 +711,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	try {
 		BeginQueryInternal(lock, query);
 	} catch (std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		if (Exception::InvalidatesDatabase(error.Type())) {
 			// fatal exceptions invalidate the entire database
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
@@ -740,7 +740,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			result = PendingPreparedStatement(lock, prepared, parameters);
 		}
 	} catch (std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		if (!Exception::InvalidatesTransaction(error.Type())) {
 			// standard exceptions do not invalidate the current transaction
 			invalidate_query = false;
@@ -796,7 +796,7 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
 	auto lock = LockContext();
 
-	PreservedError error;
+	ErrorData error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {
 		return ErrorResult<MaterializedQueryResult>(std::move(error), query);
@@ -846,14 +846,14 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 }
 
 bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query,
-                                    vector<unique_ptr<SQLStatement>> &result, PreservedError &error) {
+									vector<unique_ptr<SQLStatement>> &result, ErrorData &error) {
 	try {
 		InitialCleanup(lock);
 		// parse the query and transform it into a set of statements
 		result = ParseStatementsInternal(lock, query);
 		return true;
 	} catch (std::exception &ex) {
-		error = PreservedError(ex);
+		error = ErrorData(ex);
 		return false;
 	}
 }
@@ -861,13 +861,13 @@ bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, bool allow_stream_result) {
 	auto lock = LockContext();
 
-	PreservedError error;
+	ErrorData error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {
 		return ErrorResult<PendingQueryResult>(std::move(error), query);
 	}
 	if (statements.size() != 1) {
-		return ErrorResult<PendingQueryResult>(PreservedError("PendingQuery can only take a single statement"), query);
+		return ErrorResult<PendingQueryResult>(ErrorData("PendingQuery can only take a single statement"), query);
 	}
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;
@@ -881,7 +881,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 	try {
 		InitialCleanup(*lock);
 	} catch (std::exception &ex) {
-		return ErrorResult<PendingQueryResult>(PreservedError(ex));
+		return ErrorResult<PendingQueryResult>(ErrorData(ex));
 	}
 
 	PendingQueryParameters parameters;
@@ -955,7 +955,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	try {
 		fun();
 	} catch (std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		bool invalidates_transaction = true;
 		if (!Exception::InvalidatesTransaction(error.Type())) {
 			// standard exceptions don't invalidate the transaction
@@ -1127,7 +1127,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 		err_str += result->names[i] + " " + result->types[i].ToString();
 	}
 	err_str += "]";
-	return ErrorResult<MaterializedQueryResult>(PreservedError(err_str));
+	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
 bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {

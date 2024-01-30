@@ -89,7 +89,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		return BindGroupingFunction(op, depth);
 	}
 	// bind the children of the operator expression
-	PreservedError error;
+	ErrorData error;
 	for (idx_t i = 0; i < op.children.size(); i++) {
 		BindChild(op.children[i], depth, error);
 	}

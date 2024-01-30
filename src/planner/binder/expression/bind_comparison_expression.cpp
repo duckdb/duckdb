@@ -200,7 +200,7 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	PreservedError error;
+	ErrorData error;
 	BindChild(expr.left, depth, error);
 	BindChild(expr.right, depth, error);
 	if (error.HasError()) {

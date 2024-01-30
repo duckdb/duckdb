@@ -27,9 +27,9 @@ TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
 	try {
 		return ExecuteTask(mode);
 	} catch (std::exception &ex) {
-		executor.PushError(PreservedError(ex));
+		executor.PushError(ErrorData(ex));
 	} catch (...) { // LCOV_EXCL_START
-		executor.PushError(PreservedError("Unknown exception in Finalize!"));
+		executor.PushError(ErrorData("Unknown exception in Finalize!"));
 	} // LCOV_EXCL_STOP
 	return TaskExecutionResult::TASK_ERROR;
 }

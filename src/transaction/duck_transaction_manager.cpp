@@ -167,7 +167,7 @@ bool DuckTransactionManager::CanCheckpoint(optional_ptr<DuckTransaction> current
 	return true;
 }
 
-PreservedError DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
+ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_uniq<lock_guard<mutex>>(transaction_lock);

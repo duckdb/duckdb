@@ -55,7 +55,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
 			// the schema is set - check if we can turn this the schema into a column ref
-			PreservedError error;
+			ErrorData error;
 			unique_ptr<ColumnRefExpression> colref;
 			if (function.catalog.empty()) {
 				colref = make_uniq<ColumnRefExpression>(function.schema);
@@ -107,7 +107,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
 
 	// bind the children of the function expression
-	PreservedError error;
+	ErrorData error;
 
 	// bind of each child
 	for (idx_t i = 0; i < function.children.size(); i++) {
@@ -160,7 +160,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	D_ASSERT(function.children[1]->GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	// bind the list parameter
-	PreservedError error;
+	ErrorData error;
 	BindChild(function.children[0], depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));

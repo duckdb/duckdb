@@ -97,7 +97,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 }
 
-BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, PreservedError error_message) {
+BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message) {
 	// try to bind in one of the outer queries, if the binding error occurred in a subquery
 	auto &active_binders = binder.GetActiveBinders();
 	// make a copy of the set of binders, so we can restore it later
@@ -120,9 +120,9 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 	return BindResult(bind_error);
 }
 
-void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, PreservedError &error) {
+void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error) {
 	if (expr) {
-		PreservedError bind_error = Bind(expr, depth);
+		ErrorData bind_error = Bind(expr, depth);
 		if (!error.HasError()) {
 			error = std::move(bind_error);
 		}
@@ -253,14 +253,14 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-PreservedError ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
+ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
 	auto query_location = expr->query_location;
 	auto &expression = *expr;
 	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
-		return PreservedError();
+		return ErrorData();
 	}
 	// bind the expression
 	BindResult result = BindExpression(expr, depth, root_expression);
@@ -275,7 +275,7 @@ PreservedError ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t 
 	if (!alias.empty()) {
 		be.expr->alias = alias;
 	}
-	return PreservedError();
+	return ErrorData();
 }
 
 bool ExpressionBinder::IsUnnestFunction(const string &function_name) {

@@ -1,6 +1,6 @@
 #include "duckdb/verification/prepared_statement_verifier.hpp"
 
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
@@ -94,7 +94,7 @@ bool PreparedStatementVerifier::Run(
 		}
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(execute_result));
 	} catch (const std::exception &ex) {
-		PreservedError error(ex);
+		ErrorData error(ex);
 		if (error.Type() != ExceptionType::PARAMETER_NOT_ALLOWED) {
 			materialized_result = make_uniq<MaterializedQueryResult>(std::move(error));
 		}

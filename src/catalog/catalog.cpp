@@ -301,7 +301,7 @@ struct CatalogLookup {
 struct CatalogEntryLookup {
 	optional_ptr<SchemaCatalogEntry> schema;
 	optional_ptr<CatalogEntry> entry;
-	PreservedError error;
+	ErrorData error;
 
 	DUCKDB_API bool Found() const {
 		return entry;
@@ -571,13 +571,13 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
                                                    const string &schema, const string &name) {
 	auto schema_entry = GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	}
 	auto entry = schema_entry->GetEntry(transaction, type, name);
 	if (!entry) {
-		return {schema_entry, nullptr, PreservedError()};
+		return {schema_entry, nullptr, ErrorData()};
 	}
-	return {schema_entry, entry, PreservedError()};
+	return {schema_entry, entry, ErrorData()};
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType type, const string &schema,
@@ -610,10 +610,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
-		return {nullptr, nullptr, PreservedError(except)};
+		return {nullptr, nullptr, ErrorData(except)};
 	}
 }
 
@@ -645,10 +645,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, vector<Catalo
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
-		return {nullptr, nullptr, PreservedError(except)};
+		return {nullptr, nullptr, ErrorData(except)};
 	}
 }
 
@@ -662,7 +662,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
 			if (!catalog_entry) {
-				return {nullptr, nullptr, PreservedError()};
+				return {nullptr, nullptr, ErrorData()};
 			}
 			lookups.emplace_back(*catalog_entry, entry.schema);
 		} else {

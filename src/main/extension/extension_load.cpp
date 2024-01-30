@@ -298,7 +298,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	try {
 		(*init_fun)(db);
 	} catch (std::exception &e) {
-		PreservedError error(e);
+		ErrorData error(e);
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
 		                            init_fun_name, res.filename, error.RawMessage());
 	}

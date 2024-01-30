@@ -8,7 +8,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	PreservedError error;
+	ErrorData error;
 	for (auto &check : expr.case_checks) {
 		BindChild(check.when_expr, depth, error);
 		BindChild(check.then_expr, depth, error);
