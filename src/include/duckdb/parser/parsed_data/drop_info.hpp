@@ -20,6 +20,7 @@ public:
 
 public:
 	DropInfo();
+	DropInfo(const DropInfo &info);
 
 	//! The catalog type to drop
 	CatalogType type;
@@ -38,7 +39,7 @@ public:
 	bool allow_drop_internal = false;
 
 public:
-	unique_ptr<DropInfo> Copy() const;
+	virtual unique_ptr<DropInfo> Copy() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);

@@ -367,9 +367,13 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 		matches.push_back(*storage_lookup.get());
 	} else {
 		for (const auto &storage_ref : GetSecretStorages()) {
-			if ((persist_type == SecretPersistType::PERSISTENT) == storage_ref.get().Persistent()) {
+			if (persist_type == SecretPersistType::PERSISTENT && !storage_ref.get().Persistent()) {
 				continue;
 			}
+			if (persist_type == SecretPersistType::TEMPORARY && storage_ref.get().Persistent()) {
+				continue;
+			}
+
 			auto lookup = storage_ref.get().GetSecretByName(transaction, name);
 			if (lookup) {
 				matches.push_back(storage_ref.get());

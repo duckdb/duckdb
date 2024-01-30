@@ -19,13 +19,18 @@ struct DropSecretInfo : public DropInfo {
 public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::DROP_INFO;
 
-public:
-	DropSecretInfo() : DropInfo(), persist_mode(SecretPersistType::DEFAULT), secret_storage("") {};
+	DropSecretInfo();
+	DropSecretInfo(const DropSecretInfo &info);
 
 	//! Secret Persistence
 	SecretPersistType persist_mode;
 	//! (optional) the name of the storage to drop from
 	string secret_storage;
+
+	unique_ptr<DropInfo> Copy() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<DropInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

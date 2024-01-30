@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/detach_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/drop_secret_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
@@ -156,6 +157,42 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
+void DropInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WriteProperty<CatalogType>(200, "type", type);
+	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(202, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(203, "name", name);
+	serializer.WriteProperty<OnEntryNotFound>(204, "if_not_found", if_not_found);
+	serializer.WritePropertyWithDefault<bool>(205, "cascade", cascade);
+	serializer.WritePropertyWithDefault<bool>(206, "allow_drop_internal", allow_drop_internal);
+}
+
+unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
+	auto type = deserializer.ReadProperty<CatalogType>(200, "type");
+	auto catalog = deserializer.ReadPropertyWithDefault<string>(201, "catalog");
+	auto schema = deserializer.ReadPropertyWithDefault<string>(202, "schema");
+	auto name = deserializer.ReadPropertyWithDefault<string>(203, "name");
+	auto if_not_found = deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found");
+	auto cascade = deserializer.ReadPropertyWithDefault<bool>(205, "cascade");
+	auto allow_drop_internal = deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal");
+	unique_ptr<DropInfo> result;
+	switch (type) {
+	case CatalogType::SECRET_ENTRY:
+		result = DropSecretInfo::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of DropInfo!");
+	}
+	result->catalog = std::move(catalog);
+	result->schema = std::move(schema);
+	result->name = std::move(name);
+	result->if_not_found = if_not_found;
+	result->cascade = cascade;
+	result->allow_drop_internal = allow_drop_internal;
+	return std::move(result);
+}
+
 void AddColumnInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteProperty<ColumnDefinition>(400, "new_column", new_column);
@@ -260,29 +297,6 @@ unique_ptr<ParseInfo> DetachInfo::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
-void DropInfo::Serialize(Serializer &serializer) const {
-	ParseInfo::Serialize(serializer);
-	serializer.WriteProperty<CatalogType>(200, "type", type);
-	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog);
-	serializer.WritePropertyWithDefault<string>(202, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(203, "name", name);
-	serializer.WriteProperty<OnEntryNotFound>(204, "if_not_found", if_not_found);
-	serializer.WritePropertyWithDefault<bool>(205, "cascade", cascade);
-	serializer.WritePropertyWithDefault<bool>(206, "allow_drop_internal", allow_drop_internal);
-}
-
-unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<DropInfo>(new DropInfo());
-	deserializer.ReadProperty<CatalogType>(200, "type", result->type);
-	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog);
-	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<string>(203, "name", result->name);
-	deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found", result->if_not_found);
-	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);
-	deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal", result->allow_drop_internal);
-	return std::move(result);
-}
-
 void DropNotNullInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(400, "column_name", column_name);
@@ -291,6 +305,19 @@ void DropNotNullInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> DropNotNullInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<DropNotNullInfo>(new DropNotNullInfo());
 	deserializer.ReadPropertyWithDefault<string>(400, "column_name", result->column_name);
+	return std::move(result);
+}
+
+void DropSecretInfo::Serialize(Serializer &serializer) const {
+	DropInfo::Serialize(serializer);
+	serializer.WriteProperty<SecretPersistType>(300, "persist_mode", persist_mode);
+	serializer.WritePropertyWithDefault<string>(301, "secret_storage", secret_storage);
+}
+
+unique_ptr<DropInfo> DropSecretInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<DropSecretInfo>(new DropSecretInfo());
+	deserializer.ReadProperty<SecretPersistType>(300, "persist_mode", result->persist_mode);
+	deserializer.ReadPropertyWithDefault<string>(301, "secret_storage", result->secret_storage);
 	return std::move(result);
 }
 

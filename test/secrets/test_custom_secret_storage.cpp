@@ -128,7 +128,7 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 
 	// Inspect current duckdb_secrets output
 	auto result = con.Query("SELECT name, storage from duckdb_secrets() ORDER BY type, name, storage");
-	REQUIRE(result->RowCount() == 3);
+	REQUIRE(result->RowCount() == 4);
 	REQUIRE(result->GetValue(0, 0).ToString() == "s1");
 	REQUIRE(result->GetValue(1, 0).ToString() == "test_storage");
 	REQUIRE(result->GetValue(0, 1).ToString() == "s2");
@@ -137,8 +137,6 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 	REQUIRE(result->GetValue(1, 2).ToString() == "test_storage");
 	REQUIRE(result->GetValue(0, 3).ToString() == "s1_test_type");
 	REQUIRE(result->GetValue(1, 3).ToString() == "test_storage");
-	REQUIRE(result->GetValue(0, 4).ToString() == "s2_test_type");
-	REQUIRE(result->GetValue(1, 4).ToString() == "test_storage");
 
 	auto transaction = CatalogTransaction::GetSystemTransaction(*db.instance);
 
@@ -169,9 +167,10 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 
 	// Inspect the log from our logger
 	REQUIRE(log.remove_secret_requests.size() == 2);
-	REQUIRE(log.write_secret_requests.size() == 2);
+	REQUIRE(log.write_secret_requests.size() == 3);
 	REQUIRE(log.write_secret_requests[0] == "s1");
 	REQUIRE(log.write_secret_requests[1] == "s2");
+	REQUIRE(log.write_secret_requests[2] == "s1_test_type");
 	REQUIRE(log.remove_secret_requests[0] == "s2");
 	REQUIRE(log.remove_secret_requests[1] == "s1");
 }
