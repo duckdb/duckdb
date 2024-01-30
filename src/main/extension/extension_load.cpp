@@ -3,6 +3,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include <iostream>
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
@@ -199,6 +200,11 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 			m.resize(zero_pos);
 		}
 	}
+
+for (auto& x : metadata_field) {
+	std::cout << x << "|||\n" ;
+}
+
 
 	auto number_metadata_fields = std::stoi(metadata_field[0]) - 1;
 	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
