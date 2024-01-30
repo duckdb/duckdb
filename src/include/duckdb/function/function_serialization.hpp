@@ -88,7 +88,8 @@ public:
 				bind_data = function.bind(context, function, children);
 			} catch (std::exception &ex) {
 				PreservedError error(ex);
-				throw SerializationException("Error during bind of function in deserialization: %s", error.RawMessage());
+				throw SerializationException("Error during bind of function in deserialization: %s",
+				                             error.RawMessage());
 			}
 		}
 		function.return_type = std::move(return_type);

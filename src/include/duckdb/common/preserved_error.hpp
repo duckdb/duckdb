@@ -45,6 +45,8 @@ public:
 		return extra_info;
 	}
 
+	DUCKDB_API void ConvertErrorToJSON();
+
 private:
 	//! Whether this PreservedError contains an exception or not
 	bool initialized;

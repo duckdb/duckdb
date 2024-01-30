@@ -16,12 +16,12 @@ using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
 using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
+using duckdb::PreservedError;
 using duckdb::QueryResultType;
 using duckdb::StringUtil;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
 using duckdb::Value;
-using duckdb::PreservedError;
 
 idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
                                 duckdb_extracted_statements *out_extracted_statements) {

@@ -8,10 +8,10 @@ using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
+using duckdb::PreservedError;
 using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
-using duckdb::PreservedError;
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {

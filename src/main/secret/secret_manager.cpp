@@ -580,18 +580,18 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 	} catch (std::exception &ex) {
 		PreservedError error(ex);
 		switch (error.Type()) {
-			case ExceptionType::SERIALIZATION:
-				throw SerializationException(
-						"Failed to deserialize the persistent secret file: '%s'. The file maybe be "
-						"corrupt, please remove the file, restart and try again. (error message: '%s')",
-						secret_path, error.RawMessage());
-			case ExceptionType::IO:
-				throw IOException(
-						"Failed to open the persistent secret file: '%s'. Some other process may have removed it, "
-						"please restart and try again. (error message: '%s')",
-						secret_path, error.RawMessage());
-			default:
-				throw;
+		case ExceptionType::SERIALIZATION:
+			throw SerializationException(
+			    "Failed to deserialize the persistent secret file: '%s'. The file maybe be "
+			    "corrupt, please remove the file, restart and try again. (error message: '%s')",
+			    secret_path, error.RawMessage());
+		case ExceptionType::IO:
+			throw IOException(
+			    "Failed to open the persistent secret file: '%s'. Some other process may have removed it, "
+			    "please restart and try again. (error message: '%s')",
+			    secret_path, error.RawMessage());
+		default:
+			throw;
 		}
 	}
 

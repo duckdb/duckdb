@@ -255,6 +255,9 @@ private:
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    bool allow_stream_result);
 
+	template <class T>
+	unique_ptr<T> ErrorResult(PreservedError error);
+
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;

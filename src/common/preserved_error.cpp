@@ -79,4 +79,12 @@ bool PreservedError::operator==(const PreservedError &other) const {
 	return raw_message == other.raw_message;
 }
 
+void PreservedError::ConvertErrorToJSON() {
+	if (raw_message.empty() || raw_message[0] == '{') {
+		// empty or already JSON
+		return;
+	}
+	raw_message = StringUtil::ToJSONMap(type, raw_message, extra_info);
+}
+
 } // namespace duckdb

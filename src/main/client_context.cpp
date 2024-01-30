@@ -87,6 +87,14 @@ void ClientContext::Destroy() {
 	CleanupInternal(*lock);
 }
 
+template <class T>
+unique_ptr<T> ClientContext::ErrorResult(PreservedError error) {
+	if (config.errors_as_json) {
+		error.ConvertErrorToJSON();
+	}
+	return make_uniq<T>(std::move(error));
+}
+
 unique_ptr<DataChunk> ClientContext::Fetch(ClientContextLock &lock, StreamQueryResult &result) {
 	D_ASSERT(IsActiveResult(lock, &result));
 	D_ASSERT(active_query->executor);
@@ -538,7 +546,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 		InitialCleanup(*lock);
 		return PrepareInternal(*lock, std::move(statement));
 	} catch (std::exception &ex) {
-		return make_uniq<PreparedStatement>(PreservedError(ex));
+		return ErrorResult<PreparedStatement>(PreservedError(ex));
 	}
 }
 
@@ -558,7 +566,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 		}
 		return PrepareInternal(*lock, std::move(statements[0]));
 	} catch (std::exception &ex) {
-		return make_uniq<PreparedStatement>(PreservedError(ex));
+		return ErrorResult<PreparedStatement>(PreservedError(ex));
 	}
 }
 
@@ -568,7 +576,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(Clien
 	try {
 		InitialCleanup(lock);
 	} catch (std::exception &ex) {
-		return make_uniq<PendingQueryResult>(PreservedError(ex));
+		return ErrorResult<PendingQueryResult>(PreservedError(ex));
 	}
 	return PendingStatementOrPreparedStatementInternal(lock, query, nullptr, prepared, parameters);
 }
@@ -585,7 +593,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	auto lock = LockContext();
 	auto pending = PendingQueryPreparedInternal(*lock, query, prepared, parameters);
 	if (pending->HasError()) {
-		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
+		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return pending->ExecuteInternal(*lock);
 }
@@ -607,10 +615,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
 		                                          prepared->properties.parameter_count);
-		return make_uniq<PendingQueryResult>(PreservedError(error_message));
+		return ErrorResult<PendingQueryResult>(PreservedError(error_message));
 	}
 	if (!prepared->properties.bound_all_parameters) {
-		return make_uniq<PendingQueryResult>(PreservedError("Not all parameters were bound"));
+		return ErrorResult<PendingQueryResult>(PreservedError("Not all parameters were bound"));
 	}
 	// execute the prepared statement
 	return PendingPreparedStatement(lock, std::move(prepared), parameters);
@@ -623,7 +631,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 	parameters.allow_stream_result = allow_stream_result;
 	auto pending = PendingQueryInternal(lock, std::move(statement), parameters, verify);
 	if (pending->HasError()) {
-		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
+		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return ExecutePendingQueryInternal(lock, *pending);
 }
@@ -655,7 +663,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 			if (error.HasError()) {
 				// error in verifying query
-				return make_uniq<PendingQueryResult>(error);
+				return ErrorResult<PendingQueryResult>(std::move(error));
 			}
 			statement = std::move(copied_statement);
 			break;
@@ -674,7 +682,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 			if (error.HasError()) {
 				// error in verifying query
-				return make_uniq<PendingQueryResult>(error);
+				return ErrorResult<PendingQueryResult>(std::move(error));
 			}
 			statement = std::move(parser.statements[0]);
 			break;
@@ -702,7 +710,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
-		return make_uniq<PendingQueryResult>(std::move(error));
+		return ErrorResult<PendingQueryResult>(std::move(error));
 	}
 	// start the profiler
 	auto &profiler = QueryProfiler::Get(*this);
@@ -737,7 +745,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 		}
 		// other types of exceptions do invalidate the current transaction
-		result = make_uniq<PendingQueryResult>(std::move(error));
+		result = ErrorResult<PendingQueryResult>(std::move(error));
 	}
 	if (result->HasError()) {
 		// query failed: abort now
@@ -773,7 +781,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto pending_query = PendingQuery(std::move(statement), allow_stream_result);
 	if (pending_query->HasError()) {
-		return make_uniq<MaterializedQueryResult>(pending_query->GetErrorObject());
+		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
 }
@@ -784,7 +792,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	PreservedError error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {
-		return make_uniq<MaterializedQueryResult>(std::move(error));
+		return ErrorResult<MaterializedQueryResult>(std::move(error));
 	}
 	if (statements.empty()) {
 		// no statements, return empty successful result
@@ -807,7 +815,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
 		unique_ptr<QueryResult> current_result;
 		if (pending_query->HasError()) {
-			current_result = make_uniq<MaterializedQueryResult>(pending_query->GetErrorObject());
+			current_result = ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 		} else {
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}
@@ -849,10 +857,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 	PreservedError error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {
-		return make_uniq<PendingQueryResult>(std::move(error));
+		return ErrorResult<PendingQueryResult>(std::move(error));
 	}
 	if (statements.size() != 1) {
-		return make_uniq<PendingQueryResult>(PreservedError("PendingQuery can only take a single statement"));
+		return ErrorResult<PendingQueryResult>(PreservedError("PendingQuery can only take a single statement"));
 	}
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;
@@ -866,7 +874,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 	try {
 		InitialCleanup(*lock);
 	} catch (std::exception &ex) {
-		return make_uniq<PendingQueryResult>(PreservedError(ex));
+		return ErrorResult<PendingQueryResult>(PreservedError(ex));
 	}
 
 	PendingQueryParameters parameters;
@@ -1076,7 +1084,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	auto &expected_columns = relation->Columns();
 	auto pending = PendingQueryInternal(*lock, relation, false);
 	if (!pending->success) {
-		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
+		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 
 	unique_ptr<QueryResult> result;
@@ -1112,7 +1120,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 		err_str += result->names[i] + " " + result->types[i].ToString();
 	}
 	err_str += "]";
-	return make_uniq<MaterializedQueryResult>(PreservedError(err_str));
+	return ErrorResult<MaterializedQueryResult>(PreservedError(err_str));
 }
 
 bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {

@@ -261,10 +261,10 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			if (TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
 				internal_error = true;
 			}
-//			// check if JSON leaked into the error
-//			if (StringUtil::Contains(result.GetError(), "{")) {
-//				internal_error = true;
-//			}
+			//			// check if JSON leaked into the error
+			//			if (StringUtil::Contains(result.GetError(), "{")) {
+			//				internal_error = true;
+			//			}
 		}
 		if (!internal_error) {
 			if (expected_result == ExpectedResult::RESULT_UNKNOWN) {

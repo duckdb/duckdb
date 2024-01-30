@@ -60,7 +60,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			auto &config = DBConfig::GetConfig(context);
 			for (auto &extension_op : config.operator_extensions) {
 				auto bound_statement =
-						extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
+				    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
 				if (bound_statement.plan != nullptr) {
 					this->names = bound_statement.names;
 					this->types = bound_statement.types;

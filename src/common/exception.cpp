@@ -42,7 +42,7 @@ bool Exception::UncaughtException() {
 }
 
 bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
-	switch(exception_type) {
+	switch (exception_type) {
 	case ExceptionType::BINDER:
 	case ExceptionType::CATALOG:
 	case ExceptionType::CONNECTION:
@@ -56,7 +56,7 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 }
 
 bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
-	switch(exception_type) {
+	switch (exception_type) {
 	case ExceptionType::INTERNAL:
 	case ExceptionType::FATAL:
 		return true;
