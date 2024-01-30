@@ -88,9 +88,11 @@ void ClientContext::Destroy() {
 }
 
 template <class T>
-unique_ptr<T> ClientContext::ErrorResult(PreservedError error) {
+unique_ptr<T> ClientContext::ErrorResult(PreservedError error, const string &query) {
 	if (config.errors_as_json) {
 		error.ConvertErrorToJSON();
+	} else if (!query.empty()) {
+		error.AddErrorLocation(query);
 	}
 	return make_uniq<T>(std::move(error));
 }
@@ -542,11 +544,12 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
 	auto lock = LockContext();
 	// prepare the query
+	auto query = statement->query;
 	try {
 		InitialCleanup(*lock);
 		return PrepareInternal(*lock, std::move(statement));
 	} catch (std::exception &ex) {
-		return ErrorResult<PreparedStatement>(PreservedError(ex));
+		return ErrorResult<PreparedStatement>(PreservedError(ex), query);
 	}
 }
 
@@ -566,7 +569,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 		}
 		return PrepareInternal(*lock, std::move(statements[0]));
 	} catch (std::exception &ex) {
-		return ErrorResult<PreparedStatement>(PreservedError(ex));
+		return ErrorResult<PreparedStatement>(PreservedError(ex), query);
 	}
 }
 
@@ -576,7 +579,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(Clien
 	try {
 		InitialCleanup(lock);
 	} catch (std::exception &ex) {
-		return ErrorResult<PendingQueryResult>(PreservedError(ex));
+		return ErrorResult<PendingQueryResult>(PreservedError(ex), query);
 	}
 	return PendingStatementOrPreparedStatementInternal(lock, query, nullptr, prepared, parameters);
 }
@@ -615,10 +618,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
 		                                          prepared->properties.parameter_count);
-		return ErrorResult<PendingQueryResult>(PreservedError(error_message));
+		return ErrorResult<PendingQueryResult>(PreservedError(error_message), query);
 	}
 	if (!prepared->properties.bound_all_parameters) {
-		return ErrorResult<PendingQueryResult>(PreservedError("Not all parameters were bound"));
+		return ErrorResult<PendingQueryResult>(PreservedError("Not all parameters were bound"), query);
 	}
 	// execute the prepared statement
 	return PendingPreparedStatement(lock, std::move(prepared), parameters);
@@ -663,7 +666,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 			if (error.HasError()) {
 				// error in verifying query
-				return ErrorResult<PendingQueryResult>(std::move(error));
+				return ErrorResult<PendingQueryResult>(std::move(error), query);
 			}
 			statement = std::move(copied_statement);
 			break;
@@ -682,7 +685,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 			if (error.HasError()) {
 				// error in verifying query
-				return ErrorResult<PendingQueryResult>(std::move(error));
+				return ErrorResult<PendingQueryResult>(std::move(error), query);
 			}
 			statement = std::move(parser.statements[0]);
 			break;
@@ -710,7 +713,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
-		return ErrorResult<PendingQueryResult>(std::move(error));
+		return ErrorResult<PendingQueryResult>(std::move(error), query);
 	}
 	// start the profiler
 	auto &profiler = QueryProfiler::Get(*this);
@@ -745,7 +748,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			}
 		}
 		// other types of exceptions do invalidate the current transaction
-		result = ErrorResult<PendingQueryResult>(std::move(error));
+		result = ErrorResult<PendingQueryResult>(std::move(error), query);
 	}
 	if (result->HasError()) {
 		// query failed: abort now
@@ -792,7 +795,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	PreservedError error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {
-		return ErrorResult<MaterializedQueryResult>(std::move(error));
+		return ErrorResult<MaterializedQueryResult>(std::move(error), query);
 	}
 	if (statements.empty()) {
 		// no statements, return empty successful result
@@ -857,10 +860,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 	PreservedError error;
 	vector<unique_ptr<SQLStatement>> statements;
 	if (!ParseStatements(*lock, query, statements, error)) {
-		return ErrorResult<PendingQueryResult>(std::move(error));
+		return ErrorResult<PendingQueryResult>(std::move(error), query);
 	}
 	if (statements.size() != 1) {
-		return ErrorResult<PendingQueryResult>(PreservedError("PendingQuery can only take a single statement"));
+		return ErrorResult<PendingQueryResult>(PreservedError("PendingQuery can only take a single statement"), query);
 	}
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;

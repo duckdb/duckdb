@@ -30,6 +30,10 @@ public:
 	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 	template <typename... Args>
+	explicit BinderException(QueryErrorContext error_context, const string &msg, Args... params)
+	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_context)) {
+	}
+	template <typename... Args>
 	explicit BinderException(optional_idx error_location, const string &msg, Args... params)
 	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_location)) {
 	}

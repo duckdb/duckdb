@@ -239,7 +239,7 @@ public:
 			return nullptr;
 		}
 		if (entry->type != T::Type) {
-			throw CatalogException(error_context.FormatError("%s is not an %s", name, T::Name));
+			throw CatalogException(error_context, "%s is not an %s", name, T::Name);
 		}
 		return &entry->template Cast<T>();
 	}
@@ -283,7 +283,7 @@ public:
 			return nullptr;
 		}
 		if (entry->type != T::Type) {
-			throw CatalogException(error_context.FormatError("%s is not an %s", name, T::Name));
+			throw CatalogException(error_context, "%s is not an %s", name, T::Name);
 		}
 		return &entry->template Cast<T>();
 	}

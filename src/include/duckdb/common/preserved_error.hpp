@@ -45,8 +45,11 @@ public:
 		return extra_info;
 	}
 
+	DUCKDB_API void AddErrorLocation(const string &query);
 	DUCKDB_API void ConvertErrorToJSON();
 
+	DUCKDB_API void AddQueryLocation(optional_idx query_location);
+	DUCKDB_API void AddQueryLocation(QueryErrorContext error_context);
 	DUCKDB_API void AddQueryLocation(const ParsedExpression &ref);
 	DUCKDB_API void AddQueryLocation(const TableRef &ref);
 

@@ -256,7 +256,7 @@ private:
 	                                                    bool allow_stream_result);
 
 	template <class T>
-	unique_ptr<T> ErrorResult(PreservedError error);
+	unique_ptr<T> ErrorResult(PreservedError error, const string &query = string());
 
 private:
 	//! Lock on using the ClientContext in parallel

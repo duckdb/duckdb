@@ -204,7 +204,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
-	QueryErrorContext error_context(root_statement, ref.query_location);
+	QueryErrorContext error_context(ref.query_location);
 
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();

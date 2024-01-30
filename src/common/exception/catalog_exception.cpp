@@ -26,7 +26,7 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const string &
 		extra_info["candidates"] = suggestion;
 	}
 	return CatalogException(
-	    context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type), name, did_you_mean),
+	    StringUtil::Format("%s with name %s does not exist!%s", CatalogTypeToString(type), name, did_you_mean),
 	    extra_info);
 }
 
@@ -39,8 +39,8 @@ CatalogException CatalogException::MissingEntry(const string &type, const string
 	if (!suggestions.empty()) {
 		extra_info["candidates"] = StringUtil::Join(suggestions, ", ");
 	}
-	return CatalogException(context.FormatError("unrecognized %s \"%s\"\n%s", type, name,
-	                                            StringUtil::CandidatesErrorMessage(suggestions, name, "Did you mean")),
+	return CatalogException(StringUtil::Format("unrecognized %s \"%s\"\n%s", type, name,
+	                                           StringUtil::CandidatesErrorMessage(suggestions, name, "Did you mean")),
 	                        extra_info);
 }
 
@@ -48,7 +48,7 @@ CatalogException CatalogException::EntryAlreadyExists(CatalogType type, const st
 	auto extra_info = Exception::InitializeExtraInfo("ENTRY_ALREADY_EXISTS", optional_idx());
 	extra_info["name"] = name;
 	extra_info["type"] = CatalogTypeToString(type);
-	return CatalogException(context.FormatError("%s with name \"%s\" already exists!", CatalogTypeToString(type), name),
+	return CatalogException(StringUtil::Format("%s with name \"%s\" already exists!", CatalogTypeToString(type), name),
 	                        extra_info);
 }
 

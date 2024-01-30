@@ -23,6 +23,10 @@ public:
 	template <typename... Args>
 	explicit CatalogException(const string &msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
 	}
+	template <typename... Args>
+	explicit CatalogException(QueryErrorContext error_context, const string &msg, Args... params)
+	    : CatalogException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_context)) {
+	}
 
 	static CatalogException MissingEntry(CatalogType type, const string &name, const string &suggestion,
 	                                     QueryErrorContext context = QueryErrorContext());

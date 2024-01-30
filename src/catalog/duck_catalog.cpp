@@ -121,7 +121,7 @@ optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction trans
 	auto entry = schemas->GetEntry(transaction, schema_name);
 	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
+			throw CatalogException(error_context, "Schema with name %s does not exist!", schema_name);
 		}
 		return nullptr;
 	}

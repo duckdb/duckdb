@@ -176,6 +176,10 @@ unordered_map<string, string> Exception::InitializeExtraInfo(const ParsedExpress
 	return InitializeExtraInfo(expr.query_location);
 }
 
+unordered_map<string, string> Exception::InitializeExtraInfo(const QueryErrorContext &error_context) {
+	return InitializeExtraInfo(error_context.query_location);
+}
+
 unordered_map<string, string> Exception::InitializeExtraInfo(const TableRef &ref) {
 	return InitializeExtraInfo(ref.query_location);
 }

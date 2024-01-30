@@ -117,13 +117,4 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	return result;
 }
 
-string QueryErrorContext::FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
-	string error_message = values.empty() ? msg : ExceptionFormatValue::Format(msg, values);
-	if (!statement) {
-		// no statement provided or query location out of range
-		return error_message;
-	}
-	return Format(statement->query, error_message, query_location);
-}
-
 } // namespace duckdb

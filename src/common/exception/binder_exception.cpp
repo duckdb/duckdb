@@ -20,7 +20,7 @@ BinderException BinderException::ColumnNotFound(const string &name, const vector
 		extra_info["candidates"] = StringUtil::Join(similar_bindings, ",");
 	}
 	return BinderException(
-	    context.FormatError("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str), extra_info);
+	    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str), extra_info);
 }
 
 } // namespace duckdb

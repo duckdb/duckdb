@@ -84,12 +84,28 @@ void PreservedError::ConvertErrorToJSON() {
 	final_message = raw_message;
 }
 
+void PreservedError::AddErrorLocation(const string &query) {
+	auto entry = extra_info.find("position");
+	if (entry == extra_info.end()) {
+		return;
+	}
+	raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+}
+
+void PreservedError::AddQueryLocation(optional_idx query_location) {
+	Exception::SetQueryLocation(query_location, extra_info);
+}
+
+void PreservedError::AddQueryLocation(QueryErrorContext error_context) {
+	AddQueryLocation(error_context.query_location);
+}
+
 void PreservedError::AddQueryLocation(const ParsedExpression &ref) {
-	Exception::SetQueryLocation(ref.query_location, extra_info);
+	AddQueryLocation(ref.query_location);
 }
 
 void PreservedError::AddQueryLocation(const TableRef &ref) {
-	Exception::SetQueryLocation(ref.query_location, extra_info);
+	AddQueryLocation(ref.query_location);
 }
 
 } // namespace duckdb

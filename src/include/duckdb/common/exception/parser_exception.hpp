@@ -17,6 +17,7 @@ namespace duckdb {
 class ParserException : public Exception {
 public:
 	DUCKDB_API explicit ParserException(const string &msg);
+	DUCKDB_API explicit ParserException(const string &msg, const unordered_map<string, string> &extra_info);
 
 	template <typename... Args>
 	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
