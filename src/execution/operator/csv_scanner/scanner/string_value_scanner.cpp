@@ -302,11 +302,13 @@ bool StringValueResult::AddRowInternal() {
 		// A wild casting error appears
 		// Recreate row for rejects-table
 		vector<Value> row;
-		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-			if (cast_errors.find(col) != cast_errors.end()) {
-				row.push_back(cast_errors[col]);
-			} else {
-				row.push_back(parse_chunk.data[col].GetValue(number_of_rows));
+		if (!state_machine.options.rejects_table_name.empty()) {
+			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+				if (cast_errors.find(col) != cast_errors.end()) {
+					row.push_back(cast_errors[col]);
+				} else {
+					row.push_back(parse_chunk.data[col].GetValue(number_of_rows));
+				}
 			}
 		}
 		for (auto &cast_error : cast_errors) {
