@@ -151,9 +151,9 @@ private:
 	void LoadSecretStorageInternal(unique_ptr<SecretStorage> storage);
 
 	//! Autoload extension for specific secret type
-	void AutoloadExtensionForType(ClientContext &context, const string &type);
+	void AutoloadExtensionForType(const string &type);
 	//! Autoload extension for specific secret function
-	void AutoloadExtensionForFunction(ClientContext &context, const string &type, const string &provider);
+	void AutoloadExtensionForFunction(const string &type, const string &provider);
 
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
@@ -174,6 +174,8 @@ private:
 	atomic<bool> initialized {false};
 	//! Configuration for secret manager
 	SecretManagerConfig config;
+	//! Pointer to current db instance
+	optional_ptr<DatabaseInstance> db;
 };
 
 //! The DefaultGenerator for persistent secrets. This is used to store lazy loaded secrets in the catalog

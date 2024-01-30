@@ -56,6 +56,9 @@ void SecretManager::Initialize(DatabaseInstance &db) {
 
 	// Set the defaults for persistent storage
 	config.default_persistent_storage = LOCAL_FILE_STORAGE_NAME;
+
+	// Store the current db for enabling autoloading
+	this->db = &db;
 }
 
 void SecretManager::LoadSecretStorage(unique_ptr<SecretStorage> storage) {
@@ -181,7 +184,7 @@ optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransacti
 }
 
 optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const string &type, const string &provider) {
-	lock_guard<mutex> lck(manager_lock);
+	unique_lock<mutex> lck(manager_lock);
 	auto lookup = secret_functions.find(type);
 
 	if (lookup != secret_functions.end()) {
@@ -190,7 +193,18 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const s
 		}
 	}
 
-	// TODO: restore autoloading here
+	// Try autoloading
+	lck.unlock();
+	AutoloadExtensionForFunction(type, provider);
+	lck.lock();
+
+	lookup = secret_functions.find(type);
+
+	if (lookup != secret_functions.end()) {
+		if (lookup->second.ProviderExists(provider)) {
+			return &lookup->second.GetFunction(provider);
+		}
+	}
 
 	return nullptr;
 }
@@ -399,10 +413,21 @@ SecretType SecretManager::LookupType(const string &type) {
 SecretType SecretManager::LookupTypeInternal(const string &type) {
 	unique_lock<mutex> lck(manager_lock);
 	auto lookup = secret_types.find(type);
-	if (lookup == secret_types.end()) {
-		// TODO autoload!
+	if (lookup != secret_types.end()) {
+		return lookup->second;
 	}
-	return lookup->second;
+
+	// Try autoloading
+	lck.unlock();
+	AutoloadExtensionForType(type);
+	lck.lock();
+
+	lookup = secret_types.find(type);
+	if (lookup != secret_types.end()) {
+		return lookup->second;
+	}
+
+	throw InvalidInputException("Secret type '%s' not found", type);
 }
 
 vector<reference<SecretEntry>> SecretManager::AllSecrets(CatalogTransaction transaction) {
@@ -489,12 +514,12 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 	}
 }
 
-void SecretManager::AutoloadExtensionForType(ClientContext &context, const string &type) {
-	ExtensionHelper::TryAutoloadFromEntry(context, type, EXTENSION_SECRET_TYPES);
+void SecretManager::AutoloadExtensionForType(const string &type) {
+	ExtensionHelper::TryAutoloadFromEntry(*db, type, EXTENSION_SECRET_TYPES);
 }
 
-void SecretManager::AutoloadExtensionForFunction(ClientContext &context, const string &type, const string &provider) {
-	ExtensionHelper::TryAutoloadFromEntry(context, type + "/" + provider, EXTENSION_SECRET_PROVIDERS);
+void SecretManager::AutoloadExtensionForFunction(const string &type, const string &provider) {
+	ExtensionHelper::TryAutoloadFromEntry(*db, type + "/" + provider, EXTENSION_SECRET_PROVIDERS);
 }
 
 optional_ptr<SecretStorage> SecretManager::GetSecretStorage(const string &name) {

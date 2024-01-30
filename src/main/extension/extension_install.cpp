@@ -166,7 +166,7 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
-string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const ClientConfig> client_config, const string &repository) {
+string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_config, const string &repository) {
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 #ifdef WASM_LOADABLE_EXTENSIONS
 	string default_endpoint = "https://extensions.duckdb.org";
@@ -175,7 +175,7 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const ClientConfig> cl
 	string default_endpoint = "http://extensions.duckdb.org";
 	versioned_path = versioned_path + ".gz";
 #endif
-	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
+	string custom_endpoint = db_config ? db_config->options.custom_extension_repo : string();
 	string endpoint;
 	if (!repository.empty()) {
 		endpoint = repository;
@@ -237,7 +237,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	throw BinderException("Remote extension installation is disabled through configuration");
 #else
 
-	string url_template = ExtensionUrlTemplate(client_config, repository);
+	string url_template = ExtensionUrlTemplate(&config, repository);
 
 	if (is_http_url) {
 		url_template = extension;

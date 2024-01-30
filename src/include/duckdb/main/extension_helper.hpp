@@ -51,11 +51,12 @@ public:
 
 	//! Autoload an extension by name. Depending on the current settings, this will either load or install+load
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
+	static void AutoLoadExtension(DatabaseInstance &db, const string &extension_name);
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
 
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
-	static string ExtensionUrlTemplate(optional_ptr<const ClientConfig> config, const string &repository);
+	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const string &repository);
 	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
 
 	static idx_t DefaultExtensionCount();
@@ -91,13 +92,13 @@ public:
 
 	//! Lookup a name in an extension entry and try to autoload it
 	template <idx_t N>
-	static void TryAutoloadFromEntry(ClientContext &context, const string &entry, const ExtensionEntry (&entries)[N]) {
-		auto &dbconfig = DBConfig::GetConfig(context);
+	static void TryAutoloadFromEntry(DatabaseInstance &db, const string &entry, const ExtensionEntry (&entries)[N]) {
+		auto &dbconfig = DBConfig::GetConfig(db);
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 		if (dbconfig.options.autoload_known_extensions) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
 			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
-				ExtensionHelper::AutoLoadExtension(context, extension_name);
+				ExtensionHelper::AutoLoadExtension(db, extension_name);
 			}
 		}
 #endif

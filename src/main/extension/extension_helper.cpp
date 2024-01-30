@@ -203,8 +203,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
-			ExtensionHelper::InstallExtension(context, extension_name, false,
-			                                  context.config.autoinstall_extension_repo);
+			auto &config = DBConfig::GetConfig(context);
+			ExtensionHelper::InstallExtension(context, extension_name, false, config.options.autoinstall_extension_repo);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
@@ -215,19 +215,23 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 }
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
-	if (context.db->ExtensionIsLoaded(extension_name)) {
+	return ExtensionHelper::AutoLoadExtension(*context.db, extension_name);
+}
+
+void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &extension_name) {
+	if (db.ExtensionIsLoaded(extension_name)) {
 		// Avoid downloading again
 		return;
 	}
-	auto &dbconfig = DBConfig::GetConfig(context);
+	auto &dbconfig = DBConfig::GetConfig(db);
 	try {
+		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
-			ExtensionHelper::InstallExtension(context, extension_name, false,
-			                                  context.config.autoinstall_extension_repo);
+			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false, "");
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(context, extension_name);
+		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name, nullptr);
 	} catch (Exception &e) {
 		throw AutoloadException(extension_name, e);
 	}
