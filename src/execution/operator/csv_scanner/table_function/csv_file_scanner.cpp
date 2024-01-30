@@ -166,11 +166,27 @@ void CSVFileScan::InitializeFileNamesTypes(const ReadCSVData &bind_data) {
 		projected_columns.emplace_back(0);
 		return;
 	}
+	std::set<idx_t> column_ids;
 	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
 		idx_t result_idx = reader_data.column_ids[i];
 		file_names.emplace_back(names[result_idx]);
 		file_types.emplace_back(types[result_idx]);
 		projected_columns.emplace_back(reader_data.column_ids[i]);
+		column_ids.insert(reader_data.column_ids[i]);
+	}
+
+	if (!column_ids.empty()){
+		// We might have to add recovery rejects column ids
+		for (idx_t  i = 0; i < options.rejects_recovery_column_ids.size(); i ++){
+			idx_t col_id = options.rejects_recovery_column_ids[i];
+			if (column_ids.find(col_id) == column_ids.end()){
+				// We have to insert this column in our projection
+				column_ids.insert(col_id);
+				file_names.emplace_back(options.rejects_recovery_columns[i]);
+				file_types.emplace_back(LogicalType::VARCHAR);
+				projected_columns.emplace_back(col_id);
+			}
+		}
 	}
 
 	if (reader_data.column_ids.empty()) {
