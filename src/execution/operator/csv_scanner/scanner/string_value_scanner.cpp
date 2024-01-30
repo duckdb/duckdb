@@ -122,10 +122,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					}
 					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
-					//					if (chunk_col_id == number_of_columns) {
-					//						// We check for a weird case, where we ignore an extra value, if it is a null
-					//value 						return;
-					//					}
+					if (chunk_col_id == number_of_columns) {
+						// We check for a weird case, where we ignore an extra value, if it is a null value
+						return;
+					}
 					validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
 				}
 				cur_col_id++;
