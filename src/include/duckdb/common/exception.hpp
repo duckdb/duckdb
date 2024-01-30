@@ -86,7 +86,8 @@ enum class ExceptionType {
 	DEPENDENCY = 37,             // dependency
 	HTTP = 38,
 	MISSING_EXTENSION = 39, // Thrown when an extension is used but not loaded
-	AUTOLOAD = 40           // Thrown when an extension is used but not loaded
+	AUTOLOAD = 40,          // Thrown when an extension is used but not loaded
+	SEQUENCE = 41
 };
 
 class Exception : public std::runtime_error {
@@ -173,6 +174,10 @@ public:
 	explicit OutOfRangeException(const string &msg, Args... params)
 	    : OutOfRangeException(ConstructMessage(msg, params...)) {
 	}
+	DUCKDB_API OutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
+	DUCKDB_API OutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
+	DUCKDB_API OutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
+	DUCKDB_API OutOfRangeException(const PhysicalType varType, const idx_t length);
 };
 
 class OutOfMemoryException : public Exception {
@@ -316,14 +321,6 @@ public:
 	}
 };
 
-class CastException : public Exception {
-public:
-	DUCKDB_API CastException(const PhysicalType origType, const PhysicalType newType);
-	DUCKDB_API CastException(const LogicalType &origType, const LogicalType &newType);
-	DUCKDB_API
-	CastException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
-};
-
 class InvalidTypeException : public Exception {
 public:
 	DUCKDB_API InvalidTypeException(PhysicalType type, const string &msg);
@@ -338,16 +335,6 @@ public:
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
 	DUCKDB_API
 	TypeMismatchException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
-};
-
-class ValueOutOfRangeException : public Exception {
-public:
-	DUCKDB_API ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
-	DUCKDB_API ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
-	DUCKDB_API ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
-	DUCKDB_API ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
-	DUCKDB_API ValueOutOfRangeException(
-	    const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class ParameterNotAllowedException : public Exception {

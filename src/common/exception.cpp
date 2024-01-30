@@ -153,7 +153,8 @@ static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Inv
                                                    {ExceptionType::DEPENDENCY, "Dependency"},
                                                    {ExceptionType::MISSING_EXTENSION, "Missing Extension"},
                                                    {ExceptionType::HTTP, "HTTP"},
-                                                   {ExceptionType::AUTOLOAD, "Extension Autoloading"}};
+                                                   {ExceptionType::AUTOLOAD, "Extension Autoloading"},
+                                                   {ExceptionType::SEQUENCE, "Sequence"}};
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	for (auto &e : EXCEPTION_MAP) {
@@ -208,50 +209,14 @@ void Exception::SetQueryLocation(optional_idx error_location, unordered_map<stri
 	}
 }
 
-CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)
+ConversionException::ConversionException(const PhysicalType orig_type, const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
 }
 
-CastException::CastException(const LogicalType &orig_type, const LogicalType &new_type)
+ConversionException::ConversionException(const LogicalType &orig_type, const LogicalType &new_type)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
-}
-
-CastException::CastException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType orig_type,
-                                                   const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " +
-                                               to_string((intmax_t)value) +
-                                               " can't be cast because the value is out of range "
-                                               "for the destination type " +
-                                               TypeIdToString(new_type)) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType orig_type,
-                                                   const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
-                                               " can't be cast because the value is out of range "
-                                               "for the destination type " +
-                                               TypeIdToString(new_type)) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
-                                                   const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
-                                               " can't be cast because the value is out of range "
-                                               "for the destination type " +
-                                               TypeIdToString(new_type)) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType var_type, const idx_t length)
-    : Exception(ExceptionType::OUT_OF_RANGE,
-                "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
 ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
@@ -290,6 +255,36 @@ NotImplementedException::NotImplementedException(const string &msg) : Exception(
 OutOfRangeException::OutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
+OutOfRangeException::OutOfRangeException(const int64_t value, const PhysicalType orig_type,
+										 const PhysicalType new_type)
+		: Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " +
+												 to_string((intmax_t)value) +
+												 " can't be cast because the value is out of range "
+												 "for the destination type " +
+												 TypeIdToString(new_type)) {
+}
+
+OutOfRangeException::OutOfRangeException(const double value, const PhysicalType orig_type,
+										 const PhysicalType new_type)
+		: Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
+												 " can't be cast because the value is out of range "
+												 "for the destination type " +
+												 TypeIdToString(new_type)) {
+}
+
+OutOfRangeException::OutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
+										 const PhysicalType new_type)
+		: Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
+												 " can't be cast because the value is out of range "
+												 "for the destination type " +
+												 TypeIdToString(new_type)) {
+}
+
+OutOfRangeException::OutOfRangeException(const PhysicalType var_type, const idx_t length)
+		: Exception(ExceptionType::OUT_OF_RANGE,
+					"The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
+}
+
 ConnectionException::ConnectionException(const string &msg) : Exception(ExceptionType::CONNECTION, msg) {
 }
 
@@ -321,7 +316,7 @@ AutoloadException::AutoloadException(const string &extension_name, const string 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 
-SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
+SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SEQUENCE, msg) {
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
