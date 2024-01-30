@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/list.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
@@ -40,7 +41,6 @@ void RegisterExceptions(const py::module &m) {
 	// FIXME: missing DatabaseError
 
 	// order of declaration matters, and this needs to be checked last
-	py::register_exception<StandardException>(m, "StandardException", error);
 	// Unknown
 	py::register_exception<FatalException>(m, "FatalException", error);
 	py::register_exception<InterruptException>(m, "InterruptException", error);
@@ -80,26 +80,31 @@ void RegisterExceptions(const py::module &m) {
 			if (p) {
 				std::rethrow_exception(p);
 			}
-		} catch (const HTTPException &httpe) {
-			// construct exception object
-			auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(httpe.what()));
+		} catch (const std::exception &ex) {
+			duckdb::ErrorData error(ex);
+			if (error.Type() == ExceptionType::HTTP) {
+				// construct exception object
+				auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(error.Message()));
 
-			auto headers = py::dict();
-			for (auto &entry : httpe.GetExtraInfo()) {
-				if (entry.first == "status_code") {
-					e.attr("status_code") = std::stoi(entry.second);
-				} else if (entry.first == "response_body") {
-					e.attr("body") = entry.second;
-				} else if (entry.first == "reason") {
-					e.attr("reason") = entry.second;
-				} else if (StringUtil::StartsWith(entry.first, "headers_")) {
-					headers[py::str(entry.first.substr(8))] = entry.second;
+				auto headers = py::dict();
+				for (auto &entry : error.ExtraInfo()) {
+					if (entry.first == "status_code") {
+						e.attr("status_code") = std::stoi(entry.second);
+					} else if (entry.first == "response_body") {
+						e.attr("body") = entry.second;
+					} else if (entry.first == "reason") {
+						e.attr("reason") = entry.second;
+					} else if (StringUtil::StartsWith(entry.first, "header_")) {
+						headers[py::str(entry.first.substr(7))] = entry.second;
+					}
 				}
-			}
-			e.attr("headers") = std::move(headers);
+				e.attr("headers") = std::move(headers);
 
-			// "throw" exception object
-			PyErr_SetObject(HTTP_EXCEPTION.ptr(), e.ptr());
+				// "throw" exception object
+				PyErr_SetObject(HTTP_EXCEPTION.ptr(), e.ptr());
+			} else {
+				throw;
+			}
 		}
 	});
 

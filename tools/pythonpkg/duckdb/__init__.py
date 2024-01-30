@@ -302,7 +302,6 @@ from .duckdb import (
     ParserException,
     SyntaxException,
     SequenceException,
-    StandardException,
     Warning
 )
 _exported_symbols.extend([
@@ -337,7 +336,6 @@ _exported_symbols.extend([
     "ParserException",
     "SyntaxException",
     "SequenceException",
-    "StandardException",
     "Warning"
 ])
 

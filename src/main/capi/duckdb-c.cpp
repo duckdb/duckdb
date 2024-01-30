@@ -4,6 +4,7 @@ using duckdb::Connection;
 using duckdb::DatabaseData;
 using duckdb::DBConfig;
 using duckdb::DuckDB;
+using duckdb::ErrorData;
 
 duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_config config, char **error) {
 	auto wrapper = new DatabaseData();
@@ -21,7 +22,7 @@ duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_conf
 	} catch (std::exception &ex) {
 		if (error) {
 			ErrorData parsed_error(ex);
-			*error = strdup(parsed_error.RawMessage().c_str());
+			*error = strdup(parsed_error.Message().c_str());
 		}
 		delete wrapper;
 		return DuckDBError;

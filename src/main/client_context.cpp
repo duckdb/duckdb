@@ -128,6 +128,7 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 			auto &db_inst = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_inst, error.RawMessage());
 		}
+		ProcessError(error, active_query->query);
 		result.SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(ErrorData("Unhandled exception in FetchInternal"));
