@@ -17,7 +17,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
       null_str_ptr(state_machine.options.null_str.c_str()), null_str_size(state_machine.options.null_str.size()),
       result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
-      store_line_size(store_line_size_p), csv_file_scan(csv_file_scan_p), lines_read(lines_read_p) {
+      store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
 
