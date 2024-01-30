@@ -284,7 +284,7 @@ void RegisterExceptions(const py::module &m) {
 			if (p) {
 				std::rethrow_exception(p);
 			}
-		} catch (const std::exception &ex) {
+		} catch (const duckdb::Exception &ex) {
 			duckdb::ErrorData error(ex);
 			switch (error.Type()) {
 			case ExceptionType::HTTP: {
@@ -352,8 +352,7 @@ void RegisterExceptions(const py::module &m) {
 			case ExceptionType::NOT_IMPLEMENTED:
 				throw PyNotImplementedException(error.Message());
 			default:
-				PyErr_SetString(PyExc_RuntimeError, error.Message().c_str());
-				break;
+				throw std::runtime_error(error.Message());
 			}
 		}
 	});
