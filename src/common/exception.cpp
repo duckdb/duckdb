@@ -255,34 +255,32 @@ NotImplementedException::NotImplementedException(const string &msg) : Exception(
 OutOfRangeException::OutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
-OutOfRangeException::OutOfRangeException(const int64_t value, const PhysicalType orig_type,
-										 const PhysicalType new_type)
-		: Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " +
-												 to_string((intmax_t)value) +
-												 " can't be cast because the value is out of range "
-												 "for the destination type " +
-												 TypeIdToString(new_type)) {
+OutOfRangeException::OutOfRangeException(const int64_t value, const PhysicalType orig_type, const PhysicalType new_type)
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " +
+                                                 to_string((intmax_t)value) +
+                                                 " can't be cast because the value is out of range "
+                                                 "for the destination type " +
+                                                 TypeIdToString(new_type)) {
 }
 
-OutOfRangeException::OutOfRangeException(const double value, const PhysicalType orig_type,
-										 const PhysicalType new_type)
-		: Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
-												 " can't be cast because the value is out of range "
-												 "for the destination type " +
-												 TypeIdToString(new_type)) {
+OutOfRangeException::OutOfRangeException(const double value, const PhysicalType orig_type, const PhysicalType new_type)
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
+                                                 " can't be cast because the value is out of range "
+                                                 "for the destination type " +
+                                                 TypeIdToString(new_type)) {
 }
 
 OutOfRangeException::OutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
-										 const PhysicalType new_type)
-		: Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
-												 " can't be cast because the value is out of range "
-												 "for the destination type " +
-												 TypeIdToString(new_type)) {
+                                         const PhysicalType new_type)
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
+                                                 " can't be cast because the value is out of range "
+                                                 "for the destination type " +
+                                                 TypeIdToString(new_type)) {
 }
 
 OutOfRangeException::OutOfRangeException(const PhysicalType var_type, const idx_t length)
-		: Exception(ExceptionType::OUT_OF_RANGE,
-					"The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
+    : Exception(ExceptionType::OUT_OF_RANGE,
+                "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
 }
 
 ConnectionException::ConnectionException(const string &msg) : Exception(ExceptionType::CONNECTION, msg) {

@@ -17,7 +17,8 @@ class Warning : public std::exception {};
 //===--------------------------------------------------------------------===//
 class PyError : public std::runtime_error {
 public:
-	explicit PyError(const string &err) : std::runtime_error(err) {}
+	explicit PyError(const string &err) : std::runtime_error(err) {
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -25,22 +26,26 @@ public:
 //===--------------------------------------------------------------------===//
 class PyFatalException : public PyError {
 public:
-	explicit PyFatalException(const string &err) : PyError(err) {}
+	explicit PyFatalException(const string &err) : PyError(err) {
+	}
 };
 
 class PyInterruptException : public PyError {
 public:
-	explicit PyInterruptException(const string &err) : PyError(err) {}
+	explicit PyInterruptException(const string &err) : PyError(err) {
+	}
 };
 
 class PyPermissionException : public PyError {
 public:
-	explicit PyPermissionException(const string &err) : PyError(err) {}
+	explicit PyPermissionException(const string &err) : PyError(err) {
+	}
 };
 
 class PySequenceException : public PyError {
 public:
-	explicit PySequenceException(const string &err) : PyError(err) {}
+	explicit PySequenceException(const string &err) : PyError(err) {
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -48,22 +53,26 @@ public:
 //===--------------------------------------------------------------------===//
 class DataError : public std::runtime_error {
 public:
-	explicit DataError(const string &err) : std::runtime_error(err) {}
+	explicit DataError(const string &err) : std::runtime_error(err) {
+	}
 };
 
 class PyOutOfRangeException : public DataError {
 public:
-	explicit PyOutOfRangeException(const string &err) : DataError(err) {}
+	explicit PyOutOfRangeException(const string &err) : DataError(err) {
+	}
 };
 
 class PyConversionException : public DataError {
 public:
-	explicit PyConversionException(const string &err) : DataError(err) {}
+	explicit PyConversionException(const string &err) : DataError(err) {
+	}
 };
 
 class PyTypeMismatchException : public DataError {
 public:
-	explicit PyTypeMismatchException(const string &err) : DataError(err) {}
+	explicit PyTypeMismatchException(const string &err) : DataError(err) {
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -71,32 +80,38 @@ public:
 //===--------------------------------------------------------------------===//
 class OperationalError : public std::runtime_error {
 public:
-	explicit OperationalError(const string &err) : std::runtime_error(err) {}
+	explicit OperationalError(const string &err) : std::runtime_error(err) {
+	}
 };
 
 class PyTransactionException : public OperationalError {
 public:
-	explicit PyTransactionException(const string &err) : OperationalError(err) {}
+	explicit PyTransactionException(const string &err) : OperationalError(err) {
+	}
 };
 
 class PyOutOfMemoryException : public OperationalError {
 public:
-	explicit PyOutOfMemoryException(const string &err) : OperationalError(err) {}
+	explicit PyOutOfMemoryException(const string &err) : OperationalError(err) {
+	}
 };
 
 class PyConnectionException : public OperationalError {
 public:
-	explicit PyConnectionException(const string &err) : OperationalError(err) {}
+	explicit PyConnectionException(const string &err) : OperationalError(err) {
+	}
 };
 
 class PySerializationException : public OperationalError {
 public:
-	explicit PySerializationException(const string &err) : OperationalError(err) {}
+	explicit PySerializationException(const string &err) : OperationalError(err) {
+	}
 };
 
 class PyIOException : public OperationalError {
 public:
-	explicit PyIOException(const string &err) : OperationalError(err) {}
+	explicit PyIOException(const string &err) : OperationalError(err) {
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -104,12 +119,14 @@ public:
 //===--------------------------------------------------------------------===//
 class IntegrityError : public std::runtime_error {
 public:
-	explicit IntegrityError(const string &err) : std::runtime_error(err) {}
+	explicit IntegrityError(const string &err) : std::runtime_error(err) {
+	}
 };
 
 class PyConstraintException : public IntegrityError {
 public:
-	explicit PyConstraintException(const string &err) : IntegrityError(err) {}
+	explicit PyConstraintException(const string &err) : IntegrityError(err) {
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -117,12 +134,14 @@ public:
 //===--------------------------------------------------------------------===//
 class InternalError : public std::runtime_error {
 public:
-	explicit InternalError(const string &err) : std::runtime_error(err) {}
+	explicit InternalError(const string &err) : std::runtime_error(err) {
+	}
 };
 
 class PyInternalException : public InternalError {
 public:
-	explicit PyInternalException(const string &err) : InternalError(err) {}
+	explicit PyInternalException(const string &err) : InternalError(err) {
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -130,37 +149,44 @@ public:
 //===--------------------------------------------------------------------===//
 class ProgrammingError : public std::runtime_error {
 public:
-	explicit ProgrammingError(const string &err) : std::runtime_error(err) {}
+	explicit ProgrammingError(const string &err) : std::runtime_error(err) {
+	}
 };
 
 class PyParserException : public ProgrammingError {
 public:
-	explicit PyParserException(const string &err) : ProgrammingError(err) {}
+	explicit PyParserException(const string &err) : ProgrammingError(err) {
+	}
 };
 
 class PySyntaxException : public ProgrammingError {
 public:
-	explicit PySyntaxException(const string &err) : ProgrammingError(err) {}
+	explicit PySyntaxException(const string &err) : ProgrammingError(err) {
+	}
 };
 
 class PyBinderException : public ProgrammingError {
 public:
-	explicit PyBinderException(const string &err) : ProgrammingError(err) {}
+	explicit PyBinderException(const string &err) : ProgrammingError(err) {
+	}
 };
 
 class PyInvalidInputException : public ProgrammingError {
 public:
-	explicit PyInvalidInputException(const string &err) : ProgrammingError(err) {}
+	explicit PyInvalidInputException(const string &err) : ProgrammingError(err) {
+	}
 };
 
 class PyInvalidTypeException : public ProgrammingError {
 public:
-	explicit PyInvalidTypeException(const string &err) : ProgrammingError(err) {}
+	explicit PyInvalidTypeException(const string &err) : ProgrammingError(err) {
+	}
 };
 
 class PyCatalogException : public ProgrammingError {
 public:
-	explicit PyCatalogException(const string &err) : ProgrammingError(err) {}
+	explicit PyCatalogException(const string &err) : ProgrammingError(err) {
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -168,12 +194,14 @@ public:
 //===--------------------------------------------------------------------===//
 class NotSupportedError : public std::runtime_error {
 public:
-	explicit NotSupportedError(const string &err) : std::runtime_error(err) {}
+	explicit NotSupportedError(const string &err) : std::runtime_error(err) {
+	}
 };
 
 class PyNotImplementedException : public NotSupportedError {
 public:
-	explicit PyNotImplementedException(const string &err) : NotSupportedError(err) {}
+	explicit PyNotImplementedException(const string &err) : NotSupportedError(err) {
+	}
 };
 
 /**
@@ -258,7 +286,7 @@ void RegisterExceptions(const py::module &m) {
 			}
 		} catch (const std::exception &ex) {
 			duckdb::ErrorData error(ex);
-			switch(error.Type()) {
+			switch (error.Type()) {
 			case ExceptionType::HTTP: {
 				// construct exception object
 				auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(error.Message()));
