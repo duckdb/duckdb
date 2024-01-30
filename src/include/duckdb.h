@@ -2321,6 +2321,23 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
                                                duckdb_appender *out_appender);
 
 /*!
+Creates an array of DUCKDB_TYPEs that represent the types of the columns of the table that the appender appends to.
+
+The resulting array should be freed with `duckdb_appender_destroy_column_types`.
+
+* appender: The appender to get the column types from.
+* out_types: The resulting array of types.
+*/
+DUCKDB_API duckdb_state duckdb_appender_get_column_types(duckdb_appender appender, DUCKDB_TYPE **out_types);
+
+/*!
+Destroys the array of DUCKDB_TYPEs that was created by `duckdb_appender_get_column_types`.
+
+* types: The array of types to destroy.
+*/
+DUCKDB_API duckdb_state duckdb_appender_destroy_column_types(DUCKDB_TYPE *types);
+
+/*!
 Returns the error message associated with the given appender.
 If the appender has no error message, this returns `nullptr` instead.
 

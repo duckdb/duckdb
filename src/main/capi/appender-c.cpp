@@ -208,6 +208,25 @@ duckdb_state duckdb_appender_close(duckdb_appender appender) {
 	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Close(); });
 }
 
+duckdb_state duckdb_appender_get_column_types(duckdb_appender appender, DUCKDB_TYPE **out_types) {
+	if (!appender) {
+		return DuckDBError;
+	}
+	return duckdb_appender_run_function(appender, [&](Appender &appender) {
+		auto types = appender.GetTypes();
+		*out_types = new DUCKDB_TYPE[types.size()];
+		for (idx_t i = 0; i < types.size(); i++) {
+			(*out_types)[i] = ConvertCPPTypeToC(types[i]);
+		}
+		return DuckDBSuccess;
+	});
+}
+
+duckdb_state duckdb_appender_destroy_column_types(DUCKDB_TYPE *types) {
+	delete[] types;
+	return DuckDBSuccess;
+}
+
 duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk) {
 	if (!chunk) {
 		return DuckDBError;

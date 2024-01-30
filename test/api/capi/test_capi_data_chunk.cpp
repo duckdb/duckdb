@@ -127,10 +127,16 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	REQUIRE(duckdb_data_chunk_get_size(nullptr) == 0);
 
 	// use the appender to insert a value using the data chunk API
-
 	duckdb_appender appender;
 	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
 	REQUIRE(status == DuckDBSuccess);
+
+	// get the column types from the appender
+	DUCKDB_TYPE *column_types;
+	REQUIRE(duckdb_appender_get_column_types(appender, &column_types) == DuckDBSuccess);
+	REQUIRE(column_types[0] == DUCKDB_TYPE_BIGINT);
+	REQUIRE(column_types[1] == DUCKDB_TYPE_SMALLINT);
+	REQUIRE(duckdb_appender_destroy_column_types(column_types) == DuckDBSuccess);
 
 	// append standard primitive values
 	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
