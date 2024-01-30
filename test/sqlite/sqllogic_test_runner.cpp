@@ -525,6 +525,26 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// vector size is too low for this test: skip it
 					return;
 				}
+			} else if (param == "exact_vector_size") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("require exact_vector_size requires a parameter");
+				}
+				// require an exact vector size
+				auto required_vector_size = std::stoi(token.parameters[1]);
+				if (STANDARD_VECTOR_SIZE != required_vector_size) {
+					// vector size does not match the required vector size: skip it
+					return;
+				}
+			} else if (param == "block_size") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("require block_size requires a parameter");
+				}
+				// require a specific block size
+				auto required_block_size = std::stoi(token.parameters[1]);
+				if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
+					// block size does not match the required block size: skip it
+					return;
+				}
 			} else if (param == "skip_reload") {
 				skip_reload = true;
 			} else if (param == "noalternativeverify") {

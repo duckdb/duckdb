@@ -2,6 +2,12 @@
 # description: Test WAL backwards compatibility
 # group: [wal]
 
+# the file was created with a block size of 256KB
+require block_size 262144
+
+# the file was created with a vector size of 2048
+require vector_size 2048
+
 load data/storage/wal_test_092.db readonly
 
 query II

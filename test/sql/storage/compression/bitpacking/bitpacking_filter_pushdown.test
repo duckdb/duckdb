@@ -2,7 +2,10 @@
 # description: Filter pushdown with Bitpacking columns
 # group: [bitpacking]
 
-# load the DB from disk
+# for small block sizes, this test will default to another compression function, as the bitpacking groups
+# no longer fit the blocks
+require block_size 262144
+
 load __TEST_DIR__/test_bitpacking.db
 
 statement ok
@@ -33,7 +36,6 @@ query I
 SELECT compression FROM pragma_storage_info('test') where segment_type = 'INTEGER' and compression != 'BitPacking'
 ----
 
-
 # filter on the bitpacking column
 query IIII
 SELECT SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE col=1337
@@ -53,6 +55,6 @@ SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE 
 0	9000	403370	0	39000	30
 
 statement ok
-drop table test
+DROP TABLE test
 
 endloop

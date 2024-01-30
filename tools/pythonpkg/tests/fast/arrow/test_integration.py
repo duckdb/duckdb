@@ -193,7 +193,7 @@ class TestArrowIntegration(object):
         assert duckdb_tbl_arrow[7].value == None
 
         # List
-        query = duckdb.query(
+        query = duckdb_cursor.sql(
             "SELECT a from (select list_value(INTERVAL 3 MONTHS, INTERVAL 5 DAYS, INTERVAL 10 SECONDS, NULL) as a) as t"
         ).arrow()['a']
         assert query[0][0].value == pyarrow.MonthDayNano([3, 0, 0])
@@ -203,8 +203,8 @@ class TestArrowIntegration(object):
 
         # Struct
         query = "SELECT a from (SELECT STRUCT_PACK(a := INTERVAL 1 MONTHS, b := INTERVAL 10 DAYS, c:= INTERVAL 20 SECONDS) as a) as t"
-        true_answer = duckdb.query(query).fetchall()
-        from_arrow = duckdb.from_arrow(duckdb.query(query).arrow()).fetchall()
+        true_answer = duckdb_cursor.sql(query).fetchall()
+        from_arrow = duckdb.from_arrow(duckdb_cursor.sql(query).arrow()).fetchall()
         assert true_answer[0][0]['a'] == from_arrow[0][0]['a']
         assert true_answer[0][0]['b'] == from_arrow[0][0]['b']
         assert true_answer[0][0]['c'] == from_arrow[0][0]['c']

@@ -38,7 +38,7 @@ body:
   - type: textarea
     attributes:
       label: To Reproduce
-      description: Steps to reproduce the behavior. Please paste the code and the output as text, and avoid using screenshots. Please add the required imports for Python scripts (e.g., import duckdb). Bonus points if the steps only include SQL queries.
+      description: Steps to reproduce the behavior. Please paste the code and the output as text, and avoid using screenshots. Please use [code blocks](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks) for formatting and add the required imports for Python scripts (e.g., import duckdb). Bonus points if the steps only include SQL queries.
     validations:
       required: true
 
