@@ -143,7 +143,7 @@ runs:
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
-        DUCKDB_PLATFORM: ${{ inputs.duckdb_arc }}
+        DUCKDB_PLATFORM: ${{ inputs.duckdb_arch }}
       run: |
         ls
         mkdir -p ~/.ssh
