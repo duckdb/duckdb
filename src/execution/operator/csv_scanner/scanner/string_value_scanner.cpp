@@ -122,10 +122,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					}
 					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
-					if (chunk_col_id == number_of_columns) {
-						// We check for a weird case, where we ignore an extra value, if it is a null value
-						return;
-					}
+					//					if (chunk_col_id == number_of_columns) {
+					//						// We check for a weird case, where we ignore an extra value, if it is a null
+					//value 						return;
+					//					}
 					validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
 				}
 				cur_col_id++;
@@ -794,16 +794,18 @@ void StringValueScanner::ProcessOverbufferValue() {
 	} else {
 		value = string_t(overbuffer_string.c_str(), overbuffer_string.size());
 	}
-	if (!states.IsNotSet()) {
+
+	if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
+		result.EmptyLine(result, iterator.pos.buffer_pos);
+	} else if (!states.IsNotSet()) {
 		result.AddValueToVector(value.GetData(), value.GetSize(), true);
 	}
+
 	if (states.NewRow() && !states.IsNotSet()) {
 		result.AddRowInternal();
 		lines_read++;
 	}
-	if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-		result.EmptyLine(result, iterator.pos.buffer_pos);
-	}
+
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer) {
 		result.added_last_line = true;
 	}
