@@ -613,6 +613,33 @@ jobs:
       shell: bash
       run: python scripts/test_vector_sizes.py
 
+  block-sizes:
+    name: Block Sizes
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Test
+        shell: bash
+        run: python scripts/test_block_sizes.py
+
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
     runs-on: ubuntu-22.04

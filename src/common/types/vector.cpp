@@ -2026,6 +2026,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vec);
 		ListVector::SetListSize(child, size);
+		return;
 	}
 	vec.auxiliary->Cast<VectorListBuffer>().SetSize(size);
 }

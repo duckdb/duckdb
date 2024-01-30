@@ -1143,6 +1143,14 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						return false;
 					}
 					pos++;
+
+					if (pos != len && buf[pos] == '_') {
+						// Skip one underscore if it is not the last character and followed by a digit
+						pos++;
+						if (pos == len || !StringUtil::CharacterIsDigit(buf[pos])) {
+							return false;
+						}
+					}
 				}
 				// make sure there is either (1) one number after the period, or (2) one number before the period
 				// i.e. we accept "1." and ".1" as valid numbers, but not "."
@@ -1194,6 +1202,14 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 		if (!OP::template HandleDigit<T, NEGATIVE>(result, digit)) {
 			return false;
 		}
+
+		if (pos != len && buf[pos] == '_') {
+			// Skip one underscore if it is not the last character and followed by a digit
+			pos++;
+			if (pos == len || !StringUtil::CharacterIsDigit(buf[pos])) {
+				return false;
+			}
+		}
 	}
 	if (!OP::template Finalize<T, NEGATIVE>(result)) {
 		return false;
@@ -1221,6 +1237,15 @@ static bool IntegerHexCastLoop(const char *buf, idx_t len, T &result, bool stric
 			digit = current_char - '0';
 		}
 		pos++;
+
+		if (pos != len && buf[pos] == '_') {
+			// Skip one underscore if it is not the last character and followed by a hex
+			pos++;
+			if (pos == len || !StringUtil::CharacterIsHex(buf[pos])) {
+				return false;
+			}
+		}
+
 		if (!OP::template HandleHexDigit<T, NEGATIVE>(result, digit)) {
 			return false;
 		}
@@ -1242,15 +1267,7 @@ static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool st
 	char current_char;
 	while (pos < len) {
 		current_char = buf[pos];
-		if (current_char == '_' && pos > start_pos) {
-			// skip underscore, if it is not the first character
-			pos++;
-			if (pos == len) {
-				// we cant end on an underscore either
-				return false;
-			}
-			continue;
-		} else if (current_char == '0') {
+		if (current_char == '0') {
 			digit = 0;
 		} else if (current_char == '1') {
 			digit = 1;
@@ -1258,6 +1275,14 @@ static bool IntegerBinaryCastLoop(const char *buf, idx_t len, T &result, bool st
 			return false;
 		}
 		pos++;
+		if (pos != len && buf[pos] == '_') {
+			// Skip one underscore if it is not the last character and followed by a digit
+			pos++;
+			if (pos == len || (buf[pos] != '0' && buf[pos] != '1')) {
+				return false;
+			}
+		}
+
 		if (!OP::template HandleBinaryDigit<T, NEGATIVE>(result, digit)) {
 			return false;
 		}

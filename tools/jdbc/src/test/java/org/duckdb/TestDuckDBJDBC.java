@@ -1,18 +1,8 @@
-package org.duckdb.test;
-
-import org.duckdb.DuckDBAppender;
-import org.duckdb.DuckDBColumnType;
-import org.duckdb.DuckDBConnection;
-import org.duckdb.DuckDBDriver;
-import org.duckdb.DuckDBResultSet;
-import org.duckdb.DuckDBResultSetMetaData;
-import org.duckdb.DuckDBStruct;
-import org.duckdb.DuckDBTimestamp;
-import org.duckdb.JsonNode;
-import org.duckdb.TestExtensionTypes;
+package org.duckdb;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -4220,7 +4210,23 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_get_binary_stream() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement s = connection.prepareStatement("select ?")) {
+            s.setObject(1, "YWJj".getBytes());
+            String out = null;
+
+            try (ResultSet rs = s.executeQuery()) {
+                while (rs.next()) {
+                    out = blob_to_string(rs.getBlob(1));
+                }
+            }
+
+            assertEquals(out, "YWJj");
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        System.exit(runTests(args, TestDuckDBJDBC.class) + runTests(args, TestExtensionTypes.class));
+        System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }
 }

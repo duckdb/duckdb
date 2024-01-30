@@ -394,14 +394,18 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-	idx_t segment_size = Storage::BLOCK_SIZE;
+
+	idx_t vector_segment_size = Storage::BLOCK_SIZE;
 	if (start_row == idx_t(MAX_ROW_ID)) {
 #if STANDARD_VECTOR_SIZE < 1024
-		segment_size = 1024 * GetTypeIdSize(type.InternalType());
+		vector_segment_size = 1024 * GetTypeIdSize(type.InternalType());
 #else
-		segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
+		vector_segment_size = STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType());
 #endif
 	}
+
+	// the segment size is bound by the block size, but can be smaller
+	idx_t segment_size = Storage::BLOCK_SIZE < vector_segment_size ? Storage::BLOCK_SIZE : vector_segment_size;
 	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
 	data.AppendSegment(l, std::move(new_segment));
 }

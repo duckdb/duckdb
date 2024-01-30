@@ -121,6 +121,7 @@ private:
 	                                     const string &local_path, const string &extension, bool force_install,
 	                                     const string &repository);
 	static const vector<string> PathComponents();
+	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
 	                                       optional_ptr<const ClientConfig> client_config);
