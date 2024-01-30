@@ -277,7 +277,7 @@ void CSVSniffer::DetectTypes() {
 			for (auto &format_candidate : format_candidates) {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
-			if (tuples.number_of_rows > 1) {
+			if (tuples.number_of_rows > 0) {
 				for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
 					best_header_row.emplace_back(tuples.GetValue(0, col_idx));
 				}
