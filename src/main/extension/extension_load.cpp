@@ -211,9 +211,9 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 	}
 
-for (auto& x : metadata_field) {
+//for (auto& x : metadata_field) {
 	//std::cout << x << "|||\n" ;
-}
+//}
 	std::string extension_duckdb_version = metadata_field[2];
 	if (engine_version != extension_duckdb_version) {
 		throw InvalidInputException("Extension \"%s\" version (%s) does not match DuckDB version (%s)", filename,
