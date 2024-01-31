@@ -6,9 +6,10 @@ name CSV Sniffer Benchmark
 group csv
 
 require tpch
-load
-CALL dbgen(sf=2, suffix='_normal');
-COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 
-run
+cache tpch_sf1.duckdb
+
+load benchmark/tpch/sf1/load.sql
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
 DESCRIBE SELECT * FROM '${BENCHMARK_DIR}/lineitem.csv'
