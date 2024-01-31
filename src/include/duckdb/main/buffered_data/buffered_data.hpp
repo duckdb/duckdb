@@ -35,7 +35,7 @@ public:
 
 class BufferedData {
 protected:
-	enum class Type { SIMPLE };
+	enum class Type { SIMPLE, BATCHED };
 
 public:
 	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(context) {

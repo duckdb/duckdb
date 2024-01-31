@@ -15,7 +15,8 @@ void BatchedBufferedData::BlockSink(BlockedSink blocked_sink, idx_t batch) {
 }
 
 BatchedBufferedData::BatchedBufferedData(shared_ptr<ClientContext> context)
-    : BufferedData(std::move(context)), other_batches_tuple_count(0), current_batch_tuple_count(0), min_batch(0) {
+    : BufferedData(BufferedData::Type::BATCHED, std::move(context)), other_batches_tuple_count(0),
+      current_batch_tuple_count(0), min_batch(0) {
 }
 
 bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
@@ -122,14 +123,15 @@ PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &r
 	}
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
-	auto res = context->ExecuteTaskInternal(context_lock, result);
+	auto cc = context.lock();
+	auto res = cc->ExecuteTaskInternal(context_lock, result);
 	while (!PendingQueryResult::IsFinished(res)) {
 		if (BufferIsFull()) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
 		UnblockSinks();
-		res = context->ExecuteTaskInternal(context_lock, result);
+		res = cc->ExecuteTaskInternal(context_lock, result);
 	}
 	// printf("IS_FINISHED\n");
 	return res;
