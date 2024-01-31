@@ -204,10 +204,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"tpcds_queries", "tpcds"},
     {"tpch", "tpch"},
     {"tpch_answers", "tpch"},
-    {"tpch_queries", "tpch"},
-    {"visualize_diff_profiling_output", "visualizer"},
-    {"visualize_json_profiling_output", "visualizer"},
-    {"visualize_last_profiling_output", "visualizer"},
+    {"tpch_queries", "tpch"}
 }; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
@@ -327,8 +324,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "sqlsmith",
     "sqlite_scanner",
     "tpcds",
-    "tpch",
-    "visualizer",
+    "tpch"
 }; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
