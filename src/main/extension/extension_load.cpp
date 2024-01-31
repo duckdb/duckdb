@@ -3,7 +3,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
-#include <iostream>
+//#include <iostream>
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
@@ -202,7 +202,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	}
 
 for (auto& x : metadata_field) {
-	std::cout << x << "|||\n" ;
+	//std::cout << x << "|||\n" ;
 }
 
 
