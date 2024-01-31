@@ -6,6 +6,8 @@ load __TEST_DIR__/comment_on.db
 
 ### Generic tests
 
+# TODO: we need further testing of comments not being modified as catalog entries are altered
+
 # String literal or NULL only
 statement error
 COMMENT ON TABLE test IS 1337
@@ -324,3 +326,4 @@ Not implemented Error: Adding comments to schemas is not implemented
 
 statement ok
 DROP TABLE test_table
+

@@ -31,6 +31,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -410,6 +413,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 
 	// database_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
+
+	// database_oid, BIGINT
+	output.SetValue(col++, output_offset, Value::BIGINT(function.schema.catalog.GetOid()));
 
 	// schema_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.name));
