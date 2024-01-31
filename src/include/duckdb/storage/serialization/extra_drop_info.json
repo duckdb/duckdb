@@ -17,9 +17,6 @@
     "class": "ExtraDropSecretInfo",
     "base": "ExtraDropInfo",
     "enum": "SECRET_INFO",
-    "includes": [
-      "duckdb/parser/parsed_data/extra_drop_info.hpp"
-    ],
     "members": [
       {
         "id": 200,

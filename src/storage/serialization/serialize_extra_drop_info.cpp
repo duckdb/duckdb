@@ -6,7 +6,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
-#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 
 namespace duckdb {
 
