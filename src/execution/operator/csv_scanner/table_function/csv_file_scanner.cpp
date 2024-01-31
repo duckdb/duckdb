@@ -162,7 +162,7 @@ void CSVFileScan::InitializeFileNamesTypes() {
 		// just read the first column
 		file_types.emplace_back(LogicalType::VARCHAR);
 		projected_columns.insert(0);
-		projection_ids.push_back({0, 0});
+		projection_ids.emplace_back(0, 0);
 		return;
 	}
 
@@ -170,7 +170,7 @@ void CSVFileScan::InitializeFileNamesTypes() {
 		idx_t result_idx = reader_data.column_ids[i];
 		file_types.emplace_back(types[result_idx]);
 		projected_columns.insert(result_idx);
-		projection_ids.push_back({result_idx, i});
+		projection_ids.emplace_back(result_idx, i);
 	}
 
 	if (!projected_columns.empty()) {
@@ -182,7 +182,7 @@ void CSVFileScan::InitializeFileNamesTypes() {
 				projected_columns.insert(col_id);
 				file_types.emplace_back(LogicalType::VARCHAR);
 				projected_columns.insert(col_id);
-				projection_ids.push_back({col_id, col_id});
+				projection_ids.emplace_back(col_id, col_id);
 			}
 		}
 	}
