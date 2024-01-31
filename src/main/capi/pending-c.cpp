@@ -161,7 +161,16 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	}
 
 	duckdb::unique_ptr<duckdb::QueryResult> result;
-	result = wrapper->statement->Execute();
+	try {
+		result = wrapper->statement->Execute();
+	} catch (const duckdb::Exception &ex) {
+		wrapper->statement->SetError(duckdb::PreservedError(ex));
+		return DuckDBError;
+	} catch (std::exception &ex) {
+		wrapper->statement->SetError(duckdb::PreservedError(ex));
+		return DuckDBError;
+	}
+
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);
 }
