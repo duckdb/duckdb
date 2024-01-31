@@ -262,8 +262,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		throw InvalidInputException("Extension \"%s\" version (%s) does not match DuckDB version (%s)", filename,
 		                            extension_version, engine_version);
 	}
+	int EXTENSION_VERSION = 2;
 
 	result.filebase = lowercase_extension_name;
+	result.extension_version = metadata_field[EXTENSION_VERSION];
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
@@ -329,7 +331,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
-	db.SetExtensionLoaded(extension);
+	db.SetExtensionLoaded(extension, res.extension_version);
 #endif
 }
 

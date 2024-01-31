@@ -25,6 +25,13 @@ class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
 
+struct ExtensionInfo {
+	ExtensionInfo(const std::string& version) : extension_version(version) {}
+	ExtensionInfo() : ExtensionInfo("defaultme") {}
+	ExtensionInfo(const ExtensionInfo& x) : ExtensionInfo(x.extension_version) {}
+	std::string extension_version;
+};
+
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
 
@@ -44,13 +51,14 @@ public:
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
-	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name);
+	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name, std::string extension_version = "");
 
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+	DUCKDB_API const unordered_map<std::string, ExtensionInfo> &LoadedExtensionsData();
 	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
 
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
@@ -71,6 +79,7 @@ private:
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
+	unordered_map<std::string, ExtensionInfo> loaded_extensions_data;
 	ValidChecker db_validity;
 };
 
