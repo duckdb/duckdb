@@ -1183,7 +1183,7 @@ else()
   add_custom_target(
           duckdb_platform ALL
 	  COMMAND
-	  echo "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
+	  echo "${DUCKDB_EXPLICIT_PLATFORM}\\x00" > duckdb_platform_out
           )
 endif()
 
