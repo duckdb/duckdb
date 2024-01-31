@@ -10,7 +10,7 @@
 namespace duckdb {
 
 struct ArgMinMaxStateBase {
-	ArgMinMaxStateBase() : is_initialized(false), arg_null(true) {
+	ArgMinMaxStateBase() : is_initialized(false), arg_null(false) {
 	}
 
 	template <class T>
@@ -36,6 +36,11 @@ struct ArgMinMaxStateBase {
 };
 
 // Out-of-line specialisations
+template <>
+void ArgMinMaxStateBase::CreateValue(string_t &value) {
+	new (&value) string_t(uint32_t(0));
+}
+
 template <>
 void ArgMinMaxStateBase::CreateValue(Vector *&value) {
 	value = nullptr;
