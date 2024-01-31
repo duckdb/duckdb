@@ -50,8 +50,9 @@ public:
 	                                  optional_ptr<const ClientConfig> client_config);
 
 	//! Autoload an extension by name. Depending on the current settings, this will either load or install+load
-	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
-	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+	static void AutoLoadExtension(ClientContext &context, const string &extension_name, const bool also_install = true);
+	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name,
+	                                            const bool also_install = true) noexcept;
 
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);

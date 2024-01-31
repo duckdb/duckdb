@@ -127,23 +127,82 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
+static bool SetInstallIsReentrant(int change) {
+	thread_local int REENTRANT_CNT = 0;
+
+	REENTRANT_CNT += change;
+
+	return REENTRANT_CNT <= 1;
+}
+
+class ReentrancyLock {
+	bool valid;
+
+public:
+	ReentrancyLock() : valid(SetInstallIsReentrant(+1)) {
+	}
+	bool LockIsValid() const {
+		return valid;
+	}
+	~ReentrancyLock() {
+		SetInstallIsReentrant(-1);
+	}
+};
+
 void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
                                        const string &repository) {
+	ReentrancyLock reentrant_lock;
+	if (!reentrant_lock.LockIsValid()) {
+		// Forbid going through InstallExtension again while already in the process
+		// Problematic case is say there is autoinstall and autoloading enabled, then it might be
+		// that while already performing an install another one is started
+		// This is problematic in two ways:
+		// - circular dependency detection
+		// - user intention might not be clear, say for example there is a `INSTALL x FROM azure://y`, then
+		//	it's intended to install & load azure from current repository or fail?
+		return;
+	}
+
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
 #endif
+	// FIXME: This should also be handled the autoloading
+
 	string local_path = ExtensionDirectory(config, fs);
 	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install, repository);
 }
 
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
                                        const string &repository) {
+	ReentrancyLock reentrant_lock;
+	if (!reentrant_lock.LockIsValid()) {
+		// Forbid going through InstallExtension again while already in the process
+		// Problematic case is say there is autoinstall and autoloading enabled, then it might be
+		// that while already performing an install another one is started
+		// This is problematic in two ways:
+		// - circular dependency detection
+		// - user intention might not be clear, say for example there is a `INSTALL x FROM azure://y`, then
+		//	it's intended to install & load azure from current repository or fail?
+		return;
+	}
+
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
 #endif
 	auto &config = DBConfig::GetConfig(context);
+
+	// Either extension OR repository might require some extensions to be loaded
+	if (!StringUtil::StartsWith(extension, "http://")) {
+		// Passing false as last parameter to avoid reentrancy issues
+		TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(extension), false);
+	}
+	if (!StringUtil::StartsWith(repository, "http://")) {
+		// Passing false as last parameter to avoid reentrancy issues
+		TryAutoLoadExtension(context, FileSystem::LookupExtensionForPattern(repository), false);
+	}
+
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
 	auto &client_config = ClientConfig::GetConfig(context);
@@ -229,7 +288,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 			}
 			fs.MoveFile(temp_path, local_extension_path);
 			return;
-		} else if (!is_http_url) {
+		} else if (!FileSystem::IsRemoteFile(extension)) {
 			throw IOException("Failed to read extension from \"%s\": no such file", extension);
 		}
 	}
@@ -254,20 +313,43 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		throw IOException("No slash in URL template");
 	}
 
-	// Special case to install extension from a local file, useful for testing
+	// Special case to install extension from a local file or NOT plain http
+	// Note that before making this the default path, the following are needed for feature-parity:
+	//	* On success (name.duckdb_extension.gz present): Performing a single GET (instead of HEAD + potentially multiple
+	// GETs)
+	//	* On failure (name.duckdb_extension[.gz] not presents): Have a way to fail with a single GET (instead of
+	// currently 2 HEADs)
+	//	* Setting the User-Agent headers
 	if (!StringUtil::Contains(url_template, "http://")) {
 		string file = fs.ConvertSeparators(url);
 		if (!fs.FileExists(file)) {
-			// check for non-gzipped variant
-			file = file.substr(0, file.size() - 3);
-			if (!fs.FileExists(file)) {
-				throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			string message_verb = FileSystem::IsRemoteFile(file) ? "download" : "copy local";
+			if (StringUtil::EndsWith(file, ".gz")) {
+				// check also for non-gzipped variant
+				file = file.substr(0, file.size() - 3);
+				if (!fs.FileExists(file)) {
+					throw IOException("Failed to %s extension \"%s\" at either of:\n     \"%s.gz\" (gzip "
+					                  "compressed version) or\n     \"%s\" (no encoding)",
+					                  message_verb, extension_name, file, file);
+				}
+			} else {
+				throw IOException("Failed to % extension \"%s\" at:\n     \"%s\" (no encoding)", message_verb,
+				                  extension_name, file);
 			}
 		}
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
 		read_handle->Read(test_data.get(), read_handle->GetFileSize());
-		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+
+		if (StringUtil::EndsWith(file, ".gz")) {
+			// if file is compressed, decompression has to be performed explicitly
+			std::string in(reinterpret_cast<const char *>(test_data.get()), read_handle->GetFileSize());
+			auto decompressed_body = GZipFileSystem::UncompressGZIPString(in);
+			WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
+		} else {
+			// if file is uncompressed
+			WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+		}
 
 		if (fs.FileExists(local_extension_path) && force_install) {
 			fs.RemoveFile(local_extension_path);
