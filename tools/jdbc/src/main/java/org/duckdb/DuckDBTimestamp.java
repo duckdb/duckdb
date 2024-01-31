@@ -1,6 +1,5 @@
 package org.duckdb;
 
-import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.ZoneOffset;
 import java.time.Instant;
@@ -31,10 +30,6 @@ public class DuckDBTimestamp {
 
     public DuckDBTimestamp(Timestamp sqlTimestamp) {
         this.timeMicros = DuckDBTimestamp.RefLocalDateTime.until(sqlTimestamp.toLocalDateTime(), ChronoUnit.MICROS);
-    }
-
-    public DuckDBTimestamp(Date date) {
-        this.timeMicros = date.getTime();
     }
 
     final static LocalDateTime RefLocalDateTime;
