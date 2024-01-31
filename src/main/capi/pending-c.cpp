@@ -155,6 +155,7 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	if (!pending_result || !out_result) {
 		return DuckDBError;
 	}
+	memset(out, 0, sizeof(out_result));
 	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return DuckDBError;
