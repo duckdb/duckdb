@@ -127,7 +127,7 @@ void UpdateDenom(Subgraph2Denominator &relation_2_denom, RelationsToTDom &relati
 	relation_2_denom.denom *= relation_to_tdom.has_tdom_hll ? relation_to_tdom.tdom_hll : relation_to_tdom.tdom_no_hll;
 }
 
-void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
+bool FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
                                vector<Subgraph2Denominator>::iterator subgraph,
                                vector<Subgraph2Denominator>::iterator end) {
 	for (; subgraph != end; subgraph++) {
@@ -140,9 +140,10 @@ void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
 			// can be deleted from the subgraph2Denominator array
 			subgraph->relations.clear();
 			merge_to.denom *= subgraph->denom;
-			return;
+			return true;
 		}
 	}
+	return false;
 }
 
 vector<Subgraph2Denominator>::iterator FindMatchingSubGraph(Subgraph2Denominator &merge_to, idx_t find_me,
@@ -225,7 +226,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 				auto next_subgraph = it + 1;
 				if (filter->join_type == JoinType::INNER) {
 					// iterate through other subgraphs and merge.
-					FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
+					bool found_match = FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
+					if (!found_match) {
+						auto call_me = "sdfvs";
+					}
 					// Now insert the right binding and update denominator with the
 					// tdom of the filter
 					// insert find_table again in case there was no other subgraph.
@@ -291,10 +295,23 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	}
 	double denom = 1;
 	// TODO: It's possible cross-products were added and are not present in the filters in the relation_2_tdom
-	//       structures. When that's the case, multiply the denom structures that have no intersection
-	for (auto &match : subgraphs) {
-		denom *= match.denom;
+	//       structures. When that's the case, merge all subgraphs
+	if (subgraphs.size() > 1) {
+		auto final_subgraph = subgraphs.at(0);
+		for (auto merge_with = subgraphs.begin() + 1; merge_with != subgraphs.end(); merge_with++) {
+			for (auto &relation : merge_with->relations) {
+				final_subgraph.relations.insert(relation);
+			}
+			for (auto &relation : merge_with->numerator_relations) {
+				final_subgraph.numerator_relations.insert(relation);
+			}
+			final_subgraph.denom *= merge_with->denom;
+			final_subgraph.numerator_filter_strength *= merge_with->numerator_filter_strength;
+		}
 	}
+//	for (auto &match : subgraphs) {
+//		denom *= match.denom;
+//	}
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
 	if (subgraphs.size() == 0 || denom == 0) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
