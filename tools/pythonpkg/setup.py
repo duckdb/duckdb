@@ -170,21 +170,14 @@ if 'DUCKDB_INSTALL_USER' in os.environ and 'install' in sys.argv:
 existing_duckdb_dir = ''
 new_sys_args = []
 libraries = []
-for i in range(len(sys.argv)):
-    if sys.argv[i].startswith("--binary-dir="):
-        existing_duckdb_dir = sys.argv[i].split('=', 1)[1]
-    elif sys.argv[i].startswith('--package_name='):
-        lib_name = sys.argv[i].split('=', 1)[1]
-    elif sys.argv[i].startswith("--compile-flags="):
-        # FIXME: this is overwriting the previously set toolchain_args ?
-        toolchain_args = ['-std=c++11'] + [
-            x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0
-        ]
-    elif sys.argv[i].startswith("--libs="):
-        libraries = [x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0]
-    else:
-        new_sys_args.append(sys.argv[i])
-sys.argv = new_sys_args
+if 'DUCKDB_BINARY_DIR' in os.environ:
+    existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
+if 'DUCKDB_COMPILE_FLAGS' in os.environ:
+    # FIXME: this is overwriting the previously set toolchain_args ?
+    toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split(' ')
+if 'DUCKDB_LIBS' in os.environ:
+    libraries = os.environ['DUCKDB_LIBS'].split(' ')
+
 define_macros = [('DUCKDB_PYTHON_LIB_NAME', lib_name)]
 
 if platform.system() == 'Darwin':
