@@ -132,7 +132,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	if (file_size < 1024) {
 		throw InvalidInputException("Extension \"%s\", version unknown, do not have metadata compatible with DuckDB version (%s). File size in particular is %i lower than minimum threshold of 1024", filename,
-		                            extension_duckdb_version, engine_version);
+		                            engine_version);
 	}
 
 	auto metadata_offset = file_size - metadata_segment.size();
