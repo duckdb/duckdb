@@ -35,6 +35,9 @@ public:
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
 	void InitializeProjection();
+
+	//! Initialize the actual names and types to be scanned from the file
+	void InitializeFileNamesTypes(const ReadCSVData &bind_data);
 	const string file_path;
 	//! File Index
 	idx_t file_idx;
@@ -54,6 +57,10 @@ public:
 	vector<string> names;
 	vector<LogicalType> types;
 	MultiFileReaderData reader_data;
+
+	vector<string> file_names;
+	vector<LogicalType> file_types;
+	vector<idx_t> projected_columns;
 
 	//! Options for this CSV Reader
 	CSVReaderOptions options;
