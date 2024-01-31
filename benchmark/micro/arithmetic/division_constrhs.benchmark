@@ -6,7 +6,7 @@ name Integer Multiplication
 group micro
 
 load
-CREATE TABLE integers AS SELECT ((i * 53) % 100)::INT4 AS i FROM range(0, 1000000000) tbl(i);
+CREATE TABLE integers AS SELECT ((i * 53) % 100)::UINT4 AS i FROM range(0, 1000000000) tbl(i);
 
 run
 SELECT MIN(i//100) FROM integers

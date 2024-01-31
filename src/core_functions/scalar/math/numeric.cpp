@@ -1,6 +1,5 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/likely.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
@@ -9,10 +8,11 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "libdivide.h"
+#include "fastmod.h"
 
 #include <cmath>
 #include <errno.h>
@@ -1339,7 +1339,8 @@ static void ConstRHSDivideOperation(DataChunk &args, ExpressionState &state, Vec
 
 	ValidityMask &validity = FlatVector::Validity(result);
 	if (rhs == 0) {
-		validity.SetInvalid(args.data.size());
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 	validity.Copy(FlatVector::Validity(args.data[0]), args.data.size());
@@ -1353,7 +1354,7 @@ static void ConstRHSDivideOperation(DataChunk &args, ExpressionState &state, Vec
 }
 
 template <class LHS, class RHS, class RESULT>
-static void ConstRHSDivideOperationFast(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ConstUnsignedRHSDivideOperationFast(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (args.data[1].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 		throw InvalidInputException("`divide_by_const` called with a non-constant hrs");
 	}
@@ -1361,18 +1362,15 @@ static void ConstRHSDivideOperationFast(DataChunk &args, ExpressionState &state,
 
 	ValidityMask &validity = FlatVector::Validity(result);
 	if (rhs == 0) {
-		validity.SetInvalid(args.data.size());
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 
-	duckdb_libdivide::divider<RHS> optimised_rhs = duckdb_libdivide::divider<RHS>(rhs);
+	uint64_t optimised_rhs = fastmod::computeM_u32(rhs);
 	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(
-	    args.data[0], result, args.size(), [&](LHS lhs, ValidityMask &validity, idx_t idx) {
-		    if (std::is_signed<RHS>() && rhs == RHS(-1) && lhs == NumericLimits<LHS>::Minimum()) {
-			    throw OutOfRangeException("Overflow in division of %d / %d", lhs, rhs);
-		    }
-		    return lhs / optimised_rhs;
-	    });
+	    args.data[0], result, args.size(),
+	    [&](LHS lhs, ValidityMask &validity, idx_t idx) { return fastmod::fastdiv_s32(lhs, optimised_rhs, rhs); });
 }
 
 static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
@@ -1381,21 +1379,21 @@ static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
 	case LogicalTypeId::TINYINT:
 		return ConstRHSDivideOperation<int8_t, int8_t, int8_t>;
 	case LogicalTypeId::SMALLINT:
-		return ConstRHSDivideOperationFast<int16_t, int16_t, int16_t>;
+		return ConstRHSDivideOperation<int16_t, int16_t, int16_t>;
 	case LogicalTypeId::INTEGER:
-		return ConstRHSDivideOperationFast<int32_t, int32_t, int32_t>;
+		return ConstRHSDivideOperation<int32_t, int32_t, int32_t>;
 	case LogicalTypeId::BIGINT:
-		return ConstRHSDivideOperationFast<int64_t, int64_t, int64_t>;
+		return ConstRHSDivideOperation<int64_t, int64_t, int64_t>;
 	case LogicalTypeId::HUGEINT:
 		return ConstRHSDivideOperation<hugeint_t, hugeint_t, hugeint_t>;
 	case LogicalTypeId::UTINYINT:
 		return ConstRHSDivideOperation<uint8_t, uint8_t, uint8_t>;
 	case LogicalTypeId::USMALLINT:
-		return ConstRHSDivideOperationFast<uint16_t, uint16_t, uint16_t>;
+		return ConstRHSDivideOperation<uint16_t, uint16_t, uint16_t>;
 	case LogicalTypeId::UINTEGER:
-		return ConstRHSDivideOperationFast<uint32_t, uint32_t, uint32_t>;
+		return ConstUnsignedRHSDivideOperationFast<uint32_t, uint32_t, uint32_t>;
 	case LogicalTypeId::UBIGINT:
-		return ConstRHSDivideOperationFast<uint64_t, uint64_t, uint64_t>;
+		return ConstRHSDivideOperation<uint64_t, uint64_t, uint64_t>;
 	case LogicalTypeId::UHUGEINT:
 		return ConstRHSDivideOperation<uhugeint_t, uhugeint_t, uhugeint_t>;
 	default:
