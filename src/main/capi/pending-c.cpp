@@ -165,11 +165,9 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	try {
 		result = wrapper->statement->Execute();
 	} catch (const duckdb::Exception &ex) {
-		wrapper->statement->SetError(duckdb::PreservedError(ex));
-		return DuckDBError;
+		result = duckdb::make_uniq<duckdb::MaterializedQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {
-		wrapper->statement->SetError(duckdb::PreservedError(ex));
-		return DuckDBError;
+		result = duckdb::make_uniq<duckdb::MaterializedQueryResult>(duckdb::PreservedError(ex));
 	}
 
 	wrapper->statement.reset();
