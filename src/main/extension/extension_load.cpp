@@ -131,8 +131,9 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	idx_t file_size = handle->GetFileSize();
 
 	if (file_size < 1024) {
-		throw InvalidInputException("Extension \"%s\", version unknown, do not have metadata compatible with DuckDB version (%s). File size in particular is %i lower than minimum threshold of 1024", filename,
-		                            engine_version);
+		throw InvalidInputException("Extension \"%s\", version unknown, do not have metadata compatible with DuckDB "
+		                            "version (%s). File size in particular is %i lower than minimum threshold of 1024",
+		                            filename, engine_version, file_size);
 	}
 
 	auto metadata_offset = file_size - metadata_segment.size();
@@ -211,9 +212,9 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 	}
 
-//for (auto& x : metadata_field) {
-	//std::cout << x << "|||\n" ;
-//}
+	// for (auto& x : metadata_field) {
+	// std::cout << x << "|||\n" ;
+	//}
 	std::string extension_duckdb_version = metadata_field[2];
 	if (engine_version != extension_duckdb_version) {
 		throw InvalidInputException("Extension \"%s\" version (%s) does not match DuckDB version (%s)", filename,
@@ -224,14 +225,14 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	a[0] = '4';
 
 	if (strcmp(a, metadata_field[0].data()) != 0) {
-		throw InvalidInputException("Extension \"%s\", version unknown, do not have metadata compatible with DuckDB version (%s). Number of fields was different than 4", filename,
-		                            extension_duckdb_version, engine_version);
+		throw InvalidInputException("Extension \"%s\", version unknown, do not have metadata compatible with DuckDB "
+		                            "version (%s). Number of fields was different than 4",
+		                            filename, extension_duckdb_version, engine_version);
 	}
 
 	auto number_metadata_fields = 3;
 	D_ASSERT(number_metadata_fields == 3); // Currently hardcoded value
 	metadata_field.resize(number_metadata_fields + 1);
-
 
 	auto filebase = fs.ExtractBaseName(filename);
 
@@ -264,8 +265,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	int EXTENSION_VERSION = 3;
 
-
-       auto lowercase_extension_name = StringUtil::Lower(filebase);
+	auto lowercase_extension_name = StringUtil::Lower(filebase);
 
 	result.filebase = lowercase_extension_name;
 	result.extension_version = metadata_field[EXTENSION_VERSION];
