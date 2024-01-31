@@ -27,6 +27,9 @@ inputs:
     default: ''
 
   # Build config
+  duckdb_arch:
+    description: 'Provide DUCKDB_PLATFORM to build system for cross compilation'
+    default: ''
   static_link_build:
     description: 'Links DuckDB statically to the loadable extensions'
     default: 1
@@ -140,6 +143,7 @@ runs:
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
+        DUCKDB_PLATFORM: ${{ inputs.duckdb_arch }}
       run: |
         ls
         mkdir -p ~/.ssh
