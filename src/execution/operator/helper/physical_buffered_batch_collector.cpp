@@ -19,7 +19,7 @@ PhysicalBufferedBatchCollector::PhysicalBufferedBatchCollector(PreparedStatement
 class BufferedBatchCollectorGlobalState : public GlobalSinkState {
 public:
 	mutex glock;
-	shared_ptr<ClientContext> context;
+	weak_ptr<ClientContext> context;
 	shared_ptr<BufferedData> buffered_data;
 };
 
@@ -111,8 +111,9 @@ unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(C
 unique_ptr<QueryResult> PhysicalBufferedBatchCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<BufferedBatchCollectorGlobalState>();
 	lock_guard<mutex> l(gstate.glock);
-	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names,
-	                                           gstate.context->GetClientProperties(), gstate.buffered_data);
+	auto cc = gstate.context.lock();
+	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
+	                                           gstate.buffered_data);
 	return std::move(result);
 }
 

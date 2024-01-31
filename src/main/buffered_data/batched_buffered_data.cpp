@@ -14,7 +14,7 @@ void BatchedBufferedData::BlockSink(BlockedSink blocked_sink, idx_t batch) {
 	blocked_sinks.emplace(std::make_pair(batch, blocked_sink));
 }
 
-BatchedBufferedData::BatchedBufferedData(shared_ptr<ClientContext> context)
+BatchedBufferedData::BatchedBufferedData(weak_ptr<ClientContext> context)
     : BufferedData(BufferedData::Type::BATCHED, std::move(context)), other_batches_tuple_count(0),
       current_batch_tuple_count(0), min_batch(0) {
 }

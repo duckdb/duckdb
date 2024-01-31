@@ -33,7 +33,7 @@ private:
 	static constexpr idx_t OTHER_BATCHES_BUFFER_SIZE = BUFFER_SIZE * 0.4;
 
 public:
-	BatchedBufferedData(shared_ptr<ClientContext> context);
+	BatchedBufferedData(weak_ptr<ClientContext> context);
 
 public:
 	void Append(unique_ptr<DataChunk> chunk, idx_t batch);
