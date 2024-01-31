@@ -1170,7 +1170,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 
 bool ClientContext::ExecutionIsFinished() {
 	if (!active_query || !active_query->executor) {
-		return false;
+		return true;
 	}
 	return active_query->executor->ExecutionIsFinished();
 }
