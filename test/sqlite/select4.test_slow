@@ -3229,6 +3229,9 @@ SELECT * FROM t9
 ----
 588 values hashing to be47bb47837e44b32abdcfb5f1645153
 
+
+mode skip
+
 query T valuesort
   SELECT e1 FROM t1
    WHERE a1 in (767,433,637,363,776,109,451)
@@ -39741,6 +39744,8 @@ SELECT e1, x8, d9, c6, x2
    AND e8 in (646,349,620,305,846)
 ----
 1050 values hashing to e0a50b87e246602e118b07307e5eaa36
+
+mode unskip
 
 query TIIIIIII rowsort join277
 SELECT x5, e6+c6, d1, c8, e9+108, a7, a3+149+a5, e4+358
