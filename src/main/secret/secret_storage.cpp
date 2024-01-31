@@ -93,7 +93,7 @@ void CatalogSetSecretStorage::DropSecretByName(CatalogTransaction transaction, c
 	}
 
 	secrets->DropEntry(transaction, name, true, true);
-	RemoveSecret(transaction, name);
+	RemoveSecret(transaction, name, on_entry_not_found);
 }
 
 SecretMatch CatalogSetSecretStorage::LookupSecret(CatalogTransaction transaction, const string &path,
@@ -157,7 +157,8 @@ void CatalogSetSecretStorage::WriteSecret(CatalogTransaction transaction, const 
                                           OnCreateConflict on_conflict) {
 	// By default, this writes nothing
 }
-void CatalogSetSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &name) {
+void CatalogSetSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &name,
+                                           OnEntryNotFound on_entry_not_found) {
 	// By default, this writes nothing
 }
 
@@ -180,7 +181,8 @@ void LocalFileSecretStorage::WriteSecret(CatalogTransaction transaction, const B
 	file_writer.Flush();
 }
 
-void LocalFileSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &secret) {
+void LocalFileSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &secret,
+                                          OnEntryNotFound on_entry_not_found) {
 	LocalFileSystem fs;
 	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
 	persistent_secrets.erase(secret);
