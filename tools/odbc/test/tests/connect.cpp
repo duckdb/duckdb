@@ -153,6 +153,11 @@ static void TestIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
 	// Create a temporary ini file
 	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
+
+	if (std::ifstream(ini_file)) {
+		std::remove(ini_file.c_str());
+	}
+
 	std::ofstream out(ini_file);
 	out << "[DuckDB]\n";
 	out << "Driver = DuckDB Driver\n";
