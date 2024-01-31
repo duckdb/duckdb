@@ -17,20 +17,13 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
 }
 
 StreamQueryResult::~StreamQueryResult() {
-	if (!context) {
-		return;
-	}
-	auto lock = context->LockContext();
-	if (IsOpenInternal(*lock)) {
-		context->CleanupInternal(*lock, this);
-	}
 }
 
 string StreamQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		result += "[[BUFFERED RESULT]]";
+		result += "[[STREAM RESULT]]";
 	} else {
 		result = GetError() + "\n";
 	}

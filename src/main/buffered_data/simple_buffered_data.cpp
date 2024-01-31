@@ -6,8 +6,12 @@
 
 namespace duckdb {
 
-SimpleBufferedData::SimpleBufferedData(shared_ptr<ClientContext> context) : BufferedData(std::move(context)) {
+SimpleBufferedData::SimpleBufferedData(weak_ptr<ClientContext> context)
+    : BufferedData(BufferedData::Type::SIMPLE, std::move(context)) {
 	buffered_count = 0;
+}
+
+SimpleBufferedData::~SimpleBufferedData() {
 }
 
 void SimpleBufferedData::BlockSink(const BlockedSink &blocked_sink) {
@@ -48,15 +52,16 @@ PendingExecutionResult SimpleBufferedData::ReplenishBuffer(StreamQueryResult &re
 		return PendingExecutionResult::RESULT_READY;
 	}
 	UnblockSinks();
+	auto cc = context.lock();
 	// Let the executor run until the buffer is no longer empty
-	auto res = context->ExecuteTaskInternal(context_lock, result);
+	auto res = cc->ExecuteTaskInternal(context_lock, result);
 	while (!PendingQueryResult::IsFinished(res)) {
 		if (buffered_count >= BUFFER_SIZE) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
 		UnblockSinks();
-		res = context->ExecuteTaskInternal(context_lock, result);
+		res = cc->ExecuteTaskInternal(context_lock, result);
 	}
 	if (result.HasError()) {
 		Close();
@@ -76,9 +81,6 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	auto chunk = std::move(buffered_chunks.front());
 	buffered_chunks.pop();
 
-	// auto count = buffered_count.load();
-	// Printer::Print(StringUtil::Format("Buffer capacity: %d", count));
-
 	if (chunk) {
 		buffered_count -= chunk->size();
 	}
@@ -88,7 +90,6 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 void SimpleBufferedData::Append(unique_ptr<DataChunk> chunk) {
 	unique_lock<mutex> lock(glock);
 	buffered_count += chunk->size();
-	// printf("buffered_count: %llu\n", buffered_count.load());
 	buffered_chunks.push(std::move(chunk));
 }
 

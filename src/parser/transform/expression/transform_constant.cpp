@@ -22,6 +22,8 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 		bool try_cast_as_integer = true;
 		bool try_cast_as_decimal = true;
 		int decimal_position = -1;
+		int num_underscores = 0;
+		int num_integer_underscores = 0;
 		for (idx_t i = 0; i < str_val.GetSize(); i++) {
 			if (val.val.str[i] == '.') {
 				// decimal point: cast as either decimal or double
@@ -32,6 +34,12 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 				// found exponent, cast as double
 				try_cast_as_integer = false;
 				try_cast_as_decimal = false;
+			}
+			if (val.val.str[i] == '_') {
+				num_underscores++;
+				if (decimal_position < 0) {
+					num_integer_underscores++;
+				}
 			}
 		}
 		if (try_cast_as_integer) {
@@ -50,10 +58,10 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
 		if (try_cast_as_decimal && decimal_position >= 0 &&
-		    str_val.GetSize() < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
+		    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 			// figure out the width/scale based on the decimal position
-			auto width = uint8_t(str_val.GetSize() - 1);
-			auto scale = uint8_t(width - decimal_position);
+			auto width = uint8_t(str_val.GetSize() - 1 - num_underscores);
+			auto scale = uint8_t(width - decimal_position + num_integer_underscores);
 			if (val.val.str[0] == '-') {
 				width--;
 			}

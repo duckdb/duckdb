@@ -96,6 +96,7 @@ public:
 	DUCKDB_API const char *what() const noexcept override;
 	DUCKDB_API const string &RawMessage() const;
 
+	static bool InvalidatesTransaction(ExceptionType exception_type);
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
 	DUCKDB_API static ExceptionType StringToExceptionType(const string &type);
 	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message,

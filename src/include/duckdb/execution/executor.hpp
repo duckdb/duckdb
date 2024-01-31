@@ -54,10 +54,10 @@ public:
 
 	vector<LogicalType> GetTypes();
 
-	unique_ptr<DataChunk> FetchChunk();
-
 	//! Push a new error
 	void PushError(PreservedError exception);
+
+	PreservedError GetError();
 
 	//! True if an error has been thrown
 	bool HasError();

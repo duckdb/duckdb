@@ -6,18 +6,18 @@ from duckdb import Value
 
 class TestDuckDBQuery(object):
     def test_duckdb_query(self, duckdb_cursor):
-        # we can use duckdb.query to run both DDL statements and select statements
-        duckdb.query('create view v1 as select 42 i')
-        rel = duckdb.query('select * from v1')
+        # we can use duckdb_cursor.sql to run both DDL statements and select statements
+        duckdb_cursor.sql('create view v1 as select 42 i')
+        rel = duckdb_cursor.sql('select * from v1')
         assert rel.fetchall()[0][0] == 42
 
         # also multiple statements
-        duckdb.query('create view v2 as select i*2 j from v1; create view v3 as select j * 2 from v2;')
-        rel = duckdb.query('select * from v3')
+        duckdb_cursor.sql('create view v2 as select i*2 j from v1; create view v3 as select j * 2 from v2;')
+        rel = duckdb_cursor.sql('select * from v3')
         assert rel.fetchall()[0][0] == 168
 
         # we can run multiple select statements - we get only the last result
-        res = duckdb.query('select 42; select 84;').fetchall()
+        res = duckdb_cursor.sql('select 42; select 84;').fetchall()
         assert res == [(84,)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])

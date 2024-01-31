@@ -34,8 +34,11 @@ public:
 };
 
 class BufferedData {
+protected:
+	enum class Type { SIMPLE };
+
 public:
-	BufferedData(shared_ptr<ClientContext> context) : context(context) {
+	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(context) {
 	}
 	virtual ~BufferedData() {
 	}
@@ -45,17 +48,40 @@ public:
 	virtual PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	shared_ptr<ClientContext> GetContext() {
-		return context;
+		return context.lock();
 	}
 	bool Closed() const {
-		return !context;
+		if (context.expired()) {
+			return false;
+		}
+		auto c = context.lock();
+		return c == nullptr;
 	}
 	void Close() {
-		context = nullptr;
+		context.reset();
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != type) {
+			throw InternalException("Failed to cast buffered data to type - buffered data type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != type) {
+			throw InternalException("Failed to cast buffered data to type - buffered data type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 
 protected:
-	shared_ptr<ClientContext> context;
+	Type type;
+	//! This is weak to avoid a cyclical reference
+	weak_ptr<ClientContext> context;
 	//! Protect against populate/fetch race condition
 	mutex glock;
 };

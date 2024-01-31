@@ -14,7 +14,9 @@ BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_t
 }
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
-    : type(type), success(!(bool)error), error(std::move(error)) {
+    : type(type), success(false), error(std::move(error)) {
+	// Assert that the error object is initialized
+	D_ASSERT(this->error);
 }
 
 BaseQueryResult::~BaseQueryResult() {

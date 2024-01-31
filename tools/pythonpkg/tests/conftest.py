@@ -68,7 +68,7 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
-def getTimeSeriesData(nper=None, freq: "Frequency" = "B") -> dict[str, "Series"]:
+def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
     from pandas import DatetimeIndex, bdate_range, Series
     from datetime import datetime
     from pandas._typing import Frequency

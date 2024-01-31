@@ -58,31 +58,6 @@ void CSVSniffer::RefineTypes() {
 			bool is_bool_type = col_type_candidates.back() == LogicalType::BOOLEAN;
 			while (col_type_candidates.size() > 1) {
 				const auto &sql_type = col_type_candidates.back();
-				//	narrow down the date formats
-				if (best_format_candidates.count(sql_type.id())) {
-					auto &best_type_format_candidates = best_format_candidates[sql_type.id()];
-					auto save_format_candidates = best_type_format_candidates;
-					while (!best_type_format_candidates.empty()) {
-						if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
-							break;
-						}
-						//	doesn't work - move to the next one
-						best_type_format_candidates.pop_back();
-						if (!best_type_format_candidates.empty()) {
-							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(),
-							              sql_type.id());
-						}
-					}
-					//	if none match, then this is not a column of type sql_type,
-					if (best_type_format_candidates.empty()) {
-						//	so restore the candidates that did work.
-						best_type_format_candidates.swap(save_format_candidates);
-						if (!best_type_format_candidates.empty()) {
-							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(),
-							              sql_type.id());
-						}
-					}
-				}
 				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 					break;
 				} else {

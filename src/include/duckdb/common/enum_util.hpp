@@ -276,8 +276,6 @@ enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
 
-enum class TaskType : uint8_t;
-
 enum class TimestampCastResult : uint8_t;
 
 enum class TransactionType : uint8_t;
@@ -674,9 +672,6 @@ const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
-
-template<>
-const char* EnumUtil::ToChars<TaskType>(TaskType value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
@@ -1089,9 +1084,6 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);
 
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value);
-
-template<>
-TaskType EnumUtil::FromString<TaskType>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);

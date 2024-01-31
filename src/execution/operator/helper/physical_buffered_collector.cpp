@@ -14,7 +14,8 @@ PhysicalBufferedCollector::PhysicalBufferedCollector(PreparedStatementData &data
 class BufferedCollectorGlobalState : public GlobalSinkState {
 public:
 	mutex glock;
-	shared_ptr<ClientContext> context;
+	//! This is weak to avoid creating a cyclical reference
+	weak_ptr<ClientContext> context;
 	shared_ptr<BufferedData> buffered_data;
 };
 
@@ -29,7 +30,7 @@ SinkResultType PhysicalBufferedCollector::Sink(ExecutionContext &context, DataCh
 	auto &lstate = input.local_state.Cast<BufferedCollectorLocalState>();
 
 	lock_guard<mutex> l(gstate.glock);
-	auto &buffered_data = dynamic_cast<SimpleBufferedData &>(*gstate.buffered_data);
+	auto &buffered_data = gstate.buffered_data->Cast<SimpleBufferedData>();
 
 	if (!lstate.blocked || buffered_data.BufferIsFull()) {
 		lstate.blocked = true;
@@ -67,8 +68,9 @@ unique_ptr<QueryResult> PhysicalBufferedCollector::GetResult(GlobalSinkState &st
 	auto &gstate = state.Cast<BufferedCollectorGlobalState>();
 	lock_guard<mutex> l(gstate.glock);
 	// FIXME: maybe we want to check if the execution was successfull before creating the StreamQueryResult ?
-	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names,
-	                                           gstate.context->GetClientProperties(), gstate.buffered_data);
+	auto cc = gstate.context.lock();
+	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
+	                                           gstate.buffered_data);
 	return std::move(result);
 }
 

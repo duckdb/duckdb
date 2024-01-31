@@ -177,8 +177,6 @@ public:
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
 
-	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
-
 	//! Whether or not the given result object (streaming query result or pending query result) is active
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
 	DUCKDB_API void SetActiveResult(ClientContextLock &lock, BaseQueryResult &result);
@@ -238,7 +236,6 @@ private:
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending);
-	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock, Executor &executor, BaseQueryResult &result);
 
 	unique_ptr<ClientContextLock> LockContext();
 

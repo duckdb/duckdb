@@ -155,13 +155,21 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	if (!pending_result || !out_result) {
 		return DuckDBError;
 	}
+	memset(out_result, 0, sizeof(duckdb_result));
 	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return DuckDBError;
 	}
 
 	duckdb::unique_ptr<duckdb::QueryResult> result;
-	result = wrapper->statement->Execute();
+	try {
+		result = wrapper->statement->Execute();
+	} catch (const duckdb::Exception &ex) {
+		result = duckdb::make_uniq<duckdb::MaterializedQueryResult>(duckdb::PreservedError(ex));
+	} catch (std::exception &ex) {
+		result = duckdb::make_uniq<duckdb::MaterializedQueryResult>(duckdb::PreservedError(ex));
+	}
+
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);
 }

@@ -100,42 +100,6 @@ void ClientContext::Destroy() {
 	CleanupInternal(*lock);
 }
 
-unique_ptr<DataChunk> ClientContext::Fetch(ClientContextLock &lock, StreamQueryResult &result) {
-	D_ASSERT(IsActiveResult(lock, result));
-	D_ASSERT(active_query->executor);
-	return FetchInternal(lock, *active_query->executor, result);
-}
-
-unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Executor &executor,
-                                                   BaseQueryResult &result) {
-	bool invalidate_query = true;
-	try {
-		// fetch the chunk and return it
-		auto chunk = executor.FetchChunk();
-		if (!chunk || chunk->size() == 0) {
-			CleanupInternal(lock, &result);
-		}
-		return chunk;
-	} catch (StandardException &ex) {
-		// standard exceptions do not invalidate the current transaction
-		result.SetError(PreservedError(ex));
-		invalidate_query = false;
-	} catch (FatalException &ex) {
-		// fatal exceptions invalidate the entire database
-		result.SetError(PreservedError(ex));
-		auto &db_inst = DatabaseInstance::GetDatabase(*this);
-		ValidChecker::Invalidate(db_inst, ex.what());
-	} catch (const Exception &ex) {
-		result.SetError(PreservedError(ex));
-	} catch (std::exception &ex) {
-		result.SetError(PreservedError(ex));
-	} catch (...) { // LCOV_EXCL_START
-		result.SetError(PreservedError("Unhandled exception in FetchInternal"));
-	} // LCOV_EXCL_STOP
-	CleanupInternal(lock, &result, invalidate_query);
-	return nullptr;
-}
-
 void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
@@ -229,6 +193,10 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	}
 	active_query->progress_bar.reset();
 
+	// Relaunch the threads if a SET THREADS command was issued
+	auto &scheduler = TaskScheduler::GetScheduler(*this);
+	scheduler.RelaunchThreads();
+
 	auto error = EndQueryInternal(lock, result ? !result->HasError() : false, invalidate_transaction);
 	if (result && !result->HasError()) {
 		// if an error occurred while committing report it in the result
@@ -256,41 +224,13 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result = prepared.properties.allow_stream_result && pending.allow_stream_result;
 	unique_ptr<QueryResult> result;
-	if (executor.HasResultCollector()) {
-		// we have a result collector - fetch the result directly from the result collector
-		result = executor.GetResult();
-		if (!create_stream_result) {
-			CleanupInternal(lock, result.get(), false);
-		} else {
-			active_query->SetOpenResult(*result);
-		}
+	D_ASSERT(executor.HasResultCollector());
+	// we have a result collector - fetch the result directly from the result collector
+	result = executor.GetResult();
+	if (!create_stream_result) {
+		CleanupInternal(lock, result.get(), false);
 	} else {
-		// no result collector - create a materialized result by continuously fetching
-		auto result_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), pending.types);
-		D_ASSERT(!result_collection->Types().empty());
-		auto materialized_result =
-		    make_uniq<MaterializedQueryResult>(pending.statement_type, pending.properties, pending.names,
-		                                       std::move(result_collection), GetClientProperties());
-
-		auto &collection = materialized_result->Collection();
-		D_ASSERT(!collection.Types().empty());
-		ColumnDataAppendState append_state;
-		collection.InitializeAppend(append_state);
-		while (true) {
-			auto chunk = FetchInternal(lock, GetExecutor(), *materialized_result);
-			if (!chunk || chunk->size() == 0) {
-				break;
-			}
-#ifdef DEBUG
-			for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
-				if (pending.types[i].id() == LogicalTypeId::VARCHAR) {
-					chunk->data[i].UTFVerify(chunk->size());
-				}
-			}
-#endif
-			collection.Append(append_state, *chunk);
-		}
-		result = std::move(materialized_result);
+		active_query->SetOpenResult(*result);
 	}
 	return result;
 }
@@ -418,19 +358,17 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		query_progress.Restart();
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
-	if (statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
-		get_result_collector_t get_method = PhysicalResultCollector::GetResultCollector;
-		auto &client_config = ClientConfig::GetConfig(*this);
-		if (!stream_result && client_config.result_collector) {
-			get_method = client_config.result_collector;
-		}
-		statement.is_streaming = stream_result;
-		auto collector = get_method(*this, statement);
-		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
-		executor.Initialize(std::move(collector));
-	} else {
-		executor.Initialize(*statement.plan);
+
+	get_result_collector_t get_method = PhysicalResultCollector::GetResultCollector;
+	auto &client_config = ClientConfig::GetConfig(*this);
+	if (!stream_result && client_config.result_collector) {
+		get_method = client_config.result_collector;
 	}
+	statement.is_streaming = stream_result;
+	auto collector = get_method(*this, statement);
+	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+	executor.Initialize(std::move(collector));
+
 	auto types = executor.GetTypes();
 	D_ASSERT(types == statement.types);
 	D_ASSERT(!active_query->HasOpenResult());
@@ -446,6 +384,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
                                                           bool dry_run) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
+	bool invalidate_transaction = false;
 	try {
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 		if (active_query->progress_bar) {
@@ -454,19 +393,38 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 		}
 		return query_result;
+	} catch (StandardException &ex) {
+		result.SetError(PreservedError(ex));
+		invalidate_transaction = false;
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		result.SetError(PreservedError(ex));
 		auto &db_instance = DatabaseInstance::GetDatabase(*this);
 		ValidChecker::Invalidate(db_instance, ex.what());
+		invalidate_transaction = true;
+	} catch (const InterruptException &ex) {
+		auto &executor = *active_query->executor;
+		if (!executor.HasError()) {
+			// Interrupted by the user
+			result.SetError(PreservedError(ex));
+			invalidate_transaction = true;
+		} else {
+			// Interrupted by an exception caused in a worker thread
+			auto error = executor.GetError();
+			invalidate_transaction = Exception::InvalidatesTransaction(error.Type());
+			result.SetError(error);
+		}
 	} catch (const Exception &ex) {
 		result.SetError(PreservedError(ex));
+		invalidate_transaction = true;
 	} catch (std::exception &ex) {
 		result.SetError(PreservedError(ex));
+		invalidate_transaction = true;
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(PreservedError("Unhandled exception in ExecuteTaskInternal"));
+		invalidate_transaction = true;
 	} // LCOV_EXCL_STOP
-	EndQueryInternal(lock, false, true);
+	EndQueryInternal(lock, false, invalidate_transaction);
 	return PendingExecutionResult::EXECUTION_ERROR;
 }
 
@@ -859,6 +817,12 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 			}
 			last_result->next = std::move(current_result);
 			last_result = last_result->next.get();
+		}
+		D_ASSERT(last_result);
+		if (last_result->HasError()) {
+			// Reset the interrupted flag, this was set by the task that found the error
+			// Next statements should not be bothered by that interruption
+			interrupted = false;
 		}
 	}
 	return result;

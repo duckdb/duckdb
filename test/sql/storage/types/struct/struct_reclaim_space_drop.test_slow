@@ -4,7 +4,6 @@
 
 require skip_reload
 
-
 load __TEST_DIR__/test_reclaim_space.db
 
 statement ok
@@ -20,15 +19,14 @@ statement ok
 CHECKPOINT;
 
 query III
-SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs
+SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs;
 ----
 0	9999999	10000000
 
+# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
+# therefore, we need to compare to a range of total block counts
 statement ok
-CREATE TABLE block_count(count int)
-
-statement ok
-insert into block_count select total_blocks from pragma_database_size();
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
 
 loop i 0 10
 
@@ -39,25 +37,34 @@ statement ok
 CREATE TABLE structs AS SELECT {'i': i, 'j': i::VARCHAR} c FROM range(10000000) tbl(i);
 
 query III
-SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs
+SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs;
 ----
 0	9999999	10000000
 
 statement ok
 CHECKPOINT;
 
+# ensure that the total blocks don't exceed the total blocks after the first iteration
+# by more than 1.2
+
+query I
+SELECT CASE WHEN ${i} = 0 THEN True
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+	ELSE False END
+FROM pragma_database_size() AS current, total_blocks_tbl;
+----
+1
+
+# adjust total_blocks_tbl once to the count after the first iteration
+
 statement ok
-insert into block_count select total_blocks from pragma_database_size();
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks) END);
 
 query III
-SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs
+SELECT MIN(c['i']), MAX(c['i']), COUNT(*) FROM structs;
 ----
 0	9999999	10000000
 
 endloop
-
-# ensure there is a small diff between min and max block counts
-query I
-select (max(count)-min(count))<20 from block_count
-----
-true

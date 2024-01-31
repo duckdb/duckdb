@@ -112,6 +112,7 @@ jobs:
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       GEN: Ninja
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
       - name: Install required ubuntu packages
@@ -196,6 +197,7 @@ jobs:
       OSX_BUILD_ARCH: ${{ matrix.osx_build_arch }}
       GEN: Ninja
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
       - uses: actions/checkout@v3
@@ -255,6 +257,7 @@ jobs:
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
       CC: ${{ matrix.duckdb_arch == 'windows_amd64_rtools' && 'gcc' || '' }}
       CXX: ${{ matrix.duckdb_arch == 'windows_amd64_rtools' && 'g++' || '' }}
 
@@ -322,6 +325,7 @@ jobs:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       GEN: Ninja
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
       - uses: actions/checkout@v3

@@ -453,24 +453,13 @@ bool Executor::ResultCollectorIsBlocked() {
 	}
 	for (auto &kv : to_be_rescheduled_tasks) {
 		auto &task = kv.second;
-		if (task->Type() != TaskType::EXECUTOR) {
-			continue;
+		if (task->TaskBlockedOnResult()) {
+			// At least one of the blocked tasks is connected to a result collector
+			// This task could be the only task that could unblock the other non-result-collector tasks
+			// To prevent a scenario where we halt indefinitely, we return here so it can be unblocked by a call to
+			// Fetch
+			return true;
 		}
-		auto &executor_task = dynamic_cast<ExecutorTask &>(*task);
-		if (!executor_task.IsPipelineTask()) {
-			continue;
-		}
-		auto &pipeline_task = dynamic_cast<PipelineTask &>(executor_task);
-		auto &pipeline_executor = pipeline_task.GetPipelineExecutor();
-		if (!pipeline_executor.RemainingSinkChunk()) {
-			// This indicates whether the Sink was blocked
-			// All blocked tasks have to be Sinks in the final pipeline
-			continue;
-		}
-		// At least one of the blocked tasks is connected to a result collector
-		// This task could be the only task that could unblock the other non-result-collector tasks
-		// To prevent a scenario where we halt indefinitely, we return here so it can be unblocked by a call to Fetch
-		return true;
 	}
 	return false;
 }
@@ -612,6 +601,10 @@ bool Executor::HasError() {
 	return error_manager.HasError();
 }
 
+PreservedError Executor::GetError() {
+	return error_manager.GetError();
+}
+
 void Executor::ThrowException() {
 	error_manager.ThrowException();
 }
@@ -662,26 +655,6 @@ unique_ptr<QueryResult> Executor::GetResult() {
 	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
 	D_ASSERT(result_collector.sink_state);
 	return result_collector.GetResult(*result_collector.sink_state);
-}
-
-unique_ptr<DataChunk> Executor::FetchChunk() {
-	D_ASSERT(physical_plan);
-
-	auto chunk = make_uniq<DataChunk>();
-	root_executor->InitializeChunk(*chunk);
-	while (true) {
-		root_executor->ExecutePull(*chunk);
-		if (chunk->size() == 0) {
-			root_executor->PullFinalize();
-			if (NextExecutor()) {
-				continue;
-			}
-			break;
-		} else {
-			break;
-		}
-	}
-	return chunk;
 }
 
 } // namespace duckdb
