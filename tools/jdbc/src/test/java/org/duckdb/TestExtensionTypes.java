@@ -8,7 +8,7 @@ import java.sql.Statement;
 import java.sql.Types;
 
 import static org.duckdb.test.Assertions.assertEquals;
-import static org.duckdb.test.TestDuckDBJDBC.JDBC_URL;
+import static org.duckdb.TestDuckDBJDBC.JDBC_URL;
 
 public class TestExtensionTypes {
 
