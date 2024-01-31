@@ -93,6 +93,10 @@ end
 @testset "DBInterface.execute - runtime error" begin
     con = DBInterface.connect(DuckDB.DB)
 
+    res = DBInterface.execute(con, "pragma threads")
+    df = DataFrame(res)
+    print(df)
+
     # run-time error
     @test_throws DuckDB.QueryException DBInterface.execute(
         con,
