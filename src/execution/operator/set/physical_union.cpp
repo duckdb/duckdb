@@ -41,7 +41,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	}
 
 	// create a union pipeline that is identical to 'current'
-	auto union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
+	auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
 
 	// continue with the current pipeline
 	children[0]->BuildPipelines(current, meta_pipeline);
@@ -52,7 +52,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	}
 
 	// build the union pipeline
-	children[1]->BuildPipelines(*union_pipeline, meta_pipeline);
+	children[1]->BuildPipelines(union_pipeline, meta_pipeline);
 
 	// Assign proper batch index to the union pipeline
 	// This needs to happen after the pipelines have been built because unions can be nested

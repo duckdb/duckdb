@@ -123,6 +123,10 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
     : Command(runner), definition(std::move(definition_p)) {
 }
 
+ModeCommand::ModeCommand(SQLLogicTestRunner &runner, string parameter_p)
+    : Command(runner), parameter(std::move(parameter_p)) {
+}
+
 struct ParallelExecuteContext {
 	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
@@ -173,8 +177,10 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	LoopDefinition loop_def = definition;
 	loop_def.loop_idx = definition.loop_start;
 	if (loop_def.is_parallel) {
-		if (context.is_parallel || !context.running_loops.empty()) {
-			throw std::runtime_error("Nested parallel loop commands not allowed");
+		for (auto &running_loop : context.running_loops) {
+			if (running_loop.is_parallel) {
+				throw std::runtime_error("Nested parallel loop commands not allowed");
+			}
 		}
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
@@ -282,6 +288,21 @@ void ReconnectCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw std::runtime_error("Cannot reconnect in parallel");
 	}
 	runner.Reconnect();
+}
+
+void ModeCommand::ExecuteInternal(ExecuteContext &context) const {
+	if (parameter == "output_hash") {
+		runner.output_hash_mode = true;
+	} else if (parameter == "output_result") {
+		runner.output_result_mode = true;
+	} else if (parameter == "no_output") {
+		runner.output_hash_mode = false;
+		runner.output_result_mode = false;
+	} else if (parameter == "debug") {
+		runner.debug_mode = true;
+	} else {
+		throw std::runtime_error("unrecognized mode: " + parameter);
+	}
 }
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {

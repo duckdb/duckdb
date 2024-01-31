@@ -120,6 +120,11 @@ private extension Vector {
     return unsafelyUnwrapElement(as: duckdb_time.self, at: index) { $0.asTime }
   }
   
+  func unwrap(_ type: TimeTz.Type, at index: Int) throws -> TimeTz {
+    try assertNonNullTypeMatch(of: type, at: index, withColumnType: .timeTz)
+    return unsafelyUnwrapElement(as: duckdb_time_tz.self, at: index) { $0.asTime }
+  }
+
   func unwrap(_ type: Date.Type, at index: Int) throws -> Date {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .date)
     return unsafelyUnwrapElement(as: duckdb_date.self, at: index) { $0.asDate }
@@ -131,7 +136,7 @@ private extension Vector {
   }
   
   func unwrap(_ type: Timestamp.Type, at index: Int) throws -> Timestamp {
-    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampTz, .timestampNS]
     try assertNonNullTypeMatch(of: type, at: index, withColumnTypes: .init(columnTypes))
     return unsafelyUnwrapElement(as: duckdb_timestamp.self, at: index) { ctimestamp in
       switch logicalType.dataType {
@@ -277,6 +282,7 @@ extension Vector.Element {
   func unwrap(_ type: Timestamp.Type) throws -> Timestamp  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Data.Type) throws -> Data  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Decimal.Type) throws -> Decimal  { try vector.unwrap(type, at: index) }
+  func unwrap(_ type: TimeTz.Type) throws -> TimeTz { try vector.unwrap(type, at: index) }
 }
 
 // MARK: - Map Contents accessors

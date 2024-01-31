@@ -20,7 +20,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
 bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	// First, allocate memory for each build column
 	auto build_size = perfect_join_statistics.build_range + 1;
-	for (const auto &type : ht.build_types) {
+	for (const auto &type : join.rhs_output_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
 
@@ -69,16 +69,15 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 
 	// Full scan the remaining build columns and fill the perfect hash table
 	const auto build_size = perfect_join_statistics.build_range + 1;
-	for (idx_t i = 0; i < ht.build_types.size(); i++) {
+	for (idx_t i = 0; i < join.rhs_output_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
-		D_ASSERT(vector.GetType() == ht.build_types[i]);
+		const auto output_col_idx = ht.output_columns[i];
+		D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
 		if (build_size > STANDARD_VECTOR_SIZE) {
 			auto &col_mask = FlatVector::Validity(vector);
 			col_mask.Initialize(build_size);
 		}
-
-		const auto col_no = ht.condition_types.size() + i;
-		data_collection.Gather(tuples_addresses, sel_tuples, key_count, col_no, vector, sel_build);
+		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build);
 	}
 
 	return true;
@@ -189,9 +188,9 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 		result.Slice(input, state.probe_sel_vec, probe_sel_count, 0);
 	}
 	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
-	for (idx_t i = 0; i < ht.build_types.size(); i++) {
+	for (idx_t i = 0; i < join.rhs_output_types.size(); i++) {
 		auto &result_vector = result.data[input.ColumnCount() + i];
-		D_ASSERT(result_vector.GetType() == ht.build_types[i]);
+		D_ASSERT(result_vector.GetType() == ht.layout.GetTypes()[ht.output_columns[i]]);
 		auto &build_vec = perfect_hash_table[i];
 		result_vector.Reference(build_vec);
 		result_vector.Slice(state.build_sel_vec, probe_sel_count);

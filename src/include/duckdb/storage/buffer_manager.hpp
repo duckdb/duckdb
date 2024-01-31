@@ -19,6 +19,7 @@ namespace duckdb {
 
 class Allocator;
 class BufferPool;
+class TemporaryMemoryManager;
 
 class BufferManager {
 	friend class BufferHandle;
@@ -60,6 +61,8 @@ public:
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool() const;
+	//! Get the manager that assigns reservations for temporary memory, e.g., for query intermediates
+	virtual TemporaryMemoryManager &GetTemporaryMemoryManager();
 
 	// Static methods
 	DUCKDB_API static BufferManager &GetBufferManager(DatabaseInstance &db);

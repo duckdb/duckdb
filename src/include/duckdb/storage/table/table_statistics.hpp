@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
 
@@ -57,6 +58,9 @@ private:
 	mutex stats_lock;
 	//! Column statistics
 	vector<shared_ptr<ColumnStatistics>> column_stats;
+	//! The table sample
+	//! Sample for table
+	unique_ptr<BlockingSample> table_sample;
 };
 
 } // namespace duckdb

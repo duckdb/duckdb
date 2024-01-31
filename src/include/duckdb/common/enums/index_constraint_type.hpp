@@ -26,7 +26,7 @@ enum class IndexConstraintType : uint8_t {
 // Index Types
 //===--------------------------------------------------------------------===//
 // NOTE: deprecated. Still necessary to read older duckdb files.
-enum class IndexType : uint8_t {
+enum class DeprecatedIndexType : uint8_t {
 	INVALID = 0,    // invalid index type
 	ART = 1,        // Adaptive Radix Tree
 	EXTENSION = 100 // Extension index
