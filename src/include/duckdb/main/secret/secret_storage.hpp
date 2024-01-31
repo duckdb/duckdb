@@ -43,11 +43,14 @@ public:
 	//! Get all secrets
 	virtual vector<reference<SecretEntry>> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Drop secret by name
-	virtual void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found, optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
+	virtual void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	                              optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get best match
-	virtual SecretMatch LookupSecret(const string &path, const string &type, optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
+	virtual SecretMatch LookupSecret(const string &path, const string &type,
+	                                 optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get a secret by name
-	virtual optional_ptr<SecretEntry> GetSecretByName(const string &name, optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
+	virtual optional_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                                  optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 
 	//! Return the offset associated to this storage for tie-breaking secrets between storages
 	virtual int64_t GetTieBreakOffset() = 0;
@@ -91,7 +94,8 @@ public:
 //! Base Implementation for catalog set based secret storage
 class CatalogSetSecretStorage : public SecretStorage {
 public:
-	CatalogSetSecretStorage(DatabaseInstance &db_instance, const string &name_p) : SecretStorage(name_p), db(db_instance) {};
+	CatalogSetSecretStorage(DatabaseInstance &db_instance, const string &name_p)
+	    : SecretStorage(name_p), db(db_instance) {};
 
 public:
 	//! SecretStorage API
@@ -102,9 +106,12 @@ public:
 	virtual optional_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
 	                                              optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	vector<reference<SecretEntry>> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
-	void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found, optional_ptr<CatalogTransaction> transaction = nullptr) override;
-	SecretMatch LookupSecret(const string &path, const string &type, optional_ptr<CatalogTransaction> transaction = nullptr) override;
-	optional_ptr<SecretEntry> GetSecretByName(const string &name, optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	SecretMatch LookupSecret(const string &path, const string &type,
+	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	optional_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                          optional_ptr<CatalogTransaction> transaction = nullptr) override;
 
 protected:
 	//! Callback called on Store to allow child classes to implement persistence.
@@ -116,7 +123,7 @@ protected:
 	//! CatalogSet containing the secrets
 	unique_ptr<CatalogSet> secrets;
 	//! DB instance for accessing the system catalog transaction
-	DatabaseInstance& db;
+	DatabaseInstance &db;
 };
 
 class TemporarySecretStorage : public CatalogSetSecretStorage {

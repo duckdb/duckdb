@@ -559,7 +559,6 @@ void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 	config.options.custom_extension_repo = DBConfig().options.custom_extension_repo;
 }
 
-
 void CustomExtensionRepository::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.custom_extension_repo = StringUtil::Lower(input.ToString());
 }

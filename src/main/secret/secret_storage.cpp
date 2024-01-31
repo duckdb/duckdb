@@ -41,7 +41,8 @@ SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const stri
 }
 
 optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(unique_ptr<const BaseSecret> secret,
-                                                               OnCreateConflict on_conflict, optional_ptr<CatalogTransaction> transaction) {
+                                                               OnCreateConflict on_conflict,
+                                                               optional_ptr<CatalogTransaction> transaction) {
 	if (secrets->GetEntry(GetTransactionOrDefault(transaction), secret->GetName())) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			string persist_string = persistent ? "Persistent" : "Temporary";
@@ -68,7 +69,8 @@ optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(unique_ptr<const 
 	DependencyList l;
 	secrets->CreateEntry(GetTransactionOrDefault(transaction), secret_name, std::move(secret_entry), l);
 
-	auto secret_catalog_entry = &secrets->GetEntry(GetTransactionOrDefault(transaction), secret_name)->Cast<SecretCatalogEntry>();
+	auto secret_catalog_entry =
+	    &secrets->GetEntry(GetTransactionOrDefault(transaction), secret_name)->Cast<SecretCatalogEntry>();
 	return secret_catalog_entry->secret;
 }
 
@@ -115,7 +117,8 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const stri
 	return SecretMatch();
 }
 
-optional_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(const string &name, optional_ptr<CatalogTransaction> transaction) {
+optional_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(const string &name,
+                                                                   optional_ptr<CatalogTransaction> transaction) {
 	auto res = secrets->GetEntry(GetTransactionOrDefault(transaction), name);
 
 	if (res) {
@@ -128,7 +131,7 @@ optional_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(const string 
 
 LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseInstance &db_p, const string &name_p,
                                                const string &secret_path)
-    : CatalogSetSecretStorage(db_p, name_p), secret_path(secret_path){
+    : CatalogSetSecretStorage(db_p, name_p), secret_path(secret_path) {
 	persistent = true;
 
 	LocalFileSystem fs;

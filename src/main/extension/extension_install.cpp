@@ -1,7 +1,7 @@
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
-#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -133,7 +133,7 @@ void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const s
 	return;
 #endif
 	string local_path = ExtensionDirectory(config, fs);
-	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install, repository);
+	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository);
 }
 
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
@@ -145,8 +145,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	auto &config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	auto &client_config = ClientConfig::GetConfig(context);
-	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install, repository);
+	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -195,9 +194,8 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 	return url;
 }
 
-void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
-                                               const string &local_path, const string &extension, bool force_install,
-                                               const string &repository) {
+void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
+                                               const string &extension, bool force_install, const string &repository) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else

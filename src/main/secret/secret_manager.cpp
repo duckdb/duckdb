@@ -13,7 +13,6 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -110,8 +109,7 @@ void SecretManager::RegisterSecretType(SecretType &type) {
 	secret_types[type.name] = type;
 }
 
-void SecretManager::RegisterSecretFunction(CreateSecretFunction function,
-                                           OnCreateConflict on_conflict) {
+void SecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict) {
 	unique_lock<mutex> lck(manager_lock);
 	auto lookup = secret_functions.find(function.secret_type);
 	if (lookup != secret_functions.end()) {
