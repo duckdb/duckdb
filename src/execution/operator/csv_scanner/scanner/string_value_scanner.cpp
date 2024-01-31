@@ -36,6 +36,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		for (idx_t i = 0; i < number_of_columns; i++) {
 			parse_types[i] = LogicalTypeId::VARCHAR;
 			logical_types.emplace_back(LogicalType::VARCHAR);
+			string name = "Column_" + to_string(i);
+			names.emplace_back(name);
 		}
 	} else {
 		if (csv_file_scan->file_types.size() > number_of_columns) {
@@ -53,14 +55,6 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
-	}
-	// Fill out Names
-	if (!csv_file_scan) {
-		for (idx_t i = 0; i < number_of_columns; i++) {
-			string name = "Column_" + to_string(i);
-			names.emplace_back(name);
-		}
-	} else {
 		names = csv_file_scan->names;
 		if (!csv_file_scan->projected_columns.empty()) {
 			projecting_columns = false;
