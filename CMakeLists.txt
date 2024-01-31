@@ -699,7 +699,7 @@ if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TID
   endif()
 endif()
 
-function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERSION PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
   if (LOCAL_EXTENSION_REPO)
     add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
@@ -709,6 +709,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   # remove name
   list(REMOVE_AT FILES 0)
   # remove output_directory
+  list(REMOVE_AT FILES 0)
+  # remove extension_version
   list(REMOVE_AT FILES 0)
   # remove parameters
   list(REMOVE_AT FILES 0)
@@ -799,9 +801,9 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   add_custom_target(
     ${TARGET_NAME}_metadated ALL
     COMMAND
-    echo 'duckdb12_version\\x00' > duckdb_version_file
+    echo '${DUCKDB_NORMALIZED_VERSION}\\x00' > duckdb_version_file
     COMMAND
-    echo 'extension123_version\\x00' > extension_version_file
+    echo '${EXTENSION_VERSION}\\x00' > extension_version_file
     COMMAND
     ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
     )
@@ -817,7 +819,7 @@ function(build_loadable_extension NAME PARAMETERS)
   list(REMOVE_AT FILES 0)
   list(REMOVE_AT FILES 0)
 
-  build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
+  build_loadable_extension_directory(${NAME} "extension/${NAME}" "ExTeNsionVersiOn" "${PARAMETERS}" ${FILES})
 endfunction()
 
 function(build_static_extension NAME PARAMETERS)
