@@ -813,6 +813,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     touch ${TARGET_NAME}_metadated
     )
   add_dependencies(${TARGET_NAME}_metadated ${TARGET_NAME})
+  add_dependencies(${TARGET_NAME}_metadated duckdb_platform)
   add_dependencies(duckdb ${TARGET_NAME}_metadated)
   add_dependencies(duckdbz ${TARGET_NAME}_metadated)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
