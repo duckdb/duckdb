@@ -10,7 +10,7 @@ JNIEXPORT {{ function.return_type or 'void' }} JNICALL {{function.name}}({{funct
 		return {{function.short_name}}({{function.names}});
 	} catch (const std::exception &e) {
 		duckdb::ErrorData error(e);
-		ThrowJNI(env, error.Message());
+		ThrowJNI(env, error.Message().c_str());
 
 		{% if function.return_type == 'jboolean' %}
 		return false;
