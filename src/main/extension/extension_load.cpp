@@ -268,7 +268,7 @@ for (auto& x : metadata_field) {
 		throw InvalidInputException("Extension \"%s\" version (%s) does not match DuckDB version (%s)", filename,
 		                            extension_version, engine_version);
 	}
-	int EXTENSION_VERSION = 2;
+	int EXTENSION_VERSION = 3;
 
 	result.filebase = lowercase_extension_name;
 	result.extension_version = metadata_field[EXTENSION_VERSION];
