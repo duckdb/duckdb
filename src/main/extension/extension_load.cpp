@@ -207,8 +207,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
+	auto lowercase_extension_name = StringUtil::Lower(filebase);
+
 	ext_version_fun_t version_fun;
-	auto version_fun_name = filebase + "_version";
+	auto version_fun_name = lowercase_extension_name + "_version";
 
 	version_fun = LoadFunctionFromDLL<ext_version_fun_t>(lib_hdl, version_fun_name, filename);
 
@@ -235,7 +237,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		                            extension_version, engine_version);
 	}
 
-	result.filebase = filebase;
+	result.filebase = lowercase_extension_name;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
