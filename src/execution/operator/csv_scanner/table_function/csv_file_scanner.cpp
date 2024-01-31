@@ -182,7 +182,7 @@ void CSVFileScan::InitializeFileNamesTypes() {
 				projected_columns.insert(col_id);
 				file_types.emplace_back(LogicalType::VARCHAR);
 				projected_columns.insert(col_id);
-				projection_ids.push_back({col_id, i});
+				projection_ids.push_back({col_id, col_id});
 			}
 		}
 	}
