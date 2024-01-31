@@ -1,0 +1,85 @@
+diff --git a/src/include/storage/postgres_schema_entry.hpp b/src/include/storage/postgres_schema_entry.hpp
+index 0145156..ab9d20b 100644
+--- a/src/include/storage/postgres_schema_entry.hpp
++++ b/src/include/storage/postgres_schema_entry.hpp
+@@ -18,8 +18,8 @@ class PostgresTransaction;
+ 
+ class PostgresSchemaEntry : public SchemaCatalogEntry {
+ public:
+-	PostgresSchemaEntry(Catalog &catalog, string name);
+-	PostgresSchemaEntry(Catalog &catalog, string name, unique_ptr<PostgresResultSlice> tables,
++	PostgresSchemaEntry(Catalog &catalog, CreateSchemaInfo &info);
++	PostgresSchemaEntry(Catalog &catalog, CreateSchemaInfo &info, unique_ptr<PostgresResultSlice> tables,
+ 	                    unique_ptr<PostgresResultSlice> enums, unique_ptr<PostgresResultSlice> composite_types,
+ 	                    unique_ptr<PostgresResultSlice> indexes);
+ 
+@@ -44,6 +44,8 @@ public:
+ 	void DropEntry(ClientContext &context, DropInfo &info) override;
+ 	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
+ 
++        static bool SchemaIsInternal(const string &name);
++
+ private:
+ 	void AlterTable(PostgresTransaction &transaction, RenameTableInfo &info);
+ 	void AlterTable(PostgresTransaction &transaction, RenameColumnInfo &info);
+@@ -54,8 +56,6 @@ private:
+ 
+ 	PostgresCatalogSet &GetCatalogSet(CatalogType type);
+ 
+-	static bool SchemaIsInternal(const string &name);
+-
+ private:
+ 	PostgresTableSet tables;
+ 	PostgresIndexSet indexes;
+diff --git a/src/storage/postgres_schema_entry.cpp b/src/storage/postgres_schema_entry.cpp
+index 06d8847..49e89c6 100644
+--- a/src/storage/postgres_schema_entry.cpp
++++ b/src/storage/postgres_schema_entry.cpp
+@@ -13,15 +13,15 @@
+ 
+ namespace duckdb {
+ 
+-PostgresSchemaEntry::PostgresSchemaEntry(Catalog &catalog, string name)
+-    : SchemaCatalogEntry(catalog, name, SchemaIsInternal(name)), tables(*this), indexes(*this), types(*this) {
++PostgresSchemaEntry::PostgresSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
++    : SchemaCatalogEntry(catalog, info), tables(*this), indexes(*this), types(*this) {
+ }
+ 
+-PostgresSchemaEntry::PostgresSchemaEntry(Catalog &catalog, string name, unique_ptr<PostgresResultSlice> tables,
++PostgresSchemaEntry::PostgresSchemaEntry(Catalog &catalog, CreateSchemaInfo &info, unique_ptr<PostgresResultSlice> tables,
+                                          unique_ptr<PostgresResultSlice> enums,
+                                          unique_ptr<PostgresResultSlice> composite_types,
+                                          unique_ptr<PostgresResultSlice> indexes)
+-    : SchemaCatalogEntry(catalog, name, SchemaIsInternal(name)), tables(*this, std::move(tables)),
++    : SchemaCatalogEntry(catalog, info), tables(*this, std::move(tables)),
+       indexes(*this, std::move(indexes)), types(*this, std::move(enums), std::move(composite_types)) {
+ }
+ 
+diff --git a/src/storage/postgres_schema_set.cpp b/src/storage/postgres_schema_set.cpp
+index 5b41277..2c3c85f 100644
+--- a/src/storage/postgres_schema_set.cpp
++++ b/src/storage/postgres_schema_set.cpp
+@@ -61,8 +61,11 @@ void PostgresSchemaSet::LoadEntries(ClientContext &context) {
+ 	for (idx_t row = 0; row < rows; row++) {
+ 		auto oid = result->GetInt64(row, 0);
+ 		auto schema_name = result->GetString(row, 1);
++                CreateSchemaInfo info;
++                info.schema = schema_name;
++                info.internal = PostgresSchemaEntry::SchemaIsInternal(schema_name);
+ 		auto schema =
+-		    make_uniq<PostgresSchemaEntry>(catalog, schema_name, std::move(tables[row]), std::move(enums[row]),
++		    make_uniq<PostgresSchemaEntry>(catalog, info, std::move(tables[row]), std::move(enums[row]),
+ 		                                   std::move(composite_types[row]), std::move(indexes[row]));
+ 		CreateEntry(std::move(schema));
+ 	}
+@@ -73,7 +76,9 @@ optional_ptr<CatalogEntry> PostgresSchemaSet::CreateSchema(ClientContext &contex
+ 
+ 	string create_sql = "CREATE SCHEMA " + KeywordHelper::WriteQuoted(info.schema, '"');
+ 	transaction.Query(create_sql);
+-	auto schema_entry = make_uniq<PostgresSchemaEntry>(catalog, info.schema);
++        auto info_copy = info.Copy();
++        info.internal = PostgresSchemaEntry::SchemaIsInternal(info_copy->schema);
++	auto schema_entry = make_uniq<PostgresSchemaEntry>(catalog, info_copy->Cast<CreateSchemaInfo>());
+ 	return CreateEntry(std::move(schema_entry));
+ }
+ 
