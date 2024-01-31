@@ -2491,14 +2491,14 @@ The resulting array should be freed with `duckdb_appender_destroy_column_types`.
 * appender: The appender to get the column types from.
 * out_types: The resulting array of types.
 */
-DUCKDB_API duckdb_state duckdb_appender_get_column_types(duckdb_appender appender, DUCKDB_TYPE **out_types);
+DUCKDB_API duckdb_state duckdb_appender_get_column_types(duckdb_appender appender, enum DUCKDB_TYPE **out_types);
 
 /*!
 Destroys the array of DUCKDB_TYPEs that was created by `duckdb_appender_get_column_types`.
 
 * types: The array of types to destroy.
 */
-DUCKDB_API duckdb_state duckdb_appender_destroy_column_types(DUCKDB_TYPE *types);
+DUCKDB_API duckdb_state duckdb_appender_destroy_column_types(enum DUCKDB_TYPE *types);
 
 /*!
 Returns the error message associated with the given appender.
