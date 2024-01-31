@@ -43,3 +43,5 @@ if(NOT WIN32
 else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
+
+add_dependencies(unittest duckdbz)

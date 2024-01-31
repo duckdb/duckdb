@@ -811,6 +811,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     )
   add_dependencies(${TARGET_NAME}_metadated ${TARGET_NAME})
   add_dependencies(duckdb ${TARGET_NAME}_metadated)
+  add_dependencies(duckdbz ${TARGET_NAME}_metadated)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
     add_dependencies(duckdb_local_extension_repo ${TARGET_NAME}_metadated)
   endif()
@@ -1174,6 +1175,11 @@ if(BUILD_PYTHON)
     Python package)
   add_extension_dependencies(duckdb_python)
 endif()
+
+add_custom_target(
+	duckdbz ALL
+	)
+
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
