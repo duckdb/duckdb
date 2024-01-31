@@ -585,7 +585,8 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 				    Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
 				continue;
 			} else if (env->IsInstanceOf(param, J_DuckDBDate)) {
-				duckdb_params.push_back(Value::DATE((date_t)env->CallIntMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
+				duckdb_params.push_back(Value::DATE((date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
+
 			} else if (env->IsInstanceOf(param, J_Timestamp)) {
 				duckdb_params.push_back(
 				    Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
