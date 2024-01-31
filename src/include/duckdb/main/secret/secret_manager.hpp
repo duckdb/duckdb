@@ -14,7 +14,6 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
-#include "duckdb/parser/parsed_data/drop_secret_info.hpp"
 
 namespace duckdb {
 class SecretManager;

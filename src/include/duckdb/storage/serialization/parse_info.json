@@ -370,7 +370,6 @@
     "class": "DropInfo",
     "base": "ParseInfo",
     "enum": "DROP_INFO",
-    "class_type": "type",
     "includes": [
       "duckdb/parser/parsed_data/drop_info.hpp"
     ],
@@ -409,32 +408,11 @@
         "id": 206,
         "name": "allow_drop_internal",
         "type": "bool"
-      }
-    ]
-  },
-  {
-    "class": "GenericDropInfo",
-    "base": "DropInfo",
-    "enum": ["TABLE_ENTRY","SCHEMA_ENTRY","INDEX_ENTRY","VIEW_ENTRY","SEQUENCE_ENTRY","MACRO_ENTRY","TABLE_MACRO_ENTRY","TYPE_ENTRY"],
-    "custom_switch_code": "result = make_uniq<DropInfo>();\nresult->type = type;\nbreak;"
-  },
-  {
-    "class": "DropSecretInfo",
-    "base": "DropInfo",
-    "enum": "SECRET_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/drop_secret_info.hpp"
-    ],
-    "members": [
-      {
-        "id": 300,
-        "name": "persist_mode",
-        "type": "SecretPersistType"
       },
       {
-        "id": 301,
-        "name": "secret_storage",
-        "type": "string"
+        "id": 207,
+        "name": "extra_drop_info",
+        "type": "unique_ptr<ExtraDropInfo>"
       }
     ]
   },
