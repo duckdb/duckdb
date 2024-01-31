@@ -132,7 +132,7 @@ struct ArgMinMaxBase {
 	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &binary) {
 		if (!state.is_initialized) {
 			if (IGNORE_NULL || binary.right_mask.RowIsValid(binary.ridx)) {
-				Assign(state, x, y, binary.left_mask.RowIsValid(binary.lidx));
+				Assign(state, x, y, !binary.left_mask.RowIsValid(binary.lidx));
 				state.is_initialized = true;
 			}
 		} else {
@@ -143,7 +143,7 @@ struct ArgMinMaxBase {
 	template <class A_TYPE, class B_TYPE, class STATE>
 	static void Execute(STATE &state, A_TYPE x_data, B_TYPE y_data, AggregateBinaryInput &binary) {
 		if ((IGNORE_NULL || binary.right_mask.RowIsValid(binary.ridx)) && COMPARATOR::Operation(y_data, state.value)) {
-			Assign(state, x_data, y_data, binary.left_mask.RowIsValid(binary.lidx));
+			Assign(state, x_data, y_data, !binary.left_mask.RowIsValid(binary.lidx));
 		}
 	}
 
@@ -191,6 +191,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		sel_t selv = idx;
 		SelectionVector sel(&selv);
 		VectorOperations::Copy(arg, *state.arg, sel, 1, 0, 0);
+		state.arg_null = ConstantVector::IsNull(*state.arg);
 	}
 
 	template <class STATE>
@@ -342,9 +343,9 @@ void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) 
 	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::BLOB, type));
 }
 
-template <class COMPARATOR>
+template <class COMPARATOR, bool IGNORE_NULL>
 static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
-	using OP = ArgMinMaxBase<COMPARATOR, true>;
+	using OP = ArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
 	AddArgMinMaxFunctionBy<OP, int32_t>(fun, LogicalType::INTEGER);
 	AddArgMinMaxFunctionBy<OP, int64_t>(fun, LogicalType::BIGINT);
 	AddArgMinMaxFunctionBy<OP, double>(fun, LogicalType::DOUBLE);
@@ -354,38 +355,31 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	AddArgMinMaxFunctionBy<OP, timestamp_t>(fun, LogicalType::TIMESTAMP_TZ);
 	AddArgMinMaxFunctionBy<OP, string_t>(fun, LogicalType::BLOB);
 
-	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, true>;
+	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
 	AddVectorArgMinMaxFunctionBy<VECTOR_OP, Vector *>(fun, LogicalType::ANY);
-}
-
-template <class COMPARATOR>
-static AggregateFunction GetArgMinMaxNullFunction(const LogicalType &by_type, const LogicalType &type) {
-	using OP = ArgMinMaxBase<COMPARATOR, false>;
-	using VOP = VectorArgMinMaxBase<COMPARATOR, false>;
-
-	switch (type.InternalType()) {
-	case PhysicalType::INT32:
-		return GetArgMinMaxFunctionBy<OP, int32_t>(by_type, type);
-	case PhysicalType::INT64:
-		return GetArgMinMaxFunctionBy<OP, int64_t>(by_type, type);
-	case PhysicalType::DOUBLE:
-		return GetArgMinMaxFunctionBy<OP, double>(by_type, type);
-	case PhysicalType::VARCHAR:
-		return GetArgMinMaxFunctionBy<OP, string_t>(by_type, type);
-	default:
-		return GetVectorArgMinMaxFunctionBy<VOP, Vector *>(by_type, type);
-	}
 }
 
 AggregateFunctionSet ArgMinFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<LessThan>(fun);
+	AddArgMinMaxFunctions<LessThan, true>(fun);
 	return fun;
 }
 
 AggregateFunctionSet ArgMaxFun::GetFunctions() {
 	AggregateFunctionSet fun;
-	AddArgMinMaxFunctions<GreaterThan>(fun);
+	AddArgMinMaxFunctions<GreaterThan, true>(fun);
+	return fun;
+}
+
+AggregateFunctionSet ArgMinNullFun::GetFunctions() {
+	AggregateFunctionSet fun;
+	AddArgMinMaxFunctions<LessThan, false>(fun);
+	return fun;
+}
+
+AggregateFunctionSet ArgMaxNullFun::GetFunctions() {
+	AggregateFunctionSet fun;
+	AddArgMinMaxFunctions<GreaterThan, false>(fun);
 	return fun;
 }
 
