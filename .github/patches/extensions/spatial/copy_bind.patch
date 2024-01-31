@@ -78,6 +78,30 @@ index 8ab228d..1a1e821 100644
  		if (StringUtil::Upper(option.first) == "DRIVER") {
  			auto set = option.second.front();
  			if (set.type().id() == LogicalTypeId::VARCHAR) {
+diff --git a/spatial/src/spatial/geos/functions/cast.cpp b/spatial/src/spatial/geos/functions/cast.cpp
+index e6d5cb8..1c87af3 100644
+--- a/spatial/src/spatial/geos/functions/cast.cpp
++++ b/spatial/src/spatial/geos/functions/cast.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "duckdb/function/cast/cast_function_set.hpp"
+ #include "duckdb/common/operator/cast_operators.hpp"
++#include "duckdb/common/error_data.hpp"
+ 
+ namespace spatial {
+ 
+@@ -54,9 +55,10 @@ static bool TextToGeometryCast(Vector &source, Vector &result, idx_t count, Cast
+ 				    throw InvalidInputException("3D/4D geometries are not supported");
+ 			    }
+ 			    return lstate.ctx.Serialize(result, geos_geom);
+-		    } catch (InvalidInputException &error) {
++		    } catch (InvalidInputException &e) {
+ 			    if (success) {
+ 				    success = false;
++				    ErrorData error(e);
+ 				    HandleCastError::AssignError(error.RawMessage(), parameters.error_message);
+ 			    }
+ 			    mask.SetInvalid(idx);
 diff --git a/spatial/src/spatial/geos/functions/scalar/st_normalize.cpp b/spatial/src/spatial/geos/functions/scalar/st_normalize.cpp
 index f44d990..e90fa2e 100644
 --- a/spatial/src/spatial/geos/functions/scalar/st_normalize.cpp
