@@ -726,7 +726,7 @@ function execute_multithreaded(stmt::Stmt, pending::PendingQueryResult)
     # When we have additional worker threads, don't execute using the main thread
     while duckdb_execution_is_finished(stmt.con.handle) == false
         ret = pending_execute_check_state(pending)
-        if ret == DUCKDB_PENDING_RESULT_READY
+        if ret == DUCKDB_PENDING_RESULT_READY || ret == DUCKDB_PENDING_ERROR
             break
         end
         Base.yield()
