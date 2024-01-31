@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.5)
 if(NOT CLANG_TIDY)
   find_package(Python3)
 endif()
+add_custom_target(
+	duckdbz ALL
+	)
 
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
@@ -1176,9 +1179,6 @@ if(BUILD_PYTHON)
   add_extension_dependencies(duckdb_python)
 endif()
 
-add_custom_target(
-	duckdbz ALL
-	)
 
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
