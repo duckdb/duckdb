@@ -39,7 +39,7 @@ public:
 	void Append(unique_ptr<DataChunk> chunk, idx_t batch);
 	void BlockSink(BlockedSink blocked_sink, idx_t batch);
 
-	bool BufferIsFull() override;
+	bool BufferIsEmpty();
 	bool ShouldBlockBatch(idx_t batch);
 	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;

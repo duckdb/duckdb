@@ -44,7 +44,6 @@ public:
 	}
 
 public:
-	virtual bool BufferIsFull() = 0;
 	virtual PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) = 0;
 	virtual unique_ptr<DataChunk> Scan() = 0;
 	shared_ptr<ClientContext> GetContext() {

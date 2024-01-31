@@ -84,11 +84,9 @@ SinkCombineResultType PhysicalBufferedBatchCollector::Combine(ExecutionContext &
 
 	lock_guard<mutex> l(gstate.glock);
 
-	auto batch = lstate.current_batch;
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
-
 	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
-	buffered_data.CompleteBatch(batch);
+
 	// FIXME: this can move from 'other' chunks to 'current' chunks, increasing the 'current_batch_tuple_count'
 	// We might want to block here if 'current_batch_tuple_count' has already reached the threshold
 	// So we don't completely disregard the BUFFER_SIZE we set

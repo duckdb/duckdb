@@ -21,7 +21,6 @@ BatchedBufferedData::BatchedBufferedData(weak_ptr<ClientContext> context)
 
 bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
 	lock_guard<mutex> lock(glock);
-	// If a batch index is specified we need to check only one of the two tuple_counts
 	bool is_minimum = IsMinBatch(lock, batch);
 	if (is_minimum) {
 		return current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE;
@@ -29,16 +28,9 @@ bool BatchedBufferedData::ShouldBlockBatch(idx_t batch) {
 	return other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE;
 }
 
-bool BatchedBufferedData::BufferIsFull() {
+bool BatchedBufferedData::BufferIsEmpty() {
 	lock_guard<mutex> lock(glock);
-	bool min_filled = current_batch_tuple_count >= CURRENT_BATCH_BUFFER_SIZE;
-	bool others_filled = other_batches_tuple_count >= OTHER_BATCHES_BUFFER_SIZE;
-	if (batches.empty()) {
-		// If there is no batch to scan, we can't break out of the loop
-		// Once the execution is properly finished, we'll break out through a different condition
-		return false;
-	}
-	return min_filled || others_filled;
+	return batches.empty();
 }
 
 bool BatchedBufferedData::IsMinBatch(lock_guard<mutex> &guard, idx_t batch) {
@@ -117,16 +109,17 @@ PendingExecutionResult BatchedBufferedData::ReplenishBuffer(StreamQueryResult &r
 	if (Closed()) {
 		return PendingExecutionResult::EXECUTION_ERROR;
 	}
-	if (BufferIsFull()) {
+	// Unblock any pending sinks if the buffer isnt full
+	UnblockSinks();
+	if (!BufferIsEmpty()) {
 		// The buffer isn't empty yet, just return
 		return PendingExecutionResult::RESULT_READY;
 	}
-	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
 	auto cc = context.lock();
 	auto res = cc->ExecuteTaskInternal(context_lock, result);
 	while (!PendingQueryResult::IsFinished(res)) {
-		if (BufferIsFull()) {
+		if (!BufferIsEmpty()) {
 			break;
 		}
 		// Check if we need to unblock more sinks to reach the buffer size
