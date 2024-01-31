@@ -227,9 +227,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 				if (filter->join_type == JoinType::INNER) {
 					// iterate through other subgraphs and merge.
 					bool found_match = FindSubgraphMatchAndMerge(*it, find_table, next_subgraph, subgraphs.end());
-					if (!found_match) {
-						auto call_me = "sdfvs";
-					}
 					// Now insert the right binding and update denominator with the
 					// tdom of the filter
 					// insert find_table again in case there was no other subgraph.
