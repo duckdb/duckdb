@@ -149,47 +149,17 @@ void BatchedBufferedData::CompleteBatch(idx_t batch) {
 
 unique_ptr<DataChunk> BatchedBufferedData::Scan() {
 	unique_ptr<DataChunk> chunk;
-	bool empty = false;
-	{
-		lock_guard<mutex> lock(glock);
-		if (!batches.empty()) {
-			chunk = std::move(batches.front());
-			batches.pop_front();
-		} else {
-			empty = true;
-		}
-	}
-	if (empty) {
-		D_ASSERT(!chunk);
-		// Increase the min batch index to see if there are still completed batches
-		// waiting to be processed
-		auto it = in_progress_batches.begin();
-		if (it != in_progress_batches.end()) {
-			auto batch = it->first;
-			auto &chunks = it->second;
-			if (chunks.completed) {
-				// By updating the min batch index, we'll move the chunks to 'batches';
-				UpdateMinBatchIndex(batch);
-			}
-			lock_guard<mutex> lock(glock);
-			if (!batches.empty()) {
-				chunk = std::move(batches.front());
-				batches.pop_front();
-			} else {
-				empty = true;
-			}
-		}
-	}
-
-	if (!chunk) {
+	lock_guard<mutex> lock(glock);
+	if (!batches.empty()) {
+		chunk = std::move(batches.front());
+		batches.pop_front();
+		current_batch_tuple_count -= chunk->size();
+	} else {
 		context.reset();
 		D_ASSERT(blocked_sinks.empty());
 		D_ASSERT(in_progress_batches.empty());
 		return nullptr;
 	}
-
-	current_batch_tuple_count -= chunk->size();
-
 	// printf("SCAN: min_batch: %llu\n", min_batch);
 	// printf("current-batch tuple_count: %llu\n", current_batch_tuple_count.load());
 	// printf("other-batches tuple_count: %llu\n\n", other_batches_tuple_count.load());
