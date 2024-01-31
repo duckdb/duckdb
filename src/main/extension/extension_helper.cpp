@@ -343,13 +343,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #else
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
-	} else if (extension == "visualizer") {
-#if DUCKDB_EXTENSION_VISUALIZER_LINKED
-		db.LoadExtension<VisualizerExtension>();
-#else
-		// visualizer extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
 	} else if (extension == "json") {
 #if DUCKDB_EXTENSION_JSON_LINKED
 		db.LoadExtension<JsonExtension>();
