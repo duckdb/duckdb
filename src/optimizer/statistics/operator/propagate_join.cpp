@@ -47,12 +47,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					if (join.join_type == JoinType::RIGHT_ANTI) {
 						std::swap(join.children[0], join.children[1]);
 					}
-					// when the right child has data, return the left child
-					// when the right child has no data, return an empty set
-					auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
-					limit->AddChild(std::move(join.children[1]));
-					auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
-					*node_ptr = std::move(cross_product);
+					// If the filter is always false or Null, just return the left child.
+					*node_ptr = std::move(join.children[0]);
 					return;
 				}
 				case JoinType::LEFT:
