@@ -58,9 +58,6 @@ void SkipScanner::Initialize() {
 }
 
 void SkipScanner::FinalizeChunkProcess() {
-	if (result.rows_to_skip == result.row_count) {
-		// We are done
-		return;
-	}
+	// nop
 }
 } // namespace duckdb
