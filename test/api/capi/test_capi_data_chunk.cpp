@@ -132,11 +132,15 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 
 	// get the column types from the appender
-	DUCKDB_TYPE *column_types;
-	REQUIRE(duckdb_appender_get_column_types(appender, &column_types) == DuckDBSuccess);
-	REQUIRE(column_types[0] == DUCKDB_TYPE_BIGINT);
-	REQUIRE(column_types[1] == DUCKDB_TYPE_SMALLINT);
-	REQUIRE(duckdb_appender_destroy_column_types(column_types) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_column_count(appender) == 2);
+
+	auto appender_first_type = duckdb_appender_column_type(appender, 0);
+	REQUIRE(duckdb_get_type_id(appender_first_type) == DUCKDB_TYPE_BIGINT);
+	duckdb_destroy_logical_type(&appender_first_type);
+
+	auto appender_second_type = duckdb_appender_column_type(appender, 1);
+	REQUIRE(duckdb_get_type_id(appender_second_type) == DUCKDB_TYPE_SMALLINT);
+	duckdb_destroy_logical_type(&appender_second_type);
 
 	// append standard primitive values
 	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
