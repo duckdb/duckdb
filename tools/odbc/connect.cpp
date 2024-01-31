@@ -3,6 +3,10 @@
 #include <iostream>
 #include <fstream>
 
+#if WIN32
+#include <windows.h>
+#endif
+
 using namespace duckdb;
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
@@ -139,7 +143,7 @@ SQLRETURN Connect::ReadFromIniFile() {
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	std::string home_directory = fs->GetHomeDirectory();
 
-	std::string odbc_file = fs->JoinPath(home_directory, ".odbc.ini");
+	std::string odbc_file = fs->JoinPath(home_directory, R"(.odbc.ini)");
 
 	std::cout << "odbc_file: " << odbc_file << std::endl;
 
@@ -174,6 +178,9 @@ SQLRETURN Connect::ReadFromIniFile() {
 		int read_size =
 		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, converted_odbc_file);
 		std::cout << "key: " << converted_key << ", read_size: " << read_size << std::endl;
+#if WIN32
+		std::cout << "last error: " << GetLastError() << std::endl;
+#endif
 		if (read_size == 0) {
 			continue;
 		} else if (read_size < 0) {
