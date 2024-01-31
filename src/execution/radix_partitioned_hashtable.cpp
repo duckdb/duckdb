@@ -778,6 +778,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 
 	if (data_collection.Count() == 0) {
 		scan_status = RadixHTScanStatus::DONE;
+		lock_guard<mutex> gstate_guard(gstate.lock);
 		if (++gstate.scan_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
@@ -798,6 +799,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	}
 
 	if (data_collection.ScanComplete(scan_state)) {
+		lock_guard<mutex> gstate_guard(gstate.lock);
 		if (++gstate.scan_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
