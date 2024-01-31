@@ -180,7 +180,9 @@ void Parser::ParseQuery(const string &query) {
 				parsing_succeed = true;
 			} else {
 				parser_error = parser.error_message;
-				parser_error_location = parser.error_location - 1;
+				if (parser.error_location > 0) {
+					parser_error_location = parser.error_location - 1;
+				}
 			}
 		}
 		// If DuckDB fails to parse the entire sql string, break the string down into individual statements
@@ -216,7 +218,9 @@ void Parser::ParseQuery(const string &query) {
 						continue;
 					} else {
 						another_parser_error = ErrorData(another_parser.error_message);
-						another_parser_error.AddQueryLocation(another_parser.error_location - 1);
+						if (another_parser.error_location > 0) {
+							another_parser_error.AddQueryLocation(another_parser.error_location - 1);
+						}
 					}
 				} // LCOV_EXCL_STOP
 				// LCOV_EXCL_START
