@@ -55,8 +55,8 @@ endif()
 if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
-            GIT_URL https://github.com/samansmink/postgres_scanner
-            GIT_TAG e4bd8991c86ef8dbda08645ce754286617ca95f2
+            GIT_URL https://github.com/duckdb/postgres_scanner
+            GIT_TAG ce22bc41da1b876a8d541e013251712cae886ea8
             APPLY_PATCHES
             )
 endif()
@@ -85,6 +85,7 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
         GIT_TAG 9b558ed2e933817bff96726fec0868e7411cee65
+        APPLY_PATCHES
         )
 
 ################# SUBSTRAIT
