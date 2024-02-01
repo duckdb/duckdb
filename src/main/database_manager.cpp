@@ -73,22 +73,6 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::AlterDatabase(ClientContext &context, AlterInfo &info) {
-	if (info.type != AlterType::SET_COMMENT) {
-		throw InternalException("Invalid AlterType found for DatabaseManager::AlterDatabase %s",
-		                        EnumUtil::ToString(info.type));
-	}
-
-	auto created = databases->AlterEntry(CatalogTransaction::GetSystemCatalogTransaction(context), info.name, info);
-
-	if (created) {
-		return GetDatabase(context, info.name);
-	} else if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-		throw CatalogException("Database '%s' not found", info.name);
-	}
-	return nullptr;
-}
-
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
 	auto database_list = GetDatabases(context);
 	for (auto &db_ref : database_list) {

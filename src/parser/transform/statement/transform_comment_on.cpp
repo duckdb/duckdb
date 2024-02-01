@@ -23,14 +23,21 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 
 		auto colref_expr = transformed_expr->Cast<ColumnRefExpression>();
 
+		if (colref_expr.column_names.size() > 4) {
+			throw ParserException("Invalid column reference: '%s', too many dots", colref_expr.ToString());
+		}
+		if (colref_expr.column_names.size() < 2) {
+			throw ParserException("Invalid column reference: '%s', please specify a table", colref_expr.ToString());
+		}
+
 		column_name = colref_expr.GetColumnName();
 		qualified_name.name = colref_expr.column_names.size() > 1 ? colref_expr.GetTableName() : "";
-		qualified_name.schema = colref_expr.column_names.size() > 2 ? colref_expr.GetSchemaName() : "";
-		qualified_name.catalog = colref_expr.column_names.size() > 3 ? colref_expr.GetCatalogName() : "";
 
-		if (colref_expr.column_names.size() < 2 || qualified_name.name.empty()) {
-			throw ParserException(
-			    "Specifying a table is required. eg. COMMENT ON COLUMN table1.col1 IS 'comment value'");
+		if (colref_expr.column_names.size() == 4) {
+			qualified_name.catalog = colref_expr.column_names[0];
+			qualified_name.schema = colref_expr.column_names[1];
+		} else if (colref_expr.column_names.size() == 3) {
+			qualified_name.schema = colref_expr.column_names[0];
 		}
 	}
 

@@ -34,8 +34,6 @@ public:
 	bool IsQualified() const;
 	const string &GetColumnName() const;
 	const string &GetTableName() const;
-	const string &GetSchemaName() const;
-	const string &GetCatalogName() const;
 	bool IsScalar() const override {
 		return false;
 	}

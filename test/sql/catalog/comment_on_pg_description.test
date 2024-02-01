@@ -15,8 +15,12 @@ statement ok
 CREATE VIEW test_view AS FROM test;
 
 # TODO comment on view column
-#statement ok
-#COMMENT ON COLUMN test_view.a IS 'comment-2.5'
+mode skip
+
+statement ok
+COMMENT ON COLUMN test_view.a IS 'comment-2.5'
+
+mode unskip
 
 statement ok
 CREATE INDEX test_index ON test(a)
