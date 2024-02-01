@@ -208,8 +208,8 @@ void ExpressionBinder::QualifyColumnNamesInLambda(FunctionExpression &function,
 		lambda_params.emplace_back();
 
 		// push the lambda parameter names
-		for (const auto column_ref_expr : column_ref_expressions) {
-			auto column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
+		for (const auto &column_ref_expr : column_ref_expressions) {
+			const auto &column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
 			lambda_params.back().emplace(column_ref.GetName());
 		}
 
