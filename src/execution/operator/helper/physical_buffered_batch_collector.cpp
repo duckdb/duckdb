@@ -48,6 +48,9 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 		return SinkResultType::BLOCKED;
 	}
 
+	// FIXME: if we want to make this more accurate, we should grab a reservation on the buffer space
+	// while we're unlocked some other thread could also append, causing us to potentially cross our buffer size
+
 	l.unlock();
 	auto to_append = make_uniq<DataChunk>();
 	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
