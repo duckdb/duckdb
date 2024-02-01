@@ -170,6 +170,9 @@ static std::string constant = "\033[33m";
 static std::string reset = "\033[00m";
 #endif
 
+static const char *continuationPrompt = "> ";
+static const char *continuationSelectedPrompt = "> ";
+
 struct searchMatch {
 	size_t history_index;
 	size_t match_start;
@@ -765,6 +768,11 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 	return 0;
 }
 
+void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
+	continuationPrompt = continuation;
+	continuationSelectedPrompt = continuationSelected;
+}
+
 #ifndef DISABLE_HIGHLIGHT
 #include <sstream>
 #include "duckdb/parser/parser.hpp"
@@ -1151,10 +1159,8 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 			result += buf[prev_pos];
 		}
 		if (is_newline) {
-			for (int p = 0; p + 2 < plen; p++) {
-				result += " ";
-			}
-			result += "> ";
+			const char *prompt = rows == cursor_row ? continuationSelectedPrompt : continuationPrompt;
+			result += prompt;
 		}
 	}
 	for (; prev_pos < cpos; prev_pos++) {
