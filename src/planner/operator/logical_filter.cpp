@@ -16,7 +16,21 @@ void LogicalFilter::ResolveTypes() {
 }
 
 vector<ColumnBinding> LogicalFilter::GetColumnBindings() {
-	return MapBindings(children[0]->GetColumnBindings(), projection_map);
+	idx_t mark_index;
+	bool is_mark_join = false;
+	if (children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = children[0]->Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::MARK) {
+			is_mark_join = true;
+			mark_index = join.mark_index;
+		}
+	}
+	auto bindings = children[0]->GetColumnBindings();
+	if (is_mark_join) {
+		bindings.erase(std::remove_if(bindings.begin(), bindings.end(),
+		                              [&mark_index](ColumnBinding x) { return x.table_index == mark_index; }));
+	}
+	return MapBindings(bindings, projection_map);
 }
 
 // Split the predicates separated by AND statements
