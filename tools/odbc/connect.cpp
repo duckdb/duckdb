@@ -176,7 +176,7 @@ SQLRETURN Connect::ReadFromIniFile() {
 		char char_val[max_val_len];
 		auto converted_key = key_pair.second.c_str();
 		int read_size =
-		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, converted_odbc_file);
+		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, "odbc.ini");
 		std::cout << "key: " << converted_key << ", read_size: " << read_size << std::endl;
 #if WIN32
 		std::cout << "last error: " << GetLastError() << std::endl;
