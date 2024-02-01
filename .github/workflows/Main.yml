@@ -46,7 +46,6 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
-      BUILD_VISUALIZER: 1
       GEN: ninja
 
     steps:
@@ -95,10 +94,10 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
+      RUN_SLOW_VERIFIERS: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -138,7 +137,6 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1

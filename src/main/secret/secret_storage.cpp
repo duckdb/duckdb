@@ -59,7 +59,7 @@ optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(CatalogTransactio
 	}
 
 	// Call write function
-	WriteSecret(transaction, *secret);
+	WriteSecret(transaction, *secret, on_conflict);
 
 	auto secret_name = secret->GetName();
 	auto secret_entry =
@@ -93,7 +93,7 @@ void CatalogSetSecretStorage::DropSecretByName(CatalogTransaction transaction, c
 	}
 
 	secrets->DropEntry(transaction, name, true, true);
-	RemoveSecret(transaction, name);
+	RemoveSecret(transaction, name, on_entry_not_found);
 }
 
 SecretMatch CatalogSetSecretStorage::LookupSecret(CatalogTransaction transaction, const string &path,
@@ -102,7 +102,9 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(CatalogTransaction transaction
 
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretEntry>();
-		best_match = SelectBestMatch(cast_entry, path, best_match);
+		if (cast_entry.secret->GetType() == type) {
+			best_match = SelectBestMatch(cast_entry, path, best_match);
+		}
 	};
 	secrets->Scan(transaction, callback);
 
@@ -151,14 +153,17 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	                                make_uniq<DefaultSecretGenerator>(catalog, manager, persistent_secrets));
 }
 
-void CatalogSetSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) {
+void CatalogSetSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret,
+                                          OnCreateConflict on_conflict) {
 	// By default, this writes nothing
 }
-void CatalogSetSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &name) {
+void CatalogSetSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &name,
+                                           OnEntryNotFound on_entry_not_found) {
 	// By default, this writes nothing
 }
 
-void LocalFileSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) {
+void LocalFileSecretStorage::WriteSecret(CatalogTransaction transaction, const BaseSecret &secret,
+                                         OnCreateConflict on_conflict) {
 	LocalFileSystem fs;
 	auto file_path = fs.JoinPath(secret_path, secret.GetName() + ".duckdb_secret");
 
@@ -176,16 +181,20 @@ void LocalFileSecretStorage::WriteSecret(CatalogTransaction transaction, const B
 	file_writer.Flush();
 }
 
-void LocalFileSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &secret) {
+void LocalFileSecretStorage::RemoveSecret(CatalogTransaction transaction, const string &secret,
+                                          OnEntryNotFound on_entry_not_found) {
 	LocalFileSystem fs;
 	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
 	persistent_secrets.erase(secret);
 	try {
 		fs.RemoveFile(file);
-	} catch (IOException &e) {
-		throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
-		                  "instance. (original error: '%s')",
-		                  file, e.RawMessage());
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::IO) {
+			throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
+			                  "instance. (original error: '%s')",
+			                  file, error.RawMessage());
+		}
 	}
 }
 

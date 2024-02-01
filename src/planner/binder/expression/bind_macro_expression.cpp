@@ -40,8 +40,8 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 		lambda_params.emplace_back();
 
 		// push the lambda parameter names
-		for (const auto column_ref_expr : column_ref_expressions) {
-			auto column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
+		for (const auto &column_ref_expr : column_ref_expressions) {
+			const auto &column_ref = column_ref_expr.get().Cast<ColumnRefExpression>();
 			lambda_params.back().emplace(column_ref.GetName());
 		}
 
@@ -120,7 +120,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	string error =
 	    MacroFunction::ValidateArguments(*macro_func.function, macro_func.name, function, positionals, defaults);
 	if (!error.empty()) {
-		throw BinderException(binder.FormatError(*expr, error));
+		throw BinderException(*expr, error);
 	}
 
 	// create a MacroBinding to bind this macro's parameters to its arguments
@@ -145,6 +145,11 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 
 	// replace current expression with stored macro expression
 	expr = macro_def.expression->Copy();
+
+	// qualify only the macro parameters with a new empty binder that only knows the macro binding
+	auto dummy_binder = Binder::CreateBinder(context);
+	dummy_binder->macro_binding = new_macro_binding.get();
+	ExpressionBinder::QualifyColumnNames(*dummy_binder, expr);
 
 	// now replace the parameters
 	vector<unordered_set<string>> lambda_params;

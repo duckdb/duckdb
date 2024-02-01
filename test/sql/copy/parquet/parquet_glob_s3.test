@@ -122,12 +122,12 @@ select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/t1.parque
 statement error
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/glob/t?.parquet')
 ----
-IO Error: Invalid query parameters found.
+Invalid query parameters found.
 
 statement error
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/?lob/t?.parquet')
 ----
-IO Error: Invalid query parameters found.
+Invalid query parameters found.
 
 # Finally, enabling url compatibility mode will disable globs allowing a user to query files with special chars
 statement ok

@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cctype>
 #include <cstring>

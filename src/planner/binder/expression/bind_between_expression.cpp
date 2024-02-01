@@ -11,12 +11,12 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	string error;
+	ErrorData error;
 	BindChild(expr.input, depth, error);
 	BindChild(expr.lower, depth, error);
 	BindChild(expr.upper, depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
 	auto &input = BoundExpression::GetExpression(*expr.input);
@@ -31,16 +31,15 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	// now obtain the result type of the input types
 	LogicalType input_type;
 	if (!BoundComparisonExpression::TryBindComparison(context, input_sql_type, lower_sql_type, input_type, expr.type)) {
-		throw BinderException(binder.FormatError(
-		    expr,
-		    StringUtil::Format("Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
-		                       input_sql_type.ToString(), lower_sql_type.ToString())));
+
+		throw BinderException(expr,
+		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
+		                      input_sql_type.ToString(), lower_sql_type.ToString());
 	}
 	if (!BoundComparisonExpression::TryBindComparison(context, input_type, upper_sql_type, input_type, expr.type)) {
-		throw BinderException(binder.FormatError(
-		    expr,
-		    StringUtil::Format("Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
-		                       input_type.ToString(), upper_sql_type.ToString())));
+		throw BinderException(expr,
+		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
+		                      input_type.ToString(), upper_sql_type.ToString());
 	}
 	// add casts (if necessary)
 	input = BoundCastExpression::AddCastToType(context, std::move(input), input_type);

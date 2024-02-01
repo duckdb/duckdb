@@ -7,6 +7,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -15,15 +16,21 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Create
+//===--------------------------------------------------------------------===//
+
 unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
                                                                  block_id_t block_id, idx_t offset,
                                                                  const LogicalType &type, idx_t start, idx_t count,
                                                                  CompressionType compression_type,
                                                                  BaseStatistics statistics,
                                                                  unique_ptr<ColumnSegmentState> segment_state) {
+
 	auto &config = DBConfig::GetConfig(db);
 	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
+
 	if (block_id == INVALID_BLOCK) {
 		// constant segment, no need to allocate an actual block
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
@@ -31,6 +38,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 		function = config.GetCompressionFunction(compression_type, type.InternalType());
 		block = block_manager.RegisterBlock(block_id);
 	}
+
 	auto segment_size = Storage::BLOCK_SIZE;
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
 	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
@@ -38,10 +46,14 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
                                                                 idx_t start, idx_t segment_size) {
+
+	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
+
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	shared_ptr<BlockHandle> block;
+
 	// transient: allocate a buffer for the uncompressed segment
 	if (segment_size < Storage::BLOCK_SIZE) {
 		block = buffer_manager.RegisterSmallMemory(segment_size);
@@ -52,28 +64,33 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0, segment_size);
 }
 
-unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {
-	return make_uniq<ColumnSegment>(other, start);
-}
-
+//===--------------------------------------------------------------------===//
+// Construct/Destruct
+//===--------------------------------------------------------------------===//
 ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p,
                              ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction &function_p,
                              BaseStatistics statistics, block_id_t block_id_p, idx_t offset_p, idx_t segment_size_p,
                              unique_ptr<ColumnSegmentState> segment_state)
+
     : SegmentBase<ColumnSegment>(start, count), db(db), type(std::move(type_p)),
       type_size(GetTypeIdSize(type.InternalType())), segment_type(segment_type), function(function_p),
       stats(std::move(statistics)), block(std::move(block)), block_id(block_id_p), offset(offset_p),
       segment_size(segment_size_p) {
+
 	if (function.get().init_segment) {
 		this->segment_state = function.get().init_segment(*this, block_id, segment_state.get());
 	}
+	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other, idx_t start)
+
     : SegmentBase<ColumnSegment>(start, other.count.load()), db(other.db), type(std::move(other.type)),
       type_size(other.type_size), segment_type(other.segment_type), function(other.function),
       stats(std::move(other.stats)), block(std::move(other.block)), block_id(other.block_id), offset(other.offset),
       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
+
+	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -128,11 +145,14 @@ idx_t ColumnSegment::SegmentSize() const {
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > this->segment_size);
 	D_ASSERT(offset == 0);
+	D_ASSERT(new_size <= Storage::BLOCK_SIZE);
+
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	shared_ptr<BlockHandle> new_block;
 	auto new_handle = buffer_manager.Allocate(new_size, false, &new_block);
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
+
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);
 	this->segment_size = new_size;
@@ -483,6 +503,13 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		return TemplatedNullSelection<true>(sel, approved_tuple_count, mask);
 	case TableFilterType::IS_NOT_NULL:
 		return TemplatedNullSelection<false>(sel, approved_tuple_count, mask);
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		// Apply the filter on the child vector
+		auto &child_vec = StructVector::GetEntries(result)[struct_filter.child_idx];
+		auto &child_mask = FlatVector::Validity(*child_vec);
+		return FilterSelection(sel, *child_vec, *struct_filter.child_filter, approved_tuple_count, child_mask);
+	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}

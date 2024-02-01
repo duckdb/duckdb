@@ -16,6 +16,8 @@ class ClientContext;
 class DatabaseInstance;
 struct DBConfig;
 
+const string GetDefaultUserAgent();
+
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
@@ -279,6 +281,15 @@ struct EnableProgressBarPrintSetting {
 	static constexpr const char *Name = "enable_progress_bar_print";
 	static constexpr const char *Description =
 	    "Controls the printing of the progress bar, when 'enable_progress_bar' is true";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ErrorsAsJsonSetting {
+	static constexpr const char *Name = "errors_as_json";
+	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

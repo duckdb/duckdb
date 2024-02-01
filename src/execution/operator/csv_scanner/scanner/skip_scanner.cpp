@@ -15,6 +15,10 @@ inline void SkipResult::InternalAddRow() {
 	row_count++;
 }
 
+void SkipResult::QuotedNewLine(SkipResult &result) {
+	// nop
+}
+
 bool SkipResult::AddRow(SkipResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (result.row_count >= result.rows_to_skip) {
@@ -41,7 +45,7 @@ SkipScanner::SkipScanner(shared_ptr<CSVBufferManager> buffer_manager, const shar
 }
 
 SkipResult &SkipScanner::ParseChunk() {
-	ParseChunkInternal();
+	ParseChunkInternal(result);
 	return result;
 }
 
@@ -50,27 +54,10 @@ SkipResult &SkipScanner::GetResult() {
 }
 
 void SkipScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
-}
-
-void SkipScanner::Process() {
-	// Run on this buffer
-	for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
-		if (ProcessCharacter(*this, buffer_handle_ptr[iterator.pos.buffer_pos], iterator.pos.buffer_pos, result)) {
-			iterator.pos.buffer_pos++;
-			if (state_machine->options.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON &&
-			    states.current_state == CSVState::CARRIAGE_RETURN) {
-				iterator.pos.buffer_pos++;
-			}
-			return;
-		}
-	}
+	states.Initialize();
 }
 
 void SkipScanner::FinalizeChunkProcess() {
-	if (result.rows_to_skip == result.row_count) {
-		// We are done
-		return;
-	}
+	// nop
 }
 } // namespace duckdb

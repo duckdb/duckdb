@@ -69,8 +69,8 @@ public:
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
 
-	//! Apply any known extension aliases
-	static string ApplyExtensionAlias(string extension_name);
+	//! Apply any known extension aliases, return the lowercase name
+	static string ApplyExtensionAlias(const string &extension_name);
 
 	static string GetExtensionName(const string &extension);
 	static bool IsFullPath(const string &extension);
@@ -121,6 +121,7 @@ private:
 	                                     const string &local_path, const string &extension, bool force_install,
 	                                     const string &repository);
 	static const vector<string> PathComponents();
+	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
 	                                       optional_ptr<const ClientConfig> client_config);

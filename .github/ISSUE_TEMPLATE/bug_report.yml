@@ -38,7 +38,7 @@ body:
   - type: textarea
     attributes:
       label: To Reproduce
-      description: Steps to reproduce the behavior. Please paste the code and the output as text, and avoid using screenshots. Please add the required imports for Python scripts (e.g., import duckdb). Bonus points if the steps only include SQL queries.
+      description: Steps to reproduce the behavior. Please paste the code and the output as text, and avoid using screenshots. Please use [code blocks](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks) for formatting and add the required imports for Python scripts (e.g., import duckdb). Bonus points if the steps only include SQL queries.
     validations:
       required: true
 
@@ -90,14 +90,14 @@ body:
 
   - type: dropdown
     attributes:
-      label: Have you tried this on the latest `main` branch?
+      label: Have you tried this on the latest [nightly build](https://duckdb.org/docs/installation/?version=main)?
       description: |
         * **Python**: `pip install duckdb --upgrade --pre`
         * **R**: `install.packages('duckdb', repos=c('https://duckdb.r-universe.dev', 'https://cloud.r-project.org'))`
         * **Other Platforms**: You can find links to binaries [here](https://duckdb.org/docs/installation/) or compile from source.
       options:
-        - I have tested with a main build
-        - I have tested with a release build (and could not test with a main build)
+        - I have tested with a nightly build
+        - I have tested with a release build (and could not test with a nightly build)
         - I have not tested with any build
     validations:
       required: true

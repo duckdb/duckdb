@@ -56,7 +56,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG 8c3e9624ee1d32f317e18136056dfca9fb97ee67
+            GIT_TAG c472af6eca6c8acb0cb2ea9bb8de599b52ef861a
             APPLY_PATCHES
             )
 endif()
@@ -66,7 +66,7 @@ if (NOT MINGW)
     duckdb_extension_load(spatial
             DONT_LINK LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_spatial.git
-            GIT_TAG a86c504d60e0f4400564c0f2d633547f39feef2c
+            GIT_TAG c30d3edec629928174889f18bc472dcff2294d2b
             INCLUDE_DIR spatial/include
             TEST_DIR test/sql
             APPLY_PATCHES
@@ -84,7 +84,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG ef91604503e5c9ef0cf89db4a29f7c97e7ba1fb5
+        GIT_TAG 9b558ed2e933817bff96726fec0868e7411cee65
         APPLY_PATCHES
         )
 

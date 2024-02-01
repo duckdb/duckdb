@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -16,7 +16,7 @@ namespace duckdb {
 
 class TaskErrorManager {
 public:
-	void PushError(PreservedError error) {
+	void PushError(ErrorData error) {
 		lock_guard<mutex> elock(error_lock);
 		this->exceptions.push_back(std::move(error));
 	}
@@ -41,6 +41,6 @@ public:
 private:
 	mutex error_lock;
 	//! Exceptions that occurred during the execution of the current query
-	vector<PreservedError> exceptions;
+	vector<ErrorData> exceptions;
 };
 } // namespace duckdb

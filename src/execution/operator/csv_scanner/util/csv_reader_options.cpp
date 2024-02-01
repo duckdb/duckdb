@@ -202,6 +202,8 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		}
 	} else if (loption == "null_padding") {
 		null_padding = ParseBoolean(value, loption);
+	} else if (loption == "parallel") {
+		parallel = ParseBoolean(value, loption);
 	} else if (loption == "allow_quoted_nulls") {
 		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else if (loption == "rejects_table") {
@@ -511,6 +513,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 		named_params["skip"] = Value::BIGINT(GetSkipRows());
 	}
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);
+	named_params["parallel"] = Value::BOOLEAN(parallel);
 	if (!date_format.at(LogicalType::DATE).format_specifier.empty()) {
 		named_params["dateformat"] = Value(date_format.at(LogicalType::DATE).format_specifier);
 	}

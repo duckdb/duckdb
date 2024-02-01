@@ -39,13 +39,12 @@ class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
 	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
-	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size);
+	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
+	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
 
 	//! Information on the vector
-	unique_ptr<Vector> vector;
-	string_t *vector_ptr;
-	ValidityMask *validity_mask;
-	idx_t vector_size;
+	unsafe_vector<void *> vector_ptr;
+	unsafe_vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
 	idx_t last_position;
@@ -56,13 +55,14 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
-	const string_t null_str;
+	const char *null_str_ptr;
+	const idx_t null_str_size;
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
-
+	idx_t number_of_rows = 0;
+	idx_t cur_col_id = 0;
 	idx_t result_size;
-
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
@@ -71,8 +71,18 @@ public:
 	LinePosition pre_previous_line_start;
 	bool store_line_size = false;
 	bool added_last_line = false;
-	//! Last result position where a new row started
-	idx_t last_row_pos = 0;
+	bool quoted_new_line = false;
+
+	unsafe_unique_array<LogicalTypeId> parse_types;
+	vector<string> names;
+	unordered_map<idx_t, string> cast_errors;
+
+	shared_ptr<CSVFileScan> csv_file_scan;
+	idx_t &lines_read;
+	//! Information regarding projected columns
+	unsafe_unique_array<bool> projected_columns;
+	bool projecting_columns = false;
+	idx_t chunk_col_id = 0;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -81,21 +91,20 @@ public:
 	static inline bool AddRow(StringValueResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(StringValueResult &result);
-
+	//! Handles QuotedNewline State
+	static inline void QuotedNewLine(StringValueResult &result);
+	void NullPaddingQuotedNewlineCheck();
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
 
 	void HandleOverLimitRows();
-	void AddValueToVector(string_t &value, bool allocate = false);
+
+	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
-
-	idx_t NumberOfRows();
-
-	void Print();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
@@ -103,8 +112,12 @@ class StringValueScanner : public BaseScanner {
 public:
 	StringValueScanner(idx_t scanner_idx, const shared_ptr<CSVBufferManager> &buffer_manager,
 	                   const shared_ptr<CSVStateMachine> &state_machine,
-	                   const shared_ptr<CSVErrorHandler> &error_handler, CSVIterator boundary = {},
-	                   idx_t result_size = STANDARD_VECTOR_SIZE);
+	                   const shared_ptr<CSVErrorHandler> &error_handler, const shared_ptr<CSVFileScan> &csv_file_scan,
+	                   CSVIterator boundary = {}, idx_t result_size = STANDARD_VECTOR_SIZE);
+
+	StringValueScanner(const shared_ptr<CSVBufferManager> &buffer_manager,
+	                   const shared_ptr<CSVStateMachine> &state_machine,
+	                   const shared_ptr<CSVErrorHandler> &error_handler);
 
 	~StringValueScanner() {
 	}
@@ -122,12 +135,14 @@ public:
 	//! Creates a new string with all escaped values removed
 	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
 
+	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
+	static bool CanDirectlyCast(const LogicalType &type,
+	                            const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options);
+
 	const idx_t scanner_idx;
 
 private:
 	void Initialize() override;
-
-	void Process() override;
 
 	void FinalizeChunkProcess() override;
 
@@ -149,6 +164,7 @@ private:
 	void SetStart();
 
 	StringValueResult result;
+	vector<LogicalType> types;
 
 	//! Pointer to the previous buffer handle, necessary for overbuffer values
 	unique_ptr<CSVBufferHandle> previous_buffer_handle;

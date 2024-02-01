@@ -11,7 +11,7 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
@@ -25,7 +25,7 @@ public:
 	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
 	                           vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API BaseQueryResult(QueryResultType type, PreservedError error);
+	DUCKDB_API BaseQueryResult(QueryResultType type, ErrorData error);
 	DUCKDB_API virtual ~BaseQueryResult();
 
 	//! The type of the result (MATERIALIZED or STREAMING)
@@ -41,18 +41,18 @@ public:
 
 public:
 	[[noreturn]] DUCKDB_API void ThrowError(const string &prepended_message = "") const;
-	DUCKDB_API void SetError(PreservedError error);
+	DUCKDB_API void SetError(ErrorData error);
 	DUCKDB_API bool HasError() const;
 	DUCKDB_API const ExceptionType &GetErrorType() const;
 	DUCKDB_API const std::string &GetError();
-	DUCKDB_API PreservedError &GetErrorObject();
+	DUCKDB_API ErrorData &GetErrorObject();
 	DUCKDB_API idx_t ColumnCount();
 
 protected:
 	//! Whether or not execution was successful
 	bool success;
 	//! The error (in case execution was not successful)
-	PreservedError error;
+	ErrorData error;
 };
 
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
@@ -64,7 +64,7 @@ public:
 	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
 	                       vector<LogicalType> types, vector<string> names, ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API QueryResult(QueryResultType type, PreservedError error);
+	DUCKDB_API QueryResult(QueryResultType type, ErrorData error);
 	DUCKDB_API virtual ~QueryResult() override;
 
 	//! Properties from the client context
@@ -108,18 +108,15 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
 
-	bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
+	bool TryFetch(unique_ptr<DataChunk> &result, ErrorData &error) {
 		try {
 			result = Fetch();
 			return success;
-		} catch (const Exception &ex) {
-			error = PreservedError(ex);
-			return false;
 		} catch (std::exception &ex) {
-			error = PreservedError(ex);
+			error = ErrorData(ex);
 			return false;
 		} catch (...) {
-			error = PreservedError("Unknown error in Fetch");
+			error = ErrorData("Unknown error in Fetch");
 			return false;
 		}
 	}

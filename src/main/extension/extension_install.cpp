@@ -2,7 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/string_util.hpp"
-
+#include "duckdb/common/exception/http_exception.hpp"
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
@@ -40,7 +40,21 @@ const string ExtensionHelper::GetVersionDirectoryName() {
 }
 
 const vector<string> ExtensionHelper::PathComponents() {
-	return vector<string> {".duckdb", "extensions", GetVersionDirectoryName(), DuckDB::Platform()};
+	return vector<string> {GetVersionDirectoryName(), DuckDB::Platform()};
+}
+
+duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
+	string home_directory = fs.GetHomeDirectory();
+	// exception if the home directory does not exist, don't create whatever we think is home
+	if (!fs.DirectoryExists(home_directory)) {
+		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+		                  "home_directory='/path/to/dir' option.",
+		                  home_directory);
+	}
+	string res = home_directory;
+	res = fs.JoinPath(res, ".duckdb");
+	res = fs.JoinPath(res, "extensions");
+	return res;
 }
 
 string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
@@ -52,6 +66,10 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 		extension_directory = config.options.extension_directory;
 		// TODO this should probably live in the FileSystem
 		// convert random separators to platform-canonic
+	} else { // otherwise default to home
+		extension_directory = DefaultExtensionFolder(fs);
+	}
+	{
 		extension_directory = fs.ConvertSeparators(extension_directory);
 		// expand ~ in extension directory
 		extension_directory = fs.ExpandPath(extension_directory);
@@ -70,15 +88,6 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 				}
 			}
 		}
-	} else { // otherwise default to home
-		string home_directory = fs.GetHomeDirectory();
-		// exception if the home directory does not exist, don't create whatever we think is home
-		if (!fs.DirectoryExists(home_directory)) {
-			throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-			                  "home_directory='/path/to/dir' option.",
-			                  home_directory);
-		}
-		extension_directory = home_directory;
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
 
@@ -99,6 +108,7 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 }
 
 bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
+	auto lowercase_extension_name = StringUtil::Lower(extension_name);
 	vector<string> candidates;
 	for (idx_t ext_count = ExtensionHelper::DefaultExtensionCount(), i = 0; i < ext_count; i++) {
 		candidates.emplace_back(ExtensionHelper::GetDefaultExtension(i).name);
@@ -106,10 +116,10 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	for (idx_t ext_count = ExtensionHelper::ExtensionAliasCount(), i = 0; i < ext_count; i++) {
 		candidates.emplace_back(ExtensionHelper::GetExtensionAlias(i).alias);
 	}
-	auto closest_extensions = StringUtil::TopNLevenshtein(candidates, extension_name);
+	auto closest_extensions = StringUtil::TopNLevenshtein(candidates, lowercase_extension_name);
 	message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
 	for (auto &closest : closest_extensions) {
-		if (closest == extension_name) {
+		if (closest == lowercase_extension_name) {
 			message = "Extension \"" + extension_name + "\" is an existing extension.\n";
 			return true;
 		}

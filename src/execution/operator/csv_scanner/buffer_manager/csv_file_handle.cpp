@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 

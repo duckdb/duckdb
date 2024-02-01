@@ -18,6 +18,10 @@
 
 namespace duckdb {
 
+const string GetDefaultUserAgent() {
+	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
+}
+
 //===--------------------------------------------------------------------===//
 // Access Mode
 //===--------------------------------------------------------------------===//
@@ -645,6 +649,21 @@ void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
 
 Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
+}
+
+//===--------------------------------------------------------------------===//
+// Errors As JSON
+//===--------------------------------------------------------------------===//
+void ErrorsAsJsonSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).errors_as_json = ClientConfig().errors_as_json;
+}
+
+void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).errors_as_json = BooleanValue::Get(input);
+}
+
+Value ErrorsAsJsonSetting::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1282,14 +1301,14 @@ void DuckDBApiSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
-	config.options.duckdb_api += " " + new_value;
+	config.options.duckdb_api = new_value;
 }
 
 void DuckDBApiSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
-	config.options.duckdb_api = DBConfig().options.duckdb_api;
+	config.options.duckdb_api = GetDefaultUserAgent();
 }
 
 Value DuckDBApiSetting::GetSetting(ClientContext &context) {

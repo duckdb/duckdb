@@ -27,6 +27,7 @@ public:
 	idx_t current_column_count = 0;
 	bool error = false;
 	bool last_value_always_empty = true;
+	idx_t result_position = 0;
 
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);
@@ -34,6 +35,8 @@ public:
 	static inline bool AddRow(ColumnCountResult &result, const idx_t buffer_pos);
 	//! Behavior when hitting an invalid state
 	static inline void InvalidState(ColumnCountResult &result);
+	//! Handles QuotedNewline State
+	static inline void QuotedNewLine(ColumnCountResult &result);
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(ColumnCountResult &result, const idx_t buffer_pos);
 	inline void InternalAddRow();
@@ -56,8 +59,6 @@ public:
 
 private:
 	void Initialize() override;
-
-	void Process() override;
 
 	void FinalizeChunkProcess() override;
 

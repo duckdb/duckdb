@@ -13,14 +13,14 @@ void ParsedExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExpressionClass>(100, "class", expression_class);
 	serializer.WriteProperty<ExpressionType>(101, "type", type);
 	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-	serializer.WritePropertyWithDefault<idx_t>(103, "query_location", query_location, idx_t(DConstants::INVALID_INDEX));
+	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
 }
 
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deserializer) {
 	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
-	auto query_location = deserializer.ReadPropertyWithDefault<idx_t>(103, "query_location", idx_t(DConstants::INVALID_INDEX));
+	auto query_location = deserializer.ReadPropertyWithDefault<optional_idx>(103, "query_location", optional_idx());
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<ParsedExpression> result;
 	switch (expression_class) {

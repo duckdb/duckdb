@@ -21,3 +21,12 @@ SELECT * FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/mai
 query IIIIIIIIIIIIIII nosort lineitemcsv
 select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/test/sql/copy/csv/data/lineitem1k.tbl.gz');
 ----
+
+statement ok
+PRAGMA enable_verification
+
+# Test load from url with query string
+query IIIIIIIIIII
+FROM sniff_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1')
+----
+,	"	"	\n	0	0	{'column00': 'BIGINT', 'column01': 'VARCHAR', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'BIGINT', 'column06': 'BIGINT', 'column07': 'VARCHAR', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'VARCHAR', 'column11': 'BIGINT', 'column12': 'BIGINT', 'column13': 'BIGINT', 'column14': 'VARCHAR', 'column15': 'VARCHAR', 'column16': 'VARCHAR', 'column17': 'BIGINT'}	NULL	NULL	NULL	FROM read_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv?v=1', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=false, columns={'column00': 'BIGINT', 'column01': 'VARCHAR', 'column02': 'BIGINT', 'column03': 'BIGINT', 'column04': 'BIGINT', 'column05': 'BIGINT', 'column06': 'BIGINT', 'column07': 'VARCHAR', 'column08': 'VARCHAR', 'column09': 'VARCHAR', 'column10': 'VARCHAR', 'column11': 'BIGINT', 'column12': 'BIGINT', 'column13': 'BIGINT', 'column14': 'VARCHAR', 'column15': 'VARCHAR', 'column16': 'VARCHAR', 'column17': 'BIGINT'});

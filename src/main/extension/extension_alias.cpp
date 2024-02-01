@@ -24,14 +24,14 @@ ExtensionAlias ExtensionHelper::GetExtensionAlias(idx_t index) {
 	return internal_aliases[index];
 }
 
-string ExtensionHelper::ApplyExtensionAlias(string extension_name) {
+string ExtensionHelper::ApplyExtensionAlias(const string &extension_name) {
 	auto lname = StringUtil::Lower(extension_name);
 	for (idx_t index = 0; internal_aliases[index].alias; index++) {
 		if (lname == internal_aliases[index].alias) {
 			return internal_aliases[index].extension;
 		}
 	}
-	return extension_name;
+	return lname;
 }
 
 } // namespace duckdb

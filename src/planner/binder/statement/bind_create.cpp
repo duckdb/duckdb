@@ -175,20 +175,20 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
-	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = scalar_function.expression->Copy();
+	ExpressionBinder::QualifyColumnNames(*this, expression);
 
 	// bind it to verify the function was defined correctly
-	string error;
+	ErrorData error;
 	auto sel_node = make_uniq<BoundSelectNode>();
 	auto group_info = make_uniq<BoundGroupInformation>();
 	SelectBinder binder(*this, context, *sel_node, *group_info);
 	error = binder.Bind(expression, 0, false);
 
-	if (!error.empty()) {
-		throw BinderException(error);
+	if (error.HasError()) {
+		error.Throw();
 	}
 
 	return BindCreateSchema(info);
@@ -247,7 +247,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 			}
 
 			if (type.id() == LogicalTypeId::INVALID) {
-				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+				type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, user_type_name);
 			}
 		} else {
 			string type_catalog = UserType::GetCatalog(type);
@@ -650,7 +650,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
 	}
 	default:
-		throw Exception("Unrecognized type!");
+		throw InternalException("Unrecognized type!");
 	}
 	properties.return_type = StatementReturnType::NOTHING;
 	properties.allow_stream_result = false;

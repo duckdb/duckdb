@@ -452,9 +452,8 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	}
 
 	// look up the aggregate function in the catalog
-	QueryErrorContext error_context(nullptr, 0);
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, DEFAULT_SCHEMA, function_name, error_context);
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
+	                                                                                        function_name);
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	if (is_parameter) {
@@ -464,7 +463,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	}
 
 	// find a matching aggregate function
-	string error;
+	ErrorData error;
 	vector<LogicalType> types;
 	types.push_back(child_type);
 	// push any extra arguments into the type list
@@ -475,7 +474,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	FunctionBinder function_binder(context);
 	auto best_function_idx = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
-		throw BinderException("No matching aggregate function\n%s", error);
+		throw BinderException("No matching aggregate function\n%s", error.Message());
 	}
 
 	// found a matching function, bind it as an aggregate

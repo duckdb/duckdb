@@ -24,10 +24,9 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		file_scans.emplace_back(
 		    make_uniq<CSVFileScan>(context, files[0], options, 0, bind_data, column_ids, file_schema));
 	};
-
 	//! There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
-	single_threaded = options.null_padding || many_csv_files;
+	single_threaded = many_csv_files || !options.parallel;
 	last_file_idx = 0;
 	scanner_idx = 0;
 	running_threads = MaxThreads();
@@ -71,8 +70,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 		}
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
-		                                  current_file->error_handler, current_boundary);
-		csv_scanner->csv_file_scan = current_file;
+		                                  current_file->error_handler, current_file, current_boundary);
 		return csv_scanner;
 	}
 	lock_guard<mutex> parallel_lock(main_mutex);
@@ -84,8 +82,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	auto &current_file = *file_scans.back();
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
-	                                  current_file.error_handler, current_boundary);
-	csv_scanner->csv_file_scan = file_scans.back();
+	                                  current_file.error_handler, file_scans.back(), current_boundary);
 	// We then produce the next boundary
 	if (!current_boundary.Next(*current_file.buffer_manager)) {
 		// This means we are done scanning the current file

@@ -24,6 +24,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -98,7 +99,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimitPercent(OrderBinder &order_bind
 		if (!result->limit) {
 			result->limit_percent = val.IsNull() ? 100 : val.GetValue<double>();
 			if (result->limit_percent < 0.0) {
-				throw Exception("Limit percentage can't be negative value");
+				throw InvalidInputException("Limit percentage can't be negative value");
 			}
 		}
 	}
@@ -158,6 +159,36 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 					order.orders = std::move(new_orders);
 				}
 			}
+#if 0
+			// When this verification is enabled, replace ORDER BY x, y with ORDER BY create_sort_key(x, y)
+			// note that we don't enable this during actual verification since it doesn't always work
+			// e.g. it breaks EXPLAIN output on queries
+			bool can_replace = true;
+			for (auto &order_node : order.orders) {
+				if (order_node.expression->type == ExpressionType::VALUE_CONSTANT) {
+					// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
+					can_replace = false;
+					break;
+				}
+			}
+			if (!order_binder.HasExtraList()) {
+				// we can only do the replacement when we can order by elements that are not in the selection list
+				can_replace = false;
+			}
+			if (can_replace) {
+				vector<unique_ptr<ParsedExpression>> sort_key_parameters;
+				for (auto &order_node : order.orders) {
+					sort_key_parameters.push_back(std::move(order_node.expression));
+					auto type = config.ResolveOrder(order_node.type);
+					auto null_order = config.ResolveNullOrder(type, order_node.null_order);
+					string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
+					sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
+				}
+				order.orders.clear();
+				auto create_sort_key = make_uniq<FunctionExpression>("create_sort_key", std::move(sort_key_parameters));
+				order.orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(create_sort_key));
+			}
+#endif
 			for (auto &order_node : order.orders) {
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
@@ -184,7 +215,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			bound_modifier = BindLimitPercent(order_binder, mod->Cast<LimitPercentModifier>());
 			break;
 		default:
-			throw Exception("Unsupported result modifier");
+			throw InternalException("Unsupported result modifier");
 		}
 		if (bound_modifier) {
 			result.modifiers.push_back(std::move(bound_modifier));
@@ -562,13 +593,14 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 					error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or "
 					         "GROUP BY this entry explicitly.";
+					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name);
 				} else {
 					error +=
 					    "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
 					    "is not important.";
+					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name,
+					                      bound_columns[0].name, bound_columns[0].name);
 				}
-				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
-				                                  bound_columns[0].name, bound_columns[0].name));
 			}
 		}
 	}

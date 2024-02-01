@@ -39,7 +39,7 @@ public:
 
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
-	string Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept;
+	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
 	bool AutomaticCheckpoint(AttachedDatabase &db);
 
