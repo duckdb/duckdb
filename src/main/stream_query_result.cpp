@@ -69,7 +69,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) 
 				ValidChecker::Invalidate(db_instance, error.RawMessage());
 			}
 		}
-		ProcessError(error, active_query->query);
+		context->ProcessError(error, context->GetCurrentQuery());
 		SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		SetError(ErrorData("Unhandled exception in FetchInternal"));
