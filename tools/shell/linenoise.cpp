@@ -133,7 +133,7 @@
 #endif
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 1000
-#define LINENOISE_MAX_LINE                20480
+#define LINENOISE_MAX_LINE                204800
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
@@ -1146,12 +1146,14 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 	return cpos;
 }
 
-static std::string addContinuationMarkers(struct linenoiseState *l, const char *buf, size_t len, int plen, int cursor_row) {
+static std::string addContinuationMarkers(struct linenoiseState *l, const char *buf, size_t len, int plen,
+                                          int cursor_row, searchMatch *match) {
 	std::string result;
 	int rows = 1;
 	int cols = plen;
 	size_t cpos = 0;
 	size_t prev_pos = 0;
+	size_t match_start_pos = match ? match->match_start : 0;
 	while (cpos < len) {
 		bool is_newline = isNewline(buf[cpos]);
 		nextPosition(l, buf, len, cpos, rows, cols, plen);
@@ -1160,7 +1162,19 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 		}
 		if (is_newline) {
 			const char *prompt = rows == cursor_row ? continuationSelectedPrompt : continuationPrompt;
+			size_t continuationLen = strlen(prompt);
+			size_t continuationRender = linenoiseComputeRenderWidth(prompt, continuationLen);
+			// pad with spaces prior to prompt
+			for (size_t i = continuationRender; i < plen; i++) {
+				result += " ";
+			}
 			result += prompt;
+			if (match && match_start_pos >= cpos) {
+				// move search match over by any additional prompts added
+				size_t continuationBytes = plen - continuationRender + continuationLen;
+				match->match_start += continuationBytes;
+				match->match_end += continuationBytes;
+			}
 		}
 	}
 	for (; prev_pos < cpos; prev_pos++) {
@@ -1210,7 +1224,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		if (l->y_scroll == 0) {
 			start = 0;
 		} else {
-			start = colAndRowToPosition(l, l->y_scroll + 1, 0);
+			start = colAndRowToPosition(l, l->y_scroll, 0);
 		}
 		if (int(l->y_scroll) + int(l->ws.ws_row) >= rows) {
 			end = len;
@@ -1232,20 +1246,23 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		l->maxrows = rows;
 	}
 
+	searchMatch match;
+	searchMatch *matchPtr = nullptr;
+	if (l->search_index < l->search_matches.size()) {
+		match = l->search_matches[l->search_index];
+		matchPtr = &match;
+	}
 	if (rows > 1) {
 		// add continuation markers
-		highlight_buffer = addContinuationMarkers(l, buf, len, plen, new_cursor_row);
+		highlight_buffer =
+		    addContinuationMarkers(l, buf, len, plen, l->y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row, matchPtr);
 		buf = (char *)highlight_buffer.c_str();
 		len = highlight_buffer.size();
 	}
 #ifndef DISABLE_HIGHLIGHT
 	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
-		searchMatch *match = nullptr;
-		if (l->search_index < l->search_matches.size()) {
-			match = &l->search_matches[l->search_index];
-		}
 		if (enableHighlighting) {
-			highlight_buffer = highlightText(buf, len, 0, len, match);
+			highlight_buffer = highlightText(buf, len, 0, len, matchPtr);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}
