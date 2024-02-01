@@ -234,7 +234,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		TransformWindowFrame(*window_spec, *expr);
 		in_window_definition = false;
-		expr->query_location = root.location;
+		SetQueryLocation(*expr, root.location);
 		return std::move(expr);
 	}
 
@@ -336,7 +336,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
 	                                              std::move(children), std::move(filter_expr), std::move(order_bys),
 	                                              root.agg_distinct, false, root.export_state);
-	function->query_location = root.location;
+	SetQueryLocation(*function, root.location);
 
 	return std::move(function);
 }

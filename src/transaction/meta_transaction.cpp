@@ -2,6 +2,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 
@@ -57,8 +58,8 @@ Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 	return Transaction::Get(context, catalog.GetAttached());
 }
 
-string MetaTransaction::Commit() {
-	string error;
+ErrorData MetaTransaction::Commit() {
+	ErrorData error;
 	// commit transactions in reverse order
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto &db = all_transactions[i - 1].get();
@@ -68,7 +69,7 @@ string MetaTransaction::Commit() {
 		}
 		auto &transaction_manager = db.GetTransactionManager();
 		auto &transaction = entry->second.get();
-		if (error.empty()) {
+		if (!error.HasError()) {
 			// commit
 			error = transaction_manager.CommitTransaction(context, transaction);
 		} else {

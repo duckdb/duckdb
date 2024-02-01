@@ -1,4 +1,5 @@
 #include "duckdb/function/cast/bound_cast_data.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
 

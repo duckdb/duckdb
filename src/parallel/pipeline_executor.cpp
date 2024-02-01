@@ -394,12 +394,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				}
 			}
 		}
-	} catch (const Exception &ex) { // LCOV_EXCL_START
-		if (executor.HasError()) {
-			executor.ThrowException();
-		}
-		throw;
-	} catch (std::exception &ex) {
+	} catch (std::exception &ex) { // LCOV_EXCL_START
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
