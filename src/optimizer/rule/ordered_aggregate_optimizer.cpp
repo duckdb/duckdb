@@ -5,6 +5,9 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 namespace duckdb {
 
@@ -28,6 +31,34 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 		return nullptr;
 	}
 
+	auto &context = rewriter.context;
+	if (context.config.enable_optimizer) {
+		// for each ORDER BY - check if it is actually necessary
+		// expressions that are in the groups do not need to be ORDERED BY
+		// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
+		// similarly, we only need to ORDER BY each aggregate once
+		expression_set_t seen_expressions;
+		auto &groups = op.Cast<LogicalAggregate>().groups;
+		for (auto &target : groups) {
+			seen_expressions.insert(*target);
+		}
+		vector<BoundOrderByNode> new_order_nodes;
+		for (auto &order_node : aggr.order_bys->orders) {
+			if (seen_expressions.find(*order_node.expression) != seen_expressions.end()) {
+				// we do not need to order by this node
+				continue;
+			}
+			seen_expressions.insert(*order_node.expression);
+			new_order_nodes.push_back(std::move(order_node));
+		}
+		if (new_order_nodes.empty()) {
+			aggr.order_bys.reset();
+			changes_made = true;
+			return nullptr;
+		}
+		aggr.order_bys->orders = std::move(new_order_nodes);
+	}
+
 	//	Rewrite first/last/arbitrary/any_value to use arg_xxx[_null] and create_sort_key
 	const auto &aggr_name = aggr.function.name;
 	string arg_xxx_name;
@@ -40,7 +71,6 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 	}
 
 	if (!arg_xxx_name.empty()) {
-		auto &context = rewriter.context;
 		FunctionBinder binder(context);
 		vector<unique_ptr<Expression>> sort_children;
 		for (auto &order : aggr.order_bys->orders) {
