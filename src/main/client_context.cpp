@@ -411,7 +411,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			auto &executor = *active_query->executor;
 			if (!executor.HasError()) {
 				// Interrupted by the user
-				result.SetError(std::move(ex));
+				result.SetError(ex);
 				invalidate_transaction = true;
 			} else {
 				// Interrupted by an exception caused in a worker thread
