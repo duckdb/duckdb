@@ -287,6 +287,15 @@ struct EnableProgressBarPrintSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ErrorsAsJsonSetting {
+	static constexpr const char *Name = "errors_as_json";
+	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ExplainOutputSetting {
 	static constexpr const char *Name = "explain_output";
 	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";

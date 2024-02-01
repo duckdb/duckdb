@@ -6,7 +6,7 @@ namespace duckdb {
 struct ErrorOperator {
 	template <class TA, class TR>
 	static inline TR Operation(const TA &input) {
-		throw Exception(input.GetString());
+		throw InvalidInputException(input.GetString());
 	}
 };
 

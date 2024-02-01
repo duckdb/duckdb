@@ -1,5 +1,4 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
-#include "duckdb/parser/parsed_data/drop_secret_info.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -77,21 +76,23 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 
 unique_ptr<DropStatement> Transformer::TransformDropSecret(duckdb_libpgquery::PGDropSecretStmt &stmt) {
 	auto result = make_uniq<DropStatement>();
-	auto info = make_uniq<DropSecretInfo>();
+	auto info = make_uniq<DropInfo>();
+	auto extra_info = make_uniq<ExtraDropSecretInfo>();
 
 	info->type = CatalogType::SECRET_ENTRY;
 	info->name = stmt.secret_name;
 	info->if_not_found = stmt.missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
-	info->persist_mode = EnumUtil::FromString<SecretPersistType>(StringUtil::Upper(stmt.persist_type));
-	info->secret_storage = stmt.secret_storage;
+	extra_info->persist_mode = EnumUtil::FromString<SecretPersistType>(StringUtil::Upper(stmt.persist_type));
+	extra_info->secret_storage = stmt.secret_storage;
 
-	if (info->persist_mode == SecretPersistType::TEMPORARY) {
-		if (!info->secret_storage.empty()) {
+	if (extra_info->persist_mode == SecretPersistType::TEMPORARY) {
+		if (!extra_info->secret_storage.empty()) {
 			throw ParserException("Can not combine TEMPORARY with specifying a storage for drop secret");
 		}
 	}
 
+	info->extra_drop_info = std::move(extra_info);
 	result->info = std::move(info);
 
 	return result;

@@ -13,7 +13,7 @@ BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_t
 	D_ASSERT(types.size() == names.size());
 }
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
+BaseQueryResult::BaseQueryResult(QueryResultType type, ErrorData error)
     : type(type), success(false), error(std::move(error)) {
 }
 
@@ -25,13 +25,13 @@ void BaseQueryResult::ThrowError(const string &prepended_message) const {
 	error.Throw(prepended_message);
 }
 
-void BaseQueryResult::SetError(PreservedError error) {
-	success = !error;
+void BaseQueryResult::SetError(ErrorData error) {
+	success = !error.HasError();
 	this->error = std::move(error);
 }
 
 bool BaseQueryResult::HasError() const {
-	D_ASSERT((bool)error == !success);
+	D_ASSERT(error.HasError() == !success);
 	return !success;
 }
 
@@ -44,7 +44,7 @@ const std::string &BaseQueryResult::GetError() {
 	return error.Message();
 }
 
-PreservedError &BaseQueryResult::GetErrorObject() {
+ErrorData &BaseQueryResult::GetErrorObject() {
 	return error;
 }
 
@@ -58,7 +58,7 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
       client_properties(std::move(client_properties_p)) {
 }
 
-QueryResult::QueryResult(QueryResultType type, PreservedError error)
+QueryResult::QueryResult(QueryResultType type, ErrorData error)
     : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR) {
 }
 

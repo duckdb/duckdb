@@ -233,8 +233,9 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
-	} catch (Exception &e) {
-		throw AutoloadException(extension_name, e);
+	} catch (std::exception &e) {
+		ErrorData error(e);
+		throw AutoloadException(extension_name, error.RawMessage());
 	}
 }
 
@@ -345,13 +346,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #if DUCKDB_EXTENSION_HTTPFS_LINKED
 		db.LoadExtension<HttpfsExtension>();
 #else
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "visualizer") {
-#if DUCKDB_EXTENSION_VISUALIZER_LINKED
-		db.LoadExtension<VisualizerExtension>();
-#else
-		// visualizer extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "json") {

@@ -27,7 +27,7 @@ FROM sniff_csv('test/sql/copy/csv/data/real/lineitem_sample.csv');
 statement error
 FROM sniff_csv('test/sql/copy/csv/data/real/non_ecziste.csv');
 ----
-IO Error: Cannot open file "test/sql/copy/csv/data/real/non_ecziste.csv": No such file or directory
+Cannot open file "test/sql/copy/csv/data/real/non_ecziste.csv": No such file or directory
 
 # Test different sample sizes
 

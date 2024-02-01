@@ -95,7 +95,7 @@ void CatalogSetSecretStorage::DropSecretByName(const string &name, OnEntryNotFou
 	}
 
 	secrets->DropEntry(GetTransactionOrDefault(transaction), name, true, true);
-	RemoveSecret(name);
+	RemoveSecret(name, on_entry_not_found);
 }
 
 SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const string &type,
@@ -159,7 +159,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 void CatalogSetSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
 	// By default, this writes nothing
 }
-void CatalogSetSecretStorage::RemoveSecret(const string &name) {
+void CatalogSetSecretStorage::RemoveSecret(const string &name, OnEntryNotFound on_entry_not_found) {
 	// By default, this writes nothing
 }
 
@@ -188,16 +188,19 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 	file_writer.Flush();
 }
 
-void LocalFileSecretStorage::RemoveSecret(const string &secret) {
+void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
 	LocalFileSystem fs;
 	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
 	persistent_secrets.erase(secret);
 	try {
 		fs.RemoveFile(file);
-	} catch (IOException &e) {
-		throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
-		                  "instance. (original error: '%s')",
-		                  file, e.RawMessage());
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::IO) {
+			throw IOException("Failed to remove secret file '%s', the file may have been removed by another duckdb "
+			                  "instance. (original error: '%s')",
+			                  file, error.RawMessage());
+		}
 	}
 }
 

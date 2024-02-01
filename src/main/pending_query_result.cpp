@@ -11,7 +11,7 @@ PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, Prep
       context(std::move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
-PendingQueryResult::PendingQueryResult(PreservedError error)
+PendingQueryResult::PendingQueryResult(ErrorData error)
     : BaseQueryResult(QueryResultType::PENDING_RESULT, std::move(error)) {
 }
 

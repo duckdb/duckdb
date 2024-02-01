@@ -64,7 +64,7 @@ protected:
 		duckdb::lock_guard<duckdb::mutex> lock(logger.lock);
 		logger.write_secret_requests.push_back(secret.GetName());
 	};
-	virtual void RemoveSecret(const string &secret) override {
+	virtual void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override {
 		duckdb::lock_guard<duckdb::mutex> lock(logger.lock);
 		logger.remove_secret_requests.push_back(secret);
 	};

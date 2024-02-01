@@ -206,8 +206,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
+	auto lowercase_extension_name = StringUtil::Lower(filebase);
+
 	ext_version_fun_t version_fun;
-	auto version_fun_name = filebase + "_version";
+	auto version_fun_name = lowercase_extension_name + "_version";
 
 	version_fun = LoadFunctionFromDLL<ext_version_fun_t>(lib_hdl, version_fun_name, filename);
 
@@ -234,7 +236,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		                            extension_version, engine_version);
 	}
 
-	result.filebase = filebase;
+	result.filebase = lowercase_extension_name;
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
@@ -295,8 +297,9 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	try {
 		(*init_fun)(db);
 	} catch (std::exception &e) {
+		ErrorData error(e);
 		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-		                            init_fun_name, res.filename, e.what());
+		                            init_fun_name, res.filename, error.RawMessage());
 	}
 
 	db.SetExtensionLoaded(extension);

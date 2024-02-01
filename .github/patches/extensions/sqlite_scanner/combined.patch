@@ -1,0 +1,44 @@
+diff --git a/src/include/storage/sqlite_transaction_manager.hpp b/src/include/storage/sqlite_transaction_manager.hpp
+index 4982eef..8f9cafc 100644
+--- a/src/include/storage/sqlite_transaction_manager.hpp
++++ b/src/include/storage/sqlite_transaction_manager.hpp
+@@ -20,7 +20,7 @@ public:
+ 	SQLiteTransactionManager(AttachedDatabase &db_p, SQLiteCatalog &sqlite_catalog);
+ 
+ 	Transaction &StartTransaction(ClientContext &context) override;
+-	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
++	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+ 	void RollbackTransaction(Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+diff --git a/src/storage/sqlite_catalog.cpp b/src/storage/sqlite_catalog.cpp
+index fad530c..36a5764 100644
+--- a/src/storage/sqlite_catalog.cpp
++++ b/src/storage/sqlite_catalog.cpp
+@@ -3,6 +3,7 @@
+ #include "storage/sqlite_transaction.hpp"
+ #include "sqlite_db.hpp"
+ #include "duckdb/storage/database_size.hpp"
++#include "duckdb/common/exception/transaction_exception.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/storage/sqlite_transaction_manager.cpp b/src/storage/sqlite_transaction_manager.cpp
+index 7b6e132..d800794 100644
+--- a/src/storage/sqlite_transaction_manager.cpp
++++ b/src/storage/sqlite_transaction_manager.cpp
+@@ -16,12 +16,12 @@ Transaction &SQLiteTransactionManager::StartTransaction(ClientContext &context)
+ 	return result;
+ }
+ 
+-string SQLiteTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
++ErrorData SQLiteTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &sqlite_transaction = transaction.Cast<SQLiteTransaction>();
+ 	sqlite_transaction.Commit();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+-	return string();
++	return ErrorData();
+ }
+ 
+ void SQLiteTransactionManager::RollbackTransaction(Transaction &transaction) {

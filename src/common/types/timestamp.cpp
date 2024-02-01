@@ -9,6 +9,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include <ctime>
 
@@ -286,7 +287,7 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_tz_t timetz, timestamp_t &res
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
 	timestamp_t result;
 	if (!TryFromDatetime(date, time, result)) {
-		throw Exception("Overflow exception in date/time -> timestamp conversion");
+		throw ConversionException("Overflow exception in date/time -> timestamp conversion");
 	}
 	return result;
 }
@@ -354,9 +355,9 @@ int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
 }
 
 double Timestamp::GetJulianDay(timestamp_t timestamp) {
-	double result = Timestamp::GetTime(timestamp).micros;
+	double result = double(Timestamp::GetTime(timestamp).micros);
 	result /= Interval::MICROS_PER_DAY;
-	result += Date::ExtractJulianDay(Timestamp::GetDate(timestamp));
+	result += double(Date::ExtractJulianDay(Timestamp::GetDate(timestamp)));
 	return result;
 }
 

@@ -96,6 +96,7 @@
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
@@ -2214,6 +2215,29 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 	}
 	if (StringUtil::Equals(value, "NOT_LOADED")) {
 		return ExtensionLoadResult::NOT_LOADED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value) {
+	switch(value) {
+	case ExtraDropInfoType::INVALID:
+		return "INVALID";
+	case ExtraDropInfoType::SECRET_INFO:
+		return "SECRET_INFO";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return ExtraDropInfoType::INVALID;
+	}
+	if (StringUtil::Equals(value, "SECRET_INFO")) {
+		return ExtraDropInfoType::SECRET_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

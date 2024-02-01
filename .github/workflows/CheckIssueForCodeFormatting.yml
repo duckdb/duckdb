@@ -20,6 +20,9 @@ jobs:
           python-version: '3.11'
       - name: Check issue for code formatting
         run: |
-          if ! echo "${{ github.event.issue.body }}" | python3 scripts/check-issue-for-code-formatting.py; then
+          cat << 'EOF' >> issue-text.md
+          ${{ github.event.issue.body }}"
+          EOF
+          if ! cat issue-text.md | python3 scripts/check-issue-for-code-formatting.py; then
               gh issue comment ${{ github.event.issue.number }} --body-file .github/workflows/code-formatting-warning.md
           fi

@@ -21,7 +21,7 @@ string UnknownIndex::GenerateErrorMessage() const {
 	    index_type.c_str(), name.c_str());
 }
 
-PreservedError UnknownIndex::Append(IndexLock &, DataChunk &, Vector &) {
+ErrorData UnknownIndex::Append(IndexLock &, DataChunk &, Vector &) {
 	throw NotImplementedException(GenerateErrorMessage());
 }
 void UnknownIndex::VerifyAppend(DataChunk &) {
@@ -36,7 +36,7 @@ void UnknownIndex::CommitDrop(IndexLock &) {
 void UnknownIndex::Delete(IndexLock &, DataChunk &, Vector &) {
 	throw NotImplementedException(GenerateErrorMessage());
 }
-PreservedError UnknownIndex::Insert(IndexLock &, DataChunk &, Vector &) {
+ErrorData UnknownIndex::Insert(IndexLock &, DataChunk &, Vector &) {
 	throw NotImplementedException(GenerateErrorMessage());
 }
 IndexStorageInfo UnknownIndex::GetStorageInfo(bool) {

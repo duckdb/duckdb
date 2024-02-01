@@ -62,3 +62,25 @@ TEST_CASE("Test extract statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBError);
 	duckdb_destroy_extracted(&stmts);
 }
+
+TEST_CASE("Test invalid PRAGMA in C API", "[capi]") {
+
+	duckdb_database db;
+	duckdb_connection con;
+	const char *err_msg;
+
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+
+	duckdb_extracted_statements stmts;
+	auto size = duckdb_extract_statements(con, "PRAGMA something;", &stmts);
+
+	REQUIRE(size == 0);
+	err_msg = duckdb_extract_statements_error(stmts);
+	REQUIRE(err_msg != nullptr);
+	REQUIRE(string(err_msg).find("Catalog Error") != std::string::npos);
+
+	duckdb_destroy_extracted(&stmts);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}

@@ -301,7 +301,7 @@ struct CatalogLookup {
 struct CatalogEntryLookup {
 	optional_ptr<SchemaCatalogEntry> schema;
 	optional_ptr<CatalogEntry> entry;
-	PreservedError error;
+	ErrorData error;
 
 	DUCKDB_API bool Found() const {
 		return entry;
@@ -510,9 +510,7 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
 		potential_names.push_back(entry.first);
 	}
-
-	throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-	                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
 }
 
 CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
@@ -562,26 +560,24 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		bool qualify_database;
 		bool qualify_schema;
 		FindMinimalQualification(context, catalog_name, schema_name, qualify_database, qualify_schema);
-		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName(qualify_database, qualify_schema) + "\"?";
+		did_you_mean = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
 	} else if (entry.Found()) {
-		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
+		did_you_mean = entry.name;
 	}
-
-	return CatalogException(error_context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
-	                                                  entry_name, did_you_mean));
+	return CatalogException::MissingEntry(type, entry_name, did_you_mean, error_context);
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type,
                                                    const string &schema, const string &name) {
 	auto schema_entry = GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	}
 	auto entry = schema_entry->GetEntry(transaction, type, name);
 	if (!entry) {
-		return {schema_entry, nullptr, PreservedError()};
+		return {schema_entry, nullptr, ErrorData()};
 	}
-	return {schema_entry, entry, PreservedError()};
+	return {schema_entry, entry, ErrorData()};
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType type, const string &schema,
@@ -614,10 +610,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
-		return {nullptr, nullptr, PreservedError(except)};
+		return {nullptr, nullptr, ErrorData(except)};
 	}
 }
 
@@ -626,7 +622,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
                                         QueryErrorContext error_context) {
 	auto res = TryLookupEntry(context, type, schema, name, if_not_found, error_context);
 
-	if (res.error) {
+	if (res.error.HasError()) {
 		res.error.Throw();
 	}
 
@@ -649,10 +645,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, vector<Catalo
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr, PreservedError()};
+		return {nullptr, nullptr, ErrorData()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
-		return {nullptr, nullptr, PreservedError(except)};
+		return {nullptr, nullptr, ErrorData(except)};
 	}
 }
 
@@ -666,7 +662,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
 			if (!catalog_entry) {
-				return {nullptr, nullptr, PreservedError()};
+				return {nullptr, nullptr, ErrorData()};
 			}
 			lookups.emplace_back(*catalog_entry, entry.schema);
 		} else {
@@ -701,7 +697,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 		}
 	}
 
-	if (lookup_entry.error) {
+	if (lookup_entry.error.HasError()) {
 		lookup_entry.error.Throw();
 	}
 
@@ -725,7 +721,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 		}
 	}
 
-	if (result.error) {
+	if (result.error.HasError()) {
 		result.error.Throw();
 	}
 

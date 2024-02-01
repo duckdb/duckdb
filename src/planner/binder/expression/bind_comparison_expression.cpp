@@ -200,11 +200,11 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
-	string error;
+	ErrorData error;
 	BindChild(expr.left, depth, error);
 	BindChild(expr.right, depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
+	if (error.HasError()) {
+		return BindResult(std::move(error));
 	}
 
 	// the children have been successfully resolved
@@ -216,9 +216,9 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// now obtain the result type of the input types
 	LogicalType input_type;
 	if (!BoundComparisonExpression::TryBindComparison(context, left_sql_type, right_sql_type, input_type, expr.type)) {
-		return BindResult(binder.FormatError(
-		    expr.query_location, "Cannot compare values of type %s and type %s - an explicit cast is required",
-		    left_sql_type.ToString(), right_sql_type.ToString()));
+		return BindResult(BinderException(expr,
+		                                  "Cannot compare values of type %s and type %s - an explicit cast is required",
+		                                  left_sql_type.ToString(), right_sql_type.ToString()));
 	}
 	// add casts (if necessary)
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,

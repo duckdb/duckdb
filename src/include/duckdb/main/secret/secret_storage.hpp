@@ -116,7 +116,7 @@ public:
 protected:
 	//! Callback called on Store to allow child classes to implement persistence.
 	virtual void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict);
-	virtual void RemoveSecret(const string &name);
+	virtual void RemoveSecret(const string &name, OnEntryNotFound on_entry_not_found);
 	//! Returns the CatalogTransaction in `transaction` if not set, return the System transaction
 	CatalogTransaction GetTransactionOrDefault(optional_ptr<CatalogTransaction> transaction);
 
@@ -153,7 +153,7 @@ protected:
 	//! Implements the writes to disk
 	void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) override;
 	//! Implements the deletes from disk
-	virtual void RemoveSecret(const string &secret) override;
+	virtual void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override;
 
 	//! Set of persistent secrets that are lazily loaded
 	case_insensitive_set_t persistent_secrets;

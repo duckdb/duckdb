@@ -582,14 +582,22 @@ unique_ptr<CatalogEntry> DefaultSecretGenerator::CreateDefaultEntry(ClientContex
 
 			return std::move(entry);
 		}
-	} catch (SerializationException &e) {
-		throw SerializationException("Failed to deserialize the persistent secret file: '%s'. The file maybe be "
-		                             "corrupt, please remove the file, restart and try again. (error message: '%s')",
-		                             secret_path, e.RawMessage());
-	} catch (IOException &e) {
-		throw IOException("Failed to open the persistent secret file: '%s'. Some other process may have removed it, "
-		                  "please restart and try again. (error message: '%s')",
-		                  secret_path, e.RawMessage());
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		switch (error.Type()) {
+		case ExceptionType::SERIALIZATION:
+			throw SerializationException(
+			    "Failed to deserialize the persistent secret file: '%s'. The file maybe be "
+			    "corrupt, please remove the file, restart and try again. (error message: '%s')",
+			    secret_path, error.RawMessage());
+		case ExceptionType::IO:
+			throw IOException(
+			    "Failed to open the persistent secret file: '%s'. Some other process may have removed it, "
+			    "please restart and try again. (error message: '%s')",
+			    secret_path, error.RawMessage());
+		default:
+			throw;
+		}
 	}
 
 	throw SerializationException("Failed to deserialize secret '%s' from '%s': file appears empty! Please remove the "
