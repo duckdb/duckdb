@@ -226,12 +226,12 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			auto &state = *states[sidx];
 			if (!state.is_initialized) {
 				STATE::template AssignValue<BY_TYPE>(state.value, bval);
-				AssignVector(state, arg, aidx);
+				AssignVector(state, arg, i);
 				state.is_initialized = true;
 
 			} else if (COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
 				STATE::template AssignValue<BY_TYPE>(state.value, bval);
-				AssignVector(state, arg, aidx);
+				AssignVector(state, arg, i);
 			}
 		}
 	}
