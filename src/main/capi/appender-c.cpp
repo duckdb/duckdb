@@ -6,6 +6,7 @@ using duckdb::AppenderWrapper;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::ErrorData;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::string_t;
@@ -27,7 +28,8 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
 	try {
 		wrapper->appender = duckdb::make_uniq<Appender>(*conn, schema, table);
 	} catch (std::exception &ex) {
-		wrapper->error = ex.what();
+		ErrorData error(ex);
+		wrapper->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		wrapper->error = "Unknown create appender error";
@@ -61,7 +63,8 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	try {
 		function(*wrapper->appender);
 	} catch (std::exception &ex) {
-		wrapper->error = ex.what();
+		ErrorData error(ex);
+		wrapper->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		wrapper->error = "Unknown error";
@@ -98,7 +101,8 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	try {
 		appender_instance->appender->Append<T>(value);
 	} catch (std::exception &ex) {
-		appender_instance->error = ex.what();
+		ErrorData error(ex);
+		appender_instance->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) {
 		return DuckDBError;

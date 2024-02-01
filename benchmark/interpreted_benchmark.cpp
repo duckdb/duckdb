@@ -302,7 +302,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 	}
 	// set up the queries
 	if (queries.find("run") == queries.end()) {
-		throw Exception("Invalid benchmark file: no \"run\" query specified");
+		throw InvalidInputException("Invalid benchmark file: no \"run\" query specified");
 	}
 	run_query = queries["run"];
 	is_loaded = true;
@@ -325,10 +325,10 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-			throw std::runtime_error("Unknown extension " + extension);
+			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {
-			throw std::runtime_error("Extension " + extension +
-			                         " is not available/was not compiled. Cannot run this benchmark.");
+			throw InvalidInputException("Extension " + extension +
+			                            " is not available/was not compiled. Cannot run this benchmark.");
 		}
 	}
 

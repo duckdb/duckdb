@@ -15,6 +15,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -289,6 +290,9 @@ protected:
 	}
 	void WriteValue(PhysicalIndex value) {
 		WriteValue(value.index);
+	}
+	void WriteValue(optional_idx value) {
+		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);
 	}
 };
 

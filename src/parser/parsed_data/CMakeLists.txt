@@ -22,6 +22,7 @@ add_library_unity(
   create_view_info.cpp
   detach_info.cpp
   drop_info.cpp
+  extra_drop_info.cpp
   sample_options.cpp
   transaction_info.cpp
   vacuum_info.cpp)

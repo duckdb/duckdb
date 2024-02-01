@@ -470,7 +470,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 //===--------------------------------------------------------------------===//
 // Insert / Verification / Constraint Checking
 //===--------------------------------------------------------------------===//
-PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
@@ -511,8 +511,8 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	}
 
 	if (failed_index != DConstants::INVALID_INDEX) {
-		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
-		                                          AppendRowError(input, failed_index)));
+		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
+		                                     AppendRowError(input, failed_index)));
 	}
 
 #ifdef DEBUG
@@ -526,10 +526,10 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	}
 #endif
 
-	return PreservedError();
+	return ErrorData();
 }
 
-PreservedError ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
+ErrorData ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	DataChunk expression_result;
 	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 

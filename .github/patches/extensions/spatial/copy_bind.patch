@@ -1,3 +1,61 @@
+diff --git a/spatial/src/spatial/core/functions/cast/geometry_cast.cpp b/spatial/src/spatial/core/functions/cast/geometry_cast.cpp
+index af7f030..20883c0 100644
+--- a/spatial/src/spatial/core/functions/cast/geometry_cast.cpp
++++ b/spatial/src/spatial/core/functions/cast/geometry_cast.cpp
+@@ -3,7 +3,7 @@
+ #include "spatial/core/functions/cast.hpp"
+ #include "spatial/core/geometry/geometry.hpp"
+ #include "spatial/core/functions/common.hpp"
+-
++#include "duckdb/common/exception/conversion_exception.hpp"
+ #include "duckdb/function/cast/cast_function_set.hpp"
+ #include "duckdb/common/vector_operations/generic_executor.hpp"
+ 
+@@ -40,11 +40,11 @@ static bool GeometryToPoint2DCast(Vector &source, Vector &result, idx_t count, C
+ 	GenericExecutor::ExecuteUnary<GEOMETRY_TYPE, POINT_TYPE>(source, result, count, [&](GEOMETRY_TYPE &geometry) {
+ 		auto geom = lstate.factory.Deserialize(geometry.val);
+ 		if (geom.Type() != GeometryType::POINT) {
+-			throw CastException("Cannot cast non-point GEOMETRY to POINT_2D");
++			throw ConversionException("Cannot cast non-point GEOMETRY to POINT_2D");
+ 		}
+ 		auto &point = geom.GetPoint();
+ 		if (point.IsEmpty()) {
+-			throw CastException("Cannot cast empty point GEOMETRY to POINT_2D");
++			throw ConversionException("Cannot cast empty point GEOMETRY to POINT_2D");
+ 		}
+ 		auto vertex = point.GetVertex();
+ 		return POINT_TYPE {vertex.x, vertex.y};
+@@ -92,7 +92,7 @@ static bool GeometryToLineString2DCast(Vector &source, Vector &result, idx_t cou
+ 	UnaryExecutor::Execute<string_t, list_entry_t>(source, result, count, [&](string_t &geom) {
+ 		auto geometry = lstate.factory.Deserialize(geom);
+ 		if (geometry.Type() != GeometryType::LINESTRING) {
+-			throw CastException("Cannot cast non-linestring GEOMETRY to LINESTRING_2D");
++			throw ConversionException("Cannot cast non-linestring GEOMETRY to LINESTRING_2D");
+ 		}
+ 
+ 		auto &line = geometry.GetLineString();
+@@ -157,7 +157,7 @@ static bool GeometryToPolygon2DCast(Vector &source, Vector &result, idx_t count,
+ 	UnaryExecutor::Execute<string_t, list_entry_t>(source, result, count, [&](string_t &geom) {
+ 		auto geometry = lstate.factory.Deserialize(geom);
+ 		if (geometry.Type() != GeometryType::POLYGON) {
+-			throw CastException("Cannot cast non-linestring GEOMETRY to POLYGON_2D");
++			throw ConversionException("Cannot cast non-linestring GEOMETRY to POLYGON_2D");
+ 		}
+ 
+ 		auto &poly = geometry.GetPolygon();
+diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
+index eecc020..5cf3159 100644
+--- a/spatial/src/spatial/gdal/functions/st_read.cpp
++++ b/spatial/src/spatial/gdal/functions/st_read.cpp
+@@ -39,7 +39,7 @@ struct WKBSpatialFilter : SpatialFilter {
+ 	explicit WKBSpatialFilter(const string &wkb_p) : SpatialFilter(SpatialFilterType::Wkb), geom(nullptr) {
+ 		auto ok = OGR_G_CreateFromWkb(wkb_p.c_str(), nullptr, &geom, (int)wkb_p.size());
+ 		if (ok != OGRERR_NONE) {
+-			throw Exception("WKBSpatialFilter: could not create geometry from WKB");
++			throw InvalidInputException("WKBSpatialFilter: could not create geometry from WKB");
+ 		}
+ 	}
+ 	~WKBSpatialFilter() {
 diff --git a/spatial/src/spatial/gdal/functions/st_write.cpp b/spatial/src/spatial/gdal/functions/st_write.cpp
 index 8ab228d..1a1e821 100644
 --- a/spatial/src/spatial/gdal/functions/st_write.cpp
@@ -20,3 +78,41 @@ index 8ab228d..1a1e821 100644
  		if (StringUtil::Upper(option.first) == "DRIVER") {
  			auto set = option.second.front();
  			if (set.type().id() == LogicalTypeId::VARCHAR) {
+diff --git a/spatial/src/spatial/geos/functions/cast.cpp b/spatial/src/spatial/geos/functions/cast.cpp
+index e6d5cb8..1c87af3 100644
+--- a/spatial/src/spatial/geos/functions/cast.cpp
++++ b/spatial/src/spatial/geos/functions/cast.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "duckdb/function/cast/cast_function_set.hpp"
+ #include "duckdb/common/operator/cast_operators.hpp"
++#include "duckdb/common/error_data.hpp"
+ 
+ namespace spatial {
+ 
+@@ -54,9 +55,10 @@ static bool TextToGeometryCast(Vector &source, Vector &result, idx_t count, Cast
+ 				    throw InvalidInputException("3D/4D geometries are not supported");
+ 			    }
+ 			    return lstate.ctx.Serialize(result, geos_geom);
+-		    } catch (InvalidInputException &error) {
++		    } catch (InvalidInputException &e) {
+ 			    if (success) {
+ 				    success = false;
++				    ErrorData error(e);
+ 				    HandleCastError::AssignError(error.RawMessage(), parameters.error_message);
+ 			    }
+ 			    mask.SetInvalid(idx);
+diff --git a/spatial/src/spatial/geos/functions/scalar/st_normalize.cpp b/spatial/src/spatial/geos/functions/scalar/st_normalize.cpp
+index f44d990..e90fa2e 100644
+--- a/spatial/src/spatial/geos/functions/scalar/st_normalize.cpp
++++ b/spatial/src/spatial/geos/functions/scalar/st_normalize.cpp
+@@ -21,8 +21,7 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
+ 		auto geom = lstate.ctx.Deserialize(input);
+ 		auto res = GEOSNormalize_r(ctx, geom.get());
+ 		if (res == -1) {
+-			throw Exception("Could not normalize geometry");
+-			;
++			throw InvalidInputException("Could not normalize geometry");
+ 		}
+ 		return lstate.ctx.Serialize(result, geom);
+ 	});
