@@ -126,14 +126,9 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 				continue;
 			}
 			bool success = false;
-			do {
-				if (!analyze_states[i]) {
-					// This compression method is deprecated, skip it
-					break;
-				}
+			if (analyze_states[i]) {
 				success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
-			} while (false);
-
+			}
 			if (!success) {
 				// could not use this compression function on this data set
 				// erase it
