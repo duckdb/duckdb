@@ -327,7 +327,6 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 		if (f_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 		    f_op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			auto &join = f_op.Cast<LogicalComparisonJoin>();
-			D_ASSERT(JoinIsReorderable(join));
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {
 				auto comparison =
