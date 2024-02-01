@@ -40,7 +40,7 @@ public:
 
 public:
 	void Append(unique_ptr<DataChunk> chunk, idx_t batch);
-	void BlockSink(BlockedSink blocked_sink, idx_t batch);
+	void BlockSink(const BlockedSink &blocked_sink, idx_t batch);
 
 	bool BufferIsEmpty();
 	bool ShouldBlockBatch(idx_t batch);
