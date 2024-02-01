@@ -2,6 +2,30 @@
 # description: Test read_files function
 # group: [table_function]
 
+query I
+SELECT COUNT(*) FROM read_text('test/sql/table_function/files/*.txt');
+----
+3
+
+query I
+SELECT COUNT(*) FROM read_blob('test/sql/table_function/files/*');
+----
+4
+
+query IIII
+SELECT * FROM read_text('test/sql/table_function/files/nonexistentfile.txt') ORDER BY ALL;
+----
+
+query I
+SELECT parse_path(filename) FROM read_text('test/sql/table_function/files/nonexistentfile.txt') ORDER BY ALL;
+----
+
+query I
+SELECT parse_path(filename) FROM read_text(['test/sql/table_function/files/one.txt', 'test/sql/table_function/files/two.txt']) ORDER BY ALL;
+----
+[test, sql, table_function, files, one.txt]
+[test, sql, table_function, files, two.txt]
+
 query III
 SELECT parse_path(filename), size, content FROM read_blob('test/sql/table_function/files/four.blob');
 ----

@@ -90,7 +90,7 @@ static unique_ptr<GlobalTableFunctionState> ReadFileInitGlobal(ClientContext &co
 
 	for (const auto &column_id : input.column_ids) {
 		// For everything except the 'file' name column, we need to open the file
-		if (column_id > ReadFileBindData::FILE_NAME_COLUMN) {
+		if (column_id != ReadFileBindData::FILE_NAME_COLUMN && column_id != COLUMN_IDENTIFIER_ROW_ID) {
 			result->requires_file_open = true;
 			break;
 		}
@@ -136,6 +136,9 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 		for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {
 			// We utilize projection pushdown to avoid potentially expensive fs operations.
 			auto proj_idx = state.column_ids[col_idx];
+			if (proj_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				continue;
+			}
 			try {
 				switch (proj_idx) {
 				case ReadFileBindData::FILE_NAME_COLUMN: {
@@ -166,18 +169,28 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 					try {
 						auto timestamp_seconds = Timestamp::FromEpochSeconds(fs.GetLastModifiedTime(*file_handle));
 						FlatVector::GetData<timestamp_t>(last_modified_vector)[out_idx] = timestamp_seconds;
-					} catch (ConversionException &) {
-						FlatVector::SetNull(last_modified_vector, out_idx, true);
+					} catch (std::exception &ex) {
+						ErrorData error(ex);
+						if (error.Type() == ExceptionType::CONVERSION) {
+							FlatVector::SetNull(last_modified_vector, out_idx, true);
+						} else {
+							throw;
+						}
 					}
 				} break;
 				default:
-					FlatVector::SetNull(output.data[col_idx], out_idx, true);
+					throw InternalException("Unsupported column index for read_file");
 				}
 			}
 			// Filesystems are not required to support all operations, so we just set the column to NULL if not
 			// implemented
-			catch (NotImplementedException &) {
-				FlatVector::SetNull(output.data[col_idx], out_idx, true);
+			catch (std::exception &ex) {
+				ErrorData error(ex);
+				if (error.Type() == ExceptionType::NOT_IMPLEMENTED) {
+					FlatVector::SetNull(output.data[col_idx], out_idx, true);
+				} else {
+					throw;
+				}
 			}
 		}
 	}
