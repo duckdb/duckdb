@@ -132,6 +132,12 @@ public:
 	}
 };
 
+class PyHTTPException : public PyIOException {
+public:
+	explicit PyHTTPException(const string &err) : PyIOException(err) {
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Integrity Error
 //===--------------------------------------------------------------------===//
@@ -329,7 +335,7 @@ void RegisterExceptions(const py::module &m) {
 	auto io_exception = py::register_exception<PyIOException>(m, "IOException", operational_error).ptr();
 	py::register_exception<PySerializationException>(m, "SerializationException", operational_error);
 
-	static py::exception<HTTPException> HTTP_EXCEPTION(m, "HTTPException", io_exception);
+	static py::exception<PyHTTPException> HTTP_EXCEPTION(m, "HTTPException", io_exception);
 	const auto string_type = py::type::of(py::str());
 	const auto Dict = py::module_::import("typing").attr("Dict");
 	HTTP_EXCEPTION.attr("__annotations__") =
