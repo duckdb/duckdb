@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -35,7 +36,7 @@ void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, b
 	error << csv_error.error_message;
 	switch (csv_error.type) {
 	case CSVErrorType::CAST_ERROR:
-		throw CastException(error.str());
+		throw ConversionException(error.str());
 	case CSVErrorType::COLUMN_NAME_TYPE_MISMATCH:
 		throw BinderException(error.str());
 	case CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE:

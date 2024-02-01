@@ -1,7 +1,8 @@
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
@@ -134,7 +135,7 @@ void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const s
 	return;
 #endif
 	string local_path = ExtensionDirectory(config, fs);
-	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install, repository);
+	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository);
 }
 
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
@@ -146,8 +147,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	auto &config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	auto &client_config = ClientConfig::GetConfig(context);
-	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install, repository);
+	InstallExtensionInternal(config, fs, local_path, extension, force_install, repository);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -167,7 +167,7 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
-string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const ClientConfig> client_config, const string &repository) {
+string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_config, const string &repository) {
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 #ifdef WASM_LOADABLE_EXTENSIONS
 	string default_endpoint = "https://extensions.duckdb.org";
@@ -176,7 +176,7 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const ClientConfig> cl
 	string default_endpoint = "http://extensions.duckdb.org";
 	versioned_path = versioned_path + ".gz";
 #endif
-	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
+	string custom_endpoint = db_config ? db_config->options.custom_extension_repo : string();
 	string endpoint;
 	if (!repository.empty()) {
 		endpoint = repository;
@@ -196,9 +196,8 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 	return url;
 }
 
-void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
-                                               const string &local_path, const string &extension, bool force_install,
-                                               const string &repository) {
+void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
+                                               const string &extension, bool force_install, const string &repository) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -238,7 +237,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	throw BinderException("Remote extension installation is disabled through configuration");
 #else
 
-	string url_template = ExtensionUrlTemplate(client_config, repository);
+	string url_template = ExtensionUrlTemplate(&config, repository);
 
 	if (is_http_url) {
 		url_template = extension;

@@ -91,13 +91,13 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindPositionalReference(expr, depth, root_expression);
 	}
 	case ExpressionClass::STAR:
-		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
+		return BindResult(BinderException(expr_ref, "STAR expression is not supported here"));
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}
 }
 
-BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message) {
+BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message) {
 	// try to bind in one of the outer queries, if the binding error occurred in a subquery
 	auto &active_binders = binder.GetActiveBinders();
 	// make a copy of the set of binders, so we can restore it later
@@ -110,7 +110,7 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
 		bind_error = next_binder.Bind(expr, depth);
-		if (bind_error.empty()) {
+		if (!bind_error.HasError()) {
 			break;
 		}
 		depth++;
@@ -120,11 +120,11 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 	return BindResult(bind_error);
 }
 
-void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
+void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error) {
 	if (expr) {
-		string bind_error = Bind(expr, depth);
-		if (error.empty()) {
-			error = bind_error;
+		ErrorData bind_error = Bind(expr, depth);
+		if (!error.HasError()) {
+			error = std::move(bind_error);
 		}
 	}
 }
@@ -217,14 +217,14 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
                                               bool root_expression) {
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
-	if (!error_msg.empty()) {
+	if (error_msg.HasError()) {
 		// Try binding the correlated column. If binding the correlated column
 		// has error messages, those should be propagated up. So for the test case
 		// having subquery failed to bind:14 the real error message should be something like
 		// aggregate with constant input must be bound to a root node.
 		auto result = BindCorrelatedColumns(expr, error_msg);
 		if (result.HasError()) {
-			throw BinderException(result.error);
+			result.error.Throw();
 		}
 		auto &bound_expr = expr->Cast<BoundExpression>();
 		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
@@ -253,27 +253,29 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-string ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
+ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
+	auto query_location = expr->query_location;
 	auto &expression = *expr;
 	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
-		return string();
+		return ErrorData();
 	}
 	// bind the expression
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
-		return result.error;
+		return std::move(result.error);
 	}
 	// successfully bound: replace the node with a BoundExpression
+	result.expression->query_location = query_location;
 	expr = make_uniq<BoundExpression>(std::move(result.expression));
 	auto &be = expr->Cast<BoundExpression>();
 	be.alias = alias;
 	if (!alias.empty()) {
 		be.expr->alias = alias;
 	}
-	return string();
+	return ErrorData();
 }
 
 bool ExpressionBinder::IsUnnestFunction(const string &function_name) {

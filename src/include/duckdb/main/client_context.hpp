@@ -23,7 +23,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/external_dependencies.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
@@ -193,10 +193,13 @@ public:
 	//! Returns true if execution of the current query is finished
 	DUCKDB_API bool ExecutionIsFinished();
 
+	//! Process an error for display to the user
+	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
+
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result,
-	                     PreservedError &error);
+	                     ErrorData &error);
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);
@@ -206,7 +209,7 @@ private:
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
-	PreservedError VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
+	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -240,7 +243,7 @@ private:
 
 	void BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction);
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
-	PreservedError EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
+	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result);
 
@@ -254,6 +257,9 @@ private:
 
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    bool allow_stream_result);
+
+	template <class T>
+	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
 private:
 	//! Lock on using the ClientContext in parallel

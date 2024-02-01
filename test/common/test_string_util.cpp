@@ -1,7 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/to_string.hpp"
-
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "catch.hpp"
 
 #include "duckdb/common/vector.hpp"

@@ -104,9 +104,6 @@ endif
 ifeq (${BUILD_FTS}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};fts
 endif
-ifeq (${BUILD_VISUALIZER}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};visualizer
-endif
 ifeq (${BUILD_HTTPFS}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};httpfs
 endif

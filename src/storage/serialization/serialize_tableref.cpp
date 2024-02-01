@@ -13,14 +13,14 @@ void TableRef::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TableReferenceType>(100, "type", type);
 	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
 	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample", sample);
-	serializer.WritePropertyWithDefault<idx_t>(103, "query_location", query_location, idx_t(DConstants::INVALID_INDEX));
+	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
 }
 
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<TableReferenceType>(100, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
 	auto sample = deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample");
-	auto query_location = deserializer.ReadPropertyWithDefault<idx_t>(103, "query_location", idx_t(DConstants::INVALID_INDEX));
+	auto query_location = deserializer.ReadPropertyWithDefault<optional_idx>(103, "query_location", optional_idx());
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:

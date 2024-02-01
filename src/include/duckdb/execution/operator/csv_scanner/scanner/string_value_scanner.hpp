@@ -79,9 +79,10 @@ public:
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 	idx_t &lines_read;
-
-	unordered_map<idx_t, idx_t> projected_columns;
-
+	//! Information regarding projected columns
+	unsafe_unique_array<bool> projected_columns;
+	bool projecting_columns = false;
+	idx_t chunk_col_id = 0;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result

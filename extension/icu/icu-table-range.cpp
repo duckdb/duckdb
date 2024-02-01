@@ -41,7 +41,7 @@ struct ICUTableRange {
 			UErrorCode success = U_ZERO_ERROR;
 			calendar.reset(icu::Calendar::createInstance(tz, locale, success));
 			if (U_FAILURE(success)) {
-				throw Exception("Unable to create ICU calendar.");
+				throw InternalException("Unable to create ICU calendar.");
 			}
 		}
 
