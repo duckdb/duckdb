@@ -644,6 +644,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RECONNECT) {
 			auto command = make_uniq<ReconnectCommand>(*this);
 			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_SLEEP) {
+			if (token.parameters.size() != 2) {
+				parser.Fail("sleep requires two parameter (e.g. sleep 1 second)");
+			}
+			// require a specific block size
+			auto sleep_duration = std::stoull(token.parameters[0]);
+			auto sleep_unit = SleepCommand::ParseUnit(token.parameters[1]);
+			auto command = make_uniq<SleepCommand>(*this, sleep_duration, sleep_unit);
+			ExecuteCommand(std::move(command));
 		}
 	}
 	if (InLoop()) {

@@ -2517,11 +2517,11 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 }
 
 template<>
-const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value) {
+const char* EnumUtil::ToChars<FunctionResultType>(FunctionResultType value) {
 	switch(value) {
-	case FunctionSideEffects::NO_SIDE_EFFECTS:
+	case FunctionResultType::CONSISTENT:
 		return "NO_SIDE_EFFECTS";
-	case FunctionSideEffects::HAS_SIDE_EFFECTS:
+	case FunctionResultType::VOLATILE:
 		return "HAS_SIDE_EFFECTS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
@@ -2529,12 +2529,12 @@ const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value) {
 }
 
 template<>
-FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value) {
+FunctionResultType EnumUtil::FromString<FunctionResultType>(const char *value) {
 	if (StringUtil::Equals(value, "NO_SIDE_EFFECTS")) {
-		return FunctionSideEffects::NO_SIDE_EFFECTS;
+		return FunctionResultType::CONSISTENT;
 	}
 	if (StringUtil::Equals(value, "HAS_SIDE_EFFECTS")) {
-		return FunctionSideEffects::HAS_SIDE_EFFECTS;
+		return FunctionResultType::VOLATILE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

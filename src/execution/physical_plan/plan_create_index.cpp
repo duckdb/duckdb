@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	// because they make deletions and lookups unfeasible
 	for (idx_t i = 0; i < op.unbound_expressions.size(); i++) {
 		auto &expr = op.unbound_expressions[i];
-		if (expr->HasSideEffects()) {
+		if (!expr->IsConsistent()) {
 			throw BinderException("Index keys cannot contain expressions with side effects.");
 		}
 	}
