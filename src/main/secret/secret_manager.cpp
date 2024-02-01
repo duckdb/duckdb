@@ -1,3 +1,5 @@
+#include "duckdb/main/secret/secret_manager.hpp"
+
 #include "duckdb/catalog/catalog_entry/secret_function_entry.hpp"
 #include "duckdb/catalog/catalog_entry/secret_type_entry.hpp"
 #include "duckdb/common/common.hpp"
@@ -13,7 +15,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/operator/logical_create_secret.hpp"
@@ -351,7 +352,8 @@ optional_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction tran
 }
 
 void SecretManager::DropSecretByName(CatalogTransaction transaction, const string &name,
-                                     OnEntryNotFound on_entry_not_found, const string &storage) {
+                                     OnEntryNotFound on_entry_not_found, SecretPersistType persist_type,
+                                     const string &storage) {
 	InitializeSecrets(transaction);
 
 	vector<reference<SecretStorage>> matches;
@@ -365,6 +367,13 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 		matches.push_back(*storage_lookup.get());
 	} else {
 		for (const auto &storage_ref : GetSecretStorages()) {
+			if (persist_type == SecretPersistType::PERSISTENT && !storage_ref.get().Persistent()) {
+				continue;
+			}
+			if (persist_type == SecretPersistType::TEMPORARY && storage_ref.get().Persistent()) {
+				continue;
+			}
+
 			auto lookup = storage_ref.get().GetSecretByName(transaction, name);
 			if (lookup) {
 				matches.push_back(storage_ref.get());
@@ -381,7 +390,7 @@ void SecretManager::DropSecretByName(CatalogTransaction transaction, const strin
 
 		throw InvalidInputException(
 		    "Ambiguity found for secret name '%s', secret occurs in multiple storages: [%s] Please specify which "
-		    "secret to drop using: 'DROP <PERSISTENT|LOCAL> SECRET [FROM <storage>]'.",
+		    "secret to drop using: 'DROP <PERSISTENT|TEMPORARY> SECRET [FROM <storage>]'.",
 		    name, list_of_matches);
 	}
 
@@ -618,9 +627,9 @@ SecretManager &SecretManager::Get(DatabaseInstance &db) {
 }
 
 void SecretManager::DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found,
-                                     const string &storage) {
+                                     SecretPersistType persist_type, const string &storage) {
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-	return DropSecretByName(transaction, name, on_entry_not_found, storage);
+	return DropSecretByName(transaction, name, on_entry_not_found, persist_type, storage);
 }
 
 } // namespace duckdb
