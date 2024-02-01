@@ -1058,7 +1058,7 @@ bool isNewline(char c) {
 
 void nextPosition(struct linenoiseState *l, const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) {
 	if (isNewline(buf[cpos])) {
-		// newline! move to next line
+		// explicit newline! move to next line and insert a prompt
 		rows++;
 		cols = plen;
 		cpos++;
@@ -1094,8 +1094,9 @@ void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_r
 	size_t cpos = 0;
 	while (cpos < l->len) {
 		if (cols >= l->ws.ws_col && !isNewline(l->buf[cpos])) {
+			// exceeded width - move to next line
 			rows++;
-			cols = plen;
+			cols = 0;
 		}
 		if (out_row < 0 && cpos >= target_pos) {
 			out_row = rows;
@@ -1117,6 +1118,7 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 	size_t cpos = 0;
 	while (cpos < l->len) {
 		if (cols >= l->ws.ws_col) {
+			// exceeded width - move to next line
 			rows++;
 			cols = 0;
 		}
@@ -1136,25 +1138,24 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 	return cpos;
 }
 
-static std::string addContinuationMarkers(struct linenoiseState *l, const char *buf, size_t len, int plen) {
+static std::string addContinuationMarkers(struct linenoiseState *l, const char *buf, size_t len, int plen, int cursor_row) {
 	std::string result;
 	int rows = 1;
-	int prev_row = 1;
 	int cols = plen;
 	size_t cpos = 0;
 	size_t prev_pos = 0;
 	while (cpos < len) {
+		bool is_newline = isNewline(buf[cpos]);
 		nextPosition(l, buf, len, cpos, rows, cols, plen);
 		for (; prev_pos < cpos; prev_pos++) {
 			result += buf[prev_pos];
 		}
-		if (rows != prev_row) {
+		if (is_newline) {
 			for (int p = 0; p + 2 < plen; p++) {
 				result += " ";
 			}
 			result += "> ";
 		}
-		prev_row = rows;
 	}
 	for (; prev_pos < cpos; prev_pos++) {
 		result += buf[prev_pos];
@@ -1227,7 +1228,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 
 	if (rows > 1) {
 		// add continuation markers
-		highlight_buffer = addContinuationMarkers(l, buf, len, plen);
+		highlight_buffer = addContinuationMarkers(l, buf, len, plen, new_cursor_row);
 		buf = (char *)highlight_buffer.c_str();
 		len = highlight_buffer.size();
 	}
