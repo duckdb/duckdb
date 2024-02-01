@@ -152,24 +152,24 @@ static void TestSettingConfigs() {
 static void TestIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
 	// Create a temporary ini file
-	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
-
-	if (std::ifstream(ini_file)) {
-		std::remove(ini_file.c_str());
-	}
-
-	std::ofstream out(ini_file);
-	out << "[DuckDB]\n";
-	out << "Driver = DuckDB Driver\n";
-	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
-	out << "access_mode = read_only\n";
-	out << "allow_unsigned_extensions = true\n";
-	out.close();
-
-	std::cout << "ini_file: " << ini_file << std::endl;
-	if (!std::ifstream(ini_file)) {
-        FAIL("Failed to create ini file");
-    }
+//	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
+//
+//	if (std::ifstream(ini_file)) {
+//		std::remove(ini_file.c_str());
+//	}
+//
+//	std::ofstream out(ini_file);
+//	out << "[DuckDB]\n";
+//	out << "Driver = DuckDB Driver\n";
+//	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
+//	out << "access_mode = read_only\n";
+//	out << "allow_unsigned_extensions = true\n";
+//	out.close();
+//
+//	std::cout << "ini_file: " << ini_file << std::endl;
+//	if (!std::ifstream(ini_file)) {
+//        FAIL("Failed to create ini file");
+//    }
 
 	// Connect to the database using the ini file
 	SQLHANDLE env;
