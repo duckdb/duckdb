@@ -105,7 +105,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	}
 
 	if (result.HasError()) {
-		throw BinderException(result.error);
+		result.error.Throw();
 	}
 
 	return BindResult(make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,

@@ -556,7 +556,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
-      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:
     - uses: actions/checkout@v3

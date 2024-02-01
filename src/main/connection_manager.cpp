@@ -1,4 +1,5 @@
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 

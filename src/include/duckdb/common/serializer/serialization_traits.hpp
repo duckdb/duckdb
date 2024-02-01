@@ -4,6 +4,7 @@
 #include <atomic>
 
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"

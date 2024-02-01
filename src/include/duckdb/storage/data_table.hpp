@@ -147,8 +147,8 @@ public:
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
-	PreservedError AppendToIndexes(DataChunk &chunk, row_t row_start);
-	static PreservedError AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start);
+	ErrorData AppendToIndexes(DataChunk &chunk, row_t row_start);
+	static ErrorData AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table

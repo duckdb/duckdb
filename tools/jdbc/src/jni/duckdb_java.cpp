@@ -380,8 +380,9 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 
 		try {
 			config.SetOptionByName(key_str, Value(value_str));
-		} catch (const Exception &e) {
-			throw CatalogException("Failed to set configuration option \"%s\"", key_str, e.what());
+		} catch (const std::exception &e) {
+			ErrorData error(e);
+			throw CatalogException("Failed to set configuration option \"%s\"", key_str, error.RawMessage());
 		}
 	}
 	bool cache_instance = database != ":memory:" && !database.empty();

@@ -652,6 +652,21 @@ Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Errors As JSON
+//===--------------------------------------------------------------------===//
+void ErrorsAsJsonSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).errors_as_json = ClientConfig().errors_as_json;
+}
+
+void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).errors_as_json = BooleanValue::Get(input);
+}
+
+Value ErrorsAsJsonSetting::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
+}
+
+//===--------------------------------------------------------------------===//
 // Explain Output
 //===--------------------------------------------------------------------===//
 void ExplainOutputSetting::ResetLocal(ClientContext &context) {
