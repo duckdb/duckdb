@@ -384,10 +384,8 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 
 	auto http_state = HTTPState::TryGetState(context, false);
 	if (http_state && !http_state->IsEmpty()) {
-		string read =
-		    "in: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_received);
-		string written =
-		    "out: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_sent);
+		string read = "in: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_received);
+		string written = "out: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_sent);
 		string head = "#HEAD: " + to_string(http_state->head_count);
 		string get = "#GET: " + to_string(http_state->get_count);
 		string put = "#PUT: " + to_string(http_state->put_count);

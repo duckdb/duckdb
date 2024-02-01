@@ -62,7 +62,7 @@ shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context, bool create
 	auto lookup = context.registered_state.find("http_state");
 
 	if (lookup != context.registered_state.end()) {
-		return std::static_pointer_cast<HTTPState,ClientContextState>(lookup->second);
+		return std::static_pointer_cast<HTTPState, ClientContextState>(lookup->second);
 	}
 
 	if (!create_on_missing) {
