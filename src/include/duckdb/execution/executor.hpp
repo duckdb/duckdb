@@ -57,7 +57,7 @@ public:
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! Push a new error
-	void PushError(PreservedError exception);
+	void PushError(ErrorData exception);
 
 	//! True if an error has been thrown
 	bool HasError();

@@ -652,6 +652,21 @@ Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Errors As JSON
+//===--------------------------------------------------------------------===//
+void ErrorsAsJsonSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).errors_as_json = ClientConfig().errors_as_json;
+}
+
+void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).errors_as_json = BooleanValue::Get(input);
+}
+
+Value ErrorsAsJsonSetting::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
+}
+
+//===--------------------------------------------------------------------===//
 // Explain Output
 //===--------------------------------------------------------------------===//
 void ExplainOutputSetting::ResetLocal(ClientContext &context) {
@@ -745,6 +760,10 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
+		if (CompressionTypeIsDeprecated(compression_type)) {
+			throw ParserException("Attempted to force a deprecated compression type (%s)",
+			                      CompressionTypeToString(compression_type));
+		}
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			auto compression_types = StringUtil::Join(ListCompressionTypes(), ", ");
 			throw ParserException("Unrecognized option for PRAGMA force_compression, expected %s", compression_types);

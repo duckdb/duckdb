@@ -54,7 +54,7 @@ HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
 	hlls[1] = other.hll;
 	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
 	if (!new_hll) {
-		throw Exception("Could not merge HLLs");
+		throw InternalException("Could not merge HLLs");
 	}
 	return new HyperLogLog(new_hll);
 }

@@ -56,6 +56,10 @@ public:
 		return true;
 	}
 
+	virtual bool Persistent() const {
+		return persistent;
+	}
+
 protected:
 	//! Helper function to select the best matching secret within a storage. Tie-breaks within a storage are broken
 	//! by secret name by default.
@@ -93,8 +97,8 @@ public:
 
 protected:
 	//! Callback called on Store to allow child classes to implement persistence.
-	virtual void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret);
-	virtual void RemoveSecret(CatalogTransaction transaction, const string &name);
+	virtual void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret, OnCreateConflict on_conflict);
+	virtual void RemoveSecret(CatalogTransaction transaction, const string &name, OnEntryNotFound on_entry_not_found);
 
 	//! CatalogSet containing the secrets
 	unique_ptr<CatalogSet> secrets;
@@ -125,9 +129,10 @@ public:
 
 protected:
 	//! Implements the writes to disk
-	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) override;
+	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret, OnCreateConflict on_conflict) override;
 	//! Implements the deletes from disk
-	virtual void RemoveSecret(CatalogTransaction transaction, const string &secret) override;
+	virtual void RemoveSecret(CatalogTransaction transaction, const string &secret,
+	                          OnEntryNotFound on_entry_not_found) override;
 
 	//! Set of persistent secrets that are lazily loaded
 	case_insensitive_set_t persistent_secrets;

@@ -327,8 +327,15 @@ void BaseAppender::AppendValue(const Value &value) {
 }
 
 void BaseAppender::AppendDataChunk(DataChunk &chunk) {
-	if (chunk.GetTypes() != types) {
-		throw InvalidInputException("Type mismatch in Append DataChunk and the types required for appender");
+	auto chunk_types = chunk.GetTypes();
+	if (chunk_types != types) {
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+			if (chunk.data[i].GetType() != types[i]) {
+				throw InvalidInputException("Type mismatch in Append DataChunk and the types required for appender, "
+				                            "expected %s but got %s for column %d",
+				                            types[i].ToString(), chunk.data[i].GetType().ToString(), i + 1);
+			}
+		}
 	}
 	collection->Append(chunk);
 	if (collection->Count() >= FLUSH_COUNT) {

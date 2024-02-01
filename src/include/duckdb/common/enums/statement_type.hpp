@@ -68,7 +68,7 @@ struct StatementProperties {
 	//! The set of databases this statement will modify
 	unordered_set<string> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
-	//! exception of
+	//! exception of ROLLBACK
 	bool requires_valid_transaction;
 	//! Whether or not the result can be streamed to the client
 	bool allow_stream_result;
