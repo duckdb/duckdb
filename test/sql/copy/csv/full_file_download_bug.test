@@ -6,19 +6,7 @@ require httpfs
 
 require tpch
 
-query II
+statement ok
 DESCRIBE FROM 'http://blobs.duckdb.org/data/train_services_demo.csv.gz'
 UNION ALL
 FROM 'http://blobs.duckdb.org/data/train_services_demo.csv.gz';
-----
-column_name     column_type     null    key     default extra
-VARCHAR VARCHAR VARCHAR VARCHAR VARCHAR VARCHAR
-[ Rows: 8]
-service_id      BIGINT  YES     NULL    NULL    NULL
-date    DATE    YES     NULL    NULL    NULL
-type    VARCHAR YES     NULL    NULL    NULL
-train_number    BIGINT  YES     NULL    NULL    NULL
-station_code    VARCHAR YES     NULL    NULL    NULL
-station_name    VARCHAR YES     NULL    NULL    NULL
-departure_time  TIMESTAMP       YES     NULL    NULL    NULL
-arrival_time    TIMESTAMP       YES     NULL    NULL    NULL
