@@ -84,17 +84,17 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 		}
 		aggr.order_bys.reset();
 
-		string error;
+		ErrorData error;
 		auto sort_key = binder.BindScalarFunction(DEFAULT_SCHEMA, "create_sort_key", std::move(sort_children), error);
 		if (!sort_key) {
-			throw BinderException(error);
+			error.Throw();
 		}
 
 		auto &children = aggr.children;
 		children.emplace_back(std::move(sort_key));
 
 		//  Look up the arg_xxx_name function in the catalog
-		QueryErrorContext error_context(nullptr, 0);
+		QueryErrorContext error_context;
 		auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA,
 		                                                              arg_xxx_name, error_context);
 		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
@@ -106,7 +106,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 		}
 		auto best_function = binder.BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
-			throw BinderException(error);
+			error.Throw();
 		}
 		// found a matching function!
 		auto bound_function = func.functions.GetFunctionByOffset(best_function);
