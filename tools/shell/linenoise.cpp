@@ -1056,25 +1056,25 @@ bool isNewline(char c) {
 	return c == '\r' || c == '\n';
 }
 
-void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) {
-	if (isNewline(l->buf[cpos])) {
+void nextPosition(struct linenoiseState *l, const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) {
+	if (isNewline(buf[cpos])) {
 		// newline! move to next line
 		rows++;
-		cols = 0;
+		cols = plen;
 		cpos++;
-		if (l->buf[cpos - 1] == '\r' && cpos < l->len && l->buf[cpos] == '\n') {
+		if (buf[cpos - 1] == '\r' && cpos < len && buf[cpos] == '\n') {
 			cpos++;
 		}
 		return;
 	}
 	int sz;
 	int char_render_width;
-	if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
+	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
 		char_render_width = 1;
 		cpos++;
 	} else {
-		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
-		cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
+		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
+		cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 	}
 	if (cols + char_render_width > l->ws.ws_col) {
 		// exceeded l->cols, move to next row
@@ -1095,13 +1095,13 @@ void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_r
 	while (cpos < l->len) {
 		if (cols >= l->ws.ws_col && !isNewline(l->buf[cpos])) {
 			rows++;
-			cols = 0;
+			cols = plen;
 		}
 		if (out_row < 0 && cpos >= target_pos) {
 			out_row = rows;
 			out_col = cols;
 		}
-		nextPosition(l, cpos, rows, cols);
+		nextPosition(l, l->buf, l->len, cpos, rows, cols, plen);
 	}
 	if (target_pos == l->len) {
 		out_row = rows;
@@ -1131,9 +1131,35 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 		if (rows == target_row && cols == target_col) {
 			return cpos;
 		}
-		nextPosition(l, cpos, rows, cols);
+		nextPosition(l, l->buf, l->len, cpos, rows, cols, plen);
 	}
 	return cpos;
+}
+
+static std::string addContinuationMarkers(struct linenoiseState *l, const char *buf, size_t len, int plen) {
+	std::string result;
+	int rows = 1;
+	int prev_row = 1;
+	int cols = plen;
+	size_t cpos = 0;
+	size_t prev_pos = 0;
+	while (cpos < len) {
+		nextPosition(l, buf, len, cpos, rows, cols, plen);
+		for (; prev_pos < cpos; prev_pos++) {
+			result += buf[prev_pos];
+		}
+		if (rows != prev_row) {
+			for (int p = 0; p + 2 < plen; p++) {
+				result += " ";
+			}
+			result += "> ";
+		}
+		prev_row = rows;
+	}
+	for (; prev_pos < cpos; prev_pos++) {
+		result += buf[prev_pos];
+	}
+	return result;
 }
 
 /* Multi line low level line refresh.
@@ -1199,6 +1225,12 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		l->maxrows = rows;
 	}
 
+	if (rows > 1) {
+		// add continuation markers
+		highlight_buffer = addContinuationMarkers(l, buf, len, plen);
+		buf = (char *)highlight_buffer.c_str();
+		len = highlight_buffer.size();
+	}
 #ifndef DISABLE_HIGHLIGHT
 	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
 		searchMatch *match = nullptr;
