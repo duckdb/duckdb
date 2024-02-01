@@ -41,9 +41,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 				simplified_mark_join = true;
 #endif
 				join.join_type = JoinType::SEMI;
-//				for (auto &binding : right_bindings) {
-//					std::cout << "removed this " << join.mark_index << ", " << binding << std::endl;
-//				}
 				filters.erase(filters.begin() + i);
 				i--;
 				continue;
