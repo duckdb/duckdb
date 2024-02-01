@@ -157,7 +157,7 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	try {
 		result = wrapper->statement->Execute();
 	} catch (std::exception &ex) {
-		ErrorData error(ex);
+		duckdb::ErrorData error(ex);
 		result = duckdb::make_uniq<duckdb::MaterializedQueryResult>(std::move(error));
 	}
 
