@@ -55,9 +55,9 @@ public:
 	vector<LogicalType> GetTypes();
 
 	//! Push a new error
-	void PushError(PreservedError exception);
+	void PushError(ErrorData exception);
 
-	PreservedError GetError();
+	ErrorData GetError();
 
 	//! True if an error has been thrown
 	bool HasError();

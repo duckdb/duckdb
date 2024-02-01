@@ -56,21 +56,21 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) 
 			chunk = nullptr;
 		}
 		return chunk;
-	} catch (StandardException &ex) {
-		// standard exceptions do not invalidate the current transaction
-		SetError(PreservedError(ex));
-		invalidate_query = false;
-	} catch (FatalException &ex) {
-		// fatal exceptions invalidate the entire database
-		SetError(PreservedError(ex));
-		auto &db_inst = DatabaseInstance::GetDatabase(*context);
-		ValidChecker::Invalidate(db_inst, ex.what());
-	} catch (const Exception &ex) {
-		SetError(PreservedError(ex));
 	} catch (std::exception &ex) {
-		SetError(PreservedError(ex));
+		ErrorData error(ex);
+		if (!Exception::InvalidatesTransaction(error.Type())) {
+			// standard exceptions do not invalidate the current transaction
+			invalidate_query = false;
+		} else if (Exception::InvalidatesDatabase(error.Type())) {
+			// fatal exceptions invalidate the entire database
+			auto &config = context->config;
+			if (!config.query_verification_enabled) {
+				auto &db_instance = DatabaseInstance::GetDatabase(*context);
+				ValidChecker::Invalidate(db_instance, error.RawMessage());
+			}
+		}
 	} catch (...) { // LCOV_EXCL_START
-		SetError(PreservedError("Unhandled exception in FetchInternal"));
+		SetError(ErrorData("Unhandled exception in FetchInternal"));
 	} // LCOV_EXCL_STOP
 	context->CleanupInternal(lock, this, invalidate_query);
 	return nullptr;

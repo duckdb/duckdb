@@ -55,8 +55,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			}
 		}
 		if (expr.subquery_type != SubqueryType::EXISTS && bound_node->types.size() > 1) {
-			throw BinderException(binder.FormatError(
-			    expr, StringUtil::Format("Subquery returns %zu columns - expected 1", bound_node->types.size())));
+			throw BinderException(expr, "Subquery returns %zu columns - expected 1", bound_node->types.size());
 		}
 		auto prior_subquery = std::move(expr.subquery);
 		expr.subquery = make_uniq<SelectStatement>();
@@ -66,9 +65,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	// now bind the child node of the subquery
 	if (expr.child) {
 		// first bind the children of the subquery, if any
-		string error = Bind(expr.child, depth);
-		if (!error.empty()) {
-			return BindResult(error);
+		auto error = Bind(expr.child, depth);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
 		}
 	}
 	// both binding the child and binding the subquery was successful
@@ -91,10 +90,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
 		LogicalType compare_type;
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, bound_node->types[0], compare_type)) {
-			throw BinderException(binder.FormatError(
-			    expr, StringUtil::Format(
-			              "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
-			              child_type.ToString(), bound_node->types[0])));
+			throw BinderException(
+			    expr, "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",
+			    child_type.ToString(), bound_node->types[0]);
 		}
 		child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
 		result->child_type = bound_node->types[0];

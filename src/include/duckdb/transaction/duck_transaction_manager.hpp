@@ -28,7 +28,7 @@ public:
 	//! Start a new transaction
 	Transaction &StartTransaction(ClientContext &context) override;
 	//! Commit the given transaction
-	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
+	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction &transaction) override;
 

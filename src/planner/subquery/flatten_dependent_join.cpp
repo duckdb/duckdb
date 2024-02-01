@@ -284,7 +284,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
 		auto &dependent_join = plan->Cast<LogicalJoin>();
 		if (!((dependent_join.join_type == JoinType::INNER) || (dependent_join.join_type == JoinType::LEFT))) {
-			throw Exception("Dependent join can only be INNER or LEFT type");
+			throw NotImplementedException("Dependent join can only be INNER or LEFT type");
 		}
 		D_ASSERT(plan->children.size() == 2);
 		// Push all the bindings down to the left side so the right side knows where to refer DELIM_GET from
@@ -345,7 +345,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		} else if (join.join_type == JoinType::MARK) {
 			if (right_has_correlation) {
-				throw Exception("MARK join with correlation in RHS not supported");
+				throw NotImplementedException("MARK join with correlation in RHS not supported");
 			}
 			// push the child into the LHS
 			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
@@ -355,7 +355,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			rewriter.VisitOperator(*plan);
 			return plan;
 		} else {
-			throw Exception("Unsupported join type for flattening correlated subquery");
+			throw NotImplementedException("Unsupported join type for flattening correlated subquery");
 		}
 		// both sides have correlation
 		// push into both sides

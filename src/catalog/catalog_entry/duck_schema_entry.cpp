@@ -97,7 +97,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	if (!set.CreateEntry(transaction, entry_name, std::move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
+			throw CatalogException::EntryAlreadyExists(entry_type, entry_name);
 		} else {
 			return nullptr;
 		}
@@ -248,7 +248,7 @@ void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
 	} else {
 		string name = info.name;
 		if (!set.AlterEntry(transaction, name, info)) {
-			throw CatalogException("Entry with name \"%s\" does not exist!", name);
+			throw CatalogException::MissingEntry(type, name, string());
 		}
 	}
 }

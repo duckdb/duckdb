@@ -8,21 +8,21 @@ namespace duckdb {
 
 static unique_ptr<ParsedExpression> TransformBooleanTestInternal(unique_ptr<ParsedExpression> argument,
                                                                  ExpressionType comparison_type, bool comparison_value,
-                                                                 idx_t query_location) {
+                                                                 int query_location) {
 	auto bool_value = make_uniq<ConstantExpression>(Value::BOOLEAN(comparison_value));
-	bool_value->query_location = query_location;
+	Transformer::SetQueryLocation(*bool_value, query_location);
 	// we cast the argument to bool to remove ambiguity wrt function binding on the comparision
 	auto cast_argument = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(argument));
 
 	auto result = make_uniq<ComparisonExpression>(comparison_type, std::move(cast_argument), std::move(bool_value));
-	result->query_location = query_location;
+	Transformer::SetQueryLocation(*result, query_location);
 	return std::move(result);
 }
 
 static unique_ptr<ParsedExpression> TransformBooleanTestIsNull(unique_ptr<ParsedExpression> argument,
                                                                ExpressionType operator_type, idx_t query_location) {
 	auto result = make_uniq<OperatorExpression>(operator_type, std::move(argument));
-	result->query_location = query_location;
+	Transformer::SetQueryLocation(*result, query_location);
 	return std::move(result);
 }
 

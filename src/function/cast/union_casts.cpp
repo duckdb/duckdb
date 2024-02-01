@@ -1,6 +1,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <algorithm> // for std::sort
 
@@ -41,7 +42,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 				message += ", ";
 			}
 		}
-		throw CastException(message);
+		throw ConversionException(message);
 	}
 
 	// sort the candidate casts by cost
@@ -68,7 +69,7 @@ unique_ptr<BoundCastData> BindToUnionCast(BindCastInput &input, const LogicalTyp
 		}
 		message += ". Disambiguate the target type by using the 'union_value(<tag> := <arg>)' function to promote the "
 		           "source value to a single member union before casting.";
-		throw CastException(message);
+		throw ConversionException(message);
 	}
 
 	// otherwise, return the selected cast
@@ -182,7 +183,7 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 			auto message =
 			    StringUtil::Format("Type %s can't be cast as %s. The member '%s' is not present in target union",
 			                       source.ToString(), target.ToString(), source_member_name);
-			throw CastException(message);
+			throw ConversionException(message);
 		}
 	}
 

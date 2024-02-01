@@ -53,7 +53,7 @@ public:
 
 	bool RemainingSinkChunk() const;
 
-	//! Initializes a chunk with the types that will flow out of ExecutePull
+	//! Initializes a chunk with the types that will flow out of the chunk
 	void InitializeChunk(DataChunk &chunk);
 	//! Execute a pipeline without a sink, and retrieve a single DataChunk
 	//! Returns an empty chunk when finished.
