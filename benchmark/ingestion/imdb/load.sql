@@ -20,4 +20,4 @@ CREATE TABLE person_info AS SELECT * FROM read_parquet('https://github.com/duckd
 CREATE TABLE role_type AS SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet');
 CREATE TABLE title AS SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_title.parquet');
 
-EXPORT DATABASE 'imdb_parquet' (FORMAT PARQUET);
+EXPORT DATABASE 'duckdb_benchmark_data/imdb_parquet' (FORMAT PARQUET);
