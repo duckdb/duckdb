@@ -290,16 +290,15 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 	}
 }
 
+static const vector<LogicalType> arg_max_by_types = {
+    LogicalType::INTEGER, LogicalType::BIGINT,    LogicalType::DOUBLE,       LogicalType::VARCHAR,
+    LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
+
 template <class OP, class ARG_TYPE>
 void AddVectorArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::INTEGER, type));
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::BIGINT, type));
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::DOUBLE, type));
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::VARCHAR, type));
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::DATE, type));
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::TIMESTAMP, type));
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::TIMESTAMP_TZ, type));
-	fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::BLOB, type));
+	for (const auto &by_type : arg_max_by_types) {
+		fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
+	}
 }
 
 template <class OP, class ARG_TYPE, class BY_TYPE>
@@ -333,14 +332,42 @@ AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const Logic
 
 template <class OP, class ARG_TYPE>
 void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::INTEGER, type));
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::BIGINT, type));
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::DOUBLE, type));
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::VARCHAR, type));
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::DATE, type));
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::TIMESTAMP, type));
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::TIMESTAMP_TZ, type));
-	fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(LogicalType::BLOB, type));
+	for (const auto &by_type : arg_max_by_types) {
+		fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
+	}
+}
+
+template <class OP>
+static AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
+	switch (type.InternalType()) {
+	case PhysicalType::INT16:
+		return GetArgMinMaxFunctionBy<OP, int16_t>(by_type, type);
+	case PhysicalType::INT32:
+		return GetArgMinMaxFunctionBy<OP, int32_t>(by_type, type);
+	case PhysicalType::INT64:
+		return GetArgMinMaxFunctionBy<OP, int64_t>(by_type, type);
+	default:
+		return GetArgMinMaxFunctionBy<OP, hugeint_t>(by_type, type);
+	}
+}
+
+template <class OP>
+static unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateFunction &function,
+                                                     vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	auto by_type = arguments[1]->return_type;
+	auto name = std::move(function.name);
+	function = GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type);
+	function.name = std::move(name);
+	function.return_type = decimal_type;
+	return nullptr;
+}
+
+template <class OP>
+void AddDecimalArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &by_type) {
+	fun.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, by_type}, LogicalTypeId::DECIMAL, nullptr, nullptr,
+	                                  nullptr, nullptr, nullptr, nullptr, BindDecimalArgMinMax<OP>));
 }
 
 template <class COMPARATOR, bool IGNORE_NULL>
@@ -354,6 +381,10 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	AddArgMinMaxFunctionBy<OP, timestamp_t>(fun, LogicalType::TIMESTAMP);
 	AddArgMinMaxFunctionBy<OP, timestamp_t>(fun, LogicalType::TIMESTAMP_TZ);
 	AddArgMinMaxFunctionBy<OP, string_t>(fun, LogicalType::BLOB);
+
+	for (const auto &by_type : arg_max_by_types) {
+		AddDecimalArgMinMaxFunctionBy<OP>(fun, by_type);
+	}
 
 	using VECTOR_OP = VectorArgMinMaxBase<COMPARATOR, IGNORE_NULL>;
 	AddVectorArgMinMaxFunctionBy<VECTOR_OP, Vector *>(fun, LogicalType::ANY);
