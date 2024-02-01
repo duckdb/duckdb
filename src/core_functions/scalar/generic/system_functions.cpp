@@ -100,7 +100,8 @@ ScalarFunction CurrentSchemasFun::GetFunction() {
 }
 
 ScalarFunction InSearchPathFun::GetFunction() {
-	ScalarFunction in_search_path({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, InSearchPathFunction);
+	ScalarFunction in_search_path({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                              InSearchPathFunction);
 	in_search_path.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
 	return in_search_path;
 }
