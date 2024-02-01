@@ -303,7 +303,7 @@ void RegisterExceptions(const py::module &m) {
 	// The base class is mapped to Error in python to somewhat match the DBAPI 2.0 specifications
 	py::register_exception<Warning>(m, "Warning");
 	auto error = py::register_exception<PyError>(m, "Error").ptr();
-	auto db_error = py::register_exception<PyError>(m, "DatabaseError", error).ptr();
+	auto db_error = py::register_exception<DatabaseError>(m, "DatabaseError", error).ptr();
 
 	// order of declaration matters, and this needs to be checked last
 	// Unknown
