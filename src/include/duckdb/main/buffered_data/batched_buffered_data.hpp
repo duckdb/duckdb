@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/parallel/interrupt.hpp"
-#include "duckdb/common/queue.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/buffered_data/simple_buffered_data.hpp"
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
