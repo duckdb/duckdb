@@ -367,7 +367,7 @@ void RegisterExceptions(const py::module &m) {
 		} catch (const duckdb::Exception &ex) {
 			duckdb::ErrorData error(ex);
 			PyThrowException(error, HTTP_EXCEPTION.ptr());
-		} catch(const std::exception &ex) {
+		} catch (const std::exception &ex) {
 			duckdb::ErrorData error(ex);
 			if (error.Type() == ExceptionType::INVALID) {
 				// we need to pass non-DuckDB exceptions through as-is
