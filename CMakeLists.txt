@@ -1111,7 +1111,7 @@ if(BUILD_PYTHON)
       env
       DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
       DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
-      DUCKDB_LIBS=${duckdb_libs}
+      DUCKDB_LIBS="${duckdb_libs}"
       pip
       install
       -e
