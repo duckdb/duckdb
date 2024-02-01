@@ -70,7 +70,7 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("example");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("result_type");
+	names.emplace_back("stability");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
@@ -102,16 +102,16 @@ unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context,
 	return std::move(result);
 }
 
-Value FunctionResultTypeToValue(FunctionResultType result_type) {
-	switch (result_type) {
-	case FunctionResultType::VOLATILE:
+Value FunctionStabilityToValue(FunctionStability stability) {
+	switch (stability) {
+	case FunctionStability::VOLATILE:
 		return Value("VOLATILE");
-	case FunctionResultType::CONSISTENT:
+	case FunctionStability::CONSISTENT:
 		return Value("CONSISTENT");
-	case FunctionResultType::CONSISTENT_WITHIN_QUERY:
+	case FunctionStability::CONSISTENT_WITHIN_QUERY:
 		return Value("CONSISTENT_WITHIN_QUERY");
 	default:
-		throw InternalException("Unsupported FunctionResultType");
+		throw InternalException("Unsupported FunctionStability");
 	}
 }
 
@@ -155,11 +155,11 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value IsVolatile(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).result_type == FunctionResultType::VOLATILE);
+		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).stability == FunctionStability::VOLATILE);
 	}
 
 	static Value ResultType(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return FunctionResultTypeToValue(entry.functions.GetFunctionByOffset(offset).result_type);
+		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).stability);
 	}
 };
 
@@ -203,11 +203,11 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value IsVolatile(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).result_type == FunctionResultType::VOLATILE);
+		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).stability == FunctionStability::VOLATILE);
 	}
 
 	static Value ResultType(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return FunctionResultTypeToValue(entry.functions.GetFunctionByOffset(offset).result_type);
+		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).stability);
 	}
 };
 
@@ -490,7 +490,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	// example, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, entry.example.empty() ? Value() : entry.example);
 
-	// result_type, LogicalType::VARCHAR
+	// stability, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::ResultType(function, function_idx));
 
 	return function_idx + 1 == OP::FunctionCount(function);

@@ -76,7 +76,7 @@ static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &re
 
 ScalarFunction CurrentQueryFun::GetFunction() {
 	ScalarFunction current_query({}, LogicalType::VARCHAR, CurrentQueryFunction);
-	current_query.result_type = FunctionResultType::VOLATILE;
+	current_query.stability = FunctionStability::VOLATILE;
 	return current_query;
 }
 

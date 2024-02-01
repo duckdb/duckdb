@@ -2517,11 +2517,11 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 }
 
 template<>
-const char* EnumUtil::ToChars<FunctionResultType>(FunctionResultType value) {
+const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value) {
 	switch(value) {
-	case FunctionResultType::CONSISTENT:
+	case FunctionStability::CONSISTENT:
 		return "NO_SIDE_EFFECTS";
-	case FunctionResultType::VOLATILE:
+	case FunctionStability::VOLATILE:
 		return "HAS_SIDE_EFFECTS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
@@ -2529,12 +2529,12 @@ const char* EnumUtil::ToChars<FunctionResultType>(FunctionResultType value) {
 }
 
 template<>
-FunctionResultType EnumUtil::FromString<FunctionResultType>(const char *value) {
+FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
 	if (StringUtil::Equals(value, "NO_SIDE_EFFECTS")) {
-		return FunctionResultType::CONSISTENT;
+		return FunctionStability::CONSISTENT;
 	}
 	if (StringUtil::Equals(value, "HAS_SIDE_EFFECTS")) {
-		return FunctionResultType::VOLATILE;
+		return FunctionStability::VOLATILE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

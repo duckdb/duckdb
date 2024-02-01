@@ -19,11 +19,11 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
-	return function.result_type == FunctionResultType::VOLATILE ? true : Expression::IsVolatile();
+	return function.result_type == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
 }
 
 bool BoundFunctionExpression::IsConsistent() const {
-	return function.result_type != FunctionResultType::CONSISTENT ? false : Expression::IsConsistent();
+	return function.result_type != FunctionStability::CONSISTENT ? false : Expression::IsConsistent();
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -39,7 +39,7 @@ bool BoundFunctionExpression::IsFoldable() const {
 			}
 		}
 	}
-	return function.result_type == FunctionResultType::VOLATILE ? false : Expression::IsFoldable();
+	return function.result_type == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 
 string BoundFunctionExpression::ToString() const {

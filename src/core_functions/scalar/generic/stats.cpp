@@ -47,7 +47,7 @@ ScalarFunction StatsFun::GetFunction() {
 	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
 	                     StatsPropagateStats);
 	stats.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	stats.result_type = FunctionResultType::VOLATILE;
+	stats.stability = FunctionStability::VOLATILE;
 	return stats;
 }
 
