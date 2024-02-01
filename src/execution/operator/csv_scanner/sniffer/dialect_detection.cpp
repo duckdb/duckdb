@@ -91,18 +91,18 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	auto &sniffed_column_counts = scanner->ParseChunk();
 	idx_t start_row = options.dialect_options.skip_rows.GetValue();
 	idx_t consistent_rows = 0;
-	idx_t num_cols = sniffed_column_counts.Empty() ? 1 : sniffed_column_counts[start_row];
+	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[start_row];
 	idx_t padding_count = 0;
 	bool allow_padding = options.null_padding;
-	if (sniffed_column_counts.Size() > rows_read) {
-		rows_read = sniffed_column_counts.Size();
+	if (sniffed_column_counts.result_position > rows_read) {
+		rows_read = sniffed_column_counts.result_position;
 	}
 	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors,
 	                                        sniffed_column_counts.last_value_always_empty)) {
 		// Not acceptable
 		return;
 	}
-	for (idx_t row = start_row; row < sniffed_column_counts.Size(); row++) {
+	for (idx_t row = start_row; row < sniffed_column_counts.result_position; row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row], options.null_padding, options.ignore_errors,
 		                                        sniffed_column_counts.last_value_always_empty)) {
 			// Not acceptable
@@ -143,7 +143,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
 	bool rows_consistent = consistent_rows + (start_row - options.dialect_options.skip_rows.GetValue()) ==
-	                       sniffed_column_counts.Size() - options.dialect_options.skip_rows.GetValue();
+	                       sniffed_column_counts.result_position - options.dialect_options.skip_rows.GetValue();
 	// If there are more than one consistent row.
 	bool more_than_one_row = (consistent_rows > 1);
 
@@ -205,7 +205,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 
 bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
 	auto &sniffed_column_counts = candidate.ParseChunk();
-	for (idx_t i = 0; i < sniffed_column_counts.Size(); i++) {
+	for (idx_t i = 0; i < sniffed_column_counts.result_position; i++) {
 		if (set_columns.IsSet()) {
 			return !set_columns.IsCandidateUnacceptable(sniffed_column_counts[i], options.null_padding,
 			                                            options.ignore_errors,

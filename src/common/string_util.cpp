@@ -405,4 +405,182 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
+static void SkipSpaces(const string &message, idx_t &pos) {
+	for (; pos < message.size() && StringUtil::CharacterIsSpace(message[pos]); pos++) {
+	}
+}
+
+static bool MatchCharacter(const string &message, idx_t &pos, char c) {
+	if (pos >= message.size()) {
+		return false;
+	}
+	return message[pos] == c;
+}
+
+static string ParseJSONValue(const string &message, idx_t &pos) {
+	string result;
+	if (!MatchCharacter(message, pos, '"')) {
+		// values need to start with a quote
+		D_ASSERT(0);
+		return result;
+	}
+	pos++;
+	for (; pos < message.size(); pos++) {
+		if (message[pos] == '\\') {
+			// escape
+			pos++;
+			if (pos >= message.size()) {
+				// escape at end of string!?
+				D_ASSERT(0);
+				return result;
+			}
+			switch (message[pos]) {
+			case 'r':
+				result += '\r';
+				break;
+			case 'n':
+				result += '\n';
+				break;
+			case 't':
+				result += '\t';
+				break;
+			case 'b':
+				result += '\b';
+				break;
+			case 'f':
+				result += '\f';
+				break;
+			case '0':
+				result += '\0';
+				break;
+			case '\\':
+			case '"':
+			case '/':
+				result += message[pos];
+				break;
+			default:
+				// unsupported escape character
+				// NOTE: we do not support unicode escape sequences here
+				D_ASSERT(0);
+				result += message[pos];
+				break;
+			}
+		} else if (message[pos] == '"') {
+			// end of message
+			pos++;
+			return result;
+		} else {
+			result += message[pos];
+		}
+	}
+	// no end-of-value found
+	D_ASSERT(0);
+	return result;
+}
+
+unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
+	unordered_map<string, string> result;
+	if (json.empty()) {
+		return result;
+	}
+	idx_t pos = 0;
+	SkipSpaces(json, pos);
+	if (!MatchCharacter(json, pos, '{')) {
+		D_ASSERT(0);
+		return result;
+	}
+	pos++;
+	while (true) {
+		SkipSpaces(json, pos);
+		if (MatchCharacter(json, pos, '}')) {
+			// end of object
+			break;
+		}
+		if (!result.empty()) {
+			// objects are comma separated
+			if (!MatchCharacter(json, pos, ',')) {
+				D_ASSERT(0);
+				return result;
+			}
+			pos++;
+		}
+		string key = ParseJSONValue(json, pos);
+		SkipSpaces(json, pos);
+		if (!MatchCharacter(json, pos, ':')) {
+			D_ASSERT(0);
+			return result;
+		}
+		pos++;
+		string value = ParseJSONValue(json, pos);
+		auto entry = result.find(key);
+		if (entry != result.end()) {
+			// entry already exists
+			D_ASSERT(0);
+			continue;
+		}
+		result.insert(make_pair(std::move(key), std::move(value)));
+	}
+	return result;
+}
+
+static void WriteJSONValue(const string &value, string &result) {
+	result += '"';
+	for (auto c : value) {
+		// check for characters we need to escape
+		switch (c) {
+		case '\0':
+			result += "\\0";
+			break;
+		case '\\':
+			result += "\\\\";
+			break;
+		case '\b':
+			result += "\\b";
+			break;
+		case '\f':
+			result += "\\f";
+			break;
+		case '\t':
+			result += "\\t";
+			break;
+		case '\r':
+			result += "\\r";
+			break;
+		case '\n':
+			result += "\\n";
+			break;
+		case '"':
+			result += "\\\"";
+			break;
+		default:
+			result += c;
+			break;
+		}
+	}
+	result += '"';
+}
+
+static void WriteJSONPair(const string &key, const string &value, string &result) {
+	WriteJSONValue(key, result);
+	result += ":";
+	WriteJSONValue(value, result);
+}
+
+string StringUtil::ToJSONMap(ExceptionType type, const string &message, const unordered_map<string, string> &map) {
+	D_ASSERT(map.find("exception_type") == map.end());
+	D_ASSERT(map.find("exception_message") == map.end());
+	string result;
+	result += "{";
+	// we always write exception type/message
+	WriteJSONPair("exception_type", Exception::ExceptionTypeToString(type), result);
+	result += ",";
+	WriteJSONPair("exception_message", message, result);
+	for (auto &entry : map) {
+		result += ",";
+		WriteJSONPair(entry.first, entry.second, result);
+	}
+	result += "}";
+	return result;
+}
+
 } // namespace duckdb

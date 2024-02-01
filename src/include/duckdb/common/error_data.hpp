@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/preserved_error.hpp
+// duckdb/common/error_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,37 +12,49 @@
 #include "duckdb/common/string.hpp"
 
 namespace duckdb {
+class ParsedExpression;
+class TableRef;
 
-class PreservedError {
+class ErrorData {
 public:
 	//! Not initialized, default constructor
-	DUCKDB_API PreservedError();
+	DUCKDB_API ErrorData();
 	//! From std::exception
-	PreservedError(const std::exception &ex) : PreservedError(ex.what()) {
-	}
+	DUCKDB_API ErrorData(const std::exception &ex); // NOLINT: allow implicit construction from exception
+	//! From a raw string and exception type
+	DUCKDB_API explicit ErrorData(ExceptionType type, const string &raw_message);
 	//! From a raw string
-	DUCKDB_API explicit PreservedError(const string &raw_message);
-	//! From an Exception
-	DUCKDB_API PreservedError(const Exception &exception);
+	DUCKDB_API explicit ErrorData(const string &raw_message);
 
 public:
 	//! Throw the error
 	[[noreturn]] DUCKDB_API void Throw(const string &prepended_message = "") const;
 	//! Get the internal exception type of the error
 	DUCKDB_API const ExceptionType &Type() const;
-	//! Allows adding addition information to the message
-	DUCKDB_API PreservedError &AddToMessage(const string &prepended_message);
 	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message();
-	//! Let's us do things like 'if (error)'
-	DUCKDB_API operator bool() const;
-	DUCKDB_API bool operator==(const PreservedError &other) const;
-	const shared_ptr<Exception> &GetError() {
-		return exception_instance;
+	DUCKDB_API const string &RawMessage() {
+		return raw_message;
+	}
+	DUCKDB_API bool operator==(const ErrorData &other) const;
+
+	inline bool HasError() const {
+		return initialized;
+	}
+	const unordered_map<string, string> &ExtraInfo() const {
+		return extra_info;
 	}
 
+	DUCKDB_API void AddErrorLocation(const string &query);
+	DUCKDB_API void ConvertErrorToJSON();
+
+	DUCKDB_API void AddQueryLocation(optional_idx query_location);
+	DUCKDB_API void AddQueryLocation(QueryErrorContext error_context);
+	DUCKDB_API void AddQueryLocation(const ParsedExpression &ref);
+	DUCKDB_API void AddQueryLocation(const TableRef &ref);
+
 private:
-	//! Whether this PreservedError contains an exception or not
+	//! Whether this ErrorData contains an exception or not
 	bool initialized;
 	//! The ExceptionType of the preserved exception
 	ExceptionType type;
@@ -50,7 +62,8 @@ private:
 	string raw_message;
 	//! The final message (stored in the preserved error for compatibility reasons with C-API)
 	string final_message;
-	std::shared_ptr<Exception> exception_instance;
+	//! Extra exception info
+	unordered_map<string, string> extra_info;
 
 private:
 	DUCKDB_API static string SanitizeErrorMessage(string error);

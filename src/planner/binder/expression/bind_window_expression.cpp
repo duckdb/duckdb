@@ -103,11 +103,11 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	auto &bound = BoundExpression::GetExpression(*expr);
 	children.emplace_back(std::move(bound));
 
-	string error;
+	ErrorData error;
 	FunctionBinder function_binder(context);
 	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
 	if (!function) {
-		throw BinderException(error);
+		error.Throw();
 	}
 	bound = std::move(function);
 	return bound->return_type;
@@ -116,24 +116,24 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	auto name = window.GetName();
 
-	QueryErrorContext error_context(binder.GetRootStatement(), window.query_location);
+	QueryErrorContext error_context(window.query_location);
 	if (inside_window) {
-		throw BinderException(error_context.FormatError("window function calls cannot be nested"));
+		throw BinderException(error_context, "window function calls cannot be nested");
 	}
 	if (depth > 0) {
-		throw BinderException(error_context.FormatError("correlated columns in window functions not supported"));
+		throw BinderException(error_context, "correlated columns in window functions not supported");
 	}
 	// If we have range expressions, then only one order by clause is allowed.
 	const auto is_range =
 	    (window.start == WindowBoundary::EXPR_PRECEDING_RANGE || window.start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
 	     window.end == WindowBoundary::EXPR_PRECEDING_RANGE || window.end == WindowBoundary::EXPR_FOLLOWING_RANGE);
 	if (is_range && window.orders.size() != 1) {
-		throw BinderException(error_context.FormatError("RANGE frames must have only one ORDER BY expression"));
+		throw BinderException(error_context, "RANGE frames must have only one ORDER BY expression");
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
 	this->inside_window = true;
-	string error;
+	ErrorData error;
 	for (auto &child : window.children) {
 		BindChild(child, depth, error);
 	}
@@ -165,9 +165,9 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.default_expr, depth, error);
 
 	this->inside_window = false;
-	if (!error.empty()) {
+	if (error.HasError()) {
 		// failed to bind children of window function
-		return BindResult(error);
+		return BindResult(std::move(error));
 	}
 
 	//	Restore any collation expressions
@@ -215,11 +215,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
-		string error;
+		ErrorData error;
 		FunctionBinder function_binder(context);
 		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
-			throw BinderException(binder.FormatError(window, error));
+			error.AddQueryLocation(window);
+			error.Throw();
 		}
 		// found a matching function! bind it as an aggregate
 		auto bound_function = func.functions.GetFunctionByOffset(best_function);

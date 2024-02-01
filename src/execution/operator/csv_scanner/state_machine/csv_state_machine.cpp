@@ -19,22 +19,4 @@ CSVStateMachine::CSVStateMachine(const StateMachine &transition_array_p, const C
 	dialect_options.state_machine_options = state_machine_options;
 }
 
-void CSVStateMachine::InitializeSelectionVector(vector<SelectionVector> &selection_vector, idx_t num_cols) {
-	if (selection_vector.empty()) {
-		selection_vector.resize(num_cols);
-		// precompute these selection vectors
-		for (idx_t i = 0; i < selection_vector.size(); i++) {
-			selection_vector[i].Initialize();
-			for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j++) {
-				selection_vector[i][j] = i + (num_cols * j);
-			}
-		}
-	}
-}
-
-const vector<SelectionVector> &CSVStateMachine::GetSelectionVector() {
-	std::call_once(call_once_flag, this->InitializeSelectionVector, selection_vector, dialect_options.num_cols);
-	return selection_vector;
-}
-
 } // namespace duckdb

@@ -4,6 +4,7 @@ add_library_unity(
   serialize_constraint.cpp
   serialize_create_info.cpp
   serialize_expression.cpp
+  serialize_extra_drop_info.cpp
   serialize_logical_operator.cpp
   serialize_macro_function.cpp
   serialize_nodes.cpp

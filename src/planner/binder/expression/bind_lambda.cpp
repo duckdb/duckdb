@@ -56,7 +56,7 @@ void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vec
 		throw BinderException(error_message);
 	}
 
-	for (const auto column_ref : column_refs) {
+	for (const auto &column_ref : column_refs) {
 		ExtractParameter(column_ref.get(), column_names, column_aliases);
 	}
 	D_ASSERT(!column_names.empty());
@@ -105,7 +105,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	}
 
 	if (result.HasError()) {
-		throw BinderException(result.error);
+		result.error.Throw();
 	}
 
 	return BindResult(make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,

@@ -4,6 +4,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/senary_executor.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cmath>
 
