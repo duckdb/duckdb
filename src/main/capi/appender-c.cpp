@@ -208,20 +208,6 @@ duckdb_state duckdb_appender_close(duckdb_appender appender) {
 	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Close(); });
 }
 
-duckdb_state duckdb_appender_get_column_types(duckdb_appender appender, DUCKDB_TYPE **out_types) {
-	if (!appender) {
-		return DuckDBError;
-	}
-	return duckdb_appender_run_function(appender, [&](Appender &appender) {
-		auto types = appender.GetTypes();
-		*out_types = new DUCKDB_TYPE[types.size()];
-		for (idx_t i = 0; i < types.size(); i++) {
-			(*out_types)[i] = ConvertCPPTypeToC(types[i]);
-		}
-		return DuckDBSuccess;
-	});
-}
-
 idx_t duckdb_appender_column_count(duckdb_appender appender) {
 	if (!appender) {
 		return 0;
@@ -234,6 +220,7 @@ idx_t duckdb_appender_column_count(duckdb_appender appender) {
 
 	return wrapper->appender->GetTypes().size();
 }
+
 duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx) {
 	if (!appender || col_idx >= duckdb_appender_column_count(appender)) {
 		return nullptr;
