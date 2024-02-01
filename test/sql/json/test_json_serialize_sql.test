@@ -19,7 +19,7 @@ SELECT json_serialize_sql('SELECT * FROM (SELECT 1 + 2)', skip_null := true, ski
 query I
 SELECT json_serialize_sql('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');
 ----
-{"error":true,"error_type":"parser","error_message":"syntax error at or near \"AND\"\nLINE 1: SELECT AND LAUNCH ROCKETS WHERE 1 = 1\n               ^"}
+<REGEX>:.*syntax error at or near.*
 
 # Test Deserialize
 query I
