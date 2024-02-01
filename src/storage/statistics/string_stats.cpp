@@ -159,8 +159,8 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 		if (unicode == UnicodeType::UNICODE) {
 			string_data.has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
-			throw InvalidInputException(ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
-			                                                              "segment statistics update"));
+			throw ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
+			                                        "segment statistics update");
 		}
 	}
 }

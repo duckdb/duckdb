@@ -10,7 +10,7 @@ SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> r
     : Relation(left_p->context, RelationType::SET_OPERATION_RELATION), left(std::move(left_p)),
       right(std::move(right_p)), setop_type(setop_type_p), setop_all(setop_all) {
 	if (left->context.GetContext() != right->context.GetContext()) {
-		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
+		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }

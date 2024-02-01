@@ -94,15 +94,22 @@ struct AlpCompression {
 	static constexpr uint8_t EXACT_TYPE_BITSIZE = sizeof(T) * 8;
 
 	/*
+	 * Check for special values which are impossible for ALP to encode
+	 * because they cannot be cast to int64 without an undefined behaviour
+	 */
+	static bool IsImpossibleToEncode(T n) {
+		return !Value::IsFinite(n) || Value::IsNan(n) || n > AlpConstants::ENCODING_UPPER_LIMIT ||
+		       n < AlpConstants::ENCODING_LOWER_LIMIT || (n == 0.0 && std::signbit(n)); //! Verification for -0.0
+	}
+
+	/*
 	 * Conversion from a Floating-Point number to Int64 without rounding
 	 */
 	static int64_t NumberToInt64(T n) {
-		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
-		//! Special values which cannot be casted to int64 without an undefined behaviour
-		if (!Value::IsFinite(n) || Value::IsNan(n) || n > AlpConstants::ENCODING_UPPER_LIMIT ||
-		    n < AlpConstants::ENCODING_LOWER_LIMIT) {
+		if (IsImpossibleToEncode(n)) {
 			return AlpConstants::ENCODING_UPPER_LIMIT;
 		}
+		n = n + AlpTypedConstants<T>::MAGIC_NUMBER - AlpTypedConstants<T>::MAGIC_NUMBER;
 		return static_cast<int64_t>(n);
 	}
 

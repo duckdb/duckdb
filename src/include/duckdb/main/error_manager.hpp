@@ -15,6 +15,7 @@
 namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
+class TransactionException;
 
 enum class ErrorType : uint16_t {
 	// error message types
@@ -51,7 +52,9 @@ public:
 		return Get(context).FormatException(error_type, params...);
 	}
 
-	DUCKDB_API static string InvalidUnicodeError(const string &input, const string &context);
+	DUCKDB_API static InvalidInputException InvalidUnicodeError(const string &input, const string &context);
+	DUCKDB_API static FatalException InvalidatedDatabase(ClientContext &context, const string &invalidated_msg);
+	DUCKDB_API static TransactionException InvalidatedTransaction(ClientContext &context);
 
 	//! Adds a custom error for a specific error type
 	void AddCustomError(ErrorType type, string new_error);

@@ -27,7 +27,7 @@ for vector_size in vector_sizes:
     print("TESTING STANDARD_VECTOR_SIZE=%d" % (vector_size,))
     replace_in_file(
         'src/include/duckdb/common/vector_size.hpp',
-        r'#define STANDARD_VECTOR_SIZE \d+',
+        r'#define STANDARD_VECTOR_SIZE \w+',
         '#define STANDARD_VECTOR_SIZE %d' % (vector_size,),
     )
     execute_system_command('rm -rf build')

@@ -26,8 +26,8 @@ public:
 public:
 	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
 	                              vector<LogicalType> types, bool allow_stream_result);
-	DUCKDB_API explicit PendingQueryResult(PreservedError error_message);
-	DUCKDB_API ~PendingQueryResult();
+	DUCKDB_API explicit PendingQueryResult(ErrorData error_message);
+	DUCKDB_API ~PendingQueryResult() override;
 
 public:
 	//! Executes a single task within the query, returning whether or not the query is ready.

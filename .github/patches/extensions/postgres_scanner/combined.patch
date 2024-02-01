@@ -1,5 +1,5 @@
 diff --git a/src/include/storage/postgres_transaction_manager.hpp b/src/include/storage/postgres_transaction_manager.hpp
-index 94427d5..b4ac2da 100644
+index 94427d5..24b82b4 100644
 --- a/src/include/storage/postgres_transaction_manager.hpp
 +++ b/src/include/storage/postgres_transaction_manager.hpp
 @@ -11,6 +11,7 @@
@@ -18,7 +18,7 @@ index 94427d5..b4ac2da 100644
 -	string CommitTransaction(ClientContext &context, Transaction *transaction) override;
 -	void RollbackTransaction(Transaction *transaction) override;
 +	Transaction &StartTransaction(ClientContext &context) override;
-+	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
++	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
 +	void RollbackTransaction(Transaction &transaction) override;
  
  	void Checkpoint(ClientContext &context, bool force = false) override;
@@ -32,7 +32,7 @@ index 94427d5..b4ac2da 100644
  
  } // namespace duckdb
 diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
-index 01a034c..6017770 100644
+index 96cedaf..1faf692 100644
 --- a/src/postgres_filter_pushdown.cpp
 +++ b/src/postgres_filter_pushdown.cpp
 @@ -1,5 +1,6 @@
@@ -42,7 +42,7 @@ index 01a034c..6017770 100644
  
  namespace duckdb {
  
-@@ -50,6 +51,12 @@ string PostgresFilterPushdown::TransformFilter(string &column_name, TableFilter
+@@ -51,6 +52,12 @@ string PostgresFilterPushdown::TransformFilter(string &column_name, TableFilter
  		auto operator_string = TransformComparision(constant_filter.comparison_type);
  		return StringUtil::Format("%s %s %s", column_name, operator_string, constant_string);
  	}
@@ -55,7 +55,7 @@ index 01a034c..6017770 100644
  	default:
  		throw InternalException("Unsupported table filter type");
  	}
-@@ -67,6 +74,11 @@ string PostgresFilterPushdown::TransformFilters(const vector<column_t> &column_i
+@@ -69,6 +76,11 @@ string PostgresFilterPushdown::TransformFilters(const vector<column_t> &column_i
  		}
  		auto column_name = KeywordHelper::WriteQuoted(names[column_ids[entry.first]], '"');
  		auto &filter = *entry.second;
@@ -68,10 +68,10 @@ index 01a034c..6017770 100644
  	}
  	return result;
 diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
-index 88786cf..bfd37ab 100644
+index e397203..9457c55 100644
 --- a/src/storage/postgres_table_set.cpp
 +++ b/src/storage/postgres_table_set.cpp
-@@ -205,8 +205,8 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
+@@ -240,8 +240,8 @@ string PostgresColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<C
  		}
  		if (column.Generated()) {
  			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
@@ -83,7 +83,7 @@ index 88786cf..bfd37ab 100644
  	}
  	// print any extra constraints that still need to be printed
 diff --git a/src/storage/postgres_transaction_manager.cpp b/src/storage/postgres_transaction_manager.cpp
-index 6de4b5c..e1b89e6 100644
+index 6de4b5c..d546c29 100644
 --- a/src/storage/postgres_transaction_manager.cpp
 +++ b/src/storage/postgres_transaction_manager.cpp
 @@ -7,26 +7,26 @@ PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, P
@@ -104,12 +104,13 @@ index 6de4b5c..e1b89e6 100644
 -string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
 -	auto postgres_transaction = (PostgresTransaction *)transaction;
 -	postgres_transaction->Commit();
-+string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
++ErrorData PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
 +	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
 +	postgres_transaction.Commit();
  	lock_guard<mutex> l(transaction_lock);
  	transactions.erase(transaction);
- 	return string();
+-	return string();
++	return ErrorData();
  }
  
 -void PostgresTransactionManager::RollbackTransaction(Transaction *transaction) {
@@ -121,26 +122,11 @@ index 6de4b5c..e1b89e6 100644
  	lock_guard<mutex> l(transaction_lock);
  	transactions.erase(transaction);
  }
-diff --git a/test/all_pg_types.sql b/test/all_pg_types.sql
-index d2312bc..5b61607 100644
---- a/test/all_pg_types.sql
-+++ b/test/all_pg_types.sql
-@@ -185,3 +185,9 @@ INSERT INTO mixed_arrays VALUES (
- INSERT INTO mixed_arrays VALUES (
- 	ARRAY[1, 2, 3]
- );
-+
-+CREATE TYPE composite_a AS (i INTEGER, j INTEGER);
-+CREATE TYPE composite_b AS (a composite_a, k INTEGER);
-+CREATE TABLE composites_of_composites (b composite_b);
-+
-+INSERT INTO composites_of_composites VALUES (((1,2),3)), (((4,5),6)), (((7,8),9));
-\ No newline at end of file
 diff --git a/test/sql/storage/attach_detach.test b/test/sql/storage/attach_detach.test
-index 7b7d19f..ba8168f 100644
+index 5def3a1..8b660f9 100644
 --- a/test/sql/storage/attach_detach.test
 +++ b/test/sql/storage/attach_detach.test
-@@ -18,6 +18,7 @@ DETACH s1
+@@ -23,6 +23,7 @@ DETACH s1
  
  statement error
  SELECT * FROM s1.test
@@ -149,10 +135,10 @@ index 7b7d19f..ba8168f 100644
  statement ok
  ATTACH 'dbname=postgresscanner' AS s1 (TYPE POSTGRES)
 diff --git a/test/sql/storage/attach_drop.test b/test/sql/storage/attach_drop.test
-index 8f1090c..90f6952 100644
+index b73d588..518b5aa 100644
 --- a/test/sql/storage/attach_drop.test
 +++ b/test/sql/storage/attach_drop.test
-@@ -27,6 +27,7 @@ DROP TABLE simple.test
+@@ -32,6 +32,7 @@ DROP TABLE simple.test
  # verify the drop was successful
  statement error
  SELECT * FROM simple.test;
@@ -160,7 +146,7 @@ index 8f1090c..90f6952 100644
  
  statement error
  DROP TABLE simple.testx
-@@ -34,4 +35,4 @@ DROP TABLE simple.testx
+@@ -39,4 +40,4 @@ DROP TABLE simple.testx
  Table with name testx does not exist
  
  statement ok
@@ -168,10 +154,10 @@ index 8f1090c..90f6952 100644
 \ No newline at end of file
 +DROP TABLE IF EXISTS simple.testx
 diff --git a/test/sql/storage/attach_filter_pushdown.test b/test/sql/storage/attach_filter_pushdown.test
-index 17b92e2..25efe1a 100644
+index c80140e..ca0a7d6 100644
 --- a/test/sql/storage/attach_filter_pushdown.test
 +++ b/test/sql/storage/attach_filter_pushdown.test
-@@ -20,3 +20,14 @@ query I
+@@ -25,3 +25,14 @@ query I
  SELECT * FROM s1.filter_pushdown WHERE i=52525
  ----
  52525
@@ -188,10 +174,10 @@ index 17b92e2..25efe1a 100644
 +{'a': {'i': 4, 'j': 5}, 'k': 6}
 \ No newline at end of file
 diff --git a/test/sql/storage/attach_views.test b/test/sql/storage/attach_views.test
-index e57b45d..0e12b54 100644
+index 44bfe4d..b5145f5 100644
 --- a/test/sql/storage/attach_views.test
 +++ b/test/sql/storage/attach_views.test
-@@ -34,9 +34,11 @@ cannot copy to view
+@@ -39,9 +39,11 @@ cannot copy to view
  # FIXME - error message here is not very descriptive
  statement error
  UPDATE v1 SET i=84
