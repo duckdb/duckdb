@@ -31,12 +31,13 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 	auto &gstate = input.global_state.Cast<BufferedBatchCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<BufferedBatchCollectorLocalState>();
 
-	lock_guard<mutex> l(gstate.glock);
 	lstate.current_batch = lstate.BatchIndex();
-
 	auto batch = lstate.BatchIndex();
 	auto min_batch_index = lstate.GetMinimumBatchIndex();
-	auto &buffered_data = dynamic_cast<BatchedBufferedData &>(*gstate.buffered_data);
+
+	unique_lock<mutex> l(gstate.glock);
+
+	auto &buffered_data = gstate.buffered_data->Cast<BatchedBufferedData>();
 	buffered_data.UpdateMinBatchIndex(min_batch_index);
 
 	if (!lstate.blocked || buffered_data.ShouldBlockBatch(batch)) {
@@ -47,11 +48,13 @@ SinkResultType PhysicalBufferedBatchCollector::Sink(ExecutionContext &context, D
 		return SinkResultType::BLOCKED;
 	}
 
+	l.unlock();
 	auto to_append = make_uniq<DataChunk>();
 	to_append->Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
 	chunk.Copy(*to_append, 0);
-
+	l.lock();
 	buffered_data.Append(std::move(to_append), batch);
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
