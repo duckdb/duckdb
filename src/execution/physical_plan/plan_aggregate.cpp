@@ -206,8 +206,7 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
 		if (bound_aggr.order_bys) {
 			// sorted aggregate!
-			FunctionBinder rebinder(context);
-			rebinder.BindSortedAggregate(bound_aggr, groups);
+			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
 		}
 	}
 	for (auto &group : groups) {

@@ -300,19 +300,12 @@ AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
 	return fun;
 }
 
-AggregateFunction FirstFun::GetLastFunction(const LogicalType &type) {
-	auto fun = GetFirstFunction<true, false>(type);
-	fun.name = "last";
-	return fun;
-}
-
 template <bool LAST, bool SKIP_NULLS>
 unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
-	function.order_dependent = AggregateOrderDependent::COMPARE_DEPENDENT;
 	function.name = std::move(name);
 	function.return_type = decimal_type;
 	return nullptr;
@@ -333,8 +326,6 @@ unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &fu
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
-	// FIRST and friends are order-dependent but not holistic.
-	function.order_dependent = AggregateOrderDependent::COMPARE_DEPENDENT;
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {

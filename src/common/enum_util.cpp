@@ -210,8 +210,6 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 	switch(value) {
 	case AggregateOrderDependent::ORDER_DEPENDENT:
 		return "ORDER_DEPENDENT";
-	case AggregateOrderDependent::COMPARE_DEPENDENT:
-		return "COMPARE_DEPENDENT";
 	case AggregateOrderDependent::NOT_ORDER_DEPENDENT:
 		return "NOT_ORDER_DEPENDENT";
 	default:
@@ -223,9 +221,6 @@ template<>
 AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char *value) {
 	if (StringUtil::Equals(value, "ORDER_DEPENDENT")) {
 		return AggregateOrderDependent::ORDER_DEPENDENT;
-	}
-	if (StringUtil::Equals(value, "COMPARE_DEPENDENT")) {
-		return AggregateOrderDependent::COMPARE_DEPENDENT;
 	}
 	if (StringUtil::Equals(value, "NOT_ORDER_DEPENDENT")) {
 		return AggregateOrderDependent::NOT_ORDER_DEPENDENT;
