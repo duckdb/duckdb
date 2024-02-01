@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 
+if(NOT CLANG_TIDY)
+  find_package(Python3)
+endif()
+
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
 endif()
@@ -286,7 +290,21 @@ else()
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
-message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}")
+string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
+
+if(DUCKDB_EXTENSION_FOLDER_IS_VERSION)
+  set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
+else()
+  set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
+endif()
+
+if(EMSCRIPTEN)
+  set(EXTENSION_POSTFIX "duckdb_extension.wasm")
+else()
+  set(EXTENSION_POSTFIX "duckdb_extension")
+endif()
+
+message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extension folder ${DUCKDB_NORMALIZED_VERSION}")
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
@@ -320,6 +338,7 @@ option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
+option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
@@ -383,6 +402,10 @@ if(DESTROY_UNPINNED_BLOCKS)
 endif()
 if(FORCE_ASYNC_SINK_SOURCE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ASYNC_SINK_SOURCE")
+endif()
+
+if(RUN_SLOW_VERIFIERS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_RUN_SLOW_VERIFIERS")
 endif()
 
 if(ALTERNATIVE_VERIFY)
@@ -631,8 +654,36 @@ function(link_threads LIBRARY)
     target_link_libraries(${LIBRARY} Threads::Threads)
 endfunction()
 
+# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
+if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
+  set(LOCAL_EXTENSION_REPO_DIR ${CMAKE_BINARY_DIR}/repository)
+else()
+  if (NOT Python3_FOUND)
+    MESSAGE(FATAL_ERROR "Could not find python3 executable, when providing LOCAL_EXTENSION_REPO this is compulsory")
+  endif()
+  set(LOCAL_EXTENSION_REPO_DIR ${LOCAL_EXTENSION_REPO})
+endif()
+
+if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+  if (NOT Python3_FOUND)
+    MESSAGE(STATUS "Could not find python3, create extension directory step will be skipped")
+  else()
+    add_custom_target(
+          duckdb_local_extension_repo ALL
+          COMMAND
+          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "${EXTENSION_POSTFIX}"
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT Create local extension repository)
+    add_dependencies(duckdb_local_extension_repo duckdb_platform)
+    message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO_DIR}")
+  endif()
+endif()
+
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
+  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+    add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
+  endif()
   # all parameters after output_directory
   set(FILES ${ARGV})
   # remove name
@@ -1036,6 +1087,8 @@ if(${EXTENSION_CONFIG_BUILD})
       FILE(APPEND ${CMAKE_BINARY_DIR}/extensions.txt "${EXT_NAME}\r")
     endif()
   endforeach()
+
+  return()
 endif()
 
 if(BUILD_PYTHON)
@@ -1077,6 +1130,28 @@ if(BUILD_PYTHON)
   endif()
 endif()
 
+if(NOT DUCKDB_EXPLICIT_PLATFORM)
+  set(VERSION_SOURCES tools/utils/test_platform.cpp)
+
+  add_executable(duckdb_platform_binary ${VERSION_SOURCES})
+  link_threads(duckdb_platform_binary)
+
+  set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
+  set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                         ${PROJECT_BINARY_DIR})
+  add_custom_target(
+          duckdb_platform ALL
+          COMMAND duckdb_platform_binary > duckdb_platform_out
+          )
+  add_dependencies(duckdb_platform duckdb_platform_binary)
+else()
+  add_custom_target(
+          duckdb_platform ALL
+	  COMMAND
+	  echo "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
+          )
+endif()
+
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
     add_subdirectory(test)
@@ -1091,28 +1166,6 @@ if(NOT CLANG_TIDY)
   endif()
 endif()
 
-# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
-if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "" AND NOT EXTENSION_CONFIG_BUILD)
-  add_custom_target(
-          duckdb_local_extension_repo ALL
-          COMMAND
-          python3 scripts/create_local_extension_repo.py $<TARGET_FILE:shell> "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO}"
-          DEPENDS shell
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-          COMMENT Create local extension repository)
-  add_extension_dependencies(duckdb_local_extension_repo)
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    # jemalloc is odd duck
-    if ("${EXT_NAME}" STREQUAL "jemalloc")
-      continue()
-    endif()
-
-    add_dependencies(duckdb_local_extension_repo ${EXT_NAME}_loadable_extension)
-  endforeach()
-  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
-endif()
-
-if (NOT EXTENSION_CONFIG_BUILD )
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"
@@ -1146,6 +1199,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     FILES "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DuckDBConfig.cmake"
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
-endif()
-
 endif()

@@ -63,6 +63,22 @@ public:
 	ArrowTableType arrow_table;
 };
 
+struct ArrowRunEndEncodingState {
+public:
+	ArrowRunEndEncodingState() {
+	}
+
+public:
+	unique_ptr<Vector> run_ends;
+	unique_ptr<Vector> values;
+
+public:
+	void Reset() {
+		run_ends.reset();
+		values.reset();
+	}
+};
+
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
@@ -73,12 +89,24 @@ public:
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
 	// Cache the (optional) dictionary of this array
 	unique_ptr<Vector> dictionary;
+	//! Run-end-encoding state
+	ArrowRunEndEncodingState run_end_encoding;
 
 public:
 	ArrowArrayScanState &GetChild(idx_t child_idx);
 	void AddDictionary(unique_ptr<Vector> dictionary_p);
 	bool HasDictionary() const;
 	Vector &GetDictionary();
+	ArrowRunEndEncodingState &RunEndEncoding() {
+		return run_end_encoding;
+	}
+
+public:
+	void Reset() {
+		// Note: dictionary is not reset
+		// the dictionary should be the same for every array scanned of this column
+		run_end_encoding.Reset();
+	}
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
@@ -101,6 +129,12 @@ public:
 	DataChunk all_columns;
 
 public:
+	void Reset() {
+		chunk_offset = 0;
+		for (auto &col : array_states) {
+			col.second->Reset();
+		}
+	}
 	ArrowArrayScanState &GetState(idx_t child_idx) {
 		auto it = array_states.find(child_idx);
 		if (it == array_states.end()) {

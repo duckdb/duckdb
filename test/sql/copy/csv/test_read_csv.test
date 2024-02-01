@@ -36,7 +36,7 @@ SELECT * FROM dates ORDER BY 1
 # we can also do this for timestamps
 # as long as we make the date format fail
 statement ok
-CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%Y-%m-%d', timestampformat='%m/%d/%Y')
+CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y', columns=STRUCT_PACK(d := 'TIMESTAMP'))
 
 query I
 SELECT * FROM timestamps

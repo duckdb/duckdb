@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select count(*) from read_csv_auto('data/csv/borked_date.csv')
+select count(*) from read_csv_auto('data/csv/borked_date.csv', header = 0)
 ----
 2070
 

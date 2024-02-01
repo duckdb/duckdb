@@ -68,6 +68,32 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
+def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
+    from pandas import DatetimeIndex, bdate_range, Series
+    from datetime import datetime
+    from pandas._typing import Frequency
+    import numpy as np
+    import string
+
+    _N = 30
+    _K = 4
+
+    def getCols(k) -> str:
+        return string.ascii_uppercase[:k]
+
+    def makeDateIndex(k: int = 10, freq: Frequency = "B", name=None, **kwargs) -> DatetimeIndex:
+        dt = datetime(2000, 1, 1)
+        dr = bdate_range(dt, periods=k, freq=freq, name=name)
+        return DatetimeIndex(dr, name=name, **kwargs)
+
+    def makeTimeSeries(nper=None, freq: Frequency = "B", name=None) -> Series:
+        if nper is None:
+            nper = _N
+        return Series(np.random.randn(nper), index=makeDateIndex(nper, freq=freq), name=name)
+
+    return {c: makeTimeSeries(nper, freq) for c in getCols(_K)}
+
+
 def pandas_2_or_higher():
     from packaging.version import Version
 

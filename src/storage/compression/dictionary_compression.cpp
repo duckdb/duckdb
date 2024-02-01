@@ -4,10 +4,8 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
@@ -612,7 +610,7 @@ void DictionaryCompressionStorage::SetDictionary(ColumnSegment &segment, BufferH
 string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
                                                            data_ptr_t baseptr, int32_t dict_offset,
                                                            uint16_t string_len) {
-	D_ASSERT(dict_offset >= 0 && dict_offset <= Storage::BLOCK_SIZE);
+	D_ASSERT(dict_offset >= 0 && dict_offset <= int32_t(Storage::BLOCK_SIZE));
 
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);

@@ -1,0 +1,743 @@
+# name: test/sql/storage/compression/alp/alp_tpcds.test_slow
+# group: [alp]
+
+require tpcds
+
+# load the DB from disk
+load __TEST_DIR__/test_alp.db
+
+#statement ok
+#pragma threads=1
+
+statement ok
+PRAGMA force_compression='alp';
+
+statement ok
+call dsdgen(sf=1, suffix='_original');
+
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+# Test both DOUBLE and FLOAT
+
+foreach type DOUBLE FLOAT
+
+# Create tables
+
+statement ok
+CREATE TABLE web_site(
+	web_site_sk ${type},
+	web_site_id VARCHAR,
+	web_rec_start_date DATE,
+	web_rec_end_date DATE,
+	web_name VARCHAR,
+	web_open_date_sk ${type},
+	web_close_date_sk ${type},
+	web_class VARCHAR,
+	web_manager VARCHAR,
+	web_mkt_id ${type},
+	web_mkt_class VARCHAR,
+	web_mkt_desc VARCHAR,
+	web_market_manager VARCHAR,
+	web_company_id ${type},
+	web_company_name VARCHAR,
+	web_street_number VARCHAR,
+	web_street_name VARCHAR,
+	web_street_type VARCHAR,
+	web_suite_number VARCHAR,
+	web_city VARCHAR,
+	web_county VARCHAR,
+	web_state VARCHAR,
+	web_zip VARCHAR,
+	web_country VARCHAR,
+	web_gmt_offset ${type},
+	web_tax_percentage ${type}
+);
+
+statement ok
+CREATE TABLE web_sales(
+	ws_sold_date_sk ${type},
+	ws_sold_time_sk ${type},
+	ws_ship_date_sk ${type},
+	ws_item_sk ${type},
+	ws_bill_customer_sk ${type},
+	ws_bill_cdemo_sk ${type},
+	ws_bill_hdemo_sk ${type},
+	ws_bill_addr_sk ${type},
+	ws_ship_customer_sk ${type},
+	ws_ship_cdemo_sk ${type},
+	ws_ship_hdemo_sk ${type},
+	ws_ship_addr_sk ${type},
+	ws_web_page_sk ${type},
+	ws_web_site_sk ${type},
+	ws_ship_mode_sk ${type},
+	ws_warehouse_sk ${type},
+	ws_promo_sk ${type},
+	ws_order_number ${type},
+	ws_quantity ${type},
+	ws_wholesale_cost ${type},
+	ws_list_price ${type},
+	ws_sales_price ${type},
+	ws_ext_discount_amt ${type},
+	ws_ext_sales_price ${type},
+	ws_ext_wholesale_cost ${type},
+	ws_ext_list_price ${type},
+	ws_ext_tax ${type},
+	ws_coupon_amt ${type},
+	ws_ext_ship_cost ${type},
+	ws_net_paid ${type},
+	ws_net_paid_inc_tax ${type},
+	ws_net_paid_inc_ship ${type},
+	ws_net_paid_inc_ship_tax ${type},
+	ws_net_profit ${type}
+);
+
+statement ok
+CREATE TABLE web_returns(
+	wr_returned_date_sk ${type},
+	wr_returned_time_sk ${type},
+	wr_item_sk ${type},
+	wr_refunded_customer_sk ${type},
+	wr_refunded_cdemo_sk ${type},
+	wr_refunded_hdemo_sk ${type},
+	wr_refunded_addr_sk ${type},
+	wr_returning_customer_sk ${type},
+	wr_returning_cdemo_sk ${type},
+	wr_returning_hdemo_sk ${type},
+	wr_returning_addr_sk ${type},
+	wr_web_page_sk ${type},
+	wr_reason_sk ${type},
+	wr_order_number ${type},
+	wr_return_quantity ${type},
+	wr_return_amt ${type},
+	wr_return_tax ${type},
+	wr_return_amt_inc_tax ${type},
+	wr_fee ${type},
+	wr_return_ship_cost ${type},
+	wr_refunded_cash ${type},
+	wr_reversed_charge ${type},
+	wr_account_credit ${type},
+	wr_net_loss ${type}
+);
+
+statement ok
+CREATE TABLE web_page(
+	wp_web_page_sk ${type},
+	wp_web_page_id VARCHAR,
+	wp_rec_start_date DATE,
+	wp_rec_end_date DATE,
+	wp_creation_date_sk ${type},
+	wp_access_date_sk ${type},
+	wp_autogen_flag VARCHAR,
+	wp_customer_sk ${type},
+	wp_url VARCHAR,
+	wp_type VARCHAR,
+	wp_char_count ${type},
+	wp_link_count ${type},
+	wp_image_count ${type},
+	wp_max_ad_count ${type}
+);
+
+statement ok
+CREATE TABLE warehouse(
+	w_warehouse_sk ${type},
+	w_warehouse_id VARCHAR,
+	w_warehouse_name VARCHAR,
+	w_warehouse_sq_ft ${type},
+	w_street_number VARCHAR,
+	w_street_name VARCHAR,
+	w_street_type VARCHAR,
+	w_suite_number VARCHAR,
+	w_city VARCHAR,
+	w_county VARCHAR,
+	w_state VARCHAR,
+	w_zip VARCHAR,
+	w_country VARCHAR,
+	w_gmt_offset ${type}
+);
+
+statement ok
+CREATE TABLE time_dim(
+	t_time_sk ${type},
+	t_time_id VARCHAR,
+	t_time ${type},
+	t_hour ${type},
+	t_minute ${type},
+	t_second ${type},
+	t_am_pm VARCHAR,
+	t_shift VARCHAR,
+	t_sub_shift VARCHAR,
+	t_meal_time VARCHAR
+);
+
+statement ok
+CREATE TABLE store_sales(
+	ss_sold_date_sk ${type},
+	ss_sold_time_sk ${type},
+	ss_item_sk ${type},
+	ss_customer_sk ${type},
+	ss_cdemo_sk ${type},
+	ss_hdemo_sk ${type},
+	ss_addr_sk ${type},
+	ss_store_sk ${type},
+	ss_promo_sk ${type},
+	ss_ticket_number ${type},
+	ss_quantity ${type},
+	ss_wholesale_cost ${type},
+	ss_list_price ${type},
+	ss_sales_price ${type},
+	ss_ext_discount_amt ${type},
+	ss_ext_sales_price ${type},
+	ss_ext_wholesale_cost ${type},
+	ss_ext_list_price ${type},
+	ss_ext_tax ${type},
+	ss_coupon_amt ${type},
+	ss_net_paid ${type},
+	ss_net_paid_inc_tax ${type},
+	ss_net_profit ${type}
+);
+
+statement ok
+CREATE TABLE store_returns(
+	sr_returned_date_sk ${type},
+	sr_return_time_sk ${type},
+	sr_item_sk ${type},
+	sr_customer_sk ${type},
+	sr_cdemo_sk ${type},
+	sr_hdemo_sk ${type},
+	sr_addr_sk ${type},
+	sr_store_sk ${type},
+	sr_reason_sk ${type},
+	sr_ticket_number ${type},
+	sr_return_quantity ${type},
+	sr_return_amt ${type},
+	sr_return_tax ${type},
+	sr_return_amt_inc_tax ${type},
+	sr_fee ${type},
+	sr_return_ship_cost ${type},
+	sr_refunded_cash ${type},
+	sr_reversed_charge ${type},
+	sr_store_credit ${type},
+	sr_net_loss ${type}
+);
+
+statement ok
+CREATE TABLE store(
+	s_store_sk ${type},
+	s_store_id VARCHAR,
+	s_rec_start_date DATE,
+	s_rec_end_date DATE,
+	s_closed_date_sk ${type},
+	s_store_name VARCHAR,
+	s_number_employees ${type},
+	s_floor_space ${type},
+	s_hours VARCHAR,
+	s_manager VARCHAR,
+	s_market_id ${type},
+	s_geography_class VARCHAR,
+	s_market_desc VARCHAR,
+	s_market_manager VARCHAR,
+	s_division_id ${type},
+	s_division_name VARCHAR,
+	s_company_id ${type},
+	s_company_name VARCHAR,
+	s_street_number VARCHAR,
+	s_street_name VARCHAR,
+	s_street_type VARCHAR,
+	s_suite_number VARCHAR,
+	s_city VARCHAR,
+	s_county VARCHAR,
+	s_state VARCHAR,
+	s_zip VARCHAR,
+	s_country VARCHAR,
+	s_gmt_offset ${type},
+	s_tax_percentage ${type}
+);
+
+statement ok
+CREATE TABLE ship_mode(
+	sm_ship_mode_sk ${type},
+	sm_ship_mode_id VARCHAR,
+	sm_type VARCHAR,
+	sm_code VARCHAR,
+	sm_carrier VARCHAR,
+	sm_contract VARCHAR
+);
+
+statement ok
+CREATE TABLE reason(
+	r_reason_sk ${type},
+	r_reason_id VARCHAR,
+	r_reason_desc VARCHAR
+);
+
+statement ok
+CREATE TABLE promotion(
+	p_promo_sk ${type},
+	p_promo_id VARCHAR,
+	p_start_date_sk ${type},
+	p_end_date_sk ${type},
+	p_item_sk ${type},
+	p_cost ${type},
+	p_response_target ${type},
+	p_promo_name VARCHAR,
+	p_channel_dmail VARCHAR,
+	p_channel_email VARCHAR,
+	p_channel_catalog VARCHAR,
+	p_channel_tv VARCHAR,
+	p_channel_radio VARCHAR,
+	p_channel_press VARCHAR,
+	p_channel_event VARCHAR,
+	p_channel_demo VARCHAR,
+	p_channel_details VARCHAR,
+	p_purpose VARCHAR,
+	p_discount_active VARCHAR
+);
+
+statement ok
+CREATE TABLE item(
+	i_item_sk ${type},
+	i_item_id VARCHAR,
+	i_rec_start_date DATE,
+	i_rec_end_date DATE,
+	i_item_desc VARCHAR,
+	i_current_price ${type},
+	i_wholesale_cost ${type},
+	i_brand_id ${type},
+	i_brand VARCHAR,
+	i_class_id ${type},
+	i_class VARCHAR,
+	i_category_id ${type},
+	i_category VARCHAR,
+	i_manufact_id ${type},
+	i_manufact VARCHAR,
+	i_size VARCHAR,
+	i_formulation VARCHAR,
+	i_color VARCHAR,
+	i_units VARCHAR,
+	i_container VARCHAR,
+	i_manager_id ${type},
+	i_product_name VARCHAR
+);
+
+statement ok
+CREATE TABLE inventory(
+	inv_date_sk ${type},
+	inv_item_sk ${type},
+	inv_warehouse_sk ${type},
+	inv_quantity_on_hand ${type}
+);
+
+statement ok
+CREATE TABLE income_band(
+	ib_income_band_sk ${type},
+	ib_lower_bound ${type},
+	ib_upper_bound ${type}
+);
+
+statement ok
+CREATE TABLE household_demographics(
+	hd_demo_sk ${type},
+	hd_income_band_sk ${type},
+	hd_buy_potential VARCHAR,
+	hd_dep_count ${type},
+	hd_vehicle_count ${type}
+);
+
+statement ok
+CREATE TABLE date_dim(
+	d_date_sk ${type},
+	d_date_id VARCHAR,
+	d_date DATE,
+	d_month_seq ${type},
+	d_week_seq ${type},
+	d_quarter_seq ${type},
+	d_year ${type},
+	d_dow ${type},
+	d_moy ${type},
+	d_dom ${type},
+	d_qoy ${type},
+	d_fy_year ${type},
+	d_fy_quarter_seq ${type},
+	d_fy_week_seq ${type},
+	d_day_name VARCHAR,
+	d_quarter_name VARCHAR,
+	d_holiday VARCHAR,
+	d_weekend VARCHAR,
+	d_following_holiday VARCHAR,
+	d_first_dom ${type},
+	d_last_dom ${type},
+	d_same_day_ly ${type},
+	d_same_day_lq ${type},
+	d_current_day VARCHAR,
+	d_current_week VARCHAR,
+	d_current_month VARCHAR,
+	d_current_quarter VARCHAR,
+	d_current_year VARCHAR
+);
+
+statement ok
+CREATE TABLE customer_demographics(
+	cd_demo_sk ${type},
+	cd_gender VARCHAR,
+	cd_marital_status VARCHAR,
+	cd_education_status VARCHAR,
+	cd_purchase_estimate ${type},
+	cd_credit_rating VARCHAR,
+	cd_dep_count ${type},
+	cd_dep_employed_count ${type},
+	cd_dep_college_count ${type}
+);
+
+statement ok
+CREATE TABLE customer_address(
+	ca_address_sk ${type},
+	ca_address_id VARCHAR,
+	ca_street_number VARCHAR,
+	ca_street_name VARCHAR,
+	ca_street_type VARCHAR,
+	ca_suite_number VARCHAR,
+	ca_city VARCHAR,
+	ca_county VARCHAR,
+	ca_state VARCHAR,
+	ca_zip VARCHAR,
+	ca_country VARCHAR,
+	ca_gmt_offset ${type},
+	ca_location_type VARCHAR
+);
+
+statement ok
+CREATE TABLE customer(
+	c_customer_sk ${type},
+	c_customer_id VARCHAR,
+	c_current_cdemo_sk ${type},
+	c_current_hdemo_sk ${type},
+	c_current_addr_sk ${type},
+	c_first_shipto_date_sk ${type},
+	c_first_sales_date_sk ${type},
+	c_salutation VARCHAR,
+	c_first_name VARCHAR,
+	c_last_name VARCHAR,
+	c_preferred_cust_flag VARCHAR,
+	c_birth_day ${type},
+	c_birth_month ${type},
+	c_birth_year ${type},
+	c_birth_country VARCHAR,
+	c_login VARCHAR,
+	c_email_address VARCHAR,
+	c_last_review_date_sk ${type}
+);
+
+statement ok
+CREATE TABLE catalog_sales(
+	cs_sold_date_sk ${type},
+	cs_sold_time_sk ${type},
+	cs_ship_date_sk ${type},
+	cs_bill_customer_sk ${type},
+	cs_bill_cdemo_sk ${type},
+	cs_bill_hdemo_sk ${type},
+	cs_bill_addr_sk ${type},
+	cs_ship_customer_sk ${type},
+	cs_ship_cdemo_sk ${type},
+	cs_ship_hdemo_sk ${type},
+	cs_ship_addr_sk ${type},
+	cs_call_center_sk ${type},
+	cs_catalog_page_sk ${type},
+	cs_ship_mode_sk ${type},
+	cs_warehouse_sk ${type},
+	cs_item_sk ${type},
+	cs_promo_sk ${type},
+	cs_order_number ${type},
+	cs_quantity ${type},
+	cs_wholesale_cost ${type},
+	cs_list_price ${type},
+	cs_sales_price ${type},
+	cs_ext_discount_amt ${type},
+	cs_ext_sales_price ${type},
+	cs_ext_wholesale_cost ${type},
+	cs_ext_list_price ${type},
+	cs_ext_tax ${type},
+	cs_coupon_amt ${type},
+	cs_ext_ship_cost ${type},
+	cs_net_paid ${type},
+	cs_net_paid_inc_tax ${type},
+	cs_net_paid_inc_ship ${type},
+	cs_net_paid_inc_ship_tax ${type},
+	cs_net_profit ${type}
+);
+
+statement ok
+CREATE TABLE catalog_returns(
+	cr_returned_date_sk ${type},
+	cr_returned_time_sk ${type},
+	cr_item_sk ${type},
+	cr_refunded_customer_sk ${type},
+	cr_refunded_cdemo_sk ${type},
+	cr_refunded_hdemo_sk ${type},
+	cr_refunded_addr_sk ${type},
+	cr_returning_customer_sk ${type},
+	cr_returning_cdemo_sk ${type},
+	cr_returning_hdemo_sk ${type},
+	cr_returning_addr_sk ${type},
+	cr_call_center_sk ${type},
+	cr_catalog_page_sk ${type},
+	cr_ship_mode_sk ${type},
+	cr_warehouse_sk ${type},
+	cr_reason_sk ${type},
+	cr_order_number ${type},
+	cr_return_quantity ${type},
+	cr_return_amount ${type},
+	cr_return_tax ${type},
+	cr_return_amt_inc_tax ${type},
+	cr_fee ${type},
+	cr_return_ship_cost ${type},
+	cr_refunded_cash ${type},
+	cr_reversed_charge ${type},
+	cr_store_credit ${type},
+	cr_net_loss ${type}
+);
+
+statement ok
+CREATE TABLE catalog_page(
+	cp_catalog_page_sk ${type},
+	cp_catalog_page_id VARCHAR,
+	cp_start_date_sk ${type},
+	cp_end_date_sk ${type},
+	cp_department VARCHAR,
+	cp_catalog_number ${type},
+	cp_catalog_page_number ${type},
+	cp_description VARCHAR,
+	cp_type VARCHAR
+);
+
+statement ok
+CREATE TABLE call_center(
+	cc_call_center_sk ${type},
+	cc_call_center_id VARCHAR,
+	cc_rec_start_date DATE,
+	cc_rec_end_date DATE,
+	cc_closed_date_sk ${type},
+	cc_open_date_sk ${type},
+	cc_name VARCHAR,
+	cc_class VARCHAR,
+	cc_employees ${type},
+	cc_sq_ft ${type},
+	cc_hours VARCHAR,
+	cc_manager VARCHAR,
+	cc_mkt_id ${type},
+	cc_mkt_class VARCHAR,
+	cc_mkt_desc VARCHAR,
+	cc_market_manager VARCHAR,
+	cc_division ${type},
+	cc_division_name VARCHAR,
+	cc_company ${type},
+	cc_company_name VARCHAR,
+	cc_street_number VARCHAR,
+	cc_street_name VARCHAR,
+	cc_street_type VARCHAR,
+	cc_suite_number VARCHAR,
+	cc_city VARCHAR,
+	cc_county VARCHAR,
+	cc_state VARCHAR,
+	cc_zip VARCHAR,
+	cc_country VARCHAR,
+	cc_gmt_offset ${type},
+	cc_tax_percentage ${type}
+);
+
+# Populate tables
+
+statement ok
+insert into web_site select * from web_site_original;
+
+statement ok
+insert into web_sales select * from web_sales_original;
+
+statement ok
+insert into web_returns select * from web_returns_original;
+
+statement ok
+insert into web_page select * from web_page_original;
+
+statement ok
+insert into warehouse select * from warehouse_original;
+
+statement ok
+insert into time_dim select * from time_dim_original;
+
+statement ok
+insert into store_sales select * from store_sales_original;
+
+statement ok
+insert into store_returns select * from store_returns_original;
+
+statement ok
+insert into store select * from store_original;
+
+statement ok
+insert into ship_mode select * from ship_mode_original;
+
+statement ok
+insert into reason select * from reason_original;
+
+statement ok
+insert into promotion select * from promotion_original;
+
+statement ok
+insert into item select * from item_original;
+
+statement ok
+insert into inventory select * from inventory_original;
+
+statement ok
+insert into income_band select * from income_band_original;
+
+statement ok
+insert into household_demographics select * from household_demographics_original;
+
+statement ok
+insert into date_dim select * from date_dim_original;
+
+statement ok
+insert into customer_demographics select * from customer_demographics_original;
+
+statement ok
+insert into customer_address select * from customer_address_original;
+
+statement ok
+insert into customer select * from customer_original;
+
+statement ok
+insert into catalog_sales select * from catalog_sales_original;
+
+statement ok
+insert into catalog_returns select * from catalog_returns_original;
+
+statement ok
+insert into catalog_page select * from catalog_page_original;
+
+statement ok
+insert into call_center select * from call_center_original;
+
+# Checkpoint to compress the data
+
+statement ok
+checkpoint
+
+# And verify that no other compression is used
+foreach tbl web_site web_sales web_returns web_page warehouse time_dim store_sales store_returns store ship_mode reason promotion item inventory income_band household_demographics date_dim customer_demographics customer_address customer catalog_sales catalog_returns catalog_page call_center
+
+# Cant turn off the creation of constant segments, so we have to just accept that some of the segments are Constant
+query I
+SELECT compression FROM pragma_storage_info('${tbl}') WHERE segment_type == '${type}' AND compression != 'ALP' AND compression != 'Constant';
+----
+
+endloop
+
+# Run the tpcds queries
+
+loop i 1 9
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
+
+endloop
+
+loop i 10 49
+
+#Skip tpcds 49 because it doesn't work without decimals
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+loop i 50 99
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+# Drop tables
+
+statement ok
+DROP TABLE web_site;
+
+statement ok
+DROP TABLE web_sales;
+
+statement ok
+DROP TABLE web_returns;
+
+statement ok
+DROP TABLE web_page;
+
+statement ok
+DROP TABLE warehouse;
+
+statement ok
+DROP TABLE time_dim;
+
+statement ok
+DROP TABLE store_sales;
+
+statement ok
+DROP TABLE store_returns;
+
+statement ok
+DROP TABLE store;
+
+statement ok
+DROP TABLE ship_mode;
+
+statement ok
+DROP TABLE reason;
+
+statement ok
+DROP TABLE promotion;
+
+statement ok
+DROP TABLE item;
+
+statement ok
+DROP TABLE inventory;
+
+statement ok
+DROP TABLE income_band;
+
+statement ok
+DROP TABLE household_demographics;
+
+statement ok
+DROP TABLE date_dim;
+
+statement ok
+DROP TABLE customer_demographics;
+
+statement ok
+DROP TABLE customer_address;
+
+statement ok
+DROP TABLE customer;
+
+statement ok
+DROP TABLE catalog_sales;
+
+statement ok
+DROP TABLE catalog_returns;
+
+statement ok
+DROP TABLE catalog_page;
+
+statement ok
+DROP TABLE call_center;
+
+
+endloop

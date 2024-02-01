@@ -131,9 +131,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			}
 			filter_operators.push_back(*op);
 		}
-		if (op->type == LogicalOperatorType::LOGICAL_SHOW) {
-			return false;
-		}
 		op = op->children[0].get();
 	}
 	bool non_reorderable_operation = false;
