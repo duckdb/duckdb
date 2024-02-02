@@ -70,6 +70,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("example");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("stability");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -97,6 +100,19 @@ unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context,
 		          return (int32_t)a.get().type < (int32_t)b.get().type;
 	          });
 	return std::move(result);
+}
+
+Value FunctionStabilityToValue(FunctionStability stability) {
+	switch (stability) {
+	case FunctionStability::VOLATILE:
+		return Value("VOLATILE");
+	case FunctionStability::CONSISTENT:
+		return Value("CONSISTENT");
+	case FunctionStability::CONSISTENT_WITHIN_QUERY:
+		return Value("CONSISTENT_WITHIN_QUERY");
+	default:
+		throw InternalException("Unsupported FunctionStability");
+	}
 }
 
 struct ScalarFunctionExtractor {
@@ -138,9 +154,12 @@ struct ScalarFunctionExtractor {
 		return Value();
 	}
 
-	static Value HasSideEffects(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).side_effects ==
-		                      FunctionSideEffects::HAS_SIDE_EFFECTS);
+	static Value IsVolatile(ScalarFunctionCatalogEntry &entry, idx_t offset) {
+		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).stability == FunctionStability::VOLATILE);
+	}
+
+	static Value ResultType(ScalarFunctionCatalogEntry &entry, idx_t offset) {
+		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).stability);
 	}
 };
 
@@ -183,9 +202,12 @@ struct AggregateFunctionExtractor {
 		return Value();
 	}
 
-	static Value HasSideEffects(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).side_effects ==
-		                      FunctionSideEffects::HAS_SIDE_EFFECTS);
+	static Value IsVolatile(AggregateFunctionCatalogEntry &entry, idx_t offset) {
+		return Value::BOOLEAN(entry.functions.GetFunctionByOffset(offset).stability == FunctionStability::VOLATILE);
+	}
+
+	static Value ResultType(AggregateFunctionCatalogEntry &entry, idx_t offset) {
+		return FunctionStabilityToValue(entry.functions.GetFunctionByOffset(offset).stability);
 	}
 };
 
@@ -236,7 +258,11 @@ struct MacroExtractor {
 		return func.expression->ToString();
 	}
 
-	static Value HasSideEffects(ScalarMacroCatalogEntry &entry, idx_t offset) {
+	static Value IsVolatile(ScalarMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value ResultType(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -290,7 +316,11 @@ struct TableMacroExtractor {
 		return Value();
 	}
 
-	static Value HasSideEffects(TableMacroCatalogEntry &entry, idx_t offset) {
+	static Value IsVolatile(TableMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value ResultType(TableMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -342,7 +372,11 @@ struct TableFunctionExtractor {
 		return Value();
 	}
 
-	static Value HasSideEffects(TableFunctionCatalogEntry &entry, idx_t offset) {
+	static Value IsVolatile(TableFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value ResultType(TableFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -395,7 +429,11 @@ struct PragmaFunctionExtractor {
 		return Value();
 	}
 
-	static Value HasSideEffects(PragmaFunctionCatalogEntry &entry, idx_t offset) {
+	static Value IsVolatile(PragmaFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value ResultType(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -441,7 +479,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, OP::GetMacroDefinition(function, function_idx));
 
 	// has_side_effects, LogicalType::BOOLEAN
-	output.SetValue(col++, output_offset, OP::HasSideEffects(function, function_idx));
+	output.SetValue(col++, output_offset, OP::IsVolatile(function, function_idx));
 
 	// internal, LogicalType::BOOLEAN
 	output.SetValue(col++, output_offset, Value::BOOLEAN(function.internal));
@@ -451,6 +489,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 
 	// example, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, entry.example.empty() ? Value() : entry.example);
+
+	// stability, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, OP::ResultType(function, function_idx));
 
 	return function_idx + 1 == OP::FunctionCount(function);
 }
