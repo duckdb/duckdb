@@ -480,6 +480,11 @@
         "id": 202,
         "name": "repository",
         "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "version",
+        "type": "string"
       }
     ]
   },

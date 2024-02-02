@@ -9,6 +9,7 @@ LoadStmt:	LOAD file_name
 					PGLoadStmt *n = makeNode(PGLoadStmt);
 					n->filename = $2;
 					n->repository = "";
+					n->version = "";
 					n->load_type = PG_LOAD_TYPE_LOAD;
 					$$ = (PGNode *)n;
 				} |
