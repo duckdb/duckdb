@@ -62,26 +62,26 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, boo
 	if (op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
 	    op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		if (has_correlation) {
-			MarkSubtreeCorrelated(op->children[1].get());
+			MarkSubtreeCorrelated(*op->children[1].get());
 		}
 	}
 	return has_correlation;
 }
 
-bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator *op) {
+bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op) {
 	// Do not mark base table scans as correlated
-	auto entry = has_correlated_expressions.find(op);
+	auto entry = has_correlated_expressions.find(&op);
 	D_ASSERT(entry != has_correlated_expressions.end());
 	bool has_correlation = entry->second;
-	for (auto &child : op->children) {
-		has_correlation |= MarkSubtreeCorrelated(child.get());
+	for (auto &child : op.children) {
+		has_correlation |= MarkSubtreeCorrelated(*child.get());
 	}
-	if (op->type != LogicalOperatorType::LOGICAL_GET || op->children.size() == 1) {
-		if (op->type == LogicalOperatorType::LOGICAL_CTE_REF) {
-			has_correlated_expressions[op] = true;
+	if (op.type != LogicalOperatorType::LOGICAL_GET || op.children.size() == 1) {
+		if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+			has_correlated_expressions[&op] = true;
 			return true;
 		} else {
-			has_correlated_expressions[op] = has_correlation;
+			has_correlated_expressions[&op] = has_correlation;
 		}
 	}
 	return has_correlation;
