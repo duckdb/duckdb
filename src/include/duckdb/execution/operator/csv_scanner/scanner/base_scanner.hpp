@@ -22,7 +22,7 @@ public:
 
 	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
-		if (!result.quoted){
+		if (!result.quoted) {
 			result.quoted_position = quoted_position;
 		}
 		result.quoted = true;
