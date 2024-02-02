@@ -8,7 +8,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
