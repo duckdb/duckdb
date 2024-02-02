@@ -23,7 +23,7 @@ jobs:
     env:
       COVERITY_PROJECT_NAME: duckdb
     steps:
-    - uses: actions/checkout@main
+    - uses: actions/checkout@v4
     - name: Download and extract the Coverity Build Tool
       run: |
           wget -q https://scan.coverity.com/download/cxx/linux64 --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ env.COVERITY_PROJECT_NAME  }}" -O cov-analysis-linux64.tar.gz
@@ -32,7 +32,22 @@ jobs:
     - name: Install dependencies
       run: sudo apt install -y git g++ cmake ninja-build libssl-dev default-jdk unixodbc-dev
     - name: Build with cov-build
-      run: DUCKDB_INSTALL_USER=1 BUILD_PYTHON=1 BUILD_JDBC=1 BUILD_ODBC=1 BUILD_AUTOCOMPLETE=1 BUILD_ICU=1 BUILD_TPCDS=1 BUILD_TCPE=1 BUILT_FTS=1 BUILD_HTTPFS=1 BUILD_JSON=1 BUILD_INET=1 BUILD_SQLSMITH=1 cov-analysis-linux64/bin/cov-build --dir cov-int make
+      run: cov-analysis-linux64/bin/cov-build --dir cov-int make
+      env:
+        PYTHON_USER_SPACE: 1
+        BUILD_PYTHON: 1
+        BUILD_JDBC: 1
+        BUILD_ODBC: 1
+        BUILD_AUTOCOMPLETE: 1
+        BUILD_ICU: 1
+        BUILD_TPCDS: 1
+        BUILD_TCPE: 1
+        BUILD_FTS: 1
+        BUILD_HTTPFS: 1
+        BUILD_JSON: 1
+        BUILD_INET: 1
+        BUILD_SQLSMITH: 1
+
     - name: Upload the result
       run: |
           tar czvf cov-int.tgz cov-int
