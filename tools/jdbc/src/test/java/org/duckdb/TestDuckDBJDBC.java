@@ -2150,7 +2150,7 @@ public class TestDuckDBJDBC {
         assertNull(d.connect("jdbc:h2:", null));
     }
 
-    public static void test_new_connection_wrong_url_bug10441() {
+    public static void test_new_connection_wrong_url_bug10441() throws Exception {
         try {
             DuckDBConnection.newConnection("jdbc:duckdb@", false, new Properties());
             fail();
