@@ -33,9 +33,6 @@ public:
 	ParsedExpression(ExpressionType type, ExpressionClass expression_class) : BaseExpression(type, expression_class) {
 	}
 
-	//! The location in the query (if any)
-	idx_t query_location = DConstants::INVALID_INDEX;
-
 public:
 	bool IsAggregate() const override;
 	bool IsWindow() const override;
@@ -63,6 +60,7 @@ protected:
 		type = other.type;
 		expression_class = other.expression_class;
 		alias = other.alias;
+		query_location = other.query_location;
 	}
 };
 

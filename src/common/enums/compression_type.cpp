@@ -16,6 +16,12 @@ vector<string> ListCompressionTypes(void) {
 	return compression_types;
 }
 
+bool CompressionTypeIsDeprecated(CompressionType compression_type) {
+	const bool is_patas = compression_type == CompressionType::COMPRESSION_PATAS;
+	const bool is_chimp = compression_type == CompressionType::COMPRESSION_CHIMP;
+	return (is_patas || is_chimp);
+}
+
 CompressionType CompressionTypeFromString(const string &str) {
 	auto compression = StringUtil::Lower(str);
 	if (compression == "uncompressed") {

@@ -1,5 +1,6 @@
 #include "duckdb/core_functions/scalar/blob_functions.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
 

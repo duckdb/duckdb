@@ -5,6 +5,7 @@ endif()
 add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
+add_subdirectory(exception)
 add_subdirectory(operator)
 add_subdirectory(progress_bar)
 add_subdirectory(row_operations)
@@ -43,7 +44,7 @@ add_library_unity(
   pipe_file_system.cpp
   local_file_system.cpp
   multi_file_reader.cpp
-  preserved_error.cpp
+  error_data.cpp
   printer.cpp
   radix_partitioning.cpp
   re2_regex.cpp

@@ -27,6 +27,7 @@ public:
 	idx_t current_column_count = 0;
 	bool error = false;
 	bool last_value_always_empty = true;
+	idx_t result_position = 0;
 
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, const idx_t buffer_pos);

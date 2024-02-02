@@ -75,7 +75,6 @@ class CSVCast {
 		UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 			T result;
 			if (!OP::Operation(options, input, result, error_message)) {
-				FlatVector::SetNull(result_vector, cur_line, true);
 				line_error = cur_line;
 				all_converted = false;
 			}

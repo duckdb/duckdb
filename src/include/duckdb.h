@@ -2484,6 +2484,25 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
                                                duckdb_appender *out_appender);
 
 /*!
+Returns the number of columns in the table that belongs to the appender.
+
+* appender The appender to get the column count from.
+* returns: The number of columns in the table.
+*/
+DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
+
+/*!
+Returns the type of the column at the specified index.
+
+Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* appender The appender to get the column type from.
+* col_idx The index of the column to get the type of.
+* returns: The duckdb_logical_type of the column.
+*/
+DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
+
+/*!
 Returns the error message associated with the given appender.
 If the appender has no error message, this returns `nullptr` instead.
 

@@ -67,4 +67,4 @@ COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL 
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_inull.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
 ----
-
+Error when converting column "col_a".

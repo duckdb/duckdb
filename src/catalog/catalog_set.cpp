@@ -13,6 +13,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 

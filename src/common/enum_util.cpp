@@ -96,6 +96,7 @@
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
@@ -2219,6 +2220,29 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value) {
+	switch(value) {
+	case ExtraDropInfoType::INVALID:
+		return "INVALID";
+	case ExtraDropInfoType::SECRET_INFO:
+		return "SECRET_INFO";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return ExtraDropInfoType::INVALID;
+	}
+	if (StringUtil::Equals(value, "SECRET_INFO")) {
+		return ExtraDropInfoType::SECRET_INFO;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
 	switch(value) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
@@ -2493,24 +2517,29 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 }
 
 template<>
-const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value) {
+const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value) {
 	switch(value) {
-	case FunctionSideEffects::NO_SIDE_EFFECTS:
-		return "NO_SIDE_EFFECTS";
-	case FunctionSideEffects::HAS_SIDE_EFFECTS:
-		return "HAS_SIDE_EFFECTS";
+	case FunctionStability::CONSISTENT:
+		return "CONSISTENT";
+	case FunctionStability::VOLATILE:
+		return "VOLATILE";
+	case FunctionStability::CONSISTENT_WITHIN_QUERY:
+		return "CONSISTENT_WITHIN_QUERY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
 }
 
 template<>
-FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value) {
-	if (StringUtil::Equals(value, "NO_SIDE_EFFECTS")) {
-		return FunctionSideEffects::NO_SIDE_EFFECTS;
+FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
+	if (StringUtil::Equals(value, "CONSISTENT")) {
+		return FunctionStability::CONSISTENT;
 	}
-	if (StringUtil::Equals(value, "HAS_SIDE_EFFECTS")) {
-		return FunctionSideEffects::HAS_SIDE_EFFECTS;
+	if (StringUtil::Equals(value, "VOLATILE")) {
+		return FunctionStability::VOLATILE;
+	}
+	if (StringUtil::Equals(value, "CONSISTENT_WITHIN_QUERY")) {
+		return FunctionStability::CONSISTENT_WITHIN_QUERY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
