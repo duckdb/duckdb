@@ -643,6 +643,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCTEScan cte_rewriter(table_index, correlated_columns);
 		cte_rewriter.VisitOperator(*plan->children[1]);
 
+		parent_propagate_null_values = false;
 		plan->children[1] =
 		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
 		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
