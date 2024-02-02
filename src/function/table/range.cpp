@@ -275,6 +275,8 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	UnnestTableFunction::RegisterFunction(*this);
 	RepeatRowTableFunction::RegisterFunction(*this);
 	CSVSnifferFunction::RegisterFunction(*this);
+	ReadBlobFunction::RegisterFunction(*this);
+	ReadTextFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb
