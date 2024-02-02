@@ -306,9 +306,9 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			final_subgraph.numerator_filter_strength *= merge_with->numerator_filter_strength;
 		}
 	}
-//	for (auto &match : subgraphs) {
-//		denom *= match.denom;
-//	}
+	//	for (auto &match : subgraphs) {
+	//		denom *= match.denom;
+	//	}
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
 	if (subgraphs.size() == 0 || denom == 0) {
 		// denominator is 1 and numerators are a cross product of cardinalities.

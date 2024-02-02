@@ -1,8 +1,6 @@
 # name: test/sqlite/select4.test_slow
 # group: [sqlite]
 
-load test4.db
-
 statement ok
 CREATE TABLE t1(
   a1 INTEGER,
