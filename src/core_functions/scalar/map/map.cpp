@@ -9,8 +9,6 @@
 
 namespace duckdb {
 
-struct MapChildInfo {};
-
 static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 
 	// if no chunk is set in ExpressionExecutor::ExecuteExpression (args.data.empty(), e.g.,
@@ -78,7 +76,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		result_child_size += keys_entry.length;
 	}
 
-	// we need to slice potential dictionary vectors
+	// we need to slice potential non-flat vectors
 	SelectionVector sel_keys(result_child_size);
 	SelectionVector sel_values(result_child_size);
 	idx_t offset = 0;
