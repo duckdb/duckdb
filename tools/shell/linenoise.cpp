@@ -1165,7 +1165,7 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 			size_t continuationLen = strlen(prompt);
 			size_t continuationRender = linenoiseComputeRenderWidth(prompt, continuationLen);
 			// pad with spaces prior to prompt
-			for (size_t i = continuationRender; i < plen; i++) {
+			for (int i = int(continuationRender); i < plen; i++) {
 				result += " ";
 			}
 			result += prompt;
