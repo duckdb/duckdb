@@ -1105,7 +1105,7 @@ if(BUILD_PYTHON)
 
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
-  set(COMMON
+  set(PIP_COMMAND
       cmake
       -E
       env
@@ -1118,11 +1118,11 @@ if(BUILD_PYTHON)
       .)
 
   if(USER_SPACE)
-    set(COMMON ${COMMON} --user)
+    set(PIP_COMMAND ${PIP_COMMAND} --user)
   endif()
   add_custom_target(
     duckdb_python ALL
-    COMMAND ${COMMON}
+    COMMAND ${PIP_COMMAND}
     DEPENDS duckdb duckdb_static
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
     COMMENT Build
