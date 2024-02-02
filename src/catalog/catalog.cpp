@@ -469,9 +469,9 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
 
-bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name) {
+bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
+	auto &dbconfig = DBConfig::GetConfig(db);
 	if (dbconfig.options.autoload_known_extensions) {
 		string extension_name;
 		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
@@ -486,7 +486,7 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogTyp
 		}
 
 		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
-			ExtensionHelper::AutoLoadExtension(context, extension_name);
+			ExtensionHelper::AutoLoadExtension(db, extension_name);
 			return true;
 		}
 	}
@@ -692,7 +692,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
+		if (AutoLoadExtensionByCatalogEntry(*context.db, type, name)) {
 			lookup_entry = TryLookupEntry(context, type, schema_name, name, if_not_found, error_context);
 		}
 	}
@@ -716,7 +716,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
+		if (AutoLoadExtensionByCatalogEntry(*context.db, type, name)) {
 			result = TryLookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
 		}
 	}
