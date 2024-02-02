@@ -237,7 +237,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		}
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		auto value = StringValueScanner::RemoveEscape(
-		    result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2,
+		    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
 		    result.state_machine.options.GetEscape()[0], result.parse_chunk.data[result.chunk_col_id]);
 		result.AddValueToVector(value.GetData(), value.GetSize());
 	} else {
@@ -246,8 +246,8 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 			auto value = string_t();
 			result.AddValueToVector(value.GetData(), value.GetSize());
 		} else {
-			result.AddValueToVector(result.buffer_ptr + result.last_position + 1,
-			                        buffer_pos - result.last_position - 2);
+			result.AddValueToVector(result.buffer_ptr + result.quoted_position + 1,
+			                        buffer_pos - result.quoted_position - 2);
 		}
 	}
 	result.quoted = false;
@@ -669,7 +669,7 @@ void StringValueScanner::ProcessExtraRow() {
 			if (states.states[0] == CSVState::UNQUOTED) {
 				result.SetEscaped(result);
 			}
-			result.SetQuoted(result);
+			result.SetQuoted(result,iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
 			while (state_machine->transition_array
 			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
