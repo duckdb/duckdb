@@ -126,4 +126,20 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 };
 
+enum class SleepUnit : uint8_t { NANOSECOND, MICROSECOND, MILLISECOND, SECOND };
+
+class SleepCommand : public Command {
+public:
+	SleepCommand(SQLLogicTestRunner &runner, idx_t duration, SleepUnit unit);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+
+	static SleepUnit ParseUnit(const string &unit);
+
+private:
+	idx_t duration;
+	SleepUnit unit;
+};
+
 } // namespace duckdb

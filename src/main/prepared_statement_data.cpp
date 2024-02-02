@@ -26,6 +26,10 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 		// no unbound statement!? cannot rebind?
 		return false;
 	}
+	if (properties.always_require_rebind) {
+		// this statement must always be re-bound
+		return true;
+	}
 	if (!properties.bound_all_parameters) {
 		// parameters not yet bound: query always requires a rebind
 		return true;

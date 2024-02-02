@@ -2517,24 +2517,29 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 }
 
 template<>
-const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value) {
+const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value) {
 	switch(value) {
-	case FunctionSideEffects::NO_SIDE_EFFECTS:
-		return "NO_SIDE_EFFECTS";
-	case FunctionSideEffects::HAS_SIDE_EFFECTS:
-		return "HAS_SIDE_EFFECTS";
+	case FunctionStability::CONSISTENT:
+		return "CONSISTENT";
+	case FunctionStability::VOLATILE:
+		return "VOLATILE";
+	case FunctionStability::CONSISTENT_WITHIN_QUERY:
+		return "CONSISTENT_WITHIN_QUERY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
 }
 
 template<>
-FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value) {
-	if (StringUtil::Equals(value, "NO_SIDE_EFFECTS")) {
-		return FunctionSideEffects::NO_SIDE_EFFECTS;
+FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
+	if (StringUtil::Equals(value, "CONSISTENT")) {
+		return FunctionStability::CONSISTENT;
 	}
-	if (StringUtil::Equals(value, "HAS_SIDE_EFFECTS")) {
-		return FunctionSideEffects::HAS_SIDE_EFFECTS;
+	if (StringUtil::Equals(value, "VOLATILE")) {
+		return FunctionStability::VOLATILE;
+	}
+	if (StringUtil::Equals(value, "CONSISTENT_WITHIN_QUERY")) {
+		return FunctionStability::CONSISTENT_WITHIN_QUERY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
