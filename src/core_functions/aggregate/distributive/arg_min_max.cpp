@@ -38,7 +38,7 @@ struct ArgMinMaxStateBase {
 // Out-of-line specialisations
 template <>
 void ArgMinMaxStateBase::CreateValue(string_t &value) {
-	new (&value) string_t(uint32_t(0));
+	value = string_t(uint32_t(0));
 }
 
 template <>
@@ -183,15 +183,17 @@ struct ArgMinMaxBase {
 template <typename COMPARATOR, bool IGNORE_NULL>
 struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 	template <class STATE>
-	static void AssignVector(STATE &state, Vector &arg, const idx_t idx) {
+	static void AssignVector(STATE &state, Vector &arg, bool arg_null, const idx_t idx) {
 		if (!state.arg) {
-			state.arg = new Vector(arg.GetType());
+			state.arg = new Vector(arg.GetType(), 1);
 			state.arg->SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
-		sel_t selv = idx;
-		SelectionVector sel(&selv);
-		VectorOperations::Copy(arg, *state.arg, sel, 1, 0, 0);
-		state.arg_null = ConstantVector::IsNull(*state.arg);
+		state.arg_null = arg_null;
+		if (!arg_null) {
+			sel_t selv = idx;
+			SelectionVector sel(&selv);
+			VectorOperations::Copy(arg, *state.arg, sel, 1, 0, 0);
+		}
 	}
 
 	template <class STATE>
@@ -218,7 +220,8 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			const auto bval = bys[bidx];
 
 			const auto aidx = adata.sel->get_index(i);
-			if (IGNORE_NULL && !adata.validity.RowIsValid(aidx)) {
+			const auto arg_null = !adata.validity.RowIsValid(aidx);
+			if (IGNORE_NULL && arg_null) {
 				continue;
 			}
 
@@ -226,12 +229,12 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 			auto &state = *states[sidx];
 			if (!state.is_initialized) {
 				STATE::template AssignValue<BY_TYPE>(state.value, bval);
-				AssignVector(state, arg, i);
+				AssignVector(state, arg, arg_null, i);
 				state.is_initialized = true;
 
 			} else if (COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
 				STATE::template AssignValue<BY_TYPE>(state.value, bval);
-				AssignVector(state, arg, i);
+				AssignVector(state, arg, arg_null, i);
 			}
 		}
 	}
@@ -243,7 +246,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		}
 		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
 			STATE::template AssignValue(target.value, source.value);
-			AssignVector(target, *source.arg, 0);
+			AssignVector(target, *source.arg, source.arg_null, 0);
 			target.is_initialized = true;
 		}
 	}
@@ -290,13 +293,17 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 	}
 }
 
-static const vector<LogicalType> arg_max_by_types = {
-    LogicalType::INTEGER, LogicalType::BIGINT,    LogicalType::DOUBLE,       LogicalType::VARCHAR,
-    LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
+static const vector<LogicalType> ArgMaxByTypes() {
+	vector<LogicalType> types = {LogicalType::INTEGER,      LogicalType::BIGINT, LogicalType::DOUBLE,
+	                             LogicalType::VARCHAR,      LogicalType::DATE,   LogicalType::TIMESTAMP,
+	                             LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
+	return types;
+}
 
 template <class OP, class ARG_TYPE>
 void AddVectorArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
-	for (const auto &by_type : arg_max_by_types) {
+	auto by_types = ArgMaxByTypes();
+	for (const auto &by_type : by_types) {
 		fun.AddFunction(GetVectorArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
 	}
 }
@@ -332,7 +339,8 @@ AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const Logic
 
 template <class OP, class ARG_TYPE>
 void AddArgMinMaxFunctionBy(AggregateFunctionSet &fun, const LogicalType &type) {
-	for (const auto &by_type : arg_max_by_types) {
+	auto by_types = ArgMaxByTypes();
+	for (const auto &by_type : by_types) {
 		fun.AddFunction(GetArgMinMaxFunctionBy<OP, ARG_TYPE>(by_type, type));
 	}
 }
@@ -382,7 +390,8 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	AddArgMinMaxFunctionBy<OP, timestamp_t>(fun, LogicalType::TIMESTAMP_TZ);
 	AddArgMinMaxFunctionBy<OP, string_t>(fun, LogicalType::BLOB);
 
-	for (const auto &by_type : arg_max_by_types) {
+	auto by_types = ArgMaxByTypes();
+	for (const auto &by_type : by_types) {
 		AddDecimalArgMinMaxFunctionBy<OP>(fun, by_type);
 	}
 

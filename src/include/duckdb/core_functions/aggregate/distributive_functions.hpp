@@ -54,18 +54,6 @@ struct ArgMinNullFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
-struct ArgminnullFun {
-	using ALIAS = ArgMinNullFun;
-
-	static constexpr const char *Name = "argminnull";
-};
-
-struct MinNullByFun {
-	using ALIAS = ArgMinNullFun;
-
-	static constexpr const char *Name = "min_null_by";
-};
-
 struct ArgMaxFun {
 	static constexpr const char *Name = "arg_max";
 	static constexpr const char *Parameters = "arg,val";
@@ -94,18 +82,6 @@ struct ArgMaxNullFun {
 	static constexpr const char *Example = "arg_max_null(A,B)";
 
 	static AggregateFunctionSet GetFunctions();
-};
-
-struct ArgmaxnullFun {
-	using ALIAS = ArgMaxNullFun;
-
-	static constexpr const char *Name = "argmaxnull";
-};
-
-struct MaxNullByFun {
-	using ALIAS = ArgMaxNullFun;
-
-	static constexpr const char *Name = "max_null_by";
 };
 
 struct BitAndFun {

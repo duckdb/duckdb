@@ -19,8 +19,7 @@
         "parameters": "arg,val",
         "description": "Finds the row with the minimum val. Calculates the arg expression at that row.",
         "example": "arg_min_null(A,B)",
-        "type": "aggregate_function_set",
-        "aliases": ["argminnull", "min_null_by"]
+        "type": "aggregate_function_set"
     },
     {
         "name": "arg_max",
@@ -35,8 +34,7 @@
         "parameters": "arg,val",
         "description": "Finds the row with the maximum val. Calculates the arg expression at that row.",
         "example": "arg_max_null(A,B)",
-        "type": "aggregate_function_set",
-        "aliases": ["argmaxnull", "max_null_by"]
+        "type": "aggregate_function_set"
     },
     {
         "name": "bit_and",
