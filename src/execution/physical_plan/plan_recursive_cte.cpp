@@ -37,7 +37,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 
 		// If this check fails, this is a reference to a materialized recursive CTE.
 		if (materialized_cte != materialized_ctes.end()) {
-			auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::CTE_SCAN,
+			auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.chunk_types, PhysicalOperatorType::CTE_SCAN,
 			                                                    op.estimated_cardinality, op.cte_index);
 
 			auto cte = recursive_cte_tables.find(op.cte_index);

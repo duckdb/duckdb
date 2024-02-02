@@ -333,6 +333,11 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 	if (!op.children.empty()) {
+		// Collect all recursive CTEs during recursive descend
+		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
+			binder.recursive_ctes[rec_cte.table_index] = &op;
+		}
 		root = std::move(op.children[0]);
 		D_ASSERT(root);
 		if (root->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {

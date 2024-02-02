@@ -42,6 +42,25 @@ unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
 
 	statement.modifiers.clear();
 
+	// Update the correlated columns for the parent binder
+	// For the left binder, depth >= 1 indicates correlations from the parent binder
+	for (const auto &col : result->child_binder->correlated_columns) {
+		if (col.depth >= 1) {
+			AddCorrelatedColumn(col);
+		}
+	}
+
+	// For the right binder, depth > 1 indicates correlations from the parent binder
+	// (depth = 1 indicates correlations from the left side of the join)
+	for (auto col : result->child_binder->correlated_columns) {
+		if (col.depth > 1) {
+			// Decrement the depth to account for the effect of the lateral binder
+			col.depth--;
+			AddCorrelatedColumn(col);
+			result->query_binder->AddCorrelatedColumn(col);
+		}
+	}
+
 	// Add bindings of left side to temporary CTE bindings context
 	result->child_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
 	                                                 result->types);
