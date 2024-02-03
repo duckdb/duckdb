@@ -181,9 +181,7 @@ protected:
 				uint64_t value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
 
 				while (iterator.pos.buffer_pos < to_pos - 8 &&
-				       !ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
-				                         (value ^ state_machine->transition_array.new_line) &
-				                         (value ^ state_machine->transition_array.quote) &
+				       !ContainsZeroByte((value ^ state_machine->transition_array.quote) &
 				                         (value ^ state_machine->transition_array.escape))) {
 					iterator.pos.buffer_pos += 8;
 					value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
