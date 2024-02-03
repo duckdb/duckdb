@@ -22201,13 +22201,13 @@ yyreduce:
 
   case 269: /* LabelOptional: LABEL PGQ_IDENT  */
 #line 113 "third_party/libpg_query/grammar/statements/pgq.y"
-                    { (yyval.list) = (yyvsp[0].str); }
+                    { (yyval.str) = (yyvsp[0].str); }
 #line 22206 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 270: /* LabelOptional: %empty  */
 #line 114 "third_party/libpg_query/grammar/statements/pgq.y"
-                    { (yyval.list) = NULL; }
+                    { (yyval.str) = NULL; }
 #line 22212 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
@@ -22240,8 +22240,8 @@ yyreduce:
 				n->table = (yyvsp[-3].list);
 				n->properties = (yyvsp[-2].list);
 				/* Xth label in list is set iff discriminator Xth-bit==1 */
-				if (n->labels) n->labels = lappend(n->labels,makeString((yyvsp[-1].list)));
-				else n->labels = list_make1(makeString((yyvsp[-1].list)));
+				if (n->labels) n->labels = lappend(n->labels,makeString((yyvsp[-1].str)));
+				else n->labels = list_make1(makeString((yyvsp[-1].str)));
 				n->is_vertex_table = true;
 				(yyval.node) = (PGNode *) n;
 			}
