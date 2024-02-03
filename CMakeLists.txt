@@ -1105,29 +1105,29 @@ if(BUILD_PYTHON)
 
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
-  if(BUILD_PYTHON)
-    if(USER_SPACE)
-      add_custom_target(
-              duckdb_python ALL
-              COMMAND
-              python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb duckdb_static
-              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-              COMMENT Build
-              Python package)
-    else()
-      add_custom_target(
-              duckdb_python ALL
-              COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb duckdb_static
-              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-              COMMENT Build
-              Python package)
-    endif()
-    add_extension_dependencies(duckdb_python)
+  set(PIP_COMMAND
+      cmake
+      -E
+      env
+      DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
+      DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
+      DUCKDB_LIBS="${duckdb_libs}"
+      pip
+      install
+      --editable
+      .)
+
+  if(USER_SPACE)
+    set(PIP_COMMAND ${PIP_COMMAND} --user)
   endif()
+  add_custom_target(
+    duckdb_python ALL
+    COMMAND ${PIP_COMMAND}
+    DEPENDS duckdb duckdb_static
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+    COMMENT Build
+    Python package)
+  add_extension_dependencies(duckdb_python)
 endif()
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
