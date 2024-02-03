@@ -32,6 +32,11 @@ SELECT INET '127.0.0.255' - 32;
 127.0.0.223
 
 query I
+SELECT INET '127.0.0.255' + 0;
+----
+127.0.0.255
+
+query I
 SELECT INET '127.0.0.31' - 32;
 ----
 126.255.255.255
@@ -44,4 +49,9 @@ SELECT INET '127.0.0.31' - -32;
 # underflow
 statement error
 SELECT INET '0.0.0.0' - 32;
+----
+
+# overflow
+statement error
+select INET '255.255.255.255' + 1
 ----
