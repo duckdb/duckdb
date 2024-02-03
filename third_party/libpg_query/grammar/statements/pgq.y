@@ -110,8 +110,8 @@ LabelList:
     ;
 
 LabelOptional:
-    LABEL PGQ_IDENT { $$ = $2 }
-    | /* EMPTY */   { $$ = NULL }
+    LABEL PGQ_IDENT { $$ = $2; }
+    | /* EMPTY */   { $$ = NULL; }
 ;
 
 Discriminator:
