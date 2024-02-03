@@ -126,31 +126,46 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 	// Initialize characters we can skip during processing, for Standard and Quoted states
 	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
+		transition_array.skip_standard[i] = true;
 		transition_array.skip_quoted[i] = true;
 	}
-
-	char two_bytes[2];
-	for (idx_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
-		for (idx_t j = 0; j < StateMachine::NUM_TRANSITIONS; j++) {
-			two_bytes[0] = i;
-			two_bytes[1] = j;
-			if (i == delimiter || i == static_cast<uint8_t>('\n') || i == static_cast<uint8_t>('\r') ||
-			    j == delimiter || j == static_cast<uint8_t>('\n') || j == static_cast<uint8_t>('\r')){
-				transition_array.skip_standard[*reinterpret_cast<uint16_t *>(&two_bytes)] = false;
-			} else{
-				transition_array.skip_standard[*reinterpret_cast<uint16_t *>(&two_bytes)] = true;
-			}
-	}
-		transition_array.skip_quoted[i] = true;
-	}
-
 	// For standard states we only care for delimiters \r and \n
+	transition_array.skip_standard[delimiter] = false;
+	transition_array.skip_standard[static_cast<uint8_t>('\n')] = false;
+	transition_array.skip_standard[static_cast<uint8_t>('\r')] = false;
 
 	// For quoted we only care about quote, escape and for delimiters \r and \n
 	transition_array.skip_quoted[quote] = false;
 	transition_array.skip_quoted[escape] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\n')] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\r')] = false;
+
+	transition_array.delimiter = delimiter;
+	transition_array.new_line = static_cast<uint8_t>('\n');
+	transition_array.carriage_return = static_cast<uint8_t>('\r');
+	transition_array.quote = quote;
+	transition_array.escape = escape;
+
+	// Shift and OR to replicate across all bytes
+	transition_array.delimiter |= transition_array.delimiter << 8;
+	transition_array.delimiter |= transition_array.delimiter << 16;
+	transition_array.delimiter |= transition_array.delimiter << 32;
+
+	transition_array.new_line |= transition_array.new_line << 8;
+	transition_array.new_line |= transition_array.new_line << 16;
+	transition_array.new_line |= transition_array.new_line << 32;
+
+	transition_array.carriage_return |= transition_array.carriage_return << 8;
+	transition_array.carriage_return |= transition_array.carriage_return << 16;
+	transition_array.carriage_return |= transition_array.carriage_return << 32;
+
+	transition_array.quote |= transition_array.quote << 8;
+	transition_array.quote |= transition_array.quote << 16;
+	transition_array.quote |= transition_array.quote << 32;
+
+	transition_array.escape |= transition_array.escape << 8;
+	transition_array.escape |= transition_array.escape << 16;
+	transition_array.escape |= transition_array.escape << 32;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {

@@ -24,10 +24,15 @@ public:
 	CSVState state_machine[NUM_TRANSITIONS][NUM_STATES];
 	//! Transitions where we might skip processing
 	//! For the Standard State
-	bool skip_standard[NUM_TRANSITIONS* NUM_TRANSITIONS];
+	bool skip_standard[256];
 	//! For the Quoted State
-	bool skip_quoted[65536];
+	bool skip_quoted[256];
 
+	uint64_t delimiter = 0;
+	uint64_t new_line = 0;
+	uint64_t carriage_return = 0;
+	uint64_t quote = 0;
+	uint64_t escape = 0;
 	const CSVState *operator[](idx_t i) const {
 		return state_machine[i];
 	}
