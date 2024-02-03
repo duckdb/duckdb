@@ -47,32 +47,33 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
-	} catch (const ParameterNotResolvedException &ex) {
-		// parameter types could not be resolved
-		this->names = {"unknown"};
-		this->types = {LogicalTypeId::UNKNOWN};
+	} catch (const std::exception &ex) {
+		ErrorData error(ex);
 		this->plan = nullptr;
-		parameters_resolved = false;
-	} catch (const Exception &ex) {
-		auto &config = DBConfig::GetConfig(context);
-
-		this->plan = nullptr;
-		for (auto &extension_op : config.operator_extensions) {
-			auto bound_statement =
-			    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
-			if (bound_statement.plan != nullptr) {
-				this->names = bound_statement.names;
-				this->types = bound_statement.types;
-				this->plan = std::move(bound_statement.plan);
-				break;
+		if (error.Type() == ExceptionType::PARAMETER_NOT_RESOLVED) {
+			// parameter types could not be resolved
+			this->names = {"unknown"};
+			this->types = {LogicalTypeId::UNKNOWN};
+			parameters_resolved = false;
+		} else if (error.Type() != ExceptionType::INVALID) {
+			// different exception type - try operator_extensions
+			auto &config = DBConfig::GetConfig(context);
+			for (auto &extension_op : config.operator_extensions) {
+				auto bound_statement =
+				    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
+				if (bound_statement.plan != nullptr) {
+					this->names = bound_statement.names;
+					this->types = bound_statement.types;
+					this->plan = std::move(bound_statement.plan);
+					break;
+				}
 			}
-		}
-
-		if (!this->plan) {
+			if (!this->plan) {
+				throw;
+			}
+		} else {
 			throw;
 		}
-	} catch (std::exception &ex) {
-		throw;
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;

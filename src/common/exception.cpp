@@ -2,6 +2,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/exception/list.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/planner/expression.hpp"
 
 #ifdef DUCKDB_CRASH_ON_ASSERT
 #include "duckdb/common/printer.hpp"
@@ -14,21 +17,22 @@
 
 namespace duckdb {
 
-Exception::Exception(const string &msg) : std::exception(), type(ExceptionType::INVALID), raw_message_(msg) {
-	exception_message_ = msg;
-}
-
 Exception::Exception(ExceptionType exception_type, const string &message)
-    : std::exception(), type(exception_type), raw_message_(message) {
-	exception_message_ = ExceptionTypeToString(exception_type) + " Error: " + message;
+    : std::runtime_error(ToJSON(exception_type, message)) {
 }
 
-const char *Exception::what() const noexcept {
-	return exception_message_.c_str();
+Exception::Exception(ExceptionType exception_type, const string &message,
+                     const unordered_map<string, string> &extra_info)
+    : std::runtime_error(ToJSON(exception_type, message, extra_info)) {
 }
 
-const string &Exception::RawMessage() const {
-	return raw_message_;
+string Exception::ToJSON(ExceptionType type, const string &message) {
+	unordered_map<string, string> extra_info;
+	return ToJSON(type, message, extra_info);
+}
+
+string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
+	return StringUtil::ToJSONMap(type, message, extra_info);
 }
 
 bool Exception::UncaughtException() {
@@ -37,6 +41,30 @@ bool Exception::UncaughtException() {
 #else
 	return std::uncaught_exception();
 #endif
+}
+
+bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
+	switch (exception_type) {
+	case ExceptionType::BINDER:
+	case ExceptionType::CATALOG:
+	case ExceptionType::CONNECTION:
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+	case ExceptionType::PARSER:
+	case ExceptionType::PERMISSION:
+		return false;
+	default:
+		return true;
+	}
+}
+
+bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
+	switch (exception_type) {
+	case ExceptionType::INTERNAL:
+	case ExceptionType::FATAL:
+		return true;
+	default:
+		return false;
+	}
 }
 
 string Exception::GetStackTrace(int max_depth) {
@@ -125,7 +153,8 @@ static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Inv
                                                    {ExceptionType::DEPENDENCY, "Dependency"},
                                                    {ExceptionType::MISSING_EXTENSION, "Missing Extension"},
                                                    {ExceptionType::HTTP, "HTTP"},
-                                                   {ExceptionType::AUTOLOAD, "Extension Autoloading"}};
+                                                   {ExceptionType::AUTOLOAD, "Extension Autoloading"},
+                                                   {ExceptionType::SEQUENCE, "Sequence"}};
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	for (auto &e : EXCEPTION_MAP) {
@@ -145,121 +174,49 @@ ExceptionType Exception::StringToExceptionType(const string &type) {
 	return ExceptionType::INVALID;
 }
 
-const HTTPException &Exception::AsHTTPException() const {
-	D_ASSERT(type == ExceptionType::HTTP);
-	const auto &e = static_cast<const HTTPException *>(this);
-	D_ASSERT(e->GetStatusCode() != 0);
-	D_ASSERT(e->GetHeaders().size() > 0);
-	return *e;
+unordered_map<string, string> Exception::InitializeExtraInfo(const Expression &expr) {
+	return InitializeExtraInfo(expr.query_location);
 }
 
-void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message,
-                                       const std::shared_ptr<Exception> &original) {
-	switch (type) {
-	case ExceptionType::OUT_OF_RANGE:
-		throw OutOfRangeException(message);
-	case ExceptionType::CONVERSION:
-		throw ConversionException(message); // FIXME: make a separation between Conversion/Cast exception?
-	case ExceptionType::INVALID_TYPE:
-		throw InvalidTypeException(message);
-	case ExceptionType::MISMATCH_TYPE:
-		throw TypeMismatchException(message);
-	case ExceptionType::TRANSACTION:
-		throw TransactionException(message);
-	case ExceptionType::NOT_IMPLEMENTED:
-		throw NotImplementedException(message);
-	case ExceptionType::CATALOG:
-		throw CatalogException(message);
-	case ExceptionType::CONNECTION:
-		throw ConnectionException(message);
-	case ExceptionType::PARSER:
-		throw ParserException(message);
-	case ExceptionType::PERMISSION:
-		throw PermissionException(message);
-	case ExceptionType::SYNTAX:
-		throw SyntaxException(message);
-	case ExceptionType::CONSTRAINT:
-		throw ConstraintException(message);
-	case ExceptionType::BINDER:
-		throw BinderException(message);
-	case ExceptionType::IO:
-		throw IOException(message);
-	case ExceptionType::SERIALIZATION:
-		throw SerializationException(message);
-	case ExceptionType::INTERRUPT:
-		throw InterruptException();
-	case ExceptionType::INTERNAL:
-		throw InternalException(message);
-	case ExceptionType::INVALID_INPUT:
-		throw InvalidInputException(message);
-	case ExceptionType::OUT_OF_MEMORY:
-		throw OutOfMemoryException(message);
-	case ExceptionType::PARAMETER_NOT_ALLOWED:
-		throw ParameterNotAllowedException(message);
-	case ExceptionType::PARAMETER_NOT_RESOLVED:
-		throw ParameterNotResolvedException();
-	case ExceptionType::FATAL:
-		throw FatalException(message);
-	case ExceptionType::DEPENDENCY:
-		throw DependencyException(message);
-	case ExceptionType::HTTP: {
-		original->AsHTTPException().Throw();
-	}
-	case ExceptionType::MISSING_EXTENSION:
-		throw MissingExtensionException(message);
-	default:
-		throw Exception(type, message);
+unordered_map<string, string> Exception::InitializeExtraInfo(const ParsedExpression &expr) {
+	return InitializeExtraInfo(expr.query_location);
+}
+
+unordered_map<string, string> Exception::InitializeExtraInfo(const QueryErrorContext &error_context) {
+	return InitializeExtraInfo(error_context.query_location);
+}
+
+unordered_map<string, string> Exception::InitializeExtraInfo(const TableRef &ref) {
+	return InitializeExtraInfo(ref.query_location);
+}
+
+unordered_map<string, string> Exception::InitializeExtraInfo(optional_idx error_location) {
+	unordered_map<string, string> result;
+	SetQueryLocation(error_location, result);
+	return result;
+}
+
+unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
+	unordered_map<string, string> result;
+	result["error_subtype"] = subtype;
+	SetQueryLocation(error_location, result);
+	return result;
+}
+
+void Exception::SetQueryLocation(optional_idx error_location, unordered_map<string, string> &extra_info) {
+	if (error_location.IsValid()) {
+		extra_info["position"] = to_string(error_location.GetIndex());
 	}
 }
 
-StandardException::StandardException(ExceptionType exception_type, const string &message)
-    : Exception(exception_type, message) {
-}
-
-CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)
+ConversionException::ConversionException(const PhysicalType orig_type, const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
 }
 
-CastException::CastException(const LogicalType &orig_type, const LogicalType &new_type)
+ConversionException::ConversionException(const LogicalType &orig_type, const LogicalType &new_type)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
-}
-
-CastException::CastException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType orig_type,
-                                                   const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " +
-                                               to_string((intmax_t)value) +
-                                               " can't be cast because the value is out of range "
-                                               "for the destination type " +
-                                               TypeIdToString(new_type)) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType orig_type,
-                                                   const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
-                                               " can't be cast because the value is out of range "
-                                               "for the destination type " +
-                                               TypeIdToString(new_type)) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
-                                                   const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
-                                               " can't be cast because the value is out of range "
-                                               "for the destination type " +
-                                               TypeIdToString(new_type)) {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType var_type, const idx_t length)
-    : Exception(ExceptionType::OUT_OF_RANGE,
-                "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
-}
-
-ValueOutOfRangeException::ValueOutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
 ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
@@ -298,16 +255,38 @@ NotImplementedException::NotImplementedException(const string &msg) : Exception(
 OutOfRangeException::OutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
-CatalogException::CatalogException(const string &msg) : StandardException(ExceptionType::CATALOG, msg) {
+OutOfRangeException::OutOfRangeException(const int64_t value, const PhysicalType orig_type, const PhysicalType new_type)
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " +
+                                                 to_string((intmax_t)value) +
+                                                 " can't be cast because the value is out of range "
+                                                 "for the destination type " +
+                                                 TypeIdToString(new_type)) {
 }
 
-ConnectionException::ConnectionException(const string &msg) : StandardException(ExceptionType::CONNECTION, msg) {
+OutOfRangeException::OutOfRangeException(const double value, const PhysicalType orig_type, const PhysicalType new_type)
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
+                                                 " can't be cast because the value is out of range "
+                                                 "for the destination type " +
+                                                 TypeIdToString(new_type)) {
 }
 
-ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
+OutOfRangeException::OutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
+                                         const PhysicalType new_type)
+    : Exception(ExceptionType::OUT_OF_RANGE, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
+                                                 " can't be cast because the value is out of range "
+                                                 "for the destination type " +
+                                                 TypeIdToString(new_type)) {
 }
 
-PermissionException::PermissionException(const string &msg) : StandardException(ExceptionType::PERMISSION, msg) {
+OutOfRangeException::OutOfRangeException(const PhysicalType var_type, const idx_t length)
+    : Exception(ExceptionType::OUT_OF_RANGE,
+                "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
+}
+
+ConnectionException::ConnectionException(const string &msg) : Exception(ExceptionType::CONNECTION, msg) {
+}
+
+PermissionException::PermissionException(const string &msg) : Exception(ExceptionType::PERMISSION, msg) {
 }
 
 SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {
@@ -319,9 +298,6 @@ ConstraintException::ConstraintException(const string &msg) : Exception(Exceptio
 DependencyException::DependencyException(const string &msg) : Exception(ExceptionType::DEPENDENCY, msg) {
 }
 
-BinderException::BinderException(const string &msg) : StandardException(ExceptionType::BINDER, msg) {
-}
-
 IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
 }
 
@@ -329,17 +305,16 @@ MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
 }
 
-AutoloadException::AutoloadException(const string &extension_name, Exception &e)
+AutoloadException::AutoloadException(const string &extension_name, const string &message)
     : Exception(ExceptionType::AUTOLOAD,
                 "An error occurred while trying to automatically install the required extension '" + extension_name +
-                    "':\n" + e.RawMessage()),
-      wrapped_exception(e) {
+                    "':\n" + message) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 
-SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
+SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SEQUENCE, msg) {
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
@@ -348,7 +323,7 @@ InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
 }
 
-InternalException::InternalException(const string &msg) : FatalException(ExceptionType::INTERNAL, msg) {
+InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
 #ifdef DUCKDB_CRASH_ON_ASSERT
 	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg);
 	abort();
@@ -358,11 +333,15 @@ InternalException::InternalException(const string &msg) : FatalException(Excepti
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
+InvalidInputException::InvalidInputException(const string &msg, const unordered_map<string, string> &extra_info)
+    : Exception(ExceptionType::INVALID_INPUT, msg, extra_info) {
+}
+
 OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(ExceptionType::OUT_OF_MEMORY, msg) {
 }
 
 ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)
-    : StandardException(ExceptionType::PARAMETER_NOT_ALLOWED, msg) {
+    : Exception(ExceptionType::PARAMETER_NOT_ALLOWED, msg) {
 }
 
 ParameterNotResolvedException::ParameterNotResolvedException()

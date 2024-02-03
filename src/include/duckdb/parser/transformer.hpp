@@ -75,7 +75,7 @@ private:
 	//! Last parameter type
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
-	unordered_map<string, duckdb_libpgquery::PGWindowDef *> window_clauses;
+	case_insensitive_map_t<duckdb_libpgquery::PGWindowDef *> window_clauses;
 	//! The set of pivot entries to create
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	//! Sets of stored CTEs, if any
@@ -352,6 +352,10 @@ private:
 
 	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
 	                                 duckdb_libpgquery::PGNode *arg);
+
+public:
+	static void SetQueryLocation(ParsedExpression &expr, int query_location);
+	static void SetQueryLocation(TableRef &ref, int query_location);
 
 private:
 	//! Current stack depth

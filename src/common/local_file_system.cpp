@@ -41,8 +41,13 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 
 #if defined(__linux__)
 #include <libgen.h>
+// See e.g.:
+// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
-#include <libproc.h>
+#include <TargetConditionals.h>                             // NOLINT
+#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1) // NOLINT
+#include <libproc.h>                                        // NOLINT
+#endif                                                      // NOLINT
 #elif defined(_WIN32)
 #include <RestartManager.h>
 #endif
@@ -175,7 +180,7 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-#ifdef __APPLE__
+#if __APPLE__ && !TARGET_OS_IPHONE
 
 static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	if (pid == getpid()) {
@@ -218,7 +223,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
 		auto cmdline = cmdline_file->ReadLine();
 		process_name = basename(const_cast<char *>(cmdline.c_str()));
-	} catch (Exception &) {
+	} catch (std::exception &) {
 		// ignore
 	}
 
@@ -241,7 +246,7 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 		if (pw) {
 			process_owner = pw->pw_name;
 		}
-	} catch (Exception &) {
+	} catch (std::exception &) {
 		// ignore
 	}
 
@@ -294,7 +299,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 	}
 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 #if defined(__sun) && defined(__SVR4)
-		throw Exception("DIRECT_IO not supported on Solaris");
+		throw InvalidInputException("DIRECT_IO not supported on Solaris");
 #endif
 #if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
 		// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO

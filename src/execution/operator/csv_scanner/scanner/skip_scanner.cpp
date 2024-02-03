@@ -15,6 +15,10 @@ inline void SkipResult::InternalAddRow() {
 	row_count++;
 }
 
+void SkipResult::QuotedNewLine(SkipResult &result) {
+	// nop
+}
+
 bool SkipResult::AddRow(SkipResult &result, const idx_t buffer_pos) {
 	result.InternalAddRow();
 	if (result.row_count >= result.rows_to_skip) {
@@ -50,13 +54,10 @@ SkipResult &SkipScanner::GetResult() {
 }
 
 void SkipScanner::Initialize() {
-	states.Initialize(CSVState::RECORD_SEPARATOR);
+	states.Initialize();
 }
 
 void SkipScanner::FinalizeChunkProcess() {
-	if (result.rows_to_skip == result.row_count) {
-		// We are done
-		return;
-	}
+	// nop
 }
 } // namespace duckdb

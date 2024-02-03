@@ -1,5 +1,5 @@
 #include "duckdb/transaction/transaction_context.hpp"
-
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -45,9 +45,9 @@ void TransactionContext::Commit() {
 	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
-	string error = transaction->Commit();
-	if (!error.empty()) {
-		throw TransactionException("Failed to commit: %s", error);
+	auto error = transaction->Commit();
+	if (error.HasError()) {
+		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	}
 }
 

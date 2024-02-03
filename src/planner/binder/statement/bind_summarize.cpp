@@ -85,7 +85,7 @@ unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
 	auto query_copy = query->Copy();
 
 	// we bind the plan once in a child-node to figure out the column names and column types
-	auto child_binder = Binder::CreateBinder(context);
+	auto child_binder = Binder::CreateBinder(context, this);
 	auto plan = child_binder->Bind(*query);
 	D_ASSERT(plan.types.size() == plan.names.size());
 	vector<unique_ptr<ParsedExpression>> name_children;

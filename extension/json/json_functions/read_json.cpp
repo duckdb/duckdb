@@ -46,7 +46,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
 				continue;
 			}
-			node.InitializeCandidateTypes(bind_data.max_depth);
+			node.InitializeCandidateTypes(bind_data.max_depth, bind_data.convert_strings_to_integers);
 			node.RefineCandidateTypes(lstate.values, next, string_vector, allocator, bind_data.date_format_map);
 			remaining -= next;
 		}
@@ -211,6 +211,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 				throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
 				                      "the limit on the number of files used to sample \"sample_size\" rows.");
 			}
+		} else if (loption == "convert_strings_to_integers") {
+			bind_data->convert_strings_to_integers = BooleanValue::Get(kv.second);
 		}
 	}
 
@@ -340,6 +342,7 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 	table_function.name = std::move(name);
 	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	table_function.named_parameters["field_appearance_threshold"] = LogicalType::DOUBLE;
+	table_function.named_parameters["convert_strings_to_integers"] = LogicalType::BOOLEAN;
 	return MultiFileReader::CreateFunctionSet(table_function);
 }
 

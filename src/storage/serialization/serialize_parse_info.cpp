@@ -269,6 +269,7 @@ void DropInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OnEntryNotFound>(204, "if_not_found", if_not_found);
 	serializer.WritePropertyWithDefault<bool>(205, "cascade", cascade);
 	serializer.WritePropertyWithDefault<bool>(206, "allow_drop_internal", allow_drop_internal);
+	serializer.WritePropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", extra_drop_info);
 }
 
 unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
@@ -280,6 +281,7 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found", result->if_not_found);
 	deserializer.ReadPropertyWithDefault<bool>(205, "cascade", result->cascade);
 	deserializer.ReadPropertyWithDefault<bool>(206, "allow_drop_internal", result->allow_drop_internal);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ExtraDropInfo>>(207, "extra_drop_info", result->extra_drop_info);
 	return std::move(result);
 }
 

@@ -151,7 +151,7 @@ T MaxValue(T a, T b) {
 }
 
 template <typename T>
-T MinValue(T a, T b) {
+constexpr T MinValue(T a, T b) {
 	return a < b ? a : b;
 }
 
@@ -160,10 +160,15 @@ T AbsValue(T a) {
 	return a < 0 ? -a : a;
 }
 
-//Align value (ceiling)
+//! Align value (ceiling)
 template<class T, T val=8>
 static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;
+}
+
+template<class T, T val=8>
+constexpr inline T AlignValueFloor(T n) {
+	return (n / val) * val;
 }
 
 template<class T, T val=8>

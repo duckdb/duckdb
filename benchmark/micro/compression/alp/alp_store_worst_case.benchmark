@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/alp/alp_store_worst_case.benchmark
+# description: ALP slowest scenario is when it founds high precision decimals. Here, ALP achieves no compression and everything is encoded as exception
+# group: [alp]
+
+name Alp Insert
+group alp
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='alp';
+DROP TABLE IF EXISTS alp_random_doubles;
+
+run
+create table alp_random_doubles as select random()::DOUBLE as data from range(50000000) tbl(i);
+checkpoint;

@@ -1,5 +1,6 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -367,7 +368,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 				                       ", the size of the array must match the destination type",
 				                       source_data[idx].GetString(), array_size);
 				if (parameters.strict) {
-					throw CastException(msg);
+					throw ConversionException(msg);
 				}
 				HandleCastError::AssignError(msg, parameters.error_message);
 			}

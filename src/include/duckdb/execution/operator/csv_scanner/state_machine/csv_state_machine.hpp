@@ -17,9 +17,9 @@ namespace duckdb {
 //! State of necessary CSV States to parse file
 //! Current, previous, and state before the previous
 struct CSVStates {
-	void Initialize(CSVState initial_state) {
-		states[0] = initial_state;
-		states[1] = initial_state;
+	void Initialize() {
+		states[0] = CSVState::NOT_SET;
+		states[1] = CSVState::NOT_SET;
 	}
 	inline bool NewValue() {
 		return states[1] == CSVState::DELIMITER;
@@ -39,11 +39,19 @@ struct CSVStates {
 
 	inline bool EmptyLine() {
 		return (states[1] == CSVState::CARRIAGE_RETURN || states[1] == CSVState::RECORD_SEPARATOR) &&
-		       states[0] == CSVState::RECORD_SEPARATOR;
+		       (states[0] == CSVState::RECORD_SEPARATOR || states[0] == CSVState::NOT_SET);
+	}
+
+	inline bool IsNotSet() {
+		return states[1] == CSVState::NOT_SET;
 	}
 
 	inline bool IsCurrentNewRow() {
 		return states[1] == CSVState::RECORD_SEPARATOR || states[1] == CSVState::CARRIAGE_RETURN;
+	}
+
+	inline bool IsCarriageReturn() {
+		return states[1] == CSVState::CARRIAGE_RETURN;
 	}
 
 	inline bool IsQuoted() {
@@ -53,7 +61,7 @@ struct CSVStates {
 		return states[1] == CSVState::ESCAPE || (states[0] == CSVState::UNQUOTED && states[1] == CSVState::QUOTED);
 	}
 	inline bool IsQuotedCurrent() {
-		return states[1] == CSVState::QUOTED;
+		return states[1] == CSVState::QUOTED || states[1] == CSVState::QUOTED_NEW_LINE;
 	}
 	CSVState states[2];
 };
@@ -79,7 +87,6 @@ public:
 		states.states[1] = transition_array[static_cast<uint8_t>(current_char)][static_cast<uint8_t>(states.states[1])];
 	}
 
-	const vector<SelectionVector> &GetSelectionVector();
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
 	const StateMachine &transition_array;
@@ -89,10 +96,6 @@ public:
 	const CSVReaderOptions &options;
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
-
-private:
-	static void InitializeSelectionVector(vector<SelectionVector> &selection_vector, idx_t num_cols);
-	vector<SelectionVector> selection_vector;
 };
 
 } // namespace duckdb

@@ -84,6 +84,7 @@ jobs:
       BUILD_JEMALLOC: 1
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -321,7 +322,7 @@ jobs:
          fetch-depth: 0
 
      - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
+       uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
        with:
          key: ${{ github.job }}
          save: ${{ env.CCACHE_SAVE }}
@@ -555,7 +556,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_JEMALLOC: 1
-      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:
     - uses: actions/checkout@v3
@@ -611,6 +612,33 @@ jobs:
     - name: Test
       shell: bash
       run: python scripts/test_vector_sizes.py
+
+  block-sizes:
+    name: Block Sizes
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Test
+        shell: bash
+        run: python scripts/test_block_sizes.py
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds

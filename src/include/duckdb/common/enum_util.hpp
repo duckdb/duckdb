@@ -120,6 +120,8 @@ enum class ExpressionType : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
+enum class ExtraDropInfoType : uint8_t;
+
 enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
@@ -438,6 +440,9 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
@@ -850,6 +855,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
 
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
