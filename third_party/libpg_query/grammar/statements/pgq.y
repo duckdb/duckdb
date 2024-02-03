@@ -109,6 +109,11 @@ LabelList:
     |   LabelList ',' PGQ_IDENT     { $$ = lappend($1, makeString($3)); }
     ;
 
+LabelOptional:
+    LABEL PGQ_IDENT { $$ = $2; }
+    | /* EMPTY */   { $$ = NULL; }
+;
+
 Discriminator:
 		IN_P qualified_name '(' LabelList ')'			
 			{ 
@@ -129,14 +134,14 @@ Discriminator:
 
 VertexTableDefinition:
 		/* qualified name is an BIGINT column with 64 bits: a maximum of 64 labels can be set */
-		QualifiednameOptionalAs PropertiesClause LABEL PGQ_IDENT Discriminator
+		QualifiednameOptionalAs PropertiesClause LabelOptional Discriminator
 			{
-				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $5;
+				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $4;
 				n->table = $1;
 				n->properties = $2;
 				/* Xth label in list is set iff discriminator Xth-bit==1 */
-				if (n->labels) n->labels = lappend(n->labels,makeString($4));
-				else n->labels = list_make1(makeString($4));
+				if (n->labels) n->labels = lappend(n->labels,makeString($3));
+				else n->labels = list_make1(makeString($3));
 				n->is_vertex_table = true;
 				$$ = (PGNode *) n;
 			}
@@ -153,9 +158,9 @@ EdgeTableDefinition:
 		QualifiednameOptionalAs
 		SOURCE KeyReference qualified_name KeySpecification
 		DESTINATION KeyReference qualified_name KeySpecification 
-		PropertiesClause LABEL PGQ_IDENT Discriminator
+		PropertiesClause LabelOptional Discriminator
 			{
-				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $13;
+				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $12;
 				n->table = $1;
 				n->is_vertex_table = false;
 				n->src_fk = $3;
@@ -166,8 +171,8 @@ EdgeTableDefinition:
 				n->dst_pk = $9;
 				n->properties = $10;
 				/* Xth label in list is set iff discriminator Xth-bit==1 */
-				if (n->labels) n->labels = lappend(n->labels,makeString($12));
-				else n->labels = list_make1(makeString($12));
+				if (n->labels) n->labels = lappend(n->labels,makeString($11));
+				else n->labels = list_make1(makeString($11));
 				$$ = (PGNode *) n;
 			}
 		;
