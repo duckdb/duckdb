@@ -158,9 +158,9 @@ EdgeTableDefinition:
 		QualifiednameOptionalAs
 		SOURCE KeyReference qualified_name KeySpecification
 		DESTINATION KeyReference qualified_name KeySpecification 
-		PropertiesClause LABEL PGQ_IDENT Discriminator
+		PropertiesClause LabelOptional Discriminator
 			{
-				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $13;
+				PGPropertyGraphTable *n = (PGPropertyGraphTable*) $12;
 				n->table = $1;
 				n->is_vertex_table = false;
 				n->src_fk = $3;
@@ -171,8 +171,8 @@ EdgeTableDefinition:
 				n->dst_pk = $9;
 				n->properties = $10;
 				/* Xth label in list is set iff discriminator Xth-bit==1 */
-				if (n->labels) n->labels = lappend(n->labels,makeString($12));
-				else n->labels = list_make1(makeString($12));
+				if (n->labels) n->labels = lappend(n->labels,makeString($11));
+				else n->labels = list_make1(makeString($11));
 				$$ = (PGNode *) n;
 			}
 		;
