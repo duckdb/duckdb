@@ -22201,13 +22201,13 @@ yyreduce:
 
   case 269: /* LabelOptional: LABEL PGQ_IDENT  */
 #line 113 "third_party/libpg_query/grammar/statements/pgq.y"
-                    { (yyval.list) = (yyvsp[0].str) }
+                    { (yyval.list) = (yyvsp[0].str); }
 #line 22206 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 270: /* LabelOptional: %empty  */
 #line 114 "third_party/libpg_query/grammar/statements/pgq.y"
-                    { (yyval.list) = NULL }
+                    { (yyval.list) = NULL; }
 #line 22212 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
