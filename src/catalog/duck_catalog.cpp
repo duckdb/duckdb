@@ -55,7 +55,7 @@ bool DuckCatalog::IsDuckCatalog() {
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	DependencyList dependencies;
-	auto entry = make_uniq<DuckSchemaEntry>(*this, info.schema, info.internal);
+	auto entry = make_uniq<DuckSchemaEntry>(*this, info);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
 		return nullptr;
