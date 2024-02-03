@@ -53,4 +53,4 @@
 %type <list> EdgePattern
 %type <list> VertexPattern
 %type <node> pgq_expr
-%type <list> LabelOptional
+%type <str> LabelOptional
