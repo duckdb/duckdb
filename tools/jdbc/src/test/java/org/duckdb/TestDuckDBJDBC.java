@@ -2,7 +2,6 @@ package org.duckdb;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -137,23 +136,11 @@ public class TestDuckDBJDBC {
         assertEquals(res, 42);
         assertFalse(rs.wasNull());
 
-        try {
-            res = rs.getInt(0);
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> rs.getInt(0), SQLException.class);
 
-        try {
-            res = rs.getInt(2);
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> rs.getInt(2), SQLException.class);
 
-        try {
-            res = rs.getInt("b");
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> rs.getInt("b"), SQLException.class);
 
         assertFalse(rs.next());
         assertFalse(rs.next());
@@ -162,11 +149,7 @@ public class TestDuckDBJDBC {
         rs.close();
         assertTrue(rs.isClosed());
 
-        try {
-            res = rs.getInt(1);
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> rs.getInt(1), SQLException.class);
 
         stmt.close();
         stmt.close();
@@ -177,24 +160,14 @@ public class TestDuckDBJDBC {
         assertFalse(conn.isValid(0));
         assertTrue(conn.isClosed());
 
-        try {
-            stmt = conn.createStatement();
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(conn::createStatement, SQLException.class);
     }
 
     public static void test_prepare_exception() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
 
-        stmt = conn.createStatement();
-
-        try {
-            stmt.execute("this is no SQL;");
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> stmt.execute("this is no SQL;"), SQLException.class);
     }
 
     public static void test_execute_exception() throws Exception {
@@ -248,11 +221,7 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getInt(1), 5);
 
         // This means a rollback must not be possible now
-        try {
-            conn.rollback();
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(conn::rollback, SQLException.class);
 
         stmt.execute("INSERT INTO t (id) VALUES (8);");
         rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
@@ -564,11 +533,7 @@ public class TestDuckDBJDBC {
         rs = stmt.executeQuery("SELECT * FROM t");
         rs.next();
 
-        try {
-            rs.getShort(2);
-            fail();
-        } catch (IllegalArgumentException e) {
-        }
+        assertThrows(() -> rs.getShort(2), IllegalArgumentException.class);
 
         rs.close();
         stmt.close();
@@ -633,29 +598,13 @@ public class TestDuckDBJDBC {
         assertEquals(meta.getColumnTypeName(1), "INTEGER");
         assertEquals(meta.getColumnTypeName(2), "DOUBLE");
 
-        try {
-            meta.getColumnName(0);
-            fail();
-        } catch (ArrayIndexOutOfBoundsException e) {
-        }
+        assertThrows(() -> meta.getColumnName(0), ArrayIndexOutOfBoundsException.class);
 
-        try {
-            meta.getColumnTypeName(0);
-            fail();
-        } catch (ArrayIndexOutOfBoundsException e) {
-        }
+        assertThrows(() -> meta.getColumnTypeName(0), ArrayIndexOutOfBoundsException.class);
 
-        try {
-            meta.getColumnName(3);
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> meta.getColumnName(3), SQLException.class);
 
-        try {
-            meta.getColumnTypeName(3);
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> meta.getColumnTypeName(3), SQLException.class);
 
         assertTrue(rs.next());
         assertEquals(rs.getInt(1), 42);
@@ -2508,12 +2457,10 @@ public class TestDuckDBJDBC {
         DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();
 
-        try {
+        assertThrows(() -> {
             @SuppressWarnings("unused")
             DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
-            fail();
-        } catch (SQLException e) {
-        }
+        }, SQLException.class);
 
         stmt.close();
         conn.close();
@@ -2536,11 +2483,7 @@ public class TestDuckDBJDBC {
         appender.append(2);
         appender.endRow();
 
-        try {
-            appender.close();
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(appender::close, SQLException.class);
 
         stmt.close();
         conn.close();
@@ -2554,13 +2497,11 @@ public class TestDuckDBJDBC {
         stmt.close();
         DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
-        try {
+        assertThrows(() -> {
             appender.beginRow();
             appender.append(1);
             appender.append(2);
-            fail();
-        } catch (SQLException e) {
-        }
+        }, SQLException.class);
 
         conn.close();
     }
@@ -2573,13 +2514,11 @@ public class TestDuckDBJDBC {
         stmt.close();
         DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
-        try {
+        assertThrows(() -> {
             appender.beginRow();
             appender.append(1);
             appender.endRow();
-            fail();
-        } catch (SQLException e) {
-        }
+        }, SQLException.class);
 
         conn.close();
     }
@@ -2591,12 +2530,10 @@ public class TestDuckDBJDBC {
         stmt.execute("CREATE TABLE data (a INTEGER)");
         DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "data");
 
-        try {
+        assertThrows(() -> {
             appender.beginRow();
             appender.append("str");
-            fail();
-        } catch (SQLException e) {
-        }
+        }, SQLException.class);
 
         stmt.close();
         conn.close();
