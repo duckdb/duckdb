@@ -16,11 +16,11 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	vector<string> label_names;
 
 	auto table_name = reinterpret_cast<duckdb_libpgquery::PGRangeVar *>(graph_table->table->head->data.ptr_value);
-	auto graph_table_name = TransformQualifiedName(*table_name);
+	auto graph_table_name = TransformQualifiedName(*table_name).name;
 	string table_name_alias =
 	    reinterpret_cast<duckdb_libpgquery::PGValue *>(graph_table->table->head->next->data.ptr_value)->val.str;
 	if (!table_name_alias.empty()) {
-		table_alias_map[table_name_alias] = graph_table_name.name;
+		table_alias_map[table_name_alias] = graph_table_name;
 	}
 
 	bool all_columns = false;
@@ -54,7 +54,12 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	     label_element = label_element->next) {
 		auto label = reinterpret_cast<duckdb_libpgquery::PGValue *>(label_element->data.ptr_value);
 		D_ASSERT(label->type == duckdb_libpgquery::T_PGString);
-		std::string label_str = label->val.str;
+		std::string label_str;
+		if (label->val.str == nullptr) {
+			label_str = graph_table_name;
+		} else {
+			label_str = label->val.str;
+		}
 		label_str = StringUtil::Lower(label_str);
 		if (global_label_set.find(label_str) != label_set.end()) {
 			throw ConstraintException("Label %s is not unique, make sure all labels are unique", label_str);
@@ -63,7 +68,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		label_names.emplace_back(label_str);
 	}
 
-	auto pg_table = make_shared<PropertyGraphTable>(graph_table_name.name, table_name_alias,
+	auto pg_table = make_shared<PropertyGraphTable>(graph_table_name, table_name_alias,
 																									column_names, label_names);
 
 	pg_table->is_vertex_table = graph_table->is_vertex_table;
