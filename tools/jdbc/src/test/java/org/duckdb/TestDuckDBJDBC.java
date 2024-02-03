@@ -2151,11 +2151,14 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_new_connection_wrong_url_bug10441() throws Exception {
-        try {
-            DuckDBConnection.newConnection("jdbc:duckdb@", false, new Properties());
-            fail();
-        } catch (SQLException e) {
-        }
+        assertThrows(() -> {
+            Connection connection = DuckDBConnection.newConnection("jdbc:duckdb@", false, new Properties());
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                // ignored
+            }
+        }, SQLException.class);
     }
 
     public static void test_parquet_reader() throws Exception {
