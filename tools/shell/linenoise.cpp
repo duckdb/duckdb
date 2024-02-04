@@ -1193,6 +1193,8 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 	size_t prev_pos = 0;
 	size_t extra_bytes = 0;    // extra bytes introduced
 	size_t token_position = 0; // token position
+	std::vector<highlightToken> new_tokens;
+	new_tokens.reserve(tokens.size());
 	while (cpos < len) {
 		bool is_newline = isNewline(buf[cpos]);
 		nextPosition(l, buf, len, cpos, rows, cols, plen);
@@ -1209,21 +1211,31 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 				result += " ";
 			}
 			result += prompt;
-			for (; token_position < tokens.size(); token_position++) {
-				if (tokens[token_position].start >= cpos) {
-					// not there yet
-					break;
-				}
-				tokens[token_position].start += extra_bytes;
-			}
-			highlightToken token;
-			token.start = cpos + extra_bytes;
-			token.type = is_cursor_row ? tokenType::TOKEN_CONTINUATION_SELECTED : tokenType::TOKEN_CONTINUATION;
-			token.search_match = false;
-			tokens.insert(tokens.begin() + token_position, token);
-			token_position++;
-
 			size_t continuationBytes = plen - continuationRender + continuationLen;
+			if (token_position < tokens.size()) {
+				for (; token_position < tokens.size(); token_position++) {
+					if (tokens[token_position].start >= cpos) {
+						// not there yet
+						break;
+					}
+					tokens[token_position].start += extra_bytes;
+					new_tokens.push_back(tokens[token_position]);
+				}
+				tokenType prev_type = tokenType::TOKEN_IDENTIFIER;
+				if (token_position > 0 && token_position < tokens.size() + 1) {
+					prev_type = tokens[token_position - 1].type;
+				}
+				highlightToken token;
+				token.start = cpos + extra_bytes;
+				token.type = is_cursor_row ? tokenType::TOKEN_CONTINUATION_SELECTED : tokenType::TOKEN_CONTINUATION;
+				token.search_match = false;
+				new_tokens.push_back(token);
+
+				token.start = cpos + extra_bytes + continuationBytes;
+				token.type = prev_type;
+				token.search_match = false;
+				new_tokens.push_back(token);
+			}
 			extra_bytes += continuationBytes;
 		}
 	}
@@ -1232,7 +1244,9 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 	}
 	for (; token_position < tokens.size(); token_position++) {
 		tokens[token_position].start += extra_bytes;
+		new_tokens.push_back(tokens[token_position]);
 	}
+	tokens = std::move(new_tokens);
 	return result;
 }
 
