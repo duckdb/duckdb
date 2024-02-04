@@ -63,9 +63,6 @@ public:
 private:
 	static TerminalSize TryMeasureTerminalSize();
 	static TerminalSize GetCursorPosition();
-
-
-
-		};
+};
 
 } // namespace duckdb

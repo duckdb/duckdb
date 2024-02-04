@@ -47,6 +47,10 @@ public:
 	static void SetCompletionCallback(linenoiseCompletionCallback *fn);
 	static void SetHintsCallback(linenoiseHintsCallback *fn);
 	static void SetFreeHintsCallback(linenoiseFreeHintsCallback *fn);
+
+	static linenoiseHintsCallback *HintsCallback();
+	static linenoiseFreeHintsCallback *FreeHintsCallback();
+
 	static void SetPrompt(const char *continuation, const char *continuationSelected);
 	static size_t ComputeRenderWidth(const char *buf, size_t len);
 	static int GetRenderPosition(const char *buf, size_t len, int max_width, int *n);
@@ -87,16 +91,19 @@ public:
 	void RefreshSearch();
 	void RefreshShowHints(struct abuf *ab, int plen);
 
-	size_t PrevChar();
-	size_t NextChar();
+	size_t PrevChar() const;
+	size_t NextChar() const;
 
 
 	void NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen);
 	void PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols);
 	size_t ColAndRowToPosition(int target_row, int target_col);
 
-	std::string AddContinuationMarkers(const char *buf, size_t len, int plen,
-												  int cursor_row, std::vector<highlightToken> &tokens);
+	string AddContinuationMarkers(const char *buf, size_t len, int plen,
+												  int cursor_row, vector<highlightToken> &tokens);
+
+	static bool IsNewline(char c);
+	static bool IsWordBoundary(char c);
 
 public:
 	int ifd;                                 /* Terminal stdin file descriptor. */

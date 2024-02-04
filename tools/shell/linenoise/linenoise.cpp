@@ -131,9 +131,6 @@ static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
 static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 
-static const char *continuationPrompt = "> ";
-static const char *continuationSelectedPrompt = "> ";
-
 int linenoiseHistoryAdd(const char *line);
 
 /* ============================== Completion ================================ */
@@ -165,6 +162,15 @@ void Linenoise::SetHintsCallback(linenoiseHintsCallback *fn) {
 void Linenoise::SetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
 	freeHintsCallback = fn;
 }
+
+linenoiseHintsCallback *Linenoise::HintsCallback() {
+	return hintsCallback;
+}
+
+linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
+	return freeHintsCallback;
+}
+
 /* This is an helper function for linenoiseEdit() and is called when the
 * user types the <tab> key in order to complete the string currently in the
 * input.
@@ -231,65 +237,6 @@ int Linenoise::CompleteLine() {
 
 	freeCompletions(&lc);
 	return c; /* Return last read character */
-}
-
-/* =========================== Line editing ================================= */
-
-/* We define a very simple "append buffer" structure, that is an heap
-* allocated string where we can append to. This is useful in order to
-* write all the escape sequences in a buffer and flush them to the standard
-* output in a single call, to avoid flickering effects. */
-struct abuf {
-	char *b;
-	int len;
-};
-
-static void abInit(struct abuf *ab) {
-	ab->b = NULL;
-	ab->len = 0;
-}
-
-static void abAppend(struct abuf *ab, const char *s, int len) {
-	char *new_entry = (char *) realloc(ab->b, ab->len + len);
-
-	if (new_entry == NULL)
-		return;
-	memcpy(new_entry + ab->len, s, len);
-	ab->b = new_entry;
-	ab->len += len;
-}
-
-static void abFree(struct abuf *ab) {
-	free(ab->b);
-}
-
-/* Helper of refreshSingleLine() and refreshMultiLine() to show hints
-* to the right of the prompt. */
-void Linenoise::RefreshShowHints(struct abuf *ab, int plen) {
-	char seq[64];
-	if (hintsCallback && plen + len < size_t(ws.ws_col)) {
-		int color = -1, bold = 0;
-		char *hint = hintsCallback(buf, &color, &bold);
-		if (hint) {
-			int hintlen = strlen(hint);
-			int hintmaxlen = ws.ws_col - (plen + len);
-			if (hintlen > hintmaxlen)
-				hintlen = hintmaxlen;
-			if (bold == 1 && color == -1)
-				color = 37;
-			if (color != -1 || bold != 0)
-				snprintf(seq, 64, "\033[%d;%d;49m", bold, color);
-			else
-				seq[0] = '\0';
-			abAppend(ab, seq, strlen(seq));
-			abAppend(ab, hint, hintlen);
-			if (color != -1 || bold != 0)
-				abAppend(ab, "\033[0m", 4);
-			/* Call the function to free the hint returned. */
-			if (freeHintsCallback)
-				freeHintsCallback(hint);
-		}
-	}
 }
 
 size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
@@ -398,191 +345,12 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 	return 0;
 }
 
-void Linenoise::SetPrompt(const char *continuation, const char *continuationSelected) {
-	continuationPrompt = continuation;
-	continuationSelectedPrompt = continuationSelected;
-}
-
-static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, size_t cols, size_t plen,
-					   std::string &highlight_buffer, bool highlight, searchMatch *match = nullptr) {
-	if (duckdb::Utf8Proc::IsValid(buf, len)) {
-		// utf8 in prompt, handle rendering
-		size_t remaining_render_width = cols - plen - 1;
-		size_t start_pos = 0;
-		size_t cpos = 0;
-		size_t prev_pos = 0;
-		size_t total_render_width = 0;
-		while (cpos < len) {
-			size_t char_render_width = duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
-			prev_pos = cpos;
-			cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
-			total_render_width += cpos - prev_pos;
-			if (total_render_width >= remaining_render_width) {
-				// character does not fit anymore! we need to figure something out
-				if (prev_pos >= pos) {
-					// we passed the cursor: break
-					cpos = prev_pos;
-					break;
-				} else {
-					// we did not pass the cursor yet! remove characters from the start until it fits again
-					while (total_render_width >= remaining_render_width) {
-						size_t start_char_width = duckdb::Utf8Proc::RenderWidth(buf, len, start_pos);
-						size_t new_start = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, start_pos);
-						total_render_width -= new_start - start_pos;
-						start_pos = new_start;
-						render_pos -= start_char_width;
-					}
-				}
-			}
-			if (prev_pos < pos) {
-				render_pos += char_render_width;
-			}
-		}
-		if (highlight) {
-			auto tokens = Highlighting::Tokenize(buf, len, match);
-			highlight_buffer = Highlighting::HighlightText(buf, len, start_pos, cpos, tokens);
-			buf = (char *) highlight_buffer.c_str();
-			len = highlight_buffer.size();
-		} else {
-			buf = buf + start_pos;
-			len = cpos - start_pos;
-		}
-	} else {
-		// invalid UTF8: fallback
-		while ((plen + pos) >= cols) {
-			buf++;
-			len--;
-			pos--;
-		}
-		while (plen + len > cols) {
-			len--;
-		}
-		render_pos = pos;
-	}
-}
-
-/* Single line low level line refresh.
-*
-* Rewrite the currently edited line accordingly to the buffer content,
-* cursor position, and number of columns of the terminal. */
-void Linenoise::RefreshSingleLine() {
-	char seq[64];
-	size_t plen = GetPromptWidth();
-	int fd = ofd;
-	char *buf = buf;
-	size_t len = len;
-	struct abuf ab;
-	size_t render_pos = 0;
-	std::string highlight_buffer;
-
-	renderText(render_pos, buf, len, pos, ws.ws_col, plen, highlight_buffer, Highlighting::IsEnabled());
-
-	abInit(&ab);
-	/* Cursor to left edge */
-	snprintf(seq, 64, "\r");
-	abAppend(&ab, seq, strlen(seq));
-	/* Write the prompt and the current buffer content */
-	abAppend(&ab, prompt, strlen(prompt));
-	abAppend(&ab, buf, len);
-	/* Show hits if any. */
-	RefreshShowHints(&ab, plen);
-	/* Erase to right */
-	snprintf(seq, 64, "\x1b[0K");
-	abAppend(&ab, seq, strlen(seq));
-	/* Move cursor to original position. */
-	snprintf(seq, 64, "\r\x1b[%dC", (int) (render_pos + plen));
-	abAppend(&ab, seq, strlen(seq));
-	if (write(fd, ab.b, ab.len) == -1) {
-	} /* Can't recover from write error. */
-	abFree(&ab);
-}
-
-void Linenoise::RefreshSearch() {
-	std::string search_prompt;
-	static const size_t SEARCH_PROMPT_RENDER_SIZE = 28;
-	std::string no_matches_text = "(no matches)";
-	bool no_matches = search_index >= search_matches.size();
-	if (search_buf.empty()) {
-		search_prompt = "search" + std::string(SEARCH_PROMPT_RENDER_SIZE - 8, ' ') + "> ";
-		no_matches_text = "(type to search)";
-	} else {
-		std::string search_text;
-		std::string matches_text;
-		search_text += search_buf;
-		if (!no_matches) {
-			matches_text += std::to_string(search_index + 1);
-			matches_text += "/" + std::to_string(search_matches.size());
-		}
-		size_t search_text_length = ComputeRenderWidth(search_text.c_str(), search_text.size());
-		size_t matches_text_length = ComputeRenderWidth(matches_text.c_str(), matches_text.size());
-		size_t total_text_length = search_text_length + matches_text_length;
-		if (total_text_length < SEARCH_PROMPT_RENDER_SIZE - 2) {
-			// search text is short: we can render the entire search text
-			search_prompt = search_text;
-			search_prompt += std::string(SEARCH_PROMPT_RENDER_SIZE - 2 - total_text_length, ' ');
-			search_prompt += matches_text;
-			search_prompt += "> ";
-		} else {
-			// search text length is too long to fit: truncate
-			bool render_matches = matches_text_length < SEARCH_PROMPT_RENDER_SIZE - 8;
-			char *search_buf = (char *) search_text.c_str();
-			size_t search_len = search_text.size();
-			size_t search_render_pos = 0;
-			size_t max_render_size = SEARCH_PROMPT_RENDER_SIZE - 3;
-			if (render_matches) {
-				max_render_size -= matches_text_length;
-			}
-			std::string highlight_buffer;
-			renderText(search_render_pos, search_buf, search_len, search_len, max_render_size, 0, highlight_buffer,
-					   false);
-			search_prompt = std::string(search_buf, search_len);
-			for (size_t i = search_render_pos; i < max_render_size; i++) {
-				search_prompt += " ";
-			}
-			if (render_matches) {
-				search_prompt += matches_text;
-			}
-			search_prompt += "> ";
-		}
-	}
-	auto oldHighlighting = Highlighting::IsEnabled();
-	Linenoise clone = *this;
-	prompt = (char *) search_prompt.c_str();
-	plen = search_prompt.size();
-	if (no_matches || search_buf.empty()) {
-		// if there are no matches render the no_matches_text
-		buf = (char *) no_matches_text.c_str();
-		len = no_matches_text.size();
-		pos = 0;
-		// don't highlight the "no_matches" text
-		Highlighting::Disable();
-	} else {
-		// if there are matches render the current history item
-		auto search_match = search_matches[search_index];
-		auto history_index = search_match.history_index;
-		auto cursor_position = search_match.match_end;
-		buf = (char *) History::GetEntry(history_index);
-		len = strlen(buf);
-		pos = cursor_position;
-	}
-	RefreshLine();
-
-	if (oldHighlighting) {
-		Highlighting::Enable();
-	}
-	buf = clone.buf;
-	len = clone.len;
-	pos = clone.pos;
-	prompt = clone.prompt;
-	plen = clone.plen;
-}
-
-bool isNewline(char c) {
+bool Linenoise::IsNewline(char c) {
 	return c == '\r' || c == '\n';
 }
 
 void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) {
-	if (isNewline(buf[cpos])) {
+	if (IsNewline(buf[cpos])) {
 		// explicit newline! move to next line and insert a prompt
 		rows++;
 		cols = plen;
@@ -617,7 +385,7 @@ void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_co
 	cols = plen;
 	size_t cpos = 0;
 	while (cpos < len) {
-		if (cols >= ws.ws_col && !isNewline(buf[cpos])) {
+		if (cols >= ws.ws_col && !IsNewline(buf[cpos])) {
 			// exceeded width - move to next line
 			rows++;
 			cols = 0;
@@ -662,247 +430,6 @@ size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) {
 	return cpos;
 }
 
-std::string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen,
-										  int cursor_row, std::vector<highlightToken> &tokens) {
-	std::string result;
-	int rows = 1;
-	int cols = plen;
-	size_t cpos = 0;
-	size_t prev_pos = 0;
-	size_t extra_bytes = 0;    // extra bytes introduced
-	size_t token_position = 0; // token position
-	std::vector<highlightToken> new_tokens;
-	new_tokens.reserve(tokens.size());
-	while (cpos < len) {
-		bool is_newline = isNewline(buf[cpos]);
-		NextPosition(buf, len, cpos, rows, cols, plen);
-		for (; prev_pos < cpos; prev_pos++) {
-			result += buf[prev_pos];
-		}
-		if (is_newline) {
-			bool is_cursor_row = rows == cursor_row;
-			const char *prompt = is_cursor_row ? continuationSelectedPrompt : continuationPrompt;
-			size_t continuationLen = strlen(prompt);
-			size_t continuationRender = ComputeRenderWidth(prompt, continuationLen);
-			// pad with spaces prior to prompt
-			for (int i = int(continuationRender); i < plen; i++) {
-				result += " ";
-			}
-			result += prompt;
-			size_t continuationBytes = plen - continuationRender + continuationLen;
-			if (token_position < tokens.size()) {
-				for (; token_position < tokens.size(); token_position++) {
-					if (tokens[token_position].start >= cpos) {
-						// not there yet
-						break;
-					}
-					tokens[token_position].start += extra_bytes;
-					new_tokens.push_back(tokens[token_position]);
-				}
-				tokenType prev_type = tokenType::TOKEN_IDENTIFIER;
-				if (token_position > 0 && token_position < tokens.size() + 1) {
-					prev_type = tokens[token_position - 1].type;
-				}
-				highlightToken token;
-				token.start = cpos + extra_bytes;
-				token.type = is_cursor_row ? tokenType::TOKEN_CONTINUATION_SELECTED : tokenType::TOKEN_CONTINUATION;
-				token.search_match = false;
-				new_tokens.push_back(token);
-
-				token.start = cpos + extra_bytes + continuationBytes;
-				token.type = prev_type;
-				token.search_match = false;
-				new_tokens.push_back(token);
-			}
-			extra_bytes += continuationBytes;
-		}
-	}
-	for (; prev_pos < cpos; prev_pos++) {
-		result += buf[prev_pos];
-	}
-	for (; token_position < tokens.size(); token_position++) {
-		tokens[token_position].start += extra_bytes;
-		new_tokens.push_back(tokens[token_position]);
-	}
-	tokens = std::move(new_tokens);
-	return result;
-}
-
-/* Multi line low level line refresh.
-*
-* Rewrite the currently edited line accordingly to the buffer content,
-* cursor position, and number of columns of the terminal. */
-void Linenoise::RefreshMultiLine() {
-	if (!render) {
-		return;
-	}
-	char seq[64];
-	int plen = GetPromptWidth();
-	// utf8 in prompt, get render width
-	int rows, cols;
-	int new_cursor_row, new_cursor_x;
-	PositionToColAndRow(pos, new_cursor_row, new_cursor_x, rows, cols);
-	int col; /* colum position, zero-based. */
-	int old_rows = maxrows ? maxrows : 1;
-	int fd = ofd, j;
-	struct abuf ab;
-	std::string highlight_buffer;
-	auto buf = this->buf;
-	auto len = this->len;
-	if (clear_screen) {
-		old_cursor_rows = 0;
-		old_rows = 0;
-		clear_screen = false;
-	}
-	if (rows > ws.ws_row) {
-		// the text does not fit in the terminal (too many rows)
-		// enable scrolling mode
-		// check if, given the current y_scroll, the cursor is visible
-		// display range is [y_scroll, y_scroll + ws.ws_row]
-		if (new_cursor_row < int(y_scroll) + 1) {
-			y_scroll = new_cursor_row - 1;
-		} else if (new_cursor_row > int(y_scroll) + int(ws.ws_row)) {
-			y_scroll = new_cursor_row - ws.ws_row;
-		}
-		// display only characters up to the current scroll position
-		int start, end;
-		if (y_scroll == 0) {
-			start = 0;
-		} else {
-			start = ColAndRowToPosition(y_scroll, 0);
-		}
-		if (int(y_scroll) + int(ws.ws_row) >= rows) {
-			end = len;
-		} else {
-			end = ColAndRowToPosition(y_scroll + ws.ws_row, 99999);
-		}
-		new_cursor_row -= y_scroll;
-		buf += start;
-		len = end - start;
-		lndebug("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, start,
-				end);
-		rows = ws.ws_row;
-	} else {
-		y_scroll = 0;
-	}
-
-	/* Update maxrows if needed. */
-	if (rows > (int) maxrows) {
-		maxrows = rows;
-	}
-
-	vector<highlightToken> tokens;
-	if (Highlighting::IsEnabled()) {
-		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
-		tokens = Highlighting::Tokenize(buf, len, match);
-	}
-	if (rows > 1) {
-		// add continuation markers
-		highlight_buffer =
-				AddContinuationMarkers(buf, len, plen, y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row,
-									   tokens);
-		buf = (char *) highlight_buffer.c_str();
-		len = highlight_buffer.size();
-	}
-	if (duckdb::Utf8Proc::IsValid(buf, len)) {
-		if (Highlighting::IsEnabled()) {
-			highlight_buffer = Highlighting::HighlightText(buf, len, 0, len, tokens);
-			buf = (char *) highlight_buffer.c_str();
-			len = highlight_buffer.size();
-		}
-	}
-
-	/* First step: clear all the lines used before. To do so start by
-	 * going to the last row. */
-	abInit(&ab);
-	if (old_rows - old_cursor_rows > 0) {
-		lndebug("go down %d", old_rows - old_cursor_rows);
-		snprintf(seq, 64, "\x1b[%dB", old_rows - int(old_cursor_rows));
-		abAppend(&ab, seq, strlen(seq));
-	}
-
-	/* Now for every row clear it, go up. */
-	for (j = 0; j < old_rows - 1; j++) {
-		lndebug("clear+up", 0);
-		snprintf(seq, 64, "\r\x1b[0K\x1b[1A");
-		abAppend(&ab, seq, strlen(seq));
-	}
-
-	/* Clean the top line. */
-	lndebug("clear", 0);
-	snprintf(seq, 64, "\r\x1b[0K");
-	abAppend(&ab, seq, strlen(seq));
-
-	/* Write the prompt and the current buffer content */
-	if (y_scroll == 0) {
-		abAppend(&ab, prompt, strlen(prompt));
-	}
-	abAppend(&ab, buf, len);
-
-	/* Show hints if any. */
-	RefreshShowHints(&ab, plen);
-
-	/* If we are at the very end of the screen with our prompt, we need to
-	 * emit a newline and move the prompt to the first column. */
-	lndebug("pos > 0 %d", pos > 0 ? 1 : 0);
-	lndebug("pos == len %d", pos == len ? 1 : 0);
-	lndebug("new_cursor_x == cols %d", new_cursor_x == ws.ws_col ? 1 : 0);
-	if (pos > 0 && pos == len && new_cursor_x == ws.ws_col) {
-		lndebug("<newline>", 0);
-		abAppend(&ab, "\n", 1);
-		snprintf(seq, 64, "\r");
-		abAppend(&ab, seq, strlen(seq));
-		rows++;
-		new_cursor_row++;
-		new_cursor_x = 0;
-		if (rows > (int) maxrows) {
-			maxrows = rows;
-		}
-	}
-	lndebug("render %d rows (old rows %d)", rows, old_rows);
-
-	/* Move cursor to right position. */
-	lndebug("new_cursor_row %d", new_cursor_row);
-	lndebug("new_cursor_x %d", new_cursor_x);
-	lndebug("len %d", len);
-	lndebug("old_cursor_rows %d", old_cursor_rows);
-	lndebug("pos %d", pos);
-	lndebug("max cols %d", ws.ws_col);
-
-	/* Go up till we reach the expected positon. */
-	if (rows - new_cursor_row > 0) {
-		lndebug("go-up %d", rows - new_cursor_row);
-		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
-		abAppend(&ab, seq, strlen(seq));
-	}
-
-	/* Set column. */
-	col = new_cursor_x;
-	lndebug("set col %d", 1 + col);
-	if (col)
-		snprintf(seq, 64, "\r\x1b[%dC", col);
-	else
-		snprintf(seq, 64, "\r");
-	abAppend(&ab, seq, strlen(seq));
-
-	lndebug("\n", 0);
-	old_cursor_rows = new_cursor_row;
-
-	if (write(fd, ab.b, ab.len) == -1) {
-	} /* Can't recover from write error. */
-	abFree(&ab);
-}
-
-/* Calls the two low level functions refreshSingleLine() or
-* refreshMultiLine() according to the selected mode. */
-void Linenoise::RefreshLine() {
-	if (Terminal::IsMultiline()) {
-		RefreshMultiLine();
-	} else {
-		RefreshSingleLine();
-	}
-}
-
 /* Insert the character 'c' at cursor current position.
 *
 * On error writing to the terminal -1 is returned, otherwise 0. */
@@ -940,11 +467,11 @@ int Linenoise::EditInsertMulti(const char *c) {
 	return 0;
 }
 
-size_t Linenoise::PrevChar() {
+size_t Linenoise::PrevChar() const {
 	return duckdb::Utf8Proc::PreviousGraphemeCluster(buf, len, pos);
 }
 
-size_t Linenoise::NextChar() {
+size_t Linenoise::NextChar() const {
 	return duckdb::Utf8Proc::NextGraphemeCluster(buf, len, pos);
 }
 
@@ -964,7 +491,7 @@ void Linenoise::EditMoveRight() {
 	}
 }
 
-bool characterIsWordBoundary(char c) {
+bool Linenoise::IsWordBoundary(char c) {
 	if (c >= 'a' && c <= 'z') {
 		return false;
 	}
@@ -984,7 +511,7 @@ void Linenoise::EditMoveWordLeft() {
 	}
 	do {
 		pos = PrevChar();
-	} while (pos > 0 && !characterIsWordBoundary(buf[pos]));
+	} while (pos > 0 && !IsWordBoundary(buf[pos]));
 	RefreshLine();
 }
 
@@ -995,7 +522,7 @@ void Linenoise::EditMoveWordRight() {
 	}
 	do {
 		pos = NextChar();
-	} while (pos != len && !characterIsWordBoundary(buf[pos]));
+	} while (pos != len && !IsWordBoundary(buf[pos]));
 	RefreshLine();
 }
 
