@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	auto &fs = FileSystem::GetFileSystem(context);
 	op.file_path = fs.ExpandPath(op.file_path);
 	if (op.use_tmp_file) {
-		op.file_path += ".tmp";
+		op.file_path = "tmp_" + op.file_path;
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.partition_output || !op.partition_columns.empty() ||
 	    op.overwrite_or_ignore) {
