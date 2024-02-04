@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "highlighting.hpp"
 #include "terminal.hpp"
 #include "linenoise.h"
 
@@ -31,6 +30,7 @@ do {                                                                            
 #endif
 
 namespace duckdb {
+struct highlightToken;
 
 struct searchMatch {
 	size_t history_index;

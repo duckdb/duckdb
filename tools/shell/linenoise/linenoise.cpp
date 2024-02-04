@@ -111,6 +111,7 @@
 #include "linenoise.h"
 #include "linenoise.hpp"
 #include "history.hpp"
+#include "highlighting.hpp"
 #include "terminal.hpp"
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
@@ -118,10 +119,7 @@
 #include "duckdb_shell_wrapper.h"
 #include <string>
 #include "sqlite3.h"
-#ifndef DISABLE_HIGHLIGHTING
-#include <sstream>
-#include "duckdb/parser/parser.hpp"
-#endif
+#include "duckdb/common/string_util.hpp"
 #ifdef __MVS__
 #include <strings.h>
 #include <sys/time.h>
@@ -129,44 +127,9 @@
 
 namespace duckdb {
 
-#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
-	// disable highlighting on windows (for now?)
-#define DISABLE_HIGHLIGHT
-#endif
-
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
 static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
-
-#ifndef DISABLE_HIGHLIGHT
-
-static int enableHighlighting = 1;
-struct Color {
-	const char *color_name;
-	const char *highlight;
-};
-static Color terminal_colors[] = {{"red",           "\033[31m"},
-								  {"green",         "\033[32m"},
-								  {"yellow",        "\033[33m"},
-								  {"blue",          "\033[34m"},
-								  {"magenta",       "\033[35m"},
-								  {"cyan",          "\033[36m"},
-								  {"white",         "\033[37m"},
-								  {"brightblack",   "\033[90m"},
-								  {"brightred",     "\033[91m"},
-								  {"brightgreen",   "\033[92m"},
-								  {"brightyellow",  "\033[93m"},
-								  {"brightblue",    "\033[94m"},
-								  {"brightmagenta", "\033[95m"},
-								  {"brightcyan",    "\033[96m"},
-								  {"brightwhite",   "\033[97m"},
-								  {nullptr,         nullptr}};
-static std::string bold = "\033[1m";
-static std::string underline = "\033[4m";
-static std::string keyword = "\033[32m";
-static std::string constant = "\033[33m";
-static std::string reset = "\033[00m";
-#endif
 
 static const char *continuationPrompt = "> ";
 static const char *continuationSelectedPrompt = "> ";
@@ -374,30 +337,14 @@ int Linenoise::GetRenderPosition(const char *buf, size_t len, int max_width, int
 	}
 }
 
-#ifndef DISABLE_HIGHLIGHT
-
-const char *getColorOption(const char *option) {
-	size_t index = 0;
-	while (terminal_colors[index].color_name) {
-		if (strcmp(terminal_colors[index].color_name, option) == 0) {
-			return terminal_colors[index].highlight;
-		}
-		index++;
-	}
-	return nullptr;
-}
-
-#endif
-
 int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error) {
-#ifndef DISABLE_HIGHLIGHT
 	if (strcmp(azArg[0], "highlight") == 0) {
 		if (nArg == 2) {
 			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
-				enableHighlighting = 0;
+				Highlighting::Disable();
 				return 1;
 			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
-				enableHighlighting = 1;
+				Highlighting::Enable();
 				return 1;
 			}
 		}
@@ -405,9 +352,9 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 		return 1;
 	} else if (strcmp(azArg[0], "keyword") == 0) {
 		if (nArg == 2) {
-			const char *option = getColorOption(azArg[1]);
+			const char *option = Highlighting::GetColorOption(azArg[1]);
 			if (option) {
-				keyword = option;
+				Highlighting::SetKeyword(option);
 				return 1;
 			}
 		}
@@ -417,9 +364,9 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 		return 1;
 	} else if (strcmp(azArg[0], "constant") == 0) {
 		if (nArg == 2) {
-			const char *option = getColorOption(azArg[1]);
+			const char *option = Highlighting::GetColorOption(azArg[1]);
 			if (option) {
-				constant = option;
+				Highlighting::SetConstant(option);
 				return 1;
 			}
 		}
@@ -429,14 +376,14 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 		return 1;
 	} else if (strcmp(azArg[0], "keywordcode") == 0) {
 		if (nArg == 2) {
-			keyword = azArg[1];
+			Highlighting::SetKeyword(azArg[1]);
 			return 1;
 		}
 		*out_error = "Expected usage: .keywordcode [terminal_code]";
 		return 1;
 	} else if (strcmp(azArg[0], "constantcode") == 0) {
 		if (nArg == 2) {
-			constant = azArg[1];
+			Highlighting::SetConstant(azArg[1]);
 			return 1;
 		}
 		*out_error = "Expected usage: .constantcode [terminal_code]";
@@ -448,7 +395,6 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 		linenoiseSetMultiLine(0);
 		return 1;
 	}
-#endif
 	return 0;
 }
 
@@ -456,138 +402,6 @@ void Linenoise::SetPrompt(const char *continuation, const char *continuationSele
 	continuationPrompt = continuation;
 	continuationSelectedPrompt = continuationSelected;
 }
-
-#ifndef DISABLE_HIGHLIGHT
-
-tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
-	switch (token_type) {
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
-			return tokenType::TOKEN_IDENTIFIER;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-			return tokenType::TOKEN_NUMERIC_CONSTANT;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			return tokenType::TOKEN_STRING_CONSTANT;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
-			return tokenType::TOKEN_OPERATOR;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
-			return tokenType::TOKEN_KEYWORD;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
-			return tokenType::TOKEN_COMMENT;
-		default:
-			throw duckdb::InternalException("Unrecognized token type");
-	}
-}
-
-std::vector<highlightToken> tokenize(char *buf, size_t len, searchMatch *match = nullptr) {
-	std::string sql(buf, len);
-	auto parseTokens = duckdb::Parser::Tokenize(sql);
-	std::vector<highlightToken> tokens;
-
-	for (auto &token: parseTokens) {
-		highlightToken new_token;
-		new_token.type = convertToken(token.type);
-		new_token.start = token.start;
-		tokens.push_back(new_token);
-	}
-
-	if (!tokens.empty() && tokens[0].start > 0) {
-		highlightToken new_token;
-		new_token.type = tokenType::TOKEN_IDENTIFIER;
-		new_token.start = 0;
-		tokens.insert(tokens.begin(), new_token);
-	}
-	if (tokens.empty() && sql.size() > 0) {
-		highlightToken new_token;
-		new_token.type = tokenType::TOKEN_IDENTIFIER;
-		new_token.start = 0;
-		tokens.push_back(new_token);
-	}
-	if (match) {
-		// we have a search match - insert it into the token list
-		// we want to insert a search token with start = match_start, end = match_end
-		// first figure out which token type we would have at match_end (if any)
-		for (size_t i = 0; i + 1 < tokens.size(); i++) {
-			if (tokens[i].start <= match->match_start && tokens[i + 1].start >= match->match_start) {
-				// this token begins after the search position, insert the token here
-				size_t token_position = i + 1;
-				auto end_type = tokens[i].type;
-				if (tokens[i].start == match->match_start) {
-					// exact start: only set the search match
-					tokens[i].search_match = true;
-				} else {
-					// non-exact start: add a new token
-					highlightToken search_token;
-					search_token.type = tokens[i].type;
-					search_token.start = match->match_start;
-					search_token.search_match = true;
-					tokens.insert(tokens.begin() + token_position, search_token);
-					token_position++;
-				}
-
-				// move forwards
-				while (token_position < tokens.size() && tokens[token_position].start < match->match_end) {
-					// this token is
-					// mark this token as a search token
-					end_type = tokens[token_position].type;
-					tokens[token_position].search_match = true;
-					token_position++;
-				}
-				if (token_position >= tokens.size() || tokens[token_position].start > match->match_end) {
-					// insert the token that marks the end of the search
-					highlightToken end_token;
-					end_token.type = end_type;
-					end_token.start = match->match_end;
-					tokens.insert(tokens.begin() + token_position, end_token);
-					token_position++;
-				}
-				break;
-			}
-		}
-	}
-	return tokens;
-}
-
-std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
-						  const std::vector<highlightToken> &tokens) {
-	std::stringstream ss;
-	for (size_t i = 0; i < tokens.size(); i++) {
-		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
-		if (next < start_pos) {
-			// this token is not rendered at all
-			continue;
-		}
-
-		auto &token = tokens[i];
-		size_t start = token.start > start_pos ? token.start : start_pos;
-		size_t end = next > end_pos ? end_pos : next;
-		if (end <= start) {
-			continue;
-		}
-		std::string text = std::string(buf + start, end - start);
-		if (token.search_match) {
-			ss << underline;
-		}
-		switch (token.type) {
-			case tokenType::TOKEN_KEYWORD:
-			case tokenType::TOKEN_CONTINUATION_SELECTED:
-				ss << keyword << text << reset;
-				break;
-			case tokenType::TOKEN_NUMERIC_CONSTANT:
-			case tokenType::TOKEN_STRING_CONSTANT:
-			case tokenType::TOKEN_CONTINUATION:
-				ss << constant << text << reset;
-				break;
-			default:
-				ss << text;
-				if (token.search_match) {
-					ss << reset;
-				}
-		}
-	}
-	return ss.str();
-}
-
-#endif
 
 static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, size_t cols, size_t plen,
 					   std::string &highlight_buffer, bool highlight, searchMatch *match = nullptr) {
@@ -624,15 +438,12 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 				render_pos += char_render_width;
 			}
 		}
-#ifndef DISABLE_HIGHLIGHT
 		if (highlight) {
-			auto tokens = tokenize(buf, len, match);
-			highlight_buffer = highlightText(buf, len, start_pos, cpos, tokens);
+			auto tokens = Highlighting::Tokenize(buf, len, match);
+			highlight_buffer = Highlighting::HighlightText(buf, len, start_pos, cpos, tokens);
 			buf = (char *) highlight_buffer.c_str();
 			len = highlight_buffer.size();
-		} else
-#endif
-		{
+		} else {
 			buf = buf + start_pos;
 			len = cpos - start_pos;
 		}
@@ -664,7 +475,7 @@ void Linenoise::RefreshSingleLine() {
 	size_t render_pos = 0;
 	std::string highlight_buffer;
 
-	renderText(render_pos, buf, len, pos, ws.ws_col, plen, highlight_buffer, enableHighlighting);
+	renderText(render_pos, buf, len, pos, ws.ws_col, plen, highlight_buffer, Highlighting::IsEnabled());
 
 	abInit(&ab);
 	/* Cursor to left edge */
@@ -734,7 +545,7 @@ void Linenoise::RefreshSearch() {
 			search_prompt += "> ";
 		}
 	}
-	auto oldHighlighting = enableHighlighting;
+	auto oldHighlighting = Highlighting::IsEnabled();
 	Linenoise clone = *this;
 	prompt = (char *) search_prompt.c_str();
 	plen = search_prompt.size();
@@ -744,7 +555,7 @@ void Linenoise::RefreshSearch() {
 		len = no_matches_text.size();
 		pos = 0;
 		// don't highlight the "no_matches" text
-		enableHighlighting = false;
+		Highlighting::Disable();
 	} else {
 		// if there are matches render the current history item
 		auto search_match = search_matches[search_index];
@@ -756,7 +567,9 @@ void Linenoise::RefreshSearch() {
 	}
 	RefreshLine();
 
-	enableHighlighting = oldHighlighting;
+	if (oldHighlighting) {
+		Highlighting::Enable();
+	}
 	buf = clone.buf;
 	len = clone.len;
 	pos = clone.pos;
@@ -978,11 +791,11 @@ void Linenoise::RefreshMultiLine() {
 		maxrows = rows;
 	}
 
-	std::vector<highlightToken> tokens;
-#ifndef DISABLE_HIGHLIGHT
-	auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
-	tokens = tokenize(buf, len, match);
-#endif
+	vector<highlightToken> tokens;
+	if (Highlighting::IsEnabled()) {
+		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
+		tokens = Highlighting::Tokenize(buf, len, match);
+	}
 	if (rows > 1) {
 		// add continuation markers
 		highlight_buffer =
@@ -991,15 +804,13 @@ void Linenoise::RefreshMultiLine() {
 		buf = (char *) highlight_buffer.c_str();
 		len = highlight_buffer.size();
 	}
-#ifndef DISABLE_HIGHLIGHT
 	if (duckdb::Utf8Proc::IsValid(buf, len)) {
-		if (enableHighlighting) {
-			highlight_buffer = highlightText(buf, len, 0, len, tokens);
+		if (Highlighting::IsEnabled()) {
+			highlight_buffer = Highlighting::HighlightText(buf, len, 0, len, tokens);
 			buf = (char *) highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}
 	}
-#endif
 
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
