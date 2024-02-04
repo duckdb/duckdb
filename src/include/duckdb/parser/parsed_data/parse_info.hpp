@@ -25,7 +25,8 @@ enum class ParseInfoType : uint8_t {
 	PRAGMA_INFO,
 	SHOW_SELECT_INFO,
 	TRANSACTION_INFO,
-	VACUUM_INFO
+	VACUUM_INFO,
+	COMMENT_ON_INFO
 };
 
 struct ParseInfo {

@@ -344,6 +344,8 @@ const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
 		return "SET_NOT_NULL";
 	case AlterTableType::DROP_NOT_NULL:
 		return "DROP_NOT_NULL";
+	case AlterTableType::SET_COLUMN_COMMENT:
+		return "SET_COLUMN_COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -381,6 +383,9 @@ AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
 	if (StringUtil::Equals(value, "DROP_NOT_NULL")) {
 		return AlterTableType::DROP_NOT_NULL;
 	}
+	if (StringUtil::Equals(value, "SET_COLUMN_COMMENT")) {
+		return AlterTableType::SET_COLUMN_COMMENT;
+	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
@@ -401,6 +406,8 @@ const char* EnumUtil::ToChars<AlterType>(AlterType value) {
 		return "ALTER_SCALAR_FUNCTION";
 	case AlterType::ALTER_TABLE_FUNCTION:
 		return "ALTER_TABLE_FUNCTION";
+	case AlterType::SET_COMMENT:
+		return "SET_COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -428,6 +435,9 @@ AlterType EnumUtil::FromString<AlterType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ALTER_TABLE_FUNCTION")) {
 		return AlterType::ALTER_TABLE_FUNCTION;
+	}
+	if (StringUtil::Equals(value, "SET_COMMENT")) {
+		return AlterType::SET_COMMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -699,6 +709,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "NOT_SET";
 	case CSVState::QUOTED_NEW_LINE:
 		return "QUOTED_NEW_LINE";
+	case CSVState::EMPTY_SPACE:
+		return "EMPTY_SPACE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -735,6 +747,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "QUOTED_NEW_LINE")) {
 		return CSVState::QUOTED_NEW_LINE;
+	}
+	if (StringUtil::Equals(value, "EMPTY_SPACE")) {
+		return CSVState::EMPTY_SPACE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3943,6 +3958,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "TRANSACTION_INFO";
 	case ParseInfoType::VACUUM_INFO:
 		return "VACUUM_INFO";
+	case ParseInfoType::COMMENT_ON_INFO:
+		return "COMMENT_ON_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3988,6 +4005,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "VACUUM_INFO")) {
 		return ParseInfoType::VACUUM_INFO;
+	}
+	if (StringUtil::Equals(value, "COMMENT_ON_INFO")) {
+		return ParseInfoType::COMMENT_ON_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

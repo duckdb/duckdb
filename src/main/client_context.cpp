@@ -166,10 +166,6 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
 	client_data->profiler->EndQuery();
 
-	if (client_data->http_state) {
-		client_data->http_state->Reset();
-	}
-
 	// Notify any registered state of query end
 	for (auto const &s : registered_state) {
 		s.second->QueryEnd();
@@ -217,7 +213,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 }
 
 void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result, bool invalidate_transaction) {
-	client_data->http_state = make_shared<HTTPState>();
 	if (!active_query) {
 		// no query currently active
 		return;
@@ -328,7 +323,6 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		}
 	}
 
-	client_data->http_state = make_shared<HTTPState>();
 	planner.CreatePlan(std::move(statement));
 	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
 	profiler.EndPhase();
@@ -510,7 +504,6 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 	}
 
 	unique_ptr<LogicalOperator> plan;
-	client_data->http_state = make_shared<HTTPState>();
 	RunFunctionInTransactionInternal(*lock, [&]() {
 		Planner planner(*this);
 		planner.CreatePlan(std::move(statements[0]));
@@ -1024,7 +1017,6 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 	D_ASSERT(!relation.GetAlias().empty());
 	D_ASSERT(!relation.ToString().empty());
 #endif
-	client_data->http_state = make_shared<HTTPState>();
 	RunFunctionInTransaction([&]() {
 		// bind the expressions
 		auto binder = Binder::CreateBinder(*this);

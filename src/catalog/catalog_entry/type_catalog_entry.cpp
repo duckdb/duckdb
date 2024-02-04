@@ -13,6 +13,14 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->comment = info.comment;
+}
+
+unique_ptr<CatalogEntry> TypeCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateTypeInfo>();
+	auto result = make_uniq<TypeCatalogEntry>(catalog, schema, cast_info);
+	return std::move(result);
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
@@ -21,6 +29,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
+	result->comment = comment;
 	return std::move(result);
 }
 

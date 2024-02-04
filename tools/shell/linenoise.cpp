@@ -133,7 +133,7 @@
 #endif
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 1000
-#define LINENOISE_MAX_LINE                20480
+#define LINENOISE_MAX_LINE                204800
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
@@ -169,6 +169,9 @@ static std::string keyword = "\033[32m";
 static std::string constant = "\033[33m";
 static std::string reset = "\033[00m";
 #endif
+
+static const char *continuationPrompt = "> ";
+static const char *continuationSelectedPrompt = "> ";
 
 struct searchMatch {
 	size_t history_index;
@@ -765,6 +768,11 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 	return 0;
 }
 
+void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
+	continuationPrompt = continuation;
+	continuationSelectedPrompt = continuationSelected;
+}
+
 #ifndef DISABLE_HIGHLIGHT
 #include <sstream>
 #include "duckdb/parser/parser.hpp"
@@ -1056,25 +1064,25 @@ bool isNewline(char c) {
 	return c == '\r' || c == '\n';
 }
 
-void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) {
-	if (isNewline(l->buf[cpos])) {
-		// newline! move to next line
+void nextPosition(struct linenoiseState *l, const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) {
+	if (isNewline(buf[cpos])) {
+		// explicit newline! move to next line and insert a prompt
 		rows++;
-		cols = 0;
+		cols = plen;
 		cpos++;
-		if (l->buf[cpos - 1] == '\r' && cpos < l->len && l->buf[cpos] == '\n') {
+		if (buf[cpos - 1] == '\r' && cpos < len && buf[cpos] == '\n') {
 			cpos++;
 		}
 		return;
 	}
 	int sz;
 	int char_render_width;
-	if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
+	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
 		char_render_width = 1;
 		cpos++;
 	} else {
-		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
-		cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
+		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
+		cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 	}
 	if (cols + char_render_width > l->ws.ws_col) {
 		// exceeded l->cols, move to next row
@@ -1094,6 +1102,7 @@ void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_r
 	size_t cpos = 0;
 	while (cpos < l->len) {
 		if (cols >= l->ws.ws_col && !isNewline(l->buf[cpos])) {
+			// exceeded width - move to next line
 			rows++;
 			cols = 0;
 		}
@@ -1101,7 +1110,7 @@ void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_r
 			out_row = rows;
 			out_col = cols;
 		}
-		nextPosition(l, cpos, rows, cols);
+		nextPosition(l, l->buf, l->len, cpos, rows, cols, plen);
 	}
 	if (target_pos == l->len) {
 		out_row = rows;
@@ -1117,6 +1126,7 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 	size_t cpos = 0;
 	while (cpos < l->len) {
 		if (cols >= l->ws.ws_col) {
+			// exceeded width - move to next line
 			rows++;
 			cols = 0;
 		}
@@ -1131,9 +1141,46 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 		if (rows == target_row && cols == target_col) {
 			return cpos;
 		}
-		nextPosition(l, cpos, rows, cols);
+		nextPosition(l, l->buf, l->len, cpos, rows, cols, plen);
 	}
 	return cpos;
+}
+
+static std::string addContinuationMarkers(struct linenoiseState *l, const char *buf, size_t len, int plen,
+                                          int cursor_row, searchMatch *match) {
+	std::string result;
+	int rows = 1;
+	int cols = plen;
+	size_t cpos = 0;
+	size_t prev_pos = 0;
+	size_t match_start_pos = match ? match->match_start : 0;
+	while (cpos < len) {
+		bool is_newline = isNewline(buf[cpos]);
+		nextPosition(l, buf, len, cpos, rows, cols, plen);
+		for (; prev_pos < cpos; prev_pos++) {
+			result += buf[prev_pos];
+		}
+		if (is_newline) {
+			const char *prompt = rows == cursor_row ? continuationSelectedPrompt : continuationPrompt;
+			size_t continuationLen = strlen(prompt);
+			size_t continuationRender = linenoiseComputeRenderWidth(prompt, continuationLen);
+			// pad with spaces prior to prompt
+			for (int i = int(continuationRender); i < plen; i++) {
+				result += " ";
+			}
+			result += prompt;
+			if (match && match_start_pos >= cpos) {
+				// move search match over by any additional prompts added
+				size_t continuationBytes = plen - continuationRender + continuationLen;
+				match->match_start += continuationBytes;
+				match->match_end += continuationBytes;
+			}
+		}
+	}
+	for (; prev_pos < cpos; prev_pos++) {
+		result += buf[prev_pos];
+	}
+	return result;
 }
 
 /* Multi line low level line refresh.
@@ -1177,7 +1224,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		if (l->y_scroll == 0) {
 			start = 0;
 		} else {
-			start = colAndRowToPosition(l, l->y_scroll + 1, 0);
+			start = colAndRowToPosition(l, l->y_scroll, 0);
 		}
 		if (int(l->y_scroll) + int(l->ws.ws_row) >= rows) {
 			end = len;
@@ -1199,14 +1246,23 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		l->maxrows = rows;
 	}
 
+	searchMatch match;
+	searchMatch *matchPtr = nullptr;
+	if (l->search_index < l->search_matches.size()) {
+		match = l->search_matches[l->search_index];
+		matchPtr = &match;
+	}
+	if (rows > 1) {
+		// add continuation markers
+		highlight_buffer =
+		    addContinuationMarkers(l, buf, len, plen, l->y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row, matchPtr);
+		buf = (char *)highlight_buffer.c_str();
+		len = highlight_buffer.size();
+	}
 #ifndef DISABLE_HIGHLIGHT
 	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
-		searchMatch *match = nullptr;
-		if (l->search_index < l->search_matches.size()) {
-			match = &l->search_matches[l->search_index];
-		}
 		if (enableHighlighting) {
-			highlight_buffer = highlightText(buf, len, 0, len, match);
+			highlight_buffer = highlightText(buf, len, 0, len, matchPtr);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}

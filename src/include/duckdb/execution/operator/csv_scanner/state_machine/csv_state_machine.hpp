@@ -74,8 +74,6 @@ struct CSVStates {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
-	std::once_flag call_once_flag;
-
 	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 
