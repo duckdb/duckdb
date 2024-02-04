@@ -779,7 +779,9 @@ enum class tokenType : uint8_t {
 	TOKEN_STRING_CONSTANT,
 	TOKEN_OPERATOR,
 	TOKEN_KEYWORD,
-	TOKEN_COMMENT
+	TOKEN_COMMENT,
+	TOKEN_CONTINUATION,
+	TOKEN_CONTINUATION_SELECTED
 };
 
 struct highlightToken {
@@ -793,7 +795,7 @@ struct highlightToken {
 #include "duckdb/parser/parser.hpp"
 
 tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
-	switch(token_type) {
+	switch (token_type) {
 	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 		return tokenType::TOKEN_IDENTIFIER;
 	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
@@ -880,7 +882,8 @@ std::vector<highlightToken> tokenize(char *buf, size_t len, searchMatch *match =
 	return tokens;
 }
 
-std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos, const std::vector<highlightToken> &tokens) {
+std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
+                          const std::vector<highlightToken> &tokens) {
 	std::stringstream ss;
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
@@ -901,10 +904,12 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 		}
 		switch (token.type) {
 		case tokenType::TOKEN_KEYWORD:
+		case tokenType::TOKEN_CONTINUATION_SELECTED:
 			ss << keyword << text << reset;
 			break;
 		case tokenType::TOKEN_NUMERIC_CONSTANT:
 		case tokenType::TOKEN_STRING_CONSTANT:
+		case tokenType::TOKEN_CONTINUATION:
 			ss << constant << text << reset;
 			break;
 		default:
@@ -1195,7 +1200,8 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 			result += buf[prev_pos];
 		}
 		if (is_newline) {
-			const char *prompt = rows == cursor_row ? continuationSelectedPrompt : continuationPrompt;
+			bool is_cursor_row = rows == cursor_row;
+			const char *prompt = is_cursor_row ? continuationSelectedPrompt : continuationPrompt;
 			size_t continuationLen = strlen(prompt);
 			size_t continuationRender = linenoiseComputeRenderWidth(prompt, continuationLen);
 			// pad with spaces prior to prompt
@@ -1203,13 +1209,20 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 				result += " ";
 			}
 			result += prompt;
-			for(; token_position < tokens.size(); token_position++) {
+			for (; token_position < tokens.size(); token_position++) {
 				if (tokens[token_position].start >= cpos) {
 					// not there yet
 					break;
 				}
 				tokens[token_position].start += extra_bytes;
 			}
+			highlightToken token;
+			token.start = cpos + extra_bytes;
+			token.type = is_cursor_row ? tokenType::TOKEN_CONTINUATION_SELECTED : tokenType::TOKEN_CONTINUATION;
+			token.search_match = false;
+			tokens.insert(tokens.begin() + token_position, token);
+			token_position++;
+
 			size_t continuationBytes = plen - continuationRender + continuationLen;
 			extra_bytes += continuationBytes;
 		}
@@ -1217,7 +1230,7 @@ static std::string addContinuationMarkers(struct linenoiseState *l, const char *
 	for (; prev_pos < cpos; prev_pos++) {
 		result += buf[prev_pos];
 	}
-	for(; token_position < tokens.size(); token_position++) {
+	for (; token_position < tokens.size(); token_position++) {
 		tokens[token_position].start += extra_bytes;
 	}
 	return result;
