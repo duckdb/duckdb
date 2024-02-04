@@ -98,6 +98,10 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BoundOrderModifier> Deserialize(Deserializer &deserializer);
+
+	//! Remove unneeded/duplicate order elements.
+	//! Returns true of orders is not empty.
+	bool Simplify(const vector<unique_ptr<Expression>> &groups);
 };
 
 enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };
