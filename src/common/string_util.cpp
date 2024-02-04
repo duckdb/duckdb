@@ -583,4 +583,38 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	return result;
 }
 
+string StringUtil::GetFileName(const string &file_path) {
+	idx_t pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return file_path;
+	}
+	return file_path.substr(pos + 1);
+}
+
+string StringUtil::GetFileExtension(const string &file_name) {
+	auto name = GetFileName(file_name);
+	idx_t pos = name.find_last_of('.');
+	if (pos == string::npos) {
+		return "";
+	}
+	return name.substr(pos + 1);
+}
+
+string StringUtil::GetFileStem(const string &file_name) {
+	auto name = GetFileName(file_name);
+	idx_t pos = name.find_last_of('.');
+	if (pos == string::npos) {
+		return name;
+	}
+	return name.substr(0, pos);
+}
+
+string StringUtil::GetFilePath(const string &file_path) {
+	idx_t pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return "";
+	}
+	return file_path.substr(0, pos);
+}
+
 } // namespace duckdb
