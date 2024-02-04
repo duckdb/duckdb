@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import ctypes
-import logging
 import os
-import sys
 import platform
 import sys
 import traceback
@@ -132,14 +130,18 @@ unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:
     unity_build = 16
 
+try:
+    import pybind11
+except ImportError:
+    raise Exception(
+        'pybind11 could not be imported. This usually means you\'re calling setup.py directly, or using a version of pip that doesn\'t support PEP517'
+    ) from None
+
 # speed up compilation with: -j = cpu_number() on non Windows machines
 if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
-    try:
-        from pybind11.setup_helpers import ParallelCompile
-    except ImportError:
-        logging.warning('Pybind11 not available yet')
-    else:
-        ParallelCompile().install()
+    from pybind11.setup_helpers import ParallelCompile
+
+    ParallelCompile().install()
 
 
 def open_utf8(fpath, flags):
@@ -165,10 +167,15 @@ else:
 if 'DUCKDB_INSTALL_USER' in os.environ and 'install' in sys.argv:
     sys.argv.append('--user')
 
-process_env_list = lambda key: [x.strip() for x in os.environ.get(key, '').split(' ') if x.strip()]
-libraries = process_env_list('DUCKDB_LIBS')
-existing_duckdb_dir = os.environ.get('DUCKDB_BINARY_DIR')
-toolchain_args += ['-std=c++11'] + process_env_list('DUCKDB_COMPILE_FLAGS')
+existing_duckdb_dir = ''
+libraries = []
+if 'DUCKDB_BINARY_DIR' in os.environ:
+    existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
+if 'DUCKDB_COMPILE_FLAGS' in os.environ:
+    # FIXME: this is overwriting the previously set toolchain_args ?
+    toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split()
+if 'DUCKDB_LIBS' in os.environ:
+    libraries = os.environ['DUCKDB_LIBS'].split(' ')
 
 define_macros = [('DUCKDB_PYTHON_LIB_NAME', lib_name)]
 
@@ -191,17 +198,6 @@ linker_args = toolchain_args
 if platform.system() == 'Windows':
     linker_args.extend(['rstrtmgr.lib'])
 
-
-class get_pybind_include(object):
-    def __init__(self, user=False):
-        self.user = user
-
-    def __str__(self):
-        import pybind11
-
-        return pybind11.get_include(self.user)
-
-
 extra_files = []
 header_files = []
 
@@ -215,7 +211,8 @@ script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
-include_directories = [main_include_path, get_pybind_include(), get_pybind_include(user=True)]
+
+include_directories = [main_include_path, pybind11.get_include(False), pybind11.get_include(True)]
 if 'BUILD_HTTPFS' in os.environ and 'OPENSSL_ROOT_DIR' in os.environ:
     include_directories += [os.path.join(os.environ['OPENSSL_ROOT_DIR'], 'include')]
 

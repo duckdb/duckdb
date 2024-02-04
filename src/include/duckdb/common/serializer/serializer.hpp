@@ -16,6 +16,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
 
@@ -299,6 +300,11 @@ protected:
 // We need to special case vector<bool> because elements of vector<bool> cannot be referenced
 template <>
 void Serializer::WriteValue(const vector<bool> &vec);
+
+// Specialization for Value (default Value comparison throws when comparing nulls)
+template <>
+void Serializer::WritePropertyWithDefault<Value>(const field_id_t field_id, const char *tag, const Value &value,
+                                                 const Value &&default_value);
 
 // List Impl
 template <class FUNC>

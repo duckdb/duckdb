@@ -50,7 +50,7 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	PushCollation(context, lower, input_type, false);
 	PushCollation(context, upper, input_type, false);
 
-	if (!input->HasSideEffects() && !input->HasParameter() && !input->HasSubquery()) {
+	if (!input->IsVolatile() && !input->HasParameter() && !input->HasSubquery()) {
 		// the expression does not have side effects and can be copied: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers
 		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer

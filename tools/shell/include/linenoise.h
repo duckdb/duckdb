@@ -68,6 +68,7 @@ void linenoiseSetMultiLine(int ml);
 void linenoisePrintKeyCodes(void);
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len);
 int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n);
+void linenoiseSetPrompt(const char *continuation, const char *continuationSelected);
 
 #ifdef __cplusplus
 }

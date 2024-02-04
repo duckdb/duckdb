@@ -237,7 +237,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		}
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		auto value = StringValueScanner::RemoveEscape(
-		    result.buffer_ptr + result.last_position + 1, buffer_pos - result.last_position - 2,
+		    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
 		    result.state_machine.options.GetEscape()[0], result.parse_chunk.data[result.chunk_col_id]);
 		result.AddValueToVector(value.GetData(), value.GetSize());
 	} else {
@@ -246,8 +246,8 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 			auto value = string_t();
 			result.AddValueToVector(value.GetData(), value.GetSize());
 		} else {
-			result.AddValueToVector(result.buffer_ptr + result.last_position + 1,
-			                        buffer_pos - result.last_position - 2);
+			result.AddValueToVector(result.buffer_ptr + result.quoted_position + 1,
+			                        buffer_pos - result.quoted_position - 2);
 		}
 	}
 	result.quoted = false;
@@ -669,7 +669,7 @@ void StringValueScanner::ProcessExtraRow() {
 			if (states.states[0] == CSVState::UNQUOTED) {
 				result.SetEscaped(result);
 			}
-			result.SetQuoted(result);
+			result.SetQuoted(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
 			while (state_machine->transition_array
 			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
@@ -740,6 +740,8 @@ void StringValueScanner::ProcessOverbufferValue() {
 	if (result.last_position == previous_buffer_handle->actual_size) {
 		state_machine->Transition(states, previous_buffer[result.last_position - 1]);
 	}
+	idx_t j = 0;
+	result.quoted = false;
 	for (idx_t i = result.last_position; i < previous_buffer_handle->actual_size; i++) {
 		state_machine->Transition(states, previous_buffer[i]);
 		if (states.EmptyLine() || states.IsCurrentNewRow()) {
@@ -751,11 +753,12 @@ void StringValueScanner::ProcessOverbufferValue() {
 			overbuffer_string += previous_buffer[i];
 		}
 		if (states.IsQuoted()) {
-			result.quoted = true;
+			result.SetQuoted(result, j);
 		}
 		if (states.IsEscaped()) {
 			result.escaped = true;
 		}
+		j++;
 	}
 	if (overbuffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
@@ -779,17 +782,19 @@ void StringValueScanner::ProcessOverbufferValue() {
 			overbuffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
 		}
 		if (states.IsQuoted()) {
-			result.quoted = true;
+			result.SetQuoted(result, j);
 		}
 		if (states.IsEscaped()) {
 			result.escaped = true;
 		}
+		j++;
 	}
 	string_t value;
 	if (result.quoted) {
-		value = string_t(overbuffer_string.c_str() + result.quoted, overbuffer_string.size() - 2);
+		value = string_t(overbuffer_string.c_str() + result.quoted_position,
+		                 overbuffer_string.size() - 1 - result.quoted_position);
 		if (result.escaped) {
-			const auto str_ptr = static_cast<const char *>(overbuffer_string.c_str() + result.quoted);
+			const auto str_ptr = static_cast<const char *>(overbuffer_string.c_str() + result.quoted_position);
 			value =
 			    StringValueScanner::RemoveEscape(str_ptr, overbuffer_string.size() - 2,
 			                                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
