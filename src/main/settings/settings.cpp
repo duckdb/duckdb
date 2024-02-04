@@ -560,7 +560,7 @@ void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 }
 
 void CustomExtensionRepository::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.custom_extension_repo = StringUtil::Lower(input.ToString());
+	config.options.custom_extension_repo = input.ToString();
 }
 
 Value CustomExtensionRepository::GetSetting(ClientContext &context) {
@@ -576,7 +576,7 @@ void AutoloadExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &co
 }
 
 void AutoloadExtensionRepository::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoinstall_extension_repo = StringUtil::Lower(input.ToString());
+	config.options.autoinstall_extension_repo = input.ToString();
 }
 
 Value AutoloadExtensionRepository::GetSetting(ClientContext &context) {
