@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/imdb/ingest_info_type.benchmark
-# description: benchmark ingestion of info_type
-# group: [imdb]
-
-template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
-table_name=info_type

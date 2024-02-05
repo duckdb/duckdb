@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/imdb/ingest_link_type.benchmark
-# description: benchmark ingestion of link_type
-# group: [imdb]
-
-template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
-table_name=link_type

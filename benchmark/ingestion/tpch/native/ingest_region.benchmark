@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpch/native/ingest_region.benchmark
+# description: benchmark ingestion of region
+# group: [tpch]
+
+template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
+table_name=region
+format=native

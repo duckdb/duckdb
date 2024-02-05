@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpcds/parquet/ingest_date_dim.benchmark
+# description: benchmark ingestion of date_dim
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=date_dim
+format=parquet

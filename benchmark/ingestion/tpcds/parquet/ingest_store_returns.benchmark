@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpcds/parquet/ingest_store_returns.benchmark
+# description: benchmark ingestion of store_returns
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=store_returns
+format=parquet

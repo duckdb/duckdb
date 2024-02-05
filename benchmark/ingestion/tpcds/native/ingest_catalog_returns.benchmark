@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpcds/native/ingest_catalog_returns.benchmark
+# description: benchmark ingestion of catalog_returns
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=catalog_returns
+format=native

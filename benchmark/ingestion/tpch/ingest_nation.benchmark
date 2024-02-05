@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/tpch/ingest_nation.benchmark
-# description: benchmark ingestion of nation
-# group: [tpch]
-
-template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
-table_name=nation

@@ -10,12 +10,12 @@ require parquet
 
 require tpch
 
-cache tpch_sf1_parquet.duckdb
+cache tpch_sf1_ingest.duckdb
 
 load benchmark/ingestion/tpch/load.sql
 
 run
-create table ${table_name}_ingested as select * from read_parquet('${BENCHMARK_DIR}/tpch_parquet/${table_name}.parquet');
+create table ${table_name}_ingested as select * from ${table_name}_${format};
 
 cleanup
 DROP TABLE ${table_name}_ingested;

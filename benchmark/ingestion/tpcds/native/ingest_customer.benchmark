@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpcds/native/ingest_customer.benchmark
+# description: benchmark ingestion of customer
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=customer
+format=native

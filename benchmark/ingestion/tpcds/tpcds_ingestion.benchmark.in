@@ -10,12 +10,13 @@ require tpcds
 
 require parquet
 
-cache tpcds_sf1_parquet.duckdb
+cache tpcds_sf1_ingest.duckdb
 
 load benchmark/ingestion/tpcds/load.sql
 
+# reads table from view created in load script
 run
-create table ${table_name}_ingested as select * from read_parquet('${BENCHMARK_DIR}/tpcds_parquet/${table_name}.parquet');
+create table ${table_name}_ingested as select * from ${table_name}_${format};
 
 cleanup
 drop table ${table_name}_ingested;

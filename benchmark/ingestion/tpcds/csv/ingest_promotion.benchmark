@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpcds/csv/ingest_promotion.benchmark
+# description: benchmark ingestion of promotion
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=promotion
+format=csv

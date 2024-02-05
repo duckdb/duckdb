@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpch/csv/ingest_nation.benchmark
+# description: benchmark ingestion of nation
+# group: [tpch]
+
+template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
+table_name=nation
+format=csv

@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/tpcds/ingest_inventory.benchmark
-# description: benchmark ingestion of inventory
-# group: [tpcds]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=inventory

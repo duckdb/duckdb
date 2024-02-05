@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/tpcds/ingest_customer_demographics.benchmark
-# description: benchmark ingestion of customer_demographics
-# group: [tpcds]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=customer_demographics

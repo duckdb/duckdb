@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/imdb/ingest_company_name.benchmark
-# description: benchmark ingestion of company_name
-# group: [imdb]
-
-template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
-table_name=company_name

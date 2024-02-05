@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/imdb/ingest_person_info.benchmark
-# description: benchmark ingestion of person_info
-# group: [imdb]
-
-template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
-table_name=person_info

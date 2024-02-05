@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpcds/native/ingest_time_dim.benchmark
+# description: benchmark ingestion of time_dim
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=time_dim
+format=native

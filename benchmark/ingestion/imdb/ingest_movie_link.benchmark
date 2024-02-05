@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/imdb/ingest_movie_link.benchmark
-# description: benchmark ingestion of movie_link
-# group: [imdb]
-
-template benchmark/ingestion/imdb/imdb_ingestion.benchmark.in
-table_name=movie_link

@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpcds/parquet/ingest_ship_mode.benchmark
+# description: benchmark ingestion of ship_mode
+# group: [tpcds]
+
+template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
+table_name=ship_mode
+format=parquet

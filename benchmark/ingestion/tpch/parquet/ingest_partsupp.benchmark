@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/tpch/parquet/ingest_partsupp.benchmark
+# description: benchmark ingestion of partsupp
+# group: [tpch]
+
+template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
+table_name=partsupp
+format=parquet

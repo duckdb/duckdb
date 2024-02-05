@@ -1,6 +1,0 @@
-# name: benchmark/ingestion/tpcds/ingest_store.benchmark
-# description: benchmark ingestion of store
-# group: [tpcds]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=store
