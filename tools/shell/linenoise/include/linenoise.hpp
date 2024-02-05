@@ -31,6 +31,7 @@ do {                                                                            
 
 namespace duckdb {
 struct highlightToken;
+struct AppendBuffer;
 
 struct searchMatch {
 	size_t history_index;
@@ -89,7 +90,7 @@ public:
 	void RefreshMultiLine();
 	void RefreshSingleLine() const;
 	void RefreshSearch();
-	void RefreshShowHints(struct abuf *ab, int plen) const;
+	void RefreshShowHints(AppendBuffer &append_buffer, int plen) const;
 
 	size_t PrevChar() const;
 	size_t NextChar() const;

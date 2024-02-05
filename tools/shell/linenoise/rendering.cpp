@@ -14,29 +14,19 @@ static const char *continuationSelectedPrompt = "> ";
 * allocated string where we can append to. This is useful in order to
 * write all the escape sequences in a buffer and flush them to the standard
 * output in a single call, to avoid flickering effects. */
-struct abuf {
-	char *b;
-	int len;
+struct AppendBuffer {
+	void Append(const char *s, idx_t len) {
+		buffer.append(s, len);
+	}
+	void Write(int fd) {
+		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
+			/* Can't recover from write error. */
+			lndebug("%s", "Failed to write buffer\n");
+		}
+	}
+private:
+	std::string buffer;
 };
-
-static void abInit(struct abuf *ab) {
-	ab->b = NULL;
-	ab->len = 0;
-}
-
-static void abAppend(struct abuf *ab, const char *s, int len) {
-	char *new_entry = (char *) realloc(ab->b, ab->len + len);
-
-	if (new_entry == NULL)
-		return;
-	memcpy(new_entry + ab->len, s, len);
-	ab->b = new_entry;
-	ab->len += len;
-}
-
-static void abFree(struct abuf *ab) {
-	free(ab->b);
-}
 
 void Linenoise::SetPrompt(const char *continuation, const char *continuationSelected) {
 	continuationPrompt = continuation;
@@ -45,7 +35,7 @@ void Linenoise::SetPrompt(const char *continuation, const char *continuationSele
 
 /* Helper of refreshSingleLine() and refreshMultiLine() to show hints
 * to the right of the prompt. */
-void Linenoise::RefreshShowHints(struct abuf *ab, int plen) const {
+void Linenoise::RefreshShowHints(AppendBuffer &append_buffer, int plen) const {
 	char seq[64];
 	auto hints_callback = Linenoise::HintsCallback();
 	if (hints_callback && plen + len < size_t(ws.ws_col)) {
@@ -62,10 +52,10 @@ void Linenoise::RefreshShowHints(struct abuf *ab, int plen) const {
 				snprintf(seq, 64, "\033[%d;%d;49m", bold, color);
 			else
 				seq[0] = '\0';
-			abAppend(ab, seq, strlen(seq));
-			abAppend(ab, hint, hintlen);
+			append_buffer.Append(seq, strlen(seq));
+			append_buffer.Append(hint, hintlen);
 			if (color != -1 || bold != 0)
-				abAppend(ab, "\033[0m", 4);
+				append_buffer.Append("\033[0m", 4);
 			/* Call the function to free the hint returned. */
 			auto free_hints_callback = Linenoise::FreeHintsCallback();
 			if (free_hints_callback) {
@@ -143,30 +133,27 @@ void Linenoise::RefreshSingleLine() const {
 	int fd = ofd;
 	char *render_buf = buf;
 	size_t render_len = len;
-	struct abuf ab;
 	size_t render_pos = 0;
 	std::string highlight_buffer;
 
 	renderText(render_pos, render_buf, render_len, pos, ws.ws_col, plen, highlight_buffer, Highlighting::IsEnabled());
 
-	abInit(&ab);
+	AppendBuffer append_buffer;
 	/* Cursor to left edge */
 	snprintf(seq, 64, "\r");
-	abAppend(&ab, seq, strlen(seq));
+	append_buffer.Append(seq, strlen(seq));
 	/* Write the prompt and the current buffer content */
-	abAppend(&ab, prompt, strlen(prompt));
-	abAppend(&ab, render_buf, render_len);
+	append_buffer.Append(prompt, strlen(prompt));
+	append_buffer.Append(render_buf, render_len);
 	/* Show hits if any. */
-	RefreshShowHints(&ab, plen);
+	RefreshShowHints(append_buffer, plen);
 	/* Erase to right */
 	snprintf(seq, 64, "\x1b[0K");
-	abAppend(&ab, seq, strlen(seq));
+	append_buffer.Append(seq, strlen(seq));
 	/* Move cursor to original position. */
 	snprintf(seq, 64, "\r\x1b[%dC", (int) (render_pos + plen));
-	abAppend(&ab, seq, strlen(seq));
-	if (write(fd, ab.b, ab.len) == -1) {
-	} /* Can't recover from write error. */
-	abFree(&ab);
+	append_buffer.Append(seq, strlen(seq));
+	append_buffer.Write(fd);
 }
 
 void Linenoise::RefreshSearch() {
@@ -332,7 +319,6 @@ void Linenoise::RefreshMultiLine() {
 	int col; /* colum position, zero-based. */
 	int old_rows = maxrows ? maxrows : 1;
 	int fd = ofd, j;
-	struct abuf ab;
 	std::string highlight_buffer;
 	auto render_buf = this->buf;
 	auto render_len = this->len;
@@ -401,33 +387,33 @@ void Linenoise::RefreshMultiLine() {
 
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
-	abInit(&ab);
+	AppendBuffer append_buffer;
 	if (old_rows - old_cursor_rows > 0) {
 		lndebug("go down %d", old_rows - old_cursor_rows);
 		snprintf(seq, 64, "\x1b[%dB", old_rows - int(old_cursor_rows));
-		abAppend(&ab, seq, strlen(seq));
+		append_buffer.Append(seq, strlen(seq));
 	}
 
 	/* Now for every row clear it, go up. */
 	for (j = 0; j < old_rows - 1; j++) {
 		lndebug("clear+up", 0);
 		snprintf(seq, 64, "\r\x1b[0K\x1b[1A");
-		abAppend(&ab, seq, strlen(seq));
+		append_buffer.Append(seq, strlen(seq));
 	}
 
 	/* Clean the top line. */
 	lndebug("clear", 0);
 	snprintf(seq, 64, "\r\x1b[0K");
-	abAppend(&ab, seq, strlen(seq));
+	append_buffer.Append(seq, strlen(seq));
 
 	/* Write the prompt and the current buffer content */
 	if (y_scroll == 0) {
-		abAppend(&ab, prompt, strlen(prompt));
+		append_buffer.Append(prompt, strlen(prompt));
 	}
-	abAppend(&ab, render_buf, render_len);
+	append_buffer.Append(render_buf, render_len);
 
 	/* Show hints if any. */
-	RefreshShowHints(&ab, plen);
+	RefreshShowHints(append_buffer, plen);
 
 	/* If we are at the very end of the screen with our prompt, we need to
 	 * emit a newline and move the prompt to the first column. */
@@ -436,9 +422,9 @@ void Linenoise::RefreshMultiLine() {
 	lndebug("new_cursor_x == cols %d", new_cursor_x == ws.ws_col ? 1 : 0);
 	if (pos > 0 && pos == len && new_cursor_x == ws.ws_col) {
 		lndebug("<newline>", 0);
-		abAppend(&ab, "\n", 1);
+		append_buffer.Append("\n", 1);
 		snprintf(seq, 64, "\r");
-		abAppend(&ab, seq, strlen(seq));
+		append_buffer.Append(seq, strlen(seq));
 		rows++;
 		new_cursor_row++;
 		new_cursor_x = 0;
@@ -460,24 +446,22 @@ void Linenoise::RefreshMultiLine() {
 	if (rows - new_cursor_row > 0) {
 		lndebug("go-up %d", rows - new_cursor_row);
 		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
-		abAppend(&ab, seq, strlen(seq));
+		append_buffer.Append(seq, strlen(seq));
 	}
 
 	/* Set column. */
 	col = new_cursor_x;
 	lndebug("set col %d", 1 + col);
-	if (col)
+	if (col) {
 		snprintf(seq, 64, "\r\x1b[%dC", col);
-	else
+	} else {
 		snprintf(seq, 64, "\r");
-	abAppend(&ab, seq, strlen(seq));
+	}
+	append_buffer.Append(seq, strlen(seq));
 
 	lndebug("\n", 0);
 	old_cursor_rows = new_cursor_row;
-
-	if (write(fd, ab.b, ab.len) == -1) {
-	} /* Can't recover from write error. */
-	abFree(&ab);
+	append_buffer.Write(fd);
 }
 
 /* Calls the two low level functions refreshSingleLine() or
