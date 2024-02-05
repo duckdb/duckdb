@@ -802,15 +802,11 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
     TARGET ${TARGET_NAME}
     POST_BUILD
     COMMAND
-    echo "METADATED ${TARGET_NAME} $<TARGET_NAME:${TARGET_NAME}> ${DUCKDB_NORMALIZED_VERSION} ${EXTENSION_VERSION}"
-    COMMAND
     printf "${DUCKDB_NORMALIZED_VERSION}" > duckdb_version_file
     COMMAND
     printf "${EXTENSION_VERSION}" > extension_version_file
     COMMAND
     bash ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
-    COMMAND
-    echo "METADATED_DONE ${TARGET_NAME} $<TARGET_NAME:${TARGET_NAME}>"
     )
   add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
