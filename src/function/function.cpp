@@ -71,10 +71,10 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       FunctionSideEffects side_effects, LogicalType varargs_p,
+                                       FunctionStability stability, LogicalType varargs_p,
                                        FunctionNullHandling null_handling)
     : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)), side_effects(side_effects), null_handling(null_handling) {
+      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {

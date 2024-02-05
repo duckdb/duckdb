@@ -88,7 +88,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 				                      "cannot be referenced before it is defined",
 				                      colref.column_names[0]);
 			}
-			if (node.select_list[index]->HasSideEffects()) {
+			if (node.select_list[index]->IsVolatile()) {
 				throw BinderException("Alias \"%s\" referenced in a SELECT clause - but the expression has side "
 				                      "effects. This is not yet supported.",
 				                      colref.column_names[0]);

@@ -105,7 +105,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 }
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
-
 	// bind the children of the function expression
 	ErrorData error;
 
@@ -130,11 +129,16 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 
 	FunctionBinder function_binder(context);
-	unique_ptr<Expression> result =
-	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();
+	}
+	if (result->type == ExpressionType::BOUND_FUNCTION) {
+		auto &bound_function = result->Cast<BoundFunctionExpression>();
+		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+			binder.SetAlwaysRequireRebind();
+		}
 	}
 	return BindResult(std::move(result));
 }

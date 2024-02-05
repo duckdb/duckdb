@@ -2698,7 +2698,7 @@ Append a duckdb_time value to the appender.
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 """
 function duckdb_append_time(appender, value)
-    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -2706,7 +2706,7 @@ Append a duckdb_timestamp value to the appender.
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
 """
 function duckdb_append_timestamp(appender, value)
-    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """
