@@ -1,3 +1,6 @@
+# name: test/sql/copy/csv/bug_10283.test
+# group: [csv]
+
 ## name: test/sql/copy/csv/bug_10283.test
 ## description: Test for issue #10283
 ## group: [csv]
