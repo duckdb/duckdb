@@ -124,9 +124,7 @@ int History::SetMaxLength(idx_t len) {
 
 		/* If we can't copy everything, free the elements we'll not use. */
 		if (len < tocopy) {
-			int j;
-
-			for (j = 0; j < tocopy - len; j++) {
+			for (idx_t j = 0; j < tocopy - len; j++) {
 				free(history[j]);
 			}
 			tocopy = len;
@@ -146,7 +144,6 @@ int History::SetMaxLength(idx_t len) {
 int History::Save(const char *filename) {
 	mode_t old_umask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
 	FILE *fp;
-	int j;
 
 	fp = fopen(filename, "w");
 	umask(old_umask);
@@ -154,7 +151,7 @@ int History::Save(const char *filename) {
 		return -1;
 	}
 	chmod(filename, S_IRUSR | S_IWUSR);
-	for (j = 0; j < history_len; j++) {
+	for (idx_t j = 0; j < history_len; j++) {
 		fprintf(fp, "%s\n", history[j]);
 	}
 	fclose(fp);
