@@ -229,3 +229,32 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("x y"), ParserException);
 	}
 }
+
+TEST_CASE("Test path utilities", "[string_util]") {
+	SECTION("File name") {
+		REQUIRE("bin" == StringUtil::GetFileName("/usr/bin/"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("/tmp/foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/."));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/.//"));
+		REQUIRE("" == StringUtil::GetFileName(".."));
+		REQUIRE("" == StringUtil::GetFileName("/"));
+	}
+
+	SECTION("File extension") {
+		REQUIRE("cpp" == StringUtil::GetFileExtension("test.cpp"));
+		REQUIRE("gz" == StringUtil::GetFileExtension("test.cpp.gz"));
+		REQUIRE("" == StringUtil::GetFileExtension("test"));
+		REQUIRE("" == StringUtil::GetFileExtension(".gitignore"));
+	}
+
+	SECTION("File stem (base name)") {
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp"));
+		REQUIRE("test.cpp" == StringUtil::GetFileStem("test.cpp.gz"));
+		REQUIRE("test" == StringUtil::GetFileStem("test"));
+		REQUIRE(".gitignore" == StringUtil::GetFileStem(".gitignore"));
+	}
+
+	SECTION("File path") {
+		REQUIRE("/usr/local/bin" == StringUtil::GetFilePath("/usr/local/bin/test.cpp"));
+	}
+}
