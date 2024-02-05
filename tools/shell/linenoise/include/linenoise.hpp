@@ -9,25 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/exception.hpp"
 #include "terminal.hpp"
 #include "linenoise.h"
 
 #define LINENOISE_MAX_LINE 204800
-
-/* Debugging macro. */
-#if 0
-FILE *lndebug_fp = NULL;
-#define lndebug(...)                                                                                                   \
-	do {                                                                                                               \
-		if (lndebug_fp == NULL) {                                                                                      \
-			lndebug_fp = fopen("/tmp/lndebug.txt", "a");                                                               \
-		}                                                                                                              \
-		fprintf(lndebug_fp, ", " __VA_ARGS__);                                                                         \
-		fflush(lndebug_fp);                                                                                            \
-	} while (0)
-#else
-#define lndebug(fmt, ...)
-#endif
 
 namespace duckdb {
 struct highlightToken;
@@ -109,6 +95,31 @@ public:
 	static bool AllWhitespace(const char *z);
 
 public:
+#define LINENOISE_LOGGING
+#ifdef LINENOISE_LOGGING
+	// Logging
+	template <typename... Args>
+	static void Log(const string &msg, Args... params) {
+		std::vector<ExceptionFormatValue> values;
+		LogMessageRecursive(msg, values, params...);
+	}
+
+	static void LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
+
+	template <class T, typename... Args>
+	static void LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
+											Args... params) {
+		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
+		LogMessageRecursive(msg, values, params...);
+	}
+#else
+	template <typename... Args>
+	static void Log(const string &msg, Args... params) {
+		// nop
+	}
+#endif
+
+public:
 	int ifd;                                 /* Terminal stdin file descriptor. */
 	int ofd;                                 /* Terminal stdout file descriptor. */
 	char *buf;                               /* Edited line buffer. */
@@ -127,6 +138,7 @@ public:
 	bool search;                             /* Whether or not we are searching our history */
 	bool render;                             /* Whether or not to re-render */
 	bool has_more_data;                      /* Whether or not there is more data available in the buffer (copy+paste)*/
+	bool insert;                             /* Whether or not the last action was inserting a new character */
 	std::string search_buf;                  //! The search buffer
 	std::vector<searchMatch> search_matches; //! The set of search matches in our history
 	size_t search_index;                     //! The current match index

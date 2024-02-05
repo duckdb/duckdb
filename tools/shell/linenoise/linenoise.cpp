@@ -209,20 +209,36 @@ int Linenoise::CompleteLine() {
 				return -1;
 			}
 
+			Linenoise::Log("\nComplete Character %d\n", (int) c);
 			switch (c) {
-			case 9: /* tab */
+			case TAB: /* tab */
 				i = (i + 1) % (lc.len + 1);
 				if (i == lc.len) {
 					Terminal::Beep();
 				}
 				break;
-			case 27: /* escape */
-				/* Re-show original buffer */
-				if (i < lc.len) {
-					RefreshLine();
+			case ESC: { /* escape */
+				auto escape = Terminal::ReadEscapeSequence(ifd);
+				switch(escape) {
+				case EscapeSequence::SHIFT_TAB:
+					// shift-tab: move backwards
+					if (i == 0) {
+						Terminal::Beep();
+					} else {
+						i--;
+					}
+					break;
+				default:
+					/* Re-show original buffer */
+					if (i < lc.len) {
+						RefreshLine();
+					}
+						stop = 1;
+					break;
+
 				}
-				stop = 1;
 				break;
+			}
 			default:
 				/* Update buffer and return */
 				if (i < lc.len) {
@@ -454,6 +470,7 @@ int Linenoise::EditInsert(char c) {
 	if (has_more_data) {
 		render = false;
 	}
+	insert = true;
 	InsertCharacter(c);
 	RefreshLine();
 	return 0;
@@ -538,11 +555,11 @@ bool Linenoise::EditMoveRowUp() {
 		return false;
 	}
 	// we can move the cursor a line up
-	lndebug("source pos %d", l->pos);
-	lndebug("move from row %d to row %d", cursor_row, cursor_row - 1);
+	Linenoise::Log("source pos %d", pos);
+	Linenoise::Log("move from row %d to row %d", cursor_row, cursor_row - 1);
 	cursor_row--;
 	pos = ColAndRowToPosition(cursor_row, cursor_col);
-	lndebug("new pos %d", l->pos);
+		Linenoise::Log("new pos %d", pos);
 	RefreshLine();
 	return true;
 }
@@ -559,11 +576,11 @@ bool Linenoise::EditMoveRowDown() {
 		return false;
 	}
 	// we can move the cursor a line down
-	lndebug("source pos %d", l->pos);
-	lndebug("move from row %d to row %d", cursor_row, cursor_row + 1);
+	Linenoise::Log("source pos %d", pos);
+	Linenoise::Log("move from row %d to row %d", cursor_row, cursor_row + 1);
 	cursor_row++;
 	pos = ColAndRowToPosition(cursor_row, cursor_col);
-	lndebug("new pos %d", l->pos);
+	Linenoise::Log("new pos %d", pos);
 	RefreshLine();
 	return true;
 }
@@ -734,8 +751,6 @@ void Linenoise::SearchNext() {
 }
 
 char Linenoise::Search(char c) {
-	char seq[64];
-
 	switch (c) {
 	case 10:
 	case ENTER: /* enter */
@@ -745,77 +760,31 @@ char Linenoise::Search(char c) {
 		// move to the next match index
 		SearchNext();
 		break;
-	case ESC: /* escape sequence */
-		/* Read the next two bytes representing the escape sequence.
-		 * Use two calls to handle slow terminals returning the two
-		 * chars at different times. */
-		// note: in search mode we ignore almost all special commands
-		if (read(ifd, seq, 1) == -1)
-			break;
-		if (seq[0] == ESC) {
+	case ESC: /* escape sequence */ {
+		auto escape = Terminal::ReadEscapeSequence(ifd);
+		switch(escape) {
+		case EscapeSequence::ESCAPE:
 			// double escape accepts search without any additional command
 			return AcceptSearch(0);
-		}
-		if (seq[0] == 'b' || seq[0] == 'f') {
+		case EscapeSequence::UP:
+			SearchPrev();
 			break;
-		}
-		if (read(ifd, seq + 1, 1) == -1)
+		case EscapeSequence::DOWN:
+			SearchNext();
 			break;
-
-		/* ESC [ sequences. */
-		if (seq[0] == '[') {
-			if (seq[1] >= '0' && seq[1] <= '9') {
-				/* Extended escape, read additional byte. */
-				if (read(ifd, seq + 2, 1) == -1)
-					break;
-				if (seq[2] == '~') {
-					switch (seq[1]) {
-					case '1':
-						return AcceptSearch(CTRL_A);
-					case '4':
-					case '8':
-						return AcceptSearch(CTRL_E);
-					default:
-						break;
-					}
-				} else if (seq[2] == ';') {
-					// read 2 extra bytes
-					if (read(ifd, seq + 3, 2) == -1)
-						break;
-				}
-			} else {
-				switch (seq[1]) {
-				case 'A': /* Up */
-					SearchPrev();
-					break;
-				case 'B': /* Down */
-					SearchNext();
-					break;
-				case 'D': /* Left */
-					return AcceptSearch(CTRL_B);
-				case 'C': /* Right */
-					return AcceptSearch(CTRL_F);
-				case 'H': /* Home */
-					return AcceptSearch(CTRL_A);
-				case 'F': /* End*/
-					return AcceptSearch(CTRL_E);
-				default:
-					break;
-				}
-			}
-		}
-		/* ESC O sequences. */
-		else if (seq[0] == 'O') {
-			switch (seq[1]) {
-			case 'H': /* Home */
-				return AcceptSearch(CTRL_A);
-			case 'F': /* End*/
-				return AcceptSearch(CTRL_E);
-			default:
-				break;
-			}
+		case EscapeSequence::HOME:
+			return AcceptSearch(CTRL_A);
+		case EscapeSequence::END:
+			return AcceptSearch(CTRL_E);
+		case EscapeSequence::LEFT:
+			return AcceptSearch(CTRL_B);
+		case EscapeSequence::RIGHT:
+			return AcceptSearch(CTRL_F);
+		default:
+			break;
 		}
 		break;
+	}
 	case CTRL_A: // accept search, move to start of line
 		return AcceptSearch(CTRL_A);
 	case '\t':
@@ -915,6 +884,7 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	has_more_data = false;
 	render = true;
 	continuation_markers = true;
+	insert = false;
 
 	/* Buffer starts empty. */
 	buf[0] = '\0';
@@ -940,7 +910,6 @@ int Linenoise::Edit() {
 	while (true) {
 		char c;
 		int nread;
-		char seq[5];
 
 		nread = read(ifd, &c, 1);
 		if (nread <= 0) {
@@ -948,6 +917,7 @@ int Linenoise::Edit() {
 		}
 		has_more_data = Terminal::HasMoreData(ifd);
 		render = true;
+		insert = false;
 		if (Terminal::IsMultiline() && !has_more_data) {
 			TerminalSize new_size = Terminal::GetTerminalSize();
 			if (new_size.ws_col != ws.ws_col || new_size.ws_row != ws.ws_row) {
@@ -990,7 +960,7 @@ int Linenoise::Edit() {
 			}
 		}
 
-		lndebug("%d\n", (int)c);
+		Linenoise::Log("%d\n", (int)c);
 		switch (c) {
 		case 10:
 		case ENTER: /* enter */
@@ -1101,120 +1071,50 @@ int Linenoise::Edit() {
 			RefreshSearch();
 			break;
 		}
-		case ESC: /* escape sequence */
-			/* Read the next two bytes representing the escape sequence.
-			 * Use two calls to handle slow terminals returning the two
-			 * chars at different times. */
-			if (read(ifd, seq, 1) == -1)
-				break;
-			if (seq[0] == 'b') {
+		case ESC: /* escape sequence */ {
+			auto escape = Terminal::ReadEscapeSequence(ifd);
+			switch(escape) {
+			case EscapeSequence::CTRL_MOVE_BACKWARDS:
+			case EscapeSequence::ALT_B:
 				EditMoveWordLeft();
 				break;
-			} else if (seq[0] == 'f') {
+			case EscapeSequence::CTRL_MOVE_FORWARDS:
+			case EscapeSequence::ALT_F:
 				EditMoveWordRight();
 				break;
-			}
-			// lndebug("seq0: %d\n", seq[0]);
-			if (read(ifd, seq + 1, 1) == -1) {
+			case EscapeSequence::HOME:
+				EditMoveHome();
+				break;
+			case EscapeSequence::END:
+				EditMoveEnd();
+				break;
+			case EscapeSequence::UP:
+				if (EditMoveRowUp()) {
+					break;
+				}
+				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_PREV);
+				break;
+			case EscapeSequence::DOWN:
+				if (EditMoveRowDown()) {
+					break;
+				}
+				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_NEXT);
+				break;
+			case EscapeSequence::RIGHT:
+				EditMoveRight();
+				break;
+			case EscapeSequence::LEFT:
+				EditMoveLeft();
+				break;
+			case EscapeSequence::DELETE:
+				EditDelete();
+				break;
+			default:
+				Linenoise::Log("Unrecognized escape\n");
 				break;
 			}
-			// lndebug("seq1: %d\n", seq[1]);
-
-			/* ESC [ sequences. */
-			if (seq[0] == '[') {
-				if (seq[1] >= '0' && seq[1] <= '9') {
-					/* Extended escape, read additional byte. */
-					if (read(ifd, seq + 2, 1) == -1)
-						break;
-					if (seq[2] == '~') {
-						switch (seq[1]) {
-						case '1':
-							EditMoveHome();
-							break;
-						case '3': /* Delete key. */
-							EditDelete();
-							break;
-						case '4':
-							EditMoveEnd();
-							break;
-						case '8':
-							EditMoveEnd();
-							break;
-						default:
-							lndebug("unrecognized escape sequence (~) %d", seq[1]);
-							break;
-						}
-					} else if (seq[2] == ';') {
-						// read 2 extra bytes
-						if (read(ifd, seq + 3, 2) == -1)
-							break;
-						if (memcmp(seq, "[1;5C", 5) == 0) {
-							// [1;5C: move word right
-							EditMoveWordRight();
-						} else if (memcmp(seq, "[1;5D", 5) == 0) {
-							// [1;5D: move word left
-							EditMoveWordLeft();
-						} else {
-							lndebug("unrecognized escape sequence (;) %d", seq[1]);
-						}
-					} else if (seq[1] == '5' && seq[2] == 'C') {
-						EditMoveWordRight();
-					} else if (seq[1] == '5' && seq[2] == 'D') {
-						EditMoveWordLeft();
-					}
-				} else {
-					switch (seq[1]) {
-					case 'A': /* Up */
-						if (EditMoveRowUp()) {
-							break;
-						}
-						EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_PREV);
-						break;
-					case 'B': /* Down */
-						if (EditMoveRowDown()) {
-							break;
-						}
-						EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_NEXT);
-						break;
-					case 'C': /* Right */
-						EditMoveRight();
-						break;
-					case 'D': /* Left */
-						EditMoveLeft();
-						break;
-					case 'H': /* Home */
-						EditMoveHome();
-						break;
-					case 'F': /* End*/
-						EditMoveEnd();
-						break;
-					default:
-						lndebug("unrecognized escape sequence (seq[1]) %d", seq[1]);
-						break;
-					}
-				}
-			}
-			/* ESC O sequences. */
-			else if (seq[0] == 'O') {
-				switch (seq[1]) {
-				case 'H': /* Home */
-					EditMoveHome();
-					break;
-				case 'F': /* End*/
-					EditMoveEnd();
-					break;
-				case 'c':
-					EditMoveWordRight();
-					break;
-				case 'd':
-					EditMoveWordLeft();
-					break;
-				default:
-					lndebug("unrecognized escape sequence (O) %d", seq[1]);
-					break;
-				}
-			}
 			break;
+		}
 		case CTRL_U: /* Ctrl+u, delete the whole line. */
 			buf[0] = '\0';
 			pos = len = 0;
@@ -1249,5 +1149,18 @@ int Linenoise::Edit() {
 	}
 	return len;
 }
+
+#ifdef LINENOISE_LOGGING
+void Linenoise::LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values) {
+	static FILE *lndebug_fp = NULL;
+	if (!lndebug_fp) {
+		lndebug_fp = fopen("/tmp/lndebug.txt", "a");
+	}
+	auto log_message = Exception::ConstructMessageRecursive(msg, values);
+	fprintf(lndebug_fp, "%s", log_message.c_str());
+	fflush(lndebug_fp);
+}
+#endif
+
 
 } // namespace duckdb

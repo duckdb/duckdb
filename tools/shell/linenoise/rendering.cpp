@@ -21,7 +21,7 @@ struct AppendBuffer {
 	void Write(int fd) {
 		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
 			/* Can't recover from write error. */
-			lndebug("%s", "Failed to write buffer\n");
+			Linenoise::Log("%s", "Failed to write buffer\n");
 		}
 	}
 
@@ -359,7 +359,7 @@ void Linenoise::RefreshMultiLine() {
 		new_cursor_row -= y_scroll;
 		render_buf += start;
 		render_len = end - start;
-		lndebug("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, start, end);
+		Linenoise::Log("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, start, end);
 		rows = ws.ws_row;
 	} else {
 		y_scroll = 0;
@@ -394,20 +394,20 @@ void Linenoise::RefreshMultiLine() {
 	 * going to the last row. */
 	AppendBuffer append_buffer;
 	if (old_rows - old_cursor_rows > 0) {
-		lndebug("go down %d", old_rows - old_cursor_rows);
+		Linenoise::Log("go down %d", old_rows - old_cursor_rows);
 		snprintf(seq, 64, "\x1b[%dB", old_rows - int(old_cursor_rows));
 		append_buffer.Append(seq, strlen(seq));
 	}
 
 	/* Now for every row clear it, go up. */
 	for (j = 0; j < old_rows - 1; j++) {
-		lndebug("clear+up", 0);
+		Linenoise::Log("clear+up");
 		snprintf(seq, 64, "\r\x1b[0K\x1b[1A");
 		append_buffer.Append(seq, strlen(seq));
 	}
 
 	/* Clean the top line. */
-	lndebug("clear", 0);
+	Linenoise::Log("clear");
 	snprintf(seq, 64, "\r\x1b[0K");
 	append_buffer.Append(seq, strlen(seq));
 
@@ -422,11 +422,11 @@ void Linenoise::RefreshMultiLine() {
 
 	/* If we are at the very end of the screen with our prompt, we need to
 	 * emit a newline and move the prompt to the first column. */
-	lndebug("pos > 0 %d", pos > 0 ? 1 : 0);
-	lndebug("pos == len %d", pos == len ? 1 : 0);
-	lndebug("new_cursor_x == cols %d", new_cursor_x == ws.ws_col ? 1 : 0);
+	Linenoise::Log("pos > 0 %d", pos > 0 ? 1 : 0);
+	Linenoise::Log("pos == len %d", pos == len ? 1 : 0);
+	Linenoise::Log("new_cursor_x == cols %d", new_cursor_x == ws.ws_col ? 1 : 0);
 	if (pos > 0 && pos == len && new_cursor_x == ws.ws_col) {
-		lndebug("<newline>", 0);
+		Linenoise::Log("<newline>", 0);
 		append_buffer.Append("\n", 1);
 		snprintf(seq, 64, "\r");
 		append_buffer.Append(seq, strlen(seq));
@@ -437,26 +437,26 @@ void Linenoise::RefreshMultiLine() {
 			maxrows = rows;
 		}
 	}
-	lndebug("render %d rows (old rows %d)", rows, old_rows);
+	Linenoise::Log("render %d rows (old rows %d)", rows, old_rows);
 
 	/* Move cursor to right position. */
-	lndebug("new_cursor_row %d", new_cursor_row);
-	lndebug("new_cursor_x %d", new_cursor_x);
-	lndebug("len %d", len);
-	lndebug("old_cursor_rows %d", old_cursor_rows);
-	lndebug("pos %d", pos);
-	lndebug("max cols %d", ws.ws_col);
+	Linenoise::Log("new_cursor_row %d", new_cursor_row);
+	Linenoise::Log("new_cursor_x %d", new_cursor_x);
+	Linenoise::Log("len %d", len);
+	Linenoise::Log("old_cursor_rows %d", old_cursor_rows);
+	Linenoise::Log("pos %d", pos);
+	Linenoise::Log("max cols %d", ws.ws_col);
 
 	/* Go up till we reach the expected positon. */
 	if (rows - new_cursor_row > 0) {
-		lndebug("go-up %d", rows - new_cursor_row);
+		Linenoise::Log("go-up %d", rows - new_cursor_row);
 		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
 		append_buffer.Append(seq, strlen(seq));
 	}
 
 	/* Set column. */
 	col = new_cursor_x;
-	lndebug("set col %d", 1 + col);
+	Linenoise::Log("set col %d", 1 + col);
 	if (col) {
 		snprintf(seq, 64, "\r\x1b[%dC", col);
 	} else {
@@ -464,7 +464,7 @@ void Linenoise::RefreshMultiLine() {
 	}
 	append_buffer.Append(seq, strlen(seq));
 
-	lndebug("\n", 0);
+	Linenoise::Log("\n");
 	old_cursor_rows = new_cursor_row;
 	append_buffer.Write(fd);
 }

@@ -37,6 +37,24 @@ enum KEY_ACTION {
 	BACKSPACE = 127 /* Backspace */
 };
 
+enum class EscapeSequence {
+	INVALID = 0,
+	UNKNOWN = 1,
+	CTRL_MOVE_BACKWARDS,
+	CTRL_MOVE_FORWARDS,
+	HOME,
+	END,
+	ALT_B,
+	ALT_F,
+	UP,
+	DOWN,
+	RIGHT,
+	LEFT,
+	DELETE,
+	SHIFT_TAB,
+	ESCAPE
+};
+
 struct TerminalSize {
 	int ws_col = 0;
 	int ws_row = 0;
@@ -60,9 +78,12 @@ public:
 	static char *EditNoTTY();
 	static int EditRaw(char *buf, size_t buflen, const char *prompt);
 
+	static EscapeSequence ReadEscapeSequence(int ifd);
+
 private:
 	static TerminalSize TryMeasureTerminalSize();
 	static TerminalSize GetCursorPosition();
+	static idx_t ReadEscapeSequence(int ifd, char sequence[]);
 };
 
 } // namespace duckdb
