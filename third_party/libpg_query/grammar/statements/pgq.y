@@ -72,15 +72,21 @@ EdgeOrRelationship:
 		RELATIONSHIP
 		;
 
+EdgeTablesClauseOptional:
+    EdgeOrRelationship TABLES '(' EdgeTableDefinition EdgeTableDefinitionList ')'   { $$ = $5?lappend($5,$4):list_make1($4); }
+    |
+    /* EMPTY */                                                                     { $$ = NULL; }
+
+
 CreatePropertyGraphStmt:
 		CREATE_P PROPERTY GRAPH qualified_name
 		VertexOrNode TABLES '(' VertexTableDefinition VertexTableDefinitionList ')'
-		EdgeOrRelationship TABLES '(' EdgeTableDefinition EdgeTableDefinitionList ')'
+		EdgeTablesClauseOptional
 			{
 				PGCreatePropertyGraphStmt *n = makeNode(PGCreatePropertyGraphStmt);
 				n->name = $4;
 				n->vertex_tables = $9?lappend($9,$8):list_make1($8);
-				n->edge_tables = $15?lappend($15,$14):list_make1($14);
+				n->edge_tables = $11;
 				$$ = (PGNode *)n;
 			}
 		;
