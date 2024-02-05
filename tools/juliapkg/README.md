@@ -120,6 +120,19 @@ The actual `julia` binaries live in `~/.julia/juliaup/<version>/bin/julia`
 lldb -- ~/.julia/juliaup/julia-1.10.0+0.aarch64.apple.darwin14/bin/julia ...
 ```
 
+#### Testing
+
+To run the test suite in it's entirety:
+```bash
+julia -e "import Pkg; Pkg.activate(\".\"); include(\"test/runtests.jl\")"
+```
+
+To run a specific test listed in `test/runtests.jl`, you can provide the name, e.g:
+```bash
+julia -e "import Pkg; Pkg.activate(\".\"); include(\"test/runtests.jl\")" "test_basic_queries.jl"
+```
+
+Just as mentioned before, to attach lldb to this, you'll have to replace the `julia` part with the absolute path.
 
 ### Submitting a New Package
 The DuckDB Julia package depends on the [DuckDB_jll package](https://github.com/JuliaBinaryWrappers/DuckDB_jll.jl), which can be updated by sending a PR to [Yggdrassil](https://github.com/JuliaPackaging/Yggdrasil/pull/5049).
