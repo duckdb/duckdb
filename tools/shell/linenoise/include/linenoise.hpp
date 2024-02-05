@@ -87,20 +87,20 @@ public:
 	char Search(char c);
 
 	void RefreshMultiLine();
-	void RefreshSingleLine();
+	void RefreshSingleLine() const;
 	void RefreshSearch();
-	void RefreshShowHints(struct abuf *ab, int plen);
+	void RefreshShowHints(struct abuf *ab, int plen) const;
 
 	size_t PrevChar() const;
 	size_t NextChar() const;
 
 
-	void NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen);
-	void PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols);
-	size_t ColAndRowToPosition(int target_row, int target_col);
+	void NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) const;
+	void PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const;
+	size_t ColAndRowToPosition(int target_row, int target_col) const;
 
 	string AddContinuationMarkers(const char *buf, size_t len, int plen,
-												  int cursor_row, vector<highlightToken> &tokens);
+												  int cursor_row, vector<highlightToken> &tokens) const;
 
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);

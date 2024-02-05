@@ -349,7 +349,7 @@ bool Linenoise::IsNewline(char c) {
 	return c == '\r' || c == '\n';
 }
 
-void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) {
+void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) const {
 	if (IsNewline(buf[cpos])) {
 		// explicit newline! move to next line and insert a prompt
 		rows++;
@@ -377,7 +377,7 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 	cols += char_render_width;
 }
 
-void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) {
+void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const {
 	int plen = GetPromptWidth();
 	out_row = -1;
 	out_col = 0;
@@ -402,7 +402,7 @@ void Linenoise::PositionToColAndRow(size_t target_pos, int &out_row, int &out_co
 	}
 }
 
-size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) {
+size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
 	int plen = GetPromptWidth();
 	int rows = 1;
 	int cols = plen;

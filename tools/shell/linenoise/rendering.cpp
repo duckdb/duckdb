@@ -45,7 +45,7 @@ void Linenoise::SetPrompt(const char *continuation, const char *continuationSele
 
 /* Helper of refreshSingleLine() and refreshMultiLine() to show hints
 * to the right of the prompt. */
-void Linenoise::RefreshShowHints(struct abuf *ab, int plen) {
+void Linenoise::RefreshShowHints(struct abuf *ab, int plen) const {
 	char seq[64];
 	auto hints_callback = Linenoise::HintsCallback();
 	if (hints_callback && plen + len < size_t(ws.ws_col)) {
@@ -137,17 +137,17 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 *
 * Rewrite the currently edited line accordingly to the buffer content,
 * cursor position, and number of columns of the terminal. */
-void Linenoise::RefreshSingleLine() {
+void Linenoise::RefreshSingleLine() const {
 	char seq[64];
 	size_t plen = GetPromptWidth();
 	int fd = ofd;
-	char *buf = buf;
-	size_t len = len;
+	char *render_buf = buf;
+	size_t render_len = len;
 	struct abuf ab;
 	size_t render_pos = 0;
 	std::string highlight_buffer;
 
-	renderText(render_pos, buf, len, pos, ws.ws_col, plen, highlight_buffer, Highlighting::IsEnabled());
+	renderText(render_pos, render_buf, render_len, pos, ws.ws_col, plen, highlight_buffer, Highlighting::IsEnabled());
 
 	abInit(&ab);
 	/* Cursor to left edge */
@@ -155,7 +155,7 @@ void Linenoise::RefreshSingleLine() {
 	abAppend(&ab, seq, strlen(seq));
 	/* Write the prompt and the current buffer content */
 	abAppend(&ab, prompt, strlen(prompt));
-	abAppend(&ab, buf, len);
+	abAppend(&ab, render_buf, render_len);
 	/* Show hits if any. */
 	RefreshShowHints(&ab, plen);
 	/* Erase to right */
@@ -250,7 +250,7 @@ void Linenoise::RefreshSearch() {
 }
 
 string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen,
-											  int cursor_row, vector<highlightToken> &tokens) {
+											  int cursor_row, vector<highlightToken> &tokens) const {
 	std::string result;
 	int rows = 1;
 	int cols = plen;
@@ -334,8 +334,8 @@ void Linenoise::RefreshMultiLine() {
 	int fd = ofd, j;
 	struct abuf ab;
 	std::string highlight_buffer;
-	auto buf = this->buf;
-	auto len = this->len;
+	auto render_buf = this->buf;
+	auto render_len = this->len;
 	if (clear_screen) {
 		old_cursor_rows = 0;
 		old_rows = 0;
@@ -364,8 +364,8 @@ void Linenoise::RefreshMultiLine() {
 			end = ColAndRowToPosition(y_scroll + ws.ws_row, 99999);
 		}
 		new_cursor_row -= y_scroll;
-		buf += start;
-		len = end - start;
+		render_buf += start;
+		render_len = end - start;
 		lndebug("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, start,
 				end);
 		rows = ws.ws_row;
@@ -381,21 +381,21 @@ void Linenoise::RefreshMultiLine() {
 	vector<highlightToken> tokens;
 	if (Highlighting::IsEnabled()) {
 		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
-		tokens = Highlighting::Tokenize(buf, len, match);
+		tokens = Highlighting::Tokenize(render_buf, render_len, match);
 	}
 	if (rows > 1) {
 		// add continuation markers
 		highlight_buffer =
-				AddContinuationMarkers(buf, len, plen, y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row,
+				AddContinuationMarkers(render_buf, render_len, plen, y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row,
 									   tokens);
-		buf = (char *) highlight_buffer.c_str();
-		len = highlight_buffer.size();
+		render_buf = (char *) highlight_buffer.c_str();
+		render_len = highlight_buffer.size();
 	}
-	if (duckdb::Utf8Proc::IsValid(buf, len)) {
+	if (duckdb::Utf8Proc::IsValid(render_buf, render_len)) {
 		if (Highlighting::IsEnabled()) {
-			highlight_buffer = Highlighting::HighlightText(buf, len, 0, len, tokens);
-			buf = (char *) highlight_buffer.c_str();
-			len = highlight_buffer.size();
+			highlight_buffer = Highlighting::HighlightText(render_buf, render_len, 0, render_len, tokens);
+			render_buf = (char *) highlight_buffer.c_str();
+			render_len = highlight_buffer.size();
 		}
 	}
 
@@ -424,7 +424,7 @@ void Linenoise::RefreshMultiLine() {
 	if (y_scroll == 0) {
 		abAppend(&ab, prompt, strlen(prompt));
 	}
-	abAppend(&ab, buf, len);
+	abAppend(&ab, render_buf, render_len);
 
 	/* Show hints if any. */
 	RefreshShowHints(&ab, plen);
