@@ -1147,7 +1147,6 @@ int Linenoise::Edit() {
 			// unsupported
 			break;
 		default: {
-			Linenoise::Log("Regular Character %d\n", (int) c);
 			if (EditInsert(c)) {
 				return -1;
 			}
