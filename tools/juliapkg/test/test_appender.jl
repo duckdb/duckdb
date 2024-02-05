@@ -53,8 +53,8 @@ end
             time TIME,
             timestamp TIMESTAMP, 
             missingval INTEGER,
-            nothingval INTEGER)"
-            # varchar VARCHAR
+            nothingval INTEGER,
+            varchar VARCHAR)"
     )
 
     # Create the appender
@@ -77,7 +77,7 @@ end
     DuckDB.append(appender, Dates.DateTime("1970-01-02T01:23:45.678"))
     DuckDB.append(appender, Missing)
     DuckDB.append(appender, Nothing)
-    # DuckDB.append(appender, "Foo")
+    DuckDB.append(appender, "Foo")
     # End the row of the appender
     DuckDB.end_row(appender)
     # Destroy the appender and flush the data
@@ -105,7 +105,7 @@ end
     @test df.timestamp == [Dates.DateTime("1970-01-02T01:23:45.678")]
     @test isequal(df.missingval, [missing])
     @test isequal(df.nothingval, [missing])
-    # @test df.varchar == ["Foo"]
+    @test df.varchar == ["Foo"]
 
     # close the database 
     DBInterface.close!(db)
