@@ -3,9 +3,6 @@ cmake_minimum_required(VERSION 3.5)
 if(NOT CLANG_TIDY)
   find_package(Python3)
 endif()
-add_custom_target(
-	duckdbz ALL
-	)
 
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
@@ -801,23 +798,23 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERS
       COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
       )
   endif()
-  add_custom_target(
-    ${TARGET_NAME}_metadated ALL
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
     COMMAND
-    echo '${DUCKDB_NORMALIZED_VERSION}\\x00' > duckdb_version_file
+    echo "METADATED ${TARGET_NAME} $<TARGET_NAME:${TARGET_NAME}> ${DUCKDB_NORMALIZED_VERSION} ${EXTENSION_VERSION}"
     COMMAND
-    echo '${EXTENSION_VERSION}\\x00' > extension_version_file
+    printf "${DUCKDB_NORMALIZED_VERSION}" > duckdb_version_file
     COMMAND
-    ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
+    printf "${EXTENSION_VERSION}" > extension_version_file
     COMMAND
-    touch ${TARGET_NAME}_metadated
+    bash ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
+    COMMAND
+    echo "METADATED_DONE ${TARGET_NAME} $<TARGET_NAME:${TARGET_NAME}>"
     )
-  add_dependencies(${TARGET_NAME}_metadated ${TARGET_NAME})
-  add_dependencies(${TARGET_NAME}_metadated duckdb_platform)
-  add_dependencies(duckdb ${TARGET_NAME}_metadated)
-  add_dependencies(duckdbz ${TARGET_NAME}_metadated)
+  add_dependencies(${TARGET_NAME} duckdb_platform)
   if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
-    add_dependencies(duckdb_local_extension_repo ${TARGET_NAME}_metadated)
+    add_dependencies(duckdb_local_extension_repo ${TARGET_NAME})
   endif()
 endfunction()
 
@@ -1200,7 +1197,7 @@ else()
   add_custom_target(
           duckdb_platform ALL
 	  COMMAND
-	  echo "${DUCKDB_EXPLICIT_PLATFORM}\\x00" > duckdb_platform_out
+	  printf "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
           )
 endif()
 
