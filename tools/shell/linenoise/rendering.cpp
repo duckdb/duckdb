@@ -11,9 +11,9 @@ static const char *continuationSelectedPrompt = "> ";
 /* =========================== Line editing ================================= */
 
 /* We define a very simple "append buffer" structure, that is an heap
-* allocated string where we can append to. This is useful in order to
-* write all the escape sequences in a buffer and flush them to the standard
-* output in a single call, to avoid flickering effects. */
+ * allocated string where we can append to. This is useful in order to
+ * write all the escape sequences in a buffer and flush them to the standard
+ * output in a single call, to avoid flickering effects. */
 struct AppendBuffer {
 	void Append(const char *s, idx_t len) {
 		buffer.append(s, len);
@@ -24,6 +24,7 @@ struct AppendBuffer {
 			lndebug("%s", "Failed to write buffer\n");
 		}
 	}
+
 private:
 	std::string buffer;
 };
@@ -34,7 +35,7 @@ void Linenoise::SetPrompt(const char *continuation, const char *continuationSele
 }
 
 /* Helper of refreshSingleLine() and refreshMultiLine() to show hints
-* to the right of the prompt. */
+ * to the right of the prompt. */
 void Linenoise::RefreshShowHints(AppendBuffer &append_buffer, int plen) const {
 	char seq[64];
 	auto hints_callback = Linenoise::HintsCallback();
@@ -44,18 +45,21 @@ void Linenoise::RefreshShowHints(AppendBuffer &append_buffer, int plen) const {
 		if (hint) {
 			int hintlen = strlen(hint);
 			int hintmaxlen = ws.ws_col - (plen + len);
-			if (hintlen > hintmaxlen)
+			if (hintlen > hintmaxlen) {
 				hintlen = hintmaxlen;
+			}
 			if (bold == 1 && color == -1)
 				color = 37;
-			if (color != -1 || bold != 0)
+			if (color != -1 || bold != 0) {
 				snprintf(seq, 64, "\033[%d;%d;49m", bold, color);
-			else
+			} else {
 				seq[0] = '\0';
+			}
 			append_buffer.Append(seq, strlen(seq));
 			append_buffer.Append(hint, hintlen);
-			if (color != -1 || bold != 0)
+			if (color != -1 || bold != 0) {
 				append_buffer.Append("\033[0m", 4);
+			}
 			/* Call the function to free the hint returned. */
 			auto free_hints_callback = Linenoise::FreeHintsCallback();
 			if (free_hints_callback) {
@@ -66,7 +70,7 @@ void Linenoise::RefreshShowHints(AppendBuffer &append_buffer, int plen) const {
 }
 
 static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, size_t cols, size_t plen,
-					   std::string &highlight_buffer, bool highlight, searchMatch *match = nullptr) {
+                       std::string &highlight_buffer, bool highlight, searchMatch *match = nullptr) {
 	if (duckdb::Utf8Proc::IsValid(buf, len)) {
 		// utf8 in prompt, handle rendering
 		size_t remaining_render_width = cols - plen - 1;
@@ -103,7 +107,7 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 		if (highlight) {
 			auto tokens = Highlighting::Tokenize(buf, len, match);
 			highlight_buffer = Highlighting::HighlightText(buf, len, start_pos, cpos, tokens);
-			buf = (char *) highlight_buffer.c_str();
+			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		} else {
 			buf = buf + start_pos;
@@ -124,9 +128,9 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 }
 
 /* Single line low level line refresh.
-*
-* Rewrite the currently edited line accordingly to the buffer content,
-* cursor position, and number of columns of the terminal. */
+ *
+ * Rewrite the currently edited line accordingly to the buffer content,
+ * cursor position, and number of columns of the terminal. */
 void Linenoise::RefreshSingleLine() const {
 	char seq[64];
 	size_t plen = GetPromptWidth();
@@ -151,7 +155,7 @@ void Linenoise::RefreshSingleLine() const {
 	snprintf(seq, 64, "\x1b[0K");
 	append_buffer.Append(seq, strlen(seq));
 	/* Move cursor to original position. */
-	snprintf(seq, 64, "\r\x1b[%dC", (int) (render_pos + plen));
+	snprintf(seq, 64, "\r\x1b[%dC", (int)(render_pos + plen));
 	append_buffer.Append(seq, strlen(seq));
 	append_buffer.Write(fd);
 }
@@ -184,7 +188,7 @@ void Linenoise::RefreshSearch() {
 		} else {
 			// search text length is too long to fit: truncate
 			bool render_matches = matches_text_length < SEARCH_PROMPT_RENDER_SIZE - 8;
-			char *search_buf = (char *) search_text.c_str();
+			char *search_buf = (char *)search_text.c_str();
 			size_t search_len = search_text.size();
 			size_t search_render_pos = 0;
 			size_t max_render_size = SEARCH_PROMPT_RENDER_SIZE - 3;
@@ -193,7 +197,7 @@ void Linenoise::RefreshSearch() {
 			}
 			std::string highlight_buffer;
 			renderText(search_render_pos, search_buf, search_len, search_len, max_render_size, 0, highlight_buffer,
-					   false);
+			           false);
 			search_prompt = std::string(search_buf, search_len);
 			for (size_t i = search_render_pos; i < max_render_size; i++) {
 				search_prompt += " ";
@@ -206,11 +210,11 @@ void Linenoise::RefreshSearch() {
 	}
 	auto oldHighlighting = Highlighting::IsEnabled();
 	Linenoise clone = *this;
-	prompt = (char *) search_prompt.c_str();
+	prompt = search_prompt.c_str();
 	plen = search_prompt.size();
 	if (no_matches || search_buf.empty()) {
 		// if there are no matches render the no_matches_text
-		buf = (char *) no_matches_text.c_str();
+		buf = (char *)no_matches_text.c_str();
 		len = no_matches_text.size();
 		pos = 0;
 		// don't highlight the "no_matches" text
@@ -220,7 +224,7 @@ void Linenoise::RefreshSearch() {
 		auto search_match = search_matches[search_index];
 		auto history_index = search_match.history_index;
 		auto cursor_position = search_match.match_end;
-		buf = (char *) History::GetEntry(history_index);
+		buf = (char *)History::GetEntry(history_index);
 		len = strlen(buf);
 		pos = cursor_position;
 	}
@@ -236,8 +240,8 @@ void Linenoise::RefreshSearch() {
 	plen = clone.plen;
 }
 
-string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen,
-											  int cursor_row, vector<highlightToken> &tokens) const {
+string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
+                                         vector<highlightToken> &tokens) const {
 	std::string result;
 	int rows = 1;
 	int cols = plen;
@@ -303,9 +307,9 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen,
 }
 
 /* Multi line low level line refresh.
-*
-* Rewrite the currently edited line accordingly to the buffer content,
-* cursor position, and number of columns of the terminal. */
+ *
+ * Rewrite the currently edited line accordingly to the buffer content,
+ * cursor position, and number of columns of the terminal. */
 void Linenoise::RefreshMultiLine() {
 	if (!render) {
 		return;
@@ -352,15 +356,14 @@ void Linenoise::RefreshMultiLine() {
 		new_cursor_row -= y_scroll;
 		render_buf += start;
 		render_len = end - start;
-		lndebug("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, start,
-				end);
+		lndebug("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, start, end);
 		rows = ws.ws_row;
 	} else {
 		y_scroll = 0;
 	}
 
 	/* Update maxrows if needed. */
-	if (rows > (int) maxrows) {
+	if (rows > (int)maxrows) {
 		maxrows = rows;
 	}
 
@@ -371,16 +374,15 @@ void Linenoise::RefreshMultiLine() {
 	}
 	if (rows > 1) {
 		// add continuation markers
-		highlight_buffer =
-				AddContinuationMarkers(render_buf, render_len, plen, y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row,
-									   tokens);
-		render_buf = (char *) highlight_buffer.c_str();
+		highlight_buffer = AddContinuationMarkers(render_buf, render_len, plen,
+		                                          y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row, tokens);
+		render_buf = (char *)highlight_buffer.c_str();
 		render_len = highlight_buffer.size();
 	}
 	if (duckdb::Utf8Proc::IsValid(render_buf, render_len)) {
 		if (Highlighting::IsEnabled()) {
 			highlight_buffer = Highlighting::HighlightText(render_buf, render_len, 0, render_len, tokens);
-			render_buf = (char *) highlight_buffer.c_str();
+			render_buf = (char *)highlight_buffer.c_str();
 			render_len = highlight_buffer.size();
 		}
 	}
@@ -428,7 +430,7 @@ void Linenoise::RefreshMultiLine() {
 		rows++;
 		new_cursor_row++;
 		new_cursor_x = 0;
-		if (rows > (int) maxrows) {
+		if (rows > (int)maxrows) {
 			maxrows = rows;
 		}
 	}
@@ -465,7 +467,7 @@ void Linenoise::RefreshMultiLine() {
 }
 
 /* Calls the two low level functions refreshSingleLine() or
-* refreshMultiLine() according to the selected mode. */
+ * refreshMultiLine() according to the selected mode. */
 void Linenoise::RefreshLine() {
 	if (Terminal::IsMultiline()) {
 		RefreshMultiLine();
@@ -474,6 +476,4 @@ void Linenoise::RefreshLine() {
 	}
 }
 
-
-
-}
+} // namespace duckdb

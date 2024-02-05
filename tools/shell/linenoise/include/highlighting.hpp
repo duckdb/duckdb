@@ -41,8 +41,7 @@ public:
 
 	static vector<highlightToken> Tokenize(char *buf, size_t len, searchMatch *match = nullptr);
 	static string HighlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
-							  const vector<highlightToken> &tokens);
-
-	};
+	                            const vector<highlightToken> &tokens);
+};
 
 } // namespace duckdb

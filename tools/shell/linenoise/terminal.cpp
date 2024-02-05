@@ -26,7 +26,7 @@ static void linenoiseAtExit(void) {
 }
 
 /* Return true if the terminal name is in the list of terminals we know are
-* not able to understand basic escape sequences. */
+ * not able to understand basic escape sequences. */
 int Terminal::IsUnsupportedTerm() {
 	char *term = getenv("TERM");
 	int j;
@@ -104,10 +104,10 @@ bool Terminal::IsAtty() {
 }
 
 /* This function is called when linenoise() is called with the standard
-* input file descriptor not attached to a TTY. So for example when the
-* program using linenoise is called in pipe or with a file redirected
-* to its standard input. In this case, we want to be able to return the
-* line regardless of its length (by default we are limited to 4k). */
+ * input file descriptor not attached to a TTY. So for example when the
+ * program using linenoise is called in pipe or with a file redirected
+ * to its standard input. In this case, we want to be able to return the
+ * line regardless of its length (by default we are limited to 4k). */
 char *Terminal::EditNoTTY() {
 	char *line = NULL;
 	size_t len = 0, maxlen = 0;
@@ -118,7 +118,7 @@ char *Terminal::EditNoTTY() {
 				maxlen = 16;
 			maxlen *= 2;
 			char *oldval = line;
-			line = (char *) realloc(line, maxlen);
+			line = (char *)realloc(line, maxlen);
 			if (line == NULL) {
 				if (oldval)
 					free(oldval);
@@ -142,7 +142,7 @@ char *Terminal::EditNoTTY() {
 }
 
 /* This function calls the line editing function linenoiseEdit() using
-* the STDIN file descriptor set in raw mode. */
+ * the STDIN file descriptor set in raw mode. */
 int Terminal::EditRaw(char *buf, size_t buflen, const char *prompt) {
 	int count;
 
@@ -210,8 +210,8 @@ static int tryParseEnv(const char *env_var) {
 }
 
 /* Use the ESC [6n escape sequence to query the cursor position
-* and return it. On error -1 is returned, on success the position of the
-* cursor. */
+ * and return it. On error -1 is returned, on success the position of the
+ * cursor. */
 TerminalSize Terminal::GetCursorPosition() {
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
@@ -283,7 +283,7 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80
-* if it fails. */
+ * if it fails. */
 TerminalSize Terminal::GetTerminalSize() {
 	TerminalSize result;
 
@@ -330,10 +330,10 @@ void Terminal::ClearScreen() {
 }
 
 /* Beep, used for completion when there is nothing to complete or when all
-* the choices were already shown. */
+ * the choices were already shown. */
 void Terminal::Beep() {
 	fprintf(stderr, "\x7");
 	fflush(stderr);
 }
 
-}
+} // namespace duckdb

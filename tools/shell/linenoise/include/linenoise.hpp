@@ -12,19 +12,19 @@
 #include "terminal.hpp"
 #include "linenoise.h"
 
-#define LINENOISE_MAX_LINE                204800
+#define LINENOISE_MAX_LINE 204800
 
 /* Debugging macro. */
 #if 0
 FILE *lndebug_fp = NULL;
 #define lndebug(...)                                                                                                   \
-do {                                                                                                               \
-	if (lndebug_fp == NULL) {                                                                                      \
-		lndebug_fp = fopen("/tmp/lndebug.txt", "a");                                                               \
-	}                                                                                                              \
-	fprintf(lndebug_fp, ", " __VA_ARGS__);                                                                         \
-	fflush(lndebug_fp);                                                                                            \
-} while (0)
+	do {                                                                                                               \
+		if (lndebug_fp == NULL) {                                                                                      \
+			lndebug_fp = fopen("/tmp/lndebug.txt", "a");                                                               \
+		}                                                                                                              \
+		fprintf(lndebug_fp, ", " __VA_ARGS__);                                                                         \
+		fflush(lndebug_fp);                                                                                            \
+	} while (0)
 #else
 #define lndebug(fmt, ...)
 #endif
@@ -42,6 +42,7 @@ struct searchMatch {
 class Linenoise {
 public:
 	Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt);
+
 public:
 	int Edit();
 
@@ -84,7 +85,6 @@ public:
 	void SearchPrev();
 	void SearchNext();
 
-
 	char Search(char c);
 
 	void RefreshMultiLine();
@@ -95,13 +95,12 @@ public:
 	size_t PrevChar() const;
 	size_t NextChar() const;
 
-
 	void NextPosition(const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) const;
 	void PositionToColAndRow(size_t target_pos, int &out_row, int &out_col, int &rows, int &cols) const;
 	size_t ColAndRowToPosition(int target_row, int target_col) const;
 
-	string AddContinuationMarkers(const char *buf, size_t len, int plen,
-												  int cursor_row, vector<highlightToken> &tokens) const;
+	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
+	                              vector<highlightToken> &tokens) const;
 
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);

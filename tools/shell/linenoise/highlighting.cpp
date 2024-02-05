@@ -20,22 +20,14 @@ struct Color {
 	const char *color_name;
 	const char *highlight;
 };
-static Color terminal_colors[] = {{"red",           "\033[31m"},
-								  {"green",         "\033[32m"},
-								  {"yellow",        "\033[33m"},
-								  {"blue",          "\033[34m"},
-								  {"magenta",       "\033[35m"},
-								  {"cyan",          "\033[36m"},
-								  {"white",         "\033[37m"},
-								  {"brightblack",   "\033[90m"},
-								  {"brightred",     "\033[91m"},
-								  {"brightgreen",   "\033[92m"},
-								  {"brightyellow",  "\033[93m"},
-								  {"brightblue",    "\033[94m"},
-								  {"brightmagenta", "\033[95m"},
-								  {"brightcyan",    "\033[96m"},
-								  {"brightwhite",   "\033[97m"},
-								  {nullptr,         nullptr}};
+static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033[32m"},
+                                  {"yellow", "\033[33m"},        {"blue", "\033[34m"},
+                                  {"magenta", "\033[35m"},       {"cyan", "\033[36m"},
+                                  {"white", "\033[37m"},         {"brightblack", "\033[90m"},
+                                  {"brightred", "\033[91m"},     {"brightgreen", "\033[92m"},
+                                  {"brightyellow", "\033[93m"},  {"brightblue", "\033[94m"},
+                                  {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
+                                  {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
 static std::string bold = "\033[1m";
 static std::string underline = "\033[4m";
 static std::string keyword = "\033[32m";
@@ -75,20 +67,20 @@ void Highlighting::SetConstant(const char *color) {
 
 static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 	switch (token_type) {
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
-			return tokenType::TOKEN_IDENTIFIER;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-			return tokenType::TOKEN_NUMERIC_CONSTANT;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			return tokenType::TOKEN_STRING_CONSTANT;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
-			return tokenType::TOKEN_OPERATOR;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
-			return tokenType::TOKEN_KEYWORD;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
-			return tokenType::TOKEN_COMMENT;
-		default:
-			throw duckdb::InternalException("Unrecognized token type");
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+		return tokenType::TOKEN_IDENTIFIER;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+		return tokenType::TOKEN_NUMERIC_CONSTANT;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+		return tokenType::TOKEN_STRING_CONSTANT;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+		return tokenType::TOKEN_OPERATOR;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+		return tokenType::TOKEN_KEYWORD;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+		return tokenType::TOKEN_COMMENT;
+	default:
+		throw duckdb::InternalException("Unrecognized token type");
 	}
 }
 
@@ -97,7 +89,7 @@ vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, searchMatch
 	auto parseTokens = duckdb::Parser::Tokenize(sql);
 	vector<highlightToken> tokens;
 
-	for (auto &token: parseTokens) {
+	for (auto &token : parseTokens) {
 		highlightToken new_token;
 		new_token.type = convertToken(token.type);
 		new_token.start = token.start;
@@ -162,7 +154,7 @@ vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, searchMatch
 }
 
 string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
-						  const vector<highlightToken> &tokens) {
+                                   const vector<highlightToken> &tokens) {
 	std::stringstream ss;
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
@@ -182,25 +174,23 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 			ss << underline;
 		}
 		switch (token.type) {
-			case tokenType::TOKEN_KEYWORD:
-			case tokenType::TOKEN_CONTINUATION_SELECTED:
-				ss << keyword << text << reset;
-				break;
-			case tokenType::TOKEN_NUMERIC_CONSTANT:
-			case tokenType::TOKEN_STRING_CONSTANT:
-			case tokenType::TOKEN_CONTINUATION:
-				ss << constant << text << reset;
-				break;
-			default:
-				ss << text;
-				if (token.search_match) {
-					ss << reset;
-				}
+		case tokenType::TOKEN_KEYWORD:
+		case tokenType::TOKEN_CONTINUATION_SELECTED:
+			ss << keyword << text << reset;
+			break;
+		case tokenType::TOKEN_NUMERIC_CONSTANT:
+		case tokenType::TOKEN_STRING_CONSTANT:
+		case tokenType::TOKEN_CONTINUATION:
+			ss << constant << text << reset;
+			break;
+		default:
+			ss << text;
+			if (token.search_match) {
+				ss << reset;
+			}
 		}
 	}
 	return ss.str();
 }
 
-}
-
-
+} // namespace duckdb

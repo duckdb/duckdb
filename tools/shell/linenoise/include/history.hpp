@@ -23,7 +23,6 @@ public:
 	static int SetMaxLength(idx_t len);
 	static int Save(const char *filename);
 	static int Load(const char *filename);
-
-	};
+};
 
 } // namespace duckdb

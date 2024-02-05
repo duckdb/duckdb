@@ -12,9 +12,8 @@ static idx_t history_len = 0;
 static char **history = NULL;
 static char *history_file = NULL;
 
-
 /* Free the history, but does not reset it. Only used when we have to
-* exit() to avoid memory leaks are reported by valgrind & co. */
+ * exit() to avoid memory leaks are reported by valgrind & co. */
 void History::Free() {
 	if (history) {
 		int j;
@@ -31,7 +30,7 @@ idx_t History::GetLength() {
 
 const char *History::GetEntry(idx_t index) {
 	if (!history || index >= history_len) {
-		//FIXME: print debug message
+		// FIXME: print debug message
 		return "";
 	}
 	return history[index];
@@ -39,7 +38,7 @@ const char *History::GetEntry(idx_t index) {
 
 void History::Overwrite(idx_t index, const char *new_entry) {
 	if (!history || index >= history_len) {
-		//FIXME: print debug message
+		// FIXME: print debug message
 		return;
 	}
 
@@ -61,7 +60,7 @@ int History::Add(const char *line) {
 
 	/* Initialization on first call. */
 	if (history == NULL) {
-		history = (char **) malloc(sizeof(char *) * history_max_len);
+		history = (char **)malloc(sizeof(char *) * history_max_len);
 		if (history == NULL) {
 			return 0;
 		}
@@ -117,7 +116,7 @@ int History::SetMaxLength(idx_t len) {
 	if (history) {
 		int tocopy = history_len;
 
-		new_entry = (char **) malloc(sizeof(char *) * len);
+		new_entry = (char **)malloc(sizeof(char *) * len);
 		if (new_entry == NULL) {
 			return 0;
 		}
@@ -156,7 +155,7 @@ int History::Save(const char *filename) {
 	chmod(filename, S_IRUSR | S_IWUSR);
 	for (j = 0; j < history_len; j++) {
 		fprintf(fp, "%s\n", history[j]);
-		}
+	}
 	fclose(fp);
 	return 0;
 }
@@ -205,4 +204,4 @@ int History::Load(const char *filename) {
 	return 0;
 }
 
-}
+} // namespace duckdb

@@ -152,13 +152,13 @@ void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 }
 
 /* Register a hits function to be called to show hits to the user at the
-* right of the prompt. */
+ * right of the prompt. */
 void Linenoise::SetHintsCallback(linenoiseHintsCallback *fn) {
 	hintsCallback = fn;
 }
 
 /* Register a function to free the hints returned by the hints callback
-* registered with linenoiseSetHintsCallback(). */
+ * registered with linenoiseSetHintsCallback(). */
 void Linenoise::SetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
 	freeHintsCallback = fn;
 }
@@ -172,11 +172,11 @@ linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
 }
 
 /* This is an helper function for linenoiseEdit() and is called when the
-* user types the <tab> key in order to complete the string currently in the
-* input.
-*
-* The state of the editing is encapsulated into the pointed linenoiseState
-* structure as described in the structure definition. */
+ * user types the <tab> key in order to complete the string currently in the
+ * input.
+ *
+ * The state of the editing is encapsulated into the pointed linenoiseState
+ * structure as described in the structure definition. */
 int Linenoise::CompleteLine() {
 	linenoiseCompletions lc = {0, NULL};
 	int nread, nwritten;
@@ -210,27 +210,27 @@ int Linenoise::CompleteLine() {
 			}
 
 			switch (c) {
-				case 9: /* tab */
-					i = (i + 1) % (lc.len + 1);
-					if (i == lc.len) {
-						Terminal::Beep();
-					}
-					break;
-				case 27: /* escape */
-					/* Re-show original buffer */
-					if (i < lc.len) {
-						RefreshLine();
-					}
-					stop = 1;
-					break;
-				default:
-					/* Update buffer and return */
-					if (i < lc.len) {
-						nwritten = snprintf(buf, buflen, "%s", lc.cvec[i]);
-						len = pos = nwritten;
-					}
-					stop = 1;
-					break;
+			case 9: /* tab */
+				i = (i + 1) % (lc.len + 1);
+				if (i == lc.len) {
+					Terminal::Beep();
+				}
+				break;
+			case 27: /* escape */
+				/* Re-show original buffer */
+				if (i < lc.len) {
+					RefreshLine();
+				}
+				stop = 1;
+				break;
+			default:
+				/* Update buffer and return */
+				if (i < lc.len) {
+					nwritten = snprintf(buf, buflen, "%s", lc.cvec[i]);
+					len = pos = nwritten;
+				}
+				stop = 1;
+				break;
 			}
 		}
 	}
@@ -306,8 +306,8 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 			}
 		}
 		*out_error = "Expected usage: .keyword "
-					 "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-					 "brightblue|brightmagenta|brightcyan|brightwhite]";
+		             "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
+		             "brightblue|brightmagenta|brightcyan|brightwhite]";
 		return 1;
 	} else if (strcmp(azArg[0], "constant") == 0) {
 		if (nArg == 2) {
@@ -318,8 +318,8 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 			}
 		}
 		*out_error = "Expected usage: .constant "
-					 "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
-					 "brightblue|brightmagenta|brightcyan|brightwhite]";
+		             "[red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen|brightyellow|"
+		             "brightblue|brightmagenta|brightcyan|brightwhite]";
 		return 1;
 	} else if (strcmp(azArg[0], "keywordcode") == 0) {
 		if (nArg == 2) {
@@ -366,7 +366,7 @@ void Linenoise::NextPosition(const char *buf, size_t len, size_t &cpos, int &row
 		char_render_width = 1;
 		cpos++;
 	} else {
-		char_render_width = (int) duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
+		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
 		cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 	}
 	if (cols + char_render_width > ws.ws_col) {
@@ -431,8 +431,8 @@ size_t Linenoise::ColAndRowToPosition(int target_row, int target_col) const {
 }
 
 /* Insert the character 'c' at cursor current position.
-*
-* On error writing to the terminal -1 is returned, otherwise 0. */
+ *
+ * On error writing to the terminal -1 is returned, otherwise 0. */
 void Linenoise::InsertCharacter(char c) {
 	if (len < buflen) {
 		if (len == pos) {
@@ -585,7 +585,7 @@ void Linenoise::EditMoveEnd() {
 }
 
 /* Substitute the currently edited line with the next or previous history
-* entry as specified by 'dir'. */
+ * entry as specified by 'dir'. */
 #define LINENOISE_HISTORY_NEXT 0
 #define LINENOISE_HISTORY_PREV 1
 
@@ -615,7 +615,7 @@ void Linenoise::EditHistoryNext(int dir) {
 }
 
 /* Delete the character at the right of the cursor without altering the cursor
-* position. Basically this is what happens with the "Delete" keyboard key. */
+ * position. Basically this is what happens with the "Delete" keyboard key. */
 void Linenoise::EditDelete() {
 	if (len > 0 && pos < len) {
 		size_t new_pos = NextChar();
@@ -641,7 +641,7 @@ void Linenoise::EditBackspace() {
 }
 
 /* Delete the previous word, maintaining the cursor at the start of the
-* current word. */
+ * current word. */
 void Linenoise::EditDeletePrevWord() {
 	size_t old_pos = pos;
 	size_t diff;
@@ -734,135 +734,135 @@ char Linenoise::Search(char c) {
 	char seq[64];
 
 	switch (c) {
-		case 10:
-		case ENTER: /* enter */
-			// accept search and run
-			return AcceptSearch(ENTER);
-		case CTRL_R:
-			// move to the next match index
-			SearchNext();
+	case 10:
+	case ENTER: /* enter */
+		// accept search and run
+		return AcceptSearch(ENTER);
+	case CTRL_R:
+		// move to the next match index
+		SearchNext();
+		break;
+	case ESC: /* escape sequence */
+		/* Read the next two bytes representing the escape sequence.
+		 * Use two calls to handle slow terminals returning the two
+		 * chars at different times. */
+		// note: in search mode we ignore almost all special commands
+		if (read(ifd, seq, 1) == -1)
 			break;
-		case ESC: /* escape sequence */
-			/* Read the next two bytes representing the escape sequence.
-			 * Use two calls to handle slow terminals returning the two
-			 * chars at different times. */
-			// note: in search mode we ignore almost all special commands
-			if (read(ifd, seq, 1) == -1)
-				break;
-			if (seq[0] == ESC) {
-				// double escape accepts search without any additional command
-				return AcceptSearch(0);
-			}
-			if (seq[0] == 'b' || seq[0] == 'f') {
-				break;
-			}
-			if (read(ifd, seq + 1, 1) == -1)
-				break;
+		if (seq[0] == ESC) {
+			// double escape accepts search without any additional command
+			return AcceptSearch(0);
+		}
+		if (seq[0] == 'b' || seq[0] == 'f') {
+			break;
+		}
+		if (read(ifd, seq + 1, 1) == -1)
+			break;
 
-			/* ESC [ sequences. */
-			if (seq[0] == '[') {
-				if (seq[1] >= '0' && seq[1] <= '9') {
-					/* Extended escape, read additional byte. */
-					if (read(ifd, seq + 2, 1) == -1)
-						break;
-					if (seq[2] == '~') {
-						switch (seq[1]) {
-							case '1':
-								return AcceptSearch(CTRL_A);
-							case '4':
-							case '8':
-								return AcceptSearch(CTRL_E);
-							default:
-								break;
-						}
-					} else if (seq[2] == ';') {
-						// read 2 extra bytes
-						if (read(ifd, seq + 3, 2) == -1)
-							break;
-					}
-				} else {
+		/* ESC [ sequences. */
+		if (seq[0] == '[') {
+			if (seq[1] >= '0' && seq[1] <= '9') {
+				/* Extended escape, read additional byte. */
+				if (read(ifd, seq + 2, 1) == -1)
+					break;
+				if (seq[2] == '~') {
 					switch (seq[1]) {
-						case 'A': /* Up */
-							SearchPrev();
-							break;
-						case 'B': /* Down */
-							SearchNext();
-							break;
-						case 'D': /* Left */
-							return AcceptSearch(CTRL_B);
-						case 'C': /* Right */
-							return AcceptSearch(CTRL_F);
-						case 'H': /* Home */
-							return AcceptSearch(CTRL_A);
-						case 'F': /* End*/
-							return AcceptSearch(CTRL_E);
-						default:
-							break;
-					}
-				}
-			}
-				/* ESC O sequences. */
-			else if (seq[0] == 'O') {
-				switch (seq[1]) {
-					case 'H': /* Home */
+					case '1':
 						return AcceptSearch(CTRL_A);
-					case 'F': /* End*/
+					case '4':
+					case '8':
 						return AcceptSearch(CTRL_E);
 					default:
 						break;
+					}
+				} else if (seq[2] == ';') {
+					// read 2 extra bytes
+					if (read(ifd, seq + 3, 2) == -1)
+						break;
+				}
+			} else {
+				switch (seq[1]) {
+				case 'A': /* Up */
+					SearchPrev();
+					break;
+				case 'B': /* Down */
+					SearchNext();
+					break;
+				case 'D': /* Left */
+					return AcceptSearch(CTRL_B);
+				case 'C': /* Right */
+					return AcceptSearch(CTRL_F);
+				case 'H': /* Home */
+					return AcceptSearch(CTRL_A);
+				case 'F': /* End*/
+					return AcceptSearch(CTRL_E);
+				default:
+					break;
 				}
 			}
-			break;
-		case CTRL_A: // accept search, move to start of line
-			return AcceptSearch(CTRL_A);
-		case '\t':
-		case CTRL_E: // accept search - move to end of line
-			return AcceptSearch(CTRL_E);
-		case CTRL_B: // accept search - move cursor left
-			return AcceptSearch(CTRL_B);
-		case CTRL_F: // accept search - move cursor right
-			return AcceptSearch(CTRL_F);
-		case CTRL_T: // accept search: swap character
-			return AcceptSearch(CTRL_T);
-		case CTRL_U: // accept search, clear buffer
-			return AcceptSearch(CTRL_U);
-		case CTRL_K: // accept search, clear after cursor
-			return AcceptSearch(CTRL_K);
-		case CTRL_D: // accept search, delete a character
-			return AcceptSearch(CTRL_D);
-		case CTRL_L:
-			linenoiseClearScreen();
-			break;
-		case CTRL_P:
-			SearchPrev();
-			break;
-		case CTRL_N:
-			SearchNext();
-			break;
-		case CTRL_C:
-		case CTRL_G:
-			// abort search
-			CancelSearch();
-			return 0;
-		case BACKSPACE: /* backspace */
-		case 8:         /* ctrl-h */
-		case CTRL_W:    /* ctrl-w */
-			// remove trailing UTF-8 bytes (if any)
-			while (!search_buf.empty() && ((search_buf.back() & 0xc0) == 0x80)) {
-				search_buf.pop_back();
+		}
+		/* ESC O sequences. */
+		else if (seq[0] == 'O') {
+			switch (seq[1]) {
+			case 'H': /* Home */
+				return AcceptSearch(CTRL_A);
+			case 'F': /* End*/
+				return AcceptSearch(CTRL_E);
+			default:
+				break;
 			}
-			// finally remove the first UTF-8 byte
-			if (!search_buf.empty()) {
-				search_buf.pop_back();
-			}
-			PerformSearch();
-			break;
-		default:
-			// add input to search buffer
-			search_buf += c;
-			// perform the search
-			PerformSearch();
-			break;
+		}
+		break;
+	case CTRL_A: // accept search, move to start of line
+		return AcceptSearch(CTRL_A);
+	case '\t':
+	case CTRL_E: // accept search - move to end of line
+		return AcceptSearch(CTRL_E);
+	case CTRL_B: // accept search - move cursor left
+		return AcceptSearch(CTRL_B);
+	case CTRL_F: // accept search - move cursor right
+		return AcceptSearch(CTRL_F);
+	case CTRL_T: // accept search: swap character
+		return AcceptSearch(CTRL_T);
+	case CTRL_U: // accept search, clear buffer
+		return AcceptSearch(CTRL_U);
+	case CTRL_K: // accept search, clear after cursor
+		return AcceptSearch(CTRL_K);
+	case CTRL_D: // accept search, delete a character
+		return AcceptSearch(CTRL_D);
+	case CTRL_L:
+		linenoiseClearScreen();
+		break;
+	case CTRL_P:
+		SearchPrev();
+		break;
+	case CTRL_N:
+		SearchNext();
+		break;
+	case CTRL_C:
+	case CTRL_G:
+		// abort search
+		CancelSearch();
+		return 0;
+	case BACKSPACE: /* backspace */
+	case 8:         /* ctrl-h */
+	case CTRL_W:    /* ctrl-w */
+		// remove trailing UTF-8 bytes (if any)
+		while (!search_buf.empty() && ((search_buf.back() & 0xc0) == 0x80)) {
+			search_buf.pop_back();
+		}
+		// finally remove the first UTF-8 byte
+		if (!search_buf.empty()) {
+			search_buf.pop_back();
+		}
+		PerformSearch();
+		break;
+	default:
+		// add input to search buffer
+		search_buf += c;
+		// perform the search
+		PerformSearch();
+		break;
 	}
 	RefreshSearch();
 	return 0;
@@ -870,7 +870,7 @@ char Linenoise::Search(char c) {
 
 bool Linenoise::AllWhitespace(const char *z) {
 	for (; *z; z++) {
-		if (isspace((unsigned char) z[0]))
+		if (isspace((unsigned char)z[0]))
 			continue;
 		if (*z == '/' && z[1] == '*') {
 			z += 2;
@@ -898,8 +898,8 @@ bool Linenoise::AllWhitespace(const char *z) {
 	return true;
 }
 
-Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt) :
-	ifd(stdin_fd), ofd(stdout_fd), buf(buf), buflen(buflen), prompt(prompt), plen(strlen(prompt)) {
+Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt)
+    : ifd(stdin_fd), ofd(stdout_fd), buf(buf), buflen(buflen), prompt(prompt), plen(strlen(prompt)) {
 	pos = 0;
 	old_cursor_rows = 1;
 	len = 0;
@@ -918,13 +918,13 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 }
 
 /* This function is the core of the line editing capability of linenoise.
-* It expects 'fd' to be already in "raw mode" so that every key pressed
-* will be returned ASAP to read().
-*
-* The resulting string is put into 'buf' when the user type enter, or
-* when ctrl+d is typed.
-*
-* The function returns the length of the current buffer. */
+ * It expects 'fd' to be already in "raw mode" so that every key pressed
+ * will be returned ASAP to read().
+ *
+ * The resulting string is put into 'buf' when the user type enter, or
+ * when ctrl+d is typed.
+ *
+ * The function returns the length of the current buffer. */
 int Linenoise::Edit() {
 	/* The latest history entry is always our current buffer, that
 	 * initially is just an empty string. */
@@ -986,262 +986,262 @@ int Linenoise::Edit() {
 			}
 		}
 
-		lndebug("%d\n", (int) c);
+		lndebug("%d\n", (int)c);
 		switch (c) {
-			case 10:
-			case ENTER: /* enter */
-				if (Terminal::IsMultiline() && len > 0) {
-					// check if this forms a complete SQL statement or not
-					buf[len] = '\0';
-					if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
-						// not a complete SQL statement yet! continuation
-						// insert "\r\n"
-						if (EditInsertMulti("\r\n")) {
-							return -1;
+		case 10:
+		case ENTER: /* enter */
+			if (Terminal::IsMultiline() && len > 0) {
+				// check if this forms a complete SQL statement or not
+				buf[len] = '\0';
+				if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
+					// not a complete SQL statement yet! continuation
+					// insert "\r\n"
+					if (EditInsertMulti("\r\n")) {
+						return -1;
+					}
+					break;
+				}
+			}
+			History::RemoveLastEntry();
+			if (Terminal::IsMultiline()) {
+				if (pos == len) {
+					// already at the end - only refresh
+					RefreshLine();
+				} else {
+					EditMoveEnd();
+				}
+			}
+			if (hintsCallback) {
+				/* Force a refresh without hints to leave the previous
+				 * line as the user typed it after a newline. */
+				linenoiseHintsCallback *hc = hintsCallback;
+				hintsCallback = NULL;
+				RefreshLine();
+				hintsCallback = hc;
+			}
+			return (int)len;
+		case CTRL_G:
+		case CTRL_C: /* ctrl-c */ {
+			if (Terminal::IsMultiline()) {
+				EditMoveEnd();
+			}
+			buf[0] = '\3';
+			// we keep track of whether or not the line was empty by writing \3 to the second position of the line
+			// this is because at a higher level we might want to know if we pressed ctrl c to clear the line
+			// or to exit the process
+			if (len > 0) {
+				buf[1] = '\3';
+				buf[2] = '\0';
+				pos = 2;
+				len = 2;
+			} else {
+				buf[1] = '\0';
+				pos = 1;
+				len = 1;
+			}
+			return (int)len;
+		}
+		case BACKSPACE: /* backspace */
+		case 8:         /* ctrl-h */
+			EditBackspace();
+			break;
+		case CTRL_D: /* ctrl-d, remove char at right of cursor, or if the
+		        line is empty, act as end-of-file. */
+			if (len > 0) {
+				EditDelete();
+			} else {
+				History::RemoveLastEntry();
+				return -1;
+			}
+			break;
+		case CTRL_Z: /* ctrl-z, suspends shell */
+			Terminal::DisableRawMode();
+			raise(SIGTSTP);
+			Terminal::EnableRawMode();
+			RefreshLine();
+			break;
+		case CTRL_T: /* ctrl-t, swaps current character with previous. */
+			if (pos > 0 && pos < len) {
+				char temp_buffer[128];
+				int prev_pos = PrevChar();
+				int next_pos = NextChar();
+				int prev_char_size = pos - prev_pos;
+				int cur_char_size = next_pos - pos;
+				memcpy(temp_buffer, buf + prev_pos, prev_char_size);
+				memmove(buf + prev_pos, buf + pos, cur_char_size);
+				memcpy(buf + prev_pos + cur_char_size, temp_buffer, prev_char_size);
+				pos = next_pos;
+				RefreshLine();
+			}
+			break;
+		case CTRL_B: /* ctrl-b */
+			EditMoveLeft();
+			break;
+		case CTRL_F: /* ctrl-f */
+			EditMoveRight();
+			break;
+		case CTRL_P: /* ctrl-p */
+			EditHistoryNext(LINENOISE_HISTORY_PREV);
+			break;
+		case CTRL_N: /* ctrl-n */
+			EditHistoryNext(LINENOISE_HISTORY_NEXT);
+			break;
+		case CTRL_R: /* ctrl-r */ {
+			// initiate reverse search
+			search = true;
+			search_buf = std::string();
+			search_matches.clear();
+			search_index = 0;
+			RefreshSearch();
+			break;
+		}
+		case ESC: /* escape sequence */
+			/* Read the next two bytes representing the escape sequence.
+			 * Use two calls to handle slow terminals returning the two
+			 * chars at different times. */
+			if (read(ifd, seq, 1) == -1)
+				break;
+			if (seq[0] == 'b') {
+				EditMoveWordLeft();
+				break;
+			} else if (seq[0] == 'f') {
+				EditMoveWordRight();
+				break;
+			}
+			// lndebug("seq0: %d\n", seq[0]);
+			if (read(ifd, seq + 1, 1) == -1) {
+				break;
+			}
+			// lndebug("seq1: %d\n", seq[1]);
+
+			/* ESC [ sequences. */
+			if (seq[0] == '[') {
+				if (seq[1] >= '0' && seq[1] <= '9') {
+					/* Extended escape, read additional byte. */
+					if (read(ifd, seq + 2, 1) == -1)
+						break;
+					if (seq[2] == '~') {
+						switch (seq[1]) {
+						case '1':
+							EditMoveHome();
+							break;
+						case '3': /* Delete key. */
+							EditDelete();
+							break;
+						case '4':
+							EditMoveEnd();
+							break;
+						case '8':
+							EditMoveEnd();
+							break;
+						default:
+							lndebug("unrecognized escape sequence (~) %d", seq[1]);
+							break;
 						}
+					} else if (seq[2] == ';') {
+						// read 2 extra bytes
+						if (read(ifd, seq + 3, 2) == -1)
+							break;
+						if (memcmp(seq, "[1;5C", 5) == 0) {
+							// [1;5C: move word right
+							EditMoveWordRight();
+						} else if (memcmp(seq, "[1;5D", 5) == 0) {
+							// [1;5D: move word left
+							EditMoveWordLeft();
+						} else {
+							lndebug("unrecognized escape sequence (;) %d", seq[1]);
+						}
+					} else if (seq[1] == '5' && seq[2] == 'C') {
+						EditMoveWordRight();
+					} else if (seq[1] == '5' && seq[2] == 'D') {
+						EditMoveWordLeft();
+					}
+				} else {
+					switch (seq[1]) {
+					case 'A': /* Up */
+						if (EditMoveRowUp()) {
+							break;
+						}
+						EditHistoryNext(LINENOISE_HISTORY_PREV);
+						break;
+					case 'B': /* Down */
+						if (EditMoveRowDown()) {
+							break;
+						}
+						EditHistoryNext(LINENOISE_HISTORY_NEXT);
+						break;
+					case 'C': /* Right */
+						EditMoveRight();
+						break;
+					case 'D': /* Left */
+						EditMoveLeft();
+						break;
+					case 'H': /* Home */
+						EditMoveHome();
+						break;
+					case 'F': /* End*/
+						EditMoveEnd();
+						break;
+					default:
+						lndebug("unrecognized escape sequence (seq[1]) %d", seq[1]);
 						break;
 					}
 				}
-				History::RemoveLastEntry();
-				if (Terminal::IsMultiline()) {
-					if (pos == len) {
-						// already at the end - only refresh
-						RefreshLine();
-					} else {
-						EditMoveEnd();
-					}
-				}
-				if (hintsCallback) {
-					/* Force a refresh without hints to leave the previous
-					 * line as the user typed it after a newline. */
-					linenoiseHintsCallback *hc = hintsCallback;
-					hintsCallback = NULL;
-					RefreshLine();
-					hintsCallback = hc;
-				}
-				return (int) len;
-			case CTRL_G:
-			case CTRL_C: /* ctrl-c */ {
-				if (Terminal::IsMultiline()) {
+			}
+			/* ESC O sequences. */
+			else if (seq[0] == 'O') {
+				switch (seq[1]) {
+				case 'H': /* Home */
+					EditMoveHome();
+					break;
+				case 'F': /* End*/
 					EditMoveEnd();
-				}
-				buf[0] = '\3';
-				// we keep track of whether or not the line was empty by writing \3 to the second position of the line
-				// this is because at a higher level we might want to know if we pressed ctrl c to clear the line
-				// or to exit the process
-				if (len > 0) {
-					buf[1] = '\3';
-					buf[2] = '\0';
-					pos = 2;
-					len = 2;
-				} else {
-					buf[1] = '\0';
-					pos = 1;
-					len = 1;
-				}
-				return (int) len;
-			}
-			case BACKSPACE: /* backspace */
-			case 8:         /* ctrl-h */
-				EditBackspace();
-				break;
-			case CTRL_D: /* ctrl-d, remove char at right of cursor, or if the
-					line is empty, act as end-of-file. */
-				if (len > 0) {
-					EditDelete();
-				} else {
-					History::RemoveLastEntry();
-					return -1;
-				}
-				break;
-			case CTRL_Z: /* ctrl-z, suspends shell */
-				Terminal::DisableRawMode();
-				raise(SIGTSTP);
-				Terminal::EnableRawMode();
-				RefreshLine();
-				break;
-			case CTRL_T: /* ctrl-t, swaps current character with previous. */
-				if (pos > 0 && pos < len) {
-					char temp_buffer[128];
-					int prev_pos = PrevChar();
-					int next_pos = NextChar();
-					int prev_char_size = pos - prev_pos;
-					int cur_char_size = next_pos - pos;
-					memcpy(temp_buffer, buf + prev_pos, prev_char_size);
-					memmove(buf + prev_pos, buf + pos, cur_char_size);
-					memcpy(buf + prev_pos + cur_char_size, temp_buffer, prev_char_size);
-					pos = next_pos;
-					RefreshLine();
-				}
-				break;
-			case CTRL_B: /* ctrl-b */
-				EditMoveLeft();
-				break;
-			case CTRL_F: /* ctrl-f */
-				EditMoveRight();
-				break;
-			case CTRL_P: /* ctrl-p */
-				EditHistoryNext(LINENOISE_HISTORY_PREV);
-				break;
-			case CTRL_N: /* ctrl-n */
-				EditHistoryNext(LINENOISE_HISTORY_NEXT);
-				break;
-			case CTRL_R: /* ctrl-r */ {
-				// initiate reverse search
-				search = true;
-				search_buf = std::string();
-				search_matches.clear();
-				search_index = 0;
-				RefreshSearch();
-				break;
-			}
-			case ESC: /* escape sequence */
-				/* Read the next two bytes representing the escape sequence.
-				 * Use two calls to handle slow terminals returning the two
-				 * chars at different times. */
-				if (read(ifd, seq, 1) == -1)
 					break;
-				if (seq[0] == 'b') {
-					EditMoveWordLeft();
-					break;
-				} else if (seq[0] == 'f') {
+				case 'c':
 					EditMoveWordRight();
 					break;
-				}
-				// lndebug("seq0: %d\n", seq[0]);
-				if (read(ifd, seq + 1, 1) == -1) {
+				case 'd':
+					EditMoveWordLeft();
+					break;
+				default:
+					lndebug("unrecognized escape sequence (O) %d", seq[1]);
 					break;
 				}
-				// lndebug("seq1: %d\n", seq[1]);
-
-				/* ESC [ sequences. */
-				if (seq[0] == '[') {
-					if (seq[1] >= '0' && seq[1] <= '9') {
-						/* Extended escape, read additional byte. */
-						if (read(ifd, seq + 2, 1) == -1)
-							break;
-						if (seq[2] == '~') {
-							switch (seq[1]) {
-								case '1':
-									EditMoveHome();
-									break;
-								case '3': /* Delete key. */
-									EditDelete();
-									break;
-								case '4':
-									EditMoveEnd();
-									break;
-								case '8':
-									EditMoveEnd();
-									break;
-								default:
-									lndebug("unrecognized escape sequence (~) %d", seq[1]);
-									break;
-							}
-						} else if (seq[2] == ';') {
-							// read 2 extra bytes
-							if (read(ifd, seq + 3, 2) == -1)
-								break;
-							if (memcmp(seq, "[1;5C", 5) == 0) {
-								// [1;5C: move word right
-								EditMoveWordRight();
-							} else if (memcmp(seq, "[1;5D", 5) == 0) {
-								// [1;5D: move word left
-								EditMoveWordLeft();
-							} else {
-								lndebug("unrecognized escape sequence (;) %d", seq[1]);
-							}
-						} else if (seq[1] == '5' && seq[2] == 'C') {
-							EditMoveWordRight();
-						} else if (seq[1] == '5' && seq[2] == 'D') {
-							EditMoveWordLeft();
-						}
-					} else {
-						switch (seq[1]) {
-							case 'A': /* Up */
-								if (EditMoveRowUp()) {
-									break;
-								}
-								EditHistoryNext(LINENOISE_HISTORY_PREV);
-								break;
-							case 'B': /* Down */
-								if (EditMoveRowDown()) {
-									break;
-								}
-								EditHistoryNext(LINENOISE_HISTORY_NEXT);
-								break;
-							case 'C': /* Right */
-								EditMoveRight();
-								break;
-							case 'D': /* Left */
-								EditMoveLeft();
-								break;
-							case 'H': /* Home */
-								EditMoveHome();
-								break;
-							case 'F': /* End*/
-								EditMoveEnd();
-								break;
-							default:
-								lndebug("unrecognized escape sequence (seq[1]) %d", seq[1]);
-								break;
-						}
-					}
-				}
-					/* ESC O sequences. */
-				else if (seq[0] == 'O') {
-					switch (seq[1]) {
-						case 'H': /* Home */
-							EditMoveHome();
-							break;
-						case 'F': /* End*/
-							EditMoveEnd();
-							break;
-						case 'c':
-							EditMoveWordRight();
-							break;
-						case 'd':
-							EditMoveWordLeft();
-							break;
-						default:
-							lndebug("unrecognized escape sequence (O) %d", seq[1]);
-							break;
-					}
-				}
-				break;
-			case CTRL_U: /* Ctrl+u, delete the whole line. */
-				buf[0] = '\0';
-				pos = len = 0;
-				RefreshLine();
-				break;
-			case CTRL_K: /* Ctrl+k, delete from current to end of line. */
-				buf[pos] = '\0';
-				len = pos;
-				RefreshLine();
-				break;
-			case CTRL_A: /* Ctrl+a, go to the start of the line */
-				EditMoveHome();
-				break;
-			case CTRL_E: /* ctrl+e, go to the end of the line */
-				EditMoveEnd();
-				break;
-			case CTRL_L: /* ctrl+l, clear screen */
-				linenoiseClearScreen();
-				clear_screen = true;
-				RefreshLine();
-				break;
-			case CTRL_W: /* ctrl+w, delete previous word */
-				EditDeletePrevWord();
-				break;
-			default: {
-				if (EditInsert(c)) {
-					return -1;
-				}
-				break;
 			}
+			break;
+		case CTRL_U: /* Ctrl+u, delete the whole line. */
+			buf[0] = '\0';
+			pos = len = 0;
+			RefreshLine();
+			break;
+		case CTRL_K: /* Ctrl+k, delete from current to end of line. */
+			buf[pos] = '\0';
+			len = pos;
+			RefreshLine();
+			break;
+		case CTRL_A: /* Ctrl+a, go to the start of the line */
+			EditMoveHome();
+			break;
+		case CTRL_E: /* ctrl+e, go to the end of the line */
+			EditMoveEnd();
+			break;
+		case CTRL_L: /* ctrl+l, clear screen */
+			linenoiseClearScreen();
+			clear_screen = true;
+			RefreshLine();
+			break;
+		case CTRL_W: /* ctrl+w, delete previous word */
+			EditDeletePrevWord();
+			break;
+		default: {
+			if (EditInsert(c)) {
+				return -1;
+			}
+			break;
+		}
 		}
 	}
 	return len;
 }
 
-}
+} // namespace duckdb
