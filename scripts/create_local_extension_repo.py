@@ -28,7 +28,7 @@ if os.name == 'nt':
 
 with open(duckdb_platform_out, 'r') as f:
     lines = f.readlines()
-    duckdb_platform = lines[0][:-1]
+    duckdb_platform = lines[0]
 
 # Create destination path
 dest_path = os.path.join(dst_path, duckdb_version, duckdb_platform)
