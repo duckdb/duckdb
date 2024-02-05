@@ -6,7 +6,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/common/printer.hpp"
-
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include <algorithm>
 
 namespace duckdb {

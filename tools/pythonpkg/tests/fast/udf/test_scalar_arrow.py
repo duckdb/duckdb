@@ -101,7 +101,7 @@ class TestPyArrowUDF(object):
 
         con = duckdb.connect()
         con.create_function('will_crash', returns_none, [BIGINT], BIGINT, type='arrow')
-        with pytest.raises(duckdb.Error, match="""Invalid Error: TypeError: 'NoneType' object is not iterable"""):
+        with pytest.raises(duckdb.Error, match="""TypeError: 'NoneType' object is not iterable"""):
             res = con.sql("""select will_crash(5)""").fetchall()
 
     def test_empty_result(self):

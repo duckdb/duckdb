@@ -86,7 +86,7 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *hstmt) {
 			}
 		} catch (duckdb::Exception &e) {
 			// TODO this is quite dirty, we should have separate error holder
-			hstmt->res->SetError(PreservedError(e));
+			hstmt->res->SetError(ErrorData(e));
 			hstmt->open = false;
 			return SetDiagnosticRecord(hstmt, SQL_ERROR, "FetchNext", hstmt->res->GetError(),
 			                           duckdb::SQLStateType::ST_HY000, hstmt->dbc->GetDataSourceName());

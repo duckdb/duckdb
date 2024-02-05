@@ -110,8 +110,8 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 		// not pinned yet: pin it
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
-		auto entry = handles.insert(make_pair(primary_id, std::move(handle)));
-		return entry.first->second;
+		auto pinned_entry = handles.insert(make_pair(primary_id, std::move(handle)));
+		return pinned_entry.first->second;
 	} else {
 		// already pinned: use the pinned handle
 		return entry->second;
@@ -322,7 +322,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block,
                                                        int32_t offset) {
 	D_ASSERT(block != INVALID_BLOCK);
-	D_ASSERT(offset < Storage::BLOCK_SIZE);
+	D_ASSERT(offset < int32_t(Storage::BLOCK_SIZE));
 
 	auto &block_manager = segment.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;
@@ -403,7 +403,7 @@ void UncompressedStringStorage::ReadStringMarker(data_ptr_t target, block_id_t &
 
 string_location_t UncompressedStringStorage::FetchStringLocation(StringDictionaryContainer dict, data_ptr_t baseptr,
                                                                  int32_t dict_offset) {
-	D_ASSERT(dict_offset >= -1 * Storage::BLOCK_SIZE && dict_offset <= Storage::BLOCK_SIZE);
+	D_ASSERT(dict_offset >= -1 * int32_t(Storage::BLOCK_SIZE) && dict_offset <= int32_t(Storage::BLOCK_SIZE));
 	if (dict_offset < 0) {
 		string_location_t result;
 		ReadStringMarker(baseptr + dict.end - (-1 * dict_offset), result.block_id, result.offset);
@@ -417,7 +417,7 @@ string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, 
                                                         Vector &result, data_ptr_t baseptr, int32_t dict_offset,
                                                         uint32_t string_length) {
 	// fetch base data
-	D_ASSERT(dict_offset <= Storage::BLOCK_SIZE);
+	D_ASSERT(dict_offset <= int32_t(Storage::BLOCK_SIZE));
 	string_location_t location = FetchStringLocation(dict, baseptr, dict_offset);
 	return FetchString(segment, dict, result, baseptr, location, string_length);
 }

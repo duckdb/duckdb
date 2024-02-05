@@ -30,7 +30,7 @@ static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function)
 }
 
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
-                                         unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+                                         unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
 	auto binder = Binder::CreateBinder(this->context, this, true);
 	unique_ptr<QueryNode> subquery_node;
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
@@ -55,7 +55,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
                                          vector<unique_ptr<ParsedExpression>> &expressions,
                                          vector<LogicalType> &arguments, vector<Value> &parameters,
                                          named_parameter_map_t &named_parameters,
-                                         unique_ptr<BoundSubqueryRef> &subquery, string &error) {
+                                         unique_ptr<BoundSubqueryRef> &subquery, ErrorData &error) {
 	if (IsTableInTableOutFunction(table_function)) {
 		// special case binding for table-in table-out function
 		arguments.emplace_back(LogicalTypeId::TABLE);
@@ -88,7 +88,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			// this separate subquery binding path is only used by python_map
 			// FIXME: this should be unified with `BindTableInTableOutFunction` above
 			if (seen_subquery) {
-				error = "Table function can have at most one subquery parameter ";
+				error = ErrorData("Table function can have at most one subquery parameter");
 				return false;
 			}
 			auto binder = Binder::CreateBinder(this->context, this, true);
@@ -116,7 +116,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (!named_parameters.empty()) {
-				error = "Unnamed parameters cannot come after named parameters";
+				error = ErrorData("Unnamed parameters cannot come after named parameters");
 				return false;
 			}
 			arguments.emplace_back(constant.IsNull() ? LogicalType::SQLNULL : sql_type);
@@ -204,7 +204,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
-	QueryErrorContext error_context(root_statement, ref.query_location);
+	QueryErrorContext error_context(ref.query_location);
 
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
@@ -242,17 +242,19 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	vector<Value> parameters;
 	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
-	string error;
+	ErrorData error;
 	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
 	                                 error)) {
-		throw BinderException(FormatError(ref, error));
+		error.AddQueryLocation(ref);
+		error.Throw();
 	}
 
 	// select the function based on the input parameters
 	FunctionBinder function_binder(context);
 	idx_t best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
-		throw BinderException(FormatError(ref, error));
+		error.AddQueryLocation(ref);
+		error.Throw();
 	}
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx);
 

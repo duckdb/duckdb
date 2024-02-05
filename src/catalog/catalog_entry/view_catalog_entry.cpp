@@ -18,6 +18,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->sql = info.sql;
 	this->internal = info.internal;
 	this->dependencies = info.dependencies;
+	this->comment = info.comment;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
@@ -35,6 +36,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->types = types;
 	result->dependencies = dependencies;
 	result->temporary = temporary;
+	result->comment = comment;
 	return std::move(result);
 }
 

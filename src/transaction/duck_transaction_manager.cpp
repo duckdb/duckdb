@@ -1,6 +1,7 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -166,7 +167,7 @@ bool DuckTransactionManager::CanCheckpoint(optional_ptr<DuckTransaction> current
 	return true;
 }
 
-string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
+ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	vector<ClientLockWrapper> client_locks;
 	auto lock = make_uniq<lock_guard<mutex>>(transaction_lock);
@@ -183,8 +184,8 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
 	// commit the UndoBuffer of the transaction
-	string error = transaction.Commit(db, commit_id, checkpoint);
-	if (!error.empty()) {
+	auto error = transaction.Commit(db, commit_id, checkpoint);
+	if (error.HasError()) {
 		// commit unsuccessful: rollback the transaction instead
 		checkpoint = false;
 		transaction.commit_id = 0;

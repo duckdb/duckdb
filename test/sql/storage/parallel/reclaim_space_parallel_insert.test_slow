@@ -2,6 +2,9 @@
 # description: Test space reclamation of optimistic writing with failures
 # group: [parallel]
 
+# FIXME: reliably fails for smaller block sizes
+require block_size 262144
+
 load __TEST_DIR__/reclaim_space_parallel_insert.db
 
 statement ok

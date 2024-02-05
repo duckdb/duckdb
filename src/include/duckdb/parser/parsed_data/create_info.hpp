@@ -13,6 +13,7 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -45,6 +46,8 @@ public:
 	string sql;
 	//! The inherent dependencies of the created entry
 	LogicalDependencyList dependencies;
+	//! User provided comment
+	Value comment;
 
 public:
 	void Serialize(Serializer &serializer) const override;

@@ -20,12 +20,11 @@ class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
 
-	idx_t Size();
-	bool Empty();
-	idx_t result_position = 0;
-
 	//! Adds a Value to the result
-	static inline void SetQuoted(ScannerResult &result) {
+	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
+		if (!result.quoted) {
+			result.quoted_position = quoted_position;
+		}
 		result.quoted = true;
 	}
 	//! Adds a Row to the result
@@ -35,6 +34,7 @@ public:
 	// Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
+	idx_t quoted_position = 0;
 
 protected:
 	CSVStates &states;
@@ -46,7 +46,8 @@ protected:
 class BaseScanner {
 public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
-	                     shared_ptr<CSVErrorHandler> error_handler, CSVIterator iterator = {});
+	                     shared_ptr<CSVErrorHandler> error_handler, shared_ptr<CSVFileScan> csv_file_scan = nullptr,
+	                     CSVIterator iterator = {});
 
 	virtual ~BaseScanner() = default;
 	//! Returns true if the scanner is finished
@@ -106,7 +107,7 @@ protected:
 	bool initialized = false;
 	//! How many lines were read by this scanner
 	idx_t lines_read = 0;
-
+	idx_t bytes_read = 0;
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner
 	virtual void Initialize();
@@ -115,6 +116,7 @@ protected:
 	template <class T>
 	void Process(T &result) {
 		idx_t to_pos;
+		const idx_t start_pos = iterator.pos.buffer_pos;
 		if (iterator.IsBoundarySet()) {
 			to_pos = iterator.GetEndPos();
 			if (to_pos > cur_buffer_handle->actual_size) {
@@ -129,18 +131,21 @@ protected:
 			case CSVState::INVALID:
 				T::InvalidState(result);
 				iterator.pos.buffer_pos++;
+				bytes_read = iterator.pos.buffer_pos - start_pos;
 				return;
 			case CSVState::RECORD_SEPARATOR:
 				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
 					lines_read++;
 					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
+						bytes_read = iterator.pos.buffer_pos - start_pos;
 						return;
 					}
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 					lines_read++;
 					if (T::AddRow(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
+						bytes_read = iterator.pos.buffer_pos - start_pos;
 						return;
 					}
 				}
@@ -151,11 +156,13 @@ protected:
 				if (states.states[0] == CSVState::RECORD_SEPARATOR || states.states[0] == CSVState::NOT_SET) {
 					if (T::EmptyLine(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
+						bytes_read = iterator.pos.buffer_pos - start_pos;
 						return;
 					}
 				} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 					if (T::AddRow(result, iterator.pos.buffer_pos)) {
 						iterator.pos.buffer_pos++;
+						bytes_read = iterator.pos.buffer_pos - start_pos;
 						return;
 					}
 				}
@@ -169,7 +176,7 @@ protected:
 				if (states.states[0] == CSVState::UNQUOTED) {
 					T::SetEscaped(result);
 				}
-				T::SetQuoted(result);
+				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (state_machine->transition_array
 				           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
@@ -198,6 +205,7 @@ protected:
 				break;
 			}
 		}
+		bytes_read = iterator.pos.buffer_pos - start_pos;
 	}
 
 	//! Finalizes the process of the chunk
@@ -210,7 +218,9 @@ protected:
 			Initialize();
 			initialized = true;
 		}
-		Process(result);
+		if (!iterator.done) {
+			Process(result);
+		}
 		FinalizeChunkProcess();
 	}
 };

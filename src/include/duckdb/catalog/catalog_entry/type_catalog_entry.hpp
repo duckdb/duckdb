@@ -29,6 +29,7 @@ public:
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	string ToSQL() const override;
 };

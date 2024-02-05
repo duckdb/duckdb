@@ -16,7 +16,8 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -72,7 +73,7 @@ class CreateStatement;
 struct CatalogEntryLookup {
 	optional_ptr<SchemaCatalogEntry> schema;
 	optional_ptr<CatalogEntry> entry;
-	PreservedError error;
+	ErrorData error;
 
 	DUCKDB_API bool Found() const {
 		return entry;
@@ -252,7 +253,7 @@ public:
 			return nullptr;
 		}
 		if (entry->type != T::Type) {
-			throw CatalogException(error_context.FormatError("%s is not an %s", name, T::Name));
+			throw CatalogException(error_context, "%s is not an %s", name, T::Name);
 		}
 		return &entry->template Cast<T>();
 	}
@@ -296,7 +297,7 @@ public:
 			return nullptr;
 		}
 		if (entry->type != T::Type) {
-			throw CatalogException(error_context.FormatError("%s is not an %s", name, T::Name));
+			throw CatalogException(error_context, "%s is not an %s", name, T::Name);
 		}
 		return &entry->template Cast<T>();
 	}
@@ -320,7 +321,7 @@ public:
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
 	static void AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
-	static bool AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name);
+	static bool AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name);
 	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
 
 protected:

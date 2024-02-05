@@ -2189,4 +2189,17 @@ typedef struct PGDropSecretStmt {
 	char *secret_storage;
 	bool missing_ok;
 } PGDropSecretStmt;
+
+/* ----------------------
+ *		Comment On Statement
+ * ----------------------
+ */
+typedef struct PGCommentOnStmt {
+	PGNodeTag type;
+	PGObjectType object_type; 	/* object type */
+	PGRangeVar *name;         /* the object to comment on */
+	PGNode *value;				/* the comment: a string or NULL*/
+	PGNode *column_expr;
+} PGCommentOnStmt;
+
 }

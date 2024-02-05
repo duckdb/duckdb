@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -47,7 +48,7 @@ public:
 	Transaction &GetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
 
-	string Commit();
+	ErrorData Commit();
 	void Rollback();
 
 	idx_t GetActiveQuery();

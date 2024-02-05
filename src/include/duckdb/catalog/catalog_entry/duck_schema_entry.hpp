@@ -15,7 +15,7 @@ namespace duckdb {
 //! A schema in the catalog
 class DuckSchemaEntry : public SchemaCatalogEntry {
 public:
-	DuckSchemaEntry(Catalog &catalog, string name, bool is_internal);
+	DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info);
 
 private:
 	//! The catalog set holding the tables
@@ -64,6 +64,8 @@ public:
 	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 	void ScanAll(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
+
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	void Verify(Catalog &catalog) override;
 

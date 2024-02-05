@@ -120,6 +120,8 @@ enum class ExpressionType : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
 
+enum class ExtraDropInfoType : uint8_t;
+
 enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
@@ -136,7 +138,7 @@ enum class ForeignKeyType : uint8_t;
 
 enum class FunctionNullHandling : uint8_t;
 
-enum class FunctionSideEffects : uint8_t;
+enum class FunctionStability : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
@@ -440,6 +442,9 @@ template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
 
 template<>
+const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
+
+template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
 
 template<>
@@ -464,7 +469,7 @@ template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
-const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value);
+const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
@@ -852,6 +857,9 @@ template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
 
 template<>
+ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
+
+template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
 
 template<>
@@ -876,7 +884,7 @@ template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
 
 template<>
-FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value);
+FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);

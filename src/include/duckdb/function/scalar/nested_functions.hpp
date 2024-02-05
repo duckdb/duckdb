@@ -49,6 +49,10 @@ struct PositionFunctor {
 	}
 };
 
+struct MapUtil {
+	static void ReinterpretMap(Vector &target, Vector &other, idx_t count);
+};
+
 struct VariableReturnBindData : public FunctionData {
 	LogicalType stype;
 

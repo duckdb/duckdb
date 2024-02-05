@@ -14,6 +14,7 @@ add_library_unity(
   copy_csv.cpp
   read_csv.cpp
   sniff_csv.cpp
+  read_file.cpp
   system_functions.cpp
   summary.cpp
   table_scan.cpp

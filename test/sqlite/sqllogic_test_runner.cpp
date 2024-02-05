@@ -199,8 +199,8 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("bitpacking");
 		result.push_back("dictionary");
 		result.push_back("fsst");
-		result.push_back("chimp");
-		result.push_back("patas");
+		result.push_back("alp");
+		result.push_back("alprd");
 		collection = true;
 	}
 	return collection;
@@ -298,8 +298,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (statement_text.empty()) {
 				parser.Fail("Unexpected empty statement text");
 			}
-			command->expected_error =
-			    parser.ExtractExpectedError(command->expected_result == ExpectedResult::RESULT_SUCCESS);
+			command->expected_error = parser.ExtractExpectedError(
+			    command->expected_result == ExpectedResult::RESULT_SUCCESS, original_sqlite_test);
 
 			// perform any renames in the text
 			command->base_sql_query = ReplaceKeywords(std::move(statement_text));
@@ -525,6 +525,26 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// vector size is too low for this test: skip it
 					return;
 				}
+			} else if (param == "exact_vector_size") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("require exact_vector_size requires a parameter");
+				}
+				// require an exact vector size
+				auto required_vector_size = std::stoi(token.parameters[1]);
+				if (STANDARD_VECTOR_SIZE != required_vector_size) {
+					// vector size does not match the required vector size: skip it
+					return;
+				}
+			} else if (param == "block_size") {
+				if (token.parameters.size() != 2) {
+					parser.Fail("require block_size requires a parameter");
+				}
+				// require a specific block size
+				auto required_block_size = std::stoi(token.parameters[1]);
+				if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
+					// block size does not match the required block size: skip it
+					return;
+				}
 			} else if (param == "skip_reload") {
 				skip_reload = true;
 			} else if (param == "noalternativeverify") {
@@ -623,6 +643,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RECONNECT) {
 			auto command = make_uniq<ReconnectCommand>(*this);
+			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_SLEEP) {
+			if (token.parameters.size() != 2) {
+				parser.Fail("sleep requires two parameter (e.g. sleep 1 second)");
+			}
+			// require a specific block size
+			auto sleep_duration = std::stoull(token.parameters[0]);
+			auto sleep_unit = SleepCommand::ParseUnit(token.parameters[1]);
+			auto command = make_uniq<SleepCommand>(*this, sleep_duration, sleep_unit);
 			ExecuteCommand(std::move(command));
 		}
 	}

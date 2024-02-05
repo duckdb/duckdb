@@ -44,12 +44,18 @@
         "name": "sql",
         "type": "string"
       },
-	  {
-		"id": 107,
-		"name": "dependencies",
-		"type": "LogicalDependencyList",
-		"default": "LogicalDependencyList()"
-	  }
+      {
+        "id": 107,
+        "name": "comment",
+        "type": "Value",
+        "default": "Value()"
+      },
+      {
+        "id": 108,
+        "name": "dependencies",
+        "type": "LogicalDependencyList",
+        "default": "LogicalDependencyList()"
+      }
     ]
   },
   {

@@ -75,7 +75,7 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
-	QueryErrorContext error_context(root_statement, ref.query_location);
+	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
 

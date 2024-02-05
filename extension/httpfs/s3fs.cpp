@@ -7,6 +7,7 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
 #endif
 
 #include <duckdb/function/scalar/string_functions.hpp>
@@ -402,8 +403,8 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		                      query_param);
 
 		if (res->code != 200) {
-			throw IOException("Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
-			                  to_string(res->code));
+			throw HTTPException(*res, "Unable to connect to URL %s %s (HTTP code %s)", res->http_url, res->error,
+			                    to_string(res->code));
 		}
 
 		etag_lookup = res->headers.find("ETag");
@@ -538,7 +539,8 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw IOException("Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code, result);
+		throw HTTPException(*res, "Unexpected response during S3 multipart upload finalization: %d\n\n%s", res->code,
+		                    result);
 	}
 }
 
@@ -1157,7 +1159,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    throw IOException("HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
+			    throw HTTPException(response, "HTTP GET error on '%s' (HTTP %d)", listobjectv2_url, response.status);
 		    }
 		    return true;
 	    },

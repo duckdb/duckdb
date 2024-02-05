@@ -48,16 +48,16 @@ public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
-	PendingExecutionResult ExecuteTask();
+	PendingExecutionResult ExecuteTask(bool dry_run = false);
 
 	void Reset();
 
 	vector<LogicalType> GetTypes();
 
-	unique_ptr<DataChunk> FetchChunk();
-
 	//! Push a new error
-	void PushError(PreservedError exception);
+	void PushError(ErrorData exception);
+
+	ErrorData GetError();
 
 	//! True if an error has been thrown
 	bool HasError();
@@ -101,6 +101,7 @@ public:
 	bool ExecutionIsFinished();
 
 private:
+	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);

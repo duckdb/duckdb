@@ -8,6 +8,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
+	this->comment = info.comment;
 }
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
@@ -29,6 +30,8 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	for (auto &expr : parsed_expressions) {
 		result->parsed_expressions.push_back(expr->Copy());
 	}
+
+	result->comment = comment;
 
 	return std::move(result);
 }

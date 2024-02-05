@@ -7,18 +7,11 @@ ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine
     : states(states_p), state_machine(state_machine_p) {
 }
 
-idx_t ScannerResult::Size() {
-	return result_position;
-}
-
-bool ScannerResult::Empty() {
-	return result_position == 0;
-}
-
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
-                         shared_ptr<CSVErrorHandler> error_handler_p, CSVIterator iterator_p)
-    : error_handler(std::move(error_handler_p)), state_machine(std::move(state_machine_p)), iterator(iterator_p),
-      buffer_manager(std::move(buffer_manager_p)) {
+                         shared_ptr<CSVErrorHandler> error_handler_p, shared_ptr<CSVFileScan> csv_file_scan_p,
+                         CSVIterator iterator_p)
+    : csv_file_scan(std::move(csv_file_scan_p)), error_handler(std::move(error_handler_p)),
+      state_machine(std::move(state_machine_p)), iterator(iterator_p), buffer_manager(std::move(buffer_manager_p)) {
 	D_ASSERT(buffer_manager);
 	D_ASSERT(state_machine);
 	// Initialize current buffer handle
