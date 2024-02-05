@@ -914,6 +914,7 @@ Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, cons
 	search = false;
 	has_more_data = false;
 	render = true;
+	continuation_markers = true;
 
 	/* Buffer starts empty. */
 	buf[0] = '\0';
@@ -1005,6 +1006,8 @@ int Linenoise::Edit() {
 					break;
 				}
 			}
+			// final refresh before returning control to the shell
+			continuation_markers = false;
 			History::RemoveLastEntry();
 			if (Terminal::IsMultiline()) {
 				if (pos == len) {

@@ -260,6 +260,9 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 		if (is_newline) {
 			bool is_cursor_row = rows == cursor_row;
 			const char *prompt = is_cursor_row ? continuationSelectedPrompt : continuationPrompt;
+			if (!continuation_markers) {
+				prompt = "";
+			}
 			size_t continuationLen = strlen(prompt);
 			size_t continuationRender = ComputeRenderWidth(prompt, continuationLen);
 			// pad with spaces prior to prompt

@@ -123,6 +123,7 @@ public:
 	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
 	idx_t history_index;                     /* The history index we are currently editing. */
 	bool clear_screen;                       /* Whether we are clearing the screen */
+	bool continuation_markers;               /* Whether or not to render continuation markers */
 	bool search;                             /* Whether or not we are searching our history */
 	bool render;                             /* Whether or not to re-render */
 	bool has_more_data;                      /* Whether or not there is more data available in the buffer (copy+paste)*/
