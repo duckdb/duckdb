@@ -188,8 +188,8 @@ static void TestIniFile() {
 	// Disconnect from the database
 	DISCONNECT_FROM_DATABASE(env, dbc);
 
-	// Delete the ini file
-	std::remove(ini_file.c_str());
+//	// Delete the ini file
+//	std::remove(ini_file.c_str());
 #endif
 }
 
