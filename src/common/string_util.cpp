@@ -635,11 +635,23 @@ string StringUtil::GetFileStem(const string &file_name) {
 }
 
 string StringUtil::GetFilePath(const string &file_path) {
-	idx_t pos = file_path.find_last_of("/\\");
+
+	// Trim the trailing slashes
+	auto end = file_path.size() - 1;
+	while (end > 0 && (file_path[end] == '/' || file_path[end] == '\\')) {
+		end--;
+	}
+
+	auto pos = file_path.find_last_of("/\\", end);
 	if (pos == string::npos) {
 		return "";
 	}
-	return file_path.substr(0, pos);
+
+	while (pos > 0 && (file_path[pos] == '/' || file_path[pos] == '\\')) {
+		pos--;
+	}
+
+	return file_path.substr(0, pos + 1);
 }
 
 } // namespace duckdb

@@ -233,9 +233,17 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 TEST_CASE("Test path utilities", "[string_util]") {
 	SECTION("File name") {
 		REQUIRE("bin" == StringUtil::GetFileName("/usr/bin/"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("tmp/foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("tmp\\foo.txt"));
 		REQUIRE("foo.txt" == StringUtil::GetFileName("/tmp/foo.txt"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("\\tmp\\foo.txt"));
 		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/."));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/./"));
 		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt/.//"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\."));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\.\\"));
+		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\.\\\\"));
 		REQUIRE("" == StringUtil::GetFileName(".."));
 		REQUIRE("" == StringUtil::GetFileName("/"));
 	}
@@ -252,9 +260,33 @@ TEST_CASE("Test path utilities", "[string_util]") {
 		REQUIRE("test.cpp" == StringUtil::GetFileStem("test.cpp.gz"));
 		REQUIRE("test" == StringUtil::GetFileStem("test"));
 		REQUIRE(".gitignore" == StringUtil::GetFileStem(".gitignore"));
+
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/."));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/./"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp/.//"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\."));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\.\\"));
+		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\.\\\\"));
+		REQUIRE("" == StringUtil::GetFileStem(".."));
+		REQUIRE("" == StringUtil::GetFileStem("/"));
+		REQUIRE("test" == StringUtil::GetFileStem("tmp/test.txt"));
+		REQUIRE("test" == StringUtil::GetFileStem("tmp\\test.txt"));
+		REQUIRE("test" == StringUtil::GetFileStem("/tmp/test.txt"));
+		REQUIRE("test" == StringUtil::GetFileStem("\\tmp\\test.txt"));
 	}
 
 	SECTION("File path") {
 		REQUIRE("/usr/local/bin" == StringUtil::GetFilePath("/usr/local/bin/test.cpp"));
+		REQUIRE("\\usr\\local\\bin" == StringUtil::GetFilePath("\\usr\\local\\bin\\test.cpp"));
+		REQUIRE("tmp" == StringUtil::GetFilePath("tmp/test.txt"));
+		REQUIRE("tmp" == StringUtil::GetFilePath("tmp\\test.txt"));
+		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp/test.txt"));
+		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\test.txt"));
+		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp/test.txt/"));
+		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\test.txt\\"));
+		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp//test.txt"));
+		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\\\test.txt"));
 	}
 }
