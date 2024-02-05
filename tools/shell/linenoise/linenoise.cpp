@@ -757,6 +757,7 @@ char Linenoise::Search(char c) {
 		// accept search and run
 		return AcceptSearch(ENTER);
 	case CTRL_R:
+	case CTRL_S:
 		// move to the next match index
 		SearchNext();
 		break;
@@ -817,7 +818,7 @@ char Linenoise::Search(char c) {
 		CancelSearch();
 		return 0;
 	case BACKSPACE: /* backspace */
-	case 8:         /* ctrl-h */
+	case CTRL_H:     /* ctrl-h */
 	case CTRL_W:    /* ctrl-w */
 		// remove trailing UTF-8 bytes (if any)
 		while (!search_buf.empty() && ((search_buf.back() & 0xc0) == 0x80)) {
@@ -996,6 +997,7 @@ int Linenoise::Edit() {
 				hintsCallback = hc;
 			}
 			return (int)len;
+		case CTRL_O:
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
 			if (Terminal::IsMultiline()) {
@@ -1018,7 +1020,7 @@ int Linenoise::Edit() {
 			return (int)len;
 		}
 		case BACKSPACE: /* backspace */
-		case 8:         /* ctrl-h */
+		case CTRL_H:    /* ctrl-h */
 			EditBackspace();
 			break;
 		case CTRL_D: /* ctrl-d, remove char at right of cursor, or if the
@@ -1062,6 +1064,7 @@ int Linenoise::Edit() {
 		case CTRL_N: /* ctrl-n */
 			EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_NEXT);
 			break;
+		case CTRL_S:
 		case CTRL_R: /* ctrl-r */ {
 			// initiate reverse search
 			search = true;
@@ -1139,7 +1142,12 @@ int Linenoise::Edit() {
 		case CTRL_W: /* ctrl+w, delete previous word */
 			EditDeletePrevWord();
 			break;
+		case CTRL_X:
+		case CTRL_Y:
+			// unsupported
+			break;
 		default: {
+			Linenoise::Log("Regular Character %d\n", (int) c);
 			if (EditInsert(c)) {
 				return -1;
 			}
