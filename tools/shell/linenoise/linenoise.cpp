@@ -752,7 +752,7 @@ void Linenoise::SearchNext() {
 
 char Linenoise::Search(char c) {
 	switch (c) {
-	case 10:
+	case CTRL_J:
 	case ENTER: /* enter */
 		// accept search and run
 		return AcceptSearch(ENTER);
@@ -963,7 +963,7 @@ int Linenoise::Edit() {
 
 		Linenoise::Log("%d\n", (int)c);
 		switch (c) {
-		case 10:
+		case CTRL_J:
 		case ENTER: /* enter */
 			if (Terminal::IsMultiline() && len > 0) {
 				// check if this forms a complete SQL statement or not

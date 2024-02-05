@@ -23,6 +23,7 @@ enum KEY_ACTION {
 	CTRL_G = 7,     /* Ctrl-g */
 	CTRL_H = 8,     /* Ctrl-h */
 	TAB = 9,        /* Tab */
+	CTRL_J = 10,    /* Ctrl+j*/
 	CTRL_K = 11,    /* Ctrl+k */
 	CTRL_L = 12,    /* Ctrl+l */
 	ENTER = 13,     /* Enter */
