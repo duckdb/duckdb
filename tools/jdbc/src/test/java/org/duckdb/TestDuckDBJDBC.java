@@ -3034,7 +3034,7 @@ public class TestDuckDBJDBC {
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
-        assertTrue(message.contains("Failed to set configuration option \"ordered_aggregate_threshold\""));
+        assertTrue(message.contains("Could not set option \"ordered_aggregate_threshold\" as a global option"));
     }
 
     private static String getSetting(Connection conn, String settingName) throws Exception {

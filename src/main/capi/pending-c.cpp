@@ -66,6 +66,37 @@ const char *duckdb_pending_error(duckdb_pending_result pending_result) {
 	return wrapper->statement->GetError().c_str();
 }
 
+duckdb_pending_state duckdb_pending_execute_check_state(duckdb_pending_result pending_result) {
+	if (!pending_result) {
+		return DUCKDB_PENDING_ERROR;
+	}
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
+	if (!wrapper->statement) {
+		return DUCKDB_PENDING_ERROR;
+	}
+	if (wrapper->statement->HasError()) {
+		return DUCKDB_PENDING_ERROR;
+	}
+	PendingExecutionResult return_value;
+	try {
+		return_value = wrapper->statement->CheckPulse();
+	} catch (std::exception &ex) {
+		wrapper->statement->SetError(duckdb::ErrorData(ex));
+		return DUCKDB_PENDING_ERROR;
+	}
+	switch (return_value) {
+	case PendingExecutionResult::BLOCKED:
+	case PendingExecutionResult::RESULT_READY:
+		return DUCKDB_PENDING_RESULT_READY;
+	case PendingExecutionResult::NO_TASKS_AVAILABLE:
+		return DUCKDB_PENDING_NO_TASKS_AVAILABLE;
+	case PendingExecutionResult::RESULT_NOT_READY:
+		return DUCKDB_PENDING_RESULT_NOT_READY;
+	default:
+		return DUCKDB_PENDING_ERROR;
+	}
+}
+
 duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result) {
 	if (!pending_result) {
 		return DUCKDB_PENDING_ERROR;
@@ -85,6 +116,7 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 		return DUCKDB_PENDING_ERROR;
 	}
 	switch (return_value) {
+	case PendingExecutionResult::BLOCKED:
 	case PendingExecutionResult::RESULT_READY:
 		return DUCKDB_PENDING_RESULT_READY;
 	case PendingExecutionResult::NO_TASKS_AVAILABLE:
@@ -115,13 +147,20 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	if (!pending_result || !out_result) {
 		return DuckDBError;
 	}
+	memset(out_result, 0, sizeof(duckdb_result));
 	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return DuckDBError;
 	}
 
 	duckdb::unique_ptr<duckdb::QueryResult> result;
-	result = wrapper->statement->Execute();
+	try {
+		result = wrapper->statement->Execute();
+	} catch (std::exception &ex) {
+		duckdb::ErrorData error(ex);
+		result = duckdb::make_uniq<duckdb::MaterializedQueryResult>(std::move(error));
+	}
+
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);
 }

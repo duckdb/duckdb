@@ -20,7 +20,7 @@ CREATE INDEX i1 ON t1 (c0);
 Catalog Error: Index with name "i1" already exists!
 
 statement ok
-ROLLBACk
+ROLLBACK
 
 statement ok
 CREATE UNIQUE INDEX i1 ON t2 (c1);

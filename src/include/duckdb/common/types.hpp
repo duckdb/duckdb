@@ -254,6 +254,19 @@ struct LogicalType {
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
+	inline bool IsNested() const {
+		auto internal = InternalType();
+		if (internal == PhysicalType::STRUCT) {
+			return true;
+		}
+		if (internal == PhysicalType::LIST) {
+			return true;
+		}
+		if (internal == PhysicalType::ARRAY) {
+			return true;
+		}
+		return false;
+	}
 
 	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
 		return type_info_;
