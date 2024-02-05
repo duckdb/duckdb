@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/parquet/ingest_catalog_page.benchmark
 # description: benchmark ingestion of catalog_page
-# group: [tpcds]
+# group: [parquet]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=catalog_page

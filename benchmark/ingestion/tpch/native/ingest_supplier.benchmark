@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpch/native/ingest_supplier.benchmark
 # description: benchmark ingestion of supplier
-# group: [tpch]
+# group: [native]
 
 template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
 table_name=supplier

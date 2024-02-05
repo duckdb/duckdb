@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/parquet/ingest_reason.benchmark
 # description: benchmark ingestion of reason
-# group: [tpcds]
+# group: [parquet]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=reason

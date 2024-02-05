@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/native/ingest_warehouse.benchmark
 # description: benchmark ingestion of warehouse
-# group: [tpcds]
+# group: [native]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=warehouse

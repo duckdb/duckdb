@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/parquet/ingest_time_dim.benchmark
 # description: benchmark ingestion of time_dim
-# group: [tpcds]
+# group: [parquet]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=time_dim

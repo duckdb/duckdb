@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/parquet/ingest_inventory.benchmark
 # description: benchmark ingestion of inventory
-# group: [tpcds]
+# group: [parquet]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=inventory

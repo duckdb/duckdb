@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/native/ingest_catalog_sales.benchmark
 # description: benchmark ingestion of catalog_sales
-# group: [tpcds]
+# group: [native]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=catalog_sales

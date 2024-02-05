@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/native/ingest_income_band.benchmark
 # description: benchmark ingestion of income_band
-# group: [tpcds]
+# group: [native]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=income_band

@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/csv/ingest_store_returns.benchmark
 # description: benchmark ingestion of store_returns
-# group: [tpcds]
+# group: [csv]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=store_returns

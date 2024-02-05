@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/parquet/ingest_web_returns.benchmark
 # description: benchmark ingestion of web_returns
-# group: [tpcds]
+# group: [parquet]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=web_returns

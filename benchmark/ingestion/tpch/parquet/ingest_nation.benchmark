@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpch/parquet/ingest_nation.benchmark
 # description: benchmark ingestion of nation
-# group: [tpch]
+# group: [parquet]
 
 template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
 table_name=nation

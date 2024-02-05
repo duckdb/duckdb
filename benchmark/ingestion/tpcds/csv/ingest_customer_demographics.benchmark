@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpcds/csv/ingest_customer_demographics.benchmark
 # description: benchmark ingestion of customer_demographics
-# group: [tpcds]
+# group: [csv]
 
 template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
 table_name=customer_demographics

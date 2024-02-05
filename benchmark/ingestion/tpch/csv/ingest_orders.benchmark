@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/tpch/csv/ingest_orders.benchmark
 # description: benchmark ingestion of orders
-# group: [tpch]
+# group: [csv]
 
 template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
 table_name=orders
