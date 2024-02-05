@@ -104,6 +104,7 @@ public:
 
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
+	static bool AllWhitespace(const char *z);
 
 public:
 	int ifd;                                 /* Terminal stdin file descriptor. */

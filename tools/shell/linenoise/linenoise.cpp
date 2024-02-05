@@ -868,7 +868,7 @@ char Linenoise::Search(char c) {
 	return 0;
 }
 
-static int allWhitespace(const char *z) {
+bool Linenoise::AllWhitespace(const char *z) {
 	for (; *z; z++) {
 		if (isspace((unsigned char) z[0]))
 			continue;
@@ -877,8 +877,9 @@ static int allWhitespace(const char *z) {
 			while (*z && (*z != '*' || z[1] != '/')) {
 				z++;
 			}
-			if (*z == 0)
-				return 0;
+			if (*z == 0) {
+				return false;
+			}
 			z++;
 			continue;
 		}
@@ -887,13 +888,14 @@ static int allWhitespace(const char *z) {
 			while (*z && *z != '\n') {
 				z++;
 			}
-			if (*z == 0)
-				return 1;
+			if (*z == 0) {
+				return true;
+			}
 			continue;
 		}
-		return 0;
+		return false;
 	}
-	return 1;
+	return true;
 }
 
 Linenoise::Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt) :
@@ -967,7 +969,7 @@ int Linenoise::Edit() {
 		/* Only autocomplete when the callback is set. It returns < 0 when
 		 * there was an error reading from fd. Otherwise it will return the
 		 * character that should be handled next. */
-		if (c == 9 && completionCallback != NULL) {
+		if (c == TAB && completionCallback != NULL) {
 			if (has_more_data) {
 				// if there is more data, this tab character was added as part of copy-pasting data
 				continue;
@@ -988,7 +990,7 @@ int Linenoise::Edit() {
 				if (Terminal::IsMultiline() && len > 0) {
 					// check if this forms a complete SQL statement or not
 					buf[len] = '\0';
-					if (buf[0] != '.' && !allWhitespace(buf) && !sqlite3_complete(buf)) {
+					if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
 						// not a complete SQL statement yet! continuation
 						// insert "\r\n"
 						if (EditInsertMulti("\r\n")) {
