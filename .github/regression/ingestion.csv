@@ -1,7 +1,3 @@
-benchmark/ingestion/tpcds/csv/ingest_customer_demographics.benchmark
-benchmark/ingestion/tpcds/parquet/ingest_customer_demographics.benchmark
-benchmark/ingestion/tpcds/native/ingest_customer_demographics.benchmark
-
 benchmark/ingestion/tpcds/csv/ingest_inventory.benchmark
 benchmark/ingestion/tpcds/parquet/ingest_inventory.benchmark
 benchmark/ingestion/tpcds/native/ingest_inventory.benchmark
@@ -9,14 +5,6 @@ benchmark/ingestion/tpcds/native/ingest_inventory.benchmark
 benchmark/ingestion/tpcds/csv/ingest_store_sales.benchmark
 benchmark/ingestion/tpcds/parquet/ingest_store_sales.benchmark
 benchmark/ingestion/tpcds/native/ingest_store_sales.benchmark
-
-benchmark/ingestion/tpcds/csv/ingest_catalog_sales.benchmark
-benchmark/ingestion/tpcds/parquet/ingest_catalog_sales.benchmark
-benchmark/ingestion/tpcds/native/ingest_catalog_sales.benchmark
-
-benchmark/ingestion/tpch/csv/ingest_customer.benchmark
-benchmark/ingestion/tpch/parquet/ingest_customer.benchmark
-benchmark/ingestion/tpch/native/ingest_customer.benchmark
 
 benchmark/ingestion/tpch/csv/ingest_lineitem.benchmark
 benchmark/ingestion/tpch/parquet/ingest_lineitem.benchmark

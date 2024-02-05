@@ -68,7 +68,7 @@ create view customer_address_native as select * from customer_address;
 
 create view reason_csv as select * from read_csv('duckdb_benchmark_data/tpcds_csv/reason.csv');
 create view reason_parquet as select * from read_parquet('duckdb_benchmark_data/tpcds_parquet/reason.parquet');
-create view reason  _native as select * from reason;
+create view reason_native as select * from reason;
 
 create view web_returns_csv as select * from read_csv('duckdb_benchmark_data/tpcds_csv/web_returns.csv');
 create view web_returns_parquet as select * from read_parquet('duckdb_benchmark_data/tpcds_parquet/web_returns.parquet');
