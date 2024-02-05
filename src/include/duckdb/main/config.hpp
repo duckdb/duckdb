@@ -112,6 +112,10 @@ struct DBConfigOptions {
 #else
 	bool autoinstall_known_extensions = false;
 #endif
+	//! Override for the default extension repository
+	string custom_extension_repo = "";
+	//! Override for the default autoload extensoin repository
+	string autoinstall_extension_repo = "";
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.

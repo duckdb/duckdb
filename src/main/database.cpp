@@ -231,7 +231,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type, nullptr);
+		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 	}
 
 	if (!config.options.unrecognized_options.empty()) {
@@ -244,6 +244,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
+	scheduler->RelaunchThreads();
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {

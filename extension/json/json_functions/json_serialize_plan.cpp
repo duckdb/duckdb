@@ -162,11 +162,17 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 
 			return StringVector::AddString(result, data, len);
 
-		} catch (Exception &exception) {
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
 			yyjson_mut_obj_add_true(doc, result_obj, "error");
+			// error type and message
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_type",
-			                          StringUtil::Lower(exception.ExceptionTypeToString(exception.type)).c_str());
-			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_message", exception.RawMessage().c_str());
+			                          StringUtil::Lower(Exception::ExceptionTypeToString(error.Type())).c_str());
+			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_message", error.RawMessage().c_str());
+			// add extra info
+			for (auto &entry : error.ExtraInfo()) {
+				yyjson_mut_obj_add_strcpy(doc, result_obj, entry.first.c_str(), entry.second.c_str());
+			}
 
 			idx_t len;
 			auto data = yyjson_mut_val_write_opts(result_obj,

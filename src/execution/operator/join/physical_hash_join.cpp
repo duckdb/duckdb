@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
@@ -614,7 +615,7 @@ public:
 	//! Initialize this source state using the info in the sink
 	void Initialize(HashJoinGlobalSinkState &sink);
 	//! Try to prepare the next stage
-	void TryPrepareNextStage(HashJoinGlobalSinkState &sink);
+	bool TryPrepareNextStage(HashJoinGlobalSinkState &sink);
 	//! Prepare the next build/probe/scan_ht stage for external hash join (must hold lock)
 	void PrepareBuild(HashJoinGlobalSinkState &sink);
 	void PrepareProbe(HashJoinGlobalSinkState &sink);
@@ -663,6 +664,8 @@ public:
 	idx_t full_outer_chunk_count;
 	idx_t full_outer_chunk_done;
 	idx_t full_outer_chunks_per_thread;
+
+	vector<InterruptState> blocked_tasks;
 };
 
 class HashJoinLocalSourceState : public LocalSourceState {
@@ -739,13 +742,14 @@ void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
 	TryPrepareNextStage(sink);
 }
 
-void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sink) {
+bool HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sink) {
 	switch (global_stage.load()) {
 	case HashJoinSourceStage::BUILD:
 		if (build_chunk_done == build_chunk_count) {
 			sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 			sink.hash_table->finalized = true;
 			PrepareProbe(sink);
+			return true;
 		}
 		break;
 	case HashJoinSourceStage::PROBE:
@@ -755,16 +759,19 @@ void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sin
 			} else {
 				PrepareBuild(sink);
 			}
+			return true;
 		}
 		break;
 	case HashJoinSourceStage::SCAN_HT:
 		if (full_outer_chunk_done == full_outer_chunk_count) {
 			PrepareBuild(sink);
+			return true;
 		}
 		break;
 	default:
 		break;
 	}
+	return false;
 }
 
 void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
@@ -1014,7 +1021,15 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 			lstate.ExecuteTask(sink, gstate, chunk);
 		} else {
 			lock_guard<mutex> guard(gstate.lock);
-			gstate.TryPrepareNextStage(sink);
+			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
+				for (auto &state : gstate.blocked_tasks) {
+					state.Callback();
+				}
+				gstate.blocked_tasks.clear();
+			} else {
+				gstate.blocked_tasks.push_back(input.interrupt_state);
+				return SourceResultType::BLOCKED;
+			}
 		}
 	}
 

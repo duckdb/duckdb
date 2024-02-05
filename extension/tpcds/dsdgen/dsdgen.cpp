@@ -121,7 +121,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 			// append happens directly in builders since they dump child tables
 			// immediately
 			if (builder_func((void *)&append_info, i)) {
-				throw Exception("Table generation failed");
+				throw InternalException("Table generation failed");
 			}
 		}
 	}

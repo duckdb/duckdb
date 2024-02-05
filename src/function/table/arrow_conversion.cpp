@@ -4,6 +4,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
 

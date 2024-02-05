@@ -83,7 +83,7 @@ jobs:
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
         make
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*"
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution --order lex --list
 
     - name: Tools Tests
       shell: bash
@@ -340,7 +340,6 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     env:
-      BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1

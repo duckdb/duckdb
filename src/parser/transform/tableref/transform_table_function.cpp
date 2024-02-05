@@ -28,7 +28,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 	case duckdb_libpgquery::T_PGFuncCall: {
 		auto func_call = PGPointerCast<duckdb_libpgquery::PGFuncCall>(call_tree.get());
 		result->function = TransformFuncCall(*func_call);
-		result->query_location = func_call->location;
+		SetQueryLocation(*result, func_call->location);
 		break;
 	}
 	case duckdb_libpgquery::T_PGSQLValueFunction:

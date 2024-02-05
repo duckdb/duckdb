@@ -30,11 +30,11 @@ SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_
 query I
 SELECT json_serialize_plan('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');
 ----
-{"error":true,"error_type":"parser","error_message":"syntax error at or near \"AND\"\nLINE 1: SELECT AND LAUNCH ROCKETS WHERE 1 = 1\n               ^"}
+<REGEX>:.*syntax error at or near.*
 
 # Example with binding error
 # The binding error message "did you mean table xyz" is not deterministic, so use a LIKE here.
 query I
-SELECT json_serialize_plan('SELECT * FROM nonexistent_table') LIKE '{"error":true,"error_type":"catalog","error_message":"Table with name nonexistent_table does not exist%';
+SELECT json_serialize_plan('SELECT * FROM nonexistent_table') LIKE '%Table with name nonexistent_table does not exist%';
 ----
 true

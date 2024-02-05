@@ -133,7 +133,7 @@
 #endif
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 1000
-#define LINENOISE_MAX_LINE                20480
+#define LINENOISE_MAX_LINE                204800
 static const char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
@@ -169,6 +169,9 @@ static std::string keyword = "\033[32m";
 static std::string constant = "\033[33m";
 static std::string reset = "\033[00m";
 #endif
+
+static const char *continuationPrompt = "> ";
+static const char *continuationSelectedPrompt = "> ";
 
 struct searchMatch {
 	size_t history_index;
@@ -765,38 +768,72 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 	return 0;
 }
 
-#ifndef DISABLE_HIGHLIGHT
-#include <sstream>
-#include "duckdb/parser/parser.hpp"
+void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
+	continuationPrompt = continuation;
+	continuationSelectedPrompt = continuationSelected;
+}
+
+enum class tokenType : uint8_t {
+	TOKEN_IDENTIFIER,
+	TOKEN_NUMERIC_CONSTANT,
+	TOKEN_STRING_CONSTANT,
+	TOKEN_OPERATOR,
+	TOKEN_KEYWORD,
+	TOKEN_COMMENT,
+	TOKEN_CONTINUATION,
+	TOKEN_CONTINUATION_SELECTED
+};
 
 struct highlightToken {
-	duckdb::SimplifiedTokenType type;
+	tokenType type;
 	size_t start = 0;
 	bool search_match = false;
 };
 
-std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos, searchMatch *match = nullptr) {
+#ifndef DISABLE_HIGHLIGHT
+#include <sstream>
+#include "duckdb/parser/parser.hpp"
+
+tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
+	switch (token_type) {
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+		return tokenType::TOKEN_IDENTIFIER;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+		return tokenType::TOKEN_NUMERIC_CONSTANT;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+		return tokenType::TOKEN_STRING_CONSTANT;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+		return tokenType::TOKEN_OPERATOR;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+		return tokenType::TOKEN_KEYWORD;
+	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+		return tokenType::TOKEN_COMMENT;
+	default:
+		throw duckdb::InternalException("Unrecognized token type");
+	}
+}
+
+std::vector<highlightToken> tokenize(char *buf, size_t len, searchMatch *match = nullptr) {
 	std::string sql(buf, len);
 	auto parseTokens = duckdb::Parser::Tokenize(sql);
-	std::stringstream ss;
 	std::vector<highlightToken> tokens;
 
 	for (auto &token : parseTokens) {
 		highlightToken new_token;
-		new_token.type = token.type;
+		new_token.type = convertToken(token.type);
 		new_token.start = token.start;
 		tokens.push_back(new_token);
 	}
 
 	if (!tokens.empty() && tokens[0].start > 0) {
 		highlightToken new_token;
-		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.type = tokenType::TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.insert(tokens.begin(), new_token);
 	}
 	if (tokens.empty() && sql.size() > 0) {
 		highlightToken new_token;
-		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.type = tokenType::TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.push_back(new_token);
 	}
@@ -808,7 +845,7 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 			if (tokens[i].start <= match->match_start && tokens[i + 1].start >= match->match_start) {
 				// this token begins after the search position, insert the token here
 				size_t token_position = i + 1;
-				duckdb::SimplifiedTokenType end_type = tokens[i].type;
+				auto end_type = tokens[i].type;
 				if (tokens[i].start == match->match_start) {
 					// exact start: only set the search match
 					tokens[i].search_match = true;
@@ -842,6 +879,12 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 			}
 		}
 	}
+	return tokens;
+}
+
+std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
+                          const std::vector<highlightToken> &tokens) {
+	std::stringstream ss;
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
 		if (next < start_pos) {
@@ -860,11 +903,13 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 			ss << underline;
 		}
 		switch (token.type) {
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+		case tokenType::TOKEN_KEYWORD:
+		case tokenType::TOKEN_CONTINUATION_SELECTED:
 			ss << keyword << text << reset;
 			break;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+		case tokenType::TOKEN_NUMERIC_CONSTANT:
+		case tokenType::TOKEN_STRING_CONSTANT:
+		case tokenType::TOKEN_CONTINUATION:
 			ss << constant << text << reset;
 			break;
 		default:
@@ -915,7 +960,8 @@ static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, 
 		}
 #ifndef DISABLE_HIGHLIGHT
 		if (highlight) {
-			highlight_buffer = highlightText(buf, len, start_pos, cpos, match);
+			auto tokens = tokenize(buf, len, match);
+			highlight_buffer = highlightText(buf, len, start_pos, cpos, tokens);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		} else
@@ -1056,25 +1102,25 @@ bool isNewline(char c) {
 	return c == '\r' || c == '\n';
 }
 
-void nextPosition(struct linenoiseState *l, size_t &cpos, int &rows, int &cols) {
-	if (isNewline(l->buf[cpos])) {
-		// newline! move to next line
+void nextPosition(struct linenoiseState *l, const char *buf, size_t len, size_t &cpos, int &rows, int &cols, int plen) {
+	if (isNewline(buf[cpos])) {
+		// explicit newline! move to next line and insert a prompt
 		rows++;
-		cols = 0;
+		cols = plen;
 		cpos++;
-		if (l->buf[cpos - 1] == '\r' && cpos < l->len && l->buf[cpos] == '\n') {
+		if (buf[cpos - 1] == '\r' && cpos < len && buf[cpos] == '\n') {
 			cpos++;
 		}
 		return;
 	}
 	int sz;
 	int char_render_width;
-	if (duckdb::Utf8Proc::UTF8ToCodepoint(l->buf + cpos, sz) < 0) {
+	if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
 		char_render_width = 1;
 		cpos++;
 	} else {
-		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(l->buf, l->len, cpos);
-		cpos = duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, cpos);
+		char_render_width = (int)duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
+		cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 	}
 	if (cols + char_render_width > l->ws.ws_col) {
 		// exceeded l->cols, move to next row
@@ -1094,6 +1140,7 @@ void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_r
 	size_t cpos = 0;
 	while (cpos < l->len) {
 		if (cols >= l->ws.ws_col && !isNewline(l->buf[cpos])) {
+			// exceeded width - move to next line
 			rows++;
 			cols = 0;
 		}
@@ -1101,7 +1148,7 @@ void positionToColAndRow(struct linenoiseState *l, size_t target_pos, int &out_r
 			out_row = rows;
 			out_col = cols;
 		}
-		nextPosition(l, cpos, rows, cols);
+		nextPosition(l, l->buf, l->len, cpos, rows, cols, plen);
 	}
 	if (target_pos == l->len) {
 		out_row = rows;
@@ -1117,6 +1164,7 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 	size_t cpos = 0;
 	while (cpos < l->len) {
 		if (cols >= l->ws.ws_col) {
+			// exceeded width - move to next line
 			rows++;
 			cols = 0;
 		}
@@ -1131,9 +1179,75 @@ size_t colAndRowToPosition(struct linenoiseState *l, int target_row, int target_
 		if (rows == target_row && cols == target_col) {
 			return cpos;
 		}
-		nextPosition(l, cpos, rows, cols);
+		nextPosition(l, l->buf, l->len, cpos, rows, cols, plen);
 	}
 	return cpos;
+}
+
+static std::string addContinuationMarkers(struct linenoiseState *l, const char *buf, size_t len, int plen,
+                                          int cursor_row, std::vector<highlightToken> &tokens) {
+	std::string result;
+	int rows = 1;
+	int cols = plen;
+	size_t cpos = 0;
+	size_t prev_pos = 0;
+	size_t extra_bytes = 0;    // extra bytes introduced
+	size_t token_position = 0; // token position
+	std::vector<highlightToken> new_tokens;
+	new_tokens.reserve(tokens.size());
+	while (cpos < len) {
+		bool is_newline = isNewline(buf[cpos]);
+		nextPosition(l, buf, len, cpos, rows, cols, plen);
+		for (; prev_pos < cpos; prev_pos++) {
+			result += buf[prev_pos];
+		}
+		if (is_newline) {
+			bool is_cursor_row = rows == cursor_row;
+			const char *prompt = is_cursor_row ? continuationSelectedPrompt : continuationPrompt;
+			size_t continuationLen = strlen(prompt);
+			size_t continuationRender = linenoiseComputeRenderWidth(prompt, continuationLen);
+			// pad with spaces prior to prompt
+			for (int i = int(continuationRender); i < plen; i++) {
+				result += " ";
+			}
+			result += prompt;
+			size_t continuationBytes = plen - continuationRender + continuationLen;
+			if (token_position < tokens.size()) {
+				for (; token_position < tokens.size(); token_position++) {
+					if (tokens[token_position].start >= cpos) {
+						// not there yet
+						break;
+					}
+					tokens[token_position].start += extra_bytes;
+					new_tokens.push_back(tokens[token_position]);
+				}
+				tokenType prev_type = tokenType::TOKEN_IDENTIFIER;
+				if (token_position > 0 && token_position < tokens.size() + 1) {
+					prev_type = tokens[token_position - 1].type;
+				}
+				highlightToken token;
+				token.start = cpos + extra_bytes;
+				token.type = is_cursor_row ? tokenType::TOKEN_CONTINUATION_SELECTED : tokenType::TOKEN_CONTINUATION;
+				token.search_match = false;
+				new_tokens.push_back(token);
+
+				token.start = cpos + extra_bytes + continuationBytes;
+				token.type = prev_type;
+				token.search_match = false;
+				new_tokens.push_back(token);
+			}
+			extra_bytes += continuationBytes;
+		}
+	}
+	for (; prev_pos < cpos; prev_pos++) {
+		result += buf[prev_pos];
+	}
+	for (; token_position < tokens.size(); token_position++) {
+		tokens[token_position].start += extra_bytes;
+		new_tokens.push_back(tokens[token_position]);
+	}
+	tokens = std::move(new_tokens);
+	return result;
 }
 
 /* Multi line low level line refresh.
@@ -1177,7 +1291,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		if (l->y_scroll == 0) {
 			start = 0;
 		} else {
-			start = colAndRowToPosition(l, l->y_scroll + 1, 0);
+			start = colAndRowToPosition(l, l->y_scroll, 0);
 		}
 		if (int(l->y_scroll) + int(l->ws.ws_row) >= rows) {
 			end = len;
@@ -1199,14 +1313,22 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		l->maxrows = rows;
 	}
 
+	std::vector<highlightToken> tokens;
+#ifndef DISABLE_HIGHLIGHT
+	auto match = l->search_index < l->search_matches.size() ? &l->search_matches[l->search_index] : nullptr;
+	tokens = tokenize(buf, len, match);
+#endif
+	if (rows > 1) {
+		// add continuation markers
+		highlight_buffer =
+		    addContinuationMarkers(l, buf, len, plen, l->y_scroll > 0 ? new_cursor_row + 1 : new_cursor_row, tokens);
+		buf = (char *)highlight_buffer.c_str();
+		len = highlight_buffer.size();
+	}
 #ifndef DISABLE_HIGHLIGHT
 	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
-		searchMatch *match = nullptr;
-		if (l->search_index < l->search_matches.size()) {
-			match = &l->search_matches[l->search_index];
-		}
 		if (enableHighlighting) {
-			highlight_buffer = highlightText(buf, len, 0, len, match);
+			highlight_buffer = highlightText(buf, len, 0, len, tokens);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		}

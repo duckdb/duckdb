@@ -21,7 +21,10 @@ public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine);
 
 	//! Adds a Value to the result
-	static inline void SetQuoted(ScannerResult &result) {
+	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
+		if (!result.quoted) {
+			result.quoted_position = quoted_position;
+		}
 		result.quoted = true;
 	}
 	//! Adds a Row to the result
@@ -31,6 +34,7 @@ public:
 	// Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	bool escaped = false;
+	idx_t quoted_position = 0;
 
 protected:
 	CSVStates &states;
@@ -172,7 +176,7 @@ protected:
 				if (states.states[0] == CSVState::UNQUOTED) {
 					T::SetEscaped(result);
 				}
-				T::SetQuoted(result);
+				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (state_machine->transition_array
 				           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&

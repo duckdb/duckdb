@@ -10,6 +10,8 @@
 #include "catch.hpp"
 #include <list>
 #include <thread>
+#include "duckdb/main/stream_query_result.hpp"
+#include <chrono>
 
 namespace duckdb {
 
@@ -88,8 +90,19 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
-
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	auto ccontext = connection->context;
+	auto result = ccontext->Query(context.sql_query, true);
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = result->Cast<StreamQueryResult>();
+		return stream_result.Materialize();
+	} else {
+		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+	}
+#else
 	return connection->Query(context.sql_query);
+#endif
 }
 
 void Command::Execute(ExecuteContext &context) const {
@@ -125,6 +138,10 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
 
 ModeCommand::ModeCommand(SQLLogicTestRunner &runner, string parameter_p)
     : Command(runner), parameter(std::move(parameter_p)) {
+}
+
+SleepCommand::SleepCommand(SQLLogicTestRunner &runner, idx_t duration, SleepUnit unit)
+    : Command(runner), duration(duration), unit(unit) {
 }
 
 struct ParallelExecuteContext {
@@ -302,6 +319,39 @@ void ModeCommand::ExecuteInternal(ExecuteContext &context) const {
 		runner.debug_mode = true;
 	} else {
 		throw std::runtime_error("unrecognized mode: " + parameter);
+	}
+}
+
+void SleepCommand::ExecuteInternal(ExecuteContext &context) const {
+	switch (unit) {
+	case SleepUnit::NANOSECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::nano>(duration));
+		break;
+	case SleepUnit::MICROSECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::micro>(duration));
+		break;
+	case SleepUnit::MILLISECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(duration));
+		break;
+	case SleepUnit::SECOND:
+		std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(duration * 1000));
+		break;
+	default:
+		throw std::runtime_error("Unrecognized sleep unit");
+	}
+}
+
+SleepUnit SleepCommand::ParseUnit(const string &unit) {
+	if (unit == "second" || unit == "seconds" || unit == "sec") {
+		return SleepUnit::SECOND;
+	} else if (unit == "millisecond" || unit == "milliseconds" || unit == "milli") {
+		return SleepUnit::MILLISECOND;
+	} else if (unit == "microsecond" || unit == "microseconds" || unit == "micro") {
+		return SleepUnit::MICROSECOND;
+	} else if (unit == "nanosecond" || unit == "nanoseconds" || unit == "nano") {
+		return SleepUnit::NANOSECOND;
+	} else {
+		throw std::runtime_error("Unrecognized sleep mode - expected second/millisecond/microescond/nanosecond");
 	}
 }
 

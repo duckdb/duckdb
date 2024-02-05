@@ -1536,6 +1536,18 @@ The error message can be obtained by calling duckdb_pending_error on the pending
 DUCKDB_API duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result);
 
 /*!
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result.
+* returns: The state of the pending result.
+*/
+DUCKDB_API duckdb_pending_state duckdb_pending_execute_check_state(duckdb_pending_result pending_result);
+
+/*!
 Fully execute a pending query result, returning the final query result.
 
 If duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.
@@ -2482,6 +2494,25 @@ Note that the object must be destroyed with `duckdb_appender_destroy`.
 */
 DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                                duckdb_appender *out_appender);
+
+/*!
+Returns the number of columns in the table that belongs to the appender.
+
+* appender The appender to get the column count from.
+* returns: The number of columns in the table.
+*/
+DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
+
+/*!
+Returns the type of the column at the specified index.
+
+Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* appender The appender to get the column type from.
+* col_idx The index of the column to get the type of.
+* returns: The duckdb_logical_type of the column.
+*/
+DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 
 /*!
 Returns the error message associated with the given appender.

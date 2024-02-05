@@ -1068,7 +1068,7 @@ struct ASinOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		if (input < -1 || input > 1) {
-			throw Exception("ASIN is undefined outside [-1,1]");
+			throw InvalidInputException("ASIN is undefined outside [-1,1]");
 		}
 		return (double)std::asin(input);
 	}

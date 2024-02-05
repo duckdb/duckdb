@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "unicode/ucal.h"
 
 namespace duckdb {
@@ -46,7 +46,7 @@ void ICUDateFunc::BindData::InitCalendar() {
 	UErrorCode success = U_ZERO_ERROR;
 	calendar.reset(icu::Calendar::createInstance(tz, locale, success));
 	if (U_FAILURE(success)) {
-		throw Exception("Unable to create ICU calendar.");
+		throw InternalException("Unable to create ICU calendar.");
 	}
 
 	//	Postgres always assumes times are given in the proleptic Gregorian calendar.
@@ -81,7 +81,7 @@ timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros)
 	UErrorCode status = U_ZERO_ERROR;
 	const auto millis = int64_t(calendar->getTime(status));
 	if (U_FAILURE(status)) {
-		throw Exception("Unable to get ICU calendar time.");
+		throw InternalException("Unable to get ICU calendar time.");
 	}
 	return timestamp_t(millis * Interval::MICROS_PER_MSEC + micros);
 }
@@ -130,7 +130,7 @@ uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {
 	UErrorCode status = U_ZERO_ERROR;
 	calendar->setTime(udate, status);
 	if (U_FAILURE(status)) {
-		throw Exception("Unable to set ICU calendar time.");
+		throw InternalException("Unable to set ICU calendar time.");
 	}
 	return uint64_t(micros);
 }
@@ -139,7 +139,7 @@ int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields f
 	UErrorCode status = U_ZERO_ERROR;
 	const auto result = calendar->get(field, status);
 	if (U_FAILURE(status)) {
-		throw Exception("Unable to extract ICU calendar part.");
+		throw InternalException("Unable to extract ICU calendar part.");
 	}
 	return result;
 }
@@ -150,7 +150,7 @@ int64_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields 
 	UErrorCode status = U_ZERO_ERROR;
 	auto sub = calendar->fieldDifference(when, field, status);
 	if (U_FAILURE(status)) {
-		throw Exception("Unable to subtract ICU calendar part.");
+		throw InternalException("Unable to subtract ICU calendar part.");
 	}
 	return sub;
 }

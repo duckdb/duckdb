@@ -140,12 +140,11 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 	} else if (format == "+r") {
 		child_list_t<LogicalType> members;
 		vector<unique_ptr<ArrowType>> children;
-		auto n_children = schema.n_children;
+		idx_t n_children = idx_t(schema.n_children);
 		D_ASSERT(n_children == 2);
-		(void)n_children;
 		D_ASSERT(string(schema.children[0]->name) == "run_ends");
 		D_ASSERT(string(schema.children[1]->name) == "values");
-		for (idx_t i = 0; i < 2; i++) {
+		for (idx_t i = 0; i < n_children; i++) {
 			auto type = schema.children[i];
 			children.emplace_back(ArrowTableFunction::GetArrowLogicalType(*type));
 			members.emplace_back(type->name, children.back()->GetDuckType());
