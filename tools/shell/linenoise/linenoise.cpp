@@ -586,28 +586,31 @@ void Linenoise::EditMoveEnd() {
 
 /* Substitute the currently edited line with the next or previous history
  * entry as specified by 'dir'. */
-#define LINENOISE_HISTORY_NEXT 0
-#define LINENOISE_HISTORY_PREV 1
-
-void Linenoise::EditHistoryNext(int dir) {
+void Linenoise::EditHistoryNext(HistoryScrollDirection dir) {
 	auto history_len = History::GetLength();
 	if (history_len > 1) {
 		/* Update the current history entry before to
 		 * overwrite it with the next one. */
 		History::Overwrite(history_len - 1 - history_index, buf);
 		/* Show the new entry */
-		history_index += (dir == LINENOISE_HISTORY_PREV) ? 1 : -1;
-		if (history_index < 0) {
-			history_index = 0;
-			return;
-		} else if (history_index >= history_len) {
-			history_index = history_len - 1;
-			return;
+		if (dir == HistoryScrollDirection::LINENOISE_HISTORY_PREV) {
+			// scroll back
+			history_index++;
+			if (history_index >= history_len) {
+				history_index = history_len - 1;
+				return;
+			}
+		} else {
+			// scroll forwards
+			if (history_index == 0) {
+				return;
+			}
+			history_index--;
 		}
 		strncpy(buf, History::GetEntry(history_len - 1 - history_index), buflen);
 		buf[buflen - 1] = '\0';
 		len = pos = strlen(buf);
-		if (Terminal::IsMultiline() && dir == LINENOISE_HISTORY_NEXT) {
+		if (Terminal::IsMultiline() && dir == HistoryScrollDirection::LINENOISE_HISTORY_NEXT) {
 			pos = ColAndRowToPosition(1, len);
 		}
 		RefreshLine();
@@ -1081,10 +1084,10 @@ int Linenoise::Edit() {
 			EditMoveRight();
 			break;
 		case CTRL_P: /* ctrl-p */
-			EditHistoryNext(LINENOISE_HISTORY_PREV);
+			EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_PREV);
 			break;
 		case CTRL_N: /* ctrl-n */
-			EditHistoryNext(LINENOISE_HISTORY_NEXT);
+			EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_NEXT);
 			break;
 		case CTRL_R: /* ctrl-r */ {
 			// initiate reverse search
@@ -1162,13 +1165,13 @@ int Linenoise::Edit() {
 						if (EditMoveRowUp()) {
 							break;
 						}
-						EditHistoryNext(LINENOISE_HISTORY_PREV);
+						EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_PREV);
 						break;
 					case 'B': /* Down */
 						if (EditMoveRowDown()) {
 							break;
 						}
-						EditHistoryNext(LINENOISE_HISTORY_NEXT);
+						EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_NEXT);
 						break;
 					case 'C': /* Right */
 						EditMoveRight();

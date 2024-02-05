@@ -7,19 +7,18 @@
 
 namespace duckdb {
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 1000
-static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
+static idx_t history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static idx_t history_len = 0;
-static char **history = NULL;
-static char *history_file = NULL;
+static char **history = nullptr;
+static char *history_file = nullptr;
 
 /* Free the history, but does not reset it. Only used when we have to
  * exit() to avoid memory leaks are reported by valgrind & co. */
 void History::Free() {
 	if (history) {
-		int j;
-
-		for (j = 0; j < history_len; j++)
+		for (idx_t j = 0; j < history_len; j++) {
 			free(history[j]);
+		}
 		free(history);
 	}
 }
@@ -59,23 +58,25 @@ int History::Add(const char *line) {
 	}
 
 	/* Initialization on first call. */
-	if (history == NULL) {
+	if (history == nullptr) {
 		history = (char **)malloc(sizeof(char *) * history_max_len);
-		if (history == NULL) {
+		if (history == nullptr) {
 			return 0;
 		}
 		memset(history, 0, (sizeof(char *) * history_max_len));
 	}
 
 	/* Don't add duplicated lines. */
-	if (history_len && !strcmp(history[history_len - 1], line))
+	if (history_len && !strcmp(history[history_len - 1], line)) {
 		return 0;
+	}
 
 	/* Add an heap allocated copy of the line in the history.
 	 * If we reached the max length, remove the older line. */
 	linecopy = strdup(line);
-	if (!linecopy)
+	if (!linecopy) {
 		return 0;
+	}
 	if (!Terminal::IsMultiline()) {
 		// replace all newlines with spaces
 		for (auto ptr = linecopy; *ptr; ptr++) {
@@ -98,7 +99,7 @@ int History::Add(const char *line) {
 		FILE *fp;
 
 		fp = fopen(history_file, "a");
-		if (fp == NULL) {
+		if (fp == nullptr) {
 			return 1;
 		}
 		fprintf(fp, "%s\n", line);
@@ -114,10 +115,10 @@ int History::SetMaxLength(idx_t len) {
 		return 0;
 	}
 	if (history) {
-		int tocopy = history_len;
+		idx_t tocopy = history_len;
 
 		new_entry = (char **)malloc(sizeof(char *) * len);
-		if (new_entry == NULL) {
+		if (new_entry == nullptr) {
 			return 0;
 		}
 
@@ -149,7 +150,7 @@ int History::Save(const char *filename) {
 
 	fp = fopen(filename, "w");
 	umask(old_umask);
-	if (fp == NULL) {
+	if (fp == nullptr) {
 		return -1;
 	}
 	chmod(filename, S_IRUSR | S_IWUSR);
@@ -165,12 +166,12 @@ int History::Load(const char *filename) {
 	char buf[LINENOISE_MAX_LINE + 1];
 	buf[LINENOISE_MAX_LINE] = '\0';
 
-	if (fp == NULL) {
+	if (fp == nullptr) {
 		return -1;
 	}
 
 	std::string result;
-	while (fgets(buf, LINENOISE_MAX_LINE, fp) != NULL) {
+	while (fgets(buf, LINENOISE_MAX_LINE, fp) != nullptr) {
 		char *p;
 
 		// strip the newline first

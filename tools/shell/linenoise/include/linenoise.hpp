@@ -33,6 +33,8 @@ namespace duckdb {
 struct highlightToken;
 struct AppendBuffer;
 
+enum class HistoryScrollDirection : uint8_t { LINENOISE_HISTORY_NEXT, LINENOISE_HISTORY_PREV };
+
 struct searchMatch {
 	size_t history_index;
 	size_t match_start;
@@ -74,7 +76,7 @@ public:
 	bool EditMoveRowDown();
 	void EditMoveHome();
 	void EditMoveEnd();
-	void EditHistoryNext(int dir);
+	void EditHistoryNext(HistoryScrollDirection dir);
 	void EditDelete();
 	void EditBackspace();
 	void EditDeletePrevWord();
@@ -119,7 +121,7 @@ public:
 	size_t y_scroll;                         /* The y scroll position (multiline mode) */
 	TerminalSize ws;                         /* Terminal size */
 	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
-	int history_index;                       /* The history index we are currently editing. */
+	idx_t history_index;                     /* The history index we are currently editing. */
 	bool clear_screen;                       /* Whether we are clearing the screen */
 	bool search;                             /* Whether or not we are searching our history */
 	bool render;                             /* Whether or not to re-render */
