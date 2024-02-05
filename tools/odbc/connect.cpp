@@ -164,6 +164,13 @@ SQLRETURN Connect::ReadFromIniFile() {
 		return SQL_SUCCESS;
 	}
 
+	UWORD config_mode;
+	auto is_success = SQLGetConfigMode(&config_mode);
+	if (is_success != SQL_SUCCESS) {
+		std::cout << "Error reading config mode" << std::endl;
+	}
+	std::cout << "config_mode: " << config_mode << std::endl;
+
 	auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
 	auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);
 	std::cout << "converted_odbc_file: " << converted_odbc_file << std::endl;
@@ -176,7 +183,7 @@ SQLRETURN Connect::ReadFromIniFile() {
 		char char_val[max_val_len];
 		auto converted_key = key_pair.second.c_str();
 		int read_size =
-		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, ".odbc.ini");
+		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, "odbc.ini");
 		std::cout << "key: " << converted_key << ", read_size: " << read_size << std::endl;
 #if WIN32
 		std::cout << "last error: " << GetLastError() << std::endl;
