@@ -258,8 +258,8 @@ size_t Linenoise::ComputeRenderWidth(const char *buf, size_t len) {
 	return render_width;
 }
 
-int Linenoise::GetPromptWidth() {
-	return ComputeRenderWidth(prompt, strlen(prompt));
+int Linenoise::GetPromptWidth() const {
+	return int(ComputeRenderWidth(prompt, strlen(prompt)));
 }
 
 int Linenoise::GetRenderPosition(const char *buf, size_t len, int max_width, int *n) {
@@ -930,9 +930,10 @@ int Linenoise::Edit() {
 	 * initially is just an empty string. */
 	History::Add("");
 
-	if (write(ofd, prompt, plen) == -1)
+	if (write(ofd, prompt, plen) == -1) {
 		return -1;
-	while (1) {
+	}
+	while (true) {
 		char c;
 		int nread;
 		char seq[5];
@@ -976,11 +977,13 @@ int Linenoise::Edit() {
 			}
 			c = CompleteLine();
 			/* Return on errors */
-			if (c < 0)
+			if (c < 0) {
 				return len;
+			}
 			/* Read next character when 0 */
-			if (c == 0)
+			if (c == 0) {
 				continue;
+			}
 		}
 
 		lndebug("%d\n", (int) c);

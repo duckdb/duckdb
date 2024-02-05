@@ -57,7 +57,7 @@ public:
 
 	static int ParseOption(const char **azArg, int nArg, const char **out_error);
 
-	int GetPromptWidth();
+	int GetPromptWidth() const;
 
 	void RefreshLine();
 	int CompleteLine();
