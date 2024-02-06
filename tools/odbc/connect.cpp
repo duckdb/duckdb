@@ -169,7 +169,18 @@ SQLRETURN Connect::ReadFromIniFile() {
 	if (is_success != SQL_SUCCESS) {
 		std::cout << "Error reading config mode" << std::endl;
 	}
-	std::cout << "config_mode: " << config_mode << std::endl;
+
+	switch (config_mode) {
+	case ODBC_BOTH_DSN:
+		std::cout << "ODBC_BOTH_DSN" << std::endl;
+		break;
+	case ODBC_USER_DSN:
+		std::cout << "ODBC_USER_DSN" << std::endl;
+		break;
+	case ODBC_SYSTEM_DSN:
+		std::cout << "ODBC_SYSTEM_DSN" << std::endl;
+		break;
+	}
 
 	auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
 	auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);

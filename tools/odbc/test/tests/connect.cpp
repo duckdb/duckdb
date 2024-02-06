@@ -1,6 +1,8 @@
 #include "../common.h"
+
 #include <fstream>
 #include <iostream>
+#include <odbcinst.h>
 
 using namespace odbc_test;
 
@@ -151,25 +153,41 @@ static void TestSettingConfigs() {
 // Test input from an ini file
 static void TestIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
+#if !defined WIN32
 	// Create a temporary ini file
-//	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
-//
-//	if (std::ifstream(ini_file)) {
-//		std::remove(ini_file.c_str());
-//	}
-//
-//	std::ofstream out(ini_file);
-//	out << "[DuckDB]\n";
-//	out << "Driver = DuckDB Driver\n";
-//	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
-//	out << "access_mode = read_only\n";
-//	out << "allow_unsigned_extensions = true\n";
-//	out.close();
-//
-//	std::cout << "ini_file: " << ini_file << std::endl;
-//	if (!std::ifstream(ini_file)) {
-//        FAIL("Failed to create ini file");
-//    }
+	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
+
+	if (std::ifstream(ini_file)) {
+		std::remove(ini_file.c_str());
+	}
+
+	std::ofstream out(ini_file);
+	out << "[DuckDB]\n";
+	out << "Driver = DuckDB Driver\n";
+	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
+	out << "access_mode = read_only\n";
+	out << "allow_unsigned_extensions = true\n";
+	out.close();
+
+	std::cout << "ini_file: " << ini_file << std::endl;
+	if (!std::ifstream(ini_file)) {
+		FAIL("Failed to create ini file");
+	}
+
+#elif defined WIN32
+	LPCSTR dsn = "DuckDB";
+	LPCSTR driver = "DuckDB Driver";
+	LPCSTR database = reinterpret_cast<LPCSTR>(ConvertToSQLCHAR(GetTesterDirectory() + "test.duckdb"));
+	LPCSTR access_mode = "read_only";
+	LPCSTR allow_unsigned_extensions = "true";
+
+	// Add DSN to the ini file
+	REQUIRE(SQLWriteDSNToIni(dsn, driver) == true);
+	// Write to the ini file
+	REQUIRE(SQLWritePrivateProfileString(dsn, "database", database, nullptr) == true);
+	REQUIRE(SQLWritePrivateProfileString(dsn, "access_mode", access_mode, nullptr) == true);
+	REQUIRE(SQLWritePrivateProfileString(dsn, "allow_unsigned_extensions", allow_unsigned_extensions, nullptr) == true);
+#endif
 
 	// Connect to the database using the ini file
 	SQLHANDLE env;
@@ -188,8 +206,9 @@ static void TestIniFile() {
 	// Disconnect from the database
 	DISCONNECT_FROM_DATABASE(env, dbc);
 
-//	// Delete the ini file
-//	std::remove(ini_file.c_str());
+#if !defined WIN32
+	std::remove(ini_file.c_str());
+#endif
 #endif
 }
 
