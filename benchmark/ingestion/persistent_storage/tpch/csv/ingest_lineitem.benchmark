@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/persistent_storage/tpch/csv/ingest_lineitem.benchmark
 # description: benchmark ingestion of lineitem
-# group: [tpch]
+# group: [csv]
 
 template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
 table_name=lineitem

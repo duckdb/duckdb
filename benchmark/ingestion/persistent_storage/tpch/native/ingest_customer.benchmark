@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/persistent_storage/tpch/native/ingest_customer.benchmark
 # description: benchmark ingestion of customer
-# group: [tpch]
+# group: [native]
 
 template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
 table_name=customer

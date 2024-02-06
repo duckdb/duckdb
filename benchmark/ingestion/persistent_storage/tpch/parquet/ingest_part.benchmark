@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/persistent_storage/tpch/parquet/ingest_part.benchmark
 # description: benchmark ingestion of part
-# group: [tpch]
+# group: [parquet]
 
 template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
 table_name=part

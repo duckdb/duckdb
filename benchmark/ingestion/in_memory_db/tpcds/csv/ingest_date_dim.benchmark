@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/in_memory_db/tpcds/csv/ingest_date_dim.benchmark
 # description: benchmark ingestion of date_dim
-# group: [tpcds]
+# group: [csv]
 
 template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion_in_memory.benchmark.in
 table_name=date_dim

@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_customer.benchmark
 # description: benchmark ingestion of customer
-# group: [tpcds]
+# group: [csv]
 
 template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=customer

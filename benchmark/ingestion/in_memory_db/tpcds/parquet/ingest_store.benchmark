@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/in_memory_db/tpcds/parquet/ingest_store.benchmark
 # description: benchmark ingestion of store
-# group: [tpcds]
+# group: [parquet]
 
 template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion_in_memory.benchmark.in
 table_name=store

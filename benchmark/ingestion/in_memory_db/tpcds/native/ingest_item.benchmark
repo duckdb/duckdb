@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/in_memory_db/tpcds/native/ingest_item.benchmark
 # description: benchmark ingestion of item
-# group: [tpcds]
+# group: [native]
 
 template benchmark/ingestion/in_memory_db/tpcds/native/tpcds_ingest_native.benchmark.in
 table_name=item

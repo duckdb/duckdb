@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_promotion.benchmark
 # description: benchmark ingestion of promotion
-# group: [tpcds]
+# group: [csv]
 
 template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=promotion

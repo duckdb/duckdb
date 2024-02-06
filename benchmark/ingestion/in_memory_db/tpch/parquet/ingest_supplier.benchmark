@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/in_memory_db/tpch/parquet/ingest_supplier.benchmark
 # description: benchmark ingestion of supplier
-# group: [tpch]
+# group: [parquet]
 
 template benchmark/ingestion/in_memory_db/tpch/tpch_ingestion_in_memory.benchmark.in
 table_name=supplier

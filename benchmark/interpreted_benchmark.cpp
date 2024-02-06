@@ -180,13 +180,12 @@ void InterpretedBenchmark::LoadBenchmark() {
 		} else if (splits[0] == "cache") {
 			if (splits.size() == 2) {
 				cache_db = splits[1];
-			}
-			else if (splits.size() == 3 && splits[2] == "no_connect") {
+			} else if (splits.size() == 3 && splits[2] == "no_connect") {
 				cache_db = splits[1];
 				cache_no_connect = true;
-			}
-			else {
-				throw std::runtime_error(reader.FormatException("cache requires a db file, and optionally a no_connect"));
+			} else {
+				throw std::runtime_error(
+				    reader.FormatException("cache requires a db file, and optionally a no_connect"));
 			}
 		} else if (splits[0] == "storage") {
 			if (splits.size() != 2) {

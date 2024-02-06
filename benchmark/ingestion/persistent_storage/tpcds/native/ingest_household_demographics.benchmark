@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_household_demographics.benchmark
 # description: benchmark ingestion of household_demographics
-# group: [tpcds]
+# group: [native]
 
 template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=household_demographics

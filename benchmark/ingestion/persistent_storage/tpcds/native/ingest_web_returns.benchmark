@@ -1,6 +1,6 @@
 # name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_web_returns.benchmark
 # description: benchmark ingestion of web_returns
-# group: [tpcds]
+# group: [native]
 
 template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=web_returns
