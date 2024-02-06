@@ -149,6 +149,28 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	list_size -= start_offset;
 }
 
+template <class BUFFER_TYPE>
+static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, ArrowArray &array, idx_t size,
+                                                                idx_t effective_offset) {
+	ArrowListOffsetData result;
+	auto &start_offset = result.start_offset;
+	auto &list_size = result.list_size;
+
+	idx_t cur_offset = 0;
+	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
+	auto sizes = ArrowBufferaData<BUFFER_TYPE>(arrow, 2) + effective_offset;
+
+	start_offset = offsets[0];
+	auto list_data = FlatVector::GetData<list_entry_t>(vector);
+	for (idx_t i = 0; i < size; i++) {
+		auto &le = list_data[i];
+		le.offset = cur_offset;
+		le.length = sizes[i];
+		cur_offset += le.length;
+	}
+	list_size = cur_offset;
+}
+
 static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &array, idx_t size,
                                                    const ArrowType &arrow_type, idx_t effective_offset) {
 	auto size_type = arrow_type.GetSizeType();
@@ -173,11 +195,20 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 		list_size = cur_offset;
 		return result;
 	}
-	if (size_type == ArrowVariableSizeType::NORMAL) {
-		return ConvertArrowListOffsetsTemplated<int32_t>(vector, array, size, effective_offset);
+	if (arrow_type.IsView()) {
+		if (size_type == ArrowVariableSizeType::NORMAL) {
+			return ConvertArrowListViewOffsetsTemplated<int32_t>(vector, array, size, effective_offset);
+		} else {
+			D_ASSERT(size_type == ArrowVariableSizeType::SUPER_SIZE);
+			return ConvertArrowListViewOffsetsTemplated<int64_t>(vector, array, size, effective_offset);
+		}
 	} else {
-		D_ASSERT(size_type == ArrowVariableSizeType::SUPER_SIZE);
-		return ConvertArrowListOffsetsTemplated<int64_t>(vector, array, size, effective_offset);
+		if (size_type == ArrowVariableSizeType::NORMAL) {
+			return ConvertArrowListOffsetsTemplated<int32_t>(vector, array, size, effective_offset);
+		} else {
+			D_ASSERT(size_type == ArrowVariableSizeType::SUPER_SIZE);
+			return ConvertArrowListOffsetsTemplated<int64_t>(vector, array, size, effective_offset);
+		}
 	}
 	return result;
 }
