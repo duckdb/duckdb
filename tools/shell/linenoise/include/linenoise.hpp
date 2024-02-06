@@ -92,12 +92,14 @@ public:
 	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
 	                              vector<highlightToken> &tokens) const;
 	void AddBracketHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const;
+	void AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const;
 
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
 	static bool AllWhitespace(const char *z);
 
 public:
+	static void LogTokens(const vector<highlightToken> &tokens);
 #define LINENOISE_LOGGING
 #ifdef LINENOISE_LOGGING
 	// Logging

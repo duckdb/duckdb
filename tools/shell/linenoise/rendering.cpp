@@ -320,6 +320,7 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 	vector<highlightToken> new_tokens;
 	new_tokens.reserve(tokens.size() + 1);
 	idx_t i;
+	bool found = false;
 	for(i = 0; i < tokens.size(); i++) {
 		// find the exact position where we need to insert the token
 		if (tokens[i].start == insert_pos) {
@@ -340,6 +341,7 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 				new_tokens.push_back(token);
 			}
 			i++;
+			found = true;
 			break;
 		} else if (tokens[i].start > insert_pos) {
 			// the next token is AFTER the render position
@@ -353,6 +355,7 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 			// now just insert the next token
 			new_tokens.push_back(tokens[i]);
 			i++;
+			found = true;
 			break;
 		} else {
 			// insert the token
@@ -362,6 +365,14 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 	// copy over the remaining tokens
 	for(; i < tokens.size(); i++) {
 		new_tokens.push_back(tokens[i]);
+	}
+	if (!found) {
+		// token was not added - add it to the end
+		highlightToken token;
+		token.start = insert_pos;
+		token.type = insert_type;
+		token.search_match = false;
+		new_tokens.push_back(token);
 	}
 	tokens = std::move(new_tokens);
 }
@@ -445,6 +456,123 @@ void Linenoise::AddBracketHighlighting(idx_t render_start, idx_t render_end, vec
 	}
 }
 
+enum class ScanState {
+	STANDARD,
+	IN_SINGLE_QUOTE,
+	IN_DOUBLE_QUOTE,
+	IN_COMMENT
+};
+
+void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
+	// do a pass over the buffer to collect errors:
+	// * brackets without matching closing/opening bracket
+	// * single quotes without matching closing single quote
+	// * double quote without matching double quote
+	ScanState state = ScanState::STANDARD;
+	vector<idx_t> brackets;
+	vector<idx_t> errors;
+	idx_t quote_pos = 0;
+	for(idx_t i = 0; i < len; i++) {
+		auto c = buf[i];
+		switch(state) {
+		case ScanState::STANDARD:
+			switch(c) {
+			case '-':
+				if (i + 1 < len && buf[i + 1] == '-') {
+					// -- puts us in a comment
+					i++;
+					state = ScanState::IN_COMMENT;
+					break;
+				}
+				break;
+			case '\'':
+				state = ScanState::IN_SINGLE_QUOTE;
+				quote_pos = i;
+				break;
+			case '\"':
+				state = ScanState::IN_DOUBLE_QUOTE;
+				quote_pos = i;
+				break;
+			case '(':
+				brackets.push_back(i);
+				break;
+			case ')':
+				if (brackets.empty()) {
+					// closing bracket without matching opening bracket
+					errors.push_back(i);
+				} else {
+					brackets.pop_back();
+				}
+				break;
+			default:
+				break;
+			}
+			break;
+		case ScanState::IN_COMMENT:
+			// comment state - the only thing that will get us out is a newline
+			switch(c) {
+			case '\r':
+			case '\n':
+				state = ScanState::STANDARD;
+				break;
+			default:
+				break;
+			}
+			break;
+		case ScanState::IN_SINGLE_QUOTE:
+			// single quote - all that will get us out is an unescaped single-quote
+			if (c == '\'') {
+				if (i + 1 < len && buf[i + 1] == '\'') {
+					// double single-quote means the quote is escaped - continue
+					i++;
+					break;
+				} else {
+					// otherwise revert to standard scan state
+					state = ScanState::STANDARD;
+					break;
+				}
+			}
+			break;
+		case ScanState::IN_DOUBLE_QUOTE:
+			// double quote - all that will get us out is an unescaped quote
+			if (c == '"') {
+				if (i + 1 < len && buf[i + 1] == '"') {
+					// double quote means the quote is escaped - continue
+					i++;
+					break;
+				} else {
+					// otherwise revert to standard scan state
+					state = ScanState::STANDARD;
+					break;
+				}
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	if (state == ScanState::IN_DOUBLE_QUOTE || state == ScanState::IN_SINGLE_QUOTE) {
+		// quote is never closed
+		errors.push_back(quote_pos);
+	}
+	if (!brackets.empty()) {
+		// if there are unclosed brackets remaining not all brackets were closed
+		for(auto &bracket : brackets) {
+			errors.push_back(bracket);
+		}
+	}
+	// insert all the errors for highlighting
+	for(auto &error : errors) {
+		Linenoise::Log("Error found at position %llu\n", error);
+		if (error < render_start || error > render_end) {
+			continue;
+		}
+		auto render_error = error - render_start;
+		InsertToken(tokenType::TOKEN_ERROR, render_error, tokens);
+	}
+	Linenoise::LogTokens(tokens);
+}
+
 /* Multi line low level line refresh.
  *
  * Rewrite the currently edited line accordingly to the buffer content,
@@ -514,6 +642,9 @@ void Linenoise::RefreshMultiLine() {
 
 		// add bracket highlighting
 		AddBracketHighlighting(render_start, render_end, tokens);
+
+		// add error highlighting
+		AddErrorHighlighting(render_start, render_end, tokens);
 	}
 	if (rows > 1) {
 		// add continuation markers

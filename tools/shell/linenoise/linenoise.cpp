@@ -1080,5 +1080,48 @@ void Linenoise::LogMessageRecursive(const string &msg, std::vector<ExceptionForm
 }
 #endif
 
+void Linenoise::LogTokens(const vector<highlightToken> &tokens) {
+#ifdef LINENOISE_LOGGING
+	for(auto &token : tokens) {
+		const char *token_type_name = "";
+		switch(token.type) {
+		case tokenType::TOKEN_IDENTIFIER:
+			token_type_name = "IDENTIFIER";
+			break;
+		case tokenType::TOKEN_NUMERIC_CONSTANT:
+			token_type_name = "NUMERIC_CONSTANT";
+			break;
+		case tokenType::TOKEN_STRING_CONSTANT:
+			token_type_name = "STRING_CONSTANT";
+			break;
+		case tokenType::TOKEN_OPERATOR:
+			token_type_name = "OPERATOR";
+			break;
+		case tokenType::TOKEN_KEYWORD:
+			token_type_name = "KEYWORD";
+			break;
+		case tokenType::TOKEN_COMMENT:
+			token_type_name = "COMMENT";
+			break;
+		case tokenType::TOKEN_CONTINUATION:
+			token_type_name = "CONTINUATION";
+			break;
+		case tokenType::TOKEN_CONTINUATION_SELECTED:
+			token_type_name = "CONTINUATION_SELECTED";
+			break;
+		case tokenType::TOKEN_BRACKET:
+			token_type_name = "BRACKET";
+			break;
+		case tokenType::TOKEN_ERROR:
+			token_type_name = "ERROR";
+			break;
+		default:
+			break;
+		}
+		Linenoise::Log("Token at position %d with type %s\n", token.start, token_type_name);
+	}
+#endif
+}
+
 
 } // namespace duckdb
