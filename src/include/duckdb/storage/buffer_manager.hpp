@@ -21,6 +21,20 @@ class Allocator;
 class BufferPool;
 class TemporaryMemoryManager;
 
+enum class MemoryTag : uint32_t {
+	BASE_TABLE,
+    HASH_TABLE,
+	PARQUET_READER,
+	CSV_READER,
+    ORDER_BY,
+    ART_INDEX,
+    COLUMN_DATA,
+    METADATA,
+    OVERFLOW_STRINGS,
+    IN_MEMORY_TABLE,
+    EXTENSION
+};
+
 class BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;
@@ -34,7 +48,7 @@ public:
 
 public:
 	static unique_ptr<BufferManager> CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config);
-	virtual BufferHandle Allocate(idx_t block_size, bool can_destroy = true,
+	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
 	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;

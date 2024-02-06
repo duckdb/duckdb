@@ -122,7 +122,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(idx_t block_size, 
 	                                std::move(res));
 }
 
-BufferHandle StandardBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
+BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
 	shared_ptr<BlockHandle> local_block;
 	auto block_ptr = block ? block : &local_block;
 	*block_ptr = RegisterMemory(block_size, can_destroy);

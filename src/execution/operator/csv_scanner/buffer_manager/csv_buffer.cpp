@@ -44,7 +44,7 @@ shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_s
 void CSVBuffer::AllocateBuffer(idx_t buffer_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	bool can_destroy = can_seek;
-	handle = buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size), can_destroy, &block);
+	handle = buffer_manager.Allocate(MemoryTag::CSV_READER, MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size), can_destroy, &block);
 }
 
 idx_t CSVBuffer::GetBufferSize() {
