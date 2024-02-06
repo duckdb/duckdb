@@ -1144,7 +1144,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 	} else {
 		timezone = tz_config->second.GetValue<string>();
 	}
-	return {timezone, db->config.options.arrow_offset_size};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view};
 }
 
 bool ClientContext::ExecutionIsFinished() {

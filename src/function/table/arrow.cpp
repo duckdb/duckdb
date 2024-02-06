@@ -15,7 +15,7 @@
 namespace duckdb {
 
 static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSizeType size, bool view) {
-	auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
+	auto child_type = ArrowTableFunction::GetArrowLogicalType(child);
 	auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), ArrowVariableSizeType::NORMAL);
 	list_type->AddChild(std::move(child_type));
 	if (view) {
@@ -102,7 +102,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, false);
 	} else if (format == "+vl") {
 		return CreateListType(*schema.children[0], ArrowVariableSizeType::NORMAL, true);
-	} else if (foramt == "+vL") {
+	} else if (format == "+vL") {
 		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
