@@ -377,85 +377,6 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 	tokens = std::move(new_tokens);
 }
 
-void Linenoise::AddBracketHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
-	// check if we are close to a bracket
-	idx_t bracket_pos;
-	bool close_to_bracket = false;
-	if (IsBracket(buf[pos])) {
-		close_to_bracket = true;
-		bracket_pos = pos;
-	}
-	if (!close_to_bracket && pos < len && IsBracket(buf[pos + 1])) {
-		close_to_bracket = true;
-		bracket_pos = pos + 1;
-	}
-	if (!close_to_bracket && pos > 0 && IsBracket(buf[pos - 1])) {
-		close_to_bracket = true;
-		bracket_pos = pos - 1;
-	}
-	if (!close_to_bracket) {
-		// cursor is not close to a bracket - no need to highlight
-		return;
-	}
-	// now find the matching opening/closing bracket for the given bracket
-	bool is_opening_bracket = buf[bracket_pos] == '(';
-	idx_t other_bracket_pos;
-	bool found = false;
-	if (is_opening_bracket) {
-		// opening bracket - scan forwards
-		int64_t bracket_level = 0;
-		for(idx_t i = bracket_pos + 1; i < len; i++) {
-			auto c = buf[i];
-			if (c == ')') {
-				if (bracket_level == 0) {
-					// found!
-					other_bracket_pos = i;
-					found = true;
-					break;
-				}
-				bracket_level--;
-			}
-			if (c == '(') {
-				bracket_level++;
-			}
-		}
-	} else {
-		// closing bracket - scan backwards
-		int64_t bracket_level = 0;
-		for(idx_t i = bracket_pos; i > 0; i--) {
-			auto c = buf[i - 1];
-			if (c == ')') {
-				bracket_level--;
-			}
-			if (c == '(') {
-				if (bracket_level == 0) {
-					// found!
-					other_bracket_pos = i - 1;
-					found = true;
-					break;
-				}
-				bracket_level++;
-			}
-		}
-	}
-	if (!found) {
-		// other bracket not found
-		return;
-	}
-	Linenoise::Log("Highlight brackets at position %d and %d\n", bracket_pos, other_bracket_pos);
-	// now we have two brackets: "bracket_pos" and "other_bracket_pos"
-	// add them to the tokens
-	idx_t positions[2] = { bracket_pos, other_bracket_pos };
-	for(idx_t k = 0; k < 2; k++) {
-		if (positions[k] < render_start || positions[k] > render_end) {
-			// this token is not rendered
-			continue;
-		}
-		idx_t render_position = positions[k] - render_start;
-		InsertToken(tokenType::TOKEN_BRACKET, render_position, tokens);
-	}
-}
-
 enum class ScanState {
 	STANDARD,
 	IN_SINGLE_QUOTE,
@@ -471,6 +392,7 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 	ScanState state = ScanState::STANDARD;
 	vector<idx_t> brackets;
 	vector<idx_t> errors;
+	vector<idx_t> cursor_brackets;
 	idx_t quote_pos = 0;
 	for(idx_t i = 0; i < len; i++) {
 		auto c = buf[i];
@@ -493,14 +415,44 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 				state = ScanState::IN_DOUBLE_QUOTE;
 				quote_pos = i;
 				break;
-			case '(':
+			case '(': {
+				// check if the cursor is at this position
+				if (pos == i) {
+					// cursor is exactly on this position - always highlight this bracket
+					if (!cursor_brackets.empty()) {
+						cursor_brackets.clear();
+					}
+					cursor_brackets.push_back(i);
+				}
+				if (cursor_brackets.empty() && ((i + 1) == pos || (pos + 1) == i)) {
+					// cursor is either BEFORE or AFTER this bracket and we don't have any highlighted bracket yet
+					// highlight this bracket
+					cursor_brackets.push_back(i);
+				}
 				brackets.push_back(i);
 				break;
+			}
 			case ')':
+				if (pos == i) {
+					// cursor is on this closing bracket
+					// clear any selected brackets - we always select this one
+					cursor_brackets.clear();
+				}
 				if (brackets.empty()) {
 					// closing bracket without matching opening bracket
 					errors.push_back(i);
 				} else {
+					if (cursor_brackets.size() == 1) {
+						if (cursor_brackets.back() == brackets.back()) {
+							// this closing bracket matches the highlighted opening cursor bracket - highlight both
+							cursor_brackets.push_back(i);
+						}
+					} else if (cursor_brackets.empty() && (pos == i || (i + 1) == pos || (pos + 1) == i)) {
+						// no cursor bracket selected yet and cursor is BEFORE or AFTER this bracket
+						// add this bracket
+						cursor_brackets.push_back(i);
+						cursor_brackets.push_back(brackets.back());
+					}
 					brackets.pop_back();
 				}
 				break;
@@ -569,6 +521,20 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 		}
 		auto render_error = error - render_start;
 		InsertToken(tokenType::TOKEN_ERROR, render_error, tokens);
+	}
+	if (cursor_brackets.size() != 2) {
+		// no matching cursor brackets found
+		cursor_brackets.clear();
+	}
+	// insert bracket for highlighting
+	for(auto &bracket_position : cursor_brackets) {
+		Linenoise::Log("Highlight bracket at position %d\n", bracket_position);
+		if (bracket_position < render_start || bracket_position > render_end) {
+			continue;
+		}
+
+		idx_t render_position = bracket_position - render_start;
+		InsertToken(tokenType::TOKEN_BRACKET, render_position, tokens);
 	}
 	Linenoise::LogTokens(tokens);
 }
@@ -639,9 +605,6 @@ void Linenoise::RefreshMultiLine() {
 	if (Highlighting::IsEnabled()) {
 		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
 		tokens = Highlighting::Tokenize(render_buf, render_len, match);
-
-		// add bracket highlighting
-		AddBracketHighlighting(render_start, render_end, tokens);
 
 		// add error highlighting
 		AddErrorHighlighting(render_start, render_end, tokens);
