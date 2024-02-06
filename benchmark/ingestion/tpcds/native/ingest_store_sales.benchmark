@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/native/ingest_store_sales.benchmark
-# description: benchmark ingestion of store_sales
-# group: [native]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=store_sales
-format=native

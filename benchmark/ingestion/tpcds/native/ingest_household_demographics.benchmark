@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/native/ingest_household_demographics.benchmark
-# description: benchmark ingestion of household_demographics
-# group: [native]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=household_demographics
-format=native

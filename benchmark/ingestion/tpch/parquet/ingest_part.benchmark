@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpch/parquet/ingest_part.benchmark
-# description: benchmark ingestion of part
-# group: [parquet]
-
-template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
-table_name=part
-format=parquet

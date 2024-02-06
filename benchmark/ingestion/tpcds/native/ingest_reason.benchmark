@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/native/ingest_reason.benchmark
-# description: benchmark ingestion of reason
-# group: [native]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=reason
-format=native

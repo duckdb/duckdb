@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/native/ingest_date_dim.benchmark
-# description: benchmark ingestion of date_dim
-# group: [native]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=date_dim
-format=native

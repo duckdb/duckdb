@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/csv/ingest_warehouse.benchmark
-# description: benchmark ingestion of warehouse
-# group: [csv]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=warehouse
-format=csv

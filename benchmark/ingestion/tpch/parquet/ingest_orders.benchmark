@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpch/parquet/ingest_orders.benchmark
-# description: benchmark ingestion of orders
-# group: [parquet]
-
-template benchmark/ingestion/tpch/tpch_ingestion.benchmark.in
-table_name=orders
-format=parquet

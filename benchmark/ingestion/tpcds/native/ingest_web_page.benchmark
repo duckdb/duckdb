@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/native/ingest_web_page.benchmark
-# description: benchmark ingestion of web_page
-# group: [native]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=web_page
-format=native

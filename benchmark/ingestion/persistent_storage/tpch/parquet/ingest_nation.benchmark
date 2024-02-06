@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/persistent_storage/tpch/parquet/ingest_nation.benchmark
+# description: benchmark ingestion of nation
+# group: [tpch]
+
+template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion.benchmark.in
+table_name=nation
+format=parquet

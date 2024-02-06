@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/csv/ingest_date_dim.benchmark
-# description: benchmark ingestion of date_dim
-# group: [csv]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=date_dim
-format=csv

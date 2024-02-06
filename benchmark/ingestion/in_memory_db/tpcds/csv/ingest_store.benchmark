@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/in_memory_db/tpcds/csv/ingest_store.benchmark
+# description: benchmark ingestion of store
+# group: [tpcds]
+
+template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion.benchmark.in
+table_name=store
+format=csv

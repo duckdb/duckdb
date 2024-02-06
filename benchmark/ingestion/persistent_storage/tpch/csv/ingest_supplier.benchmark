@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/persistent_storage/tpch/csv/ingest_supplier.benchmark
+# description: benchmark ingestion of supplier
+# group: [tpch]
+
+template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion.benchmark.in
+table_name=supplier
+format=csv

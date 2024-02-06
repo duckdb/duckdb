@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/in_memory_db/tpcds/csv/ingest_web_page.benchmark
+# description: benchmark ingestion of web_page
+# group: [tpcds]
+
+template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion.benchmark.in
+table_name=web_page
+format=csv

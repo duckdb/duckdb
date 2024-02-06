@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/csv/ingest_web_sales.benchmark
-# description: benchmark ingestion of web_sales
-# group: [csv]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=web_sales
-format=csv

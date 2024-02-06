@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/parquet/ingest_catalog_returns.benchmark
-# description: benchmark ingestion of catalog_returns
-# group: [parquet]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=catalog_returns
-format=parquet

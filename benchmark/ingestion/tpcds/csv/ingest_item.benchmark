@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/csv/ingest_item.benchmark
-# description: benchmark ingestion of item
-# group: [csv]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=item
-format=csv

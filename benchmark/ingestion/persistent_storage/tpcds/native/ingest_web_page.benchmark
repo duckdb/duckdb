@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_web_page.benchmark
+# description: benchmark ingestion of web_page
+# group: [tpcds]
+
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion.benchmark.in
+table_name=web_page
+format=native

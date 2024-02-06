@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/tpcds/csv/ingest_ship_mode.benchmark
-# description: benchmark ingestion of ship_mode
-# group: [csv]
-
-template benchmark/ingestion/tpcds/tpcds_ingestion.benchmark.in
-table_name=ship_mode
-format=csv
