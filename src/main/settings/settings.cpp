@@ -1060,7 +1060,6 @@ Value ProduceArrowStringView::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
 }
 
-
 //===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//

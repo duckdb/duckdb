@@ -15,6 +15,14 @@ static void TestArrowRoundtrip(const string &query, bool export_large_buffer = f
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false));
 }
 
+static void TestArrowRoundtripStringView(const string &query) {
+	DuckDB db;
+	Connection con(db);
+	auto res = con.Query("SET produce_arrow_string_view=True");
+	REQUIRE(!res->HasError());
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false));
+}
+
 static void TestParquetRoundtrip(const string &path) {
 	DuckDB db;
 	Connection con(db);
@@ -79,6 +87,13 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	                   "FROM test_all_types()");
 }
 
+TEST_CASE("Test Arrow String View", "[arrow][.]") {
+	// Test Small Strings
+	TestArrowRoundtripStringView("SELECT (i*10^i)::varchar str FROM range(5) tbl(i)");
+	// Test Big Strings
+
+	// Test Mix of Small/Big Strings
+}
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
 	std::vector<std::string> data;
 	// data.emplace_back("data/parquet-testing/7-set.snappy.arrow2.parquet");

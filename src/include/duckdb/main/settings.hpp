@@ -489,8 +489,7 @@ struct ExportLargeBufferArrow {
 
 struct ProduceArrowStringView {
 	static constexpr const char *Name = "produce_arrow_string_view";
-	static constexpr const char *Description =
-	    "If strings should be produced by DuckDB as string_views";
+	static constexpr const char *Description = "If strings should be produced by DuckDB as string_views";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
