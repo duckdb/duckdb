@@ -49,6 +49,7 @@ public:
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);
 	virtual DUCKDB_API void FreeReservedMemory(idx_t size);
+	virtual vector<MemoryInformation> GetMemoryUsageInfo() const = 0;
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	virtual void SetLimit(idx_t limit = (idx_t)-1);

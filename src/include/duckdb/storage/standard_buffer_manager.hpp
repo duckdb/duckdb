@@ -63,6 +63,9 @@ public:
 	//! blocks can be evicted
 	void SetLimit(idx_t limit = (idx_t)-1) final override;
 
+	//! Returns informaton about memory usage
+	vector<MemoryInformation> GetMemoryUsageInfo() const override;
+
 	//! Returns a list of all temporary files
 	vector<TemporaryFileInformation> GetTemporaryFiles() final override;
 

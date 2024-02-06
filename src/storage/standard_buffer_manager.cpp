@@ -233,6 +233,17 @@ void StandardBufferManager::SetLimit(idx_t limit) {
 	buffer_pool.SetLimit(limit, InMemoryWarning());
 }
 
+vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
+    vector<MemoryInformation> result;
+    for(idx_t k = 0; k < MEMORY_TAG_COUNT; k++) {
+        MemoryInformation info;
+        info.tag = MemoryTag(k);
+        info.size = buffer_pool.memory_usage_per_tag[k].load();
+        result.push_back(info);
+    }
+    return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Temporary File Management
 //===--------------------------------------------------------------------===//
