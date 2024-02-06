@@ -71,7 +71,7 @@ private:
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
 	static constexpr const double MAXIMUM_MEMORY_LIMIT_RATIO = 0.8;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
-	static constexpr const double MAXIMUM_FREE_MEMORY_RATIO = 0.8;
+	static constexpr const double MAXIMUM_FREE_MEMORY_RATIO = double(2) / double(3);
 
 public:
 	//! Get the TemporaryMemoryManager
