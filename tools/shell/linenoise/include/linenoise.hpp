@@ -19,7 +19,13 @@ namespace duckdb {
 struct highlightToken;
 struct AppendBuffer;
 
-enum class HistoryScrollDirection : uint8_t { LINENOISE_HISTORY_NEXT, LINENOISE_HISTORY_PREV };
+enum class HistoryScrollDirection : uint8_t {
+	LINENOISE_HISTORY_NEXT,
+	LINENOISE_HISTORY_PREV,
+	LINENOISE_HISTORY_START,
+	LINENOISE_HISTORY_END
+};
+enum class Capitalization : uint8_t { CAPITALIZE, LOWERCASE, UPPERCASE };
 
 struct searchMatch {
 	size_t history_index;
@@ -74,10 +80,18 @@ public:
 	void EditMoveStartOfLine();
 	void EditMoveEndOfLine();
 	void EditHistoryNext(HistoryScrollDirection dir);
+	void EditHistorySetIndex(idx_t index);
 	void EditDelete();
 	void EditBackspace();
 	void EditDeletePrevWord();
+	void EditDeleteNextWord();
+	void EditDeleteAll();
+	void EditCapitalizeNextWord(Capitalization capitalization);
+	void EditRemoveSpaces();
+	void EditSwapCharacter();
+	void EditSwapWord();
 
+	void StartSearch();
 	void CancelSearch();
 	char AcceptSearch(char nextCommand);
 	void PerformSearch();

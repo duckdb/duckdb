@@ -149,26 +149,17 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 						i--;
 					}
 					break;
-				case EscapeSequence::UP:
-				case EscapeSequence::DOWN:
-				case EscapeSequence::LEFT:
-				case EscapeSequence::RIGHT:
-				case EscapeSequence::CTRL_MOVE_BACKWARDS:
-				case EscapeSequence::CTRL_MOVE_FORWARDS:
-				case EscapeSequence::HOME:
-				case EscapeSequence::END:
-				case EscapeSequence::ALT_B:
-				case EscapeSequence::ALT_F:
-					current_sequence = escape;
-					accept_completion = true;
-					stop = true;
-					break;
-				default:
+				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
 					if (i < completions.size()) {
 						RefreshLine();
 					}
 					current_sequence = escape;
+					stop = true;
+					break;
+				default:
+					current_sequence = escape;
+					accept_completion = true;
 					stop = true;
 					break;
 				}
@@ -601,19 +592,28 @@ void Linenoise::EditHistoryNext(HistoryScrollDirection dir) {
 		 * overwrite it with the next one. */
 		History::Overwrite(history_len - 1 - history_index, buf);
 		/* Show the new entry */
-		if (dir == HistoryScrollDirection::LINENOISE_HISTORY_PREV) {
+		switch (dir) {
+		case HistoryScrollDirection::LINENOISE_HISTORY_PREV:
 			// scroll back
 			history_index++;
 			if (history_index >= history_len) {
 				history_index = history_len - 1;
 				return;
 			}
-		} else {
+			break;
+		case HistoryScrollDirection::LINENOISE_HISTORY_NEXT:
 			// scroll forwards
 			if (history_index == 0) {
 				return;
 			}
 			history_index--;
+			break;
+		case HistoryScrollDirection::LINENOISE_HISTORY_END:
+			history_index = 0;
+			break;
+		case HistoryScrollDirection::LINENOISE_HISTORY_START:
+			history_index = history_len - 1;
+			break;
 		}
 		strncpy(buf, History::GetEntry(history_len - 1 - history_index), buflen);
 		buf[buflen - 1] = '\0';
@@ -651,22 +651,198 @@ void Linenoise::EditBackspace() {
 	}
 }
 
+static bool IsSpace(char c) {
+	switch (c) {
+	case ' ':
+	case '\r':
+	case '\n':
+	case '\t':
+		return true;
+	default:
+		return false;
+	}
+}
+
 /* Delete the previous word, maintaining the cursor at the start of the
  * current word. */
 void Linenoise::EditDeletePrevWord() {
 	size_t old_pos = pos;
 	size_t diff;
 
-	while (pos > 0 && buf[pos - 1] == ' ') {
+	while (pos > 0 && IsSpace(buf[pos - 1])) {
 		pos--;
 	}
-	while (pos > 0 && buf[pos - 1] != ' ') {
+	while (pos > 0 && !IsSpace(buf[pos - 1])) {
 		pos--;
 	}
 	diff = old_pos - pos;
 	memmove(buf + pos, buf + old_pos, len - old_pos + 1);
 	len -= diff;
 	RefreshLine();
+}
+
+/* Delete the next word */
+void Linenoise::EditDeleteNextWord() {
+	size_t next_pos = pos;
+	size_t diff;
+
+	while (next_pos < len && IsSpace(buf[next_pos])) {
+		next_pos++;
+	}
+	while (next_pos < len && !IsSpace(buf[next_pos])) {
+		next_pos++;
+	}
+	diff = next_pos - pos;
+	memmove(buf + pos, buf + next_pos, len - next_pos + 1);
+	len -= diff;
+	RefreshLine();
+}
+
+void Linenoise::EditRemoveSpaces() {
+	size_t start_pos = pos;
+	size_t end_pos = pos;
+	size_t diff;
+
+	while (start_pos > 0 && buf[start_pos - 1] == ' ') {
+		start_pos--;
+	}
+	while (end_pos < len && buf[end_pos] == ' ') {
+		end_pos++;
+	}
+	diff = end_pos - start_pos;
+	memmove(buf + start_pos, buf + end_pos, len - end_pos + 1);
+	len -= diff;
+	pos = start_pos;
+	RefreshLine();
+}
+
+void Linenoise::EditSwapCharacter() {
+	if (pos == 0 || len < 2) {
+		return;
+	}
+	char temp_buffer[128];
+	if (pos + 1 > len) {
+		pos = PrevChar();
+	}
+	int prev_pos = PrevChar();
+	int next_pos = NextChar();
+	int prev_char_size = pos - prev_pos;
+	int cur_char_size = next_pos - pos;
+	memcpy(temp_buffer, buf + prev_pos, prev_char_size);
+	memmove(buf + prev_pos, buf + pos, cur_char_size);
+	memcpy(buf + prev_pos + cur_char_size, temp_buffer, prev_char_size);
+	pos = next_pos;
+	RefreshLine();
+}
+
+void Linenoise::EditSwapWord() {
+	idx_t current_pos = pos;
+	idx_t left_word_start, left_word_end;
+	idx_t right_word_start, right_word_end;
+
+	// move to the end of the right word
+	idx_t end_pos = pos;
+	while (end_pos < len && IsSpace(buf[end_pos])) {
+		end_pos++;
+	}
+	while (end_pos < len && !IsSpace(buf[end_pos])) {
+		end_pos++;
+	}
+	current_pos = end_pos;
+	while (current_pos > 0 && IsSpace(buf[current_pos - 1])) {
+		current_pos--;
+	}
+	right_word_end = current_pos;
+	// move to the start of the right word
+	while (current_pos > 0 && !IsSpace(buf[current_pos - 1])) {
+		current_pos--;
+	}
+	right_word_start = current_pos;
+
+	// move to the left of the left word
+	while (current_pos > 0 && IsSpace(buf[current_pos - 1])) {
+		current_pos--;
+	}
+	left_word_end = current_pos;
+	while (current_pos > 0 && !IsSpace(buf[current_pos - 1])) {
+		current_pos--;
+	}
+	left_word_start = current_pos;
+	if (left_word_start == right_word_start) {
+		// no words to swap
+		return;
+	}
+	idx_t left_len = left_word_end - left_word_start;
+	idx_t right_len = right_word_end - right_word_start;
+	if (left_len == 0 || right_len == 0) {
+		// one of the words has no length
+		return;
+	}
+	// now we need to swap [LEFT][RIGHT] to [RIGHT][LEFT]
+	// there's certainly some fancy way of doing this in-place
+	// but this is way easier
+	string left_word(buf + left_word_start, left_len);
+	string right_word(buf + right_word_start, right_len);
+	memset(buf + left_word_start, ' ', end_pos - left_word_start);
+	memcpy(buf + left_word_start, right_word.c_str(), right_word.size());
+	memcpy(buf + end_pos - left_len, left_word.c_str(), left_word.size());
+	pos = end_pos;
+	RefreshLine();
+}
+
+void Linenoise::EditDeleteAll() {
+	buf[0] = '\0';
+	pos = len = 0;
+	RefreshLine();
+}
+
+void Linenoise::EditCapitalizeNextWord(Capitalization capitalization) {
+	size_t next_pos = pos;
+
+	// find the next word
+	while (next_pos < len && IsSpace(buf[next_pos])) {
+		next_pos++;
+	}
+	bool first_char = true;
+	while (next_pos < len && !IsSpace(buf[next_pos])) {
+		switch (capitalization) {
+		case Capitalization::CAPITALIZE: {
+			if (first_char) {
+				first_char = false;
+				if (buf[next_pos] >= 'a' && buf[next_pos] <= 'z') {
+					buf[next_pos] -= 'a' - 'A';
+				}
+			}
+			break;
+		}
+		case Capitalization::LOWERCASE: {
+			if (buf[next_pos] >= 'A' && buf[next_pos] <= 'Z') {
+				buf[next_pos] += 'a' - 'A';
+			}
+			break;
+		}
+		case Capitalization::UPPERCASE: {
+			if (buf[next_pos] >= 'a' && buf[next_pos] <= 'z') {
+				buf[next_pos] -= 'a' - 'A';
+			}
+			break;
+		}
+		default:
+			break;
+		}
+		next_pos++;
+	}
+	pos = next_pos;
+	RefreshLine();
+}
+
+void Linenoise::StartSearch() {
+	// initiate reverse search
+	search = true;
+	search_buf = std::string();
+	search_matches.clear();
+	search_index = 0;
+	RefreshSearch();
 }
 
 void Linenoise::CancelSearch() {
@@ -1034,18 +1210,7 @@ int Linenoise::Edit() {
 			RefreshLine();
 			break;
 		case CTRL_T: /* ctrl-t, swaps current character with previous. */
-			if (pos > 0 && pos < len) {
-				char temp_buffer[128];
-				int prev_pos = PrevChar();
-				int next_pos = NextChar();
-				int prev_char_size = pos - prev_pos;
-				int cur_char_size = next_pos - pos;
-				memcpy(temp_buffer, buf + prev_pos, prev_char_size);
-				memmove(buf + prev_pos, buf + pos, cur_char_size);
-				memcpy(buf + prev_pos + cur_char_size, temp_buffer, prev_char_size);
-				pos = next_pos;
-				RefreshLine();
-			}
+			EditSwapCharacter();
 			break;
 		case CTRL_B: /* ctrl-b */
 			EditMoveLeft();
@@ -1061,12 +1226,7 @@ int Linenoise::Edit() {
 			break;
 		case CTRL_S:
 		case CTRL_R: /* ctrl-r */ {
-			// initiate reverse search
-			search = true;
-			search_buf = std::string();
-			search_matches.clear();
-			search_index = 0;
-			RefreshSearch();
+			StartSearch();
 			break;
 		}
 		case ESC: /* escape sequence */ {
@@ -1080,6 +1240,12 @@ int Linenoise::Edit() {
 				current_sequence = EscapeSequence::INVALID;
 			}
 			switch (escape) {
+			case EscapeSequence::ALT_LEFT_ARROW:
+				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_START);
+				break;
+			case EscapeSequence::ALT_RIGHT_ARROW:
+				EditHistoryNext(HistoryScrollDirection::LINENOISE_HISTORY_END);
+				break;
 			case EscapeSequence::CTRL_MOVE_BACKWARDS:
 			case EscapeSequence::ALT_B:
 				EditMoveWordLeft();
@@ -1087,6 +1253,34 @@ int Linenoise::Edit() {
 			case EscapeSequence::CTRL_MOVE_FORWARDS:
 			case EscapeSequence::ALT_F:
 				EditMoveWordRight();
+				break;
+			case EscapeSequence::ALT_D:
+				EditDeleteNextWord();
+				break;
+			case EscapeSequence::ALT_C:
+				EditCapitalizeNextWord(Capitalization::CAPITALIZE);
+				break;
+			case EscapeSequence::ALT_L:
+				EditCapitalizeNextWord(Capitalization::LOWERCASE);
+				break;
+			case EscapeSequence::ALT_N:
+			case EscapeSequence::ALT_P:
+				StartSearch();
+				break;
+			case EscapeSequence::ALT_T:
+				EditSwapWord();
+				break;
+			case EscapeSequence::ALT_U:
+				EditCapitalizeNextWord(Capitalization::UPPERCASE);
+				break;
+			case EscapeSequence::ALT_R:
+				EditDeleteAll();
+				break;
+			case EscapeSequence::ALT_BACKSPACE:
+				EditDeletePrevWord();
+				break;
+			case EscapeSequence::ALT_BACKSLASH:
+				EditRemoveSpaces();
 				break;
 			case EscapeSequence::HOME:
 				EditMoveHome();
@@ -1122,9 +1316,7 @@ int Linenoise::Edit() {
 			break;
 		}
 		case CTRL_U: /* Ctrl+u, delete the whole line. */
-			buf[0] = '\0';
-			pos = len = 0;
-			RefreshLine();
+			EditDeleteAll();
 			break;
 		case CTRL_K: /* Ctrl+k, delete from current to end of line. */
 			buf[pos] = '\0';
