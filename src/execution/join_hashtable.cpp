@@ -248,7 +248,7 @@ static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], const hash_t 
                                     const data_ptr_t key_locations[], const idx_t pointer_offset) {
 	for (idx_t i = 0; i < count; i++) {
 		const auto index = indices[i];
-		if (PARALLEL) {
+		if constexpr (PARALLEL) {
 			data_ptr_t head;
 			do {
 				head = pointers[index];
