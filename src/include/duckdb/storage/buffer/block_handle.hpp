@@ -24,8 +24,8 @@ class DatabaseInstance;
 enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
 
 struct BufferPoolReservation {
-    MemoryTag tag;
-    idx_t size {0};
+	MemoryTag tag;
+	idx_t size {0};
 	BufferPool &pool;
 
 	BufferPoolReservation(MemoryTag tag, BufferPool &pool);
@@ -61,8 +61,8 @@ class BlockHandle {
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
-	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag, unique_ptr<FileBuffer> buffer, bool can_destroy,
-	            idx_t block_size, BufferPoolReservation &&reservation);
+	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag, unique_ptr<FileBuffer> buffer,
+	            bool can_destroy, idx_t block_size, BufferPoolReservation &&reservation);
 	~BlockHandle();
 
 	BlockManager &block_manager;

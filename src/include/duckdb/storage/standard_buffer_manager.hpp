@@ -92,7 +92,8 @@ public:
 protected:
 	//! Helper
 	template <typename... ARGS>
-	TempBufferPoolReservation EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta, unique_ptr<FileBuffer> *buffer, ARGS...);
+	TempBufferPoolReservation EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
+	                                             ARGS...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
@@ -108,9 +109,10 @@ protected:
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final override;
 
 	//! Write a temporary buffer to disk
-	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;
+	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final override;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer = nullptr) final override;
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id,
+	                                           unique_ptr<FileBuffer> buffer = nullptr) final override;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
@@ -148,6 +150,8 @@ protected:
 	Allocator buffer_allocator;
 	//! Block manager for temp data
 	unique_ptr<BlockManager> temp_block_manager;
+	//! Temporary evicted memory data per tag
+	atomic<idx_t> evicted_data_per_tag[MEMORY_TAG_COUNT];
 };
 
 } // namespace duckdb

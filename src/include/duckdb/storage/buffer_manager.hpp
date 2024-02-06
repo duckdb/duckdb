@@ -80,8 +80,8 @@ public:
 protected:
 	virtual void PurgeQueue() = 0;
 	virtual void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
-	virtual void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer);
-	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer);
+	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
+	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id, unique_ptr<FileBuffer> buffer);
 	virtual void DeleteTemporaryFile(block_id_t id);
 };
 

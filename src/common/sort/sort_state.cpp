@@ -294,8 +294,8 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	auto unordered_data_handle = buffer_manager->Pin(unordered_data_block->block);
 	const data_ptr_t unordered_data_ptr = unordered_data_handle.Ptr();
 	// Create new block that will hold re-ordered row data
-	auto ordered_data_block =
-	    make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager, unordered_data_block->capacity, unordered_data_block->entry_size);
+	auto ordered_data_block = make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, *buffer_manager,
+	                                                  unordered_data_block->capacity, unordered_data_block->entry_size);
 	ordered_data_block->count = count;
 	auto ordered_data_handle = buffer_manager->Pin(ordered_data_block->block);
 	data_ptr_t ordered_data_ptr = ordered_data_handle.Ptr();

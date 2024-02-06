@@ -8,6 +8,7 @@ namespace duckdb {
 struct MemoryInformation {
 	MemoryTag tag;
 	idx_t size;
+	idx_t evicted_data;
 };
 
 struct TemporaryFileInformation {
