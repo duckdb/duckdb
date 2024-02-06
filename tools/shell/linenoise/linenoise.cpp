@@ -116,7 +116,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 
 				len = completions[i].completion.size();
 				pos = completions[i].cursor_pos;
-				buf = (char *) completions[i].completion.c_str();
+				buf = (char *)completions[i].completion.c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
