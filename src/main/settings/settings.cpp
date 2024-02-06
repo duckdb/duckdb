@@ -1046,6 +1046,22 @@ Value ExportLargeBufferArrow::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// ProduceArrowStringView
+//===--------------------------------------------------------------------===//
+void ProduceArrowStringView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.produce_arrow_string_views = input.GetValue<bool>();
+}
+
+void ProduceArrowStringView::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.produce_arrow_string_views = DBConfig().options.produce_arrow_string_views;
+}
+
+Value ProduceArrowStringView::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
+}
+
+
+//===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
 void ProfilerHistorySize::ResetLocal(ClientContext &context) {
