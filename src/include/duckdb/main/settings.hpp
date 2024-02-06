@@ -496,6 +496,16 @@ struct ExportLargeBufferArrow {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ArrowOutputListView {
+	static constexpr const char *Name = "arrow_output_list_view";
+	static constexpr const char *Description =
+	    "If export to arrow format should use ListView as the physical layout for LIST columns";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ProfilerHistorySize {
 	static constexpr const char *Name = "profiler_history_size";
 	static constexpr const char *Description = "Sets the profiler history size";
