@@ -131,7 +131,6 @@ jobs:
     - name: Test Standard ODBC tests
       shell: bash
       run: |
-#        tools/odbc/scripts/create_ini_file.sh
         tools/odbc/bin/Release/test_odbc.exe
 
     - name: Print ODBC trace on failure
