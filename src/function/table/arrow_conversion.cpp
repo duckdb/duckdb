@@ -147,6 +147,7 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	}
 	list_size = offsets[size];
 	list_size -= start_offset;
+	return result;
 }
 
 template <class BUFFER_TYPE>
@@ -169,6 +170,7 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 		cur_offset += le.length;
 	}
 	list_size = cur_offset;
+	return result;
 }
 
 static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &array, idx_t size,
@@ -197,17 +199,17 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 	}
 	if (arrow_type.IsView()) {
 		if (size_type == ArrowVariableSizeType::NORMAL) {
-			return ConvertArrowListViewOffsetsTemplated<int32_t>(vector, array, size, effective_offset);
+			return ConvertArrowListViewOffsetsTemplated<uint32_t>(vector, array, size, effective_offset);
 		} else {
 			D_ASSERT(size_type == ArrowVariableSizeType::SUPER_SIZE);
-			return ConvertArrowListViewOffsetsTemplated<int64_t>(vector, array, size, effective_offset);
+			return ConvertArrowListViewOffsetsTemplated<uint64_t>(vector, array, size, effective_offset);
 		}
 	} else {
 		if (size_type == ArrowVariableSizeType::NORMAL) {
-			return ConvertArrowListOffsetsTemplated<int32_t>(vector, array, size, effective_offset);
+			return ConvertArrowListOffsetsTemplated<uint32_t>(vector, array, size, effective_offset);
 		} else {
 			D_ASSERT(size_type == ArrowVariableSizeType::SUPER_SIZE);
-			return ConvertArrowListOffsetsTemplated<int64_t>(vector, array, size, effective_offset);
+			return ConvertArrowListOffsetsTemplated<uint64_t>(vector, array, size, effective_offset);
 		}
 	}
 	return result;
@@ -216,7 +218,6 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                               const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                               int64_t parent_offset) {
-	auto size_type = arrow_type.GetSizeType();
 	auto &scan_state = array_state.state;
 
 	SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);

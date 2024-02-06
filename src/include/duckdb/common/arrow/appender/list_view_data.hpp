@@ -35,7 +35,7 @@ public:
 	}
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
-		result->n_buffers = 2;
+		result->n_buffers = 3;
 		result->buffers[1] = append_data.main_buffer.data();
 		result->buffers[2] = append_data.aux_buffer.data();
 
@@ -57,6 +57,10 @@ public:
 		auto offset_data = append_data.main_buffer.GetData<BUFTYPE>();
 		auto size_data = append_data.aux_buffer.GetData<BUFTYPE>();
 
+		if (append_data.row_count == 0) {
+			// first entry
+			offset_data[0] = 0;
+		}
 		// set up the offsets using the list entries
 		auto last_offset = offset_data[append_data.row_count];
 		for (idx_t i = 0; i < size; i++) {
@@ -78,9 +82,9 @@ public:
 				    "%u but the offset of %lu exceeds this.",
 				    NumericLimits<int32_t>::Maximum(), last_offset);
 			}
-			last_offset += list_length;
 			offset_data[offset_idx] = last_offset;
 			size_data[offset_idx] = list_length;
+			last_offset += list_length;
 
 			for (idx_t k = 0; k < list_length; k++) {
 				child_sel.push_back(data[source_idx].offset + k);
