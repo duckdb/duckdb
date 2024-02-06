@@ -126,6 +126,9 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 
 	// The last argument could be a flag to be set if we want a minimal list or a maximal list
 	idx_t size = arguments.size();
+	if (size == 0) {
+		throw BinderException("Provide at least one argument to " + bound_function.name);
+	}
 	if (arguments[size - 1]->return_type.id() == LogicalTypeId::BOOLEAN) {
 		size--;
 	}

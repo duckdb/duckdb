@@ -1,0 +1,29 @@
+# name: test/fuzzer/duckfuzz/list_zip_no_args.test
+# description: You know
+# group: [duckfuzz]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.1);
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/1361
+statement error
+SELECT array_zip() AS c0;
+----
+Binder Error
+
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+# https://github.com/duckdb/duckdb-fuzzer/issues/1360
+statement error
+WITH jennifer_1 AS (SELECT (SELECT date FROM main.all_types LIMIT 1 OFFSET 5) AS c6), jennifer_0 AS (SELECT list_zip() AS c11 LIMIT 94)SELECT subq_5.c1 AS c0 FROM jennifer_1 AS ref_4 LEFT JOIN (SELECT ref_5.ubigint AS c0, ref_5.nested_int_array AS c1 FROM main.all_types AS ref_5 , (SELECT ref_5.timestamp_s AS c0, subq_3.c1 AS c1 FROM main.all_types AS ref_6 , (SELECT ref_7."struct" AS c0, ref_6.struct_of_arrays AS c1 FROM main.all_types AS ref_7 WHERE (ref_5."varchar" ~~* ref_6."varchar") LIMIT 104) AS subq_3 WHERE EXISTS(SELECT ref_6.dec_18_6 AS c0, ref_5."bit" AS c1, subq_3.c0 AS c2, subq_3.c0 AS c3, ref_8.c4 AS c4 FROM jennifer_0 AS ref_8 WHERE (ref_5."varchar" !~~ ref_6."varchar") LIMIT 56) LIMIT 66) AS subq_4 WHERE (ref_5."varchar" ~~~ ref_5."varchar") LIMIT 142) AS subq_5 ON ((CAST(NULL AS VARCHAR) !~~* ref_4.c2)) WHERE (ref_4.c2 !~~* ref_4.c2) LIMIT 167
+----
+Binder Error
+
+statement error
+SELECT list_zip()
+----
+Binder Error
+
