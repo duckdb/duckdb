@@ -385,7 +385,8 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 
 	// if a cache db is required but no connection, then reset the connection
 	if (!cache_db.empty() && cache_no_connect) {
-		cache_db = ":memory:";
+		cache_db = "";
+		in_memory = true;
 		cache_no_connect = false;
 		if (!load_query.empty()) {
 			queries.erase("load");
