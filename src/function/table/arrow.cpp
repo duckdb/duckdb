@@ -16,7 +16,7 @@ namespace duckdb {
 
 static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSizeType size, bool view) {
 	auto child_type = ArrowTableFunction::GetArrowLogicalType(child);
-	auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), ArrowVariableSizeType::NORMAL);
+	auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), size);
 	list_type->AddChild(std::move(child_type));
 	if (view) {
 		list_type->SetView();

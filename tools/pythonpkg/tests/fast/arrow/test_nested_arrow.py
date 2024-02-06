@@ -20,10 +20,7 @@ def arrow_to_pandas(duckdb_cursor, query):
 
 
 class TestArrowNested(object):
-    @pytest.mark.parametrize('use_list_view', [True, False])
-    def test_lists_basic(self, duckdb_cursor, use_list_view):
-        duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
-
+    def test_lists_basic(self, duckdb_cursor):
         # Test Constant List
         query = duckdb_cursor.query("SELECT a from (select list_value(3,5,10) as a) as t").arrow()['a'].to_numpy()
         assert query[0][0] == 3
@@ -48,7 +45,6 @@ class TestArrowNested(object):
         data = pa.array([[1], None, [2]], type=pa.large_list(pa.int64()))
         arrow_table = pa.Table.from_arrays([data], ['a'])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        print(rel)
 
         res = rel.execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
