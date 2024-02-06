@@ -27,8 +27,13 @@ struct searchMatch {
 	size_t match_end;
 };
 
+struct Completion {
+	string completion;
+	idx_t cursor_pos;
+};
+
 struct TabCompletion {
-	vector<string> completions;
+	vector<Completion> completions;
 };
 
 class Linenoise {
@@ -54,7 +59,7 @@ public:
 	int GetPromptWidth() const;
 
 	void RefreshLine();
-	int CompleteLine();
+	int CompleteLine(EscapeSequence &current_sequence);
 	void InsertCharacter(char c);
 	int EditInsert(char c);
 	int EditInsertMulti(const char *c);

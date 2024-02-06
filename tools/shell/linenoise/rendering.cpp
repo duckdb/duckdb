@@ -627,7 +627,7 @@ bool Linenoise::AddCompletionMarker(const char *buf, idx_t len, string &result_b
 		// no completions found
 		return false;
 	}
-	if (completion.completions[0].size() <= len) {
+	if (completion.completions[0].completion.size() <= len) {
 		// completion is not long enough
 		return false;
 	}
@@ -637,13 +637,13 @@ bool Linenoise::AddCompletionMarker(const char *buf, idx_t len, string &result_b
 		if (!IsCompletionCharacter(buf[cpos])) {
 			break;
 		}
-		if (completion.completions[0][cpos] != buf[cpos]) {
+		if (completion.completions[0].completion[cpos] != buf[cpos]) {
 			return false;
 		}
 	}
 	// add the first completion found for rendering purposes
 	result_buffer = string(buf, len);
-	result_buffer += completion.completions[0].substr(len);
+	result_buffer += completion.completions[0].completion.substr(len);
 
 	highlightToken completion_token;
 	completion_token.start = len;

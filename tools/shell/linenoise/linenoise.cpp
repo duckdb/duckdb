@@ -74,9 +74,18 @@ TabCompletion Linenoise::TabComplete() const {
 	linenoiseCompletions lc;
 	lc.cvec = nullptr;
 	lc.len = 0;
+	// complete based on the cursor position
+	auto prev_char = buf[pos];
+	buf[pos] = '\0';
 	completionCallback(buf, &lc);
+	buf[pos] = prev_char;
+	result.completions.reserve(lc.len);
 	for (idx_t i = 0; i < lc.len; i++) {
-		result.completions.emplace_back(lc.cvec[i]);
+		Completion c;
+		c.completion = lc.cvec[i];
+		c.cursor_pos = c.completion.size();
+		c.completion += buf + pos;
+		result.completions.emplace_back(std::move(c));
 	}
 	freeCompletions(&lc);
 	return result;
@@ -87,7 +96,7 @@ TabCompletion Linenoise::TabComplete() const {
  *
  * The state of the editing is encapsulated into the pointed linenoiseState
  * structure as described in the structure definition. */
-int Linenoise::CompleteLine() {
+int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 	int nread, nwritten;
 	char c = 0;
 
@@ -96,15 +105,18 @@ int Linenoise::CompleteLine() {
 	if (completions.empty()) {
 		Terminal::Beep();
 	} else {
-		size_t stop = 0, i = 0;
+		bool stop = false;
+		bool accept_completion = false;
+		idx_t i = 0;
 
 		while (!stop) {
 			/* Show completion or original buffer */
 			if (i < completions.size()) {
 				Linenoise saved = *this;
 
-				len = pos = completions[i].size();
-				buf = (char *)completions[i].c_str();
+				len = completions[i].completion.size();
+				pos = completions[i].cursor_pos;
+				buf = (char *) completions[i].completion.c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
@@ -137,24 +149,43 @@ int Linenoise::CompleteLine() {
 						i--;
 					}
 					break;
+				case EscapeSequence::UP:
+				case EscapeSequence::DOWN:
+				case EscapeSequence::LEFT:
+				case EscapeSequence::RIGHT:
+				case EscapeSequence::CTRL_MOVE_BACKWARDS:
+				case EscapeSequence::CTRL_MOVE_FORWARDS:
+				case EscapeSequence::HOME:
+				case EscapeSequence::END:
+				case EscapeSequence::ALT_B:
+				case EscapeSequence::ALT_F:
+					current_sequence = escape;
+					accept_completion = true;
+					stop = true;
+					break;
 				default:
 					/* Re-show original buffer */
 					if (i < completions.size()) {
 						RefreshLine();
 					}
-					stop = 1;
+					current_sequence = escape;
+					stop = true;
 					break;
 				}
 				break;
 			}
 			default:
+				accept_completion = true;
+				stop = true;
+				break;
+			}
+			if (stop && accept_completion && i < completions.size()) {
 				/* Update buffer and return */
 				if (i < completions.size()) {
-					nwritten = snprintf(buf, buflen, "%s", completions[i].c_str());
-					len = pos = nwritten;
+					nwritten = snprintf(buf, buflen, "%s", completions[i].completion.c_str());
+					pos = completions[i].cursor_pos;
+					len = nwritten;
 				}
-				stop = 1;
-				break;
 			}
 		}
 	}
@@ -831,6 +862,7 @@ int Linenoise::Edit() {
 		return -1;
 	}
 	while (true) {
+		EscapeSequence current_sequence = EscapeSequence::INVALID;
 		char c;
 		int nread;
 
@@ -872,7 +904,7 @@ int Linenoise::Edit() {
 				// if there is more data, this tab character was added as part of copy-pasting data
 				continue;
 			}
-			c = CompleteLine();
+			c = CompleteLine(current_sequence);
 			/* Return on errors */
 			if (c < 0) {
 				return len;
@@ -998,7 +1030,15 @@ int Linenoise::Edit() {
 			break;
 		}
 		case ESC: /* escape sequence */ {
-			auto escape = Terminal::ReadEscapeSequence(ifd);
+			EscapeSequence escape;
+			if (current_sequence == EscapeSequence::INVALID) {
+				// read escape sequence
+				escape = Terminal::ReadEscapeSequence(ifd);
+			} else {
+				// use stored sequence
+				escape = current_sequence;
+				current_sequence = EscapeSequence::INVALID;
+			}
 			switch (escape) {
 			case EscapeSequence::CTRL_MOVE_BACKWARDS:
 			case EscapeSequence::ALT_B:
