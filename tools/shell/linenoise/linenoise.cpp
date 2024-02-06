@@ -1,108 +1,3 @@
-/* linenoise.c -- guerrilla line editing library against the idea that a
- * line editing lib needs to be 20,000 lines of C code.
- *
- * You can find the latest source code at:
- *
- *   http://github.com/antirez/linenoise
- *
- * Does a number of crazy assumptions that happen to be true in 99.9999% of
- * the 2010 UNIX computers around.
- *
- * ------------------------------------------------------------------------
- *
- * Copyright (c) 2010-2016, Salvatore Sanfilippo <antirez at gmail dot com>
- * Copyright (c) 2010-2013, Pieter Noordhuis <pcnoordhuis at gmail dot com>
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- *  *  Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *  *  Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * ------------------------------------------------------------------------
- *
- * References:
- * - http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
- * - http://www.3waylabs.com/nw/WWW/products/wizcon/vt220.html
- *
- * Todo list:
- * - Filter bogus Ctrl+<char> combinations.
- * - Win32 support
- *
- * Bloat:
- * - History search like Ctrl+r in readline?
- *
- * List of escape sequences used by this program, we do everything just
- * with three sequences. In order to be so cheap we may have some
- * flickering effect with some slow terminal, but the lesser sequences
- * the more compatible.
- *
- * EL (Erase Line)
- *    Sequence: ESC [ n K
- *    Effect: if n is 0 or missing, clear from cursor to end of line
- *    Effect: if n is 1, clear from beginning of line to cursor
- *    Effect: if n is 2, clear entire line
- *
- * CUF (CUrsor Forward)
- *    Sequence: ESC [ n C
- *    Effect: moves cursor forward n chars
- *
- * CUB (CUrsor Backward)
- *    Sequence: ESC [ n D
- *    Effect: moves cursor backward n chars
- *
- * The following is used to get the terminal width if getting
- * the width with the TIOCGWINSZ ioctl fails
- *
- * DSR (Device Status Report)
- *    Sequence: ESC [ 6 n
- *    Effect: reports the current cusor position as ESC [ n ; m R
- *            where n is the row and m is the column
- *
- * When multi line mode is enabled, we also use an additional escape
- * sequence. However multi line editing is disabled by default.
- *
- * CUU (Cursor Up)
- *    Sequence: ESC [ n A
- *    Effect: moves cursor up of n chars.
- *
- * CUD (Cursor Down)
- *    Sequence: ESC [ n B
- *    Effect: moves cursor down of n chars.
- *
- * When linenoiseClearScreen() is called, two additional escape sequences
- * are used in order to clear the screen and position the cursor at home
- * position.
- *
- * CUP (Cursor position)
- *    Sequence: ESC [ H
- *    Effect: moves the cursor to upper left corner
- *
- * ED (Erase display)
- *    Sequence: ESC [ 2 J
- *    Effect: clear the whole screen
- *
- */
-
 #include <sys/stat.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -585,7 +480,7 @@ bool Linenoise::EditMoveRowDown() {
 	return true;
 }
 
-/* Move cursor to the start of the line. */
+/* Move cursor to the start of the buffer. */
 void Linenoise::EditMoveHome() {
 	if (pos != 0) {
 		pos = 0;
@@ -593,12 +488,28 @@ void Linenoise::EditMoveHome() {
 	}
 }
 
-/* Move cursor to the end of the line. */
+/* Move cursor to the end of the buffer. */
 void Linenoise::EditMoveEnd() {
 	if (pos != len) {
 		pos = len;
 		RefreshLine();
 	}
+}
+
+/* Move cursor to the start of the line. */
+void Linenoise::EditMoveStartOfLine() {
+	while(pos > 0 && buf[pos] != '\n') {
+		pos--;
+	}
+	RefreshLine();
+}
+
+/* Move cursor to the end of the line. */
+void Linenoise::EditMoveEndOfLine() {
+	while(pos < len && buf[pos + 1] != '\n') {
+		pos++;
+	}
+	RefreshLine();
 }
 
 /* Substitute the currently edited line with the next or previous history

@@ -62,6 +62,8 @@ public:
 	bool EditMoveRowDown();
 	void EditMoveHome();
 	void EditMoveEnd();
+	void EditMoveStartOfLine();
+	void EditMoveEndOfLine();
 	void EditHistoryNext(HistoryScrollDirection dir);
 	void EditDelete();
 	void EditBackspace();
