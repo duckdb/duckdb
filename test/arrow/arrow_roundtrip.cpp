@@ -102,8 +102,9 @@ TEST_CASE("Test Arrow String View", "[arrow][.]") {
 	    "SELECT 'Imaverybigstringmuchbiggerthanfourbytes' str FROM range(5) tbl(i) UNION SELECT NULL");
 
 	// Test Mix of Small/Big/NULL Strings
-	TestArrowRoundtripStringView("SELECT 'Imaverybigstringmuchbiggerthanfourbytes' str FROM range(5) tbl(i) UNION "
-	                             "SELECT NULL UNION SELECT (i*10^i)::varchar str FROM range(5) tbl(i)");
+	TestArrowRoundtripStringView(
+	    "SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION "
+	    "SELECT NULL UNION SELECT (i*10^i)::varchar str FROM range(10000) tbl(i)");
 }
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
 	std::vector<std::string> data;
