@@ -164,9 +164,9 @@ struct ArrowVarcharToStringViewData {
 				// Copy Prefix
 				memcpy(&string_data[i * 16 + 4], data[source_idx].GetPrefix(), 4);
 				// Produced Data Buffer is always 0
-				arrow_4byte[result_idx * 6] = 0;
+				arrow_4byte[result_idx * 4 + 2] = 0;
 				// Give Offset
-				arrow_4byte[result_idx * 7] = last_offset;
+				arrow_4byte[result_idx * 4 + 3] = last_offset;
 				// Copy data to data buffer
 				auto current_offset = last_offset + string_length;
 				append_data.aux_buffer.resize(current_offset);
@@ -180,7 +180,7 @@ struct ArrowVarcharToStringViewData {
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 2;
 		result->buffers[1] = append_data.main_buffer.data();
-		//		result->buffers[2] = append_data.aux_buffer.data();
+		result->buffers[2] = append_data.aux_buffer.data();
 	}
 };
 

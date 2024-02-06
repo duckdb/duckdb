@@ -265,15 +265,14 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 
 static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array) {
 	auto strings = FlatVector::GetData<string_t>(vector);
-	auto length_buffer = ArrowBufferData<uint32_t>(array, 1);
+	auto length_buffer = ArrowBufferData<int32_t>(array, 1);
 	auto views_buffer = ArrowBufferData<char>(array, 1);
 
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 		if (FlatVector::IsNull(vector, row_idx)) {
 			continue;
 		}
-		uint32_t length = length_buffer[row_idx * 4];
-
+		int32_t length = length_buffer[row_idx * 4];
 		if (length <= 12) {
 			//	This string is inlined
 			//  | Bytes 0-3  | Bytes 4-15                            |
@@ -285,6 +284,10 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array) {
 			//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 			//  |------------|------------|------------|-------------|
 			//  | length     | prefix     | buf. index | offset      |
+			int32_t buffer_index = length_buffer[row_idx * 4 + 2];
+			int32_t offset = length_buffer[row_idx * 4 + 3];
+			auto c_data = ArrowBufferData<char>(array, 2 + buffer_index);
+			strings[row_idx] = string_t(&c_data[offset], length);
 		}
 	}
 }
