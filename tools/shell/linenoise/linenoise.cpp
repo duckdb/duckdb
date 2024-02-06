@@ -250,7 +250,19 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 		}
 		*out_error = "Expected usage: .highlight [off|on]";
 		return 1;
-	} else if (strcmp(azArg[0], "completion") == 0) {
+	} else if (strcmp(azArg[0], "render_errors") == 0) {
+		if (nArg == 2) {
+			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
+				Linenoise::DisableErrorRendering();
+				return 1;
+			} else if (strcmp(azArg[1], "on") == 0 || strcmp(azArg[1], "1") == 0) {
+				Linenoise::EnableErrorRendering();
+				return 1;
+			}
+		}
+		*out_error = "Expected usage: .render_errors [off|on]";
+		return 1;
+	} else if (strcmp(azArg[0], "render_completion") == 0) {
 		if (nArg == 2) {
 			if (strcmp(azArg[1], "off") == 0 || strcmp(azArg[1], "0") == 0) {
 				Linenoise::DisableCompletionRendering();
@@ -260,7 +272,7 @@ int Linenoise::ParseOption(const char **azArg, int nArg, const char **out_error)
 				return 1;
 			}
 		}
-		*out_error = "Expected usage: .completion [off|on]";
+		*out_error = "Expected usage: .render_completion [off|on]";
 		return 1;
 	} else if (strcmp(azArg[0], "keyword") == 0 || strcmp(azArg[0], "constant") == 0 ||
 	           strcmp(azArg[0], "comment") == 0 || strcmp(azArg[0], "error") == 0 || strcmp(azArg[0], "cont") == 0 ||

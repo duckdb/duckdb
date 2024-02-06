@@ -8,6 +8,7 @@ namespace duckdb {
 static const char *continuationPrompt = "> ";
 static const char *continuationSelectedPrompt = "> ";
 static bool enableCompletionRendering = true;
+static bool enableErrorRendering = true;
 
 void Linenoise::EnableCompletionRendering() {
 	enableCompletionRendering = true;
@@ -15,6 +16,14 @@ void Linenoise::EnableCompletionRendering() {
 
 void Linenoise::DisableCompletionRendering() {
 	enableCompletionRendering = false;
+}
+
+void Linenoise::EnableErrorRendering() {
+	enableErrorRendering = true;
+}
+
+void Linenoise::DisableErrorRendering() {
+	enableErrorRendering = false;
 }
 
 /* =========================== Line editing ================================= */
@@ -386,6 +395,9 @@ enum class ScanState { STANDARD, IN_SINGLE_QUOTE, IN_DOUBLE_QUOTE, IN_COMMENT };
 
 void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
 	static constexpr const idx_t MAX_ERROR_LENGTH = 2000;
+	if (!enableErrorRendering) {
+		return;
+	}
 	if (len >= MAX_ERROR_LENGTH) {
 		return;
 	}

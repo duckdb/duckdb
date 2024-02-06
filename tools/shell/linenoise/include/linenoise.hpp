@@ -112,6 +112,8 @@ public:
 
 	static void EnableCompletionRendering();
 	static void DisableCompletionRendering();
+	static void EnableErrorRendering();
+	static void DisableErrorRendering();
 
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);
