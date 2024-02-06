@@ -15,6 +15,8 @@ BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_t
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, ErrorData error)
     : type(type), success(false), error(std::move(error)) {
+	// Assert that the error object is initialized
+	D_ASSERT(this->error.HasError());
 }
 
 BaseQueryResult::~BaseQueryResult() {

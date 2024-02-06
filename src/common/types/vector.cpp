@@ -118,6 +118,21 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 
 void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
+#ifdef DEBUG
+	auto &this_type = GetType();
+	auto &other_type = other.GetType();
+
+	auto type_is_same = other_type == this_type;
+	bool this_is_nested = this_type.IsNested();
+	bool other_is_nested = other_type.IsNested();
+
+	bool not_nested = this_is_nested == false && other_is_nested == false;
+	bool type_size_equal = GetTypeIdSize(this_type.InternalType()) == GetTypeIdSize(other_type.InternalType());
+	//! Either the types are completely identical, or they are not nested and their physical type size is the same
+	//! The reason nested types are not allowed is because copying the auxiliary buffer does not happen recursively
+	//! e.g DOUBLE[] to BIGINT[], the type of the LIST would say BIGINT but the child Vector says DOUBLE
+	D_ASSERT((not_nested && type_size_equal) || type_is_same);
+#endif
 	AssignSharedPointer(buffer, other.buffer);
 	AssignSharedPointer(auxiliary, other.auxiliary);
 	data = other.data;

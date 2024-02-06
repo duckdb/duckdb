@@ -97,12 +97,12 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold) {
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold), thread_count(1) {
 }
 
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
-	SetThreadsInternal(1);
+	RelaunchThreadsInternal(1);
 #endif
 }
 
@@ -236,11 +236,10 @@ int32_t TaskScheduler::NumberOfThreads() {
 
 void TaskScheduler::SetThreads(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
-	lock_guard<mutex> t(thread_lock);
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
 	}
-	SetThreadsInternal(n);
+	thread_count = n;
 #else
 	if (n != 1) {
 		throw NotImplementedException("DuckDB was compiled without threads! Setting threads > 1 is not allowed.");
@@ -263,7 +262,13 @@ void TaskScheduler::YieldThread() {
 #endif
 }
 
-void TaskScheduler::SetThreadsInternal(int32_t n) {
+void TaskScheduler::RelaunchThreads() {
+	lock_guard<mutex> t(thread_lock);
+	auto n = thread_count.load();
+	RelaunchThreadsInternal(n);
+}
+
+void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
 	if (threads.size() == idx_t(n - 1)) {
 		return;

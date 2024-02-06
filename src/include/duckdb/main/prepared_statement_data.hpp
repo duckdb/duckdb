@@ -46,6 +46,8 @@ public:
 	idx_t catalog_version;
 	//! The map of parameter index to the actual value entry
 	bound_parameter_map_t value_map;
+	//! Whether we are creating a streaming result or not
+	bool is_streaming = false;
 
 public:
 	void CheckParameterCount(idx_t parameter_count);

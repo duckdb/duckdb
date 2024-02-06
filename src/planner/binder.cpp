@@ -415,6 +415,18 @@ void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 	can_contain_nulls = can_contain_nulls_p;
 }
 
+void Binder::SetAlwaysRequireRebind() {
+	reference<Binder> current_binder = *this;
+	while (true) {
+		auto &current = current_binder.get();
+		current.properties.always_require_rebind = true;
+		if (!current.parent) {
+			break;
+		}
+		current_binder = *current.parent;
+	}
+}
+
 void Binder::AddTableName(string table_name) {
 	auto root_binder = GetRootBinder();
 	root_binder->table_names.insert(std::move(table_name));

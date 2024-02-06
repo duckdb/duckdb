@@ -11,14 +11,29 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       function(std::move(info.function)) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->comment = info.comment;
 }
 
 ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
     : MacroCatalogEntry(catalog, schema, info) {
 }
 
+unique_ptr<CatalogEntry> ScalarMacroCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateMacroInfo>();
+	auto result = make_uniq<ScalarMacroCatalogEntry>(catalog, schema, cast_info);
+	return std::move(result);
+}
+
 TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
     : MacroCatalogEntry(catalog, schema, info) {
+}
+
+unique_ptr<CatalogEntry> TableMacroCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateMacroInfo>();
+	auto result = make_uniq<TableMacroCatalogEntry>(catalog, schema, cast_info);
+	return std::move(result);
 }
 
 unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
@@ -27,6 +42,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->schema = schema.name;
 	info->name = name;
 	info->function = function->Copy();
+	info->comment = comment;
 	return std::move(info);
 }
 
