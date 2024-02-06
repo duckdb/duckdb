@@ -158,7 +158,7 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 
 	idx_t cur_offset = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
-	auto sizes = ArrowBufferaData<BUFFER_TYPE>(arrow, 2) + effective_offset;
+	auto sizes = ArrowBufferData<BUFFER_TYPE>(array, 2) + effective_offset;
 
 	start_offset = offsets[0];
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
