@@ -311,6 +311,140 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 	return result;
 }
 
+bool IsBracket(char c) {
+	return c == '(' || c == ')';
+}
+
+// insert a token of length 1 of the specified type
+void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken> &tokens) {
+	vector<highlightToken> new_tokens;
+	new_tokens.reserve(tokens.size() + 1);
+	idx_t i;
+	for(i = 0; i < tokens.size(); i++) {
+		// find the exact position where we need to insert the token
+		if (tokens[i].start == insert_pos) {
+			// this token is exactly at this render position
+
+			// insert highlighting for the bracket
+			highlightToken token;
+			token.start = insert_pos;
+			token.type = insert_type;
+			token.search_match = false;
+			new_tokens.push_back(token);
+
+			// now we need to insert the other token ONLY if the other token is not immediately following this one
+			if (i + 1 >= tokens.size() || tokens[i + 1].start > insert_pos + 1) {
+				token.start = insert_pos + 1;
+				token.type = tokens[i].type;
+				token.search_match = false;
+				new_tokens.push_back(token);
+			}
+			i++;
+			break;
+		} else if (tokens[i].start > insert_pos) {
+			// the next token is AFTER the render position
+			// insert highlighting for the bracket
+			highlightToken token;
+			token.start = insert_pos;
+			token.type = insert_type;
+			token.search_match = false;
+			new_tokens.push_back(token);
+
+			// now just insert the next token
+			new_tokens.push_back(tokens[i]);
+			i++;
+			break;
+		} else {
+			// insert the token
+			new_tokens.push_back(tokens[i]);
+		}
+	}
+	// copy over the remaining tokens
+	for(; i < tokens.size(); i++) {
+		new_tokens.push_back(tokens[i]);
+	}
+	tokens = std::move(new_tokens);
+}
+
+void Linenoise::AddBracketHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
+	// check if we are close to a bracket
+	idx_t bracket_pos;
+	bool close_to_bracket = false;
+	if (IsBracket(buf[pos])) {
+		close_to_bracket = true;
+		bracket_pos = pos;
+	}
+	if (!close_to_bracket && pos < len && IsBracket(buf[pos + 1])) {
+		close_to_bracket = true;
+		bracket_pos = pos + 1;
+	}
+	if (!close_to_bracket && pos > 0 && IsBracket(buf[pos - 1])) {
+		close_to_bracket = true;
+		bracket_pos = pos - 1;
+	}
+	if (!close_to_bracket) {
+		// cursor is not close to a bracket - no need to highlight
+		return;
+	}
+	// now find the matching opening/closing bracket for the given bracket
+	bool is_opening_bracket = buf[bracket_pos] == '(';
+	idx_t other_bracket_pos;
+	bool found = false;
+	if (is_opening_bracket) {
+		// opening bracket - scan forwards
+		int64_t bracket_level = 0;
+		for(idx_t i = bracket_pos + 1; i < len; i++) {
+			auto c = buf[i];
+			if (c == ')') {
+				if (bracket_level == 0) {
+					// found!
+					other_bracket_pos = i;
+					found = true;
+					break;
+				}
+				bracket_level--;
+			}
+			if (c == '(') {
+				bracket_level++;
+			}
+		}
+	} else {
+		// closing bracket - scan backwards
+		int64_t bracket_level = 0;
+		for(idx_t i = bracket_pos; i > 0; i--) {
+			auto c = buf[i - 1];
+			if (c == ')') {
+				bracket_level--;
+			}
+			if (c == '(') {
+				if (bracket_level == 0) {
+					// found!
+					other_bracket_pos = i - 1;
+					found = true;
+					break;
+				}
+				bracket_level++;
+			}
+		}
+	}
+	if (!found) {
+		// other bracket not found
+		return;
+	}
+	Linenoise::Log("Highlight brackets at position %d and %d\n", bracket_pos, other_bracket_pos);
+	// now we have two brackets: "bracket_pos" and "other_bracket_pos"
+	// add them to the tokens
+	idx_t positions[2] = { bracket_pos, other_bracket_pos };
+	for(idx_t k = 0; k < 2; k++) {
+		if (positions[k] < render_start || positions[k] > render_end) {
+			// this token is not rendered
+			continue;
+		}
+		idx_t render_position = positions[k] - render_start;
+		InsertToken(tokenType::TOKEN_BRACKET, render_position, tokens);
+	}
+}
+
 /* Multi line low level line refresh.
  *
  * Rewrite the currently edited line accordingly to the buffer content,
@@ -331,6 +465,8 @@ void Linenoise::RefreshMultiLine() {
 	std::string highlight_buffer;
 	auto render_buf = this->buf;
 	auto render_len = this->len;
+	idx_t render_start = 0;
+	idx_t render_end = render_len;
 	if (clear_screen) {
 		old_cursor_rows = 0;
 		old_rows = 0;
@@ -347,21 +483,20 @@ void Linenoise::RefreshMultiLine() {
 			y_scroll = new_cursor_row - ws.ws_row;
 		}
 		// display only characters up to the current scroll position
-		int start, end;
 		if (y_scroll == 0) {
-			start = 0;
+			render_start = 0;
 		} else {
-			start = ColAndRowToPosition(y_scroll, 0);
+			render_start = ColAndRowToPosition(y_scroll, 0);
 		}
 		if (int(y_scroll) + int(ws.ws_row) >= rows) {
-			end = len;
+			render_end = len;
 		} else {
-			end = ColAndRowToPosition(y_scroll + ws.ws_row, 99999);
+			render_end = ColAndRowToPosition(y_scroll + ws.ws_row, 99999);
 		}
 		new_cursor_row -= y_scroll;
-		render_buf += start;
-		render_len = end - start;
-		Linenoise::Log("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, start, end);
+		render_buf += render_start;
+		render_len = render_end - render_start;
+		Linenoise::Log("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, render_start, render_end);
 		rows = ws.ws_row;
 	} else {
 		y_scroll = 0;
@@ -376,6 +511,9 @@ void Linenoise::RefreshMultiLine() {
 	if (Highlighting::IsEnabled()) {
 		auto match = search_index < search_matches.size() ? &search_matches[search_index] : nullptr;
 		tokens = Highlighting::Tokenize(render_buf, render_len, match);
+
+		// add bracket highlighting
+		AddBracketHighlighting(render_start, render_end, tokens);
 	}
 	if (rows > 1) {
 		// add continuation markers

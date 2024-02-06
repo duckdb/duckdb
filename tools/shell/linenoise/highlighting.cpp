@@ -32,6 +32,7 @@ static std::string bold = "\033[1m";
 static std::string underline = "\033[4m";
 static std::string keyword = "\033[32m";
 static std::string constant = "\033[33m";
+static std::string error = "\033[31m";
 static std::string reset = "\033[00m";
 
 void Highlighting::Enable() {
@@ -182,6 +183,12 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 		case tokenType::TOKEN_STRING_CONSTANT:
 		case tokenType::TOKEN_CONTINUATION:
 			ss << constant << text << reset;
+			break;
+		case tokenType::TOKEN_BRACKET:
+			ss << underline << text << reset;
+			break;
+		case tokenType::TOKEN_ERROR:
+			ss << error << text << reset;
 			break;
 		default:
 			ss << text;

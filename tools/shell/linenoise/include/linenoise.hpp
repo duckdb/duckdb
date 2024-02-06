@@ -91,6 +91,7 @@ public:
 
 	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
 	                              vector<highlightToken> &tokens) const;
+	void AddBracketHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const;
 
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
