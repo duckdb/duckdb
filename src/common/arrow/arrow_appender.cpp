@@ -188,6 +188,15 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		}
 		break;
 	case LogicalTypeId::VARCHAR:
+		if (append_data.options.produce_arrow_string_view) {
+			InitializeAppenderForType<ArrowVarcharToStringViewData>(append_data);
+		} else {
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowVarcharData<string_t>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, int32_t>>(append_data);
+			}
+		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {

@@ -112,4 +112,67 @@ struct ArrowVarcharData {
 	}
 };
 
+struct ArrowVarcharToStringViewData {
+	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
+		result.main_buffer.reserve((capacity + 1) * 16);
+
+		//		result.aux_buffer.reserve(capacity);
+	}
+
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+		idx_t size = to - from;
+		UnifiedVectorFormat format;
+		input.ToUnifiedFormat(input_size, format);
+
+		// resize the validity mask and set up the validity buffer for iteration
+		ResizeValidity(append_data.validity, append_data.row_count + size);
+		auto validity_data = (uint8_t *)append_data.validity.data();
+
+		// resize the offset buffer - the offset buffer holds the offsets into the child array
+		auto data = UnifiedVectorFormat::GetData<string_t>(format);
+
+		for (idx_t i = from; i < to; i++) {
+			auto source_idx = format.sel->get_index(i);
+
+			if (!format.validity.RowIsValid(source_idx)) {
+				// Null value
+				uint8_t current_bit;
+				idx_t current_byte;
+				GetBitPosition(append_data.row_count + i - from, current_byte, current_bit);
+				SetNull(append_data, validity_data, current_byte, current_bit);
+				continue;
+			}
+
+			// These two are now the same buffer
+			auto arrow_length = append_data.main_buffer.GetData<uint32_t>();
+			auto string_data = append_data.main_buffer.GetData<char>();
+			// This is the 16 byte index
+			auto result_idx = append_data.row_count + i - from;
+			auto &current_arrow_length = arrow_length[result_idx * 4];
+			current_arrow_length = ArrowVarcharConverter::GetLength(data[source_idx]);
+
+			if (current_arrow_length <= 12) {
+				//	This string is inlined
+				//  | Bytes 0-3  | Bytes 4-15                            |
+				//  |------------|---------------------------------------|
+				//  | length     | data (padded with 0)                  |
+				memcpy(&string_data[i * 16 + 4], data->GetData(), data->GetSize());
+			} else {
+				//* This string is not inlined, we have to check a different buffer and offsets
+				//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
+				//  |------------|------------|------------|-------------|
+				//  | length     | prefix     | buf. index | offset      |
+				throw InvalidInputException("Not accepted yet");
+			}
+		}
+		append_data.row_count += size;
+	}
+
+	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
+		result->n_buffers = 2;
+		result->buffers[1] = append_data.main_buffer.data();
+		//		result->buffers[2] = append_data.aux_buffer.data();
+	}
+};
+
 } // namespace duckdb
