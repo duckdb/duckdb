@@ -12,6 +12,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -20,20 +21,6 @@ namespace duckdb {
 class Allocator;
 class BufferPool;
 class TemporaryMemoryManager;
-
-enum class MemoryTag : uint32_t {
-	BASE_TABLE,
-    HASH_TABLE,
-	PARQUET_READER,
-	CSV_READER,
-    ORDER_BY,
-    ART_INDEX,
-    COLUMN_DATA,
-    METADATA,
-    OVERFLOW_STRINGS,
-    IN_MEMORY_TABLE,
-    EXTENSION
-};
 
 class BufferManager {
 	friend class BufferHandle;
