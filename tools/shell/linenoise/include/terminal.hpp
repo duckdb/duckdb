@@ -23,18 +23,41 @@ enum KEY_ACTION {
 	CTRL_G = 7,     /* Ctrl-g */
 	CTRL_H = 8,     /* Ctrl-h */
 	TAB = 9,        /* Tab */
+	CTRL_J = 10,    /* Ctrl+j*/
 	CTRL_K = 11,    /* Ctrl+k */
 	CTRL_L = 12,    /* Ctrl+l */
 	ENTER = 13,     /* Enter */
 	CTRL_N = 14,    /* Ctrl-n */
+	CTRL_O = 15,    /* Ctrl-O */
 	CTRL_P = 16,    /* Ctrl-p */
 	CTRL_R = 18,    /* Ctrl-r */
+	CTRL_S = 19,    /* Ctrl-s */
 	CTRL_T = 20,    /* Ctrl-t */
 	CTRL_U = 21,    /* Ctrl+u */
 	CTRL_W = 23,    /* Ctrl+w */
+	CTRL_X = 24,    /* Ctrl+x */
+	CTRL_Y = 25,    /* Ctrl+y */
 	CTRL_Z = 26,    /* Ctrl+z */
 	ESC = 27,       /* Escape */
 	BACKSPACE = 127 /* Backspace */
+};
+
+enum class EscapeSequence {
+	INVALID = 0,
+	UNKNOWN = 1,
+	CTRL_MOVE_BACKWARDS,
+	CTRL_MOVE_FORWARDS,
+	HOME,
+	END,
+	ALT_B,
+	ALT_F,
+	UP,
+	DOWN,
+	RIGHT,
+	LEFT,
+	DELETE,
+	SHIFT_TAB,
+	ESCAPE
 };
 
 struct TerminalSize {
@@ -60,9 +83,12 @@ public:
 	static char *EditNoTTY();
 	static int EditRaw(char *buf, size_t buflen, const char *prompt);
 
+	static EscapeSequence ReadEscapeSequence(int ifd);
+
 private:
 	static TerminalSize TryMeasureTerminalSize();
 	static TerminalSize GetCursorPosition();
+	static idx_t ReadEscapeSequence(int ifd, char sequence[]);
 };
 
 } // namespace duckdb

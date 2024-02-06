@@ -21,8 +21,12 @@ enum class tokenType : uint8_t {
 	TOKEN_KEYWORD,
 	TOKEN_COMMENT,
 	TOKEN_CONTINUATION,
-	TOKEN_CONTINUATION_SELECTED
+	TOKEN_CONTINUATION_SELECTED,
+	TOKEN_BRACKET,
+	TOKEN_ERROR
 };
+
+enum class HighlightingType { KEYWORD, CONSTANT, COMMENT, ERROR, CONTINUATION, CONTINUATION_SELECTED };
 
 struct highlightToken {
 	tokenType type;
@@ -36,8 +40,7 @@ public:
 	static void Disable();
 	static bool IsEnabled();
 	static const char *GetColorOption(const char *option);
-	static void SetKeyword(const char *color);
-	static void SetConstant(const char *color);
+	static void SetHighlightingColor(HighlightingType type, const char *color);
 
 	static vector<highlightToken> Tokenize(char *buf, size_t len, searchMatch *match = nullptr);
 	static string HighlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,

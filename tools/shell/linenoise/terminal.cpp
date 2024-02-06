@@ -304,7 +304,7 @@ TerminalSize Terminal::GetTerminalSize() {
 	// if those fail measure the size by moving the cursor to the corner and fetching the position
 	if (!result.ws_col || !result.ws_row) {
 		TerminalSize measured_size = TryMeasureTerminalSize();
-		lndebug("measured size col %d,row %d -- ", measured_size.ws_row, measured_size.ws_col);
+		Linenoise::Log("measured size col %d,row %d -- ", measured_size.ws_row, measured_size.ws_col);
 		if (measured_size.ws_row) {
 			result.ws_row = measured_size.ws_row;
 		}
@@ -334,6 +334,154 @@ void Terminal::ClearScreen() {
 void Terminal::Beep() {
 	fprintf(stderr, "\x7");
 	fflush(stderr);
+}
+
+EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
+	char seq[5];
+	idx_t length = ReadEscapeSequence(ifd, seq);
+	if (length == 0) {
+		return EscapeSequence::INVALID;
+	}
+	Linenoise::Log("escape of length %d\n", length);
+	switch (length) {
+	case 1:
+		switch (seq[0]) {
+		case ESC:
+			return EscapeSequence::ESCAPE;
+		case 'b':
+			return EscapeSequence::ALT_B;
+		case 'f':
+			return EscapeSequence::ALT_F;
+		default:
+			Linenoise::Log("unrecognized escape sequence of length 1 - %d\n", seq[0]);
+			break;
+		}
+		break;
+	case 2:
+		if (seq[0] == 'O') {
+			switch (seq[1]) {
+			case 'A': /* Up */
+				return EscapeSequence::UP;
+			case 'B': /* Down */
+				return EscapeSequence::DOWN;
+			case 'C': /* Right */
+				return EscapeSequence::RIGHT;
+			case 'D': /* Left */
+				return EscapeSequence::LEFT;
+			case 'H': /* Home */
+				return EscapeSequence::HOME;
+			case 'F': /* End*/
+				return EscapeSequence::END;
+			case 'c':
+				return EscapeSequence::ALT_F;
+			case 'd':
+				return EscapeSequence::ALT_B;
+			default:
+				Linenoise::Log("unrecognized escape sequence (O) %d\n", seq[1]);
+				break;
+			}
+		} else if (seq[0] == '[') {
+			switch (seq[1]) {
+			case 'A': /* Up */
+				return EscapeSequence::UP;
+			case 'B': /* Down */
+				return EscapeSequence::DOWN;
+			case 'C': /* Right */
+				return EscapeSequence::RIGHT;
+			case 'D': /* Left */
+				return EscapeSequence::LEFT;
+			case 'H': /* Home */
+				return EscapeSequence::HOME;
+			case 'F': /* End*/
+				return EscapeSequence::END;
+			case 'Z': /* Shift Tab */
+				return EscapeSequence::SHIFT_TAB;
+			default:
+				Linenoise::Log("unrecognized escape sequence (seq[1]) %d\n", seq[1]);
+				break;
+			}
+		} else {
+			Linenoise::Log("unrecognized escape sequence of length %d\n", length);
+		}
+		break;
+	case 3:
+		if (seq[2] == '~') {
+			switch (seq[1]) {
+			case '1':
+				return EscapeSequence::HOME;
+			case '3': /* Delete key. */
+				return EscapeSequence::DELETE;
+			case '4':
+			case '8':
+				return EscapeSequence::END;
+			default:
+				Linenoise::Log("unrecognized escape sequence (~) %d\n", seq[1]);
+				break;
+			}
+		} else if (seq[1] == '5' && seq[2] == 'C') {
+			return EscapeSequence::ALT_F;
+		} else if (seq[1] == '5' && seq[2] == 'D') {
+			return EscapeSequence::ALT_B;
+		} else {
+			Linenoise::Log("unrecognized escape sequence of length %d\n", length);
+		}
+		break;
+	case 5:
+		if (memcmp(seq, "[1;5C", 5) == 0 || memcmp(seq, "[1;3C", 5) == 0) {
+			// [1;5C: move word right
+			return EscapeSequence::CTRL_MOVE_FORWARDS;
+		} else if (memcmp(seq, "[1;5D", 5) == 0 || memcmp(seq, "[1;3D", 5) == 0) {
+			// [1;5D: move word left
+			return EscapeSequence::CTRL_MOVE_BACKWARDS;
+		} else {
+			Linenoise::Log("unrecognized escape sequence (;) %d\n", seq[1]);
+		}
+		break;
+	default:
+		Linenoise::Log("unrecognized escape sequence of length %d\n", length);
+		break;
+	}
+	return EscapeSequence::UNKNOWN;
+}
+
+idx_t Terminal::ReadEscapeSequence(int ifd, char seq[]) {
+	/* Read the next two bytes representing the escape sequence.
+	 * Use two calls to handle slow terminals returning the two
+	 * chars at different times. */
+	if (read(ifd, seq, 1) == -1) {
+		return 0;
+	}
+	switch (seq[0]) {
+	case ESC:
+	case 'b':
+	case 'f':
+		return 1;
+	default:
+		break;
+	}
+	if (read(ifd, seq + 1, 1) == -1) {
+		return 0;
+	}
+
+	if (seq[0] != '[') {
+		return 2;
+	}
+	if (seq[1] < '0' || seq[1] > '9') {
+		return 2;
+	}
+	/* Extended escape, read additional byte. */
+	if (read(ifd, seq + 2, 1) == -1) {
+		return 0;
+	}
+	if (seq[2] == ';') {
+		// read 2 extra bytes
+		if (read(ifd, seq + 3, 2) == -1) {
+			return 0;
+		}
+		return 5;
+	} else {
+		return 3;
+	}
 }
 
 } // namespace duckdb
