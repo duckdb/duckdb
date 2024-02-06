@@ -71,7 +71,7 @@ private:
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
 	static constexpr const double MAXIMUM_MEMORY_LIMIT_RATIO = 0.8;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
-	static constexpr const double MAXIMUM_FREE_MEMORY_RATIO = 0.6;
+	static constexpr const double MAXIMUM_FREE_MEMORY_RATIO = 0.8;
 
 public:
 	//! Get the TemporaryMemoryManager
@@ -105,6 +105,8 @@ private:
 	bool has_temporary_directory;
 	//! Number of threads
 	idx_t num_threads;
+	//! Max memory per query
+	idx_t query_max_memory;
 
 	//! Currently active states
 	reference_set_t<TemporaryMemoryState> active_states;

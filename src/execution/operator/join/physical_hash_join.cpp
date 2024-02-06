@@ -86,8 +86,10 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op, ClientContext &context_p)
-	    : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
-	      finalized(false), scanned_data(false) {
+	    : context(context_p), num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
+	      temporary_memory_update_count(0),
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
+	      scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
 
 		// for perfect hash join
@@ -106,8 +108,12 @@ public:
 
 public:
 	ClientContext &context;
+
+	const idx_t num_threads;
+	atomic<idx_t> temporary_memory_update_count;
 	//! Temporary memory state for managing this operator's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
+
 	//! Global HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
 	//! The perfect hash join executor (if any)
@@ -132,7 +138,8 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : join_key_executor(context) {
+	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context)
+	    : join_key_executor(context), chunk_count(0) {
 		auto &allocator = BufferAllocator::Get(context);
 
 		for (auto &cond : op.conditions) {
@@ -158,6 +165,10 @@ public:
 
 	//! Thread-local HT
 	unique_ptr<JoinHashTable> hash_table;
+
+	//! For updating the temporary memory state
+	idx_t chunk_count;
+	static constexpr const idx_t CHUNK_COUNT_UPDATE_INTERVAL = 60;
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
@@ -241,6 +252,16 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 		}
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
+
+	if (++lstate.chunk_count % HashJoinLocalSinkState::CHUNK_COUNT_UPDATE_INTERVAL == 0) {
+		auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
+		if (++gstate.temporary_memory_update_count % gstate.num_threads == 0) {
+			auto &sink_collection = lstate.hash_table->GetSinkCollection();
+			auto ht_size = sink_collection.SizeInBytes() + JoinHashTable::PointerTableSize(sink_collection.Count());
+			gstate.temporary_memory_state->SetRemainingSize(context.client, gstate.num_threads * ht_size);
+		}
+	}
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
