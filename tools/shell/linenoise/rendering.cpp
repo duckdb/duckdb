@@ -18,6 +18,10 @@ struct AppendBuffer {
 	void Append(const char *s, idx_t len) {
 		buffer.append(s, len);
 	}
+	void Append(const char *s) {
+		buffer.append(s);
+	}
+
 	void Write(int fd) {
 		if (write(fd, buffer.c_str(), buffer.size()) == -1) {
 			/* Can't recover from write error. */
@@ -58,7 +62,7 @@ void Linenoise::RefreshShowHints(AppendBuffer &append_buffer, int plen) const {
 			append_buffer.Append(seq, strlen(seq));
 			append_buffer.Append(hint, hintlen);
 			if (color != -1 || bold != 0) {
-				append_buffer.Append("\033[0m", 4);
+				append_buffer.Append("\033[0m");
 			}
 			/* Call the function to free the hint returned. */
 			auto free_hints_callback = Linenoise::FreeHintsCallback();
@@ -144,19 +148,17 @@ void Linenoise::RefreshSingleLine() const {
 
 	AppendBuffer append_buffer;
 	/* Cursor to left edge */
-	snprintf(seq, 64, "\r");
-	append_buffer.Append(seq, strlen(seq));
+	append_buffer.Append("\r");
 	/* Write the prompt and the current buffer content */
-	append_buffer.Append(prompt, strlen(prompt));
+	append_buffer.Append(prompt);
 	append_buffer.Append(render_buf, render_len);
 	/* Show hits if any. */
 	RefreshShowHints(append_buffer, plen);
 	/* Erase to right */
-	snprintf(seq, 64, "\x1b[0K");
-	append_buffer.Append(seq, strlen(seq));
+	append_buffer.Append("\x1b[0K");
 	/* Move cursor to original position. */
 	snprintf(seq, 64, "\r\x1b[%dC", (int)(render_pos + plen));
-	append_buffer.Append(seq, strlen(seq));
+	append_buffer.Append(seq);
 	append_buffer.Write(fd);
 }
 
@@ -325,7 +327,7 @@ void Linenoise::RefreshMultiLine() {
 	PositionToColAndRow(pos, new_cursor_row, new_cursor_x, rows, cols);
 	int col; /* colum position, zero-based. */
 	int old_rows = maxrows ? maxrows : 1;
-	int fd = ofd, j;
+	int fd = ofd;
 	std::string highlight_buffer;
 	auto render_buf = this->buf;
 	auto render_len = this->len;
@@ -396,24 +398,22 @@ void Linenoise::RefreshMultiLine() {
 	if (old_rows - old_cursor_rows > 0) {
 		Linenoise::Log("go down %d", old_rows - old_cursor_rows);
 		snprintf(seq, 64, "\x1b[%dB", old_rows - int(old_cursor_rows));
-		append_buffer.Append(seq, strlen(seq));
+		append_buffer.Append(seq);
 	}
 
 	/* Now for every row clear it, go up. */
-	for (j = 0; j < old_rows - 1; j++) {
+	for (int j = 0; j < old_rows - 1; j++) {
 		Linenoise::Log("clear+up");
-		snprintf(seq, 64, "\r\x1b[0K\x1b[1A");
-		append_buffer.Append(seq, strlen(seq));
+		append_buffer.Append("\r\x1b[0K\x1b[1A");
 	}
 
 	/* Clean the top line. */
 	Linenoise::Log("clear");
-	snprintf(seq, 64, "\r\x1b[0K");
-	append_buffer.Append(seq, strlen(seq));
+	append_buffer.Append("\r\x1b[0K");
 
 	/* Write the prompt and the current buffer content */
 	if (y_scroll == 0) {
-		append_buffer.Append(prompt, strlen(prompt));
+		append_buffer.Append(prompt);
 	}
 	append_buffer.Append(render_buf, render_len);
 
@@ -427,9 +427,8 @@ void Linenoise::RefreshMultiLine() {
 	Linenoise::Log("new_cursor_x == cols %d", new_cursor_x == ws.ws_col ? 1 : 0);
 	if (pos > 0 && pos == len && new_cursor_x == ws.ws_col) {
 		Linenoise::Log("<newline>", 0);
-		append_buffer.Append("\n", 1);
-		snprintf(seq, 64, "\r");
-		append_buffer.Append(seq, strlen(seq));
+		append_buffer.Append("\n");
+		append_buffer.Append("\r");
 		rows++;
 		new_cursor_row++;
 		new_cursor_x = 0;
@@ -451,7 +450,7 @@ void Linenoise::RefreshMultiLine() {
 	if (rows - new_cursor_row > 0) {
 		Linenoise::Log("go-up %d", rows - new_cursor_row);
 		snprintf(seq, 64, "\x1b[%dA", rows - new_cursor_row);
-		append_buffer.Append(seq, strlen(seq));
+		append_buffer.Append(seq);
 	}
 
 	/* Set column. */
@@ -462,7 +461,7 @@ void Linenoise::RefreshMultiLine() {
 	} else {
 		snprintf(seq, 64, "\r");
 	}
-	append_buffer.Append(seq, strlen(seq));
+	append_buffer.Append(seq);
 
 	Linenoise::Log("\n");
 	old_cursor_rows = new_cursor_row;
