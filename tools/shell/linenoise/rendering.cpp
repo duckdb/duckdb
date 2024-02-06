@@ -7,6 +7,15 @@
 namespace duckdb {
 static const char *continuationPrompt = "> ";
 static const char *continuationSelectedPrompt = "> ";
+static bool enableCompletionRendering = true;
+
+void Linenoise::EnableCompletionRendering() {
+	enableCompletionRendering = true;
+}
+
+void Linenoise::DisableCompletionRendering() {
+	enableCompletionRendering = false;
+}
 
 /* =========================== Line editing ================================= */
 
@@ -599,6 +608,13 @@ bool IsCompletionCharacter(char c) {
 
 bool Linenoise::AddCompletionMarker(const char *buf, idx_t len, string &result_buffer,
                                     vector<highlightToken> &tokens) const {
+	if (!enableCompletionRendering) {
+		return false;
+	}
+	if (!continuation_markers) {
+		// don't render when pressing ctrl+c, only when editing
+		return false;
+	}
 	static constexpr const idx_t MAX_COMPLETION_LENGTH = 1000;
 	if (len >= MAX_COMPLETION_LENGTH) {
 		return false;

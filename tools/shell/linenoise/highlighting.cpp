@@ -31,7 +31,9 @@ static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033
 static std::string bold = "\033[1m";
 static std::string underline = "\033[4m";
 static std::string keyword = "\033[32m";
+static std::string continuation_selected = "\033[32m";
 static std::string constant = "\033[33m";
+static std::string continuation = "\033[90m";
 static std::string comment = "\033[90m";
 static std::string error = "\033[31m";
 static std::string reset = "\033[00m";
@@ -59,12 +61,27 @@ const char *Highlighting::GetColorOption(const char *option) {
 	return nullptr;
 }
 
-void Highlighting::SetKeyword(const char *color) {
-	keyword = color;
-}
-
-void Highlighting::SetConstant(const char *color) {
-	constant = color;
+void Highlighting::SetHighlightingColor(HighlightingType type, const char *color) {
+	switch (type) {
+	case HighlightingType::KEYWORD:
+		keyword = color;
+		break;
+	case HighlightingType::CONSTANT:
+		constant = color;
+		break;
+	case HighlightingType::COMMENT:
+		comment = color;
+		break;
+	case HighlightingType::ERROR:
+		error = color;
+		break;
+	case HighlightingType::CONTINUATION:
+		continuation = color;
+		break;
+	case HighlightingType::CONTINUATION_SELECTED:
+		continuation_selected = color;
+		break;
+	}
 }
 
 static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
@@ -187,13 +204,17 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 		}
 		switch (token.type) {
 		case tokenType::TOKEN_KEYWORD:
-		case tokenType::TOKEN_CONTINUATION_SELECTED:
 			ss << keyword << text << reset;
 			break;
 		case tokenType::TOKEN_NUMERIC_CONSTANT:
 		case tokenType::TOKEN_STRING_CONSTANT:
-		case tokenType::TOKEN_CONTINUATION:
 			ss << constant << text << reset;
+			break;
+		case tokenType::TOKEN_CONTINUATION:
+			ss << continuation << text << reset;
+			break;
+		case tokenType::TOKEN_CONTINUATION_SELECTED:
+			ss << continuation_selected << text << reset;
 			break;
 		case tokenType::TOKEN_BRACKET:
 			ss << underline << text << reset;

@@ -110,6 +110,9 @@ public:
 
 	TabCompletion TabComplete() const;
 
+	static void EnableCompletionRendering();
+	static void DisableCompletionRendering();
+
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);
 #ifdef LINENOISE_LOGGING
