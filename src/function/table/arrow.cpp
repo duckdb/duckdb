@@ -14,6 +14,16 @@
 
 namespace duckdb {
 
+static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSizeType size, bool view) {
+	auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
+	auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), ArrowVariableSizeType::NORMAL);
+	list_type->AddChild(std::move(child_type));
+	if (view) {
+		list_type->SetView();
+	}
+	return list_type;
+}
+
 static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
 	auto format = string(schema.format);
 	if (format == "n") {
@@ -87,17 +97,13 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 	} else if (format == "tin") {
 		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::MONTH_DAY_NANO);
 	} else if (format == "+l") {
-		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
-		auto list_type =
-		    make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), ArrowVariableSizeType::NORMAL);
-		list_type->AddChild(std::move(child_type));
-		return list_type;
+		return CreateListType(*schema.children[0], ArrowVariableSizeType::NORMAL, false);
 	} else if (format == "+L") {
-		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
-		auto list_type =
-		    make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), ArrowVariableSizeType::SUPER_SIZE);
-		list_type->AddChild(std::move(child_type));
-		return list_type;
+		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, false);
+	} else if (format == "+vl") {
+		return CreateListType(*schema.children[0], ArrowVariableSizeType::NORMAL, true);
+	} else if (foramt == "+vL") {
+		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);

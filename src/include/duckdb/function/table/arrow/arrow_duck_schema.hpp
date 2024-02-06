@@ -75,6 +75,10 @@ public:
 
 	bool RunEndEncoded() const;
 
+	bool IsView() const;
+
+	void SetView();
+
 	const ArrowType &operator[](idx_t index) const;
 
 private:
@@ -91,6 +95,8 @@ private:
 	unique_ptr<ArrowType> dictionary_type;
 	//! Is run-end-encoded
 	bool run_end_encoded = false;
+	//! Is a String/ListView
+	bool is_view = false;
 };
 
 using arrow_column_map_t = unordered_map<idx_t, unique_ptr<ArrowType>>;

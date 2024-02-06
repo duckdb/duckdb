@@ -48,6 +48,14 @@ bool ArrowType::RunEndEncoded() const {
 	return run_end_encoded;
 }
 
+bool ArrowType::IsView() const {
+	return is_view;
+}
+
+void ArrowType::SetView() {
+	is_view = true;
+}
+
 LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	if (use_dictionary && dictionary_type) {
 		return dictionary_type->GetDuckType();
