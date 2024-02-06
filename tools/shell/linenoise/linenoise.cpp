@@ -911,6 +911,7 @@ int Linenoise::Edit() {
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
 			if (Terminal::IsMultiline()) {
+				continuation_markers = false;
 				EditMoveEnd();
 			}
 			buf[0] = '\3';
