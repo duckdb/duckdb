@@ -387,12 +387,12 @@ static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offse
 	idx_t end = count;
 	while (begin < end) {
 		idx_t middle = (begin + end) / 2;
-		// begin < end impies middle < end
+		// begin < end implies middle < end
 		if (offset >= static_cast<idx_t>(run_ends[middle])) {
 			// keep searching in [middle + 1, end)
 			begin = middle + 1;
 		} else {
-			// run_ends[middle] > offset, so keep searching in [begin, middle)
+			// offset < run_ends[middle], so keep searching in [begin, middle)
 			end = middle;
 		}
 	}
