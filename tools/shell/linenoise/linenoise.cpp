@@ -66,6 +66,21 @@ linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
 	return freeHintsCallback;
 }
 
+TabCompletion Linenoise::TabComplete() const {
+	TabCompletion result;
+	if (!completionCallback) {
+		return result;
+	}
+	linenoiseCompletions lc;
+	lc.cvec = nullptr;
+	lc.len = 0;
+	completionCallback(buf, &lc);
+	for (idx_t i = 0; i < lc.len; i++) {
+		result.completions.emplace_back(lc.cvec[i]);
+	}
+	freeCompletions(&lc);
+	return result;
+}
 /* This is an helper function for linenoiseEdit() and is called when the
  * user types the <tab> key in order to complete the string currently in the
  * input.
@@ -73,23 +88,23 @@ linenoiseFreeHintsCallback *Linenoise::FreeHintsCallback() {
  * The state of the editing is encapsulated into the pointed linenoiseState
  * structure as described in the structure definition. */
 int Linenoise::CompleteLine() {
-	linenoiseCompletions lc = {0, NULL};
 	int nread, nwritten;
 	char c = 0;
 
-	completionCallback(buf, &lc);
-	if (lc.len == 0) {
+	auto completion_list = TabComplete();
+	auto &completions = completion_list.completions;
+	if (completions.empty()) {
 		Terminal::Beep();
 	} else {
 		size_t stop = 0, i = 0;
 
 		while (!stop) {
 			/* Show completion or original buffer */
-			if (i < lc.len) {
+			if (i < completions.size()) {
 				Linenoise saved = *this;
 
-				len = pos = strlen(lc.cvec[i]);
-				buf = lc.cvec[i];
+				len = pos = completions[i].size();
+				buf = (char *)completions[i].c_str();
 				RefreshLine();
 				len = saved.len;
 				pos = saved.pos;
@@ -100,15 +115,14 @@ int Linenoise::CompleteLine() {
 
 			nread = read(ifd, &c, 1);
 			if (nread <= 0) {
-				freeCompletions(&lc);
 				return -1;
 			}
 
 			Linenoise::Log("\nComplete Character %d\n", (int)c);
 			switch (c) {
 			case TAB: /* tab */
-				i = (i + 1) % (lc.len + 1);
-				if (i == lc.len) {
+				i = (i + 1) % (completions.size() + 1);
+				if (i == completions.size()) {
 					Terminal::Beep();
 				}
 				break;
@@ -125,7 +139,7 @@ int Linenoise::CompleteLine() {
 					break;
 				default:
 					/* Re-show original buffer */
-					if (i < lc.len) {
+					if (i < completions.size()) {
 						RefreshLine();
 					}
 					stop = 1;
@@ -135,8 +149,8 @@ int Linenoise::CompleteLine() {
 			}
 			default:
 				/* Update buffer and return */
-				if (i < lc.len) {
-					nwritten = snprintf(buf, buflen, "%s", lc.cvec[i]);
+				if (i < completions.size()) {
+					nwritten = snprintf(buf, buflen, "%s", completions[i].c_str());
 					len = pos = nwritten;
 				}
 				stop = 1;
@@ -144,8 +158,6 @@ int Linenoise::CompleteLine() {
 			}
 		}
 	}
-
-	freeCompletions(&lc);
 	return c; /* Return last read character */
 }
 

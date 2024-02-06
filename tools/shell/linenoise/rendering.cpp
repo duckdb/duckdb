@@ -582,8 +582,75 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 		}
 		tokens = std::move(new_tokens);
 	}
+}
 
-	Linenoise::LogTokens(tokens);
+bool IsCompletionCharacter(char c) {
+	if (c >= 'A' && c <= 'Z') {
+		return true;
+	}
+	if (c >= 'a' && c <= 'z') {
+		return true;
+	}
+	if (c == '_') {
+		return true;
+	}
+	return false;
+}
+
+bool Linenoise::AddCompletionMarker(const char *buf, idx_t len, string &result_buffer,
+                                    vector<highlightToken> &tokens) const {
+	static constexpr const idx_t MAX_COMPLETION_LENGTH = 1000;
+	if (len >= MAX_COMPLETION_LENGTH) {
+		return false;
+	}
+	if (!insert || pos != len) {
+		// only show when inserting a character at the end
+		return false;
+	}
+	if (pos < 3) {
+		// we need at least 3 bytes
+		return false;
+	}
+	if (!tokens.empty() && tokens.back().type == tokenType::TOKEN_ERROR) {
+		// don't show auto-completion when we have errors
+		return false;
+	}
+	// we ONLY show completion if we have typed at least three characters that are supported for completion
+	// for now this is ONLY the characters a-z, A-Z and underscore (_)
+	for (idx_t i = pos - 3; i < pos; i++) {
+		if (!IsCompletionCharacter(buf[i])) {
+			return false;
+		}
+	}
+	auto completion = TabComplete();
+	if (completion.completions.empty()) {
+		// no completions found
+		return false;
+	}
+	if (completion.completions[0].size() <= len) {
+		// completion is not long enough
+		return false;
+	}
+	// we have stricter requirements for rendering completions - the completion must match exactly
+	for (idx_t i = pos; i > 0; i--) {
+		auto cpos = i - 1;
+		if (!IsCompletionCharacter(buf[cpos])) {
+			break;
+		}
+		if (completion.completions[0][cpos] != buf[cpos]) {
+			return false;
+		}
+	}
+	// add the first completion found for rendering purposes
+	result_buffer = string(buf, len);
+	result_buffer += completion.completions[0].substr(len);
+
+	highlightToken completion_token;
+	completion_token.start = len;
+	completion_token.type = tokenType::TOKEN_COMMENT;
+	completion_token.search_match = true;
+	tokens.push_back(completion_token);
+	return true;
 }
 
 /* Multi line low level line refresh.
@@ -656,6 +723,12 @@ void Linenoise::RefreshMultiLine() {
 
 		// add error highlighting
 		AddErrorHighlighting(render_start, render_end, tokens);
+
+		// add completion hint
+		if (AddCompletionMarker(render_buf, render_len, highlight_buffer, tokens)) {
+			render_buf = (char *)highlight_buffer.c_str();
+			render_len = highlight_buffer.size();
+		}
 	}
 	if (rows > 1) {
 		// add continuation markers

@@ -27,6 +27,10 @@ struct searchMatch {
 	size_t match_end;
 };
 
+struct TabCompletion {
+	vector<string> completions;
+};
+
 class Linenoise {
 public:
 	Linenoise(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt);
@@ -93,9 +97,13 @@ public:
 	                              vector<highlightToken> &tokens) const;
 	void AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const;
 
+	bool AddCompletionMarker(const char *buf, idx_t len, string &result_buffer, vector<highlightToken> &tokens) const;
+
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
 	static bool AllWhitespace(const char *z);
+
+	TabCompletion TabComplete() const;
 
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);
