@@ -140,9 +140,9 @@ SQLRETURN Connect::ParseInputStr() {
 
 SQLRETURN Connect::ReadFromIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
+#if !defined WIN32
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	std::string home_directory = fs->GetHomeDirectory();
-
 	std::string odbc_file = fs->JoinPath(home_directory, R"(.odbc.ini)");
 
 	std::cout << "odbc_file: " << odbc_file << std::endl;
@@ -159,30 +159,15 @@ SQLRETURN Connect::ReadFromIniFile() {
         std::cout << str << std::endl;
     }
 	in.close();
+	auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
+#else
+	auto converted_odbc_file = "odbc.ini";
+#endif
 
 	if (dbc->dsn.empty()) {
 		return SQL_SUCCESS;
 	}
 
-	UWORD config_mode;
-	auto is_success = SQLGetConfigMode(&config_mode);
-	if (is_success != SQL_SUCCESS) {
-		std::cout << "Error reading config mode" << std::endl;
-	}
-
-	switch (config_mode) {
-	case ODBC_BOTH_DSN:
-		std::cout << "ODBC_BOTH_DSN" << std::endl;
-		break;
-	case ODBC_USER_DSN:
-		std::cout << "ODBC_USER_DSN" << std::endl;
-		break;
-	case ODBC_SYSTEM_DSN:
-		std::cout << "ODBC_SYSTEM_DSN" << std::endl;
-		break;
-	}
-
-	auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
 	auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);
 	std::cout << "converted_odbc_file: " << converted_odbc_file << std::endl;
 	std::cout << "converted_dsn: " << converted_dsn << std::endl;
@@ -194,7 +179,7 @@ SQLRETURN Connect::ReadFromIniFile() {
 		char char_val[max_val_len];
 		auto converted_key = key_pair.second.c_str();
 		int read_size =
-		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, "odbc.ini");
+		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, converted_odbc_file);
 		std::cout << "key: " << converted_key << ", read_size: " << read_size << std::endl;
 #if WIN32
 		std::cout << "last error: " << GetLastError() << std::endl;

@@ -150,6 +150,29 @@ static void TestSettingConfigs() {
 	          "READ_WRITE");
 }
 
+#if defined WIN32
+static void runSQLInstallerError(bool ret, std::string errorMessage) {
+	if (bool == true) {
+		REQUIRE(ret == true)
+	}
+
+	SQLSMALLINT recNumber;
+	SQLCHAR sqlState[SQL_SQLSTATE_SIZE];
+	SQLINTEGER nativeError;
+	SQLCHAR msgText[SQL_MAX_MESSAGE_LENGTH];
+	SQLSMALLINT msgTextLen;
+
+	SQLInstallerError(1, &recNumber, sqlState, &nativeError, msgText, sizeof(msgText), &msgTextLen);
+
+	// Print or handle the error information
+	std::cerr << errorMessage << "\n";
+	std::cerr << "SQLSTATE: " << sqlState << "\n";
+	std::cerr << "Native Error: " << nativeError << "\n";
+	std::cerr << "Message: " << msgText << "\n";
+	REQUIRE(ret == true)
+}
+#endif
+
 // Test input from an ini file
 static void TestIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
@@ -182,11 +205,11 @@ static void TestIniFile() {
 	LPCSTR allow_unsigned_extensions = "true";
 
 	// Add DSN to the ini file
-	REQUIRE(SQLWriteDSNToIni(dsn, driver) == true);
+	runSQLInstallerError(SQLWriteDSNToIni(dsn, driver), "Failed to write DSN to ini file");
 	// Write to the ini file
-	REQUIRE(SQLWritePrivateProfileString(dsn, "database", database, nullptr) == true);
-	REQUIRE(SQLWritePrivateProfileString(dsn, "access_mode", access_mode, nullptr) == true);
-	REQUIRE(SQLWritePrivateProfileString(dsn, "allow_unsigned_extensions", allow_unsigned_extensions, nullptr) == true);
+	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "database", database, nullptr), "Failed to write database to ini file");
+	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "access_mode", access_mode, nullptr), "Failed to write access_mode to ini file");
+	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "allow_unsigned_extensions", allow_unsigned_extensions, nullptr), "Failed to write allow_unsigned_extensions to ini file");
 #endif
 
 	// Connect to the database using the ini file
