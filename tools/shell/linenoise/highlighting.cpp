@@ -32,6 +32,7 @@ static std::string bold = "\033[1m";
 static std::string underline = "\033[4m";
 static std::string keyword = "\033[32m";
 static std::string constant = "\033[33m";
+static std::string comment = "\033[90m";
 static std::string error = "\033[31m";
 static std::string reset = "\033[00m";
 
@@ -157,6 +158,7 @@ vector<highlightToken> Highlighting::Tokenize(char *buf, size_t len, searchMatch
 string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size_t end_pos,
                                    const vector<highlightToken> &tokens) {
 	std::stringstream ss;
+	size_t prev_pos = 0;
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
 		if (next < start_pos) {
@@ -170,6 +172,15 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 		if (end <= start) {
 			continue;
 		}
+		if (prev_pos > start) {
+#ifdef DEBUG
+			throw InternalException("ERROR - Rendering at position %llu after rendering at position %llu\n", start,
+			                        prev_pos);
+#endif
+			Linenoise::Log("ERROR - Rendering at position %llu after rendering at position %llu\n", start, prev_pos);
+			continue;
+		}
+		prev_pos = start;
 		std::string text = std::string(buf + start, end - start);
 		if (token.search_match) {
 			ss << underline;
@@ -189,6 +200,9 @@ string Highlighting::HighlightText(char *buf, size_t len, size_t start_pos, size
 			break;
 		case tokenType::TOKEN_ERROR:
 			ss << error << text << reset;
+			break;
+		case tokenType::TOKEN_COMMENT:
+			ss << comment << text << reset;
 			break;
 		default:
 			ss << text;

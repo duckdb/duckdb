@@ -104,7 +104,7 @@ int Linenoise::CompleteLine() {
 				return -1;
 			}
 
-			Linenoise::Log("\nComplete Character %d\n", (int) c);
+			Linenoise::Log("\nComplete Character %d\n", (int)c);
 			switch (c) {
 			case TAB: /* tab */
 				i = (i + 1) % (lc.len + 1);
@@ -114,7 +114,7 @@ int Linenoise::CompleteLine() {
 				break;
 			case ESC: { /* escape */
 				auto escape = Terminal::ReadEscapeSequence(ifd);
-				switch(escape) {
+				switch (escape) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
 					if (i == 0) {
@@ -128,9 +128,8 @@ int Linenoise::CompleteLine() {
 					if (i < lc.len) {
 						RefreshLine();
 					}
-						stop = 1;
+					stop = 1;
 					break;
-
 				}
 				break;
 			}
@@ -454,7 +453,7 @@ bool Linenoise::EditMoveRowUp() {
 	Linenoise::Log("move from row %d to row %d", cursor_row, cursor_row - 1);
 	cursor_row--;
 	pos = ColAndRowToPosition(cursor_row, cursor_col);
-		Linenoise::Log("new pos %d", pos);
+	Linenoise::Log("new pos %d", pos);
 	RefreshLine();
 	return true;
 }
@@ -498,7 +497,7 @@ void Linenoise::EditMoveEnd() {
 
 /* Move cursor to the start of the line. */
 void Linenoise::EditMoveStartOfLine() {
-	while(pos > 0 && buf[pos] != '\n') {
+	while (pos > 0 && buf[pos] != '\n') {
 		pos--;
 	}
 	RefreshLine();
@@ -506,7 +505,7 @@ void Linenoise::EditMoveStartOfLine() {
 
 /* Move cursor to the end of the line. */
 void Linenoise::EditMoveEndOfLine() {
-	while(pos < len && buf[pos + 1] != '\n') {
+	while (pos < len && buf[pos + 1] != '\n') {
 		pos++;
 	}
 	RefreshLine();
@@ -674,7 +673,7 @@ char Linenoise::Search(char c) {
 		break;
 	case ESC: /* escape sequence */ {
 		auto escape = Terminal::ReadEscapeSequence(ifd);
-		switch(escape) {
+		switch (escape) {
 		case EscapeSequence::ESCAPE:
 			// double escape accepts search without any additional command
 			return AcceptSearch(0);
@@ -729,7 +728,7 @@ char Linenoise::Search(char c) {
 		CancelSearch();
 		return 0;
 	case BACKSPACE: /* backspace */
-	case CTRL_H:     /* ctrl-h */
+	case CTRL_H:    /* ctrl-h */
 	case CTRL_W:    /* ctrl-w */
 		// remove trailing UTF-8 bytes (if any)
 		while (!search_buf.empty() && ((search_buf.back() & 0xc0) == 0x80)) {
@@ -987,7 +986,7 @@ int Linenoise::Edit() {
 		}
 		case ESC: /* escape sequence */ {
 			auto escape = Terminal::ReadEscapeSequence(ifd);
-			switch(escape) {
+			switch (escape) {
 			case EscapeSequence::CTRL_MOVE_BACKWARDS:
 			case EscapeSequence::ALT_B:
 				EditMoveWordLeft();
@@ -1082,9 +1081,9 @@ void Linenoise::LogMessageRecursive(const string &msg, std::vector<ExceptionForm
 
 void Linenoise::LogTokens(const vector<highlightToken> &tokens) {
 #ifdef LINENOISE_LOGGING
-	for(auto &token : tokens) {
+	for (auto &token : tokens) {
 		const char *token_type_name = "";
-		switch(token.type) {
+		switch (token.type) {
 		case tokenType::TOKEN_IDENTIFIER:
 			token_type_name = "IDENTIFIER";
 			break;
@@ -1122,6 +1121,5 @@ void Linenoise::LogTokens(const vector<highlightToken> &tokens) {
 	}
 #endif
 }
-
 
 } // namespace duckdb

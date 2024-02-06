@@ -336,7 +336,6 @@ void Terminal::Beep() {
 	fflush(stderr);
 }
 
-
 EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 	char seq[5];
 	idx_t length = ReadEscapeSequence(ifd, seq);
@@ -344,9 +343,9 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 		return EscapeSequence::INVALID;
 	}
 	Linenoise::Log("escape of length %d\n", length);
-	switch(length) {
+	switch (length) {
 	case 1:
-		switch(seq[0]) {
+		switch (seq[0]) {
 		case ESC:
 			return EscapeSequence::ESCAPE;
 		case 'b':
@@ -361,45 +360,45 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 	case 2:
 		if (seq[0] == 'O') {
 			switch (seq[1]) {
-				case 'A': /* Up */
-					return EscapeSequence::UP;
-				case 'B': /* Down */
-					return EscapeSequence::DOWN;
-				case 'C': /* Right */
-					return EscapeSequence::RIGHT;
-				case 'D': /* Left */
-					return EscapeSequence::LEFT;
-				case 'H': /* Home */
-					return EscapeSequence::HOME;
-				case 'F': /* End*/
-					return EscapeSequence::END;
-				case 'c':
-					return EscapeSequence::ALT_F;
-				case 'd':
-					return EscapeSequence::ALT_B;
-				default:
-					Linenoise::Log("unrecognized escape sequence (O) %d\n", seq[1]);
-					break;
+			case 'A': /* Up */
+				return EscapeSequence::UP;
+			case 'B': /* Down */
+				return EscapeSequence::DOWN;
+			case 'C': /* Right */
+				return EscapeSequence::RIGHT;
+			case 'D': /* Left */
+				return EscapeSequence::LEFT;
+			case 'H': /* Home */
+				return EscapeSequence::HOME;
+			case 'F': /* End*/
+				return EscapeSequence::END;
+			case 'c':
+				return EscapeSequence::ALT_F;
+			case 'd':
+				return EscapeSequence::ALT_B;
+			default:
+				Linenoise::Log("unrecognized escape sequence (O) %d\n", seq[1]);
+				break;
 			}
 		} else if (seq[0] == '[') {
 			switch (seq[1]) {
-				case 'A': /* Up */
-					return EscapeSequence::UP;
-				case 'B': /* Down */
-					return EscapeSequence::DOWN;
-				case 'C': /* Right */
-					return EscapeSequence::RIGHT;
-				case 'D': /* Left */
-					return EscapeSequence::LEFT;
-				case 'H': /* Home */
-					return EscapeSequence::HOME;
-				case 'F': /* End*/
-					return EscapeSequence::END;
-				case 'Z': /* Shift Tab */
-					return EscapeSequence::SHIFT_TAB;
-				default:
-					Linenoise::Log("unrecognized escape sequence (seq[1]) %d\n", seq[1]);
-					break;
+			case 'A': /* Up */
+				return EscapeSequence::UP;
+			case 'B': /* Down */
+				return EscapeSequence::DOWN;
+			case 'C': /* Right */
+				return EscapeSequence::RIGHT;
+			case 'D': /* Left */
+				return EscapeSequence::LEFT;
+			case 'H': /* Home */
+				return EscapeSequence::HOME;
+			case 'F': /* End*/
+				return EscapeSequence::END;
+			case 'Z': /* Shift Tab */
+				return EscapeSequence::SHIFT_TAB;
+			default:
+				Linenoise::Log("unrecognized escape sequence (seq[1]) %d\n", seq[1]);
+				break;
 			}
 		} else {
 			Linenoise::Log("unrecognized escape sequence of length %d\n", length);
@@ -408,16 +407,16 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 	case 3:
 		if (seq[2] == '~') {
 			switch (seq[1]) {
-				case '1':
-					return EscapeSequence::HOME;
-				case '3': /* Delete key. */
-					return EscapeSequence::DELETE;
-				case '4':
-				case '8':
-					return EscapeSequence::END;
-				default:
-					Linenoise::Log("unrecognized escape sequence (~) %d\n", seq[1]);
-					break;
+			case '1':
+				return EscapeSequence::HOME;
+			case '3': /* Delete key. */
+				return EscapeSequence::DELETE;
+			case '4':
+			case '8':
+				return EscapeSequence::END;
+			default:
+				Linenoise::Log("unrecognized escape sequence (~) %d\n", seq[1]);
+				break;
 			}
 		} else if (seq[1] == '5' && seq[2] == 'C') {
 			return EscapeSequence::ALT_F;
@@ -452,7 +451,7 @@ idx_t Terminal::ReadEscapeSequence(int ifd, char seq[]) {
 	if (read(ifd, seq, 1) == -1) {
 		return 0;
 	}
-	switch(seq[0]) {
+	switch (seq[0]) {
 	case ESC:
 	case 'b':
 	case 'f':

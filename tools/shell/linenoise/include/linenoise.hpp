@@ -99,6 +99,7 @@ public:
 
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);
+#define LINENOISE_LOGGING
 #ifdef LINENOISE_LOGGING
 	// Logging
 	template <typename... Args>
@@ -111,7 +112,7 @@ public:
 
 	template <class T, typename... Args>
 	static void LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
-											Args... params) {
+	                                Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		LogMessageRecursive(msg, values, params...);
 	}

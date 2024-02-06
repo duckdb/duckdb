@@ -311,17 +311,13 @@ string Linenoise::AddContinuationMarkers(const char *buf, size_t len, int plen, 
 	return result;
 }
 
-bool IsBracket(char c) {
-	return c == '(' || c == ')';
-}
-
 // insert a token of length 1 of the specified type
 void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken> &tokens) {
 	vector<highlightToken> new_tokens;
 	new_tokens.reserve(tokens.size() + 1);
 	idx_t i;
 	bool found = false;
-	for(i = 0; i < tokens.size(); i++) {
+	for (i = 0; i < tokens.size(); i++) {
 		// find the exact position where we need to insert the token
 		if (tokens[i].start == insert_pos) {
 			// this token is exactly at this render position
@@ -363,7 +359,7 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 		}
 	}
 	// copy over the remaining tokens
-	for(; i < tokens.size(); i++) {
+	for (; i < tokens.size(); i++) {
 		new_tokens.push_back(tokens[i]);
 	}
 	if (!found) {
@@ -377,12 +373,7 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 	tokens = std::move(new_tokens);
 }
 
-enum class ScanState {
-	STANDARD,
-	IN_SINGLE_QUOTE,
-	IN_DOUBLE_QUOTE,
-	IN_COMMENT
-};
+enum class ScanState { STANDARD, IN_SINGLE_QUOTE, IN_DOUBLE_QUOTE, IN_COMMENT };
 
 void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
 	static constexpr const idx_t MAX_ERROR_LENGTH = 2000;
@@ -397,15 +388,18 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 	vector<idx_t> brackets;
 	vector<idx_t> errors;
 	vector<idx_t> cursor_brackets;
+	vector<idx_t> comment_start;
+	vector<idx_t> comment_end;
 	idx_t quote_pos = 0;
-	for(idx_t i = 0; i < len; i++) {
+	for (idx_t i = 0; i < len; i++) {
 		auto c = buf[i];
-		switch(state) {
+		switch (state) {
 		case ScanState::STANDARD:
-			switch(c) {
+			switch (c) {
 			case '-':
 				if (i + 1 < len && buf[i + 1] == '-') {
 					// -- puts us in a comment
+					comment_start.push_back(i);
 					i++;
 					state = ScanState::IN_COMMENT;
 					break;
@@ -466,10 +460,12 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 			break;
 		case ScanState::IN_COMMENT:
 			// comment state - the only thing that will get us out is a newline
-			switch(c) {
+			switch (c) {
 			case '\r':
 			case '\n':
+				// newline - left comment state
 				state = ScanState::STANDARD;
+				comment_end.push_back(i);
 				break;
 			default:
 				break;
@@ -513,12 +509,12 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 	}
 	if (!brackets.empty()) {
 		// if there are unclosed brackets remaining not all brackets were closed
-		for(auto &bracket : brackets) {
+		for (auto &bracket : brackets) {
 			errors.push_back(bracket);
 		}
 	}
 	// insert all the errors for highlighting
-	for(auto &error : errors) {
+	for (auto &error : errors) {
 		Linenoise::Log("Error found at position %llu\n", error);
 		if (error < render_start || error > render_end) {
 			continue;
@@ -531,7 +527,7 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 		cursor_brackets.clear();
 	}
 	// insert bracket for highlighting
-	for(auto &bracket_position : cursor_brackets) {
+	for (auto &bracket_position : cursor_brackets) {
 		Linenoise::Log("Highlight bracket at position %d\n", bracket_position);
 		if (bracket_position < render_start || bracket_position > render_end) {
 			continue;
@@ -540,6 +536,53 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 		idx_t render_position = bracket_position - render_start;
 		InsertToken(tokenType::TOKEN_BRACKET, render_position, tokens);
 	}
+	// insert comments
+	if (!comment_start.empty()) {
+		vector<highlightToken> new_tokens;
+		new_tokens.reserve(tokens.size());
+		idx_t token_idx = 0;
+		for (idx_t c = 0; c < comment_start.size(); c++) {
+			auto c_start = comment_start[c];
+			auto c_end = c < comment_end.size() ? comment_end[c] : len;
+			if (c_start < render_start || c_end > render_end) {
+				continue;
+			}
+			Linenoise::Log("Comment at position %d to %d\n", c_start, c_end);
+			c_start -= render_start;
+			c_end -= render_start;
+			bool inserted_comment = false;
+
+			highlightToken comment_token;
+			comment_token.start = c_start;
+			comment_token.type = tokenType::TOKEN_COMMENT;
+			comment_token.search_match = false;
+
+			for (; token_idx < tokens.size(); token_idx++) {
+				if (tokens[token_idx].start >= c_start) {
+					// insert the comment here
+					new_tokens.push_back(comment_token);
+					inserted_comment = true;
+					break;
+				}
+				new_tokens.push_back(tokens[token_idx]);
+			}
+			if (!inserted_comment) {
+				new_tokens.push_back(comment_token);
+			} else {
+				// skip all tokens until we exit the comment again
+				for (; token_idx < tokens.size(); token_idx++) {
+					if (tokens[token_idx].start > c_end) {
+						break;
+					}
+				}
+			}
+		}
+		for (; token_idx < tokens.size(); token_idx++) {
+			new_tokens.push_back(tokens[token_idx]);
+		}
+		tokens = std::move(new_tokens);
+	}
+
 	Linenoise::LogTokens(tokens);
 }
 
@@ -594,7 +637,8 @@ void Linenoise::RefreshMultiLine() {
 		new_cursor_row -= y_scroll;
 		render_buf += render_start;
 		render_len = render_end - render_start;
-		Linenoise::Log("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, render_start, render_end);
+		Linenoise::Log("truncate to rows %d - %d (render bytes %d to %d)", y_scroll, y_scroll + ws.ws_row, render_start,
+		               render_end);
 		rows = ws.ws_row;
 	} else {
 		y_scroll = 0;
