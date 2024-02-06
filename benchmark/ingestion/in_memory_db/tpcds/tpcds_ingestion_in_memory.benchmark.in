@@ -15,8 +15,9 @@ cache tpcds_sf1_ingest.duckdb no_connect
 load benchmark/ingestion/load_tpcds.sql
 
 # reads table from view created in load script
+
 run
-create table ${table_name}_ingested as select * from ${table_name}_${format};
+create table ${table_name}_ingested as select * from read_${format}('${BENCHMARK_DIR}/tpcds_${format}/${table_name}.${format}');
 
 cleanup
 drop table ${table_name}_ingested;

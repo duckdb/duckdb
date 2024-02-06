@@ -2,6 +2,7 @@
 # description: benchmark ingestion of web_site
 # group: [tpcds]
 
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=web_site
 format=native
+

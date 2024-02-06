@@ -1,7 +1,8 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_call_center.benchmark
+# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_call_center.benchmark
 # description: benchmark ingestion of call_center
 # group: [tpcds]
 
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=call_center
-format=csv
+format=parquet
+

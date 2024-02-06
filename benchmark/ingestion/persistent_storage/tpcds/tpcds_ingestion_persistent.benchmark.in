@@ -10,6 +10,8 @@ require tpcds
 
 require parquet
 
+cache tpcds_sf1_ingest.duckdb
+
 load benchmark/ingestion/load_tpcds.sql
 
 # reads table from view created in load script

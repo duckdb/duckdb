@@ -372,7 +372,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 				in_memory_db_has_data = true;
 			}
 		}
-		if (!in_memory_db_has_data && !cache_no_connect) {
+		if (!in_memory_db_has_data) {
 			// failed to load: write the cache
 			result = state->con.Query(load_query);
 		}
@@ -386,8 +386,11 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 
 	// if a cache db is required but no connection, then reset the connection
 	if (!cache_db.empty() && cache_no_connect) {
-		cache_db = DEFAULT_DB_PATH;
+		cache_db = ":memory:";
 		cache_no_connect = false;
+		if (!load_query.empty()) {
+			queries.erase("load");
+		}
 		return Initialize(config);
 	}
 

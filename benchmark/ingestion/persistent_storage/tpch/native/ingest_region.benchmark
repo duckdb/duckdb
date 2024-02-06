@@ -2,6 +2,6 @@
 # description: benchmark ingestion of region
 # group: [tpch]
 
-template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
 table_name=region
 format=native

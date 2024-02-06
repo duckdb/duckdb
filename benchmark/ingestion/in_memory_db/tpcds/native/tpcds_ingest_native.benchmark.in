@@ -4,13 +4,13 @@
 
 name Q${table_name}
 group ingestion
-subgroup tpch
+subgroup tpcds
 
 require parquet
 
-require tpch
+require tpcds
 
-load benchmark/ingestion/in_memory_db/tpch/native/load_native.sql
+load benchmark/ingestion/in_memory_db/tpcds/native/load_native.sql
 
 run
 create table ${table_name}_ingested as select * from ${table_name}_${format};

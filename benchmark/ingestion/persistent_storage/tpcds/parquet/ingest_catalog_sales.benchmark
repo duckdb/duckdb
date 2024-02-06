@@ -1,7 +1,8 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_catalog_sales.benchmark
+# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_catalog_sales.benchmark
 # description: benchmark ingestion of catalog_sales
 # group: [tpcds]
 
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=catalog_sales
-format=csv
+format=parquet
+

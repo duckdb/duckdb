@@ -2,6 +2,7 @@
 # description: benchmark ingestion of time_dim
 # group: [tpcds]
 
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=time_dim
 format=native
+

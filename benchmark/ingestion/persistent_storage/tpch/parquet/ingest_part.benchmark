@@ -2,6 +2,6 @@
 # description: benchmark ingestion of part
 # group: [tpch]
 
-template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
 table_name=part
 format=parquet

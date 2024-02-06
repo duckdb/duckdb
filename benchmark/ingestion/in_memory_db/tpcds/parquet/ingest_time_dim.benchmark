@@ -2,6 +2,6 @@
 # description: benchmark ingestion of time_dim
 # group: [tpcds]
 
-template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion_in_memory.benchmark.in
 table_name=time_dim
 format=parquet

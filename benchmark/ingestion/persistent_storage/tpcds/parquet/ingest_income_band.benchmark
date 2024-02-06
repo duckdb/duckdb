@@ -1,7 +1,8 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_income_band.benchmark
+# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_income_band.benchmark
 # description: benchmark ingestion of income_band
 # group: [tpcds]
 
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=income_band
-format=csv
+format=parquet
+

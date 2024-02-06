@@ -1,7 +1,8 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_customer_address.benchmark
+# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_customer_address.benchmark
 # description: benchmark ingestion of customer_address
 # group: [tpcds]
 
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
 table_name=customer_address
-format=csv
+format=parquet
+

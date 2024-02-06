@@ -2,6 +2,6 @@
 # description: benchmark ingestion of promotion
 # group: [tpcds]
 
-template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion.benchmark.in
+template benchmark/ingestion/in_memory_db/tpcds/native/tpcds_ingest_native.benchmark.in
 table_name=promotion
 format=native
