@@ -150,54 +150,67 @@ static void TestSettingConfigs() {
 	          "READ_WRITE");
 }
 
-#if defined WIN32
+//#if defined WIN32
 static void runSQLInstallerError(bool ret, std::string errorMessage) {
-	if (bool == true) {
-		REQUIRE(ret == true)
+	if (ret == true) {
+		REQUIRE(ret == true);
 	}
 
-	SQLSMALLINT recNumber;
-	SQLCHAR sqlState[SQL_SQLSTATE_SIZE];
-	SQLINTEGER nativeError;
-	SQLCHAR msgText[SQL_MAX_MESSAGE_LENGTH];
-	SQLSMALLINT msgTextLen;
+	DWORD errorCode;
+	CHAR msgText[SQL_MAX_MESSAGE_LENGTH];
+	WORD msgTextLen;
 
-	SQLInstallerError(1, &recNumber, sqlState, &nativeError, msgText, sizeof(msgText), &msgTextLen);
+	SQLInstallerError(1, &errorCode, reinterpret_cast<LPSTR>(msgText), sizeof(msgText), &msgTextLen);
 
 	// Print or handle the error information
 	std::cerr << errorMessage << "\n";
-	std::cerr << "SQLSTATE: " << sqlState << "\n";
-	std::cerr << "Native Error: " << nativeError << "\n";
+	switch (errorCode) {
+	case ODBC_ERROR_GENERAL_ERR:
+		std::cerr << "ODBC_ERROR_GENERAL_ERR\n";
+		break;
+	case ODBC_ERROR_INVALID_PATH:
+		std::cerr << "ODBC_ERROR_INVALID_PATH\n";
+		break;
+	case ODBC_ERROR_INVALID_REQUEST_TYPE:
+		std::cerr << "ODBC_ERROR_INVALID_REQUEST_TYPE\n";
+	case ODBC_ERROR_REQUEST_FAILED:
+		std::cerr << "ODBC_ERROR_REQUEST_FAILED\n";
+		break;
+	case ODBC_ERROR_OUT_OF_MEM:
+		std::cerr << "ODBC_ERROR_OUT_OF_MEM\n";
+		break;
+	}
+	std::cerr << "Error: " << errorCode << "\n";
 	std::cerr << "Message: " << msgText << "\n";
-	REQUIRE(ret == true)
+	REQUIRE(ret == true);
 }
-#endif
+//#endif
 
 // Test input from an ini file
 static void TestIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
-#if !defined WIN32
-	// Create a temporary ini file
-	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
+//#if !defined WIN32
+//	// Create a temporary ini file
+//	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
+//
+//	if (std::ifstream(ini_file)) {
+//		std::remove(ini_file.c_str());
+//	}
+//
+//	std::ofstream out(ini_file);
+//	out << "[DuckDB]\n";
+//	out << "Driver = DuckDB Driver\n";
+//	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
+//	out << "access_mode = read_only\n";
+//	out << "allow_unsigned_extensions = true\n";
+//	out.close();
+//
+//	std::cout << "ini_file: " << ini_file << std::endl;
+//	if (!std::ifstream(ini_file)) {
+//		FAIL("Failed to create ini file");
+//	}
 
-	if (std::ifstream(ini_file)) {
-		std::remove(ini_file.c_str());
-	}
-
-	std::ofstream out(ini_file);
-	out << "[DuckDB]\n";
-	out << "Driver = DuckDB Driver\n";
-	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
-	out << "access_mode = read_only\n";
-	out << "allow_unsigned_extensions = true\n";
-	out.close();
-
-	std::cout << "ini_file: " << ini_file << std::endl;
-	if (!std::ifstream(ini_file)) {
-		FAIL("Failed to create ini file");
-	}
-
-#elif defined WIN32
+//#elif defined WIN32
 	LPCSTR dsn = "DuckDB";
 	LPCSTR driver = "DuckDB Driver";
 	LPCSTR database = reinterpret_cast<LPCSTR>(ConvertToSQLCHAR(GetTesterDirectory() + "test.duckdb"));
@@ -205,12 +218,12 @@ static void TestIniFile() {
 	LPCSTR allow_unsigned_extensions = "true";
 
 	// Add DSN to the ini file
-	runSQLInstallerError(SQLWriteDSNToIni(dsn, driver), "Failed to write DSN to ini file");
+//	runSQLInstallerError(SQLWriteDSNToIni(dsn, driver), "Failed to write DSN to ini file");
 	// Write to the ini file
 	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "database", database, nullptr), "Failed to write database to ini file");
 	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "access_mode", access_mode, nullptr), "Failed to write access_mode to ini file");
 	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "allow_unsigned_extensions", allow_unsigned_extensions, nullptr), "Failed to write allow_unsigned_extensions to ini file");
-#endif
+//#endif
 
 	// Connect to the database using the ini file
 	SQLHANDLE env;
@@ -229,9 +242,9 @@ static void TestIniFile() {
 	// Disconnect from the database
 	DISCONNECT_FROM_DATABASE(env, dbc);
 
-#if !defined WIN32
-	std::remove(ini_file.c_str());
-#endif
+//#if !defined WIN32
+//	std::remove(ini_file.c_str());
+//#endif
 #endif
 }
 
