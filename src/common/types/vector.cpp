@@ -909,6 +909,8 @@ void Vector::Flatten(idx_t count) {
 			//                          | 2 |
 			// 							 ...
 
+			child.Flatten(count * array_size);
+
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
 			for (idx_t array_idx = 0; array_idx < count; array_idx++) {
