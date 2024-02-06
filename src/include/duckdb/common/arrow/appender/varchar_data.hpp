@@ -115,8 +115,7 @@ struct ArrowVarcharData {
 struct ArrowVarcharToStringViewData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.main_buffer.reserve((capacity + 1) * 16);
-
-		//		result.aux_buffer.reserve(capacity);
+		result.aux_buffer.reserve(capacity);
 	}
 
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
@@ -130,7 +129,7 @@ struct ArrowVarcharToStringViewData {
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		auto data = UnifiedVectorFormat::GetData<string_t>(format);
-
+		idx_t last_offset = 0;
 		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
 
@@ -144,25 +143,35 @@ struct ArrowVarcharToStringViewData {
 			}
 
 			// These two are now the same buffer
-			auto arrow_length = append_data.main_buffer.GetData<uint32_t>();
+			auto arrow_4byte = append_data.main_buffer.GetData<int32_t>();
 			auto string_data = append_data.main_buffer.GetData<char>();
 			// This is the 16 byte index
 			auto result_idx = append_data.row_count + i - from;
-			auto &current_arrow_length = arrow_length[result_idx * 4];
-			current_arrow_length = ArrowVarcharConverter::GetLength(data[source_idx]);
+			auto &string_length = arrow_4byte[result_idx * 4];
+			string_length = ArrowVarcharConverter::GetLength(data[source_idx]);
 
-			if (current_arrow_length <= 12) {
+			if (string_length <= 12) {
 				//	This string is inlined
 				//  | Bytes 0-3  | Bytes 4-15                            |
 				//  |------------|---------------------------------------|
 				//  | length     | data (padded with 0)                  |
-				memcpy(&string_data[i * 16 + 4], data[source_idx].GetData(), data[source_idx].GetSize());
+				memcpy(&string_data[i * 16 + 4], data[source_idx].GetData(), string_length);
 			} else {
 				//* This string is not inlined, we have to check a different buffer and offsets
 				//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 				//  |------------|------------|------------|-------------|
 				//  | length     | prefix     | buf. index | offset      |
-				throw InvalidInputException("Not accepted yet");
+				// Copy Prefix
+				memcpy(&string_data[i * 16 + 4], data[source_idx].GetPrefix(), 4);
+				// Produced Data Buffer is always 0
+				arrow_4byte[result_idx * 6] = 0;
+				// Give Offset
+				arrow_4byte[result_idx * 7] = last_offset;
+				// Copy data to data buffer
+				auto current_offset = last_offset + string_length;
+				append_data.aux_buffer.resize(current_offset);
+				memcpy(append_data.aux_buffer.data() + last_offset, data[source_idx].GetData(), string_length);
+				last_offset = current_offset;
 			}
 		}
 		append_data.row_count += size;

@@ -286,7 +286,6 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array) {
 			//  |------------|------------|------------|-------------|
 			//  | length     | prefix     | buf. index | offset      |
 		}
-		int x = 0;
 	}
 }
 
