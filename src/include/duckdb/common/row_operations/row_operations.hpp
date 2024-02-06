@@ -25,6 +25,32 @@ class StringHeap;
 class Vector;
 struct UnifiedVectorFormat;
 
+// The parent validity classes help to set the validity of the parent vector
+struct ParentValidity {
+	virtual void SetInvalid(idx_t idx) = 0;
+	virtual bool IsValid(idx_t idx) = 0;
+};
+
+// For STRUCT vectors, where the nested elements are stored "horizontally" across the multiple child vectors
+struct HorizontalParentValidity final : public ParentValidity {
+	data_ptr_t *validitymask_locations;
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+
+	HorizontalParentValidity(data_ptr_t *validitymask_locations, idx_t child_vector_index);
+	void SetInvalid(idx_t idx) final;
+	bool IsValid(idx_t idx) final;
+};
+
+// For LIST and ARRAY vectors, where the nested elements are stored "vertically" within the single child vector
+struct VerticalParentValidity final : public ParentValidity {
+	data_ptr_t validitymask_location;
+
+	explicit VerticalParentValidity(data_ptr_t validitymask_location);
+	void SetInvalid(idx_t idx) final;
+	bool IsValid(idx_t idx) final;
+};
+
 struct RowOperationsState {
 	explicit RowOperationsState(ArenaAllocator &allocator) : allocator(allocator) {
 	}
@@ -91,15 +117,15 @@ struct RowOperations {
 	static void ComputeEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t vcount,
 	                              idx_t ser_count, const SelectionVector &sel, idx_t offset = 0);
 	//! Scatter vector with variable size type to the heap.
-	static void HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset = 0);
+	static void HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+	                        data_ptr_t *key_locations, optional_ptr<ParentValidity> parent_validity, idx_t offset = 0);
 	//! Scatter vector data with variable size type to the heap.
 	static void HeapScatterVData(UnifiedVectorFormat &vdata, PhysicalType type, const SelectionVector &sel,
-	                             idx_t ser_count, idx_t col_idx, data_ptr_t *key_locations,
-	                             data_ptr_t *validitymask_locations, idx_t offset = 0);
+	                             idx_t ser_count, data_ptr_t *key_locations,
+	                             optional_ptr<ParentValidity> parent_validity, idx_t offset = 0);
 	//! Gather a single column with variable size type from the heap.
-	static void HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_idx,
-	                       data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
+	static void HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, data_ptr_t key_locations[],
+	                       optional_ptr<ParentValidity> parent_validity);
 
 	//===--------------------------------------------------------------------===//
 	// Sorting Operators
