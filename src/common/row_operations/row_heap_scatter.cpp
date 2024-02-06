@@ -7,40 +7,80 @@ namespace duckdb {
 
 using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
+NestedValidity::NestedValidity(data_ptr_t validitymask_location)
+    : list_validity_location(validitymask_location), struct_validity_locations(nullptr), entry_idx(0), idx_in_entry(0) {
+}
+
+NestedValidity::NestedValidity(data_ptr_t *validitymask_locations, idx_t child_vector_index)
+    : list_validity_location(nullptr), struct_validity_locations(validitymask_locations), entry_idx(0),
+      idx_in_entry(0) {
+	ValidityBytes::GetEntryIndex(child_vector_index, entry_idx, idx_in_entry);
+}
+
+void NestedValidity::SetInvalid(idx_t idx) {
+	if (list_validity_location) {
+		// Is List
+		auto entry_offset = idx / 8;
+		auto bit_offset = idx % 8;
+		const auto bit = ~(1UL << bit_offset);
+		list_validity_location[entry_offset] &= bit;
+	} else {
+		// Is Struct
+		const auto bit = ~(1UL << idx_in_entry);
+		*(struct_validity_locations[idx] + entry_idx) &= bit;
+	}
+}
+
+bool NestedValidity::IsValid(idx_t idx) {
+	if (list_validity_location) {
+		// Is List
+		auto entry_offset = idx / 8;
+		auto bit_offset = idx % 8;
+		return list_validity_location[entry_offset] & (1UL << bit_offset);
+	} else {
+		// Is Struct
+		ValidityBytes row_mask(struct_validity_locations[idx]);
+		const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
+		return valid;
+	}
+}
+
+/*
 VerticalParentValidity::VerticalParentValidity(data_ptr_t validitymask_location)
     : validitymask_location(validitymask_location) {
 }
 
 void VerticalParentValidity::SetInvalid(idx_t idx) {
-	auto entry_offset = idx / 8;
-	auto bit_offset = idx % 8;
-	const auto bit = ~(1UL << bit_offset);
-	validitymask_location[entry_offset] &= bit;
+    auto entry_offset = idx / 8;
+    auto bit_offset = idx % 8;
+    const auto bit = ~(1UL << bit_offset);
+    validitymask_location[entry_offset] &= bit;
 }
 
 bool VerticalParentValidity::IsValid(idx_t idx) {
-	auto entry_offset = idx / 8;
-	auto bit_offset = idx % 8;
-	ValidityBytes row_mask(validitymask_location + entry_offset);
-	const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(0), bit_offset);
-	return valid;
+    auto entry_offset = idx / 8;
+    auto bit_offset = idx % 8;
+    ValidityBytes row_mask(validitymask_location + entry_offset);
+    const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(0), bit_offset);
+    return valid;
 }
 
 HorizontalParentValidity::HorizontalParentValidity(data_ptr_t *validitymask_locations, idx_t child_vector_index)
     : validitymask_locations(validitymask_locations), entry_idx(0), idx_in_entry(0) {
-	ValidityBytes::GetEntryIndex(child_vector_index, entry_idx, idx_in_entry);
+    ValidityBytes::GetEntryIndex(child_vector_index, entry_idx, idx_in_entry);
 }
 
 void HorizontalParentValidity::SetInvalid(idx_t idx) {
-	const auto bit = ~(1UL << idx_in_entry);
-	*(validitymask_locations[idx] + entry_idx) &= bit;
+    const auto bit = ~(1UL << idx_in_entry);
+    *(validitymask_locations[idx] + entry_idx) &= bit;
 }
 
 bool HorizontalParentValidity::IsValid(idx_t idx) {
-	ValidityBytes row_mask(validitymask_locations[idx]);
-	const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
-	return valid;
+    ValidityBytes row_mask(validitymask_locations[idx]);
+    const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
+    return valid;
 }
+ */
 
 static void ComputeStringEntrySizes(UnifiedVectorFormat &vdata, idx_t entry_sizes[], const idx_t ser_count,
                                     const SelectionVector &sel, const idx_t offset) {
@@ -197,7 +237,7 @@ void RowOperations::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcou
 
 template <class T>
 static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count,
-                                 data_ptr_t *key_locations, optional_ptr<ParentValidity> parent_validity,
+                                 data_ptr_t *key_locations, optional_ptr<NestedValidity> parent_validity,
                                  idx_t offset) {
 	auto source = UnifiedVectorFormat::GetData<T>(vdata);
 	if (!parent_validity) {
@@ -227,7 +267,7 @@ static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVect
 }
 
 static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                    data_ptr_t *key_locations, optional_ptr<ParentValidity> parent_validity,
+                                    data_ptr_t *key_locations, optional_ptr<NestedValidity> parent_validity,
                                     idx_t offset) {
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(vcount, vdata);
@@ -268,7 +308,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 }
 
 static void HeapScatterStructVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                    data_ptr_t *key_locations, optional_ptr<ParentValidity> parent_validity,
+                                    data_ptr_t *key_locations, optional_ptr<NestedValidity> parent_validity,
                                     idx_t offset) {
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(vcount, vdata);
@@ -296,13 +336,13 @@ static void HeapScatterStructVector(Vector &v, idx_t vcount, const SelectionVect
 	// now serialize the struct vectors
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto &struct_vector = *children[i];
-		HorizontalParentValidity struct_validity(struct_validitymask_locations, i);
+		NestedValidity struct_validity(struct_validitymask_locations, i);
 		RowOperations::HeapScatter(struct_vector, vcount, sel, ser_count, key_locations, &struct_validity, offset);
 	}
 }
 
 static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                  data_ptr_t *key_locations, optional_ptr<ParentValidity> parent_validity,
+                                  data_ptr_t *key_locations, optional_ptr<NestedValidity> parent_validity,
                                   idx_t offset) {
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(vcount, vdata);
@@ -398,7 +438,7 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 }
 
 static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                   data_ptr_t *key_locations, optional_ptr<ParentValidity> parent_validity,
+                                   data_ptr_t *key_locations, optional_ptr<NestedValidity> parent_validity,
                                    idx_t offset) {
 
 	auto &child_vector = ArrayVector::GetEntry(v);
@@ -469,7 +509,7 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 				}
 			}
 
-			VerticalParentValidity array_parent_validity(array_validitymask_location);
+			NestedValidity array_parent_validity(array_validitymask_location);
 			RowOperations::HeapScatter(child_vector, ArrayVector::GetTotalSize(v),
 			                           *FlatVector::IncrementalSelectionVector(), chunk_size, array_entry_locations,
 			                           &array_parent_validity, array_start);
@@ -482,7 +522,7 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 }
 
 void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                data_ptr_t *key_locations, optional_ptr<ParentValidity> parent_validity, idx_t offset) {
+                                data_ptr_t *key_locations, optional_ptr<NestedValidity> parent_validity, idx_t offset) {
 	if (TypeIsConstantSize(v.GetType().InternalType())) {
 		UnifiedVectorFormat vdata;
 		v.ToUnifiedFormat(vcount, vdata);
@@ -513,7 +553,7 @@ void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &
 
 void RowOperations::HeapScatterVData(UnifiedVectorFormat &vdata, PhysicalType type, const SelectionVector &sel,
                                      idx_t ser_count, data_ptr_t *key_locations,
-                                     optional_ptr<ParentValidity> parent_validity, idx_t offset) {
+                                     optional_ptr<NestedValidity> parent_validity, idx_t offset) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

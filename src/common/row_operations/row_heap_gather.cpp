@@ -49,7 +49,7 @@ static void HeapGatherStructVector(Vector &v, const idx_t vcount, const Selectio
 	// now deserialize into the struct vectors
 	auto &children = StructVector::GetEntries(v);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		HorizontalParentValidity parent_validity(struct_validitymask_locations, i);
+		NestedValidity parent_validity(struct_validitymask_locations, i);
 		RowOperations::HeapGather(*children[i], vcount, sel, key_locations, &parent_validity);
 	}
 }
@@ -190,7 +190,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 			}
 
 			// Pass on this array's validity mask to the child vector
-			VerticalParentValidity parent_validity(array_validitymask_location);
+			NestedValidity parent_validity(array_validitymask_location);
 			RowOperations::HeapGather(child_vector, chunk_size, array_sel, array_entry_locations, &parent_validity);
 
 			elem_remaining -= chunk_size;
@@ -200,7 +200,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 }
 
 void RowOperations::HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, data_ptr_t *key_locations,
-                               optional_ptr<ParentValidity> parent_validity) {
+                               optional_ptr<NestedValidity> parent_validity) {
 	v.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto &validity = FlatVector::Validity(v);
