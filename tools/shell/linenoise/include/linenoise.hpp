@@ -99,7 +99,6 @@ public:
 
 public:
 	static void LogTokens(const vector<highlightToken> &tokens);
-#define LINENOISE_LOGGING
 #ifdef LINENOISE_LOGGING
 	// Logging
 	template <typename... Args>

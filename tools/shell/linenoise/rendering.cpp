@@ -385,6 +385,10 @@ enum class ScanState {
 };
 
 void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
+	static constexpr const idx_t MAX_ERROR_LENGTH = 2000;
+	if (len >= MAX_ERROR_LENGTH) {
+		return;
+	}
 	// do a pass over the buffer to collect errors:
 	// * brackets without matching closing/opening bracket
 	// * single quotes without matching closing single quote
