@@ -19,9 +19,3 @@ fi
 
 cat "$ini_file_path"
 echo "$ini_file_path created successfully!"
-
-
-int  RS_SQLGetPrivateProfileString(const char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile);
-
-key=hello
-
