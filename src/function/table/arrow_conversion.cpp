@@ -4,6 +4,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
 
@@ -682,7 +683,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		case ArrowVariableSizeType::NORMAL:
 		case ArrowVariableSizeType::FIXED_SIZE: {
 			auto cdata = ArrowBufferData<char>(array, 2);
-			auto offsets = ArrowBufferData<uint64_t>(array, 1) +
+			auto offsets = ArrowBufferData<uint32_t>(array, 1) +
 			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 			SetVectorString(vector, size, cdata, offsets);
 			break;
@@ -694,6 +695,20 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		}
 		break;
 	}
+		//	case LogicalTypeId::VARCHAR: {
+		//		auto size_type = arrow_type.GetSizeType();
+		//		auto cdata = ArrowBufferData<char>(array, 2);
+		//		if (size_type == ArrowVariableSizeType::SUPER_SIZE) {
+		//			auto offsets = ArrowBufferData<uint64_t>(array, 1) +
+		//			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
+		//			SetVectorString(vector, size, cdata, offsets);
+		//		} else {
+		//			auto offsets = ArrowBufferData<uint32_t>(array, 1) +
+		//			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
+		//			SetVectorString(vector, size, cdata, offsets);
+		//		}
+		//		break;
+		//	}
 	case LogicalTypeId::DATE: {
 
 		auto precision = arrow_type.GetDateTimeType();
