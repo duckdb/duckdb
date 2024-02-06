@@ -90,7 +90,13 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 TEST_CASE("Test Arrow String View", "[arrow][.]") {
 	// Test Small Strings
 	TestArrowRoundtripStringView("SELECT (i*10^i)::varchar str FROM range(5) tbl(i)");
+
+	// Test Small Strings + Nulls
+	TestArrowRoundtripStringView("SELECT (i*10^i)::varchar str FROM range(5) tbl(i) UNION SELECT NULL");
+
 	// Test Big Strings
+
+	// Test Big Strings + Nulls
 
 	// Test Mix of Small/Big Strings
 }

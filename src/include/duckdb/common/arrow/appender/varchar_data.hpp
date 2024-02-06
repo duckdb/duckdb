@@ -156,7 +156,7 @@ struct ArrowVarcharToStringViewData {
 				//  | Bytes 0-3  | Bytes 4-15                            |
 				//  |------------|---------------------------------------|
 				//  | length     | data (padded with 0)                  |
-				memcpy(&string_data[i * 16 + 4], data->GetData(), data->GetSize());
+				memcpy(&string_data[i * 16 + 4], data[source_idx].GetData(), data[source_idx].GetSize());
 			} else {
 				//* This string is not inlined, we have to check a different buffer and offsets
 				//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
