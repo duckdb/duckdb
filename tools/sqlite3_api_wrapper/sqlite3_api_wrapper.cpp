@@ -11,7 +11,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
@@ -129,13 +129,13 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
-			pDb->last_error = PreservedError(ex);
+			pDb->last_error = ErrorData(ex);
 			pDb->errCode = SQLITE_ERROR;
 		}
 		rc = SQLITE_ERROR;
 	} catch (std::exception &ex) {
 		if (pDb) {
-			pDb->last_error = PreservedError(ex);
+			pDb->last_error = ErrorData(ex);
 			pDb->errCode = SQLITE_ERROR;
 		}
 		rc = SQLITE_ERROR;
@@ -227,11 +227,9 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		*ppStmt = stmt.release();
 		return SQLITE_OK;
-	} catch (const Exception &ex) {
-		db->last_error = PreservedError(ex);
-		return SQLITE_ERROR;
 	} catch (std::exception &ex) {
-		db->last_error = PreservedError(ex);
+		db->last_error = ErrorData(ex);
+		db->con->context->ProcessError(db->last_error, query);
 		return SQLITE_ERROR;
 	}
 }
@@ -241,11 +239,11 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 		return nullptr;
 	}
 	if (!pStmt->prepared) {
-		pStmt->db->last_error = PreservedError("Attempting sqlite3_step() on a non-successfully prepared statement");
+		pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
 		return nullptr;
 	}
 	if (pStmt->result) {
-		pStmt->db->last_error = PreservedError("Statement has already been executed");
+		pStmt->db->last_error = ErrorData("Statement has already been executed");
 		return nullptr;
 	}
 	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
@@ -292,7 +290,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		return SQLITE_MISUSE;
 	}
 	if (!pStmt->prepared) {
-		pStmt->db->last_error = PreservedError("Attempting sqlite3_step() on a non-successfully prepared statement");
+		pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
 		return SQLITE_ERROR;
 	}
 	pStmt->current_text = nullptr;

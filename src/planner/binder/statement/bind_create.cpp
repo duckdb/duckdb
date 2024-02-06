@@ -181,14 +181,14 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	ExpressionBinder::QualifyColumnNames(*this, expression);
 
 	// bind it to verify the function was defined correctly
-	string error;
+	ErrorData error;
 	auto sel_node = make_uniq<BoundSelectNode>();
 	auto group_info = make_uniq<BoundGroupInformation>();
 	SelectBinder binder(*this, context, *sel_node, *group_info);
 	error = binder.Bind(expression, 0, false);
 
-	if (!error.empty()) {
-		throw BinderException(error);
+	if (error.HasError()) {
+		error.Throw();
 	}
 
 	return BindCreateSchema(info);
@@ -650,7 +650,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
 	}
 	default:
-		throw Exception("Unrecognized type!");
+		throw InternalException("Unrecognized type!");
 	}
 	properties.return_type = StatementReturnType::NOTHING;
 	properties.allow_stream_result = false;

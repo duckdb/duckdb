@@ -1,6 +1,8 @@
 package org.duckdb;
 
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
@@ -595,7 +597,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setBytes(int parameterIndex, byte[] x) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setBytes");
+        setObject(parameterIndex, x);
     }
 
     @Override
@@ -893,7 +895,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x) throws SQLException {
-        throw new SQLFeatureNotSupportedException("setBinaryStream");
+        try {
+            setBytes(parameterIndex, JdbcUtils.readAllBytes(x));
+        } catch (IOException ioe) {
+            throw new SQLException("Failed to read from InputStream", ioe);
+        }
     }
 
     @Override

@@ -21,6 +21,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
+	this->comment = info.comment;
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {
@@ -63,6 +64,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->constraints.reserve(constraints.size());
 	std::for_each(constraints.begin(), constraints.end(),
 	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
+	result->comment = comment;
 	return std::move(result);
 }
 

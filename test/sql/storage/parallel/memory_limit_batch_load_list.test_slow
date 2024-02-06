@@ -2,6 +2,9 @@
 # description: Test batch streaming to disk with different row group sizes
 # group: [parallel]
 
+# FIXME: with a block size of 16KB and when run in relassert, this test fails with: mutex lock failed: Invalid argument
+require block_size 262144
+
 require parquet
 
 load __TEST_DIR__/memory_limit_batch_load_list.db

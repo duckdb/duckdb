@@ -43,6 +43,12 @@
         "id": 106,
         "name": "sql",
         "type": "string"
+      },
+      {
+        "id": 107,
+        "name": "comment",
+        "type": "Value",
+        "default": "Value()"
       }
     ]
   },

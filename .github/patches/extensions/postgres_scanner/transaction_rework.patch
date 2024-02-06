@@ -1,72 +1,69 @@
+diff --git a/duckdb b/duckdb
+index 5b39151..8548e1a 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 5b391512a8fc7800a0c22d98714e6d8f25c002cf
++Subproject commit 8548e1a6d676bdc0225e821872b0ae675c46e47c
 diff --git a/src/include/storage/postgres_transaction_manager.hpp b/src/include/storage/postgres_transaction_manager.hpp
-index 94427d5..b4ac2da 100644
+index b4ac2da..24b82b4 100644
 --- a/src/include/storage/postgres_transaction_manager.hpp
 +++ b/src/include/storage/postgres_transaction_manager.hpp
-@@ -11,6 +11,7 @@
- #include "duckdb/transaction/transaction_manager.hpp"
- #include "storage/postgres_catalog.hpp"
- #include "storage/postgres_transaction.hpp"
-+#include "duckdb/common/reference_map.hpp"
- 
- namespace duckdb {
- 
-@@ -18,16 +19,16 @@ class PostgresTransactionManager : public TransactionManager {
- public:
+@@ -20,7 +20,7 @@ public:
  	PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &postgres_catalog);
  
--	Transaction *StartTransaction(ClientContext &context) override;
--	string CommitTransaction(ClientContext &context, Transaction *transaction) override;
--	void RollbackTransaction(Transaction *transaction) override;
-+	Transaction &StartTransaction(ClientContext &context) override;
-+	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
-+	void RollbackTransaction(Transaction &transaction) override;
+ 	Transaction &StartTransaction(ClientContext &context) override;
+-	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
++	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+ 	void RollbackTransaction(Transaction &transaction) override;
  
  	void Checkpoint(ClientContext &context, bool force = false) override;
+diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
+index af04909..4f72573 100644
+--- a/src/postgres_filter_pushdown.cpp
++++ b/src/postgres_filter_pushdown.cpp
+@@ -78,10 +78,6 @@ string PostgresFilterPushdown::TransformFilters(const vector<column_t> &column_i
+ 		auto column_name = KeywordHelper::WriteQuoted(names[column_ids[entry.first]], '"');
+ 		auto &filter = *entry.second;
  
- private:
- 	PostgresCatalog &postgres_catalog;
- 	mutex transaction_lock;
--	unordered_map<Transaction *, unique_ptr<PostgresTransaction>> transactions;
-+	reference_map_t<Transaction, unique_ptr<PostgresTransaction>> transactions;
- };
- 
- } // namespace duckdb
+-//		if (filter.filter_type == TableFilterType::STRUCT_EXTRACT) {
+-//			column_name = StringUtil::Format("(%s)", column_name.c_str());
+-//		}
+-
+ 		result += TransformFilter(column_name, filter);
+ 	}
+ 	return result;
 diff --git a/src/storage/postgres_transaction_manager.cpp b/src/storage/postgres_transaction_manager.cpp
-index 6de4b5c..e1b89e6 100644
+index e1b89e6..d546c29 100644
 --- a/src/storage/postgres_transaction_manager.cpp
 +++ b/src/storage/postgres_transaction_manager.cpp
-@@ -7,26 +7,26 @@ PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, P
-     : TransactionManager(db_p), postgres_catalog(postgres_catalog) {
- }
- 
--Transaction *PostgresTransactionManager::StartTransaction(ClientContext &context) {
-+Transaction &PostgresTransactionManager::StartTransaction(ClientContext &context) {
- 	auto transaction = make_uniq<PostgresTransaction>(postgres_catalog, *this, context);
- 	transaction->Start();
--	auto result = transaction.get();
-+	auto &result = *transaction;
- 	lock_guard<mutex> l(transaction_lock);
- 	transactions[result] = std::move(transaction);
+@@ -16,12 +16,12 @@ Transaction &PostgresTransactionManager::StartTransaction(ClientContext &context
  	return result;
  }
  
--string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
--	auto postgres_transaction = (PostgresTransaction *)transaction;
--	postgres_transaction->Commit();
-+string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
-+	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
-+	postgres_transaction.Commit();
+-string PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
++ErrorData PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
+ 	postgres_transaction.Commit();
  	lock_guard<mutex> l(transaction_lock);
  	transactions.erase(transaction);
- 	return string();
+-	return string();
++	return ErrorData();
  }
  
--void PostgresTransactionManager::RollbackTransaction(Transaction *transaction) {
--	auto postgres_transaction = (PostgresTransaction *)transaction;
--	postgres_transaction->Rollback();
-+void PostgresTransactionManager::RollbackTransaction(Transaction &transaction) {
-+	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
-+	postgres_transaction.Rollback();
- 	lock_guard<mutex> l(transaction_lock);
- 	transactions.erase(transaction);
- }
+ void PostgresTransactionManager::RollbackTransaction(Transaction &transaction) {
+diff --git a/test/sql/storage/attach_filter_pushdown.test b/test/sql/storage/attach_filter_pushdown.test
+index 8c8c295..f36ff60 100644
+--- a/test/sql/storage/attach_filter_pushdown.test
++++ b/test/sql/storage/attach_filter_pushdown.test
+@@ -6,8 +6,8 @@ require postgres_scanner
+ 
+ require-env POSTGRES_TEST_DATABASE_AVAILABLE
+ 
+-#statement ok
+-#PRAGMA enable_verification
++statement ok
++PRAGMA enable_verification
+ 
+ statement ok
+ ATTACH 'dbname=postgresscanner' AS s1 (TYPE POSTGRES)

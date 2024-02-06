@@ -26,6 +26,28 @@ unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 }
 
 //===--------------------------------------------------------------------===//
+// SetCommentInfo
+//===--------------------------------------------------------------------===//
+SetCommentInfo::SetCommentInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
+                               string entry_name_p, Value new_comment_value_p, OnEntryNotFound if_not_found)
+    : AlterInfo(AlterType::SET_COMMENT, std::move(entry_catalog_p), std::move(entry_schema_p), std::move(entry_name_p),
+                if_not_found),
+      entry_catalog_type(entry_catalog_type), comment_value(std::move(new_comment_value_p)) {
+}
+
+CatalogType SetCommentInfo::GetCatalogType() const {
+	return entry_catalog_type;
+}
+
+unique_ptr<AlterInfo> SetCommentInfo::Copy() const {
+	return make_uniq_base<AlterInfo, SetCommentInfo>(entry_catalog_type, catalog, schema, name, comment_value,
+	                                                 if_not_found);
+}
+
+SetCommentInfo::SetCommentInfo() : AlterInfo(AlterType::SET_COMMENT) {
+}
+
+//===--------------------------------------------------------------------===//
 // AlterTableInfo
 //===--------------------------------------------------------------------===//
 AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER_TABLE), alter_table_type(type) {
@@ -130,6 +152,24 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
 	                                                       expression->Copy());
+}
+
+//===--------------------------------------------------------------------===//
+// SetColumnCommentInfo
+//===--------------------------------------------------------------------===//
+SetColumnCommentInfo::SetColumnCommentInfo() : AlterTableInfo(AlterTableType::SET_COLUMN_COMMENT) {
+}
+
+SetColumnCommentInfo::SetColumnCommentInfo(AlterEntryData data, string column_name, Value comment_value)
+    : AlterTableInfo(AlterTableType::SET_COLUMN_COMMENT, std::move(data)), column_name(std::move(column_name)),
+      comment(std::move(comment_value)) {
+}
+
+SetColumnCommentInfo::~SetColumnCommentInfo() {
+}
+
+unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
+	return make_uniq_base<AlterInfo, SetColumnCommentInfo>(GetAlterEntryData(), column_name, comment);
 }
 
 //===--------------------------------------------------------------------===//

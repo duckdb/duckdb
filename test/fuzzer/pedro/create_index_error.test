@@ -57,7 +57,7 @@ CREATE INDEX i0 ON t1 (c1, (decode('\x81\x5C\xE5'::BLOB)::VARCHAR));
 statement error
 INSERT INTO t1 VALUES (1);
 ----
-Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
+TransactionContext Error: Failed to commit: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
 
 statement ok
 CREATE INDEX i1 ON t1 USING ART (c1);

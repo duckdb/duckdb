@@ -11,8 +11,8 @@
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/secret/secret.hpp"
-#include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 
 namespace duckdb {
@@ -40,12 +40,9 @@ public:
 };
 
 //! A Secret Entry in the secret manager
-struct SecretEntry : public InCatalogEntry {
+struct SecretEntry {
 public:
-	SecretEntry(unique_ptr<const BaseSecret> secret, Catalog &catalog, string name)
-	    : InCatalogEntry(CatalogType::SECRET_ENTRY, catalog, name), secret(std::move(secret)) {
-		internal = true;
-	}
+	SecretEntry(unique_ptr<const BaseSecret> secret) : secret(std::move(secret)) {};
 
 	//! Whether the secret is persistent
 	SecretPersistType persist_type;
@@ -91,14 +88,13 @@ public:
 	DUCKDB_API void LoadSecretStorage(unique_ptr<SecretStorage> storage);
 
 	//! Deserialize a secret by automatically selecting the correct deserializer
-	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(CatalogTransaction transaction, Deserializer &deserializer);
+	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(Deserializer &deserializer);
 	//! Register a new SecretType
-	DUCKDB_API void RegisterSecretType(CatalogTransaction transaction, SecretType &type);
+	DUCKDB_API void RegisterSecretType(SecretType &type);
 	//! Lookup a SecretType
-	DUCKDB_API SecretType LookupType(CatalogTransaction transaction, const string &type);
+	DUCKDB_API SecretType LookupType(const string &type);
 	//! Register a Secret Function i.e. a secret provider for a secret type
-	DUCKDB_API void RegisterSecretFunction(CatalogTransaction transaction, CreateSecretFunction function,
-	                                       OnCreateConflict on_conflict);
+	DUCKDB_API void RegisterSecretFunction(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Register a secret by providing a secret manually
 	DUCKDB_API optional_ptr<SecretEntry> RegisterSecret(CatalogTransaction transaction,
 	                                                    unique_ptr<const BaseSecret> secret,
@@ -115,7 +111,9 @@ public:
 	                                                     const string &storage = "");
 	//! Delete a secret by name, optionally by providing the storage to drop from
 	DUCKDB_API void DropSecretByName(CatalogTransaction transaction, const string &name,
-	                                 OnEntryNotFound on_entry_not_found, const string &storage = "");
+	                                 OnEntryNotFound on_entry_not_found,
+	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
+	                                 const string &storage = "");
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction);
 
@@ -134,16 +132,14 @@ public:
 
 	//! Utility functions
 	DUCKDB_API void DropSecretByName(ClientContext &context, const string &name, OnEntryNotFound on_entry_not_found,
+	                                 SecretPersistType persist_type = SecretPersistType::DEFAULT,
 	                                 const string &storage = "");
 
 private:
-	//! Deserialize a secret
-	unique_ptr<BaseSecret> DeserializeSecretInternal(CatalogTransaction transaction, Deserializer &deserializer);
 	//! Lookup a SecretType
-	SecretType LookupTypeInternal(CatalogTransaction transaction, const string &type);
+	SecretType LookupTypeInternal(const string &type);
 	//! Lookup a CreateSecretFunction
-	optional_ptr<CreateSecretFunction> LookupFunctionInternal(CatalogTransaction transaction, const string &type,
-	                                                          const string &provider);
+	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const string &type, const string &provider);
 	//! Register a new Secret
 	optional_ptr<SecretEntry> RegisterSecretInternal(CatalogTransaction transaction,
 	                                                 unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
@@ -154,9 +150,9 @@ private:
 	void LoadSecretStorageInternal(unique_ptr<SecretStorage> storage);
 
 	//! Autoload extension for specific secret type
-	void AutoloadExtensionForType(ClientContext &context, const string &type);
+	void AutoloadExtensionForType(const string &type);
 	//! Autoload extension for specific secret function
-	void AutoloadExtensionForFunction(ClientContext &context, const string &type, const string &provider);
+	void AutoloadExtensionForFunction(const string &type, const string &provider);
 
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();
@@ -165,18 +161,20 @@ private:
 	//! Throw an exception if the secret manager is initialized
 	void ThrowOnSettingChangeIfInitialized();
 
-	//! Secret CatalogSets (thread-safe)
-	unique_ptr<CatalogSet> secret_types;
-	unique_ptr<CatalogSet> secret_functions;
-
-	//! Lock for settings and storages
+	//! Lock for types, functions, settings and storages
 	mutex manager_lock;
+	//! Secret functions;
+	case_insensitive_map_t<CreateSecretFunctionSet> secret_functions;
+	//! Secret types;
+	case_insensitive_map_t<SecretType> secret_types;
 	//! Map of all registered SecretStorages
 	case_insensitive_map_t<unique_ptr<SecretStorage>> secret_storages;
 	//! While false, secret manager settings can still be changed
 	atomic<bool> initialized {false};
 	//! Configuration for secret manager
 	SecretManagerConfig config;
+	//! Pointer to current db instance
+	optional_ptr<DatabaseInstance> db;
 };
 
 //! The DefaultGenerator for persistent secrets. This is used to store lazy loaded secrets in the catalog

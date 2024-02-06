@@ -118,9 +118,9 @@ public:
 	DUCKDB_API void ResetFromCache(const VectorCache &cache);
 
 	//! Creates a reference to a slice of the other vector
-	DUCKDB_API void Slice(Vector &other, idx_t offset, idx_t end);
+	DUCKDB_API void Slice(const Vector &other, idx_t offset, idx_t end);
 	//! Creates a reference to a slice of the other vector
-	DUCKDB_API void Slice(Vector &other, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Slice(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Turns the vector into a dictionary vector with the specified dictionary
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
@@ -171,6 +171,11 @@ public:
 	inline void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
 		auxiliary = std::move(new_buffer);
 	};
+
+	inline void CopyBuffer(Vector &other) {
+		buffer = other.buffer;
+		data = other.data;
+	}
 
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);

@@ -47,12 +47,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					if (join.join_type == JoinType::RIGHT_ANTI) {
 						std::swap(join.children[0], join.children[1]);
 					}
-					// when the right child has data, return the left child
-					// when the right child has no data, return an empty set
-					auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
-					limit->AddChild(std::move(join.children[1]));
-					auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
-					*node_ptr = std::move(cross_product);
+					// If the filter is always false or Null, just return the left child.
+					*node_ptr = std::move(join.children[0]);
 					return;
 				}
 				case JoinType::LEFT:
@@ -102,8 +98,11 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						if (join.join_type == JoinType::RIGHT_SEMI) {
 							std::swap(join.children[0], join.children[1]);
 						}
-						// when the right child has data, return the left child
 						// when the right child has no data, return an empty set
+						// cannot just return the left child because if the right child has no cardinality
+						// then the whole result should be empty.
+						// TODO: write better CE logic for limits so that we can just look at
+						//  join.children[1].estimated_cardinality.
 						auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
 						limit->AddChild(std::move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
@@ -115,6 +114,11 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						auto cross_product =
 						    LogicalCrossProduct::Create(std::move(join.children[0]), std::move(join.children[1]));
 						*node_ptr = std::move(cross_product);
+						return;
+					}
+					case JoinType::ANTI:
+					case JoinType::RIGHT_ANTI: {
+						ReplaceWithEmptyResult(*node_ptr);
 						return;
 					}
 					default:

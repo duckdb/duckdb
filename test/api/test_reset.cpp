@@ -77,6 +77,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
 	    {"enable_progress_bar", {true}},
+	    {"errors_as_json", {true}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
 	    {"external_threads", {8}},
 	    {"file_search_path", {"test"}},

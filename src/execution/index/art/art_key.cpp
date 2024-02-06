@@ -14,21 +14,28 @@ ARTKey::ARTKey(ArenaAllocator &allocator, const uint32_t &len) : len(len) {
 
 template <>
 ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, string_t value) {
-	uint32_t len = value.GetSize() + 1;
-	auto data = allocator.Allocate(len);
-	memcpy(data, value.GetData(), len - 1);
-
-	// FIXME: rethink this
-	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
-		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain zero bytes
-		for (uint32_t i = 0; i < len - 1; i++) {
-			if (data[i] == '\0') {
-				throw NotImplementedException("ART indexes cannot contain BLOBs with zero bytes.");
-			}
+	auto string_data = const_data_ptr_cast(value.GetData());
+	auto string_len = value.GetSize();
+	// we need to escape \00 and \01
+	idx_t escape_count = 0;
+	for (idx_t r = 0; r < string_len; r++) {
+		if (string_data[r] <= 1) {
+			escape_count++;
 		}
 	}
-
-	data[len - 1] = '\0';
+	idx_t len = string_len + escape_count + 1;
+	auto data = allocator.Allocate(len);
+	// copy over the data and add in escapes
+	idx_t pos = 0;
+	for (idx_t r = 0; r < string_len; r++) {
+		if (string_data[r] <= 1) {
+			// escape
+			data[pos++] = '\01';
+		}
+		data[pos++] = string_data[r];
+	}
+	// end with a null-terminator
+	data[pos] = '\0';
 	return ARTKey(data, len);
 }
 
@@ -39,21 +46,7 @@ ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, 
 
 template <>
 void ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, ARTKey &key, string_t value) {
-	key.len = value.GetSize() + 1;
-	key.data = allocator.Allocate(key.len);
-	memcpy(key.data, value.GetData(), key.len - 1);
-
-	// FIXME: rethink this
-	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
-		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain zero bytes
-		for (uint32_t i = 0; i < key.len - 1; i++) {
-			if (key.data[i] == '\0') {
-				throw NotImplementedException("ART indexes cannot contain BLOBs with zero bytes.");
-			}
-		}
-	}
-
-	key.data[key.len - 1] = '\0';
+	key = ARTKey::CreateARTKey<string_t>(allocator, type, value);
 }
 
 template <>

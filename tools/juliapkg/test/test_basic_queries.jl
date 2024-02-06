@@ -72,14 +72,30 @@ SELECT '🦆🍞🦆'
     DBInterface.close!(con)
 end
 
-@testset "DBInterface.execute errors" begin
+@testset "DBInterface.execute - parser error" begin
     con = DBInterface.connect(DuckDB.DB)
 
     # parser error
     @test_throws DuckDB.QueryException DBInterface.execute(con, "SELEC")
 
+    DBInterface.close!(con)
+end
+
+@testset "DBInterface.execute - binder error" begin
+    con = DBInterface.connect(DuckDB.DB)
+
     # binder error
     @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM this_table_does_not_exist")
+
+    DBInterface.close!(con)
+end
+
+@testset "DBInterface.execute - runtime error" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    res = DBInterface.execute(con, "select current_setting('threads')")
+    df = DataFrame(res)
+    print(df)
 
     # run-time error
     @test_throws DuckDB.QueryException DBInterface.execute(

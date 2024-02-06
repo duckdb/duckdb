@@ -51,7 +51,6 @@ int main(int argc, char *argv[]) {
 				return 1;
 			}
 			SetTestDirectory(test_dir);
-			delete_test_path = false;
 		} else if (string(argv[i]) == "--zero-initialize") {
 			SetDebugInitialize(0);
 		} else if (string(argv[i]) == "--one-initialize") {

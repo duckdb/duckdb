@@ -20,6 +20,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
 
@@ -99,7 +101,7 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	auto &block_pointer = column_pointers[c];
 	MetadataReader column_data_reader(metadata_manager, block_pointer);
 	this->columns[c] =
-	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
+	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
 		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
@@ -362,6 +364,40 @@ bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<storage_t> &co
 	return true;
 }
 
+static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
+	switch (filter.filter_type) {
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		auto &child_state = state.child_states[1 + struct_filter.child_idx]; // +1 for validity
+		auto &child_filter = struct_filter.child_filter;
+		return GetFilterScanCount(child_state, *child_filter);
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_state = filter.Cast<ConjunctionAndFilter>();
+		idx_t max_count = 0;
+		for (auto &child_filter : conjunction_state.child_filters) {
+			max_count = std::max(GetFilterScanCount(state, *child_filter), max_count);
+		}
+		return max_count;
+	}
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_state = filter.Cast<ConjunctionOrFilter>();
+		idx_t max_count = 0;
+		for (auto &child_filter : conjunction_state.child_filters) {
+			max_count = std::max(GetFilterScanCount(state, *child_filter), max_count);
+		}
+		return max_count;
+	}
+	case TableFilterType::IS_NULL:
+	case TableFilterType::IS_NOT_NULL:
+	case TableFilterType::CONSTANT_COMPARISON:
+		return state.current->start + state.current->count;
+	default: {
+		throw NotImplementedException("Unimplemented filter type for zonemap");
+	}
+	}
+}
+
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
@@ -374,8 +410,9 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		const auto &base_column_idx = column_ids[column_idx];
 		bool read_segment = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], *entry.second);
 		if (!read_segment) {
-			idx_t target_row =
-			    state.column_scans[column_idx].current->start + state.column_scans[column_idx].current->count;
+
+			idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], *entry.second);
+
 			D_ASSERT(target_row >= this->start);
 			D_ASSERT(target_row <= this->start + this->count);
 			idx_t target_vector_index = (target_row - this->start) / STANDARD_VECTOR_SIZE;

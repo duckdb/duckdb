@@ -7,6 +7,7 @@ StreamWrapper::~StreamWrapper() {
 
 CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
     : FileHandle(fs, path), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
+	D_ASSERT(child_handle->SeekPosition() == 0);
 }
 
 CompressedFile::~CompressedFile() {

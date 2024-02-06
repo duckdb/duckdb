@@ -71,9 +71,8 @@ jobs:
       - name: Java Tests
         shell: bash
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run: >
-          java -cp build/release/tools/jdbc/duckdb_jdbc.jar
-          org.duckdb.test.TestDuckDBJDBC
+        working-directory: tools/jdbc
+        run: make test_release
 
       - name: Deploy
         shell: bash
@@ -98,6 +97,7 @@ jobs:
       ENABLE_EXTENSION_AUTOINSTALL: 1
       OVERRIDE_JDBC_OS_ARCH: arm64
       JAVA_HOME: ../../jdk8u345-b01
+      DUCKDB_PLATFORM: linux_arm64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -152,14 +152,14 @@ jobs:
         run: >
           python scripts/windows_ci.py
 
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DBUILD_SHELL=0
 
           cmake --build . --config Release
       - name: Java Tests
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
-        run: |
-          java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+        working-directory: tools/jdbc
+        run: make test_release
       - name: Deploy
         shell: bash
         run: >
@@ -200,9 +200,8 @@ jobs:
       - name: Java Tests
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
-        run: >
-          java -cp build/release/tools/jdbc/duckdb_jdbc.jar
-          org.duckdb.test.TestDuckDBJDBC
+        working-directory: tools/jdbc
+        run: make test_release
       - name: Java Example
         shell: bash
         run: |
@@ -314,7 +313,7 @@ jobs:
           git clone https://github.com/cwida/jdbccts.git
 
       - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
+        uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
         with:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}

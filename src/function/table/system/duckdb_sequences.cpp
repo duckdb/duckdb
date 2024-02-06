@@ -37,6 +37,9 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, Tabl
 	names.emplace_back("sequence_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("temporary");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -103,6 +106,8 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		output.SetValue(col++, count, Value(seq.name));
 		// sequence_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(seq.oid));
+		// comment, VARCHAR
+		output.SetValue(col++, count, Value(seq.comment));
 		// temporary, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq.temporary));
 		// start_value, BIGINT
