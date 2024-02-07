@@ -583,4 +583,75 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 	return result;
 }
 
+string StringUtil::GetFileName(const string &file_path) {
+
+	if (EndsWith(file_path, "..")) {
+		return "";
+	}
+
+	idx_t pos = file_path.find_last_of("/\\");
+	if (pos == string::npos) {
+		return file_path;
+	}
+	auto end = file_path.size() - 1;
+
+	// If the rest of the string is just slashes or dots, trim them
+	if (file_path.find_first_not_of("/\\.", pos) == string::npos) {
+		// Trim the trailing slashes and dots
+		while (end > 0 && (file_path[end] == '/' || file_path[end] == '.' || file_path[end] == '\\')) {
+			end--;
+		}
+
+		// Now find the next slash
+		pos = file_path.find_last_of("/\\", end);
+		if (pos == string::npos) {
+			return file_path.substr(0, end + 1);
+		}
+	}
+
+	return file_path.substr(pos + 1, end - pos);
+}
+
+string StringUtil::GetFileExtension(const string &file_name) {
+	auto name = GetFileName(file_name);
+	idx_t pos = name.find_last_of('.');
+	// We dont consider e.g. `.gitignore` to have an extension
+	if (pos == string::npos || pos == 0) {
+		return "";
+	}
+	return name.substr(pos + 1);
+}
+
+string StringUtil::GetFileStem(const string &file_name) {
+	auto name = GetFileName(file_name);
+	if (name.size() > 1 && name[0] == '.') {
+		return name;
+	}
+	idx_t pos = name.find_last_of('.');
+	if (pos == string::npos) {
+		return name;
+	}
+	return name.substr(0, pos);
+}
+
+string StringUtil::GetFilePath(const string &file_path) {
+
+	// Trim the trailing slashes
+	auto end = file_path.size() - 1;
+	while (end > 0 && (file_path[end] == '/' || file_path[end] == '\\')) {
+		end--;
+	}
+
+	auto pos = file_path.find_last_of("/\\", end);
+	if (pos == string::npos) {
+		return "";
+	}
+
+	while (pos > 0 && (file_path[pos] == '/' || file_path[pos] == '\\')) {
+		pos--;
+	}
+
+	return file_path.substr(0, pos + 1);
+}
+
 } // namespace duckdb
