@@ -1,0 +1,21 @@
+# name: test/sql/pg_catalog/concurrent_query_id.test
+# group: [pg_catalog]
+
+statement ok
+CREATE TABLE t1(query_id UBIGINT);
+
+concurrentloop i 0 10
+
+loop j 0 10
+
+statement ok
+INSERT INTO t1 SELECT current_query_id()
+
+endloop
+
+endloop
+
+query I
+SELECT COUNT(DISTINCT query_id) FROM t1
+----
+100

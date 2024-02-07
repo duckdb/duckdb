@@ -50,6 +50,8 @@ struct ActiveQueryContext {
 public:
 	//! The query that is currently being executed
 	string query;
+	//! The query id of the current query that is being processed
+	idx_t query_id = 0;
 	//! Prepared statement data
 	shared_ptr<PreparedStatementData> prepared;
 	//! The query executor
@@ -136,6 +138,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	BeginTransactionInternal(lock, false);
 	LogQueryInternal(lock, query);
 	active_query->query = query;
+	active_query->query_id = db->GetNewQueryId();
 
 	query_progress.Initialize();
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
@@ -221,6 +224,11 @@ Executor &ClientContext::GetExecutor() {
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
+}
+
+uint64_t ClientContext::GetCurrentQueryId() {
+	D_ASSERT(active_query);
+	return active_query->query_id;
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {

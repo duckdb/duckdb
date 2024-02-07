@@ -43,6 +43,9 @@ SELECT current_query();
 ----
 SELECT current_query();
 
+statement ok
+SELECT current_query_id();
+
 query I
 SELECT pg_catalog.current_query();
 ----

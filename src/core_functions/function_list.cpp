@@ -124,6 +124,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(CurrentDatabaseFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDateFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentQueryFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentQueryIdFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentSchemaFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentSchemasFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentSettingFun),
