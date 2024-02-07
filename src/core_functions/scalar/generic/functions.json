@@ -64,13 +64,6 @@
         "type": "scalar_function"
     },
     {
-        "name": "current_query_id",
-        "parameters": "",
-        "description": "Returns the id of the current query",
-        "example": "current_query_id()",
-        "type": "scalar_function"
-    },
-    {
         "name": "current_schema",
         "parameters": "",
         "description": "Returns the name of the currently active schema. Default is main",

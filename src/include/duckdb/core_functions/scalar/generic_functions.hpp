@@ -96,15 +96,6 @@ struct CurrentQueryFun {
 	static ScalarFunction GetFunction();
 };
 
-struct CurrentQueryIdFun {
-	static constexpr const char *Name = "current_query_id";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Returns the id of the current query";
-	static constexpr const char *Example = "current_query_id()";
-
-	static ScalarFunction GetFunction();
-};
-
 struct CurrentSchemaFun {
 	static constexpr const char *Name = "current_schema";
 	static constexpr const char *Parameters = "";

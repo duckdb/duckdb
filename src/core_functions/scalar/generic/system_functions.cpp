@@ -16,12 +16,6 @@ static void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vecto
 	result.Reference(val);
 }
 
-// current_query_id
-static void CurrentQueryIdFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto val = Value::UBIGINT(state.GetContext().GetCurrentQueryId());
-	result.Reference(val);
-}
-
 // current_schema
 static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
