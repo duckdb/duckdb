@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
@@ -234,8 +235,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			filter.expressions.erase(filter.expressions.begin() + i);
 			i--;
 			if (filter.expressions.empty()) {
-				// all conditions have been erased: remove the entire filter
-				*node_ptr = std::move(filter.children[0]);
+				// just break. The physical filter planner will plan a projection instead
 				break;
 			}
 		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
