@@ -453,7 +453,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: build/relassert/test/unittest
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
