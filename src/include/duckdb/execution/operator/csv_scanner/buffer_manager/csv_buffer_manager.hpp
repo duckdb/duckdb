@@ -68,6 +68,7 @@ private:
 	mutex main_mutex;
 	//! If the file_handle used seek
 	bool has_seeked = false;
+	unordered_set<idx_t> reset_when_possible;
 };
 
 } // namespace duckdb
