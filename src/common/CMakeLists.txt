@@ -20,6 +20,10 @@ if(${EXIT_TIME_DESTRUCTORS_WARNING})
       "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
 endif()
 
+if(DEBUG_STACKTRACE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_STACKTRACE")
+endif()
+
 add_library_unity(
   duckdb_common
   OBJECT
