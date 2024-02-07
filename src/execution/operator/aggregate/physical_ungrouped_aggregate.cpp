@@ -403,13 +403,13 @@ public:
 	                                       const PhysicalUngroupedAggregate &op,
 	                                       UngroupedAggregateGlobalSinkState &state_p)
 	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p),
-	      allocator(gstate.CreateAllocator()) {
+	      allocator(gstate.CreateAllocator()), aggregate_state(op.aggregates) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
 private:
-	void AggregateDistinct();
+	TaskExecutionResult AggregateDistinct();
 
 private:
 	shared_ptr<Event> event;
@@ -418,6 +418,12 @@ private:
 	UngroupedAggregateGlobalSinkState &gstate;
 
 	ArenaAllocator &allocator;
+
+	// Distinct aggregation state
+	AggregateState aggregate_state;
+	idx_t aggregation_idx = 0;
+	unique_ptr<LocalSourceState> radix_table_lstate;
+	bool blocked = false;
 };
 
 void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
@@ -425,6 +431,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 	auto &aggregates = op.aggregates;
 	auto &distinct_data = *op.distinct_data;
 
+	idx_t n_threads = 0;
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
 	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
@@ -444,10 +451,11 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		// Create global state for scanning
 		auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table_p = *distinct_data.radix_tables[table_idx];
+		n_threads += radix_table_p.MaxThreads(*gstate.distinct_state->radix_states[table_idx]);
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
+	n_threads = MaxValue<idx_t>(n_threads, 1);
 
-	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_threads; i++) {
 		tasks.push_back(
@@ -458,19 +466,21 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 }
 
 TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::ExecuteTask(TaskExecutionMode mode) {
-	AggregateDistinct();
+	auto res = AggregateDistinct();
+	if (res == TaskExecutionResult::TASK_BLOCKED) {
+		return res;
+	}
 	event->FinishTask();
 	return TaskExecutionResult::TASK_FINISHED;
 }
 
-void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
+TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	D_ASSERT(gstate.distinct_state);
 	auto &distinct_state = *gstate.distinct_state;
 	auto &distinct_data = *op.distinct_data;
 
-	// Create thread-local copy of aggregate state
 	auto &aggregates = op.aggregates;
-	AggregateState state(aggregates);
+	auto &state = aggregate_state;
 
 	// Thread-local contexts
 	ThreadContext thread_context(executor.context);
@@ -479,14 +489,12 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	auto &finalize_event = event->Cast<UngroupedDistinctAggregateFinalizeEvent>();
 
 	// Now loop through the distinct aggregates, scanning the distinct HTs
-	idx_t payload_idx = 0;
-	idx_t next_payload_idx = 0;
-	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
-		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 
-		// Forward the payload idx
-		payload_idx = next_payload_idx;
-		next_payload_idx = payload_idx + aggregate.children.size();
+	// This needs to be preserved in case the radix_table.GetData blocks
+	auto &agg_idx = aggregation_idx;
+
+	for (; agg_idx < aggregates.size(); agg_idx++) {
+		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 
 		// If aggregate is not distinct, skip it
 		if (!distinct_data.IsDistinct(agg_idx)) {
@@ -495,11 +503,15 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 
 		const auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table = *distinct_data.radix_tables[table_idx];
-		auto lstate = radix_table.GetLocalSourceState(execution_context);
+		if (!blocked) {
+			// Because we can block, we need to make sure we preserve this state
+			radix_table_lstate = radix_table.GetLocalSourceState(execution_context);
+		}
+		auto &lstate = *radix_table_lstate;
 
 		auto &sink = *distinct_state.radix_states[table_idx];
-		InterruptState interrupt_state;
-		OperatorSourceInput source_input {*finalize_event.global_source_states[agg_idx], *lstate, interrupt_state};
+		InterruptState interrupt_state(shared_from_this());
+		OperatorSourceInput source_input {*finalize_event.global_source_states[agg_idx], lstate, interrupt_state};
 
 		DataChunk output_chunk;
 		output_chunk.Initialize(executor.context, distinct_state.distinct_output_chunks[table_idx]->GetTypes());
@@ -517,8 +529,8 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 				D_ASSERT(output_chunk.size() == 0);
 				break;
 			} else if (res == SourceResultType::BLOCKED) {
-				throw InternalException(
-				    "Unexpected interrupt from radix table GetData in UngroupedDistinctAggregateFinalizeTask");
+				blocked = true;
+				return TaskExecutionResult::TASK_BLOCKED;
 			}
 
 			// We dont need to resolve the filter, we already did this in Sink
@@ -537,12 +549,11 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 			aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
 			                                 state.aggregates[agg_idx].get(), payload_chunk.size());
 		}
+		blocked = false;
 	}
 
 	// After scanning the distinct HTs, we can combine the thread-local agg states with the thread-global
 	lock_guard<mutex> guard(finalize_event.lock);
-	payload_idx = 0;
-	next_payload_idx = 0;
 	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
 		if (!distinct_data.IsDistinct(agg_idx)) {
 			continue;
@@ -561,6 +572,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	if (++finalize_event.tasks_done == finalize_event.tasks_scheduled) {
 		gstate.finished = true;
 	}
+	return TaskExecutionResult::TASK_FINISHED;
 }
 
 SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,

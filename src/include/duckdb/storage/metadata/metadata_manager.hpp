@@ -42,10 +42,10 @@ struct MetadataHandle {
 
 class MetadataManager {
 public:
-	//! The size of metadata blocks
-	static constexpr const idx_t METADATA_BLOCK_SIZE = 4088;
 	//! The amount of metadata blocks per storage block
 	static constexpr const idx_t METADATA_BLOCK_COUNT = 64;
+	//! The size of metadata blocks
+	static constexpr const idx_t METADATA_BLOCK_SIZE = AlignValueFloor(Storage::BLOCK_SIZE / METADATA_BLOCK_COUNT);
 
 public:
 	MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager);
@@ -87,5 +87,9 @@ protected:
 	void AddAndRegisterBlock(MetadataBlock block);
 	void ConvertToTransient(MetadataBlock &block);
 };
+
+//! Detect mismatching constant values
+static_assert(MetadataManager::METADATA_BLOCK_SIZE * MetadataManager::METADATA_BLOCK_COUNT <= Storage::BLOCK_SIZE,
+              "metadata block count exceeds total block alloc size");
 
 } // namespace duckdb

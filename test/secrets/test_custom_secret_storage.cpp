@@ -5,6 +5,7 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,11 +16,34 @@ struct TestSecretLog {
 	duckdb::vector<string> write_secret_requests;
 };
 
+// Demo secret type
+struct DemoSecretType {
+	static duckdb::unique_ptr<BaseSecret> CreateDemoSecret(ClientContext &context, CreateSecretInput &input) {
+		auto scope = input.scope;
+		if (scope.empty()) {
+			scope = {""};
+		}
+		auto return_value = make_uniq<KeyValueSecret>(scope, input.type, input.provider, input.name);
+		return std::move(return_value);
+	}
+
+	static void RegisterDemoSecret(DatabaseInstance &instance, const string &type_name) {
+		SecretType secret_type;
+		secret_type.name = type_name;
+		secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;
+		secret_type.default_provider = "config";
+		ExtensionUtil::RegisterSecretType(instance, secret_type);
+
+		CreateSecretFunction secret_fun = {type_name, "config", CreateDemoSecret};
+		ExtensionUtil::RegisterFunction(instance, secret_fun);
+	}
+};
+
 // Demo pluggable secret storage
 class TestSecretStorage : public CatalogSetSecretStorage {
 public:
 	TestSecretStorage(const string &name_p, DatabaseInstance &db, TestSecretLog &logger_p, int64_t tie_break_offset_p)
-	    : CatalogSetSecretStorage(name_p), tie_break_offset(tie_break_offset_p), logger(logger_p) {
+	    : CatalogSetSecretStorage(db, name_p), tie_break_offset(tie_break_offset_p), logger(logger_p) {
 		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
 		persistent = true;
 		include_in_lookups = true;
@@ -36,17 +60,44 @@ public:
 	bool include_in_lookups;
 
 protected:
-	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) override {
+	void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) override {
 		duckdb::lock_guard<duckdb::mutex> lock(logger.lock);
 		logger.write_secret_requests.push_back(secret.GetName());
 	};
-	virtual void RemoveSecret(CatalogTransaction transaction, const string &secret) override {
+	virtual void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override {
 		duckdb::lock_guard<duckdb::mutex> lock(logger.lock);
 		logger.remove_secret_requests.push_back(secret);
 	};
 
 	TestSecretLog &logger;
 };
+
+TEST_CASE("Test secret lookups by secret type", "[secret][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	if (!db.ExtensionIsLoaded("httpfs")) {
+		return;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=false;"));
+
+	// Register a demo secret type
+	DemoSecretType::RegisterDemoSecret(*db.instance, "secret_type_1");
+	DemoSecretType::RegisterDemoSecret(*db.instance, "secret_type_2");
+
+	// Create some secrets
+	REQUIRE_NO_FAIL(con.Query("CREATE SECRET s1 (TYPE secret_type_1, SCOPE '')"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SECRET s2 (TYPE secret_type_2, SCOPE '')"));
+
+	// Note that the secrets collide completely, except for their types
+	auto res1 = con.Query("SELECT which_secret('blablabla', 'secret_type_1')");
+	auto res2 = con.Query("SELECT which_secret('blablabla', 'secret_type_2')");
+
+	// Correct secret is selected
+	REQUIRE(res1->GetValue(0, 0).ToString() == "s1");
+	REQUIRE(res2->GetValue(0, 0).ToString() == "s2");
+}
 
 TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 	DuckDB db(nullptr);
@@ -71,15 +122,21 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE PERSISTENT SECRET s2 IN test_storage (TYPE S3, SCOPE 's3://')"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY SECRET s2 (TYPE S3, SCOPE 's3://')"));
 
+	// We add this secret of the wrong type, but with better matching scope: these should be ignored on lookup
+	DemoSecretType::RegisterDemoSecret(*db.instance, "test");
+	REQUIRE_NO_FAIL(con.Query("CREATE SECRET s1_test_type IN TEST_STORAGE (TYPE test, SCOPE 's3://foo/bar.csv')"));
+
 	// Inspect current duckdb_secrets output
-	auto result = con.Query("SELECT name, storage from duckdb_secrets() ORDER BY name, storage");
-	REQUIRE(result->RowCount() == 3);
+	auto result = con.Query("SELECT name, storage from duckdb_secrets() ORDER BY type, name, storage");
+	REQUIRE(result->RowCount() == 4);
 	REQUIRE(result->GetValue(0, 0).ToString() == "s1");
 	REQUIRE(result->GetValue(1, 0).ToString() == "test_storage");
 	REQUIRE(result->GetValue(0, 1).ToString() == "s2");
 	REQUIRE(result->GetValue(1, 1).ToString() == "memory");
 	REQUIRE(result->GetValue(0, 2).ToString() == "s2");
 	REQUIRE(result->GetValue(1, 2).ToString() == "test_storage");
+	REQUIRE(result->GetValue(0, 3).ToString() == "s1_test_type");
+	REQUIRE(result->GetValue(1, 3).ToString() == "test_storage");
 
 	auto transaction = CatalogTransaction::GetSystemTransaction(*db.instance);
 
@@ -110,9 +167,10 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 
 	// Inspect the log from our logger
 	REQUIRE(log.remove_secret_requests.size() == 2);
-	REQUIRE(log.write_secret_requests.size() == 2);
+	REQUIRE(log.write_secret_requests.size() == 3);
 	REQUIRE(log.write_secret_requests[0] == "s1");
 	REQUIRE(log.write_secret_requests[1] == "s2");
+	REQUIRE(log.write_secret_requests[2] == "s1_test_type");
 	REQUIRE(log.remove_secret_requests[0] == "s2");
 	REQUIRE(log.remove_secret_requests[1] == "s1");
 }

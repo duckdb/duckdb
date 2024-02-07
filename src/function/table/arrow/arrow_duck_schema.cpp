@@ -36,6 +36,18 @@ const ArrowType &ArrowType::GetDictionary() const {
 	return *dictionary_type;
 }
 
+void ArrowType::SetRunEndEncoded() {
+	D_ASSERT(children.size() == 2);
+	auto actual_type = children[1]->GetDuckType();
+	// Override the duckdb type to the actual type
+	type = actual_type;
+	run_end_encoded = true;
+}
+
+bool ArrowType::RunEndEncoded() const {
+	return run_end_encoded;
+}
+
 LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	if (use_dictionary && dictionary_type) {
 		return dictionary_type->GetDuckType();

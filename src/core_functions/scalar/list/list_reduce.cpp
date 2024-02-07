@@ -172,7 +172,7 @@ void LambdaFunctions::ListReduceFunction(duckdb::DataChunk &args, duckdb::Expres
 		loops++;
 	}
 
-	if (info.is_all_constant && !info.has_side_effects) {
+	if (info.is_all_constant && !info.is_volatile) {
 		info.result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }

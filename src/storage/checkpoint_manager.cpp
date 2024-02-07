@@ -199,6 +199,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block.block_pointer;
+	header.block_size = Storage::BLOCK_ALLOC_SIZE;
+	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(header);
 
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
@@ -416,7 +418,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	// now we can look for the index in the catalog and assign the table info
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = table.GetStorage().info;
+	index.info = make_shared<IndexDataTableInfo>(table.GetStorage().info, info.index_name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {

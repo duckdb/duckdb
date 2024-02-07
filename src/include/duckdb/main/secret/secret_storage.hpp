@@ -14,8 +14,10 @@
 namespace duckdb {
 
 class BaseSecret;
+class Catalog;
 class CatalogSet;
 struct CatalogTransaction;
+class DatabaseInstance;
 struct SecretMatch;
 struct SecretEntry;
 
@@ -36,17 +38,19 @@ public:
 	};
 
 	//! Store a secret
-	virtual optional_ptr<SecretEntry> StoreSecret(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
-	                                              OnCreateConflict on_conflict) = 0;
+	virtual optional_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                              optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get all secrets
-	virtual vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) = 0;
+	virtual vector<reference<SecretEntry>> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Drop secret by name
-	virtual void DropSecretByName(CatalogTransaction transaction, const string &name,
-	                              OnEntryNotFound on_entry_not_found) = 0;
+	virtual void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	                              optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get best match
-	virtual SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type) = 0;
+	virtual SecretMatch LookupSecret(const string &path, const string &type,
+	                                 optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get a secret by name
-	virtual optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) = 0;
+	virtual optional_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                                  optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 
 	//! Return the offset associated to this storage for tie-breaking secrets between storages
 	virtual int64_t GetTieBreakOffset() = 0;
@@ -54,6 +58,10 @@ public:
 	//! Returns include_in_lookups, used to create secret storage
 	virtual bool IncludeInLookups() {
 		return true;
+	}
+
+	virtual bool Persistent() const {
+		return persistent;
 	}
 
 protected:
@@ -73,36 +81,54 @@ protected:
 	bool persistent;
 };
 
+//! Wrapper struct around a SecretEntry to allow storing it
+struct SecretCatalogEntry : public InCatalogEntry {
+public:
+	SecretCatalogEntry(unique_ptr<SecretEntry> secret_p, Catalog &catalog);
+	SecretCatalogEntry(unique_ptr<const BaseSecret> secret_p, Catalog &catalog);
+
+	//! The secret to store in a catalog
+	unique_ptr<SecretEntry> secret;
+};
+
 //! Base Implementation for catalog set based secret storage
 class CatalogSetSecretStorage : public SecretStorage {
 public:
-	CatalogSetSecretStorage(const string &name_p) : SecretStorage(name_p) {};
+	CatalogSetSecretStorage(DatabaseInstance &db_instance, const string &name_p)
+	    : SecretStorage(name_p), db(db_instance) {};
 
 public:
 	//! SecretStorage API
 	string &GetName() override {
 		return storage_name;
 	};
-	optional_ptr<SecretEntry> StoreSecret(CatalogTransaction transaction, unique_ptr<const BaseSecret> secret,
-	                                      OnCreateConflict on_conflict) override;
-	vector<reference<SecretEntry>> AllSecrets(CatalogTransaction transaction) override;
-	void DropSecretByName(CatalogTransaction transaction, const string &name,
-	                      OnEntryNotFound on_entry_not_found) override;
-	SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type) override;
-	optional_ptr<SecretEntry> GetSecretByName(CatalogTransaction transaction, const string &name) override;
+
+	virtual optional_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                              optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	vector<reference<SecretEntry>> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
+	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	SecretMatch LookupSecret(const string &path, const string &type,
+	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	optional_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                          optional_ptr<CatalogTransaction> transaction = nullptr) override;
 
 protected:
 	//! Callback called on Store to allow child classes to implement persistence.
-	virtual void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret);
-	virtual void RemoveSecret(CatalogTransaction transaction, const string &name);
+	virtual void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict);
+	virtual void RemoveSecret(const string &name, OnEntryNotFound on_entry_not_found);
+	//! Returns the CatalogTransaction in `transaction` if not set, return the System transaction
+	CatalogTransaction GetTransactionOrDefault(optional_ptr<CatalogTransaction> transaction);
 
 	//! CatalogSet containing the secrets
 	unique_ptr<CatalogSet> secrets;
+	//! DB instance for accessing the system catalog transaction
+	DatabaseInstance &db;
 };
 
 class TemporarySecretStorage : public CatalogSetSecretStorage {
 public:
-	TemporarySecretStorage(const string &name_p, DatabaseInstance &db) : CatalogSetSecretStorage(name_p) {
+	TemporarySecretStorage(const string &name_p, DatabaseInstance &db_p) : CatalogSetSecretStorage(db_p, name_p) {
 		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
 		persistent = false;
 	}
@@ -125,9 +151,9 @@ public:
 
 protected:
 	//! Implements the writes to disk
-	void WriteSecret(CatalogTransaction transaction, const BaseSecret &secret) override;
+	void WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) override;
 	//! Implements the deletes from disk
-	virtual void RemoveSecret(CatalogTransaction transaction, const string &secret) override;
+	virtual void RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) override;
 
 	//! Set of persistent secrets that are lazily loaded
 	case_insensitive_set_t persistent_secrets;

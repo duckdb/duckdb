@@ -43,6 +43,7 @@ void JSONScanData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(112, "timestamp_format", GetTimestampFormat());
 	serializer.WritePropertyWithDefault<double>(113, "field_appearance_threshold", field_appearance_threshold, 0.1);
 	serializer.WritePropertyWithDefault<idx_t>(114, "maximum_sample_files", maximum_sample_files, 32);
+	serializer.WritePropertyWithDefault<bool>(115, "convert_strings_to_integers", convert_strings_to_integers, false);
 }
 
 unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
@@ -72,6 +73,7 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	result->names = std::move(names);
 	deserializer.ReadPropertyWithDefault<double>(113, "field_appearance_threshold", result->field_appearance_threshold, 0.1);
 	deserializer.ReadPropertyWithDefault<idx_t>(114, "maximum_sample_files", result->maximum_sample_files, 32);
+	deserializer.ReadPropertyWithDefault<bool>(115, "convert_strings_to_integers", result->convert_strings_to_integers, false);
 	return result;
 }
 

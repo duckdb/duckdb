@@ -137,6 +137,23 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		auto union_type = make_uniq<ArrowType>(LogicalType::UNION(members));
 		union_type->AssignChildren(std::move(children));
 		return union_type;
+	} else if (format == "+r") {
+		child_list_t<LogicalType> members;
+		vector<unique_ptr<ArrowType>> children;
+		idx_t n_children = idx_t(schema.n_children);
+		D_ASSERT(n_children == 2);
+		D_ASSERT(string(schema.children[0]->name) == "run_ends");
+		D_ASSERT(string(schema.children[1]->name) == "values");
+		for (idx_t i = 0; i < n_children; i++) {
+			auto type = schema.children[i];
+			children.emplace_back(ArrowTableFunction::GetArrowLogicalType(*type));
+			members.emplace_back(type->name, children.back()->GetDuckType());
+		}
+
+		auto struct_type = make_uniq<ArrowType>(LogicalType::STRUCT(members));
+		struct_type->AssignChildren(std::move(children));
+		struct_type->SetRunEndEncoded();
+		return struct_type;
 	} else if (format == "+m") {
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
@@ -284,7 +301,7 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	if (parallel_state.done) {
 		return false;
 	}
-	state.chunk_offset = 0;
+	state.Reset();
 	state.batch_index = ++parallel_state.batch_index;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();

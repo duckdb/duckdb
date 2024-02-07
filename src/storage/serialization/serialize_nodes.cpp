@@ -132,6 +132,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", dialect_options.skip_rows);
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", dialect_options.date_format);
 	serializer.WritePropertyWithDefault<string>(129, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
+	serializer.WritePropertyWithDefault<bool>(130, "parallel", parallel);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -166,6 +167,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<CSVOption<idx_t>>(127, "dialect_options.skip_rows", result.dialect_options.skip_rows);
 	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(128, "dialect_options.date_format", result.dialect_options.date_format);
 	deserializer.ReadPropertyWithDefault<string>(129, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
+	deserializer.ReadPropertyWithDefault<bool>(130, "parallel", result.parallel);
 	return result;
 }
 
@@ -199,6 +201,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression", expression);
 	serializer.WriteProperty<TableColumnType>(103, "category", category);
 	serializer.WriteProperty<duckdb::CompressionType>(104, "compression_type", compression_type);
+	serializer.WritePropertyWithDefault<Value>(105, "comment", comment, Value());
 }
 
 ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -208,6 +211,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	auto category = deserializer.ReadProperty<TableColumnType>(103, "category");
 	ColumnDefinition result(std::move(name), std::move(type), std::move(expression), category);
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
+	deserializer.ReadPropertyWithDefault<Value>(105, "comment", result.comment, Value());
 	return result;
 }
 

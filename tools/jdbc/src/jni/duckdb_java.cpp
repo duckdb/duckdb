@@ -39,6 +39,7 @@ static jclass J_String;
 static jclass J_Timestamp;
 static jclass J_TimestampTZ;
 static jclass J_Decimal;
+static jclass J_ByteArray;
 
 static jmethodID J_Bool_booleanValue;
 static jmethodID J_Byte_byteValue;
@@ -147,6 +148,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	env->DeleteLocalRef(tmpLocalRef);
 	tmpLocalRef = env->FindClass("java/math/BigDecimal");
 	J_Decimal = (jclass)env->NewGlobalRef(tmpLocalRef);
+	env->DeleteLocalRef(tmpLocalRef);
+	tmpLocalRef = env->FindClass("[B");
+	J_ByteArray = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("java/util/Map");
@@ -376,8 +380,9 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 
 		try {
 			config.SetOptionByName(key_str, Value(value_str));
-		} catch (const Exception &e) {
-			throw CatalogException("Failed to set configuration option \"%s\"", key_str, e.what());
+		} catch (const std::exception &e) {
+			ErrorData error(e);
+			throw CatalogException("Failed to set configuration option \"%s\", error: %s", key_str, error.RawMessage());
 		}
 	}
 	bool cache_instance = database != ":memory:" && !database.empty();
@@ -572,6 +577,8 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 			} else if (env->IsInstanceOf(param, J_String)) {
 				auto param_string = jstring_to_string(env, (jstring)param);
 				duckdb_params.push_back(Value(param_string));
+			} else if (env->IsInstanceOf(param, J_ByteArray)) {
+				duckdb_params.push_back(Value::BLOB_RAW(byte_array_to_string(env, (jbyteArray)param)));
 			} else if (env->IsInstanceOf(param, J_UUID)) {
 				auto most_significant = (jlong)env->CallObjectMethod(param, J_UUID_getMostSignificantBits);
 				auto least_significant = (jlong)env->CallObjectMethod(param, J_UUID_getLeastSignificantBits);

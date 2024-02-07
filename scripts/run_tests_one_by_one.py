@@ -1,7 +1,5 @@
 import sys
 import subprocess
-import re
-import os
 import time
 
 import argparse
@@ -12,6 +10,7 @@ parser.add_argument('--no-exit', action='store_true', help='Do not exit after ru
 parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
+parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
 
 args, extra_args = parser.parse_known_args()
 
@@ -48,7 +47,11 @@ for line in stdout.splitlines():
     splits = line.rsplit('\t', 1)
     test_cases.append(splits[0])
 
+
 test_count = len(test_cases)
+if args.list:
+    for test_number, test_case in enumerate(test_cases):
+        print(print(f"[{test_number}/{test_count}]: {test_case}"))
 return_code = 0
 
 
@@ -68,7 +71,7 @@ def parse_assertions(stdout):
 
 for test_number, test_case in enumerate(test_cases):
     if not profile:
-        print("[" + str(test_number) + "/" + str(test_count) + "]: " + test_case, end="")
+        print(f"[{test_number}/{test_count}]: {test_case}", end="")
     start = time.time()
     res = subprocess.run([unittest_program, test_case], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout = res.stdout.decode('utf8')
@@ -81,7 +84,7 @@ for test_number, test_case in enumerate(test_cases):
     if args.time_execution:
         additional_data += f" (Time: {end - start:.4f} seconds)"
 
-    print(additional_data)
+    print(additional_data, flush=True)
     if profile:
         print(f'{test_case}	{end - start}')
     if res.returncode is not None and res.returncode != 0:

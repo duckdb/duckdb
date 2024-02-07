@@ -61,6 +61,9 @@ public:
 	//! Sets the amount of active threads executing tasks for the system; n-1 background threads will be launched.
 	//! The main thread will also be used for execution
 	void SetThreads(int32_t n);
+
+	void RelaunchThreads();
+
 	//! Returns the number of threads
 	DUCKDB_API int32_t NumberOfThreads();
 
@@ -74,7 +77,7 @@ public:
 	void SetAllocatorFlushTreshold(idx_t threshold);
 
 private:
-	void SetThreadsInternal(int32_t n);
+	void RelaunchThreadsInternal(int32_t n);
 
 private:
 	DatabaseInstance &db;
@@ -88,6 +91,8 @@ private:
 	vector<unique_ptr<atomic<bool>>> markers;
 	//! The threshold after which to flush the allocator after completing a task
 	atomic<idx_t> allocator_flush_threshold;
+	//! Requested thread count
+	atomic<int32_t> thread_count;
 };
 
 } // namespace duckdb

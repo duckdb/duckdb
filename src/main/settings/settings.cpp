@@ -555,31 +555,33 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Custom Extension Repository
 //===--------------------------------------------------------------------===//
-void CustomExtensionRepository::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).custom_extension_repo = ClientConfig().custom_extension_repo;
+void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.custom_extension_repo = DBConfig().options.custom_extension_repo;
 }
 
-void CustomExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).custom_extension_repo = StringUtil::Lower(input.ToString());
+void CustomExtensionRepository::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.custom_extension_repo = input.ToString();
 }
 
 Value CustomExtensionRepository::GetSetting(ClientContext &context) {
-	return Value(ClientConfig::GetConfig(context).custom_extension_repo);
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.custom_extension_repo);
 }
 
 //===--------------------------------------------------------------------===//
 // Autoload Extension Repository
 //===--------------------------------------------------------------------===//
-void AutoloadExtensionRepository::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).autoinstall_extension_repo = ClientConfig().autoinstall_extension_repo;
+void AutoloadExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoinstall_extension_repo = DBConfig().options.autoinstall_extension_repo;
 }
 
-void AutoloadExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).autoinstall_extension_repo = StringUtil::Lower(input.ToString());
+void AutoloadExtensionRepository::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoinstall_extension_repo = input.ToString();
 }
 
 Value AutoloadExtensionRepository::GetSetting(ClientContext &context) {
-	return Value(ClientConfig::GetConfig(context).autoinstall_extension_repo);
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.autoinstall_extension_repo);
 }
 
 //===--------------------------------------------------------------------===//
@@ -649,6 +651,21 @@ void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
 
 Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
+}
+
+//===--------------------------------------------------------------------===//
+// Errors As JSON
+//===--------------------------------------------------------------------===//
+void ErrorsAsJsonSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).errors_as_json = ClientConfig().errors_as_json;
+}
+
+void ErrorsAsJsonSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).errors_as_json = BooleanValue::Get(input);
+}
+
+Value ErrorsAsJsonSetting::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).errors_as_json ? 1 : 0);
 }
 
 //===--------------------------------------------------------------------===//
@@ -745,6 +762,10 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
+		if (CompressionTypeIsDeprecated(compression_type)) {
+			throw ParserException("Attempted to force a deprecated compression type (%s)",
+			                      CompressionTypeToString(compression_type));
+		}
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			auto compression_types = StringUtil::Join(ListCompressionTypes(), ", ");
 			throw ParserException("Unrecognized option for PRAGMA force_compression, expected %s", compression_types);

@@ -90,7 +90,7 @@ SELECT part_col, value_col, value2_col FROM parquet_scan('__TEST_DIR__/partition
 statement error
 COPY test TO '__TEST_DIR__/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
 ----
-IO Error: Directory
+Directory
 
 # Trailing slash ist auch gut!
 statement ok

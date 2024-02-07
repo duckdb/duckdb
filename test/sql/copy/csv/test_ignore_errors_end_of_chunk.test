@@ -2,6 +2,10 @@
 # description: IGNORE_ERRORS test
 # group: [csv]
 
+# IGNORE_ERRORS and NULL_PADDING happens on the first vector during dialect detection, so it is likely that
+# small vector sizes miss certain properties, resulting in different errors
+require vector_size 2048
+
 # Try without sniffing
 
 statement ok

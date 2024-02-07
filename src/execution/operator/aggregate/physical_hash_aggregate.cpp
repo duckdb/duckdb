@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -521,7 +522,7 @@ public:
 	void FinishEvent() override;
 
 private:
-	void CreateGlobalSources();
+	idx_t CreateGlobalSources();
 
 private:
 	ClientContext &context;
@@ -545,7 +546,7 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
 private:
-	void AggregateDistinctGrouping(const idx_t grouping_idx);
+	TaskExecutionResult AggregateDistinctGrouping(const idx_t grouping_idx);
 
 private:
 	Pipeline &pipeline;
@@ -553,12 +554,18 @@ private:
 
 	const PhysicalHashAggregate &op;
 	HashAggregateGlobalSinkState &gstate;
+
+	unique_ptr<LocalSinkState> local_sink_state;
+	idx_t grouping_idx = 0;
+	unique_ptr<LocalSourceState> radix_table_lstate;
+	bool blocked = false;
+	idx_t aggregation_idx = 0;
+	idx_t payload_idx = 0;
+	idx_t next_payload_idx = 0;
 };
 
 void HashAggregateDistinctFinalizeEvent::Schedule() {
-	CreateGlobalSources();
-
-	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	const auto n_threads = CreateGlobalSources();
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_threads; i++) {
 		tasks.push_back(make_uniq<HashAggregateDistinctFinalizeTask>(*pipeline, shared_from_this(), op, gstate));
@@ -566,11 +573,14 @@ void HashAggregateDistinctFinalizeEvent::Schedule() {
 	SetTasks(std::move(tasks));
 }
 
-void HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
+idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 	auto &aggregates = op.grouped_aggregate_data.aggregates;
 	global_source_states.reserve(op.groupings.size());
+
+	idx_t n_threads = 0;
 	for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 		auto &grouping = op.groupings[grouping_idx];
+		auto &distinct_state = *gstate.grouping_states[grouping_idx].distinct_state;
 		auto &distinct_data = *grouping.distinct_data;
 
 		vector<unique_ptr<GlobalSourceState>> aggregate_sources;
@@ -587,10 +597,13 @@ void HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 
 			auto table_idx = distinct_data.info.table_map.at(agg_idx);
 			auto &radix_table_p = distinct_data.radix_tables[table_idx];
+			n_threads += radix_table_p->MaxThreads(*distinct_state.radix_states[table_idx]);
 			aggregate_sources.push_back(radix_table_p->GetGlobalSourceState(context));
 		}
 		global_source_states.push_back(std::move(aggregate_sources));
 	}
+
+	return MaxValue<idx_t>(n_threads, 1);
 }
 
 void HashAggregateDistinctFinalizeEvent::FinishEvent() {
@@ -600,14 +613,22 @@ void HashAggregateDistinctFinalizeEvent::FinishEvent() {
 }
 
 TaskExecutionResult HashAggregateDistinctFinalizeTask::ExecuteTask(TaskExecutionMode mode) {
-	for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
-		AggregateDistinctGrouping(grouping_idx);
+	for (; grouping_idx < op.groupings.size(); grouping_idx++) {
+		auto res = AggregateDistinctGrouping(grouping_idx);
+		if (res == TaskExecutionResult::TASK_BLOCKED) {
+			return res;
+		}
+		D_ASSERT(res == TaskExecutionResult::TASK_FINISHED);
+		aggregation_idx = 0;
+		payload_idx = 0;
+		next_payload_idx = 0;
+		local_sink_state = nullptr;
 	}
 	event->FinishTask();
 	return TaskExecutionResult::TASK_FINISHED;
 }
 
-void HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t grouping_idx) {
+TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t grouping_idx) {
 	D_ASSERT(op.distinct_collection_info);
 	auto &info = *op.distinct_collection_info;
 
@@ -624,9 +645,11 @@ void HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t gr
 	ExecutionContext execution_context(executor.context, thread_context, &pipeline);
 
 	// Sink state to sink into global HTs
-	InterruptState interrupt_state;
+	InterruptState interrupt_state(shared_from_this());
 	auto &global_sink_state = *grouping_state.table_state;
-	auto local_sink_state = grouping_data.table_data.GetLocalSinkState(execution_context);
+	if (!local_sink_state) {
+		local_sink_state = grouping_data.table_data.GetLocalSinkState(execution_context);
+	}
 	OperatorSinkInput sink_input {global_sink_state, *local_sink_state, interrupt_state};
 
 	// Create a chunk that mimics the 'input' chunk in Sink, for storing the group vectors
@@ -635,24 +658,24 @@ void HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t gr
 		group_chunk.Initialize(executor.context, op.input_group_types);
 	}
 
-	auto &groups = op.grouped_aggregate_data.groups;
-	const idx_t group_by_size = groups.size();
+	const idx_t group_by_size = op.grouped_aggregate_data.groups.size();
 
 	DataChunk aggregate_input_chunk;
 	if (!gstate.payload_types.empty()) {
 		aggregate_input_chunk.Initialize(executor.context, gstate.payload_types);
 	}
 
-	auto &finalize_event = event->Cast<HashAggregateDistinctFinalizeEvent>();
+	const auto &finalize_event = event->Cast<HashAggregateDistinctFinalizeEvent>();
 
-	idx_t payload_idx;
-	idx_t next_payload_idx = 0;
-	for (idx_t agg_idx = 0; agg_idx < op.grouped_aggregate_data.aggregates.size(); agg_idx++) {
+	auto &agg_idx = aggregation_idx;
+	for (; agg_idx < op.grouped_aggregate_data.aggregates.size(); agg_idx++) {
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 
-		// Forward the payload idx
-		payload_idx = next_payload_idx;
-		next_payload_idx = payload_idx + aggregate.children.size();
+		if (!blocked) {
+			// Forward the payload idx
+			payload_idx = next_payload_idx;
+			next_payload_idx = payload_idx + aggregate.children.size();
+		}
 
 		// If aggregate is not distinct, skip it
 		if (!distinct_data.IsDistinct(agg_idx)) {
@@ -664,8 +687,11 @@ void HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t gr
 		auto &radix_table = distinct_data.radix_tables[table_idx];
 
 		auto &sink = *distinct_state.radix_states[table_idx];
-		auto local_source = radix_table->GetLocalSourceState(execution_context);
-		OperatorSourceInput source_input {*finalize_event.global_source_states[grouping_idx][agg_idx], *local_source,
+		if (!blocked) {
+			radix_table_lstate = radix_table->GetLocalSourceState(execution_context);
+		}
+		auto &local_source = *radix_table_lstate;
+		OperatorSourceInput source_input {*finalize_event.global_source_states[grouping_idx][agg_idx], local_source,
 		                                  interrupt_state};
 
 		// Create a duplicate of the output_chunk, because of multi-threading we cant alter the original
@@ -683,8 +709,8 @@ void HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t gr
 				D_ASSERT(output_chunk.size() == 0);
 				break;
 			} else if (res == SourceResultType::BLOCKED) {
-				throw InternalException(
-				    "Unexpected interrupt from radix table GetData in HashAggregateDistinctFinalizeTask");
+				blocked = true;
+				return TaskExecutionResult::TASK_BLOCKED;
 			}
 
 			auto &grouped_aggregate_data = *distinct_data.grouped_aggregate_data[table_idx];
@@ -704,8 +730,10 @@ void HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t gr
 			// Sink it into the main ht
 			grouping_data.table_data.Sink(execution_context, group_chunk, sink_input, aggregate_input_chunk, {agg_idx});
 		}
+		blocked = false;
 	}
 	grouping_data.table_data.Combine(execution_context, global_sink_state, *local_sink_state);
+	return TaskExecutionResult::TASK_FINISHED;
 }
 
 SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -805,6 +833,7 @@ public:
 		}
 	}
 
+	optional_idx radix_idx;
 	vector<unique_ptr<LocalSourceState>> radix_states;
 };
 
@@ -819,32 +848,37 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	auto &gstate = input.global_state.Cast<HashAggregateGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<HashAggregateLocalSourceState>();
 	while (true) {
-		idx_t radix_idx = gstate.state_index;
+		if (!lstate.radix_idx.IsValid()) {
+			lstate.radix_idx = gstate.state_index.load();
+		}
+		const auto radix_idx = lstate.radix_idx.GetIndex();
 		if (radix_idx >= groupings.size()) {
 			break;
 		}
+
 		auto &grouping = groupings[radix_idx];
 		auto &radix_table = grouping.table_data;
 		auto &grouping_gstate = sink_gstate.grouping_states[radix_idx];
 
-		InterruptState interrupt_state;
 		OperatorSourceInput source_input {*gstate.radix_states[radix_idx], *lstate.radix_states[radix_idx],
-		                                  interrupt_state};
+		                                  input.interrupt_state};
 		auto res = radix_table.GetData(context, chunk, *grouping_gstate.table_state, source_input);
+		if (res == SourceResultType::BLOCKED) {
+			return res;
+		}
 		if (chunk.size() != 0) {
 			return SourceResultType::HAVE_MORE_OUTPUT;
-		} else if (res == SourceResultType::BLOCKED) {
-			throw InternalException("Unexpectedly Blocked from radix_table");
 		}
 
 		// move to the next table
 		lock_guard<mutex> l(gstate.lock);
-		radix_idx++;
-		if (radix_idx > gstate.state_index) {
+		lstate.radix_idx = lstate.radix_idx.GetIndex() + 1;
+		if (lstate.radix_idx.GetIndex() > gstate.state_index) {
 			// we have not yet worked on the table
 			// move the global index forwards
-			gstate.state_index = radix_idx;
+			gstate.state_index = lstate.radix_idx.GetIndex();
 		}
+		lstate.radix_idx = gstate.state_index.load();
 	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;

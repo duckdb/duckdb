@@ -353,25 +353,25 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-bool Binder::HasMatchingBinding(const string &table_name, const string &column_name, string &error_message) {
+bool Binder::HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error) {
 	string empty_schema;
-	return HasMatchingBinding(empty_schema, table_name, column_name, error_message);
+	return HasMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
 bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-                                string &error_message) {
+                                ErrorData &error) {
 	string empty_catalog;
-	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error_message);
+	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
 bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-                                const string &column_name, string &error_message) {
+                                const string &column_name, ErrorData &error) {
 	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->alias) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
-		binding = bind_context.GetBinding(table_name, error_message);
+		binding = bind_context.GetBinding(table_name, error);
 	}
 
 	if (!binding) {
@@ -395,7 +395,7 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 	bool binding_found;
 	binding_found = binding->HasMatchingBinding(column_name);
 	if (!binding_found) {
-		error_message = binding->ColumnNotFoundError(column_name);
+		error = binding->ColumnNotFoundError(column_name);
 	}
 	return binding_found;
 }
@@ -415,6 +415,18 @@ void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 	can_contain_nulls = can_contain_nulls_p;
 }
 
+void Binder::SetAlwaysRequireRebind() {
+	reference<Binder> current_binder = *this;
+	while (true) {
+		auto &current = current_binder.get();
+		current.properties.always_require_rebind = true;
+		if (!current.parent) {
+			break;
+		}
+		current_binder = *current.parent;
+	}
+}
+
 void Binder::AddTableName(string table_name) {
 	auto root_binder = GetRootBinder();
 	root_binder->table_names.insert(std::move(table_name));
@@ -423,19 +435,6 @@ void Binder::AddTableName(string table_name) {
 const unordered_set<string> &Binder::GetTableNames() {
 	auto root_binder = GetRootBinder();
 	return root_binder->table_names;
-}
-
-string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
-	return FormatError(expr_context.query_location, message);
-}
-
-string Binder::FormatError(TableRef &ref_context, const string &message) {
-	return FormatError(ref_context.query_location, message);
-}
-
-string Binder::FormatErrorRecursive(idx_t query_location, const string &message, vector<ExceptionFormatValue> &values) {
-	QueryErrorContext context(root_statement, query_location);
-	return context.FormatErrorRecursive(message, values);
 }
 
 // FIXME: this is extremely naive

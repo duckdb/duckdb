@@ -91,11 +91,6 @@ struct ClientConfig {
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
 
-	//! Override for the default extension repository
-	string custom_extension_repo = "";
-	//! Override for the default autoload extensoin repository
-	string autoinstall_extension_repo = "";
-
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 
@@ -107,6 +102,9 @@ struct ClientConfig {
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
+
+	//! Output error messages as structured JSON instead of as a raw string
+	bool errors_as_json = false;
 
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;

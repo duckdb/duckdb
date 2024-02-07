@@ -187,14 +187,14 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 	child_list_t<LogicalType> child_types;
 
 	if (arguments.size() != 2 && !arguments.empty()) {
-		throw Exception("We need exactly two lists for a map");
+		throw InvalidInputException("We need exactly two lists for a map");
 	}
 	if (arguments.size() == 2) {
 		if (arguments[0]->return_type.id() != LogicalTypeId::LIST) {
-			throw Exception("First argument is not a list");
+			throw InvalidInputException("First argument is not a list");
 		}
 		if (arguments[1]->return_type.id() != LogicalTypeId::LIST) {
-			throw Exception("Second argument is not a list");
+			throw InvalidInputException("Second argument is not a list");
 		}
 		child_types.push_back(make_pair("key", arguments[0]->return_type));
 		child_types.push_back(make_pair("value", arguments[1]->return_type));

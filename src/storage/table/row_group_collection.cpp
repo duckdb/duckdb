@@ -616,7 +616,7 @@ struct CollectionCheckpointState {
 	mutex write_lock;
 
 public:
-	void PushError(PreservedError error) {
+	void PushError(ErrorData error) {
 		error_manager.PushError(std::move(error));
 	}
 	bool HasError() {
@@ -667,12 +667,10 @@ public:
 			ExecuteTask();
 			checkpoint_state.FinishTask();
 			return TaskExecutionResult::TASK_FINISHED;
-		} catch (Exception &ex) {
-			checkpoint_state.PushError(PreservedError(ex));
 		} catch (std::exception &ex) {
-			checkpoint_state.PushError(PreservedError(ex));
+			checkpoint_state.PushError(ErrorData(ex));
 		} catch (...) { // LCOV_EXCL_START
-			checkpoint_state.PushError(PreservedError("Unknown exception during Checkpoint!"));
+			checkpoint_state.PushError(ErrorData("Unknown exception during Checkpoint!"));
 		} // LCOV_EXCL_STOP
 		return TaskExecutionResult::TASK_ERROR;
 	}

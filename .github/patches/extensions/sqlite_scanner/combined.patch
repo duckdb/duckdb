@@ -1,0 +1,92 @@
+diff --git a/duckdb b/duckdb
+index a056c8e..8548e1a 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit a056c8e0a29f2f38d245afeb9e48cc308711aa21
++Subproject commit 8548e1a6d676bdc0225e821872b0ae675c46e47c
+diff --git a/src/include/storage/sqlite_schema_entry.hpp b/src/include/storage/sqlite_schema_entry.hpp
+index 2052584..5bd82b3 100644
+--- a/src/include/storage/sqlite_schema_entry.hpp
++++ b/src/include/storage/sqlite_schema_entry.hpp
+@@ -15,7 +15,7 @@ class SQLiteTransaction;
+ 
+ class SQLiteSchemaEntry : public SchemaCatalogEntry {
+ public:
+-	SQLiteSchemaEntry(Catalog &catalog);
++	SQLiteSchemaEntry(Catalog &catalog, CreateSchemaInfo &info);
+ 
+ public:
+ 	optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) override;
+diff --git a/src/include/storage/sqlite_transaction_manager.hpp b/src/include/storage/sqlite_transaction_manager.hpp
+index 4982eef..8f9cafc 100644
+--- a/src/include/storage/sqlite_transaction_manager.hpp
++++ b/src/include/storage/sqlite_transaction_manager.hpp
+@@ -20,7 +20,7 @@ public:
+ 	SQLiteTransactionManager(AttachedDatabase &db_p, SQLiteCatalog &sqlite_catalog);
+ 
+ 	Transaction &StartTransaction(ClientContext &context) override;
+-	string CommitTransaction(ClientContext &context, Transaction &transaction) override;
++	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+ 	void RollbackTransaction(Transaction &transaction) override;
+ 
+ 	void Checkpoint(ClientContext &context, bool force = false) override;
+diff --git a/src/storage/sqlite_catalog.cpp b/src/storage/sqlite_catalog.cpp
+index fad530c..c7918cf 100644
+--- a/src/storage/sqlite_catalog.cpp
++++ b/src/storage/sqlite_catalog.cpp
+@@ -1,8 +1,10 @@
+ #include "storage/sqlite_catalog.hpp"
++#include "duckdb/parser/parsed_data/create_schema_info.hpp"
++#include "duckdb/storage/database_size.hpp"
++#include "sqlite_db.hpp"
+ #include "storage/sqlite_schema_entry.hpp"
+ #include "storage/sqlite_transaction.hpp"
+-#include "sqlite_db.hpp"
+-#include "duckdb/storage/database_size.hpp"
++#include "duckdb/common/exception/transaction_exception.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -17,7 +19,8 @@ SQLiteCatalog::~SQLiteCatalog() {
+ }
+ 
+ void SQLiteCatalog::Initialize(bool load_builtin) {
+-	main_schema = make_uniq<SQLiteSchemaEntry>(*this);
++        CreateSchemaInfo info;
++	main_schema = make_uniq<SQLiteSchemaEntry>(*this, info);
+ }
+ 
+ optional_ptr<CatalogEntry> SQLiteCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
+diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
+index 7c4059e..21f38cf 100644
+--- a/src/storage/sqlite_schema_entry.cpp
++++ b/src/storage/sqlite_schema_entry.cpp
+@@ -15,7 +15,7 @@
+ 
+ namespace duckdb {
+ 
+-SQLiteSchemaEntry::SQLiteSchemaEntry(Catalog &catalog) : SchemaCatalogEntry(catalog, DEFAULT_SCHEMA, true) {
++SQLiteSchemaEntry::SQLiteSchemaEntry(Catalog &catalog, CreateSchemaInfo &info) : SchemaCatalogEntry(catalog, info) {
+ }
+ 
+ SQLiteTransaction &GetSQLiteTransaction(CatalogTransaction transaction) {
+diff --git a/src/storage/sqlite_transaction_manager.cpp b/src/storage/sqlite_transaction_manager.cpp
+index 7b6e132..d800794 100644
+--- a/src/storage/sqlite_transaction_manager.cpp
++++ b/src/storage/sqlite_transaction_manager.cpp
+@@ -16,12 +16,12 @@ Transaction &SQLiteTransactionManager::StartTransaction(ClientContext &context)
+ 	return result;
+ }
+ 
+-string SQLiteTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
++ErrorData SQLiteTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
+ 	auto &sqlite_transaction = transaction.Cast<SQLiteTransaction>();
+ 	sqlite_transaction.Commit();
+ 	lock_guard<mutex> l(transaction_lock);
+ 	transactions.erase(transaction);
+-	return string();
++	return ErrorData();
+ }
+ 
+ void SQLiteTransactionManager::RollbackTransaction(Transaction &transaction) {

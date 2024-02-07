@@ -10,13 +10,14 @@ CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile> &file_p) {
 	file = file_p;
 }
 
-void CachedFileHandle::SetInitialized() {
+void CachedFileHandle::SetInitialized(idx_t total_size) {
 	if (file->initialized) {
 		throw InternalException("Cannot set initialized on cached file that was already initialized");
 	}
 	if (!lock) {
 		throw InternalException("Cannot set initialized on cached file without lock");
 	}
+	file->size = total_size;
 	file->initialized = true;
 	lock = nullptr;
 }
@@ -57,10 +58,26 @@ void HTTPState::Reset() {
 	cached_files.clear();
 }
 
-shared_ptr<HTTPState> HTTPState::TryGetState(FileOpener *opener) {
+shared_ptr<HTTPState> HTTPState::TryGetState(ClientContext &context, bool create_on_missing) {
+	auto lookup = context.registered_state.find("http_state");
+
+	if (lookup != context.registered_state.end()) {
+		return std::static_pointer_cast<HTTPState, ClientContextState>(lookup->second);
+	}
+
+	if (!create_on_missing) {
+		return nullptr;
+	}
+
+	auto http_state = make_shared<HTTPState>();
+	context.registered_state["http_state"] = http_state;
+	return http_state;
+}
+
+shared_ptr<HTTPState> HTTPState::TryGetState(FileOpener *opener, bool create_on_missing) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
-		return client_context->client_data->http_state;
+		return TryGetState(*client_context, create_on_missing);
 	}
 	return nullptr;
 }

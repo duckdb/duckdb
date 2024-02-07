@@ -442,6 +442,28 @@ void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
 	}
 }
 
+bool Executor::ResultCollectorIsBlocked() {
+	if (completed_pipelines + 1 != total_pipelines) {
+		// The result collector is always in the last pipeline
+		return false;
+	}
+	lock_guard<mutex> l(executor_lock);
+	if (to_be_rescheduled_tasks.empty()) {
+		return false;
+	}
+	for (auto &kv : to_be_rescheduled_tasks) {
+		auto &task = kv.second;
+		if (task->TaskBlockedOnResult()) {
+			// At least one of the blocked tasks is connected to a result collector
+			// This task could be the only task that could unblock the other non-result-collector tasks
+			// To prevent a scenario where we halt indefinitely, we return here so it can be unblocked by a call to
+			// Fetch
+			return true;
+		}
+	}
+	return false;
+}
+
 void Executor::AddToBeRescheduled(shared_ptr<Task> &task_p) {
 	lock_guard<mutex> l(executor_lock);
 	if (cancelled) {
@@ -457,7 +479,7 @@ bool Executor::ExecutionIsFinished() {
 	return completed_pipelines >= total_pipelines || HasError();
 }
 
-PendingExecutionResult Executor::ExecuteTask() {
+PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 	// Only executor should return NO_TASKS_AVAILABLE
 	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
@@ -467,14 +489,29 @@ PendingExecutionResult Executor::ExecuteTask() {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	while (completed_pipelines < total_pipelines) {
 		// there are! if we don't already have a task, fetch one
-		if (!task) {
-			scheduler.GetTaskFromProducer(*producer, task);
+		auto current_task = task.get();
+		if (dry_run) {
+			// Pretend we have no task, we don't want to execute anything
+			current_task = nullptr;
+		} else {
+			if (!task) {
+				scheduler.GetTaskFromProducer(*producer, task);
+			}
+			current_task = task.get();
 		}
-		if (!task && !HasError()) {
+
+		if (!current_task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
+			if (ResultCollectorIsBlocked()) {
+				// The blocked tasks are processing the Sink of a BufferedResultCollector
+				// We return here so the query result can be made and fetched from
+				// which will in turn unblock the Sink tasks.
+				return PendingExecutionResult::BLOCKED;
+			}
 			return PendingExecutionResult::NO_TASKS_AVAILABLE;
 		}
-		if (task) {
+
+		if (current_task) {
 			// if we have a task, partially process it
 			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
 			if (result == TaskExecutionResult::TASK_BLOCKED) {
@@ -553,15 +590,19 @@ vector<LogicalType> Executor::GetTypes() {
 	return physical_plan->GetTypes();
 }
 
-void Executor::PushError(PreservedError exception) {
-	// interrupt execution of any other pipelines that belong to this executor
-	context.interrupted = true;
+void Executor::PushError(ErrorData exception) {
 	// push the exception onto the stack
 	error_manager.PushError(std::move(exception));
+	// interrupt execution of any other pipelines that belong to this executor
+	context.interrupted = true;
 }
 
 bool Executor::HasError() {
 	return error_manager.HasError();
+}
+
+ErrorData Executor::GetError() {
+	return error_manager.GetError();
 }
 
 void Executor::ThrowException() {
@@ -614,26 +655,6 @@ unique_ptr<QueryResult> Executor::GetResult() {
 	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
 	D_ASSERT(result_collector.sink_state);
 	return result_collector.GetResult(*result_collector.sink_state);
-}
-
-unique_ptr<DataChunk> Executor::FetchChunk() {
-	D_ASSERT(physical_plan);
-
-	auto chunk = make_uniq<DataChunk>();
-	root_executor->InitializeChunk(*chunk);
-	while (true) {
-		root_executor->ExecutePull(*chunk);
-		if (chunk->size() == 0) {
-			root_executor->PullFinalize();
-			if (NextExecutor()) {
-				continue;
-			}
-			break;
-		} else {
-			break;
-		}
-	}
-	return chunk;
 }
 
 } // namespace duckdb

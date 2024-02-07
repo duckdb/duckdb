@@ -183,12 +183,15 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 				}
 			}
 		}
-	} catch (SerializationException &ex) { // LCOV_EXCL_START
-		                                   // serialization exception - torn WAL
-		                                   // continue reading
-	} catch (std::exception &ex) {
-		Printer::PrintF("Exception in WAL playback during initial read: %s\n", ex.what());
-		return false;
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::SERIALIZATION) {
+			// serialization exception - torn WAL
+			// continue reading
+		} else {
+			Printer::PrintF("Exception in WAL playback during initial read: %s\n", error.RawMessage());
+			return false;
+		}
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback during initial read");
 		return false;
@@ -226,13 +229,13 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 				con.BeginTransaction();
 			}
 		}
-	} catch (SerializationException &ex) { // LCOV_EXCL_START
-		// serialization error during WAL replay: rollback
-		con.Rollback();
-	} catch (std::exception &ex) {
-		// FIXME: this should report a proper warning in the connection
-		Printer::PrintF("Exception in WAL playback: %s\n", ex.what());
-		// exception thrown in WAL replay: rollback
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::SERIALIZATION) {
+			// FIXME: this should report a proper warning in the connection
+			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());
+			// exception thrown in WAL replay: rollback
+		}
 		con.Rollback();
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback: %s\n");
@@ -576,7 +579,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = table.GetStorage().info;
+	index.info = make_shared<IndexDataTableInfo>(table.GetStorage().info, index.name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -612,9 +615,11 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto index_instance =
-	    index_type->create_instance(info.index_name, info.constraint_type, info.column_ids, unbound_expressions,
-	                                TableIOManager::Get(data_table), data_table.db, index_info);
+
+	CreateIndexInput input(TableIOManager::Get(data_table), data_table.db, info.constraint_type, info.index_name,
+	                       info.column_ids, unbound_expressions, index_info, info.options);
+
+	auto index_instance = index_type->create_instance(input);
 	data_table.info->indexes.AddIndex(std::move(index_instance));
 }
 
@@ -649,7 +654,7 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		return;
 	}
 	if (!state.current_table) {
-		throw Exception("Corrupt WAL: insert without table");
+		throw InternalException("Corrupt WAL: insert without table");
 	}
 
 	// append to the current table
