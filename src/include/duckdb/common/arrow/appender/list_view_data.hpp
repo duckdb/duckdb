@@ -57,12 +57,7 @@ public:
 		auto offset_data = append_data.main_buffer.GetData<BUFTYPE>();
 		auto size_data = append_data.aux_buffer.GetData<BUFTYPE>();
 
-		if (append_data.row_count == 0) {
-			// first entry
-			offset_data[0] = 0;
-		}
-		// set up the offsets using the list entries
-		auto last_offset = offset_data[append_data.row_count];
+		BUFTYPE last_offset = append_data.row_count ? offset_data[append_data.row_count - 1] : 0;
 		for (idx_t i = 0; i < size; i++) {
 			auto source_idx = format.sel->get_index(i + from);
 			auto offset_idx = append_data.row_count + i;
