@@ -20,10 +20,11 @@ NestedValidity::NestedValidity(data_ptr_t *validitymask_locations, idx_t child_v
 void NestedValidity::SetInvalid(idx_t idx) {
 	if (list_validity_location) {
 		// Is List
-		auto entry_offset = idx / 8;
-		auto bit_offset = idx % 8;
-		const auto bit = ~(1UL << bit_offset);
-		list_validity_location[entry_offset] &= bit;
+		idx_t list_entry_idx;
+		idx_t list_idx_in_entry;
+		ValidityBytes::GetEntryIndex(idx, list_entry_idx, list_idx_in_entry);
+		const auto bit = ~(1UL << list_idx_in_entry);
+		list_validity_location[list_entry_idx] &= bit;
 	} else {
 		// Is Struct
 		const auto bit = ~(1UL << idx_in_entry);
@@ -34,14 +35,15 @@ void NestedValidity::SetInvalid(idx_t idx) {
 bool NestedValidity::IsValid(idx_t idx) {
 	if (list_validity_location) {
 		// Is List
-		auto entry_offset = idx / 8;
-		auto bit_offset = idx % 8;
-		return list_validity_location[entry_offset] & (1UL << bit_offset);
+		idx_t list_entry_idx;
+		idx_t list_idx_in_entry;
+		ValidityBytes::GetEntryIndex(idx, list_entry_idx, list_idx_in_entry);
+		const auto bit = (1UL << list_idx_in_entry);
+		return list_validity_location[list_entry_idx] & bit;
 	} else {
 		// Is Struct
-		ValidityBytes row_mask(struct_validity_locations[idx]);
-		const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
-		return valid;
+		const auto bit = (1UL << idx_in_entry);
+		return *(struct_validity_locations[idx] + entry_idx) & bit;
 	}
 }
 
