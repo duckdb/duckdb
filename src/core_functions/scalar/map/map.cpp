@@ -100,7 +100,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		if (!keys_data.validity.RowIsValid(keys_idx)) {
 			MapVector::EvalMapInvalidReason(MapInvalidReason::NULL_KEY_LIST);
 		}
-		if (!keys_data.validity.RowIsValid(keys_idx)) {
+		if (!values_data.validity.RowIsValid(values_idx)) {
 			MapVector::EvalMapInvalidReason(MapInvalidReason::NULL_VALUE_LIST);
 		}
 		if (keys_entry.length != values_entry.length) {
