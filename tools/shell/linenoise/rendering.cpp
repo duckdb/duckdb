@@ -7,7 +7,7 @@
 namespace duckdb {
 static const char *continuationPrompt = "> ";
 static const char *continuationSelectedPrompt = "> ";
-static bool enableCompletionRendering = true;
+static bool enableCompletionRendering = false;
 static bool enableErrorRendering = true;
 
 void Linenoise::EnableCompletionRendering() {
