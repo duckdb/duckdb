@@ -49,7 +49,7 @@ DBConfig::DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_o
 DBConfig::~DBConfig() {
 }
 
-DatabaseInstance::DatabaseInstance() : max_query_id(0) {
+DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -73,10 +73,6 @@ DatabaseManager &DatabaseInstance::GetDatabaseManager() {
 		throw InternalException("Missing DB manager");
 	}
 	return *db_manager;
-}
-
-idx_t DatabaseInstance::GetNewQueryId() {
-	return ++max_query_id;
 }
 
 Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {

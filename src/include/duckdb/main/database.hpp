@@ -58,8 +58,6 @@ public:
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(const AttachInfo &info, const string &type,
 	                                                    AccessMode access_mode);
 
-	DUCKDB_API idx_t GetNewQueryId();
-
 private:
 	void Initialize(const char *path, DBConfig *config);
 	void CreateMainDatabase();
@@ -74,7 +72,6 @@ private:
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
 	ValidChecker db_validity;
-	atomic<idx_t> max_query_id;
 };
 
 //! The database object. This object holds the catalog and all the
