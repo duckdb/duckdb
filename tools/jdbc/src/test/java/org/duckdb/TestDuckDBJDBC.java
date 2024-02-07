@@ -2150,6 +2150,17 @@ public class TestDuckDBJDBC {
         assertNull(d.connect("jdbc:h2:", null));
     }
 
+    public static void test_new_connection_wrong_url_bug10441() throws Exception {
+        assertThrows(() -> {
+            Connection connection = DuckDBConnection.newConnection("jdbc:duckdb@", false, new Properties());
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                // ignored
+            }
+        }, SQLException.class);
+    }
+
     public static void test_parquet_reader() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
@@ -3023,7 +3034,7 @@ public class TestDuckDBJDBC {
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
-        assertTrue(message.contains("Failed to set configuration option \"ordered_aggregate_threshold\""));
+        assertTrue(message.contains("Could not set option \"ordered_aggregate_threshold\" as a global option"));
     }
 
     private static String getSetting(Connection conn, String settingName) throws Exception {

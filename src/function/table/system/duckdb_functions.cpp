@@ -31,6 +31,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -41,6 +44,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("description");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("comment");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("return_type");
@@ -446,6 +452,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	// database_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
 
+	// database_oid, BIGINT
+	output.SetValue(col++, output_offset, Value::BIGINT(function.schema.catalog.GetOid()));
+
 	// schema_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.name));
 
@@ -457,6 +466,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 
 	// function_description, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, entry.description.empty() ? Value() : entry.description);
+
+	// comment, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset, entry.comment);
 
 	// return_type, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::GetReturnType(function, function_idx));

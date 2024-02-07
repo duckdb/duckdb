@@ -10,6 +10,7 @@
 #include "catch.hpp"
 #include <list>
 #include <thread>
+#include "duckdb/main/stream_query_result.hpp"
 #include <chrono>
 
 namespace duckdb {
@@ -89,8 +90,19 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
-
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	auto ccontext = connection->context;
+	auto result = ccontext->Query(context.sql_query, true);
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = result->Cast<StreamQueryResult>();
+		return stream_result.Materialize();
+	} else {
+		D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+		return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
+	}
+#else
 	return connection->Query(context.sql_query);
+#endif
 }
 
 void Command::Execute(ExecuteContext &context) const {

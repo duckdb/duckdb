@@ -175,6 +175,8 @@ public:
 	idx_t count_before_combining;
 	//! Maximum partition size if all unique
 	idx_t max_partition_size;
+
+	vector<InterruptState> blocked_tasks;
 };
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
@@ -526,7 +528,6 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	auto max_threads =
 	    MinValue<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(), gstate.partitions.size());
 	gstate.temporary_memory_state->SetRemainingSize(context, max_threads * gstate.max_partition_size);
-
 	gstate.finalized = true;
 }
 
@@ -572,8 +573,9 @@ public:
 	vector<column_t> column_ids;
 
 	//! For synchronizing scan tasks
-	atomic<idx_t> scan_idx;
-	atomic<idx_t> scan_done;
+	mutex lock;
+	idx_t scan_idx;
+	idx_t scan_done;
 };
 
 enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };
@@ -635,18 +637,26 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	if (finished) {
 		return false;
 	}
-	// We first try to assign a Scan task, then a Finalize task if that didn't work, without using any locks
 
-	// We need an atomic compare-and-swap to assign a Scan task, because we need to only increment
-	// the 'scan_idx' atomic if the 'finalize' of that partition is true, i.e., ready to be scanned
-	bool scan_assigned = true;
-	do {
-		lstate.task_idx = scan_idx.load();
-		if (lstate.task_idx >= n_partitions || !sink.partitions[lstate.task_idx]->finalized) {
-			scan_assigned = false;
-			break;
+	// We first try to assign a Scan task, then a Finalize task if that didn't work
+	bool scan_assigned = false;
+	{
+		lock_guard<mutex> gstate_guard(lock);
+		if (scan_idx < n_partitions && sink.partitions[scan_idx]->finalized) {
+			lstate.task_idx = scan_idx++;
+			scan_assigned = true;
+			if (scan_idx == n_partitions) {
+				// We will never be able to assign another task, unblock blocked tasks
+				lock_guard<mutex> sink_guard(sink.lock);
+				if (!sink.blocked_tasks.empty()) {
+					for (auto &state : sink.blocked_tasks) {
+						state.Callback();
+					}
+					sink.blocked_tasks.clear();
+				}
+			}
 		}
-	} while (!std::atomic_compare_exchange_weak(&scan_idx, &lstate.task_idx, lstate.task_idx + 1));
+	}
 
 	if (scan_assigned) {
 		// We successfully assigned a Scan task
@@ -669,7 +679,8 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 		return true;
 	}
 
-	// We didn't manage to assign a Finalize task
+	// We didn't manage to assign a Finalize task because there are none left
+	sink.temporary_memory_state->SetRemainingSize(context, 0);
 	return false;
 }
 
@@ -741,6 +752,17 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	// Mark partition as ready to scan
 	partition.finalized = true;
 
+	// Unblock blocked tasks so they can scan this partition
+	{
+		lock_guard<mutex> sink_guard(sink.lock);
+		if (!sink.blocked_tasks.empty()) {
+			for (auto &state : sink.blocked_tasks) {
+				state.Callback();
+			}
+			sink.blocked_tasks.clear();
+		}
+	}
+
 	// Make sure this thread's aggregate allocator does not get lost
 	lock_guard<mutex> guard(sink.lock);
 	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
@@ -756,6 +778,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 
 	if (data_collection.Count() == 0) {
 		scan_status = RadixHTScanStatus::DONE;
+		lock_guard<mutex> gstate_guard(gstate.lock);
 		if (++gstate.scan_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
@@ -776,6 +799,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	}
 
 	if (data_collection.ScanComplete(scan_state)) {
+		lock_guard<mutex> gstate_guard(gstate.lock);
 		if (++gstate.scan_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
@@ -834,7 +858,6 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	         sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE);
 
 	if (gstate.finished) {
-		sink.temporary_memory_state->SetRemainingSize(context.client, 0);
 		return SourceResultType::FINISHED;
 	}
 
@@ -875,6 +898,15 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	while (!gstate.finished && chunk.size() == 0) {
 		if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
 			lstate.ExecuteTask(sink, gstate, chunk);
+		} else {
+			lock_guard<mutex> gstate_guard(gstate.lock);
+			if (gstate.scan_idx < sink.partitions.size()) {
+				lock_guard<mutex> sink_guard(sink.lock);
+				sink.blocked_tasks.push_back(input.interrupt_state);
+				return SourceResultType::BLOCKED;
+			} else {
+				return SourceResultType::FINISHED;
+			}
 		}
 	}
 

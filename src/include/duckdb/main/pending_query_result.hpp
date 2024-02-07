@@ -28,6 +28,7 @@ public:
 	                              vector<LogicalType> types, bool allow_stream_result);
 	DUCKDB_API explicit PendingQueryResult(ErrorData error_message);
 	DUCKDB_API ~PendingQueryResult() override;
+	DUCKDB_API bool AllowStreamResult() const;
 
 public:
 	//! Executes a single task within the query, returning whether or not the query is ready.
@@ -38,6 +39,7 @@ public:
 	//!	    but tasks may become available in the future.
 	//! The error message can be obtained by calling GetError() on the PendingQueryResult.
 	DUCKDB_API PendingExecutionResult ExecuteTask();
+	DUCKDB_API PendingExecutionResult CheckPulse();
 
 	//! Returns the result of the query as an actual query result.
 	//! This returns (mostly) instantly if ExecuteTask has been called until RESULT_READY was returned.
@@ -47,6 +49,7 @@ public:
 
 	//! Function to determine whether execution is considered finished
 	DUCKDB_API static bool IsFinished(PendingExecutionResult result);
+	DUCKDB_API static bool IsFinishedOrBlocked(PendingExecutionResult result);
 
 private:
 	shared_ptr<ClientContext> context;

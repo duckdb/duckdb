@@ -28,6 +28,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
@@ -344,6 +345,8 @@ const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
 		return "SET_NOT_NULL";
 	case AlterTableType::DROP_NOT_NULL:
 		return "DROP_NOT_NULL";
+	case AlterTableType::SET_COLUMN_COMMENT:
+		return "SET_COLUMN_COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -381,6 +384,9 @@ AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
 	if (StringUtil::Equals(value, "DROP_NOT_NULL")) {
 		return AlterTableType::DROP_NOT_NULL;
 	}
+	if (StringUtil::Equals(value, "SET_COLUMN_COMMENT")) {
+		return AlterTableType::SET_COLUMN_COMMENT;
+	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
@@ -401,6 +407,8 @@ const char* EnumUtil::ToChars<AlterType>(AlterType value) {
 		return "ALTER_SCALAR_FUNCTION";
 	case AlterType::ALTER_TABLE_FUNCTION:
 		return "ALTER_TABLE_FUNCTION";
+	case AlterType::SET_COMMENT:
+		return "SET_COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -428,6 +436,9 @@ AlterType EnumUtil::FromString<AlterType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ALTER_TABLE_FUNCTION")) {
 		return AlterType::ALTER_TABLE_FUNCTION;
+	}
+	if (StringUtil::Equals(value, "SET_COMMENT")) {
+		return AlterType::SET_COMMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -699,6 +710,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "NOT_SET";
 	case CSVState::QUOTED_NEW_LINE:
 		return "QUOTED_NEW_LINE";
+	case CSVState::EMPTY_SPACE:
+		return "EMPTY_SPACE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -735,6 +748,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "QUOTED_NEW_LINE")) {
 		return CSVState::QUOTED_NEW_LINE;
+	}
+	if (StringUtil::Equals(value, "EMPTY_SPACE")) {
+		return CSVState::EMPTY_SPACE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3484,6 +3500,79 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value) {
+	switch(value) {
+	case MemoryTag::BASE_TABLE:
+		return "BASE_TABLE";
+	case MemoryTag::HASH_TABLE:
+		return "HASH_TABLE";
+	case MemoryTag::PARQUET_READER:
+		return "PARQUET_READER";
+	case MemoryTag::CSV_READER:
+		return "CSV_READER";
+	case MemoryTag::ORDER_BY:
+		return "ORDER_BY";
+	case MemoryTag::ART_INDEX:
+		return "ART_INDEX";
+	case MemoryTag::COLUMN_DATA:
+		return "COLUMN_DATA";
+	case MemoryTag::METADATA:
+		return "METADATA";
+	case MemoryTag::OVERFLOW_STRINGS:
+		return "OVERFLOW_STRINGS";
+	case MemoryTag::IN_MEMORY_TABLE:
+		return "IN_MEMORY_TABLE";
+	case MemoryTag::ALLOCATOR:
+		return "ALLOCATOR";
+	case MemoryTag::EXTENSION:
+		return "EXTENSION";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
+	if (StringUtil::Equals(value, "BASE_TABLE")) {
+		return MemoryTag::BASE_TABLE;
+	}
+	if (StringUtil::Equals(value, "HASH_TABLE")) {
+		return MemoryTag::HASH_TABLE;
+	}
+	if (StringUtil::Equals(value, "PARQUET_READER")) {
+		return MemoryTag::PARQUET_READER;
+	}
+	if (StringUtil::Equals(value, "CSV_READER")) {
+		return MemoryTag::CSV_READER;
+	}
+	if (StringUtil::Equals(value, "ORDER_BY")) {
+		return MemoryTag::ORDER_BY;
+	}
+	if (StringUtil::Equals(value, "ART_INDEX")) {
+		return MemoryTag::ART_INDEX;
+	}
+	if (StringUtil::Equals(value, "COLUMN_DATA")) {
+		return MemoryTag::COLUMN_DATA;
+	}
+	if (StringUtil::Equals(value, "METADATA")) {
+		return MemoryTag::METADATA;
+	}
+	if (StringUtil::Equals(value, "OVERFLOW_STRINGS")) {
+		return MemoryTag::OVERFLOW_STRINGS;
+	}
+	if (StringUtil::Equals(value, "IN_MEMORY_TABLE")) {
+		return MemoryTag::IN_MEMORY_TABLE;
+	}
+	if (StringUtil::Equals(value, "ALLOCATOR")) {
+		return MemoryTag::ALLOCATOR;
+	}
+	if (StringUtil::Equals(value, "EXTENSION")) {
+		return MemoryTag::EXTENSION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<NType>(NType value) {
 	switch(value) {
 	case NType::PREFIX:
@@ -3958,6 +4047,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "TRANSACTION_INFO";
 	case ParseInfoType::VACUUM_INFO:
 		return "VACUUM_INFO";
+	case ParseInfoType::COMMENT_ON_INFO:
+		return "COMMENT_ON_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4003,6 +4094,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "VACUUM_INFO")) {
 		return ParseInfoType::VACUUM_INFO;
+	}
+	if (StringUtil::Equals(value, "COMMENT_ON_INFO")) {
+		return ParseInfoType::COMMENT_ON_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4133,6 +4227,8 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "RESULT_NOT_READY";
 	case PendingExecutionResult::EXECUTION_ERROR:
 		return "EXECUTION_ERROR";
+	case PendingExecutionResult::BLOCKED:
+		return "BLOCKED";
 	case PendingExecutionResult::NO_TASKS_AVAILABLE:
 		return "NO_TASKS_AVAILABLE";
 	default:
@@ -4150,6 +4246,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	}
 	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
 		return PendingExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return PendingExecutionResult::BLOCKED;
 	}
 	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
 		return PendingExecutionResult::NO_TASKS_AVAILABLE;

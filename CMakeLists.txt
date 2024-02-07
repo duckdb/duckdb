@@ -292,7 +292,7 @@ endif()
 
 string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
 
-if(DUCKDB_EXTENSION_FOLDER_IS_VERSION)
+if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND DEFINED GIT_COMMIT_HASH)
   set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
 else()
   set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
@@ -341,6 +341,7 @@ option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
+option(DEBUG_ALLOCATION "Debug setting: keep track of outstanding allocations to detect memory leaks" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
@@ -410,6 +411,10 @@ endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
+endif()
+
+if(DEBUG_ALLOCATION)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ALLOCATION")
 endif()
 
 if(DEBUG_STACKTRACE)
@@ -671,7 +676,7 @@ if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TID
     add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
-          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "${EXTENSION_POSTFIX}"
+          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_CURRENT_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "${EXTENSION_POSTFIX}"
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
     add_dependencies(duckdb_local_extension_repo duckdb_platform)
@@ -1105,29 +1110,29 @@ if(BUILD_PYTHON)
 
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
-  if(BUILD_PYTHON)
-    if(USER_SPACE)
-      add_custom_target(
-              duckdb_python ALL
-              COMMAND
-              python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb duckdb_static
-              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-              COMMENT Build
-              Python package)
-    else()
-      add_custom_target(
-              duckdb_python ALL
-              COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb duckdb_static
-              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-              COMMENT Build
-              Python package)
-    endif()
-    add_extension_dependencies(duckdb_python)
+  set(PIP_COMMAND
+      cmake
+      -E
+      env
+      DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
+      DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
+      DUCKDB_LIBS="${duckdb_libs}"
+      pip
+      install
+      --editable
+      .)
+
+  if(USER_SPACE)
+    set(PIP_COMMAND ${PIP_COMMAND} --user)
   endif()
+  add_custom_target(
+    duckdb_python ALL
+    COMMAND ${PIP_COMMAND}
+    DEPENDS duckdb duckdb_static
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+    COMMENT Build
+    Python package)
+  add_extension_dependencies(duckdb_python)
 endif()
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
@@ -1141,7 +1146,7 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
                                          ${PROJECT_BINARY_DIR})
   add_custom_target(
           duckdb_platform ALL
-          COMMAND duckdb_platform_binary > duckdb_platform_out
+          COMMAND duckdb_platform_binary > duckdb_platform_out || (echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1)
           )
   add_dependencies(duckdb_platform duckdb_platform_binary)
 else()
