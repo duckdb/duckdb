@@ -345,13 +345,23 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 	Linenoise::Log("escape of length %d\n", length);
 	switch (length) {
 	case 1:
+		if (seq[0] >= 'a' && seq[0] <= 'z') {
+			return EscapeSequence(idx_t(EscapeSequence::ALT_A) + (seq[0] - 'a'));
+		}
+		if (seq[0] >= 'A' && seq[0] <= 'Z') {
+			return EscapeSequence(idx_t(EscapeSequence::ALT_A) + (seq[0] - 'A'));
+		}
 		switch (seq[0]) {
+		case BACKSPACE:
+			return EscapeSequence::ALT_BACKSPACE;
 		case ESC:
 			return EscapeSequence::ESCAPE;
-		case 'b':
-			return EscapeSequence::ALT_B;
-		case 'f':
-			return EscapeSequence::ALT_F;
+		case '<':
+			return EscapeSequence::ALT_LEFT_ARROW;
+		case '>':
+			return EscapeSequence::ALT_RIGHT_ARROW;
+		case '\\':
+			return EscapeSequence::ALT_BACKSLASH;
 		default:
 			Linenoise::Log("unrecognized escape sequence of length 1 - %d\n", seq[0]);
 			break;
@@ -401,7 +411,7 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 				break;
 			}
 		} else {
-			Linenoise::Log("unrecognized escape sequence of length %d\n", length);
+			Linenoise::Log("unrecognized escape sequence of length %d (%d %d)\n", length, seq[0], seq[1]);
 		}
 		break;
 	case 3:
@@ -445,19 +455,16 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd) {
 }
 
 idx_t Terminal::ReadEscapeSequence(int ifd, char seq[]) {
-	/* Read the next two bytes representing the escape sequence.
-	 * Use two calls to handle slow terminals returning the two
-	 * chars at different times. */
 	if (read(ifd, seq, 1) == -1) {
 		return 0;
 	}
 	switch (seq[0]) {
-	case ESC:
-	case 'b':
-	case 'f':
-		return 1;
-	default:
+	case 'O':
+	case '[':
+		// these characters have multiple bytes following them
 		break;
+	default:
+		return 1;
 	}
 	if (read(ifd, seq + 1, 1) == -1) {
 		return 0;
