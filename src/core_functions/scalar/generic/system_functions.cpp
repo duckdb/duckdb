@@ -80,12 +80,6 @@ ScalarFunction CurrentQueryFun::GetFunction() {
 	return current_query;
 }
 
-ScalarFunction CurrentQueryIdFun::GetFunction() {
-	ScalarFunction current_query({}, LogicalType::UBIGINT, CurrentQueryIdFunction);
-	current_query.stability = FunctionStability::VOLATILE;
-	return current_query;
-}
-
 ScalarFunction CurrentSchemaFun::GetFunction() {
 	ScalarFunction current_schema({}, LogicalType::VARCHAR, CurrentSchemaFunction);
 	current_schema.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
