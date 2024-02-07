@@ -659,6 +659,11 @@ function pending_execute_tasks(pending::PendingQueryResult)::Bool
     return ret != DUCKDB_PENDING_ERROR
 end
 
+function pending_execute_check_state(pending::PendingQueryResult)::duckdb_pending_state
+    ret = duckdb_pending_execute_check_state(pending.handle)
+    return ret
+end
+
 # execute background tasks in a loop, until task execution is finished
 function execute_tasks(state::duckdb_task_state, con::Connection)
     while !duckdb_task_state_is_finished(state)
@@ -708,7 +713,7 @@ function execute_singlethreaded(pending::PendingQueryResult)::Bool
     return success
 end
 
-function execute_multithreaded(stmt::Stmt)
+function execute_multithreaded(stmt::Stmt, pending::PendingQueryResult)
     # if multi-threading is enabled, launch background tasks
     task_state = duckdb_create_task_state(stmt.con.db.handle)
 
@@ -720,6 +725,10 @@ function execute_multithreaded(stmt::Stmt)
 
     # When we have additional worker threads, don't execute using the main thread
     while duckdb_execution_is_finished(stmt.con.handle) == false
+        ret = pending_execute_check_state(pending)
+        if ret == DUCKDB_PENDING_RESULT_READY || ret == DUCKDB_PENDING_ERROR
+            break
+        end
         Base.yield()
         GC.safepoint()
     end
@@ -746,7 +755,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
             throw(QueryException(get_error(stmt, pending)))
         end
     else
-        execute_multithreaded(stmt)
+        execute_multithreaded(stmt, pending)
     end
 
     handle = Ref{duckdb_result}()

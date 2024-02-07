@@ -42,6 +42,9 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 	names.emplace_back("table_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("is_unique");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -104,6 +107,8 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table_entry.oid));
+		// comment, VARCHAR
+		output.SetValue(col++, count, Value(index.comment));
 		// is_unique, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(index.IsUnique()));
 		// is_primary, BOOLEAN

@@ -176,6 +176,7 @@ public:
 	}
 
 	void SetCanContainNulls(bool can_contain_nulls);
+	void SetAlwaysRequireRebind();
 
 private:
 	//! The parent binder (if any)

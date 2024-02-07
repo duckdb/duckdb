@@ -33,6 +33,8 @@ private:
 	shared_ptr<char> data;
 	//! Data capacity
 	uint64_t capacity = 0;
+	//! Size of file
+	idx_t size;
 	//! Lock for initializing the file
 	mutex lock;
 	//! When initialized is set to true, the file is safe for parallel reading without holding the lock
@@ -47,7 +49,7 @@ public:
 	//! allocate a buffer for the file
 	void AllocateBuffer(idx_t size);
 	//! Indicate the file is fully downloaded and safe for parallel reading without lock
-	void SetInitialized();
+	void SetInitialized(idx_t total_size);
 	//! Grow buffer to new size, copying over `bytes_to_copy` to the new buffer
 	void GrowBuffer(idx_t new_capacity, idx_t bytes_to_copy);
 	//! Write to the buffer
@@ -62,20 +64,26 @@ public:
 	uint64_t GetCapacity() {
 		return file->capacity;
 	}
+	//! Return the size of the initialized file
+	idx_t GetSize() {
+		D_ASSERT(file->initialized);
+		return file->size;
+	}
 
 private:
 	unique_ptr<lock_guard<mutex>> lock;
 	shared_ptr<CachedFile> file;
 };
 
-class HTTPState {
+class HTTPState : public ClientContextState {
 public:
 	//! Reset all counters and cached files
 	void Reset();
 	//! Get cache entry, create if not exists
 	shared_ptr<CachedFile> &GetCachedFile(const string &path);
-	//! Helper function to get the HTTP state
-	static shared_ptr<HTTPState> TryGetState(FileOpener *opener);
+	//! Helper functions to get the HTTP state
+	static shared_ptr<HTTPState> TryGetState(ClientContext &context, bool create_on_missing = true);
+	static shared_ptr<HTTPState> TryGetState(FileOpener *opener, bool create_on_missing = true);
 
 	bool IsEmpty() {
 		return head_count == 0 && get_count == 0 && put_count == 0 && post_count == 0 && total_bytes_received == 0 &&
@@ -88,6 +96,11 @@ public:
 	atomic<idx_t> post_count {0};
 	atomic<idx_t> total_bytes_received {0};
 	atomic<idx_t> total_bytes_sent {0};
+
+	//! Called by the ClientContext when the current query ends
+	void QueryEnd() override {
+		Reset();
+	}
 
 private:
 	//! Mutex to lock when getting the cached file(Parallel Only)
