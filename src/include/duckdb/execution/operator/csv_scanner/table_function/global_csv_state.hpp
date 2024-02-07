@@ -74,9 +74,7 @@ private:
 	atomic<idx_t> scanner_idx;
 
 	atomic<idx_t> last_file_idx;
-
-	//! This variable keeps track of how many threads are doing work on each file
-	unordered_map<idx_t,idx_t> workers;
+	shared_ptr<CSVBufferUsage> current_buffer_in_use;
 };
 
 } // namespace duckdb

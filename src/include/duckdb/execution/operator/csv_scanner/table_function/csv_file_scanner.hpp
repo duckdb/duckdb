@@ -66,8 +66,5 @@ public:
 
 	//! Options for this CSV Reader
 	CSVReaderOptions options;
-
-	//! This variable keeps track of how many threads are doing work on each buffer
-	unordered_map<idx_t,idx_t> workers;
 };
 } // namespace duckdb
