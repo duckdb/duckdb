@@ -19,7 +19,8 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	for (idx_t i = 0; i < source_child_types.size(); i++) {
 		if (!target_is_unnamed && !source_is_unnamed &&
 		    !StringUtil::CIEquals(source_child_types[i].first, result_child_types[i].first)) {
-			throw TypeMismatchException(source, target, "Cannot cast STRUCTs with different names");
+			throw TypeMismatchException(source, target,
+			                            "Cannot cast STRUCTs with different names. Are the fields in the same order?");
 		}
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
 		child_cast_info.push_back(std::move(child_cast));
