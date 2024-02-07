@@ -36,7 +36,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 		current_boundary = CSVIterator(0, 0, 0, 0, buffer_size);
 	}
-	current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager,0);
+	current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
@@ -78,8 +78,9 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(StringValueScanner *previous
 	if (finished) {
 		return nullptr;
 	}
-	if (current_buffer_in_use->buffer_idx != current_boundary.GetBufferIdx()){
-		current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager,current_boundary.GetBufferIdx());
+	if (current_buffer_in_use->buffer_idx != current_boundary.GetBufferIdx()) {
+		current_buffer_in_use =
+		    make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
 	}
 	// We first create the scanner for the current boundary
 	auto &current_file = *file_scans.back();
@@ -101,7 +102,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(StringValueScanner *previous
 			// And re-start the boundary-iterator
 			auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 			current_boundary = CSVIterator(current_file_idx, 0, 0, 0, buffer_size);
-			current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager,0);
+			current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
 		} else {
 			// If not we are done with this CSV Scanning
 			finished = true;
