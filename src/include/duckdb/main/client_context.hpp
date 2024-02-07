@@ -57,8 +57,10 @@ struct PendingQueryParameters {
 //! e.g. caches that need to live as long as a ClientContext or Query.
 class ClientContextState {
 public:
-	virtual ~ClientContextState() {};
-	virtual void QueryEnd() = 0;
+	virtual ~ClientContextState() = default;
+	virtual void TransactionBegin() {}
+	virtual void QueryBegin() {}
+	virtual void QueryEnd() {}
 };
 
 //! The ClientContext holds information relevant to the current client session
@@ -243,7 +245,7 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	void BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction);
+	void BeginTransactionInternal(ClientContextLock &lock);
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 

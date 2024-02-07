@@ -115,30 +115,34 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	return make_uniq<T>(std::move(error));
 }
 
-void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction) {
+void ClientContext::BeginTransactionInternal(ClientContextLock &lock) {
+	transaction.BeginTransaction();
+	// Notify any registered state of query begin
+	for (auto const &s : registered_state) {
+		s.second->TransactionBegin();
+	}
+}
+
+void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
 	auto &db_inst = DatabaseInstance::GetDatabase(*this);
 	if (ValidChecker::IsInvalidated(db_inst)) {
 		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));
 	}
-	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
-	    ValidChecker::IsInvalidated(transaction.ActiveTransaction())) {
-		throw ErrorManager::InvalidatedTransaction(*this);
-	}
 	active_query = make_uniq<ActiveQueryContext>();
 	if (transaction.IsAutoCommit()) {
-		transaction.BeginTransaction();
+		BeginTransactionInternal(lock);
 	}
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
-}
-
-void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
-	BeginTransactionInternal(lock, false);
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 
 	query_progress.Initialize();
+	// Notify any registered state of query begin
+	for (auto const &s : registered_state) {
+		s.second->QueryBegin();
+	}
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
@@ -912,7 +916,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
 	if (require_new_transaction) {
 		D_ASSERT(!active_query);
-		transaction.BeginTransaction();
+		BeginTransactionInternal(lock);
 	}
 	try {
 		fun();
