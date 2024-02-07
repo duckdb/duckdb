@@ -58,11 +58,16 @@ struct PendingQueryParameters {
 class ClientContextState {
 public:
 	virtual ~ClientContextState() = default;
-	virtual void TransactionBegin() {}
-	virtual void QueryBegin() {}
-	virtual void QueryEnd() {}
-	virtual void TransactionCommit() {}
-	virtual void TransactionRollback() {}
+	virtual void TransactionBegin() {
+	}
+	virtual void QueryBegin() {
+	}
+	virtual void QueryEnd() {
+	}
+	virtual void TransactionCommit() {
+	}
+	virtual void TransactionRollback() {
+	}
 };
 
 //! The ClientContext holds information relevant to the current client session
