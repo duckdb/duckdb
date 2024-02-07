@@ -7,13 +7,13 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
@@ -452,7 +452,6 @@ public:
 		sink.hash_table->GetTotalSize(partition_sizes, partition_counts, max_partition_size, max_partition_count);
 		sink.temporary_memory_state->SetMinimumReservation(max_partition_size +
 		                                                   JoinHashTable::PointerTableSize(max_partition_count));
-
 		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation());
 		sink.ScheduleFinalize(*pipeline, *this);
 	}
