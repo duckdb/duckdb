@@ -27,9 +27,10 @@ idx_t SortedData::Count() {
 void SortedData::CreateBlock() {
 	auto capacity =
 	    MaxValue(((idx_t)Storage::BLOCK_SIZE + layout.GetRowWidth() - 1) / layout.GetRowWidth(), state.block_capacity);
-	data_blocks.push_back(make_uniq<RowDataBlock>(buffer_manager, capacity, layout.GetRowWidth()));
+	data_blocks.push_back(make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, capacity, layout.GetRowWidth()));
 	if (!layout.AllConstant() && state.external) {
-		heap_blocks.push_back(make_uniq<RowDataBlock>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1));
+		heap_blocks.push_back(
+		    make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1));
 		D_ASSERT(data_blocks.size() == heap_blocks.size());
 	}
 }
@@ -105,7 +106,8 @@ void SortedBlock::InitializeWrite() {
 void SortedBlock::CreateBlock() {
 	auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + sort_layout.entry_size - 1) / sort_layout.entry_size,
 	                         state.block_capacity);
-	radix_sorting_data.push_back(make_uniq<RowDataBlock>(buffer_manager, capacity, sort_layout.entry_size));
+	radix_sorting_data.push_back(
+	    make_uniq<RowDataBlock>(MemoryTag::ORDER_BY, buffer_manager, capacity, sort_layout.entry_size));
 }
 
 void SortedBlock::AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
