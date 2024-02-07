@@ -238,7 +238,8 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		// If it's an escaped value we have to remove all the escapes, this is not really great
 		auto value = StringValueScanner::RemoveEscape(
 		    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
-		    result.state_machine.options.GetEscape()[0], result.parse_chunk.data[result.chunk_col_id]);
+		    result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
+		    result.parse_chunk.data[result.chunk_col_id]);
 		result.AddValueToVector(value.GetData(), value.GetSize());
 	} else {
 		if (buffer_pos < result.last_position + 2) {
@@ -1051,7 +1052,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 			}
 		}
 		iterator.done = FinishedFile();
-		if (result.null_padding) {
+		if (result.null_padding && result.number_of_rows < STANDARD_VECTOR_SIZE) {
 			while (result.cur_col_id < result.number_of_columns) {
 				result.validity_mask[result.chunk_col_id++]->SetInvalid(result.number_of_rows);
 				result.cur_col_id++;

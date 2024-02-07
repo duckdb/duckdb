@@ -221,9 +221,6 @@ static void RangeDateTimeFunction(ClientContext &context, TableFunctionInput &da
 	idx_t size = 0;
 	auto data = FlatVector::GetData<timestamp_t>(output.data[0]);
 	while (true) {
-		data[size++] = state.current_state;
-		state.current_state =
-		    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, bind_data.increment);
 		if (bind_data.Finished(state.current_state)) {
 			state.finished = true;
 			break;
@@ -231,6 +228,9 @@ static void RangeDateTimeFunction(ClientContext &context, TableFunctionInput &da
 		if (size >= STANDARD_VECTOR_SIZE) {
 			break;
 		}
+		data[size++] = state.current_state;
+		state.current_state =
+		    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, bind_data.increment);
 	}
 	output.SetCardinality(size);
 }
