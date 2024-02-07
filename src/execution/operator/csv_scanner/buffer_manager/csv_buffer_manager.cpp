@@ -47,7 +47,7 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 				last_buffer->last_buffer = true;
 				return false;
 			}
-			auto maybe_last_buffer = last_buffer->Next(*file_handle, cur_buffer_size, file_idx);
+			auto maybe_last_buffer = last_buffer->Next(*file_handle, cur_buffer_size, file_idx, has_seeked);
 			if (!maybe_last_buffer) {
 				last_buffer->last_buffer = true;
 				return false;
@@ -74,7 +74,7 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	if (pos != 0) {
 		cached_buffers[pos - 1]->Unpin();
 	}
-	return cached_buffers[pos]->Pin(*file_handle);
+	return cached_buffers[pos]->Pin(*file_handle, has_seeked);
 }
 
 idx_t CSVBufferManager::GetBufferSize() {

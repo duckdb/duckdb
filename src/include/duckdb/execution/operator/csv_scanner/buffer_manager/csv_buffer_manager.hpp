@@ -64,6 +64,8 @@ private:
 	idx_t bytes_read = 0;
 	//! Because the buffer manager can be accessed in Parallel we need a mutex.
 	mutex main_mutex;
+	//! If the file_handle used seek
+	bool has_seeked = false;
 };
 
 } // namespace duckdb
