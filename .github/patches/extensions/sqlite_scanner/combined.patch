@@ -100,7 +100,7 @@ index 6356265..fef18fe 100644
  
 -query IIIII
 -SELECT * REPLACE (trim(split(sql, '(')[1]) AS sql) FROM sqlite_master ORDER BY 1, 2
-+query IIIIs
++query IIII
 +SELECT * EXCLUDE (sql) FROM sqlite_master ORDER BY 1, 2
  ----
 -index	i_index	integers	0	CREATE INDEX i_index ON integers
