@@ -15,6 +15,18 @@
 
 namespace duckdb {
 
+struct CSVBufferUsage {
+	CSVBufferUsage(CSVBufferManager &buffer_manager_p, idx_t buffer_idx_p)
+	    : buffer_manager(buffer_manager_p), buffer_idx(buffer_idx_p) {
+
+	                                        };
+	~CSVBufferUsage() {
+		buffer_manager.ResetBuffer(buffer_idx);
+	}
+	CSVBufferManager &buffer_manager;
+	idx_t buffer_idx;
+};
+
 //! Class that keeps track of line starts, used for line size verification
 class LinePosition {
 public:
@@ -140,6 +152,9 @@ public:
 	                            const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options);
 
 	const idx_t scanner_idx;
+
+	//! Variable that manages buffer tracking
+	shared_ptr<CSVBufferUsage> buffer_tracker;
 
 private:
 	void Initialize() override;
