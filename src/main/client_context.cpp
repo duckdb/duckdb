@@ -155,17 +155,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	ErrorData error;
 	try {
 		if (transaction.HasActiveTransaction()) {
-			// Move the query profiler into the history
-			auto &prev_profilers = client_data->query_profiler_history->GetPrevProfilers();
-			prev_profilers.emplace_back(transaction.GetActiveQuery(), std::move(client_data->profiler));
-			// Reinitialize the query profiler
-			client_data->profiler = make_shared<QueryProfiler>(*this);
-			// Propagate settings of the saved query into the new profiler.
-			client_data->profiler->Propagate(*prev_profilers.back().second);
-			if (prev_profilers.size() >= client_data->query_profiler_history->GetPrevProfilersSize()) {
-				prev_profilers.pop_front();
-			}
-
 			transaction.ResetActiveQuery();
 			if (transaction.IsAutoCommit()) {
 				if (success) {
