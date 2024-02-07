@@ -133,8 +133,6 @@ def print_diffs(diffs):
 
 
 def cardinality_is_higher(old_cost, new_cost):
-    # card_a > card_b?
-    # add 20% threshold before we start caring
     return old_cost.total > new_cost.total or \
         old_cost.build_side > new_cost.build_side or \
         old_cost.probe_side > new_cost.probe_side
@@ -142,8 +140,8 @@ def cardinality_is_higher(old_cost, new_cost):
 
 def main():
     old, new, benchmark_dir = parse_args()
-    # init_db(old, OLD_DB_NAME, benchmark_dir)
-    # init_db(new, NEW_DB_NAME, benchmark_dir)
+    init_db(old, OLD_DB_NAME, benchmark_dir)
+    init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
@@ -178,8 +176,8 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    # os.remove(OLD_DB_NAME)
-    # os.remove(NEW_DB_NAME)
+    os.remove(OLD_DB_NAME)
+    os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
