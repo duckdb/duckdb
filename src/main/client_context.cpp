@@ -123,6 +123,22 @@ void ClientContext::BeginTransactionInternal(ClientContextLock &lock) {
 	}
 }
 
+void ClientContext::CommitInternal(ClientContextLock &lock) {
+	transaction.Commit();
+	// Notify any registered state of transaction commit
+	for (auto const &s : registered_state) {
+		s.second->TransactionCommit();
+	}
+}
+
+void ClientContext::RollbackInternal(ClientContextLock &lock) {
+	transaction.Rollback();
+	// Notify any registered state of transaction rollback
+	for (auto const &s : registered_state) {
+		s.second->TransactionRollback();
+	}
+}
+
 void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
@@ -162,9 +178,9 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 			transaction.ResetActiveQuery();
 			if (transaction.IsAutoCommit()) {
 				if (success) {
-					transaction.Commit();
+					CommitInternal(lock);
 				} else {
-					transaction.Rollback();
+					RollbackInternal(lock);
 				}
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
@@ -931,14 +947,14 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		if (require_new_transaction) {
-			transaction.Rollback();
+			RollbackInternal(lock);
 		} else if (invalidates_transaction) {
 			ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 		}
 		throw;
 	}
 	if (require_new_transaction) {
-		transaction.Commit();
+		CommitInternal(lock);
 	}
 }
 

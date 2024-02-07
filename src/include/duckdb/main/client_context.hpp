@@ -61,6 +61,8 @@ public:
 	virtual void TransactionBegin() {}
 	virtual void QueryBegin() {}
 	virtual void QueryEnd() {}
+	virtual void TransactionCommit() {}
+	virtual void TransactionRollback() {}
 };
 
 //! The ClientContext holds information relevant to the current client session
@@ -246,6 +248,8 @@ private:
 	unique_ptr<ClientContextLock> LockContext();
 
 	void BeginTransactionInternal(ClientContextLock &lock);
+	void CommitInternal(ClientContextLock &lock);
+	void RollbackInternal(ClientContextLock &lock);
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 
