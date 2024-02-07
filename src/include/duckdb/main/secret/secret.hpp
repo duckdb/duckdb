@@ -101,6 +101,7 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 
 	virtual unique_ptr<const BaseSecret> Clone() const {
+		D_ASSERT(typeid(BaseSecret) == typeid(*this));
 		return make_uniq<BaseSecret>(*this);
 	}
 
