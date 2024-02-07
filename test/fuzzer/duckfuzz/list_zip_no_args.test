@@ -4,9 +4,6 @@
 
 require tpch
 
-statement ok
-call dbgen(sf=0.1);
-
 # https://github.com/duckdb/duckdb-fuzzer/issues/1361
 statement error
 SELECT array_zip() AS c0;
