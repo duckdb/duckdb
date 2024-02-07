@@ -56,7 +56,7 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	return percentage * 100;
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(StringValueScanner *previous_scanner) {
+unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	if (single_threaded) {
 		idx_t cur_idx = last_file_idx++;
 		if (cur_idx >= bind_data.files.size()) {

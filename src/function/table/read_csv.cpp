@@ -180,7 +180,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		return nullptr;
 	}
 	auto &global_state = global_state_p->Cast<CSVGlobalState>();
-	auto csv_scanner = global_state.Next(nullptr);
+	auto csv_scanner = global_state.Next();
 	if (!csv_scanner) {
 		global_state.DecrementThread();
 	}
@@ -208,7 +208,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		if (csv_local_state.csv_reader->FinishedIterator()) {
 			csv_local_state.csv_reader->csv_file_scan->error_handler->Insert(
 			    csv_local_state.csv_reader->GetBoundaryIndex(), csv_local_state.csv_reader->GetLinesRead());
-			csv_local_state.csv_reader = csv_global_state.Next(csv_local_state.csv_reader.get());
+			csv_local_state.csv_reader = csv_global_state.Next();
 			if (!csv_local_state.csv_reader) {
 				csv_global_state.DecrementThread();
 				break;
