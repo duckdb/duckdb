@@ -41,12 +41,6 @@ struct TupleDataGatherFunction {
 	vector<TupleDataGatherFunction> child_functions;
 };
 
-enum class WithinCollection : uint8_t {
-	NO,
-	LIST,
-	ARRAY,
-};
-
 //! TupleDataCollection represents a set of buffer-managed data stored in row format
 //! FIXME: rename to RowDataCollection after we phase it out
 class TupleDataCollection {
@@ -74,11 +68,9 @@ public:
 	void Unpin();
 
 	//! Gets the scatter function for the given type
-	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type,
-	                                                   WithinCollection within = WithinCollection::NO);
+	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
 	//! Gets the gather function for the given type
-	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type,
-	                                                 WithinCollection within = WithinCollection::NO);
+	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
