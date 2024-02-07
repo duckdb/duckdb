@@ -232,11 +232,6 @@ const string &ClientContext::GetCurrentQuery() {
 	return active_query->query;
 }
 
-uint64_t ClientContext::GetCurrentQueryId() {
-	D_ASSERT(active_query);
-	return transaction.GetActiveQuery();
-}
-
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(pending));
