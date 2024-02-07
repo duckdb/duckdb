@@ -1,0 +1,134 @@
+# name: test/sql/catalog/function/query_function.test
+# description: test query() function
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT * FROM query('SELECT 42');
+----
+42
+
+query I
+FROM query('SELECT 42 as a');
+----
+42
+
+query I
+FROM query('SELECT 10 + 32;');
+----
+42
+
+query I
+FROM query('SELECT abs(-42)');
+----
+42
+
+query I
+FROM query('FROM query("SELECT 1")');
+----
+1
+
+query I
+SELECT * FROM query('SELECT * FROM (SELECT 1 + 2)');
+----
+3
+
+query III
+FROM query('SELECT 1, 2, 3');
+----
+1	2	3
+
+query I
+SELECT * FROM query('FROM query(''SELECT 17 + 25'')');
+----
+42
+
+query I
+FROM query('SELECT 42;;;--- hello;');
+----
+42
+
+# query text
+query I
+SELECT 'hello';
+----
+hello
+
+query I
+SELECT * FROM query('SELECT ''hello''');
+----
+hello
+
+# query from table
+statement ok
+CREATE TABLE tbl1 (a INT, b INT);
+
+statement ok
+FROM query('SELECT *, 1 + 2 FROM tbl1');
+
+statement ok
+CREATE TABLE tbl2 (a INT, b INT, c INT);
+
+statement ok
+INSERT INTO tbl2 VALUES (1, 2, 3), (4, 5, 6), (7, 8, 9);
+
+query III
+SELECT * FROM query('FROM tbl2');
+----
+1	2	3
+4	5	6
+7	8	9
+
+query I
+SELECT * FROM query('SELECT a + b + c FROM tbl2');
+----
+6
+15
+24
+
+# query multiple nested type tags
+query II
+SELECT * FROM query('WITH a(i) as (SELECT 1) SELECT a1.i as i1, a2.i as i2 FROM a as a1, a as a2');
+----
+1	1
+
+# test incorrect usage
+statement error
+SELECT * FROM query(NULL);
+----
+Parser Error: syntax error at or near "NULL"
+
+statement error
+SELECT * FROM query(' ');
+----
+Parser Error: Expected a single SELECT statement
+
+statement error
+SELECT * FROM query('');
+----
+Parser Error: Expected a single SELECT statement
+
+statement error
+SELECT * FROM query('FROM query(FROM)');
+----
+Parser Error: syntax error at or near "FROM"
+
+# multiple statements are not supported
+statement error
+SELECT * FROM query('SELECT 1; SELECT 2');
+----
+Parser Error: Expected a single SELECT statement
+
+# syntax error
+statement error
+SELECT query(SELECT 1);
+----
+Parser Error: syntax error at or near "SELECT"
+
+statement error
+SELECT * FROM query('CREATE TABLE tbl (a INT)');
+----
+Parser Error: Expected a single SELECT statement
+
