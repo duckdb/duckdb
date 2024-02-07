@@ -216,8 +216,8 @@ static void TestIniFile() {
 //#elif defined WIN32
 	LPCSTR dsn = "DuckDB";
 	LPCSTR driver = "DuckDB Driver";
-	std::string db = GetTesterDirectory() + "test.duckdb";
-	LPCSTR database = db.c_str();
+//	std::string db = GetTesterDirectory() + "test.duckdb";
+	LPCSTR database = "test.duckdb";
 	LPCSTR access_mode = "read_only";
 	LPCSTR allow_unsigned_extensions = "true";
 
