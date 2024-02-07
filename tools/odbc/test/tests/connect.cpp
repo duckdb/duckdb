@@ -179,6 +179,9 @@ static void runSQLInstallerError(bool ret, std::string errorMessage) {
 	case ODBC_ERROR_OUT_OF_MEM:
 		std::cerr << "ODBC_ERROR_OUT_OF_MEM\n";
 		break;
+	case ODBC_ERROR_INVALID_STR:
+		std::cerr << "ODBC_ERROR_INVALID_STR\n";
+		break;
 	}
 	std::cerr << "Error: " << errorCode << "\n";
 	std::cerr << "Message: " << msgText << "\n";
@@ -213,12 +216,13 @@ static void TestIniFile() {
 //#elif defined WIN32
 	LPCSTR dsn = "DuckDB";
 	LPCSTR driver = "DuckDB Driver";
-	LPCSTR database = reinterpret_cast<LPCSTR>(ConvertToSQLCHAR(GetTesterDirectory() + "test.duckdb"));
+	std::string db = GetTesterDirectory() + "test.duckdb";
+	LPCSTR database = db.c_str();
 	LPCSTR access_mode = "read_only";
 	LPCSTR allow_unsigned_extensions = "true";
 
 	// Add DSN to the ini file
-//	runSQLInstallerError(SQLWriteDSNToIni(dsn, driver), "Failed to write DSN to ini file");
+	runSQLInstallerError(SQLWriteDSNToIni(dsn, driver), "Failed to write DSN to ini file");
 	// Write to the ini file
 	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "database", database, nullptr), "Failed to write database to ini file");
 	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "access_mode", access_mode, nullptr), "Failed to write access_mode to ini file");
