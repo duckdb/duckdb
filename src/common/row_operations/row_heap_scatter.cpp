@@ -45,43 +45,6 @@ bool NestedValidity::IsValid(idx_t idx) {
 	}
 }
 
-/*
-VerticalParentValidity::VerticalParentValidity(data_ptr_t validitymask_location)
-    : validitymask_location(validitymask_location) {
-}
-
-void VerticalParentValidity::SetInvalid(idx_t idx) {
-    auto entry_offset = idx / 8;
-    auto bit_offset = idx % 8;
-    const auto bit = ~(1UL << bit_offset);
-    validitymask_location[entry_offset] &= bit;
-}
-
-bool VerticalParentValidity::IsValid(idx_t idx) {
-    auto entry_offset = idx / 8;
-    auto bit_offset = idx % 8;
-    ValidityBytes row_mask(validitymask_location + entry_offset);
-    const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(0), bit_offset);
-    return valid;
-}
-
-HorizontalParentValidity::HorizontalParentValidity(data_ptr_t *validitymask_locations, idx_t child_vector_index)
-    : validitymask_locations(validitymask_locations), entry_idx(0), idx_in_entry(0) {
-    ValidityBytes::GetEntryIndex(child_vector_index, entry_idx, idx_in_entry);
-}
-
-void HorizontalParentValidity::SetInvalid(idx_t idx) {
-    const auto bit = ~(1UL << idx_in_entry);
-    *(validitymask_locations[idx] + entry_idx) &= bit;
-}
-
-bool HorizontalParentValidity::IsValid(idx_t idx) {
-    ValidityBytes row_mask(validitymask_locations[idx]);
-    const auto valid = row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
-    return valid;
-}
- */
-
 static void ComputeStringEntrySizes(UnifiedVectorFormat &vdata, idx_t entry_sizes[], const idx_t ser_count,
                                     const SelectionVector &sel, const idx_t offset) {
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
