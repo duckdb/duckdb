@@ -77,6 +77,11 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	return cached_buffers[pos]->Pin(*file_handle, has_seeked);
 }
 
+void CSVBufferManager::ResetBuffer(const idx_t buffer_idx){
+	D_ASSERT(buffer_idx < cached_buffers.size() && cached_buffers[buffer_idx]);
+	cached_buffers[buffer_idx].reset();
+}
+
 idx_t CSVBufferManager::GetBufferSize() {
 	return buffer_size;
 }
