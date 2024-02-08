@@ -19,6 +19,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 #include "duckdb.hpp"
 
@@ -271,11 +272,39 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 }
 
+static void RegisterStatementType(py::handle &m) {
+	auto statement_type = py::enum_<duckdb::StatementType>(m, "StatementType");
+	static const duckdb::StatementType types[] = {
+	    duckdb::StatementType::INVALID_STATEMENT,      duckdb::StatementType::SELECT_STATEMENT,
+	    duckdb::StatementType::INSERT_STATEMENT,       duckdb::StatementType::UPDATE_STATEMENT,
+	    duckdb::StatementType::CREATE_STATEMENT,       duckdb::StatementType::DELETE_STATEMENT,
+	    duckdb::StatementType::PREPARE_STATEMENT,      duckdb::StatementType::EXECUTE_STATEMENT,
+	    duckdb::StatementType::ALTER_STATEMENT,        duckdb::StatementType::TRANSACTION_STATEMENT,
+	    duckdb::StatementType::COPY_STATEMENT,         duckdb::StatementType::ANALYZE_STATEMENT,
+	    duckdb::StatementType::VARIABLE_SET_STATEMENT, duckdb::StatementType::CREATE_FUNC_STATEMENT,
+	    duckdb::StatementType::EXPLAIN_STATEMENT,      duckdb::StatementType::DROP_STATEMENT,
+	    duckdb::StatementType::EXPORT_STATEMENT,       duckdb::StatementType::PRAGMA_STATEMENT,
+	    duckdb::StatementType::VACUUM_STATEMENT,       duckdb::StatementType::CALL_STATEMENT,
+	    duckdb::StatementType::SET_STATEMENT,          duckdb::StatementType::LOAD_STATEMENT,
+	    duckdb::StatementType::RELATION_STATEMENT,     duckdb::StatementType::EXTENSION_STATEMENT,
+	    duckdb::StatementType::LOGICAL_PLAN_STATEMENT, duckdb::StatementType::ATTACH_STATEMENT,
+	    duckdb::StatementType::DETACH_STATEMENT,       duckdb::StatementType::MULTI_STATEMENT,
+	    duckdb::StatementType::COPY_DATABASE_STATEMENT};
+	static const idx_t amount = sizeof(types) / sizeof(duckdb::StatementType);
+	for (idx_t i = 0; i < amount; i++) {
+		auto &type = types[i];
+		statement_type.value(StatementTypeToString(type).c_str(), type);
+	}
+	statement_type.export_values();
+}
+
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
 	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
 	    .export_values();
+
+	RegisterStatementType(m);
 
 	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
 	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)

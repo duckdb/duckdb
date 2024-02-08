@@ -18,7 +18,13 @@ public:
 	explicit DuckDBPyStatement(unique_ptr<SQLStatement> statement);
 
 public:
+	//! Create a copy of the wrapped statement
 	unique_ptr<SQLStatement> GetStatement();
+	string Query() const;
+	py::set NamedParameters() const;
+	StatementType Type() const;
+
+public:
 	static void Initialize(py::handle &m);
 
 private:
