@@ -74,14 +74,11 @@ private:
 	BaseQueryResult *open_result = nullptr;
 };
 
+#ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
-	~DebugClientContextState() {
-		if (active_transaction != 0) {
-			throw InternalException("DebugClientContextState - active_transaction > 0 - bug in TransactionBegin/TransactionCommit/TransactionRollback callbacks");
-		}
-		if (active_query != 0) {
-			throw InternalException("DebugClientContextState - active_query > 0 - bug in QueryBegin/QueryEnd callbacks");
-		}
+	~DebugClientContextState() override {
+		D_ASSERT(active_transaction == 0);
+		D_ASSERT(active_query == 0);
 	}
 
 	idx_t active_transaction = 0;
@@ -103,10 +100,13 @@ struct DebugClientContextState : public ClientContextState {
 		active_transaction--;
 	}
 };
+#endif
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+#ifdef DEBUG
 	registered_state["debug_client_context_state"] = make_uniq<DebugClientContextState>();
+#endif
 }
 
 ClientContext::~ClientContext() {
