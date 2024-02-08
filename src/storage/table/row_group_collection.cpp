@@ -799,7 +799,9 @@ public:
 					                                           append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
-					if (remaining > 0 || append_counts[current_append_idx] == Storage::ROW_GROUP_SIZE) {
+					const bool row_group_full = append_counts[current_append_idx] == Storage::ROW_GROUP_SIZE;
+					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
+					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// move to the next row group
 						current_append_idx++;
 						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
