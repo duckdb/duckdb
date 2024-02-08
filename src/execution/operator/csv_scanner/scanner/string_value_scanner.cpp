@@ -123,9 +123,6 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					empty = state_machine.options.force_not_null[chunk_col_id];
 				}
 				if (empty) {
-					//					if (cur_col_id >= number_of_columns) {
-					//						HandleOverLimitRows();
-					//					}
 					if (parse_types[chunk_col_id] != LogicalTypeId::VARCHAR) {
 						// If it is not a varchar, empty values are not accepted, we must error.
 						cast_errors[chunk_col_id] = std::string("");
@@ -144,15 +141,6 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			}
 		}
 	}
-	//	if (cur_col_id >= number_of_columns) {
-	//		HandleOverLimitRows();
-	//		if (projecting_columns) {
-	//			if (!projected_columns[cur_col_id]) {
-	//				cur_col_id++;
-	//				return;
-	//			}
-	//		}
-	//	}
 	bool success = true;
 	switch (parse_types[chunk_col_id]) {
 	case LogicalTypeId::TINYINT:

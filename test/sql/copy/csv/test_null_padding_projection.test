@@ -98,3 +98,44 @@ select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
 where a = 10 and d = 10000;
 ----
 10	100	1000	10000	data/csv/nullpadding.csv
+
+# Try All Columns
+query IIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER'}, auto_detect = false, filename = true)
+where a = 10 and d = 10000;
+----
+10	100	1000	10000	NULL	data/csv/nullpadding.csv
+10	100	1000	10000	100000	data/csv/nullpadding.csv
+
+query IIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL
+10	100	1000	10000	NULL
+10	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL
+10	100	1000	10000	100000
+
+# Try more columns
+query IIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER', 'f': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL	NULL
+10	100	1000	10000	NULL	NULL
+10	NULL	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL	NULL
+10	100	1000	10000	100000	NULL
+
+# Moreee
+query IIIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER', 'f': 'INTEGER', 'g': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL	NULL	NULL
+10	100	1000	10000	NULL	NULL	NULL
+10	NULL	NULL	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL	NULL	NULL
+10	100	1000	10000	100000	NULL	NULL
