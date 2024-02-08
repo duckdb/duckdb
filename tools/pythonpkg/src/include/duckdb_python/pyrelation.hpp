@@ -261,6 +261,8 @@ public:
 
 	static bool IsRelation(const py::object &object);
 
+	bool CanBeRegisteredBy(Connection &con);
+
 	Relation &GetRel();
 
 	bool ContainsColumnByName(const string &name) const;
