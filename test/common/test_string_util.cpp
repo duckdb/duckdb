@@ -244,7 +244,7 @@ TEST_CASE("Test path utilities", "[string_util]") {
 		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\."));
 		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\.\\"));
 		REQUIRE("foo.txt" == StringUtil::GetFileName("foo.txt\\.\\\\"));
-		REQUIRE("" == StringUtil::GetFileName(".."));
+		REQUIRE(".." == StringUtil::GetFileName(".."));
 		REQUIRE("" == StringUtil::GetFileName("/"));
 	}
 
@@ -269,7 +269,7 @@ TEST_CASE("Test path utilities", "[string_util]") {
 		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\."));
 		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\.\\"));
 		REQUIRE("test" == StringUtil::GetFileStem("test.cpp\\.\\\\"));
-		REQUIRE("" == StringUtil::GetFileStem(".."));
+		REQUIRE(".." == StringUtil::GetFileStem(".."));
 		REQUIRE("" == StringUtil::GetFileStem("/"));
 		REQUIRE("test" == StringUtil::GetFileStem("tmp/test.txt"));
 		REQUIRE("test" == StringUtil::GetFileStem("tmp\\test.txt"));
