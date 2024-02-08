@@ -165,7 +165,8 @@ void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state,
 	for (auto &type : types) {
 		if (type.Contains(LogicalTypeId::ARRAY)) {
 			auto cast_type = ArrayType::ConvertToList(type);
-			chunk_state.cached_cast_vector_cache.push_back(make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
+			chunk_state.cached_cast_vector_cache.push_back(
+			    make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
 			chunk_state.cached_cast_vectors.push_back(make_uniq<Vector>(*chunk_state.cached_cast_vector_cache.back()));
 		} else {
 			chunk_state.cached_cast_vectors.emplace_back();
@@ -434,7 +435,8 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<colum
 	for (auto &type : layout.GetTypes()) {
 		if (type.Contains(LogicalTypeId::ARRAY)) {
 			auto cast_type = ArrayType::ConvertToList(type);
-			chunk_state.cached_cast_vector_cache.push_back(make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
+			chunk_state.cached_cast_vector_cache.push_back(
+			    make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
 			chunk_state.cached_cast_vectors.push_back(make_uniq<Vector>(*chunk_state.cached_cast_vector_cache.back()));
 		} else {
 			chunk_state.cached_cast_vectors.emplace_back();
