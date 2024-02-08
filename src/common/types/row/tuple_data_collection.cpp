@@ -511,8 +511,13 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	auto &chunk = segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(segment, pin_state, chunk_state, chunk_index, false);
 	result.Reset();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		if (chunk_state.cached_cast_vectors[i]) {
+			chunk_state.cached_cast_vectors[i]->ResetFromCache(*chunk_state.cached_cast_vector_cache[i]);
+		}
+	}
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), chunk.count, column_ids, result,
-	       *FlatVector::IncrementalSelectionVector());
+	       *FlatVector::IncrementalSelectionVector(), chunk_state.cached_cast_vectors);
 	result.SetCardinality(chunk.count);
 }
 

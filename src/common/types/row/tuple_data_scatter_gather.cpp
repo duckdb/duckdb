@@ -962,35 +962,39 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 //-------------------------------------------------------------------------------
 
 void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
-                                 DataChunk &result, const SelectionVector &target_sel) const {
+                                 DataChunk &result, const SelectionVector &target_sel,
+                                 vector<unique_ptr<Vector>> &cached_cast_vectors) const {
 	D_ASSERT(result.ColumnCount() == layout.ColumnCount());
 	vector<column_t> column_ids;
 	column_ids.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		column_ids.emplace_back(col_idx);
 	}
-	Gather(row_locations, scan_sel, scan_count, column_ids, result, target_sel);
+	Gather(row_locations, scan_sel, scan_count, column_ids, result, target_sel, cached_cast_vectors);
 }
 
 void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
                                  const vector<column_t> &column_ids, DataChunk &result,
-                                 const SelectionVector &target_sel) const {
+                                 const SelectionVector &target_sel,
+                                 vector<unique_ptr<Vector>> &cached_cast_vectors) const {
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		Gather(row_locations, scan_sel, scan_count, column_ids[col_idx], result.data[col_idx], target_sel);
+		Gather(row_locations, scan_sel, scan_count, column_ids[col_idx], result.data[col_idx], target_sel,
+		       cached_cast_vectors[col_idx].get());
 	}
 }
 
 void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
-                                 const column_t column_id, Vector &result, const SelectionVector &target_sel) const {
+                                 const column_t column_id, Vector &result, const SelectionVector &target_sel,
+                                 optional_ptr<Vector> cached_cast_vector) const {
 	const auto &gather_function = gather_functions[column_id];
-	gather_function.function(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel, result,
-	                         gather_function.child_functions);
+	gather_function.function(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel,
+	                         cached_cast_vector, gather_function.child_functions);
 }
 
 template <class T>
 static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                      const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                     const SelectionVector &target_sel, Vector &dummy_vector,
+                                     const SelectionVector &target_sel, optional_ptr<Vector> dummy_vector,
                                      const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
@@ -1019,7 +1023,7 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 
 static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                   const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                  const SelectionVector &target_sel, Vector &dummy_vector,
+                                  const SelectionVector &target_sel, optional_ptr<Vector> dummy_vector,
                                   const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
@@ -1071,7 +1075,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 //------------------------------------------------------------------------------
 static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                 const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
-                                const SelectionVector &target_sel, Vector &dummy_vector,
+                                const SelectionVector &target_sel, optional_ptr<Vector> dummy_vector,
                                 const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
@@ -1122,7 +1126,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
 	child_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count,
-	                        ListVector::GetEntry(target), target_sel, target, child_function.child_functions);
+	                        ListVector::GetEntry(target), target_sel, &target, child_function.child_functions);
 }
 
 //------------------------------------------------------------------------------
@@ -1132,7 +1136,8 @@ template <class T>
 static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
                                                      const idx_t list_size_before, const SelectionVector &scan_sel,
                                                      const idx_t scan_count, Vector &target,
-                                                     const SelectionVector &target_sel, Vector &list_vector,
+                                                     const SelectionVector &target_sel,
+                                                     optional_ptr<Vector> list_vector,
                                                      const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
@@ -1143,7 +1148,7 @@ static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layo
 	auto &target_validity = FlatVector::Validity(target);
 
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(list_vector);
+	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
@@ -1179,7 +1184,7 @@ static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layo
 static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
                                                   const idx_t list_size_before, const SelectionVector &scan_sel,
                                                   const idx_t scan_count, Vector &target,
-                                                  const SelectionVector &target_sel, Vector &list_vector,
+                                                  const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                                   const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
@@ -1189,7 +1194,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 	auto &target_validity = FlatVector::Validity(target);
 
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(list_vector);
+	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
@@ -1227,7 +1232,8 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
                                                       const idx_t list_size_before, const SelectionVector &scan_sel,
                                                       const idx_t scan_count, Vector &target,
-                                                      const SelectionVector &target_sel, Vector &list_vector,
+                                                      const SelectionVector &target_sel,
+                                                      optional_ptr<Vector> list_vector,
                                                       const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
@@ -1239,7 +1245,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	const auto child_list_size_before = ListVector::GetListSize(target);
 
 	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(list_vector);
+	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
 
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)
 	Vector combined_list_vector(LogicalType::HUGEINT);
@@ -1293,84 +1299,49 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
 	child_function.function(layout, heap_locations, child_list_size_before, scan_sel, scan_count,
-	                        ListVector::GetEntry(target), target_sel, combined_list_vector,
+	                        ListVector::GetEntry(target), target_sel, &combined_list_vector,
 	                        child_function.child_functions);
 }
 
-// Special case: We cant currently handle arrays, so we need to replace each array with a list of the same type.
-static LogicalType TypeReplaceArrayWithList(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::ARRAY: {
-		return LogicalType::LIST(TypeReplaceArrayWithList(ArrayType::GetChildType(type)));
-	}
-	case LogicalTypeId::LIST:
-		return LogicalType::LIST(TypeReplaceArrayWithList(ListType::GetChildType(type)));
-	case LogicalTypeId::STRUCT: {
-		auto children = StructType::GetChildTypes(type);
-		for (auto &child : children) {
-			child.second = TypeReplaceArrayWithList(child.second);
-		}
-		return LogicalType::STRUCT(children);
-	}
-	case LogicalTypeId::MAP: {
-		auto key_type = TypeReplaceArrayWithList(MapType::KeyType(type));
-		auto value_type = TypeReplaceArrayWithList(MapType::ValueType(type));
-		return LogicalType::MAP(key_type, value_type);
-	}
-	case LogicalTypeId::UNION: {
-		auto children = UnionType::CopyMemberTypes(type);
-		for (auto &child : children) {
-			child.second = TypeReplaceArrayWithList(child.second);
-		}
-		return LogicalType::UNION(children);
-	}
-	default:
-		return type;
+//------------------------------------------------------------------------------
+// Special cases for arrays
+//------------------------------------------------------------------------------
+// A gather function that wraps another gather function and casts the result to the target array type
+static void TupleDataCastToArrayListGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+                                           const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+                                           const SelectionVector &target_sel, optional_ptr<Vector> cached_cast_vector,
+                                           const vector<TupleDataGatherFunction> &child_functions) {
+	if (false) {
+		// Reuse the cached cast vector
+		TupleDataListGather(layout, row_locations, col_idx, scan_sel, scan_count, *cached_cast_vector, target_sel,
+		                    cached_cast_vector, child_functions);
+		VectorOperations::DefaultCast(*cached_cast_vector, target, scan_count);
+	} else {
+		// Otherwise, create a new temporary cast vector
+		Vector cast_vector(ArrayType::ConvertToList(target.GetType()));
+		TupleDataListGather(layout, row_locations, col_idx, scan_sel, scan_count, cast_vector, target_sel, &cast_vector,
+		                    child_functions);
+		VectorOperations::DefaultCast(cast_vector, target, scan_count);
 	}
 }
 
-static bool TypeHasArray(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::ARRAY:
-		return true;
-	case LogicalTypeId::LIST:
-		return TypeHasArray(ListType::GetChildType(type));
-	case LogicalTypeId::STRUCT: {
-		auto children = StructType::GetChildTypes(type);
-		for (auto &child : children) {
-			if (TypeHasArray(child.second)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	case LogicalTypeId::MAP: {
-		return TypeHasArray(MapType::KeyType(type)) || TypeHasArray(MapType::ValueType(type));
-	}
-	case LogicalTypeId::UNION: {
-		auto children = UnionType::CopyMemberTypes(type);
-		for (auto &child : children) {
-			if (TypeHasArray(child.second)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	default:
-		return false;
-	}
-}
+static void TupleDataCastToArrayStructGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+                                             const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+                                             const SelectionVector &target_sel, optional_ptr<Vector> cached_cast_vector,
+                                             const vector<TupleDataGatherFunction> &child_functions) {
 
-static void TupleDataCollectionGatherArrayAsList(const TupleDataLayout &layout, Vector &row_locations,
-                                                 const idx_t col_idx, const SelectionVector &scan_sel,
-                                                 const idx_t scan_count, Vector &target,
-                                                 const SelectionVector &target_sel, Vector &dummy_vector,
-                                                 const vector<TupleDataGatherFunction> &child_functions) {
-
-	Vector cast_vector(TypeReplaceArrayWithList(target.GetType()));
-	TupleDataListGather(layout, row_locations, col_idx, scan_sel, scan_count, cast_vector, target_sel, dummy_vector,
-	                    child_functions);
-	VectorOperations::DefaultCast(cast_vector, target, scan_count);
+	if (cached_cast_vector) {
+		// Reuse the cached cast vector
+		TupleDataStructGather(layout, row_locations, col_idx, scan_sel, scan_count, *cached_cast_vector, target_sel,
+		                      cached_cast_vector, child_functions);
+		VectorOperations::DefaultCast(*cached_cast_vector, target, scan_count);
+	} else {
+		// Otherwise, create a new temporary cast vector
+		Vector cast_vector(ArrayType::ConvertToList(target.GetType()));
+		TupleDataStructGather(layout, row_locations, col_idx, scan_sel, scan_count, cast_vector, target_sel,
+		                      &cast_vector, child_functions);
+		VectorOperations::DefaultCast(cast_vector, target, scan_count);
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -1452,16 +1423,29 @@ static TupleDataGatherFunction TupleDataGetGatherFunctionInternal(const LogicalT
 }
 
 TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType &type) {
-	if (TypeHasArray(type)) {
+	if (!type.IsNested()) {
+		return TupleDataGetGatherFunctionInternal(type, false);
+	}
+
+	if (type.Contains(LogicalTypeId::ARRAY)) {
 		// Special case: we cant handle arrays yet, so we need to replace them with lists when gathering
-		auto list_type = TypeReplaceArrayWithList(type);
+		auto new_type = ArrayType::ConvertToList(type);
 		TupleDataGatherFunction result;
-		result.function = TupleDataCollectionGatherArrayAsList;
-		if (list_type.id() == LogicalTypeId::LIST) {
+		// Theres only two cases: Either the array is within a struct, or it is within a list (or has now become a list)
+		if (new_type.InternalType() == PhysicalType::LIST) {
+			result.function = TupleDataCastToArrayListGather;
 			result.child_functions.push_back(
-			    TupleDataGetGatherFunctionInternal(ListType::GetChildType(list_type), true));
+			    TupleDataGetGatherFunctionInternal(ListType::GetChildType(new_type), true));
+			return result;
+		} else if (new_type.InternalType() == PhysicalType::STRUCT) {
+			result.function = TupleDataCastToArrayStructGather;
+			for (const auto &child_type : StructType::GetChildTypes(new_type)) {
+				result.child_functions.push_back(TupleDataGetGatherFunctionInternal(child_type.second, false));
+			}
+			return result;
+		} else {
+			throw InternalException("Unsupported type for TupleDataCollection::GetGatherFunction");
 		}
-		return result;
 	}
 	return TupleDataGetGatherFunctionInternal(type, false);
 }
