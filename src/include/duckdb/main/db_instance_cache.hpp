@@ -14,6 +14,9 @@
 #include "duckdb/function/replacement_scan.hpp"
 
 namespace duckdb {
+
+string GetDBAbsolutePath(const string &database_p, FileSystem &fs);
+
 class DBInstanceCache {
 public:
 	DBInstanceCache() {};

@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
@@ -67,11 +68,13 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	// get the name and path of the database
 	auto &name = info->name;
 	auto &path = info->path;
+
+	auto &fs = FileSystem::GetFileSystem(context.client);
+	path = GetDBAbsolutePath(path, fs);
 	if (db_type.empty()) {
 		DBPathAndType::ExtractExtensionPrefix(path, db_type);
 	}
 	if (name.empty()) {
-		auto &fs = FileSystem::GetFileSystem(context.client);
 		name = AttachedDatabase::ExtractDatabaseName(path, fs);
 	}
 
