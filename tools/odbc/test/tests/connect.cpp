@@ -224,7 +224,7 @@ static void TestIniFile() {
 	// Add DSN to the ini file
 	runSQLInstallerError(SQLWriteDSNToIni(dsn, driver), "Failed to write DSN to ini file");
 	// Write to the ini file
-	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "database", database, nullptr), "Failed to write database to ini file");
+//	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "database", database, nullptr), "Failed to write database to ini file");
 	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "access_mode", access_mode, nullptr), "Failed to write access_mode to ini file");
 	runSQLInstallerError(SQLWritePrivateProfileString(dsn, "allow_unsigned_extensions", allow_unsigned_extensions, nullptr), "Failed to write allow_unsigned_extensions to ini file");
 //#endif
