@@ -657,6 +657,7 @@ public:
 		shared_ptr<Task> task_from_producer;
 		while (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
 			auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
+			(void)res;
 			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
 			task_from_producer.reset();
 		}
