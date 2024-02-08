@@ -5,6 +5,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
 
 namespace duckdb {

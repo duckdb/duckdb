@@ -21,7 +21,10 @@ public:
 	virtual ~ClientContextState() = default;
 	virtual void QueryBegin(ClientContext &context) {
 	}
+	virtual void QueryEnd() {
+	}
 	virtual void QueryEnd(ClientContext &context) {
+		QueryEnd();
 	}
 	virtual void TransactionBegin(MetaTransaction &transaction, ClientContext &context) {
 	}
