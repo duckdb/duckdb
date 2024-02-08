@@ -220,18 +220,6 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 	auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
 
-	for (auto &type : layout.GetTypes()) {
-		if (type.Contains(LogicalTypeId::ARRAY)) {
-			auto cast_type = ArrayType::ConvertToList(type);
-			chunk_state.cached_cast_vectors.push_back(make_uniq<Vector>(cast_type));
-			chunk_state.cached_cast_vector_cache.push_back(
-			    make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
-		} else {
-			chunk_state.cached_cast_vectors.emplace_back();
-			chunk_state.cached_cast_vector_cache.emplace_back();
-		}
-	}
-
 	for (auto &part_ref : parts) {
 		auto &part = part_ref.get();
 		const auto next = part.count;

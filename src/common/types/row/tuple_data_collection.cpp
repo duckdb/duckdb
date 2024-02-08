@@ -161,6 +161,17 @@ void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state,
 	}
 	InitializeVectorFormat(chunk_state.vector_data, types);
 	chunk_state.column_ids = std::move(column_ids);
+
+	for (auto &type : types) {
+		if (type.Contains(LogicalTypeId::ARRAY)) {
+			auto cast_type = ArrayType::ConvertToList(type);
+			chunk_state.cached_cast_vector_cache.push_back(make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
+			chunk_state.cached_cast_vectors.push_back(make_uniq<Vector>(*chunk_state.cached_cast_vector_cache.back()));
+		} else {
+			chunk_state.cached_cast_vectors.emplace_back();
+			chunk_state.cached_cast_vector_cache.emplace_back();
+		}
+	}
 }
 
 void TupleDataCollection::Append(DataChunk &new_chunk, const SelectionVector &append_sel, idx_t append_count) {
@@ -417,6 +428,19 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<colum
 	state.segment_index = 0;
 	state.chunk_index = 0;
 	state.chunk_state.column_ids = std::move(column_ids);
+
+	auto &chunk_state = state.chunk_state;
+
+	for (auto &type : layout.GetTypes()) {
+		if (type.Contains(LogicalTypeId::ARRAY)) {
+			auto cast_type = ArrayType::ConvertToList(type);
+			chunk_state.cached_cast_vector_cache.push_back(make_uniq<VectorCache>(Allocator::DefaultAllocator(), cast_type));
+			chunk_state.cached_cast_vectors.push_back(make_uniq<Vector>(*chunk_state.cached_cast_vector_cache.back()));
+		} else {
+			chunk_state.cached_cast_vectors.emplace_back();
+			chunk_state.cached_cast_vector_cache.emplace_back();
+		}
+	}
 }
 
 void TupleDataCollection::InitializeScan(TupleDataParallelScanState &gstate, TupleDataPinProperties properties) const {
@@ -503,7 +527,6 @@ bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segmen
 	chunk_index = state.chunk_index++;
 	return true;
 }
-
 void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
                                       const vector<column_t> &column_ids, idx_t segment_index, idx_t chunk_index,
                                       DataChunk &result) {
@@ -511,7 +534,8 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	auto &chunk = segment.chunks[chunk_index];
 	segment.allocator->InitializeChunkState(segment, pin_state, chunk_state, chunk_index, false);
 	result.Reset();
-	for (idx_t i = 0; i < column_ids.size(); i++) {
+
+	for (idx_t i = 0; i < result.ColumnCount(); i++) {
 		if (chunk_state.cached_cast_vectors[i]) {
 			chunk_state.cached_cast_vectors[i]->ResetFromCache(*chunk_state.cached_cast_vector_cache[i]);
 		}
