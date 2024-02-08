@@ -1,6 +1,6 @@
 # name: test/sql/function/nested/array_extract_unnamed_struct.test
 # description: Test array extract on unnamed structs
-# group: [string]
+# group: [nested]
 
 statement ok
 PRAGMA enable_verification
