@@ -128,7 +128,7 @@ Key name for struct_extract needs to be a constant string
 statement error
 select struct_extract({'a': 42}, 42)
 ----
-No function matches
+can only be used on unnamed structs
 
 # test string to struct within struct casting
 query I
