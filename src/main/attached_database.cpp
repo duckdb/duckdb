@@ -40,11 +40,13 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
-                                   string name_p, const AttachInfo &info, AccessMode access_mode)
+                                   ClientContext &context, string name_p, const AttachInfo &info,
+                                   AccessMode access_mode)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
-	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, *info.Copy(), access_mode);
+	catalog =
+	    storage_extension.attach(storage_extension.storage_info.get(), context, *this, name, *info.Copy(), access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
