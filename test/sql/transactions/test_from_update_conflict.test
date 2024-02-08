@@ -42,3 +42,4 @@ BEGIN TRANSACTION
 
 statement error con2
 UPDATE src SET b = 20000 FROM test WHERE src.b = test.a;
+----

@@ -31,7 +31,6 @@ class UpdateStatement;
 class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;
-class ShowStatement;
 class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
@@ -42,6 +41,7 @@ class ResetVariableStatement;
 class LoadStatement;
 class LogicalPlanStatement;
 class MultiStatement;
+class CopyDatabaseStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -97,6 +97,7 @@ class TableFunctionRef;
 class EmptyTableRef;
 class ExpressionListRef;
 class PivotRef;
+class ShowRef;
 
 //===--------------------------------------------------------------------===//
 // Other

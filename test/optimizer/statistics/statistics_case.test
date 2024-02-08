@@ -27,6 +27,7 @@ logical_opt	<!REGEX>:.*EMPTY_RESULT.*
 # this gives an overflow on the RHS
 statement error
 SELECT 123::TINYINT + (CASE WHEN i=2 THEN (i+1)::TINYINT ELSE (i+2)::TINYINT END) FROM integers;
+----
 
 # this does not
 query I

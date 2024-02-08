@@ -51,16 +51,16 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
 		return "FIXED_BATCH_COPY_TO_FILE";
-	case PhysicalOperatorType::DELIM_JOIN:
-		return "DELIM_JOIN";
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+		return "LEFT_DELIM_JOIN";
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
+		return "RIGHT_DELIM_JOIN";
 	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
 		return "BLOCKWISE_NL_JOIN";
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:
 		return "NESTED_LOOP_JOIN";
 	case PhysicalOperatorType::HASH_JOIN:
 		return "HASH_JOIN";
-	case PhysicalOperatorType::INDEX_JOIN:
-		return "INDEX_JOIN";
 	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
 		return "PIECEWISE_MERGE_JOIN";
 	case PhysicalOperatorType::IE_JOIN:
@@ -121,6 +121,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_SCHEMA";
 	case PhysicalOperatorType::CREATE_MACRO:
 		return "CREATE_MACRO";
+	case PhysicalOperatorType::CREATE_SECRET:
+		return "CREATE_SECRET";
 	case PhysicalOperatorType::DROP:
 		return "DROP";
 	case PhysicalOperatorType::PRAGMA:
@@ -151,6 +153,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXTENSION";
 	case PhysicalOperatorType::PIVOT:
 		return "PIVOT";
+	case PhysicalOperatorType::COPY_DATABASE:
+		return "COPY_DATABASE";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

@@ -2035,6 +2035,17 @@ typedef struct PGImportStmt {
 } PGImportStmt;
 
 /* ----------------------
+ *		Copy Database Statement
+ * ----------------------
+ */
+typedef struct PGCopyDatabaseStmt {
+	PGNodeTag type;
+	const char *from_database;
+	const char *to_database;
+	const char *copy_database_flag;
+} PGCopyDatabaseStmt;
+
+/* ----------------------
  *		Interval Constant
  * ----------------------
  */
@@ -2151,5 +2162,44 @@ typedef struct PGUseStmt {
 	PGRangeVar *name;    /* variable to be set */
 } PGUseStmt;
 
+
+/* ----------------------
+ *		Create Secret Statement
+ * ----------------------
+ */
+typedef struct PGCreateSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;                 /* the optional storage type of the secret */
+	PGList *scope;                        /* optionally the scopes of the secret */
+	PGList *options;                      /* Secret options */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
+} PGCreateSecretStmt;
+
+
+/* ----------------------
+ *		Drop Secret Statement
+ * ----------------------
+ */
+typedef struct PGDropSecretStmt {
+	PGNodeTag type;
+	char *persist_type;                   /* the requested persist mode */
+	char *secret_name;                    /* name of the secret */
+	char *secret_storage;
+	bool missing_ok;
+} PGDropSecretStmt;
+
+/* ----------------------
+ *		Comment On Statement
+ * ----------------------
+ */
+typedef struct PGCommentOnStmt {
+	PGNodeTag type;
+	PGObjectType object_type; 	/* object type */
+	PGRangeVar *name;         /* the object to comment on */
+	PGNode *value;				/* the comment: a string or NULL*/
+	PGNode *column_expr;
+} PGCommentOnStmt;
 
 }

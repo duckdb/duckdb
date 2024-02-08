@@ -13,28 +13,29 @@ CALL dbgen(sf=0.0001);
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY
 
-# Q 02
+# Q 02: join with JoinType::SINGLE (created when pushing down dependent joins) is converted to LEFT
 query II
 explain SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE '%BRASS' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE' AND ps_supplycost = ( SELECT min(ps_supplycost) FROM partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = 'EUROPE') ORDER BY s_acctbal DESC, n_name, s_name, p_partkey LIMIT 100;
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*SINGLE.*
 
-# Q 17
+# Q 17: join with JoinType::SINGLE (created when pushing down dependent joins) is converted to LEFT
 query II
 explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND p_brand = 'Brand#23' AND p_container = 'MED BOX' AND l_quantity < ( SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
 ----
+logical_opt	<!REGEX>:.*SINGLE.*
+
+# Q 17: if we remove the filters """ p_brand = 'Brand#23' AND p_container = 'MED BOX' """ we can remove the whole DELIM join
+query II
+explain SELECT sum(l_extendedprice) / 7.0 AS avg_yearly FROM lineitem, part WHERE p_partkey = l_partkey AND l_quantity < (SELECT 0.2 * avg(l_quantity) FROM lineitem WHERE l_partkey = p_partkey);
+----
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
 
-# Q 20
+# Q 20: join with JoinType::SINGLE (created when pushing down dependent joins) is converted to LEFT
 query II
 explain SELECT s_name, s_address FROM supplier, nation WHERE s_suppkey IN ( SELECT ps_suppkey FROM partsupp WHERE ps_partkey IN ( SELECT p_partkey FROM part WHERE p_name LIKE 'forest%') AND ps_availqty > ( SELECT 0.5 * sum(l_quantity) FROM lineitem WHERE l_partkey = ps_partkey AND l_suppkey = ps_suppkey AND l_shipdate >= CAST('1994-01-01' AS date) AND l_shipdate < CAST('1995-01-01' AS date))) AND s_nationkey = n_nationkey AND n_name = 'CANADA' ORDER BY s_name;
 ----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
-
-query II
-explain SELECT s_name, count(*) AS numwait FROM supplier, lineitem l1, orders, nation WHERE s_suppkey = l1.l_suppkey AND o_orderkey = l1.l_orderkey AND o_orderstatus = 'F' AND l1.l_receiptdate > l1.l_commitdate AND EXISTS ( SELECT * FROM lineitem l2 WHERE l2.l_orderkey = l1.l_orderkey AND l2.l_suppkey <> l1.l_suppkey) AND NOT EXISTS ( SELECT * FROM lineitem l3 WHERE l3.l_orderkey = l1.l_orderkey AND l3.l_suppkey <> l1.l_suppkey AND l3.l_receiptdate > l3.l_commitdate) AND s_nationkey = n_nationkey AND n_name = 'SAUDI ARABIA' GROUP BY s_name ORDER BY numwait DESC, s_name LIMIT 100;
-----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
+logical_opt	<!REGEX>:.*SINGLE.*
 
 statement ok
 CREATE TABLE integers(i INTEGER, j integer)
@@ -179,3 +180,22 @@ NULL	0
 1	1
 2	1
 3	0
+
+# FTS
+require fts
+
+require noalternativeverify
+
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
+
+query II
+EXPLAIN SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*

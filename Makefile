@@ -104,9 +104,6 @@ endif
 ifeq (${BUILD_FTS}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};fts
 endif
-ifeq (${BUILD_VISUALIZER}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};visualizer
-endif
 ifeq (${BUILD_HTTPFS}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};httpfs
 endif
@@ -201,11 +198,17 @@ endif
 ifeq (${FORCE_ASYNC_SINK_SOURCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASYNC_SINK_SOURCE=1
 endif
+ifeq (${RUN_SLOW_VERIFIERS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DRUN_SLOW_VERIFIERS=1
+endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
 ifeq (${DEBUG_MOVE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_MOVE=1
+endif
+ifeq (${DEBUG_ALLOCATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_ALLOCATION=1
 endif
 ifeq (${DEBUG_STACKTRACE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
@@ -216,9 +219,7 @@ endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
 endif
-ifneq (${LOCAL_EXTENSION_REPO},)
-	CMAKE_VARS:=${CMAKE_VARS} -DLOCAL_EXTENSION_REPO="${LOCAL_EXTENSION_REPO}"
-endif
+CMAKE_VARS:=${CMAKE_VARS} -DLOCAL_EXTENSION_REPO="${LOCAL_EXTENSION_REPO}"
 ifneq (${OSX_BUILD_ARCH}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_ARCH=${OSX_BUILD_ARCH}
 endif
@@ -227,6 +228,12 @@ ifeq (${OSX_BUILD_UNIVERSAL}, 1)
 endif
 ifneq ("${CUSTOM_LINKER}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCUSTOM_LINKER=${CUSTOM_LINKER}
+endif
+ifdef SKIP_PLATFORM_UTIL
+	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_PLATFORM_UTIL=1
+endif
+ifdef DEBUG_STACKTRACE
+	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
 endif
 
 # Enable VCPKG for this build
@@ -245,6 +252,12 @@ ifneq ("${LTO}", "")
 endif
 ifneq ("${CMAKE_LLVM_PATH}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
+endif
+
+ifdef DUCKDB_PLATFORM
+	ifneq ("${DUCKDB_PLATFORM}", "")
+		CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXPLICIT_PLATFORM='${DUCKDB_PLATFORM}'
+	endif
 endif
 
 clean:
@@ -269,14 +282,17 @@ release: ${EXTENSION_CONFIG_STEP}
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" && \
-	emmake make -j8 -Cbuild/wasm_mvp && \
-	cd build/wasm_mvp && bash ../../scripts/link-wasm-extensions.sh
+	emmake make -j8 -Cbuild/wasm_mvp
 
 wasm_eh: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_eh && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" && \
-	emmake make -j8 -Cbuild/wasm_eh && \
-	cd build/wasm_eh && bash ../../scripts/link-wasm-extensions.sh
+	emmake make -j8 -Cbuild/wasm_eh
+
+wasm_threads: ${EXTENSION_CONFIG_STEP}
+	mkdir -p ./build/wasm_threads && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads" && \
+	emmake make -j8 -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
@@ -396,7 +412,7 @@ sqlsmith: debug
 # works both on executable, libraries (-> .duckdb_extension) and on WebAssembly
 bloaty/bloaty:
 	git clone https://github.com/google/bloaty.git
-	cd bloaty && git submodule update --init --recursive && cmake -B build -G Ninja -S . && cmake --build build
+	cd bloaty && git submodule update --init --recursive && cmake -Bm build -G Ninja -S . && cmake --build build
 	mv bloaty/build/bloaty bloaty/bloaty
 
 bloaty: reldebug bloaty/bloaty
@@ -414,3 +430,13 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
+
+bundle-library: release
+	cd build/release && \
+	mkdir -p bundle && \
+	cp src/libduckdb_static.a bundle/. && \
+	cp third_party/*/libduckdb_*.a bundle/. && \
+	cp extension/*/lib*_extension.a bundle/. && \
+	cd bundle && \
+	find . -name '*.a' -exec ${AR} -x {} \; && \
+	${AR} cr ../libduckdb_bundle.a *.o

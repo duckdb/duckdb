@@ -13,9 +13,9 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -644,6 +644,11 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
+	if (HasDictionary(state)) {
+		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
+		column_chunk.meta_data.statistics.__isset.distinct_count = true;
+		column_chunk.meta_data.__isset.statistics = true;
+	}
 	for (const auto &write_info : state.write_info) {
 		column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
 	}
@@ -807,6 +812,22 @@ struct ParquetHugeintOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Hugeint::Cast<double>(input);
+	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<ColumnWriterStatistics>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
+	}
+};
+
+struct ParquetUhugeintOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Uhugeint::Cast<double>(input);
 	}
 
 	template <class SRC, class TGT>
@@ -1274,7 +1295,6 @@ public:
 		idx_t run_count = 0;
 		auto strings = FlatVector::GetData<string_t>(vector);
 		for (idx_t i = 0; i < vcount; i++) {
-
 			if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index + i]) {
 				continue;
 			}
@@ -1992,6 +2012,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::HUGEINT:
 		return make_uniq<StandardColumnWriter<hugeint_t, double, ParquetHugeintOperator>>(
+		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
+	case LogicalTypeId::UHUGEINT:
+		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(
 		    writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(

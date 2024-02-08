@@ -242,7 +242,7 @@ fastfloat_really_inline uint64_t _umul128(uint64_t ab, uint64_t cd,
 fastfloat_really_inline value128 full_multiplication(uint64_t a,
                                                      uint64_t b) {
   value128 answer;
-#ifdef _M_ARM64
+#if defined(FASTFLOAT_VISUAL_STUDIO) && defined(_M_ARM64)
   // ARM64 has native support for 64-bit multiplications, no need to emulate
   answer.high = __umulh(a, b);
   answer.low = a * b;
@@ -522,33 +522,61 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
 
   uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
 
-  while ((p != pend) && is_integer(*p)) {
-    // a multiplication by 10 is cheaper than an arbitrary integer
-    // multiplication
-    i = 10 * i +
-        uint64_t(*p - '0'); // might overflow, we will handle the overflow later
-    ++p;
+  while ((p != pend)) {
+    if(is_integer(*p)) {
+      // a multiplication by 10 is cheaper than an arbitrary integer
+      // multiplication
+      i = 10 * i +
+          uint64_t(*p - '0'); // might overflow, we will handle the overflow later
+      ++p;
+	  if(p != pend && *p == '_') {
+		  // skip 1 underscore if it is not the last character and followed by a digit
+		  ++p;
+		  if(p == pend || !is_integer(*p)) {
+			  return answer;
+		  }
+	  }
+    }
+    else {
+      break;
+    }
   }
   const char *const end_of_integer_part = p;
   int64_t digit_count = int64_t(end_of_integer_part - start_digits);
   int64_t exponent = 0;
   if ((p != pend) && (*p == decimal_separator)) {
     ++p;
-  // Fast approach only tested under little endian systems
-  if ((p + 8 <= pend) && is_made_of_eight_digits_fast(p)) {
-    i = i * 100000000 + parse_eight_digits_unrolled(p); // in rare cases, this will overflow, but that's ok
-    p += 8;
+
+    // Fast approach only tested under little endian systems
     if ((p + 8 <= pend) && is_made_of_eight_digits_fast(p)) {
       i = i * 100000000 + parse_eight_digits_unrolled(p); // in rare cases, this will overflow, but that's ok
       p += 8;
+      if ((p + 8 <= pend) && is_made_of_eight_digits_fast(p)) {
+        i = i * 100000000 + parse_eight_digits_unrolled(p); // in rare cases, this will overflow, but that's ok
+        p += 8;
+      }
     }
-  }
-    while ((p != pend) && is_integer(*p)) {
-      uint8_t digit = uint8_t(*p - '0');
-      ++p;
-      i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
+
+    int64_t skipped_underscores = 0;
+    while ((p != pend)) {
+      if(is_integer(*p)) {
+        uint8_t digit = uint8_t(*p - '0');
+        ++p;
+        i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
+
+		if(p != pend && *p == '_') {
+		  // skip 1 underscore if it is not the last character and followed by a digit
+		  ++p;
+		  ++skipped_underscores;
+		  if(p == pend || !is_integer(*p)) {
+			  return answer;
+		  }
+		}
+      } else {
+		break;
+	  }
     }
-    exponent = end_of_integer_part + 1 - p;
+    exponent = end_of_integer_part + 1 - p + skipped_underscores;
     digit_count -= exponent;
   }
   // we must have encountered at least one integer!
@@ -574,12 +602,25 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
       // Otherwise, we will be ignoring the 'e'.
       p = location_of_e;
     } else {
-      while ((p != pend) && is_integer(*p)) {
-        uint8_t digit = uint8_t(*p - '0');
-        if (exp_number < 0x10000) {
-          exp_number = 10 * exp_number + digit;
+      while ((p != pend)) {
+        if(is_integer(*p)) {
+          uint8_t digit = uint8_t(*p - '0');
+          if (exp_number < 0x10000) {
+            exp_number = 10 * exp_number + digit;
+          }
+          ++p;
+
+		  if(p != pend && *p == '_') {
+			// skip 1 underscore if it is not the last character and followed by a digit
+			++p;
+			if(p == pend || !is_integer(*p)) {
+				return answer;
+			}
+		  }
         }
-        ++p;
+        else {
+          break;
+        }
       }
       if(neg_exp) { exp_number = - exp_number; }
       exponent += exp_number;
@@ -612,20 +653,50 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
       i = 0;
       p = start_digits;
       const uint64_t minimal_nineteen_digit_integer{1000000000000000000};
-      while((i < minimal_nineteen_digit_integer) && (p != pend) && is_integer(*p)) {
-        i = i * 10 + uint64_t(*p - '0');
-        ++p;
+      while((i < minimal_nineteen_digit_integer) && (p != pend)) {
+        if (is_integer(*p)){ 
+          i = i * 10 + uint64_t(*p - '0');
+          ++p;
+
+		  if(p != pend && *p == '_') {
+			// skip 1 underscore if it is not the last character and followed by a digit
+			++p;
+			if(p == pend || !is_integer(*p)) {
+				answer.valid = false;
+				return answer;
+			}
+		  }
+        }
+		else {
+          break;
+        }
       }
       if (i >= minimal_nineteen_digit_integer) { // We have a big integers
         exponent = end_of_integer_part - p + exp_number;
       } else { // We have a value with a fractional component.
           p++; // skip the decimal_separator
           const char *first_after_period = p;
-          while((i < minimal_nineteen_digit_integer) && (p != pend) && is_integer(*p)) {
-            i = i * 10 + uint64_t(*p - '0');
-            ++p;
+          int64_t skipped_underscores = 0;
+          while((i < minimal_nineteen_digit_integer) && (p != pend)) {
+            if(is_integer(*p)) {
+              i = i * 10 + uint64_t(*p - '0');
+              ++p;
+
+			  if(p != pend && *p == '_') {
+				// skip 1 underscore if it is not the last character and followed by a digit
+				++p;
+				++skipped_underscores;
+				if(p == pend || !is_integer(*p)) {
+					answer.valid = false;
+					return answer;
+				}
+			  }
+			}
+            else {
+              break;
+            }
           }
-          exponent = first_after_period - p + exp_number;
+          exponent = first_after_period - p + exp_number + skipped_underscores;
       }
       // We have now corrected both exponent and i, to a truncated value
     }

@@ -19,6 +19,9 @@ class TableIOManager;
 struct DataTableInfo {
 	DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, string schema, string table);
 
+	//! Initialize any unknown indexes whose types might now be present after an extension load
+	void InitializeIndexes(ClientContext &context);
+
 	//! The database instance of the table
 	AttachedDatabase &db;
 	//! The table IO manager
@@ -26,12 +29,14 @@ struct DataTableInfo {
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
 	atomic<idx_t> cardinality;
-	// schema of the table
+	//! The schema of the table
 	string schema;
-	// name of the table
+	//! The name of the table
 	string table;
-
+	//! The physical list of indexes of this table
 	TableIndexList indexes;
+	//! Index storage information of the indexes created by this table
+	vector<IndexStorageInfo> index_storage_infos;
 
 	bool IsTemporary() const;
 };

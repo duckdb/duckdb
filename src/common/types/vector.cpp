@@ -9,6 +9,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -27,7 +28,7 @@
 namespace duckdb {
 
 Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
-    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr) {
+    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
 		Initialize(zero_data, capacity);
 	}
@@ -117,6 +118,21 @@ void Vector::ReferenceAndSetType(const Vector &other) {
 
 void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
+#ifdef DEBUG
+	auto &this_type = GetType();
+	auto &other_type = other.GetType();
+
+	auto type_is_same = other_type == this_type;
+	bool this_is_nested = this_type.IsNested();
+	bool other_is_nested = other_type.IsNested();
+
+	bool not_nested = this_is_nested == false && other_is_nested == false;
+	bool type_size_equal = GetTypeIdSize(this_type.InternalType()) == GetTypeIdSize(other_type.InternalType());
+	//! Either the types are completely identical, or they are not nested and their physical type size is the same
+	//! The reason nested types are not allowed is because copying the auxiliary buffer does not happen recursively
+	//! e.g DOUBLE[] to BIGINT[], the type of the LIST would say BIGINT but the child Vector says DOUBLE
+	D_ASSERT((not_nested && type_size_equal) || type_is_same);
+#endif
 	AssignSharedPointer(buffer, other.buffer);
 	AssignSharedPointer(auxiliary, other.auxiliary);
 	data = other.data;
@@ -127,7 +143,7 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 	cache.ResetFromCache(*this);
 }
 
-void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
+void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		Reference(other);
 		return;
@@ -162,7 +178,7 @@ void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 	}
 }
 
-void Vector::Slice(Vector &other, const SelectionVector &sel, idx_t count) {
+void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count) {
 	Reference(other);
 	Slice(sel, count);
 }
@@ -406,6 +422,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case PhysicalType::UINT64:
 		reinterpret_cast<uint64_t *>(data)[index] = val.GetValueUnsafe<uint64_t>();
 		break;
+	case PhysicalType::UINT128:
+		reinterpret_cast<uhugeint_t *>(data)[index] = val.GetValueUnsafe<uhugeint_t>();
+		break;
 	case PhysicalType::FLOAT:
 		reinterpret_cast<float *>(data)[index] = val.GetValueUnsafe<float>();
 		break;
@@ -560,6 +579,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::TIMESTAMPTZ(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<hugeint_t *>(data)[index]);
+	case LogicalTypeId::UHUGEINT:
+		return Value::UHUGEINT(reinterpret_cast<uhugeint_t *>(data)[index]);
 	case LogicalTypeId::UUID:
 		return Value::UUID(reinterpret_cast<hugeint_t *>(data)[index]);
 	case LogicalTypeId::DECIMAL: {
@@ -848,6 +869,9 @@ void Vector::Flatten(idx_t count) {
 		case PhysicalType::INT128:
 			TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
 			break;
+		case PhysicalType::UINT128:
+			TemplatedFlattenConstantVector<uhugeint_t>(data, old_data, count);
+			break;
 		case PhysicalType::FLOAT:
 			TemplatedFlattenConstantVector<float>(data, old_data, count);
 			break;
@@ -884,6 +908,8 @@ void Vector::Flatten(idx_t count) {
 			//	             =>    ..   | 1 |
 			//                          | 2 |
 			// 							 ...
+
+			child.Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
@@ -2002,6 +2028,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vec);
 		ListVector::SetListSize(child, size);
+		return;
 	}
 	vec.auxiliary->Cast<VectorListBuffer>().SetSize(size);
 }

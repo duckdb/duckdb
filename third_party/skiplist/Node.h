@@ -80,6 +80,7 @@ public:
 
 		_Compare _compare;
 		Node* cache;
+		pcg32_fast prng;
 	};
 
     Node(const T &value, _Compare _cmp, _Pool &pool);
@@ -133,7 +134,7 @@ protected:
 		_nodeRefs.clear();
 		do {
 			_nodeRefs.push_back(this, _nodeRefs.height() ? 0 : 1);
-		} while (tossCoin());
+		} while (_pool.prng() < _pool.prng.max() / 2);
 	}
 
 protected:

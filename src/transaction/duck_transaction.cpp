@@ -56,6 +56,7 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 	if (extra_data_size > 0) {
 		alloc_size += extra_data_size + sizeof(idx_t);
 	}
+
 	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
 	// store the pointer to the catalog entry
 	Store<CatalogEntry *>(&entry, baseptr);
@@ -110,7 +111,7 @@ bool DuckTransaction::AutomaticCheckpoint(AttachedDatabase &db) {
 	return storage_manager.AutomaticCheckpoint(storage->EstimatedSize() + undo_buffer.EstimatedSize());
 }
 
-string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
+ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept {
 	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
 	//    true: Then this function will NOT write to the WAL or flush/persist.
 	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
@@ -128,6 +129,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 	} else {
 		log = nullptr;
 	}
+
 	try {
 		storage->Commit(commit_state, *this);
 		undo_buffer.Commit(iterator_state, log, commit_id);
@@ -140,10 +142,10 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 		if (storage_commit_state) {
 			storage_commit_state->FlushCommit();
 		}
-		return string();
+		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
-		return ex.what();
+		return ErrorData(ex);
 	}
 }
 

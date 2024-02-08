@@ -11,6 +11,7 @@ CREATE TYPE alias AS VARCHAR;
 #Enums with the same name shouldn't work
 statement error
 CREATE TYPE alias AS INTEGER;
+----
 
 # Delete ALIASs
 statement ok
@@ -19,6 +20,7 @@ DROP TYPE alias;
 #This won't work because alias was already deleted
 statement error
 DROP TYPE alias;
+----
 
 # We can create alias again
 statement ok
@@ -42,3 +44,4 @@ DROP TYPE IF EXISTS alias;
 # create a type with a non-existant type as source
 statement error
 CREATE TYPE alias as BLOBL;
+----

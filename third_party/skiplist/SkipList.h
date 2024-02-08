@@ -447,6 +447,7 @@
 #include <set> // Used for HeadNode::_lacksIntegrityNodeReferencesNotInList()
 #include <string> // Used for class Exception
 #include <random>
+#include "pcg_random.hpp"
 
 #ifdef DEBUG
 #include <cassert>
@@ -530,11 +531,6 @@ namespace duckdb_skiplistlib {
         void _throw_exceeds_size(size_t index);
 
 /************************ END: Exceptions ****************************/
-
-        bool tossCoin();
-
-        /** Seed the random number generator for coin tosses. */
-        void seedRand(unsigned seed);
 
 #ifdef SKIPLIST_THREAD_SUPPORT
         /**

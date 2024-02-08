@@ -73,6 +73,7 @@ StatisticsType BaseStatistics::GetStatsType(const LogicalType &type) {
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return StatisticsType::NUMERIC_STATS;
@@ -255,23 +256,41 @@ void BaseStatistics::CopyBase(const BaseStatistics &other) {
 void BaseStatistics::Set(StatsInfo info) {
 	switch (info) {
 	case StatsInfo::CAN_HAVE_NULL_VALUES:
-		has_null = true;
+		SetHasNull();
 		break;
 	case StatsInfo::CANNOT_HAVE_NULL_VALUES:
 		has_null = false;
 		break;
 	case StatsInfo::CAN_HAVE_VALID_VALUES:
-		has_no_null = true;
+		SetHasNoNull();
 		break;
 	case StatsInfo::CANNOT_HAVE_VALID_VALUES:
 		has_no_null = false;
 		break;
 	case StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES:
-		has_null = true;
-		has_no_null = true;
+		SetHasNull();
+		SetHasNoNull();
 		break;
 	default:
 		throw InternalException("Unrecognized StatsInfo for BaseStatistics::Set");
+	}
+}
+
+void BaseStatistics::SetHasNull() {
+	has_null = true;
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
+			StructStats::GetChildStats(*this, c).SetHasNull();
+		}
+	}
+}
+
+void BaseStatistics::SetHasNoNull() {
+	has_no_null = true;
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		for (idx_t c = 0; c < StructType::GetChildCount(type); c++) {
+			StructStats::GetChildStats(*this, c).SetHasNoNull();
+		}
 	}
 }
 
@@ -309,6 +328,7 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 			break;
 		case StatisticsType::ARRAY_STATS:
 			ArrayStats::Serialize(*this, serializer);
+			break;
 		default:
 			break;
 		}

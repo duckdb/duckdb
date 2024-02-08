@@ -48,9 +48,10 @@
         "name": "pandas",
         "children": [
             "pandas.DataFrame",
-            "pandas._libs",
             "pandas.isnull",
-            "pandas.ArrowDtype"
+            "pandas.ArrowDtype",
+            "pandas.NaT",
+            "pandas.NA"
         ],
         "required": false
     },
@@ -60,27 +61,16 @@
         "name": "DataFrame",
         "children": []
     },
-    "pandas._libs": {
+    "pandas.NaT": {
         "type": "attribute",
-        "full_path": "pandas._libs",
-        "name": "_libs",
-        "children": [
-            "pandas._libs.missing"
-        ],
-        "required": false
+        "full_path": "pandas.NaT",
+        "name": "NaT",
+        "children": []
     },
-    "pandas._libs.missing": {
+    "pandas.NA": {
         "type": "attribute",
-        "full_path": "pandas._libs.missing",
-        "name": "missing",
-        "children": [
-            "pandas._libs.missing.NAType"
-        ]
-    },
-    "pandas._libs.missing.NAType": {
-        "type": "attribute",
-        "full_path": "pandas._libs.missing.NAType",
-        "name": "NAType",
+        "full_path": "pandas.NA",
+        "name": "NA",
         "children": []
     },
     "pandas.isnull": {
@@ -224,6 +214,7 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
+			"numpy.core",
             "numpy.ndarray",
             "numpy.datetime64",
             "numpy.generic",
@@ -247,6 +238,20 @@
             "numpy.cdouble",
             "numpy.clongdouble"
         ]
+    },
+    "numpy.core": {
+        "type": "attribute",
+        "full_path": "numpy.core",
+        "name": "core",
+        "children": [
+            "numpy.core.multiarray"
+        ]
+    },
+    "numpy.core.multiarray": {
+        "type": "attribute",
+        "full_path": "numpy.core.multiarray",
+        "name": "multiarray",
+        "children": []
     },
     "numpy.ndarray": {
         "type": "attribute",
@@ -433,7 +438,7 @@
         "children": [
             "duckdb.filesystem.ModifiedMemoryFileSystem"
         ],
-		"required": false
+        "required": false
     },
     "duckdb.filesystem.ModifiedMemoryFileSystem": {
         "type": "attribute",

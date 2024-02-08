@@ -1,0 +1,64 @@
+# name: test/sql/storage/vacuum/vacuum_partial_deletes_cleanup.test_slow
+# description: Verify that deleting rows and re-appending does not increase storage size
+# group: [vacuum]
+
+load __TEST_DIR__/vacuum_deletes_partial_cleanup.db
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+# verify that deleting an entire table in a loop doesn't increase database size (i.e. deletes are vacuumed correctly)
+
+# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
+# therefore, we need to compare to a range of total block counts
+statement ok
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+loop i 0 10
+
+statement ok
+INSERT INTO integers SELECT * FROM range(1000000);
+
+query I
+SELECT SUM(i) FROM integers;
+----
+499999500000
+
+query I
+DELETE FROM integers WHERE i%2=0
+----
+500000
+
+statement ok
+CHECKPOINT
+
+query I
+DELETE FROM integers WHERE i%2<>0
+----
+500000
+
+
+query I
+SELECT SUM(i) FROM integers
+----
+NULL
+
+# ensure that the total blocks don't exceed the total blocks after the first iteration
+# by more than 1.2
+
+query I
+SELECT CASE WHEN ${i} = 0 THEN True
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
+	ELSE False END
+FROM pragma_database_size() AS current, total_blocks_tbl;
+----
+1
+
+# adjust total_blocks_tbl once to the count after the first iteration
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks) END);
+
+endloop

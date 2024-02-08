@@ -5,6 +5,7 @@
 # incorrect usage
 statement error
 select list_product()
+----
 
 statement ok
 CREATE TABLE integers(i INTEGER[]);

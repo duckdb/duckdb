@@ -263,6 +263,7 @@ class TestDataFrameJoin(object):
     @pytest.mark.parametrize('how', ['semi', 'leftsemi', 'left_semi'])
     def test_semi_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
+        df = df.orderBy(*df.columns)
         res = df.collect()
         assert res == [
             Row(
@@ -295,6 +296,7 @@ class TestDataFrameJoin(object):
     @pytest.mark.parametrize('how', ['anti', 'leftanti', 'left_anti'])
     def test_anti_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
+        df.orderBy(*df.columns)
         res = df.collect()
         assert res == [
             Row(emp_id=6, name='Brown', superior_emp_id=2, year_joined='2010', emp_dept_id='50', gender='', salary=-1)
@@ -313,6 +315,7 @@ class TestDataFrameJoin(object):
                 col("emp2.name").alias("superior_emp_name"),
             )
         )
+        df = df.orderBy(*df.columns)
         res = df.collect()
         assert res == [
             Row(emp_id=2, name='Rose', superior_emp_id=1, superior_emp_name='Smith'),

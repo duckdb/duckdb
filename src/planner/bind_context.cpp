@@ -15,10 +15,14 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
+
+BindContext::BindContext(Binder &binder) : binder(binder) {
+}
 
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
@@ -133,10 +137,10 @@ void BindContext::TransferUsingBinding(BindContext &current_context, optional_pt
 }
 
 string BindContext::GetActualColumnName(const string &binding_name, const string &column_name) {
-	string error;
+	ErrorData error;
 	auto binding = GetBinding(binding_name, error);
 	if (!binding) {
-		throw InternalException("No binding with name \"%s\"", binding_name);
+		throw InternalException("No binding with name \"%s\": %s", binding_name, error.RawMessage());
 	}
 	column_t binding_index;
 	if (!binding->TryGetBindingIndex(column_name, binding_index)) { // LCOV_EXCL_START
@@ -158,10 +162,10 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 }
 
 unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
-	string error_message;
+	ErrorData error;
 
-	auto binding = GetBinding(table_name, error_message);
-	D_ASSERT(binding);
+	auto binding = GetBinding(table_name, error);
+	D_ASSERT(binding && !error.HasError());
 	auto &table_binding = binding->Cast<TableBinding>();
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->alias = column_name;
@@ -192,7 +196,7 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &catalog_name, const string &schema_name,
                                                                 const string &table_name, const string &column_name) {
-	string error_message;
+	ErrorData error;
 	vector<string> names;
 	if (!catalog_name.empty()) {
 		names.push_back(catalog_name);
@@ -204,7 +208,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	names.push_back(column_name);
 
 	auto result = make_uniq<ColumnRefExpression>(std::move(names));
-	auto binding = GetBinding(table_name, error_message);
+	auto binding = GetBinding(table_name, error);
 	if (!binding) {
 		return std::move(result);
 	}
@@ -233,7 +237,7 @@ optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
-optional_ptr<Binding> BindContext::GetBinding(const string &name, string &out_error) {
+optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out_error) {
 	auto match = bindings.find(name);
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
@@ -243,7 +247,8 @@ optional_ptr<Binding> BindContext::GetBinding(const string &name, string &out_er
 		}
 		string candidate_str =
 		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, name), "Candidate tables");
-		out_error = StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str);
+		out_error = ErrorData(ExceptionType::BINDER,
+		                      StringUtil::Format("Referenced table \"%s\" not found!%s", name, candidate_str));
 		return nullptr;
 	}
 	return match->second.get();
@@ -254,10 +259,10 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 		throw InternalException("Could not bind alias \"%s\"!", colref.GetColumnName());
 	}
 
-	string error;
+	ErrorData error;
 	auto binding = GetBinding(colref.GetTableName(), error);
 	if (!binding) {
-		return BindResult(error);
+		return BindResult(std::move(error));
 	}
 	return binding->Bind(colref, depth);
 }
@@ -363,13 +368,13 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	} else {
 		// SELECT tbl.* case
 		// SELECT struct.* case
-		string error;
+		ErrorData error;
 		auto binding = GetBinding(expr.relation_name, error);
 		bool is_struct_ref = false;
 		if (!binding) {
 			auto binding_name = GetMatchingBinding(expr.relation_name);
 			if (binding_name.empty()) {
-				throw BinderException(error);
+				error.Throw();
 			}
 			binding = bindings[binding_name].get();
 			is_struct_ref = true;
@@ -402,6 +407,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_name, binding->alias));
 			}
 		}
+	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		expr.exclude_list.clear();
+		expr.replace_list.clear();
 	}
 	for (auto &excluded : expr.exclude_list) {
 		if (excluded_columns.find(excluded) == excluded_columns.end()) {

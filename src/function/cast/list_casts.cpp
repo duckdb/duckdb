@@ -38,11 +38,14 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	// only handle constant and flat vectors here for now
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(source.GetVectorType());
-		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+		const bool is_null = ConstantVector::IsNull(source);
+		ConstantVector::SetNull(result, is_null);
 
-		auto ldata = ConstantVector::GetData<list_entry_t>(source);
-		auto tdata = ConstantVector::GetData<list_entry_t>(result);
-		*tdata = *ldata;
+		if (!is_null) {
+			auto ldata = ConstantVector::GetData<list_entry_t>(source);
+			auto tdata = ConstantVector::GetData<list_entry_t>(result);
+			*tdata = *ldata;
+		}
 	} else {
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -79,7 +82,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
 	auto &validity = FlatVector::Validity(varchar_list);
 
-	child.Flatten(count);
+	child.Flatten(ListVector::GetListSize(varchar_list));
 	auto child_data = FlatVector::GetData<string_t>(child);
 	auto &child_validity = FlatVector::Validity(child);
 
@@ -104,7 +107,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		}
 		result_data[i] = StringVector::EmptyString(result, list_length);
 		auto dataptr = result_data[i].GetDataWriteable();
-		auto offset = 0;
+		idx_t offset = 0;
 		dataptr[offset++] = '[';
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			auto idx = list.offset + list_idx;

@@ -27,7 +27,7 @@ struct ApproxCountDistinctFun {
 struct ArgMinFun {
 	static constexpr const char *Name = "arg_min";
 	static constexpr const char *Parameters = "arg,val";
-	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the arg expression at that row.";
+	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the non-NULL arg expression at that row.";
 	static constexpr const char *Example = "arg_min(A,B)";
 
 	static AggregateFunctionSet GetFunctions();
@@ -45,10 +45,19 @@ struct MinByFun {
 	static constexpr const char *Name = "min_by";
 };
 
+struct ArgMinNullFun {
+	static constexpr const char *Name = "arg_min_null";
+	static constexpr const char *Parameters = "arg,val";
+	static constexpr const char *Description = "Finds the row with the minimum val. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_min_null(A,B)";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 struct ArgMaxFun {
 	static constexpr const char *Name = "arg_max";
 	static constexpr const char *Parameters = "arg,val";
-	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the arg expression at that row.";
+	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the non-NULL arg expression at that row.";
 	static constexpr const char *Example = "arg_max(A,B)";
 
 	static AggregateFunctionSet GetFunctions();
@@ -64,6 +73,15 @@ struct MaxByFun {
 	using ALIAS = ArgMaxFun;
 
 	static constexpr const char *Name = "max_by";
+};
+
+struct ArgMaxNullFun {
+	static constexpr const char *Name = "arg_max_null";
+	static constexpr const char *Parameters = "arg,val";
+	static constexpr const char *Description = "Finds the row with the maximum val. Calculates the arg expression at that row.";
+	static constexpr const char *Example = "arg_max_null(A,B)";
+
+	static AggregateFunctionSet GetFunctions();
 };
 
 struct BitAndFun {
@@ -154,6 +172,15 @@ struct KurtosisFun {
 	static constexpr const char *Name = "kurtosis";
 	static constexpr const char *Parameters = "x";
 	static constexpr const char *Description = "Returns the excess kurtosis (Fisher’s definition) of all input values, with a bias correction according to the sample size";
+	static constexpr const char *Example = "";
+
+	static AggregateFunction GetFunction();
+};
+
+struct KurtosisPopFun {
+	static constexpr const char *Name = "kurtosis_pop";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Returns the excess kurtosis (Fisher’s definition) of all input values, without bias correction";
 	static constexpr const char *Example = "";
 
 	static AggregateFunction GetFunction();

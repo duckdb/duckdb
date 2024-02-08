@@ -12,6 +12,7 @@ CREATE TABLE routes (
 	agency_id TEXT,
 	FOREIGN KEY (agency_id) REFERENCES agency
 );
+----
 
 statement ok
 CREATE TABLE agency (
@@ -26,6 +27,7 @@ CREATE TABLE routes (
 	agency_id TEXT,
 	FOREIGN KEY (route_id, agency_id) REFERENCES agency
 );
+----
 
 statement ok
 CREATE TABLE routes (
@@ -37,6 +39,7 @@ CREATE TABLE routes (
 # verify foreign key functionality
 statement error
 INSERT INTO routes VALUES (1, 1);
+----
 
 statement ok
 INSERT INTO agency VALUES (1, 1);
@@ -47,6 +50,7 @@ INSERT INTO routes VALUES (1, 1);
 # now without a primary key
 statement error
 DROP TABLE agency;
+----
 
 statement ok
 DROP TABLE routes;
@@ -66,6 +70,7 @@ CREATE TABLE routes (
 	agency_id TEXT,
 	FOREIGN KEY (agency_id) REFERENCES agency
 );
+----
 
 # self-referential primary key
 statement ok
@@ -80,6 +85,7 @@ INSERT INTO routes VALUES (1, NULL);
 
 statement error
 INSERT INTO routes VALUES (2, 2);
+----
 
 statement ok
 INSERT INTO routes VALUES (2, 1);

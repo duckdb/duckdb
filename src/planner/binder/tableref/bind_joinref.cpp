@@ -205,7 +205,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			}
 			error_msg += "\n   Left candidates: " + left_candidates;
 			error_msg += "\n   Right candidates: " + right_candidates;
-			throw BinderException(FormatError(ref, error_msg));
+			throw BinderException(ref, error_msg);
 		}
 		break;
 	}

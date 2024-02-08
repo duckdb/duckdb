@@ -106,6 +106,7 @@ NULL	NULL	1
 # we CANNOT mix aggregates and groups
 statement error
 SELECT (g+i)%2 + SUM(i), SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
+----
 
 # multiple groups
 

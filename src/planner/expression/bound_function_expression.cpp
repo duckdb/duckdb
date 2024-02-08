@@ -18,8 +18,12 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
 	D_ASSERT(!function.name.empty());
 }
 
-bool BoundFunctionExpression::HasSideEffects() const {
-	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? true : Expression::HasSideEffects();
+bool BoundFunctionExpression::IsVolatile() const {
+	return function.stability == FunctionStability::VOLATILE ? true : Expression::IsVolatile();
+}
+
+bool BoundFunctionExpression::IsConsistent() const {
+	return function.stability != FunctionStability::CONSISTENT ? false : Expression::IsConsistent();
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -30,16 +34,16 @@ bool BoundFunctionExpression::IsFoldable() const {
 		auto &lambda_bind_data = bind_info->Cast<ListLambdaBindData>();
 		if (lambda_bind_data.lambda_expr) {
 			auto &expr = *lambda_bind_data.lambda_expr;
-			if (expr.HasSideEffects()) {
+			if (expr.IsVolatile()) {
 				return false;
 			}
 		}
 	}
-	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? false : Expression::IsFoldable();
+	return function.stability == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), function.name,
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
 	                                                                         is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {

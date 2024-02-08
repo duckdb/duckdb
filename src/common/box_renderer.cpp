@@ -96,6 +96,8 @@ string BoxRenderer::RenderType(const LogicalType &type) {
 		return "uint32";
 	case LogicalTypeId::UBIGINT:
 		return "uint64";
+	case LogicalTypeId::UHUGEINT:
+		return "uint128";
 	case LogicalTypeId::LIST: {
 		auto child = RenderType(ListType::GetChildType(type));
 		return child + "[]";
@@ -116,6 +118,7 @@ ValueRenderAlignment BoxRenderer::TypeAlignment(const LogicalType &type) {
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -254,7 +257,55 @@ list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context,
 }
 
 string ConvertRenderValue(const string &input) {
-	return StringUtil::Replace(StringUtil::Replace(input, "\n", "\\n"), string("\0", 1), "\\0");
+	string result;
+	result.reserve(input.size());
+	for (idx_t c = 0; c < input.size(); c++) {
+		data_t byte_value = const_data_ptr_cast(input.c_str())[c];
+		if (byte_value < 32) {
+			// ASCII control character
+			result += "\\";
+			switch (input[c]) {
+			case 7:
+				// bell
+				result += 'a';
+				break;
+			case 8:
+				// backspace
+				result += 'b';
+				break;
+			case 9:
+				// tab
+				result += 't';
+				break;
+			case 10:
+				// newline
+				result += 'n';
+				break;
+			case 11:
+				// vertical tab
+				result += 'v';
+				break;
+			case 12:
+				// form feed
+				result += 'f';
+				break;
+			case 13:
+				// cariage return
+				result += 'r';
+				break;
+			case 27:
+				// escape
+				result += 'e';
+				break;
+			default:
+				result += to_string(byte_value);
+				break;
+			}
+		} else {
+			result += input[c];
+		}
+	}
+	return result;
 }
 
 string BoxRenderer::GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r) {

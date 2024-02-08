@@ -16,6 +16,17 @@
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 namespace duckdb {
+
+struct ExportEntries {
+	vector<reference<CatalogEntry>> schemas;
+	vector<reference<CatalogEntry>> custom_types;
+	vector<reference<CatalogEntry>> sequences;
+	vector<reference<CatalogEntry>> tables;
+	vector<reference<CatalogEntry>> views;
+	vector<reference<CatalogEntry>> indexes;
+	vector<reference<CatalogEntry>> macros;
+};
+
 //! Parse a file from disk using a specified copy function and return the set of chunks retrieved from the file
 class PhysicalExport : public PhysicalOperator {
 public:
@@ -43,6 +54,9 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
+	static void ExtractEntries(ClientContext &context, vector<reference<SchemaCatalogEntry>> &schemas,
+	                           ExportEntries &result);
 
 public:
 	// Sink interface

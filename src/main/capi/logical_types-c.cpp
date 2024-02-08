@@ -35,17 +35,17 @@ duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
 	return reinterpret_cast<duckdb_logical_type>(ltype);
 }
 
-duckdb_logical_type duckdb_create_union_type(duckdb_logical_type member_types_p, const char **member_names,
+duckdb_logical_type duckdb_create_union_type(duckdb_logical_type *member_types_p, const char **member_names,
                                              idx_t member_count) {
 	if (!member_types_p || !member_names) {
 		return nullptr;
 	}
-	duckdb::LogicalType *member_types = reinterpret_cast<duckdb::LogicalType *>(member_types_p);
+	duckdb::LogicalType **member_types = reinterpret_cast<duckdb::LogicalType **>(member_types_p);
 	duckdb::LogicalType *mtype = new duckdb::LogicalType;
 	duckdb::child_list_t<duckdb::LogicalType> members;
 
 	for (idx_t i = 0; i < member_count; i++) {
-		members.push_back(make_pair(member_names[i], member_types[i]));
+		members.push_back(make_pair(member_names[i], *member_types[i]));
 	}
 	*mtype = duckdb::LogicalType::UNION(members);
 	return reinterpret_cast<duckdb_logical_type>(mtype);

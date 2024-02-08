@@ -30,10 +30,10 @@ static void StemFunction(DataChunk &args, ExpressionState &state, Vector &result
 		    if (s == 0) {
 			    const char **stemmers = sb_stemmer_list();
 			    size_t n_stemmers = 27;
-			    throw Exception(StringUtil::Format(
+			    throw InvalidInputException(
 			        "Unrecognized stemmer '%s'. Supported stemmers are: ['%s'], or use 'none' for no stemming",
 			        stemmer.GetString(),
-			        StringUtil::Join(stemmers, n_stemmers, "', '", [](const char *st) { return st; })));
+			        StringUtil::Join(stemmers, n_stemmers, "', '", [](const char *st) { return st; }));
 		    }
 
 		    auto output_data =

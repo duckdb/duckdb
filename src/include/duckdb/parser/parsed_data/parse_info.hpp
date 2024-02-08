@@ -17,6 +17,7 @@ enum class ParseInfoType : uint8_t {
 	ATTACH_INFO,
 	COPY_INFO,
 	CREATE_INFO,
+	CREATE_SECRET_INFO,
 	DETACH_INFO,
 	DROP_INFO,
 	BOUND_EXPORT_DATA,
@@ -24,7 +25,8 @@ enum class ParseInfoType : uint8_t {
 	PRAGMA_INFO,
 	SHOW_SELECT_INFO,
 	TRANSACTION_INFO,
-	VACUUM_INFO
+	VACUUM_INFO,
+	COMMENT_ON_INFO
 };
 
 struct ParseInfo {

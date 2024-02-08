@@ -1,15 +1,15 @@
 #include "duckdb/transaction/undo_buffer.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
-#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -103,12 +103,26 @@ bool UndoBuffer::ChangesMade() {
 }
 
 idx_t UndoBuffer::EstimatedSize() {
+
 	idx_t estimated_size = 0;
 	auto node = allocator.GetHead();
 	while (node) {
 		estimated_size += node->current_position;
 		node = node->next.get();
 	}
+
+	// we need to search for any index creation entries
+	IteratorState iterator_state;
+	IterateEntries(iterator_state, [&](UndoFlags entry_type, data_ptr_t data) {
+		if (entry_type == UndoFlags::CATALOG_ENTRY) {
+			auto catalog_entry = Load<CatalogEntry *>(data);
+			if (catalog_entry->Parent().type == CatalogType::INDEX_ENTRY) {
+				auto &index = catalog_entry->Parent().Cast<DuckIndexEntry>();
+				estimated_size += index.initial_index_size;
+			}
+		}
+	});
+
 	return estimated_size;
 }
 

@@ -50,6 +50,7 @@ Göbel
 # but not with NOACCENT
 statement error
 SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1
+----
 
 # japanese collation
 statement ok
@@ -82,3 +83,40 @@ statement error
 SELECT icu_sort_key('goose', 'DUCK_DUCK_ENUM');
 ----
 Invalid Input Error
+
+# issue duckdb/duckdb#9692
+query I
+select chr(2*16*256+1*256+2*16+11) collate da  =chr(12*16+5) collate da;
+----
+True
+
+
+query I
+select icu_sort_key(chr(2*16*256+1*256+2*16+11),'da')=icu_sort_key(chr(12*16+5),'da');
+----
+True
+
+query I
+select chr(2*16*256+1*256+2*16+11) collate da > chr(12*16+5) collate da;
+----
+FALSE
+
+query I
+select chr(2*16*256+1*256+2*16+11) collate da > chr(12*16+5) collate da;
+----
+FALSE
+
+query I
+select count(*) from (select chr(2*16*256+1*256+2*16+11) union select chr(12*16+5)) as t(s) group by s collate da;
+----
+2
+
+query I
+select nfc_normalize(chr(2*16*256+1*256+2*16+11))=nfc_normalize(chr(12*16+5));
+----
+TRUE
+
+query I
+select count(*) from (select chr(2*16*256+1*256+2*16+11) union select chr(12*16+5)) as t(s) group by s collate nfc;
+----
+2

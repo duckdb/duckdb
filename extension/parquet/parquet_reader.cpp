@@ -25,6 +25,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
@@ -202,6 +203,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		case ConvertedType::DECIMAL:
 			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
 				throw IOException("DECIMAL requires a length and scale specifier!");
+			}
+			if (s_ele.precision > DecimalType::MaxWidth()) {
+				return LogicalType::DOUBLE;
 			}
 			switch (s_ele.type) {
 			case Type::BYTE_ARRAY:
@@ -871,6 +875,11 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	case TableFilterType::IS_NULL:
 		FilterIsNull(v, filter_mask, count);
 		break;
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
+		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
+	} break;
 	default:
 		D_ASSERT(0);
 		break;

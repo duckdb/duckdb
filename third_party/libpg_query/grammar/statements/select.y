@@ -51,6 +51,10 @@ SelectStmt: select_no_parens			%prec UMINUS
 select_with_parens:
 			'(' select_no_parens ')'				{ $$ = $2; }
 			| '(' select_with_parens ')'			{ $$ = $2; }
+			| '(' VariableShowStmt ')'
+		    {
+		    	$$ = $2;
+			}
 		;
 
 /*
@@ -2022,6 +2026,18 @@ millisecond_keyword:
 microsecond_keyword:
 	MICROSECOND_P | MICROSECONDS_P
 
+week_keyword:
+	WEEK_P | WEEKS_P
+
+decade_keyword:
+	DECADE_P | DECADES_P
+
+century_keyword:
+	CENTURY_P | CENTURIES_P
+
+millennium_keyword:
+	MILLENNIUM_P | MILLENNIA_P
+
 opt_interval:
 			year_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR), @1)); }
@@ -2039,6 +2055,14 @@ opt_interval:
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MILLISECOND), @1)); }
 			| microsecond_keyword
 				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MICROSECOND), @1)); }
+			| week_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(WEEK), @1)); }
+			| decade_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(DECADE), @1)); }
+			| century_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(CENTURY), @1)); }
+			| millennium_keyword
+				{ $$ = list_make1(makeIntConst(INTERVAL_MASK(MILLENNIUM), @1)); }
 			| year_keyword TO month_keyword
 				{
 					$$ = list_make1(makeIntConst(INTERVAL_MASK(YEAR) |
@@ -3522,6 +3546,10 @@ extract_arg:
 			| second_keyword								{ $$ = (char*) "second"; }
 			| millisecond_keyword							{ $$ = (char*) "millisecond"; }
 			| microsecond_keyword							{ $$ = (char*) "microsecond"; }
+			| week_keyword									{ $$ = (char*) "week"; }
+			| decade_keyword								{ $$ = (char*) "decade"; }
+			| century_keyword								{ $$ = (char*) "century"; }
+			| millennium_keyword							{ $$ = (char*) "millennium"; }
 			| Sconst										{ $$ = $1; }
 		;
 

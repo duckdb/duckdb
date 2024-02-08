@@ -197,15 +197,19 @@ SELECT * FROM exam WINDOW w AS (ORDER BY mark) QUALIFY row_number() OVER w = 1
 # must appear WINDOW clause before QUALIFY clause
 statement error
 SELECT * FROM exam QUALIFY row_number() OVER w = 1 WINDOW w AS (ORDER BY mark)
+----
 
 # QUALIFY clause requires at least one window function to be specified in at least one of the SELECT column list or the filter predicate of the QUALIFY clause
 statement error
 SELECT b, avg(a) AS avga FROM test GROUP BY b QUALIFY avga > 10
+----
 
 # invalid window function
 statement error
 SELECT b FROM test QUALIFY avga() > 10
+----
 
 # column not found in from clause and can't find in alias map
 statement error
 SELECT b, SUM(a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) > sum;
+----

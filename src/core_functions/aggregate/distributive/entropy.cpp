@@ -146,10 +146,11 @@ AggregateFunction GetEntropyFunctionInternal(PhysicalType type) {
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<double>, double, double, EntropyFunction>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
-	case PhysicalType::VARCHAR:
+	case PhysicalType::VARCHAR: {
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<string>, string_t, double,
-		                                                   EntropyFunctionString>(LogicalType::VARCHAR,
-		                                                                          LogicalType::DOUBLE);
+		                                                   EntropyFunctionString>(
+		    LogicalType::ANY_PARAMS(LogicalType::VARCHAR, 150), LogicalType::DOUBLE);
+	}
 
 	default:
 		throw InternalException("Unimplemented approximate_count aggregate");

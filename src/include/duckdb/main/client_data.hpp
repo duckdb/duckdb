@@ -13,7 +13,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -53,9 +53,6 @@ struct ClientData {
 
 	//! The file opener of the client context
 	unique_ptr<FileOpener> file_opener;
-
-	//! HTTP State in this query
-	shared_ptr<HTTPState> http_state;
 
 	//! The clients' file system wrapper
 	unique_ptr<FileSystem> client_file_system;
