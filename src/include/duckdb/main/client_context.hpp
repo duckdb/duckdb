@@ -45,29 +45,13 @@ struct ActiveQueryContext;
 struct ParserOptions;
 class SimpleBufferedData;
 struct ClientData;
+class ClientContextState;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
 	optional_ptr<case_insensitive_map_t<Value>> parameters;
 	//! Whether or not a stream result should be allowed
 	bool allow_stream_result = false;
-};
-
-//! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
-//! e.g. caches that need to live as long as a ClientContext or Query.
-class ClientContextState {
-public:
-	virtual ~ClientContextState() = default;
-	virtual void TransactionBegin() {
-	}
-	virtual void QueryBegin() {
-	}
-	virtual void QueryEnd() {
-	}
-	virtual void TransactionCommit() {
-	}
-	virtual void TransactionRollback() {
-	}
 };
 
 //! The ClientContext holds information relevant to the current client session
@@ -250,9 +234,6 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
-	void BeginTransactionInternal(ClientContextLock &lock);
-	void CommitInternal(ClientContextLock &lock);
-	void RollbackInternal(ClientContextLock &lock);
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction);
 

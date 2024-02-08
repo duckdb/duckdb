@@ -43,6 +43,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/main/client_context_state.hpp"
 
 namespace duckdb {
 
@@ -73,8 +74,39 @@ private:
 	BaseQueryResult *open_result = nullptr;
 };
 
+struct DebugClientContextState : public ClientContextState {
+	~DebugClientContextState() {
+		if (active_transaction != 0) {
+			throw InternalException("DebugClientContextState - active_transaction > 0 - bug in TransactionBegin/TransactionCommit/TransactionRollback callbacks");
+		}
+		if (active_query != 0) {
+			throw InternalException("DebugClientContextState - active_query > 0 - bug in QueryBegin/QueryEnd callbacks");
+		}
+	}
+
+	idx_t active_transaction = 0;
+	idx_t active_query = 0;
+
+	void QueryBegin(ClientContext &context) override {
+		active_query++;
+	}
+	void QueryEnd(ClientContext &context) override {
+		active_query--;
+	}
+	void TransactionBegin(MetaTransaction &transaction, ClientContext &context) override {
+		active_transaction++;
+	}
+	void TransactionCommit(MetaTransaction &transaction, ClientContext &context) override {
+		active_transaction--;
+	}
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
+		active_transaction--;
+	}
+};
+
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+	registered_state["debug_client_context_state"] = make_uniq<DebugClientContextState>();
 }
 
 ClientContext::~ClientContext() {
@@ -115,30 +147,6 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	return make_uniq<T>(std::move(error));
 }
 
-void ClientContext::BeginTransactionInternal(ClientContextLock &lock) {
-	transaction.BeginTransaction();
-	// Notify any registered state of query begin
-	for (auto const &s : registered_state) {
-		s.second->TransactionBegin();
-	}
-}
-
-void ClientContext::CommitInternal(ClientContextLock &lock) {
-	transaction.Commit();
-	// Notify any registered state of transaction commit
-	for (auto const &s : registered_state) {
-		s.second->TransactionCommit();
-	}
-}
-
-void ClientContext::RollbackInternal(ClientContextLock &lock) {
-	transaction.Rollback();
-	// Notify any registered state of transaction rollback
-	for (auto const &s : registered_state) {
-		s.second->TransactionRollback();
-	}
-}
-
 void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
@@ -148,7 +156,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	}
 	active_query = make_uniq<ActiveQueryContext>();
 	if (transaction.IsAutoCommit()) {
-		BeginTransactionInternal(lock);
+		transaction.BeginTransaction();
 	}
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 	LogQueryInternal(lock, query);
@@ -157,7 +165,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	query_progress.Initialize();
 	// Notify any registered state of query begin
 	for (auto const &s : registered_state) {
-		s.second->QueryBegin();
+		s.second->QueryBegin(*this);
 	}
 }
 
@@ -166,7 +174,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 
 	// Notify any registered state of query end
 	for (auto const &s : registered_state) {
-		s.second->QueryEnd();
+		s.second->QueryEnd(*this);
 	}
 
 	D_ASSERT(active_query.get());
@@ -178,9 +186,9 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 			transaction.ResetActiveQuery();
 			if (transaction.IsAutoCommit()) {
 				if (success) {
-					CommitInternal(lock);
+					transaction.Commit();
 				} else {
-					RollbackInternal(lock);
+					transaction.Rollback();
 				}
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
@@ -927,7 +935,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
 	if (require_new_transaction) {
 		D_ASSERT(!active_query);
-		BeginTransactionInternal(lock);
+		transaction.BeginTransaction();
 	}
 	try {
 		fun();
@@ -942,14 +950,14 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		if (require_new_transaction) {
-			RollbackInternal(lock);
+			transaction.Rollback();
 		} else if (invalidates_transaction) {
 			ValidChecker::Invalidate(ActiveTransaction(), error.RawMessage());
 		}
 		throw;
 	}
 	if (require_new_transaction) {
-		CommitInternal(lock);
+		transaction.Commit();
 	}
 }
 

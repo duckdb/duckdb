@@ -5,6 +5,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/client_context_state.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,11 @@ void TransactionContext::BeginTransaction() {
 	auto catalog_version = Catalog::GetSystemCatalog(context).GetCatalogVersion();
 	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, catalog_version);
 
+	// Notify any registered state of transaction begin
+	for (auto const &s : context.registered_state) {
+		s.second->TransactionBegin(*current_transaction, context);
+	}
+
 	auto &config = DBConfig::GetConfig(context);
 	if (config.options.immediate_transaction_mode) {
 		// if immediate transaction mode is enabled then start all transactions immediately
@@ -46,6 +52,10 @@ void TransactionContext::Commit() {
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	auto error = transaction->Commit();
+	// Notify any registered state of transaction commit
+	for (auto const &s : context.registered_state) {
+		s.second->TransactionCommit(*transaction, context);
+	}
 	if (error.HasError()) {
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	}
@@ -65,6 +75,10 @@ void TransactionContext::Rollback() {
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	transaction->Rollback();
+	// Notify any registered state of transaction rollback
+	for (auto const &s : context.registered_state) {
+		s.second->TransactionRollback(*transaction, context);
+	}
 }
 
 void TransactionContext::ClearTransaction() {
