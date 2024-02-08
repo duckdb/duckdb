@@ -9,10 +9,14 @@ from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
 ----
 Expected Number of Columns: 4 Found: 5
 
+# Create a view
+statement ok
+CREATE VIEW np AS  from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true);
+
 # With ignore errors this should work, with last row being ignored
 query IIII
-from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
-'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true)
+from np
 ----
 10	100	1000	NULL
 10	100	1000	10000
@@ -20,3 +24,63 @@ from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
 10	100	NULL	NULL
 
 # Try a couple projections
+query I
+select a from np
+----
+10
+10
+10
+10
+
+query II
+select b,d from np
+----
+10	100
+10	100
+10	NULL
+10	100
+
+# Now let's try with options that give a const value
+query IIIII
+from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+10	100	1000	NULL	data/csv/nullpadding.csv
+10	100	1000	10000	data/csv/nullpadding.csv
+10	NULL	NULL	NULL	data/csv/nullpadding.csv
+10	100	NULL	NULL	data/csv/nullpadding.csv
+
+query II
+select a, filename from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+
+query I
+select filename from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+
+query I
+select a from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+10
+10
+10
+10
+
+# Let's try some filters
+query IIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true)
+where a = 10 and d = 10000;
+----
+10	100	1000	10000	data/csv/nullpadding.csv
