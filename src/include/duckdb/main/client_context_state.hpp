@@ -34,5 +34,4 @@ public:
 	}
 };
 
-
 } // namespace duckdb
