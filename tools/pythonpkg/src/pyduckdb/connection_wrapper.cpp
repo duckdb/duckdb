@@ -11,6 +11,13 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::UnionType(const py::object &member
 	return conn->UnionType(members);
 }
 
+py::list PyConnectionWrapper::ExtractStatements(const string &query, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ExtractStatements(query);
+}
+
 shared_ptr<DuckDBPyType> PyConnectionWrapper::EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
                                                        const py::list &values, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {

@@ -27,6 +27,7 @@
 #include "duckdb_python/map.hpp"
 #include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pystatement.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
@@ -201,7 +202,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("parameters") = py::none())
 	    .def("read_json", &DuckDBPyConnection::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	         py::arg("name"), py::kw_only(), py::arg("columns") = py::none(), py::arg("sample_size") = py::none(),
-	         py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none());
+	         py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none())
+	    .def("extract_statements", &DuckDBPyConnection::ExtractStatements,
+	         "Parse the query string and extract the Statement object(s) produced", py::arg("query"));
 
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
@@ -293,6 +296,18 @@ py::list DuckDBPyConnection::ListFilesystems() {
 		names.append(py::str(name));
 	}
 	return names;
+}
+
+py::list DuckDBPyConnection::ExtractStatements(const string &query) {
+	if (!connection) {
+		throw ConnectionException("Connection already closed!");
+	}
+	py::list result;
+	auto statements = connection->ExtractStatements(query);
+	for (auto &statement : statements) {
+		result.append(make_uniq<DuckDBPyStatement>(std::move(statement)));
+	}
+	return result;
 }
 
 bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
