@@ -799,7 +799,7 @@ public:
 					                                           append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
-					if (remaining > 0) {
+					if (remaining > 0 || append_counts[current_append_idx] == Storage::ROW_GROUP_SIZE) {
 						// move to the next row group
 						current_append_idx++;
 						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
