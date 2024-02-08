@@ -38,10 +38,10 @@ public:
 	};
 
 	//! Store a secret
-	virtual optional_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-	                                              optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
+	virtual unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                            optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get all secrets
-	virtual vector<reference<SecretEntry>> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
+	virtual vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Drop secret by name
 	virtual void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
 	                              optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
@@ -49,8 +49,8 @@ public:
 	virtual SecretMatch LookupSecret(const string &path, const string &type,
 	                                 optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 	//! Get a secret by name
-	virtual optional_ptr<SecretEntry> GetSecretByName(const string &name,
-	                                                  optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
+	virtual unique_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                                optional_ptr<CatalogTransaction> transaction = nullptr) = 0;
 
 	//! Return the offset associated to this storage for tie-breaking secrets between storages
 	virtual int64_t GetTieBreakOffset() = 0;
@@ -103,15 +103,15 @@ public:
 		return storage_name;
 	};
 
-	virtual optional_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
-	                                              optional_ptr<CatalogTransaction> transaction = nullptr) override;
-	vector<reference<SecretEntry>> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	virtual unique_ptr<SecretEntry> StoreSecret(unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+	                                            optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	vector<SecretEntry> AllSecrets(optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	void DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
 	                      optional_ptr<CatalogTransaction> transaction = nullptr) override;
 	SecretMatch LookupSecret(const string &path, const string &type,
 	                         optional_ptr<CatalogTransaction> transaction = nullptr) override;
-	optional_ptr<SecretEntry> GetSecretByName(const string &name,
-	                                          optional_ptr<CatalogTransaction> transaction = nullptr) override;
+	unique_ptr<SecretEntry> GetSecretByName(const string &name,
+	                                        optional_ptr<CatalogTransaction> transaction = nullptr) override;
 
 protected:
 	//! Callback called on Store to allow child classes to implement persistence.
