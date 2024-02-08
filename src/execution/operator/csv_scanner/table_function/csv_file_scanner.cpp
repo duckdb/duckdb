@@ -152,14 +152,14 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
-	if (options.null_padding) {
-		// If we are null padding we do not yet support projection pushdown
-		file_types = types;
-		if (!reader_data.constant_map.empty()) {
-			idx_t i = 0;
-		}
-		return;
-	}
+	//	if (options.null_padding) {
+	//		// If we are null padding we do not yet support projection pushdown
+	//		file_types = types;
+	//		if (!reader_data.constant_map.empty()) {
+	//			idx_t i = 0;
+	//		}
+	//		return;
+	//	}
 	if (reader_data.empty_columns && reader_data.column_ids.empty()) {
 		// This means that the columns from this file are irrelevant.
 		// just read the first column

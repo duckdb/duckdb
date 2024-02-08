@@ -2,6 +2,9 @@
 # description: Test CSV with nullpading interoping with other options and projection pushdown
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
 # Test simple null_padding, this will fail because we have a row with more columns that defined
 statement error
 from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
@@ -35,10 +38,10 @@ select a from np
 query II
 select b,d from np
 ----
-10	100
-10	100
-10	NULL
-10	100
+100	NULL
+100	10000
+NULL	NULL
+100	NULL
 
 # Now let's try with options that give a const value
 query IIIII
@@ -78,6 +81,17 @@ select a from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
 10
 
 # Let's try some filters
+
+query IIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true)
+where  b = 100;
+----
+10	100	1000	NULL
+10	100	1000	10000
+10	100	NULL	NULL
+
+
 query IIIII
 select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
 'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true)
