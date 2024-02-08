@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/test_null_padding_projection.test
+# description: Test CSV with nullpading interoping with other options and projection pushdown
+# group: [csv]
+
+# Test simple null_padding, this will fail because we have a row with more columns that defined
+statement error
+from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false)
+----
+Expected Number of Columns: 4 Found: 5
+
+# With ignore errors this should work, with last row being ignored
+query IIII
+from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true)
+----
+10	100	1000	NULL
+10	100	1000	10000
+10	NULL	NULL	NULL
+10	100	NULL	NULL
+
+# Try a couple projections

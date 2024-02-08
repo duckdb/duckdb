@@ -87,6 +87,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
+	if (ignore_current_row) {
+		return;
+	}
 	if (projecting_columns) {
 		if (!projected_columns[cur_col_id]) {
 			cur_col_id++;
@@ -275,6 +278,7 @@ void StringValueResult::HandleOverLimitRows() {
 	// If we get here we need to remove the last line
 	cur_col_id = 0;
 	chunk_col_id = 0;
+	ignore_current_row = true;
 }
 
 void StringValueResult::QuotedNewLine(StringValueResult &result) {
@@ -293,6 +297,11 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 }
 
 bool StringValueResult::AddRowInternal() {
+	if (ignore_current_row) {
+		// An error occurred on this row, we are ignoring it and resetting our control flag
+		ignore_current_row = false;
+		return false;
+	}
 	if (!cast_errors.empty()) {
 		// A wild casting error appears
 		// Recreate row for rejects-table
