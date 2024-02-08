@@ -130,17 +130,15 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 		size--;
 	}
 
+	case_insensitive_set_t struct_names;
 	for (idx_t i = 0; i < size; i++) {
 		auto &child = arguments[i];
-		if (child->alias.empty()) {
-			child->alias = "list_" + to_string(i + 1);
-		}
 		switch (child->return_type.id()) {
 		case LogicalTypeId::LIST:
-			struct_children.push_back(make_pair(child->alias, ListType::GetChildType(child->return_type)));
+			struct_children.push_back(make_pair(string(), ListType::GetChildType(child->return_type)));
 			break;
 		case LogicalTypeId::SQLNULL:
-			struct_children.push_back(make_pair(child->alias, LogicalTypeId::SQLNULL));
+			struct_children.push_back(make_pair(string(), LogicalTypeId::SQLNULL));
 			break;
 		default:
 			throw ParameterNotResolvedException();
