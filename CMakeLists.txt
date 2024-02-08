@@ -1119,6 +1119,7 @@ if(BUILD_PYTHON)
       DUCKDB_LIBS="${duckdb_libs}"
       pip
       install
+      --editable
       .)
 
   if(USER_SPACE)
