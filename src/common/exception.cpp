@@ -32,7 +32,13 @@ string Exception::ToJSON(ExceptionType type, const string &message) {
 }
 
 string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
+#ifdef DUCKDB_DEBUG_STACKTRACE
+	auto extended_extra_info = extra_info;
+	extended_extra_info["stack_trace"] = Exception::GetStackTrace();
+	return StringUtil::ToJSONMap(type, message, extended_extra_info);
+#else
 	return StringUtil::ToJSONMap(type, message, extra_info);
+#endif
 }
 
 bool Exception::UncaughtException() {
