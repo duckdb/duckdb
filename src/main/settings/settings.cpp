@@ -722,11 +722,19 @@ Value ExtensionDirectorySetting::GetSetting(ClientContext &context) {
 // External Threads Setting
 //===--------------------------------------------------------------------===//
 void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.external_threads = input.GetValue<int64_t>();
+	idx_t new_external_threads = input.GetValue<int64_t>();
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
+	}
+	config.options.external_threads = new_external_threads;
 }
 
 void ExternalThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.external_threads = DBConfig().options.external_threads;
+	idx_t new_external_threads = DBConfig().options.external_threads;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
+	}
+	config.options.external_threads = new_external_threads;
 }
 
 Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
@@ -1246,14 +1254,19 @@ Value TempDirectorySetting::GetSetting(ClientContext &context) {
 // Threads Setting
 //===--------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.maximum_threads = input.GetValue<int64_t>();
+	idx_t new_maximum_threads = input.GetValue<int64_t>();
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads);
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
 	}
+	config.options.maximum_threads = new_maximum_threads;
 }
 
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.SetDefaultMaxThreads();
+	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+	}
+	config.options.maximum_threads = new_maximum_threads;
 }
 
 Value ThreadsSetting::GetSetting(ClientContext &context) {
