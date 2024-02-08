@@ -156,7 +156,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
             fieldids AS (
                 SELECT fieldid
                 FROM %fts_schema%.fields
-                WHERE CASE WHEN fields IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(fields, ','))) AS fsq) END
+                WHERE CASE WHEN fields IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split(field, ','))) AS fsq) END
             ),
             qtermids AS (
                 SELECT termid
