@@ -90,3 +90,27 @@ index 7b6e132..d800794 100644
  }
  
  void SQLiteTransactionManager::RollbackTransaction(Transaction &transaction) {
+diff --git a/test/sql/storage/attach_schema_functions.test b/test/sql/storage/attach_schema_functions.test
+index 6356265..fef18fe 100644
+--- a/test/sql/storage/attach_schema_functions.test
++++ b/test/sql/storage/attach_schema_functions.test
+@@ -20,13 +20,13 @@ CREATE INDEX i_index ON s.main.integers(j)
+ statement ok
+ CREATE VIEW s.v1 AS SELECT 42 AS a;
+ 
+-query IIIII
+-SELECT * REPLACE (trim(split(sql, '(')[1]) AS sql) FROM sqlite_master ORDER BY 1, 2
++query IIII
++SELECT * EXCLUDE (sql) FROM sqlite_master ORDER BY 1, 2
+ ----
+-index	i_index	integers	0	CREATE INDEX i_index ON integers
+-index	sqlite_autoindex_integers_1	integers	0	NULL
+-table	integers	integers	0	CREATE TABLE integers
+-view	v1	v1	0	CREATE VIEW v1
++index	i_index	integers	0
++index	sqlite_autoindex_integers_1	integers	0
++table	integers	integers	0
++view	v1	v1	0
+ 
+ query IIII
+ SELECT database_name, table_name, has_primary_key, estimated_size FROM duckdb_tables()

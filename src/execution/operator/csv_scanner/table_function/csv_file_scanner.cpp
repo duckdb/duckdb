@@ -152,7 +152,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
-	if (options.null_padding) {
+	if (options.null_padding && reader_data.column_ids.empty()) {
 		// If we are null padding we do not yet support projection pushdown
 		file_types = types;
 		return;

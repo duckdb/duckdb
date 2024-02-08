@@ -28,7 +28,7 @@
 namespace duckdb {
 
 Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
-    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr) {
+    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
 		Initialize(zero_data, capacity);
 	}
@@ -908,6 +908,8 @@ void Vector::Flatten(idx_t count) {
 			//	             =>    ..   | 1 |
 			//                          | 2 |
 			// 							 ...
+
+			child.Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);

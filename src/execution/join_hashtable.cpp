@@ -290,12 +290,9 @@ void JoinHashTable::InitializePointerTable() {
 	if (hash_map.get()) {
 		// There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(data_ptr_t);
-		if (capacity > current_capacity) {
-			// Need more space
+		if (capacity != current_capacity) {
+			// Different size, re-allocate
 			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
-		} else {
-			// Just use the current hash map
-			capacity = current_capacity;
 		}
 	} else {
 		// Allocate a hash map

@@ -60,7 +60,7 @@ public:
 
 	vector<LogicalType> file_types;
 
-	// Variables to handle projection pushdown
+	//! Variables to handle projection pushdown
 	set<idx_t> projected_columns;
 	std::vector<std::pair<idx_t, idx_t>> projection_ids;
 

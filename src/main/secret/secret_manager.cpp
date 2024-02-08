@@ -31,8 +31,8 @@ SecretCatalogEntry::SecretCatalogEntry(unique_ptr<const BaseSecret> secret_p, Ca
 	secret = make_uniq<SecretEntry>(std::move(secret_p));
 }
 
-const BaseSecret &SecretMatch::GetSecret() {
-	return *secret_entry.get()->secret;
+const BaseSecret &SecretMatch::GetSecret() const {
+	return *secret_entry->secret;
 }
 
 constexpr const char *SecretManager::TEMPORARY_STORAGE_NAME;
@@ -121,18 +121,17 @@ void SecretManager::RegisterSecretFunction(CreateSecretFunction function, OnCrea
 	secret_functions.insert({function.secret_type, new_set});
 }
 
-optional_ptr<SecretEntry> SecretManager::RegisterSecret(CatalogTransaction transaction,
-                                                        unique_ptr<const BaseSecret> secret,
-                                                        OnCreateConflict on_conflict, SecretPersistType persist_type,
-                                                        const string &storage) {
+unique_ptr<SecretEntry> SecretManager::RegisterSecret(CatalogTransaction transaction,
+                                                      unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
+                                                      SecretPersistType persist_type, const string &storage) {
 	InitializeSecrets(transaction);
 	return RegisterSecretInternal(transaction, std::move(secret), on_conflict, persist_type, storage);
 }
 
-optional_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction transaction,
-                                                                unique_ptr<const BaseSecret> secret,
-                                                                OnCreateConflict on_conflict,
-                                                                SecretPersistType persist_type, const string &storage) {
+unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction transaction,
+                                                              unique_ptr<const BaseSecret> secret,
+                                                              OnCreateConflict on_conflict,
+                                                              SecretPersistType persist_type, const string &storage) {
 	//! Ensure we only create secrets for known types;
 	LookupTypeInternal(secret->GetType());
 
@@ -207,7 +206,7 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const s
 	return nullptr;
 }
 
-optional_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, const CreateSecretInfo &info) {
+unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, const CreateSecretInfo &info) {
 	// Note that a context is required for CreateSecret, as the CreateSecretFunction expects one
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 	InitializeSecrets(transaction);
@@ -294,7 +293,7 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 	InitializeSecrets(transaction);
 
 	int64_t best_match_score = NumericLimits<int64_t>::Minimum();
-	optional_ptr<SecretEntry> best_match = nullptr;
+	unique_ptr<SecretEntry> best_match = nullptr;
 
 	for (const auto &storage_ref : GetSecretStorages()) {
 		if (!storage_ref.get().IncludeInLookups()) {
@@ -302,7 +301,7 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 		}
 		auto match = storage_ref.get().LookupSecret(path, type, &transaction);
 		if (match.HasMatch() && match.score > best_match_score) {
-			best_match = match.secret_entry.get();
+			best_match = std::move(match.secret_entry);
 			best_match_score = match.score;
 		}
 	}
@@ -314,11 +313,11 @@ SecretMatch SecretManager::LookupSecret(CatalogTransaction transaction, const st
 	return SecretMatch();
 }
 
-optional_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transaction, const string &name,
-                                                         const string &storage) {
+unique_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction transaction, const string &name,
+                                                       const string &storage) {
 	InitializeSecrets(transaction);
 
-	optional_ptr<SecretEntry> result;
+	unique_ptr<SecretEntry> result = nullptr;
 	bool found = false;
 
 	if (!storage.empty()) {
@@ -339,7 +338,7 @@ optional_ptr<SecretEntry> SecretManager::GetSecretByName(CatalogTransaction tran
 				    "Ambiguity detected for secret name '%s', secret occurs in multiple storage backends.", name);
 			}
 
-			result = lookup;
+			result = std::move(lookup);
 			found = true;
 		}
 	}
@@ -428,10 +427,10 @@ SecretType SecretManager::LookupTypeInternal(const string &type) {
 	throw InvalidInputException("Secret type '%s' not found", type);
 }
 
-vector<reference<SecretEntry>> SecretManager::AllSecrets(CatalogTransaction transaction) {
+vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	InitializeSecrets(transaction);
 
-	vector<reference<SecretEntry>> result;
+	vector<SecretEntry> result;
 
 	// Add results from all backends to the result set
 	for (const auto &backend : secret_storages) {
