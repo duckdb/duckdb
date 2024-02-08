@@ -49,12 +49,13 @@ struct ListCast {
 
 struct StructBoundCastData : public BoundCastData {
 	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p, vector<idx_t> child_member_map_p)
-	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)), child_member_map(std::move(child_member_map_p)) {
+	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)),
+	      child_member_map(std::move(child_member_map_p)) {
 		D_ASSERT(child_cast_info.size() == child_member_map.size());
 	}
 	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p)
-			: child_cast_info(std::move(child_casts)), target(std::move(target_p)) {
-		for(idx_t i = 0; i < child_cast_info.size(); i++) {
+	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)) {
+		for (idx_t i = 0; i < child_cast_info.size(); i++) {
 			child_member_map.push_back(i);
 		}
 	}

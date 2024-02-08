@@ -1053,7 +1053,7 @@ LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalTyp
 
 void LogicalType::Verify() const {
 #ifdef DEBUG
-	switch(id_) {
+	switch (id_) {
 	case LogicalTypeId::DECIMAL:
 		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
 		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
@@ -1062,7 +1062,7 @@ void LogicalType::Verify() const {
 		// verify child types
 		case_insensitive_set_t child_names;
 		bool all_empty = true;
-		for(auto &entry : StructType::GetChildTypes(*this)) {
+		for (auto &entry : StructType::GetChildTypes(*this)) {
 			if (entry.first.empty()) {
 				D_ASSERT(all_empty);
 			} else {

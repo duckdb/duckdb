@@ -36,7 +36,9 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 			// named struct cast - find corresponding member in target
 			auto entry = target_members.find(source_child.first);
 			if (entry == target_members.end()) {
-				throw TypeMismatchException(source, target, "Cannot cast STRUCTs - element \"" + source_child.first + "\" in source struct was not found in target struct" );
+				throw TypeMismatchException(source, target,
+				                            "Cannot cast STRUCTs - element \"" + source_child.first +
+				                                "\" in source struct was not found in target struct");
 			}
 			target_idx = entry->second;
 			target_members.erase(entry);
