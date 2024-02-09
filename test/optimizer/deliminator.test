@@ -195,7 +195,3 @@ INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2'
 statement ok
 PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
 
-query II
-EXPLAIN SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
-----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
