@@ -25,6 +25,7 @@ static DefaultOptimizerType internal_optimizer_types[] = {
     {"common_aggregate", OptimizerType::COMMON_AGGREGATE},
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"top_n", OptimizerType::TOP_N},
+    {"build_side_probe_side", OptimizerType::BUILD_SIDE_PROBE_SIDE},
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},
     {"reorder_filter", OptimizerType::REORDER_FILTER},
