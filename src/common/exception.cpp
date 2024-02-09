@@ -307,6 +307,10 @@ DependencyException::DependencyException(const string &msg) : Exception(Exceptio
 IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
 }
 
+IOException::IOException(const string &msg, const unordered_map<string, string> &extra_info)
+    : Exception(ExceptionType::IO, msg, extra_info) {
+}
+
 MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
 }

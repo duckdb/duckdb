@@ -1113,10 +1113,13 @@ if(BUILD_PYTHON)
       DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
       DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
       DUCKDB_LIBS="${duckdb_libs}"
-      pip
-      install
-      --editable
-      .)
+	)
+
+  if(PYTHON_EDITABLE_BUILD)
+    set(PIP_COMMAND ${PIP_COMMAND} pip install --editable .)
+  else()
+    set(PIP_COMMAND ${PIP_COMMAND} pip install .)
+  endif()
 
   if(USER_SPACE)
     set(PIP_COMMAND ${PIP_COMMAND} --user)
