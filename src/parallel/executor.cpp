@@ -410,7 +410,9 @@ void Executor::CancelTasks() {
 		to_be_rescheduled_tasks.clear();
 		events.clear();
 	}
+	// Take all pending tasks and execute them until they cancel
 	WorkOnTasks();
+	// In case there are still tasks being worked, wait for those to properly finish as well
 	for (auto &weak_ref : weak_references) {
 		while (true) {
 			auto weak = weak_ref.lock();
