@@ -50,11 +50,12 @@ def init_db(cli, dbname, benchmark_dir):
     print("INITIALIZATION DONE")
 
 
-class CardinalityCounter:
+class PlanCost:
     def __init__(self):
         self.total = 0
         self.build_side = 0
         self.probe_side = 0
+        self.time = 0
 
     def __add__(self, other):
         self.total += other.total
@@ -64,7 +65,9 @@ class CardinalityCounter:
 
 
 def op_inspect(op):
-    cost = CardinalityCounter()
+    cost = PlanCost()
+    if op['name'] == "Query":
+        cost.time = op['timing']
     if op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
         cost.total = op['cardinality']
         if 'cardinality' in op['children'][0]:
@@ -79,8 +82,7 @@ def op_inspect(op):
         return cost
 
     for child_op in op['children']:
-        wat = op_inspect(child_op)
-        cost += wat
+        cost += op_inspect(child_op)
 
     return cost
 
@@ -134,17 +136,28 @@ def print_diffs(diffs):
 
 
 def cardinality_is_higher(old_cost, new_cost):
-    return (
-        old_cost.total > new_cost.total
-        or old_cost.build_side > new_cost.build_side
-        or old_cost.probe_side > new_cost.probe_side
+    new_cardinality_higher = (
+        old_cost.total < new_cost.total
+        or old_cost.build_side < new_cost.build_side
+        or old_cost.probe_side < new_cost.probe_side
     )
+    new_timing_higher = old_cost.time < new_cost.time
+
+    # if the cardinalities have changed, its possible build side probe sides
+    # have changed, but this may still lead to better execution. So return
+    # result of timing
+    if new_cardinality_higher:
+        return new_timing_higher
+
+    # if new_cardinality_higher is False, we either have the same plan, or
+    # an even better plan with less cardinalities.
+    return False
 
 
 def main():
     old, new, benchmark_dir = parse_args()
-    init_db(old, OLD_DB_NAME, benchmark_dir)
-    init_db(new, NEW_DB_NAME, benchmark_dir)
+    # init_db(old, OLD_DB_NAME, benchmark_dir)
+    # init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
