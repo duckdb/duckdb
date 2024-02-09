@@ -2,8 +2,6 @@
 # description: test FILE_SIZE_BYTES parameter for COPY (slow test)
 # group: [copy]
 
-
-
 statement ok
 CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0, 10000000) tbl(i);
 
