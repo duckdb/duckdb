@@ -87,7 +87,12 @@ protected:
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
-	atomic<uint32_t> queue_insertions;
+	//! This is also the total number of unpinned buffers.
+	atomic<idx_t> unpinned_buffers;
+	//! Total number of buffers that have ever been pinned.
+	atomic<idx_t> pinned_buffers;
+	//! Whether a queue purge is currently active
+	atomic<bool> purge_active;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
 	//! Memory usage per tag

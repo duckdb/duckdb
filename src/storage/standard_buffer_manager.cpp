@@ -166,6 +166,9 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		// check if the block is already loaded
 		if (handle->state == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and return a pointer to the handle
+			if (handle->buffer->type != FileBufferType::TINY_BUFFER && handle->readers == 0) {
+				buffer_pool.pinned_buffers++;
+			}
 			handle->readers++;
 			return handle->Load(handle);
 		}
@@ -181,12 +184,18 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	// check if the block is already loaded
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// the block is loaded, increment the reader count and return a pointer to the handle
+		if (handle->buffer->type != FileBufferType::TINY_BUFFER && handle->readers == 0) {
+			buffer_pool.pinned_buffers++;
+		}
 		handle->readers++;
 		reservation.Resize(0);
 		return handle->Load(handle);
 	}
 	// now we can actually load the current block
 	D_ASSERT(handle->readers == 0);
+	if (handle->buffer && handle->buffer->type != FileBufferType::TINY_BUFFER) {
+		buffer_pool.pinned_buffers++;
+	}
 	handle->readers = 1;
 	auto buf = handle->Load(handle, std::move(reusable_buffer));
 	handle->memory_charge = std::move(reservation);

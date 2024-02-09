@@ -31,7 +31,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	// being destroyed, so any unswizzled pointers are just binary junk now.
 	unswizzled = nullptr;
-	auto &buffer_manager = block_manager.buffer_manager;
+
 	// no references remain to this block: erase
 	if (buffer && state == BlockState::BLOCK_LOADED) {
 		D_ASSERT(memory_charge.size > 0);
@@ -41,7 +41,6 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
-	buffer_manager.GetBufferPool().PurgeQueue();
 	block_manager.UnregisterBlock(block_id, can_destroy);
 }
 
