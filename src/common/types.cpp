@@ -1053,9 +1053,39 @@ LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalTyp
 
 void LogicalType::Verify() const {
 #ifdef DEBUG
-	if (id_ == LogicalTypeId::DECIMAL) {
+	switch (id_) {
+	case LogicalTypeId::DECIMAL:
 		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
 		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		break;
+	case LogicalTypeId::STRUCT: {
+		// verify child types
+		case_insensitive_set_t child_names;
+		bool all_empty = true;
+		for (auto &entry : StructType::GetChildTypes(*this)) {
+			if (entry.first.empty()) {
+				D_ASSERT(all_empty);
+			} else {
+				// check for duplicate struct names
+				all_empty = false;
+				auto existing_entry = child_names.find(entry.first);
+				D_ASSERT(existing_entry == child_names.end());
+				child_names.insert(entry.first);
+			}
+			entry.second.Verify();
+		}
+		break;
+	}
+	case LogicalTypeId::LIST:
+		ListType::GetChildType(*this).Verify();
+		break;
+	case LogicalTypeId::MAP: {
+		MapType::KeyType(*this).Verify();
+		MapType::ValueType(*this).Verify();
+		break;
+	}
+	default:
+		break;
 	}
 #endif
 }

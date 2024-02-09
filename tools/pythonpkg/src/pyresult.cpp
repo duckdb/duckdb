@@ -376,8 +376,13 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL: {
 		return py::str("NUMBER");
 	}
-	case LogicalTypeId::VARCHAR:
-		return py::str("STRING");
+	case LogicalTypeId::VARCHAR: {
+		if (type.HasAlias() && type.GetAlias() == "JSON") {
+			return py::str("JSON");
+		} else {
+			return py::str("STRING");
+		}
+	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 		return py::str("BINARY");

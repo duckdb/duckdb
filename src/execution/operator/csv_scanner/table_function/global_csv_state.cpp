@@ -36,6 +36,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 		current_boundary = CSVIterator(0, 0, 0, 0, buffer_size);
 	}
+	current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
@@ -77,18 +78,23 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	if (finished) {
 		return nullptr;
 	}
-
+	if (current_buffer_in_use->buffer_idx != current_boundary.GetBufferIdx()) {
+		current_buffer_in_use =
+		    make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
+	}
 	// We first create the scanner for the current boundary
 	auto &current_file = *file_scans.back();
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, file_scans.back(), current_boundary);
+
+	csv_scanner->buffer_tracker = current_buffer_in_use;
+
 	// We then produce the next boundary
 	if (!current_boundary.Next(*current_file.buffer_manager)) {
 		// This means we are done scanning the current file
 		auto current_file_idx = current_file.file_idx + 1;
 		if (current_file_idx < bind_data.files.size()) {
-			file_scans.back()->buffer_manager.reset();
 			// If we have a next file we have to construct the file scan for that
 			file_scans.emplace_back(make_shared<CSVFileScan>(context, bind_data.files[current_file_idx],
 			                                                 bind_data.options, current_file_idx, bind_data, column_ids,
@@ -96,6 +102,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 			// And re-start the boundary-iterator
 			auto buffer_size = file_scans.back()->buffer_manager->GetBuffer(0)->actual_size;
 			current_boundary = CSVIterator(current_file_idx, 0, 0, 0, buffer_size);
+			current_buffer_in_use = make_shared<CSVBufferUsage>(*file_scans.back()->buffer_manager, 0);
 		} else {
 			// If not we are done with this CSV Scanning
 			finished = true;

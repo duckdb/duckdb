@@ -15,6 +15,18 @@
 
 namespace duckdb {
 
+struct CSVBufferUsage {
+	CSVBufferUsage(CSVBufferManager &buffer_manager_p, idx_t buffer_idx_p)
+	    : buffer_manager(buffer_manager_p), buffer_idx(buffer_idx_p) {
+
+	                                        };
+	~CSVBufferUsage() {
+		buffer_manager.ResetBuffer(buffer_idx);
+	}
+	CSVBufferManager &buffer_manager;
+	idx_t buffer_idx;
+};
+
 //! Class that keeps track of line starts, used for line size verification
 class LinePosition {
 public:
@@ -83,6 +95,9 @@ public:
 	unsafe_unique_array<bool> projected_columns;
 	bool projecting_columns = false;
 	idx_t chunk_col_id = 0;
+
+	//! If the current row has an error, we have to skip it
+	bool ignore_current_row = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -140,6 +155,9 @@ public:
 	                            const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &format_options);
 
 	const idx_t scanner_idx;
+
+	//! Variable that manages buffer tracking
+	shared_ptr<CSVBufferUsage> buffer_tracker;
 
 private:
 	void Initialize() override;

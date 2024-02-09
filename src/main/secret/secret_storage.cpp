@@ -40,9 +40,9 @@ SecretMatch SecretStorage::SelectBestMatch(SecretEntry &secret_entry, const stri
 	}
 }
 
-optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(unique_ptr<const BaseSecret> secret,
-                                                               OnCreateConflict on_conflict,
-                                                               optional_ptr<CatalogTransaction> transaction) {
+unique_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(unique_ptr<const BaseSecret> secret,
+                                                             OnCreateConflict on_conflict,
+                                                             optional_ptr<CatalogTransaction> transaction) {
 	if (secrets->GetEntry(GetTransactionOrDefault(transaction), secret->GetName())) {
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
 			string persist_string = persistent ? "Persistent" : "Temporary";
@@ -71,11 +71,11 @@ optional_ptr<SecretEntry> CatalogSetSecretStorage::StoreSecret(unique_ptr<const 
 
 	auto secret_catalog_entry =
 	    &secrets->GetEntry(GetTransactionOrDefault(transaction), secret_name)->Cast<SecretCatalogEntry>();
-	return secret_catalog_entry->secret;
+	return make_uniq<SecretEntry>(*secret_catalog_entry->secret);
 }
 
-vector<reference<SecretEntry>> CatalogSetSecretStorage::AllSecrets(optional_ptr<CatalogTransaction> transaction) {
-	vector<reference<SecretEntry>> ret_value;
+vector<SecretEntry> CatalogSetSecretStorage::AllSecrets(optional_ptr<CatalogTransaction> transaction) {
+	vector<SecretEntry> ret_value;
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretCatalogEntry>();
 		ret_value.push_back(*cast_entry.secret);
@@ -117,13 +117,13 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const stri
 	return SecretMatch();
 }
 
-optional_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(const string &name,
-                                                                   optional_ptr<CatalogTransaction> transaction) {
+unique_ptr<SecretEntry> CatalogSetSecretStorage::GetSecretByName(const string &name,
+                                                                 optional_ptr<CatalogTransaction> transaction) {
 	auto res = secrets->GetEntry(GetTransactionOrDefault(transaction), name);
 
 	if (res) {
 		auto &cast_entry = res->Cast<SecretCatalogEntry>();
-		return cast_entry.secret;
+		return make_uniq<SecretEntry>(*cast_entry.secret);
 	}
 
 	return nullptr;

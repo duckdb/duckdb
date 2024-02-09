@@ -168,6 +168,7 @@ public:
 
 	//! For synchronizing finalize tasks
 	atomic<idx_t> finalize_idx;
+	atomic<idx_t> finalize_done;
 
 	//! Pin properties when scanning
 	TupleDataPinProperties scan_pin_properties;
@@ -182,8 +183,9 @@ public:
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
     : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
       radix_ht(radix_ht_p), config(context, *this), finalized(false), external(false), active_threads(0),
-      any_combined(false), finalize_idx(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
-      count_before_combining(0), max_partition_size(0) {
+      any_combined(false), finalize_idx(0), finalize_done(0),
+      scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
+      max_partition_size(0) {
 
 	auto tuples_per_block = Storage::BLOCK_ALLOC_SIZE / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count = config.sink_capacity / GroupedAggregateHashTable::LOAD_FACTOR;
@@ -353,7 +355,7 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	// Check if we're approaching the memory limit
 	auto &temporary_memory_state = *gstate.temporary_memory_state;
-	const auto total_size = ht.GetPartitionedData()->SizeInBytes() + ht.Capacity() * sizeof(aggr_ht_entry_t);
+	const auto total_size = partitioned_data->SizeInBytes() + ht.Capacity() * sizeof(aggr_ht_entry_t);
 	idx_t thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 	if (total_size > thread_limit) {
 		// We're over the thread memory limit
@@ -362,11 +364,10 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			lock_guard<mutex> guard(gstate.lock);
 			thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 			if (total_size > thread_limit) {
-				// Out-of-core would be triggered below, try to increase the reservation, but only up to a limit
-				auto new_remaining_size =
-				    MinValue<idx_t>(2 * temporary_memory_state.GetRemainingSize(),
-				                    BufferManager::GetBufferManager(context).GetQueryMaxMemory() / 2);
-				temporary_memory_state.SetRemainingSize(context, new_remaining_size);
+				// Out-of-core would be triggered below, try to increase the reservation
+				auto remaining_size =
+				    MaxValue<idx_t>(gstate.active_threads * total_size, temporary_memory_state.GetRemainingSize());
+				temporary_memory_state.SetRemainingSize(context, 2 * remaining_size);
 				thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 			}
 		}
@@ -542,9 +543,12 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 
 	// This many partitions will fit given our reservation (at least 1))
 	auto partitions_fit = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / sink.max_partition_size, 1);
+	// Maximum is either the number of partitions, or the number of threads
+	auto max_possible =
+	    MinValue<idx_t>(sink.partitions.size(), TaskScheduler::GetScheduler(sink.context).NumberOfThreads());
 
-	// Of course, limit it to the number of actual partitions
-	return MinValue<idx_t>(sink.partitions.size(), partitions_fit);
+	// Mininum of the two
+	return MinValue<idx_t>(partitions_fit, max_possible);
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
@@ -668,6 +672,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 
 	// We didn't assign a Scan task
 	if (sink.finalize_idx >= n_partitions) {
+		lstate.ht.reset();
 		return false; // No finalize tasks left
 	}
 
@@ -680,7 +685,6 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	// We didn't manage to assign a Finalize task because there are none left
-	sink.temporary_memory_state->SetRemainingSize(context, 0);
 	return false;
 }
 
@@ -751,6 +755,11 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 	// Mark partition as ready to scan
 	partition.finalized = true;
+
+	if (++sink.finalize_done == sink.partitions.size()) {
+		// All finalizes are done, set remaining size to 0
+		sink.temporary_memory_state->SetRemainingSize(sink.context, 0);
+	}
 
 	// Unblock blocked tasks so they can scan this partition
 	{

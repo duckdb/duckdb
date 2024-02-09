@@ -417,10 +417,6 @@ if(DEBUG_ALLOCATION)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ALLOCATION")
 endif()
 
-if(DEBUG_STACKTRACE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_STACKTRACE")
-endif()
-
 if(DEBUG_MOVE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_MOVE")
 endif()
@@ -1117,10 +1113,13 @@ if(BUILD_PYTHON)
       DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
       DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
       DUCKDB_LIBS="${duckdb_libs}"
-      pip
-      install
-      --editable
-      .)
+	)
+
+  if(PYTHON_EDITABLE_BUILD)
+    set(PIP_COMMAND ${PIP_COMMAND} pip install --editable .)
+  else()
+    set(PIP_COMMAND ${PIP_COMMAND} pip install .)
+  endif()
 
   if(USER_SPACE)
     set(PIP_COMMAND ${PIP_COMMAND} --user)

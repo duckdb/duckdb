@@ -194,6 +194,11 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		s.second->QueryEnd(*this);
 	}
 
+	if (active_query->executor) {
+		active_query->executor->CancelTasks();
+	}
+	active_query->progress_bar.reset();
+
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_progress.Initialize();

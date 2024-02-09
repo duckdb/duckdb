@@ -103,12 +103,6 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		return binder.bind_context.CreateColumnReference(table_name, column_name);
 	}
 
-	// column was not found - check if it is a SQL value function
-	auto value_function = GetSQLValueFunction(column_name);
-	if (value_function) {
-		return value_function;
-	}
-
 	// it's not, find candidates and error
 	auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 	error = ErrorData(BinderException::ColumnNotFound(column_name, similar_bindings));
@@ -420,7 +414,6 @@ BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx
 }
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_t depth) {
-
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
@@ -428,6 +421,13 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	ErrorData error;
 	auto expr = QualifyColumnName(col_ref_p, error);
 	if (!expr) {
+		if (!col_ref_p.IsQualified()) {
+			// column was not found - check if it is a SQL value function
+			auto value_function = GetSQLValueFunction(col_ref_p.GetName());
+			if (value_function) {
+				return BindExpression(value_function, depth);
+			}
+		}
 		error.AddQueryLocation(col_ref_p);
 		return BindResult(std::move(error));
 	}

@@ -139,12 +139,8 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
-	// fill up the aliases with the remaining names of the bound query
-	base.aliases.reserve(query_node.names.size());
-	for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {
-		base.aliases.push_back(query_node.names[i]);
-	}
 	base.types = query_node.types;
+	base.names = query_node.names;
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -159,8 +155,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	vector<LogicalType> dummy_types;
 	vector<string> dummy_names;
 	// positional parameters
-	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
-		auto param = base.function->parameters[i]->Cast<ColumnRefExpression>();
+	for (auto &param_expr : base.function->parameters) {
+		auto param = param_expr->Cast<ColumnRefExpression>();
 		if (param.IsQualified()) {
 			throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
 		}
@@ -168,10 +164,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		dummy_names.push_back(param.GetColumnName());
 	}
 	// default parameters
-	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
-		auto &val = it->second->Cast<ConstantExpression>();
+	for (auto &entry : base.function->default_parameters) {
+		auto &val = entry.second->Cast<ConstantExpression>();
 		dummy_types.push_back(val.value.type());
-		dummy_names.push_back(it->first);
+		dummy_names.push_back(entry.first);
 	}
 	auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();

@@ -74,6 +74,7 @@ private:
 	atomic<idx_t> scanner_idx;
 
 	atomic<idx_t> last_file_idx;
+	shared_ptr<CSVBufferUsage> current_buffer_in_use;
 };
 
 } // namespace duckdb
