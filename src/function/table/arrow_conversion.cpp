@@ -372,30 +372,31 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, c
 	}
 }
 
+// Find the index of the first run-end that is strictly greater than the offset.
+// count is returned if no such run-end is found.
 template <class RUN_END_TYPE>
 static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offset) {
+	// Binary-search within the [0, count) range. For example:
+	// [0, 0, 0, 1, 1, 2] encoded as
+	// run_ends: [3, 5, 6]:
+	// 0, 1, 2 -> 0
+	//    3, 4 -> 1
+	//       5 -> 2
+	// 6, 7 .. -> 3 (3 == count [not found])
 	idx_t begin = 0;
-	idx_t end = count - 1;
+	idx_t end = count;
 	while (begin < end) {
-		idx_t middle = static_cast<idx_t>(std::floor((begin + end) / 2));
+		idx_t middle = (begin + end) / 2;
+		// begin < end implies middle < end
 		if (offset >= static_cast<idx_t>(run_ends[middle])) {
-			// Our offset starts after this run has ended
+			// keep searching in [middle + 1, end)
 			begin = middle + 1;
 		} else {
-			// This offset might fall into this run_end
-			if (middle == 0) {
-				return middle;
-			}
-			if (offset >= static_cast<idx_t>(run_ends[middle - 1])) {
-				// For example [0, 0, 0, 1, 1, 2]
-				// encoded as run_ends: [3, 5, 6]
-				// 3 (run_ends[0]) >= offset < 5 (run_ends[1])
-				return middle;
-			}
-			end = middle - 1;
+			// offset < run_ends[middle], so keep searching in [begin, middle)
+			end = middle;
 		}
 	}
-	return end;
+	return begin;
 }
 
 template <class RUN_END_TYPE, class VALUE_TYPE>
