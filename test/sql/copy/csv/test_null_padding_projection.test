@@ -1,0 +1,141 @@
+# name: test/sql/copy/csv/test_null_padding_projection.test
+# description: Test CSV with nullpading interoping with other options and projection pushdown
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# Test simple null_padding, this will fail because we have a row with more columns that defined
+statement error
+from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false)
+----
+Expected Number of Columns: 4 Found: 5
+
+# Create a view
+statement ok
+CREATE VIEW np AS  from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true);
+
+# With ignore errors this should work, with last row being ignored
+query IIII
+from np
+----
+10	100	1000	NULL
+10	100	1000	10000
+10	NULL	NULL	NULL
+10	100	NULL	NULL
+
+# Try a couple projections
+query I
+select a from np
+----
+10
+10
+10
+10
+
+query II
+select b,d from np
+----
+100	NULL
+100	10000
+NULL	NULL
+100	NULL
+
+# Now let's try with options that give a const value
+query IIIII
+from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+10	100	1000	NULL	data/csv/nullpadding.csv
+10	100	1000	10000	data/csv/nullpadding.csv
+10	NULL	NULL	NULL	data/csv/nullpadding.csv
+10	100	NULL	NULL	data/csv/nullpadding.csv
+
+query II
+select a, filename from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+10	data/csv/nullpadding.csv
+
+query I
+select filename from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+data/csv/nullpadding.csv
+
+query I
+select a from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true);
+----
+10
+10
+10
+10
+
+# Let's try some filters
+
+query IIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true)
+where  b = 100;
+----
+10	100	1000	NULL
+10	100	1000	10000
+10	100	NULL	NULL
+
+
+query IIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER'}, auto_detect = false, ignore_errors = true, filename = true)
+where a = 10 and d = 10000;
+----
+10	100	1000	10000	data/csv/nullpadding.csv
+
+# Try All Columns
+query IIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER'}, auto_detect = false, filename = true)
+where a = 10 and d = 10000;
+----
+10	100	1000	10000	NULL	data/csv/nullpadding.csv
+10	100	1000	10000	100000	data/csv/nullpadding.csv
+
+query IIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL
+10	100	1000	10000	NULL
+10	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL
+10	100	1000	10000	100000
+
+# Try more columns
+query IIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER', 'f': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL	NULL
+10	100	1000	10000	NULL	NULL
+10	NULL	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL	NULL
+10	100	1000	10000	100000	NULL
+
+# Moreee
+query IIIIIII
+select * from read_csv('data/csv/nullpadding.csv',null_padding=true, columns={
+'a': 'INTEGER','b': 'INTEGER','c': 'INTEGER','d': 'INTEGER', 'e': 'INTEGER', 'f': 'INTEGER', 'g': 'INTEGER'}, auto_detect = false)
+----
+10	100	1000	NULL	NULL	NULL	NULL
+10	100	1000	10000	NULL	NULL	NULL
+10	NULL	NULL	NULL	NULL	NULL	NULL
+10	100	NULL	NULL	NULL	NULL	NULL
+10	100	1000	10000	100000	NULL	NULL

@@ -9,36 +9,37 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/exception.hpp"
 #include "terminal.hpp"
 #include "linenoise.h"
 
 #define LINENOISE_MAX_LINE 204800
 
-/* Debugging macro. */
-#if 0
-FILE *lndebug_fp = NULL;
-#define lndebug(...)                                                                                                   \
-	do {                                                                                                               \
-		if (lndebug_fp == NULL) {                                                                                      \
-			lndebug_fp = fopen("/tmp/lndebug.txt", "a");                                                               \
-		}                                                                                                              \
-		fprintf(lndebug_fp, ", " __VA_ARGS__);                                                                         \
-		fflush(lndebug_fp);                                                                                            \
-	} while (0)
-#else
-#define lndebug(fmt, ...)
-#endif
-
 namespace duckdb {
 struct highlightToken;
 struct AppendBuffer;
 
-enum class HistoryScrollDirection : uint8_t { LINENOISE_HISTORY_NEXT, LINENOISE_HISTORY_PREV };
+enum class HistoryScrollDirection : uint8_t {
+	LINENOISE_HISTORY_NEXT,
+	LINENOISE_HISTORY_PREV,
+	LINENOISE_HISTORY_START,
+	LINENOISE_HISTORY_END
+};
+enum class Capitalization : uint8_t { CAPITALIZE, LOWERCASE, UPPERCASE };
 
 struct searchMatch {
 	size_t history_index;
 	size_t match_start;
 	size_t match_end;
+};
+
+struct Completion {
+	string completion;
+	idx_t cursor_pos;
+};
+
+struct TabCompletion {
+	vector<Completion> completions;
 };
 
 class Linenoise {
@@ -64,7 +65,7 @@ public:
 	int GetPromptWidth() const;
 
 	void RefreshLine();
-	int CompleteLine();
+	int CompleteLine(EscapeSequence &current_sequence);
 	void InsertCharacter(char c);
 	int EditInsert(char c);
 	int EditInsertMulti(const char *c);
@@ -76,11 +77,21 @@ public:
 	bool EditMoveRowDown();
 	void EditMoveHome();
 	void EditMoveEnd();
+	void EditMoveStartOfLine();
+	void EditMoveEndOfLine();
 	void EditHistoryNext(HistoryScrollDirection dir);
+	void EditHistorySetIndex(idx_t index);
 	void EditDelete();
 	void EditBackspace();
 	void EditDeletePrevWord();
+	void EditDeleteNextWord();
+	void EditDeleteAll();
+	void EditCapitalizeNextWord(Capitalization capitalization);
+	void EditRemoveSpaces();
+	void EditSwapCharacter();
+	void EditSwapWord();
 
+	void StartSearch();
 	void CancelSearch();
 	char AcceptSearch(char nextCommand);
 	void PerformSearch();
@@ -103,10 +114,45 @@ public:
 
 	string AddContinuationMarkers(const char *buf, size_t len, int plen, int cursor_row,
 	                              vector<highlightToken> &tokens) const;
+	void AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const;
+
+	bool AddCompletionMarker(const char *buf, idx_t len, string &result_buffer, vector<highlightToken> &tokens) const;
 
 	static bool IsNewline(char c);
 	static bool IsWordBoundary(char c);
 	static bool AllWhitespace(const char *z);
+
+	TabCompletion TabComplete() const;
+
+	static void EnableCompletionRendering();
+	static void DisableCompletionRendering();
+	static void EnableErrorRendering();
+	static void DisableErrorRendering();
+
+public:
+	static void LogTokens(const vector<highlightToken> &tokens);
+#ifdef LINENOISE_LOGGING
+	// Logging
+	template <typename... Args>
+	static void Log(const string &msg, Args... params) {
+		std::vector<ExceptionFormatValue> values;
+		LogMessageRecursive(msg, values, params...);
+	}
+
+	static void LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
+
+	template <class T, typename... Args>
+	static void LogMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
+	                                Args... params) {
+		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
+		LogMessageRecursive(msg, values, params...);
+	}
+#else
+	template <typename... Args>
+	static void Log(const string &msg, Args... params) {
+		// nop
+	}
+#endif
 
 public:
 	int ifd;                                 /* Terminal stdin file descriptor. */
@@ -127,6 +173,7 @@ public:
 	bool search;                             /* Whether or not we are searching our history */
 	bool render;                             /* Whether or not to re-render */
 	bool has_more_data;                      /* Whether or not there is more data available in the buffer (copy+paste)*/
+	bool insert;                             /* Whether or not the last action was inserting a new character */
 	std::string search_buf;                  //! The search buffer
 	std::vector<searchMatch> search_matches; //! The set of search matches in our history
 	size_t search_index;                     //! The current match index

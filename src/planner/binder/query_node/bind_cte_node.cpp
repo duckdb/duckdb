@@ -56,6 +56,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
 	// Add bindings of left side to temporary CTE bindings context
 	result->child_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, names, result->types);
 	result->child = result->child_binder->BindNode(*statement.child);
+	for (auto &c : result->query_binder->correlated_columns) {
+		result->child_binder->AddCorrelatedColumn(c);
+	}
 
 	// the result types of the CTE are the types of the LHS
 	result->types = result->child->types;

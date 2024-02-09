@@ -1186,6 +1186,18 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_set_date() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT ?")) {
+            Date date = Date.valueOf("1969-01-01");
+            stmt.setDate(1, date);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                assertEquals(rs.getDate(1), date);
+            }
+        }
+    }
+
     public static void test_lots_of_decimals() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
