@@ -145,8 +145,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
 				    single_array, py::arg("names") = single_name);
 			} catch (py::error_already_set &ex) {
-				ex.restore();
-				throw;
+				throw InvalidInputException("Could not convert the result into an Arrow Table");
 			}
 		}
 		// Convert the pyarrow result back to a DuckDB datachunk
