@@ -380,8 +380,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const string &que
 	return shared_from_this();
 }
 
-static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult &pending_query) {
-	if (pending_query.AllowStreamResult()) {
+static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult *pending_query) {
+	if (pending_query->AllowStreamResult()) {
 		return PendingQueryResult::IsFinishedOrBlocked;
 	}
 	return PendingQueryResult::IsFinished;

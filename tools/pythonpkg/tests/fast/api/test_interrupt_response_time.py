@@ -52,7 +52,7 @@ class TestQueryInterrupt(object):
         # which then breaks this test, so just make sure it's operating
         # normally.
         signal.signal(signal.SIGINT, signal.default_int_handler)
-        interrupt_delay = 3
+        interrupt_delay = 1
 
         def interrupt():
             # Wait for query to start:
