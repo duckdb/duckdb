@@ -4,7 +4,6 @@
 # Adapt interrupt test from ipython as shown here:
 # https://github.com/itamarst/ipython/blob/561d08809d08a4473e5a085392678544888fdb61/IPython/utils/tests/test_process.py
 
-# import pytest
 import duckdb
 import pandas as pd
 import numpy as np
@@ -95,7 +94,7 @@ class TestQueryInterrupt(object):
 
     def test_system_interrupt(self):
         """
-        Test that queries promptly respond to keyboard interrupts
+        Test that queries respond promptly to keyboard interrupts
         """
         large_test_data = large_test_data_gen()
         print("\n")
