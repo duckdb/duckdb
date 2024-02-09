@@ -28,8 +28,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
       type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
                                                 : AttachedDatabaseType::READ_WRITE_DATABASE),
       parent_catalog(&catalog_p) {
-	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
 	catalog = make_uniq<DuckCatalog>(*this);
+	// do this after catalog to guarnatee we allow extension to instantionate DuckCatalog causing creation
+	// of the storage
+	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
 }
@@ -43,6 +45,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, info, access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
+	}
+	if (dynamic_cast<DuckCatalog*>(catalog.get())) {
+		// DuckCatalog, instatiante storage
+		storage = make_uniq<SingleFileStorageManager>(*this, info.path, access_mode == AccessMode::READ_ONLY);
 	}
 	transaction_manager =
 	    storage_extension.create_transaction_manager(storage_extension.storage_info.get(), *this, *catalog);
