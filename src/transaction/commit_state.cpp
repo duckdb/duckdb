@@ -45,7 +45,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 
 	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
-		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::TABLE_ENTRY) {
+	case CatalogType::VIEW_ENTRY:
+		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == parent.type) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
@@ -57,18 +58,34 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			auto parse_info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "alter_info");
 			deserializer.End();
 
-			if (!column_name.empty()) {
-				D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
-				auto &table_entry = entry.Cast<DuckTableEntry>();
-				D_ASSERT(table_entry.IsDuckTable());
-				// write the alter table in the log
-				table_entry.CommitAlter(column_name);
+			switch (parent.type) {
+			case CatalogType::TABLE_ENTRY:
+				if (!column_name.empty()) {
+					D_ASSERT(entry.type != CatalogType::RENAMED_ENTRY);
+					auto &table_entry = entry.Cast<DuckTableEntry>();
+					D_ASSERT(table_entry.IsDuckTable());
+					// write the alter table in the log
+					table_entry.CommitAlter(column_name);
+				}
+				break;
+			case CatalogType::VIEW_ENTRY:
+				(void)column_name;
+				break;
 			}
+
 			auto &alter_info = parse_info->Cast<AlterInfo>();
 			log->WriteAlter(alter_info);
 		} else {
-			// CREATE TABLE statement
-			log->WriteCreateTable(parent.Cast<TableCatalogEntry>());
+			switch (parent.type) {
+			case CatalogType::TABLE_ENTRY:
+				// CREATE TABLE statement
+				log->WriteCreateTable(parent.Cast<TableCatalogEntry>());
+				break;
+			case CatalogType::VIEW_ENTRY:
+				// CREATE VIEW statement
+				log->WriteCreateView(parent.Cast<ViewCatalogEntry>());
+				break;
+			}
 		}
 		break;
 	case CatalogType::SCHEMA_ENTRY:
@@ -77,28 +94,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			return;
 		}
 		log->WriteCreateSchema(parent.Cast<SchemaCatalogEntry>());
-		break;
-	case CatalogType::VIEW_ENTRY:
-		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == CatalogType::VIEW_ENTRY) {
-			// ALTER TABLE statement, read the extra data after the entry
-			auto extra_data_size = Load<idx_t>(dataptr);
-			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
-			// deserialize it
-			MemoryStream source(extra_data, extra_data_size);
-			BinaryDeserializer deserializer(source);
-			deserializer.Begin();
-			auto column_name = deserializer.ReadProperty<string>(100, "column_name");
-			auto parse_info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "alter_info");
-			deserializer.End();
-
-			(void)column_name;
-
-			// write the alter table in the log
-			auto &alter_info = parse_info->Cast<AlterInfo>();
-			log->WriteAlter(alter_info);
-		} else {
-			log->WriteCreateView(parent.Cast<ViewCatalogEntry>());
-		}
 		break;
 	case CatalogType::SEQUENCE_ENTRY:
 		log->WriteCreateSequence(parent.Cast<SequenceCatalogEntry>());
