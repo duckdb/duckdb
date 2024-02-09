@@ -189,13 +189,12 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
 	client_data->profiler->EndQuery();
 
+	if (active_query->executor) {
+		active_query->executor->CancelTasks();
+	}
 	// Notify any registered state of query end
 	for (auto const &s : registered_state) {
 		s.second->QueryEnd(*this);
-	}
-
-	if (active_query->executor) {
-		active_query->executor->CancelTasks();
 	}
 	active_query->progress_bar.reset();
 
