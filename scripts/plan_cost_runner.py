@@ -62,6 +62,7 @@ class CardinalityCounter:
         self.probe_side += other.probe_side
         return self
 
+
 def op_inspect(op):
     cost = CardinalityCounter()
     if op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
@@ -133,9 +134,11 @@ def print_diffs(diffs):
 
 
 def cardinality_is_higher(old_cost, new_cost):
-    return old_cost.total > new_cost.total or \
-        old_cost.build_side > new_cost.build_side or \
-        old_cost.probe_side > new_cost.probe_side
+    return (
+        old_cost.total > new_cost.total
+        or old_cost.build_side > new_cost.build_side
+        or old_cost.probe_side > new_cost.probe_side
+    )
 
 
 def main():
