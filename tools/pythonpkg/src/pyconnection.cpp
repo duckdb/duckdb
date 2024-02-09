@@ -388,19 +388,21 @@ static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQuer
 }
 
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
+    std::atomic<bool> abort_query;
+    abort_query.store(false);
 	std::future<void> future = std::async(
 	    std::launch::async,
-	    [](PendingQueryResult *pending_query) {
+	    [](PendingQueryResult *pending_query, std::atomic<bool> *abort_query) {
 		    PendingExecutionResult execution_result;
 		    auto is_finished = FinishedCondition(pending_query);
 		    do {
 			    execution_result = pending_query->ExecuteTask();
-		    } while (!is_finished(execution_result));
+		    } while (!abort_query->load() && !is_finished(execution_result));
 		    if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 			    pending_query->ThrowError();
 		    }
 	    },
-	    &pending_query);
+	    &pending_query, &abort_query);
 
 	std::future_status status;
 	do {
@@ -408,11 +410,13 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 		{
 			py::gil_scoped_acquire gil;
 			if (PyErr_CheckSignals() != 0) {
+				abort_query.store(true);
 				throw std::runtime_error("Query interrupted");
 			}
 		}
 	} while (status != std::future_status::ready);
 
+	future.get(); // Propagate any exception
 	return pending_query.Execute();
 }
 

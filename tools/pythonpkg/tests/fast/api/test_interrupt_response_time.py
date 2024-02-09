@@ -53,7 +53,7 @@ class TestQueryInterrupt(object):
         # which then breaks this test, so just make sure it's operating
         # normally.
         signal.signal(signal.SIGINT, signal.default_int_handler)
-        interrupt_delay = 1
+        interrupt_delay = 0.1
 
         def interrupt():
             # Wait for query to start:
@@ -88,7 +88,7 @@ class TestQueryInterrupt(object):
         # Elapsed time is not entirely predictable, there may still be significant C++ unwind time
         # when returning from exception
         assert (
-            elapsed < 15
+            elapsed < 10
         ), query_name + "Query didn't respond to interrupt fast enough. Took %s seconds to respond." % (end - start)
         print("\n")
 
