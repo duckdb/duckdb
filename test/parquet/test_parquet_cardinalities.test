@@ -1,0 +1,13 @@
+# name: test/parquet/test_parquet_cardinalities.test
+# description: Test parquet_cardinalities
+# group: [parquet]
+
+require parquet
+
+
+statement ok
+select * from read_parquet('test/parquet/all_data.parquet') where a % 10000 = 0;
+
+statement ok
+select * from read_parquet('parquet_data/table_*.parquet') where a % 10000 = 0;
+
