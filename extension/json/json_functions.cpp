@@ -167,6 +167,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetSerializeSqlFunction());
 	functions.push_back(GetDeserializeSqlFunction());
 
+    functions.push_back(GetArrayAppendFunction());
 	return functions;
 }
 

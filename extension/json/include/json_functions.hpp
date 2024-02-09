@@ -103,6 +103,7 @@ private:
 	static ScalarFunctionSet GetDeserializeSqlFunction();
 	static ScalarFunctionSet GetSerializePlanFunction();
 
+    static ScalarFunctionSet GetArrayAppendFunction();
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
 	template <class FUNCTION_INFO>

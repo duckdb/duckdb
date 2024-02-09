@@ -29,6 +29,21 @@ public:
 		});
 	}
 
+	//! Single-argument JSON functions that (partially) exposes yyjson functionality
+	static void UnaryMutExecute(DataChunk &args, ExpressionState &state, Vector &result,
+	                            std::function<yyjson_mut_val*(yyjson_mut_val *, yyjson_mut_doc *, yyjson_alc *, Vector &)> fun) {
+		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+		auto alc = lstate.json_allocator.GetYYAlc();
+
+		auto &inputs = args.data[0];
+		UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+			auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+			auto mut_doc = yyjson_doc_mut_copy(doc, alc);
+			auto new_val = fun(mut_doc->root, mut_doc, alc, result);
+			return JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc); // Write String back
+		});
+	}
+
 	//! Two-argument JSON read function (with path query), i.e. json_type('[1, 2, 3]', '$[0]')
 	template <class T, bool NULL_IF_NULL = true>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
@@ -107,6 +122,29 @@ public:
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	}
+
+	//! Two-argument JSON manipulation function
+	template <class T>
+	static void BinaryMutExecute(DataChunk &args, ExpressionState &state, Vector &result,
+	                             std::function<yyjson_mut_val*(yyjson_mut_val*, yyjson_mut_doc*, T, yyjson_alc*, Vector&)> fun) {
+		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+		auto alc = lstate.json_allocator.GetYYAlc();
+
+		auto &inputs_left  = args.data[0];
+        auto &inputs_right = args.data[1];
+
+		BinaryExecutor::Execute<string_t, T, string_t>(
+		    inputs_left, inputs_right, result, args.size(),
+		    [&](string_t left, T right) {
+                auto ldoc = JSONCommon::ReadDocument(left, JSONCommon::READ_FLAG, alc);
+                auto mut_ldoc = yyjson_doc_mut_copy(ldoc, alc);
+
+                auto new_val = fun(mut_ldoc->root, mut_ldoc, right, alc, result);
+
+                return JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc);
+		});
+	}
+
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
 	template <class T, bool NULL_IF_NULL = true>
