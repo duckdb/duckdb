@@ -24,7 +24,6 @@ class FileOpener;
 class FileSystem;
 class HTTPState;
 class QueryProfiler;
-class QueryProfilerHistory;
 class PreparedStatementData;
 class SchemaCatalogEntry;
 struct RandomEngine;
@@ -35,8 +34,6 @@ struct ClientData {
 
 	//! Query profiler
 	shared_ptr<QueryProfiler> profiler;
-	//! QueryProfiler History
-	unique_ptr<QueryProfilerHistory> query_profiler_history;
 
 	//! The set of temporary objects that belong to this client
 	shared_ptr<AttachedDatabase> temporary_objects;

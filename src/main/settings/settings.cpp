@@ -1067,27 +1067,6 @@ Value ExportLargeBufferArrow::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Profiler History Size
-//===--------------------------------------------------------------------===//
-void ProfilerHistorySize::ResetLocal(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	client_data.query_profiler_history->ResetProfilerHistorySize();
-}
-
-void ProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
-	auto size = input.GetValue<int64_t>();
-	if (size <= 0) {
-		throw ParserException("Size should be >= 0");
-	}
-	auto &client_data = ClientData::Get(context);
-	client_data.query_profiler_history->SetProfilerHistorySize(size);
-}
-
-Value ProfilerHistorySize::GetSetting(ClientContext &context) {
-	return Value();
-}
-
-//===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//
 void ProfileOutputSetting::ResetLocal(ClientContext &context) {
