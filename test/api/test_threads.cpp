@@ -45,7 +45,12 @@ TEST_CASE("Test external threads", "[api]") {
 	con.Query("SET external_threads=0");
 	REQUIRE(config.options.external_threads == 0);
 	REQUIRE(db.NumberOfThreads() == 13);
-	auto res = con.Query("SET external_threads=14");
+
+	auto res = con.Query("SET external_threads=-1");
+	REQUIRE(res->HasError());
+	REQUIRE(res->GetError() == "Syntax Error: Must have a non-negative number of external threads!");
+
+	res = con.Query("SET external_threads=14");
 	REQUIRE(res->HasError());
 	REQUIRE(res->GetError() == "Syntax Error: Number of threads can't be smaller than number of external threads!");
 

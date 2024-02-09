@@ -722,7 +722,11 @@ Value ExtensionDirectorySetting::GetSetting(ClientContext &context) {
 // External Threads Setting
 //===--------------------------------------------------------------------===//
 void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	idx_t new_external_threads = input.GetValue<int64_t>();
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 0) {
+		throw SyntaxException("Must have a non-negative number of external threads!");
+	}
+	idx_t new_external_threads = new_val;
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
 	}
@@ -1254,7 +1258,11 @@ Value TempDirectorySetting::GetSetting(ClientContext &context) {
 // Threads Setting
 //===--------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	idx_t new_maximum_threads = input.GetValue<int64_t>();
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 1) {
+		throw SyntaxException("Must have at least 1 thread!");
+	}
+	idx_t new_maximum_threads = new_val;
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
 	}
