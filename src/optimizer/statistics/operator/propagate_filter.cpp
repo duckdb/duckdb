@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
