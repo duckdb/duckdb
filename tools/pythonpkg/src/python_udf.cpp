@@ -141,8 +141,13 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 
 			single_array[0] = python_object;
 			single_name[0] = "c0";
-			python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-			    single_array, py::arg("names") = single_name);
+			try {
+				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+				    single_array, py::arg("names") = single_name);
+			} catch (py::error_already_set &ex) {
+				ex.restore();
+				throw;
+			}
 		}
 		// Convert the pyarrow result back to a DuckDB datachunk
 		ConvertPyArrowToDataChunk(python_object, result, state.GetContext(), count);
