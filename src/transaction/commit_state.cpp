@@ -46,6 +46,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	switch (parent.type) {
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::VIEW_ENTRY:
+	case CatalogType::INDEX_ENTRY:
 		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == parent.type) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
@@ -69,6 +70,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 				}
 				break;
 			case CatalogType::VIEW_ENTRY:
+			case CatalogType::INDEX_ENTRY:
 				(void)column_name;
 				break;
 			}
@@ -84,6 +86,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::VIEW_ENTRY:
 				// CREATE VIEW statement
 				log->WriteCreateView(parent.Cast<ViewCatalogEntry>());
+				break;
+			case CatalogType::INDEX_ENTRY:
+				log->WriteCreateIndex(parent.Cast<IndexCatalogEntry>());
 				break;
 			}
 		}
@@ -103,9 +108,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		break;
 	case CatalogType::TABLE_MACRO_ENTRY:
 		log->WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
-		break;
-	case CatalogType::INDEX_ENTRY:
-		log->WriteCreateIndex(parent.Cast<IndexCatalogEntry>());
 		break;
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType(parent.Cast<TypeCatalogEntry>());
