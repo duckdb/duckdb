@@ -95,6 +95,9 @@ public:
 	unsafe_unique_array<bool> projected_columns;
 	bool projecting_columns = false;
 	idx_t chunk_col_id = 0;
+
+	//! If the current row has an error, we have to skip it
+	bool ignore_current_row = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result

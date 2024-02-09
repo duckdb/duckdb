@@ -34,6 +34,15 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 	}
 }
 
+bool DuckDBPyRelation::CanBeRegisteredBy(Connection &con) {
+	if (!rel) {
+		// PyRelation without an internal relation can not be registered
+		return false;
+	}
+	auto context = rel->context.GetContext();
+	return context == con.context;
+}
+
 DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
@@ -735,6 +744,7 @@ unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
 }
 
 void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
+	result.reset();
 	auto query_result = ExecuteInternal(stream_result);
 	if (!query_result) {
 		throw InternalException("ExecuteOrThrow - no query available to execute");
