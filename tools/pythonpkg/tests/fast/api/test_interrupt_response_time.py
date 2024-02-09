@@ -22,6 +22,7 @@ def large_test_data_gen():
     print("test data generation complete")
     return df
 
+
 def long_running_query():
     return """
     SELECT 
@@ -30,6 +31,7 @@ def long_running_query():
     FROM df
     ORDER by col0 DESC                 
     """
+
 
 def limited_column_query():
     return """
@@ -86,9 +88,11 @@ class TestQueryInterrupt(object):
 
         # Elapsed time is not entirely predictable, there may still be significant C++ unwind time
         # when returning from exception
-        assert elapsed < 15, query_name + "Query didn't respond to interrupt fast enough. Took %s seconds to respond." % (end - start)
+        assert (
+            elapsed < 15
+        ), query_name + "Query didn't respond to interrupt fast enough. Took %s seconds to respond." % (end - start)
         print("\n")
-    
+
     def test_system_interrupt(self):
         """
         Test that queries promptly respond to keyboard interrupts
@@ -97,5 +101,3 @@ class TestQueryInterrupt(object):
         print("\n")
         self.assert_interrupts("limited_column_query", limited_column_query, large_test_data)
         self.assert_interrupts("long_running_query", long_running_query, large_test_data)
-        
-
