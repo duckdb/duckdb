@@ -461,7 +461,7 @@ static string AddColumnNameToBinding(const string &base_name, case_insensitive_s
 	idx_t index = 1;
 	string name = base_name;
 	while (current_names.find(name) != current_names.end()) {
-		name = base_name + ":" + std::to_string(index++);
+		name = base_name + "_" + std::to_string(index++);
 	}
 	current_names.insert(name);
 	return name;

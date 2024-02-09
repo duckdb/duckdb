@@ -36,7 +36,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
 	for (auto &n : result->names) {
 		string name = n;
 		while (find(names.begin(), names.end(), name) != names.end()) {
-			name = n + ":" + std::to_string(index++);
+			name = n + "_" + std::to_string(index++);
 		}
 		names.push_back(name);
 	}
