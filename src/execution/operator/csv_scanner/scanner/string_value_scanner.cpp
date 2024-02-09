@@ -235,6 +235,8 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		if (result.projecting_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
 				result.cur_col_id++;
+				result.quoted = false;
+				result.escaped = false;
 				return;
 			}
 		}
