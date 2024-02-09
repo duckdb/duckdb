@@ -85,18 +85,34 @@ struct DebugClientContextState : public ClientContextState {
 	idx_t active_query = 0;
 
 	void QueryBegin(ClientContext &context) override {
+		if (active_query != 0) {
+			throw InternalException("DebugClientContextState::QueryBegin called when a query is already active");
+		}
 		active_query++;
 	}
 	void QueryEnd(ClientContext &context) override {
+		if (active_query != 1) {
+			throw InternalException("DebugClientContextState::QueryEnd called with active_query != 1");
+		}
 		active_query--;
 	}
 	void TransactionBegin(MetaTransaction &transaction, ClientContext &context) override {
+		if (active_transaction != 0) {
+			throw InternalException(
+			    "DebugClientContextState::TransactionBegin called when a transaction is already active");
+		}
 		active_transaction++;
 	}
 	void TransactionCommit(MetaTransaction &transaction, ClientContext &context) override {
+		if (active_transaction != 1) {
+			throw InternalException("DebugClientContextState::TransactionCommit called with active_transaction != 1");
+		}
 		active_transaction--;
 	}
 	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
+		if (active_transaction != 1) {
+			throw InternalException("DebugClientContextState::TransactionRollback called with active_transaction != 1");
+		}
 		active_transaction--;
 	}
 };
