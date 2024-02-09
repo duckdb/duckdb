@@ -42,7 +42,6 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	case JoinType::LEFT:
 	case JoinType::ANTI:
 	case JoinType::SEMI: {
-		// TODO create recursive call for RHS child
 		return PullupFromLeft(std::move(op));
 	}
 	default:
