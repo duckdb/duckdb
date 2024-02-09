@@ -78,6 +78,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		// namely a dependency on the CTE pipeline to finish
 		auto cte_dependency = entry->second.get().shared_from_this();
 		auto cte_sink = state.GetPipelineSink(*cte_dependency);
+		(void)cte_sink;
 		D_ASSERT(cte_sink);
 		D_ASSERT(cte_sink->type == PhysicalOperatorType::CTE);
 		current.AddDependency(cte_dependency);
