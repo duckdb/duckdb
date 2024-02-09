@@ -49,6 +49,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
 	case CatalogType::TYPE_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
 		if (entry.type == CatalogType::RENAMED_ENTRY || entry.type == parent.type) {
 			// ALTER statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
@@ -75,6 +77,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::INDEX_ENTRY:
 			case CatalogType::SEQUENCE_ENTRY:
 			case CatalogType::TYPE_ENTRY:
+			case CatalogType::MACRO_ENTRY:
+			case CatalogType::TABLE_MACRO_ENTRY:
 				(void)column_name;
 				break;
 			}
@@ -103,6 +107,12 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 				// CREATE TYPE statement
 				log->WriteCreateType(parent.Cast<TypeCatalogEntry>());
 				break;
+			case CatalogType::MACRO_ENTRY:
+				log->WriteCreateMacro(parent.Cast<ScalarMacroCatalogEntry>());
+				break;
+			case CatalogType::TABLE_MACRO_ENTRY:
+				log->WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
+				break;
 			}
 		}
 		break;
@@ -112,12 +122,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			return;
 		}
 		log->WriteCreateSchema(parent.Cast<SchemaCatalogEntry>());
-		break;
-	case CatalogType::MACRO_ENTRY:
-		log->WriteCreateMacro(parent.Cast<ScalarMacroCatalogEntry>());
-		break;
-	case CatalogType::TABLE_MACRO_ENTRY:
-		log->WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
 		break;
 	case CatalogType::RENAMED_ENTRY:
 		// This is a rename, nothing needs to be done for this
