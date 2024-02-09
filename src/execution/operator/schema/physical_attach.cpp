@@ -69,14 +69,14 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto &name = info->name;
 	auto &path = info->path;
 
-	auto &fs = FileSystem::GetFileSystem(context.client);
-	path = GetDBAbsolutePath(path, fs);
 	if (db_type.empty()) {
 		DBPathAndType::ExtractExtensionPrefix(path, db_type);
 	}
+	auto &fs = FileSystem::GetFileSystem(context.client);
 	if (name.empty()) {
 		name = AttachedDatabase::ExtractDatabaseName(path, fs);
 	}
+	path = GetDBAbsolutePath(path, fs);
 
 	// check ATTACH IF NOT EXISTS
 	auto &db_manager = DatabaseManager::Get(context.client);
