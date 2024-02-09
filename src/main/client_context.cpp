@@ -77,43 +77,44 @@ private:
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
-		D_ASSERT(active_transaction == 0);
-		D_ASSERT(active_query == 0);
+		D_ASSERT(!active_transaction);
+		D_ASSERT(!active_query);
 	}
 
-	idx_t active_transaction = 0;
-	idx_t active_query = 0;
+	bool active_transaction = false;
+	bool active_query = false;
 
 	void QueryBegin(ClientContext &context) override {
-		if (active_query != 0) {
+		if (active_query) {
 			throw InternalException("DebugClientContextState::QueryBegin called when a query is already active");
 		}
-		active_query++;
+		active_query = true;
 	}
 	void QueryEnd(ClientContext &context) override {
-		if (active_query != 1) {
-			throw InternalException("DebugClientContextState::QueryEnd called with active_query != 1");
+		if (!active_query) {
+			throw InternalException("DebugClientContextState::QueryEnd called when no query is active");
 		}
-		active_query--;
+		active_query = false;
 	}
 	void TransactionBegin(MetaTransaction &transaction, ClientContext &context) override {
-		if (active_transaction != 0) {
+		if (active_transaction) {
 			throw InternalException(
 			    "DebugClientContextState::TransactionBegin called when a transaction is already active");
 		}
-		active_transaction++;
+		active_transaction = true;
 	}
 	void TransactionCommit(MetaTransaction &transaction, ClientContext &context) override {
-		if (active_transaction != 1) {
-			throw InternalException("DebugClientContextState::TransactionCommit called with active_transaction != 1");
+		if (!active_transaction) {
+			throw InternalException("DebugClientContextState::TransactionCommit called when no transaction is active");
 		}
-		active_transaction--;
+		active_transaction = false;
 	}
 	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
-		if (active_transaction != 1) {
-			throw InternalException("DebugClientContextState::TransactionRollback called with active_transaction != 1");
+		if (!active_transaction) {
+			throw InternalException(
+			    "DebugClientContextState::TransactionRollback called when no transaction is active");
 		}
-		active_transaction--;
+		active_transaction = false;
 	}
 };
 #endif
