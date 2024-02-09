@@ -235,6 +235,9 @@ int32_t TaskScheduler::NumberOfThreads() {
 }
 
 void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
+	if (total_threads == 0) {
+		throw SyntaxException("Number of threads must be positive!");
+	}
 #ifndef DUCKDB_NO_THREADS
 	if (total_threads < external_threads) {
 		throw SyntaxException("Number of threads can't be smaller than number of external threads!");
