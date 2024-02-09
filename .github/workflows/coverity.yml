@@ -35,6 +35,7 @@ jobs:
       run: cov-analysis-linux64/bin/cov-build --dir cov-int make
       env:
         PYTHON_USER_SPACE: 1
+        PYTHON_EDITABLE_BUILD: 1
         BUILD_PYTHON: 1
         BUILD_JDBC: 1
         BUILD_ODBC: 1

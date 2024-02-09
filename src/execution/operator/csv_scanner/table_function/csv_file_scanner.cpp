@@ -114,8 +114,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		options.dialect_options.state_machine_options.new_line = CSVSniffer::DetectNewLineDelimiter(*buffer_manager);
 	}
 
-	names = bind_data.return_names;
-	types = bind_data.return_types;
+	names = bind_data.csv_names;
+	types = bind_data.csv_types;
 	state_machine =
 	    make_shared<CSVStateMachine>(state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 
@@ -152,11 +152,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, CSVRea
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
-	if (options.null_padding && reader_data.column_ids.empty()) {
-		// If we are null padding we do not yet support projection pushdown
-		file_types = types;
-		return;
-	}
 	if (reader_data.empty_columns && reader_data.column_ids.empty()) {
 		// This means that the columns from this file are irrelevant.
 		// just read the first column

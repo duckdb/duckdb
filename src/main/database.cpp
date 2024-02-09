@@ -123,8 +123,8 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(const AttachInfo &info, const string &type,
-                                                                      AccessMode access_mode) {
+unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
+                                                                      const string &type, AccessMode access_mode) {
 	unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extension
@@ -137,7 +137,7 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(const Atta
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
 			// use storage extension to create the initial database
 			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-			                                                info.name, info, access_mode);
+			                                                context, info.name, info, access_mode);
 		} else {
 			attached_database =
 			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);

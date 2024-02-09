@@ -114,16 +114,14 @@ void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_f
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	auto path = StringUtil::GetFilePath(tmp_file_path);
-	auto base = StringUtil::GetFileStem(tmp_file_path);
-	auto extension = StringUtil::GetFileExtension(tmp_file_path);
-	extension = extension.empty() ? extension : "." + extension;
+	auto base = StringUtil::GetFileName(tmp_file_path);
 
-	auto suffix = base.rfind("_tmp");
-	if (suffix != string::npos) {
-		base = base.substr(0, suffix);
+	auto prefix = base.find("tmp_");
+	if (prefix == 0) {
+		base = base.substr(4);
 	}
 
-	auto file_path = fs.JoinPath(path, base + extension);
+	auto file_path = fs.JoinPath(path, base);
 	if (fs.FileExists(file_path)) {
 		fs.RemoveFile(file_path);
 	}

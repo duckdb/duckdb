@@ -642,6 +642,27 @@ public:
 		}
 		return false;
 	}
+	void CancelTasks() {
+		// This should only be called after an error has occurred, no other mechanism to cancel checkpoint tasks exists
+		// currently
+		D_ASSERT(error_manager.HasError());
+		// Give every pending task the chance to cancel
+		WorkOnTasks();
+		// Wait for all active tasks to realize they have been canceled
+		while (completed_tasks != total_tasks) {
+		}
+	}
+
+	void WorkOnTasks() {
+		shared_ptr<Task> task_from_producer;
+		while (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
+			auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
+			(void)res;
+			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
+			task_from_producer.reset();
+		}
+	}
+
 	bool GetTask(shared_ptr<Task> &task) {
 		return scheduler.GetTaskFromProducer(*token, task);
 	}
@@ -660,7 +681,10 @@ public:
 
 	virtual void ExecuteTask() = 0;
 	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		(void)mode;
+		D_ASSERT(mode == TaskExecutionMode::PROCESS_ALL);
 		if (checkpoint_state.HasError()) {
+			checkpoint_state.FinishTask();
 			return TaskExecutionResult::TASK_FINISHED;
 		}
 		try {
@@ -672,6 +696,7 @@ public:
 		} catch (...) { // LCOV_EXCL_START
 			checkpoint_state.PushError(ErrorData("Unknown exception during Checkpoint!"));
 		} // LCOV_EXCL_STOP
+		checkpoint_state.FinishTask();
 		return TaskExecutionResult::TASK_ERROR;
 	}
 
@@ -775,7 +800,9 @@ public:
 					                                           append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
-					if (remaining > 0) {
+					const bool row_group_full = append_counts[current_append_idx] == Storage::ROW_GROUP_SIZE;
+					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
+					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// move to the next row group
 						current_append_idx++;
 						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
@@ -942,8 +969,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// check if we ran into any errors while checkpointing
 	if (checkpoint_state.HasError()) {
 		// throw the error
+		checkpoint_state.CancelTasks();
 		checkpoint_state.ThrowError();
 	}
+
 	// no errors - finalize the row groups
 	idx_t new_total_rows = 0;
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
