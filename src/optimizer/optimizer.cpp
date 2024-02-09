@@ -176,6 +176,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		column_lifetime.VisitOperator(*plan);
 	});
 
+	// swaps left and right children of joins so that the table with less data is the build side
+	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
+		BuildProbeSideOptimizer build_probe_side_optimizer(true);
+		build_probe_side_optimizer.VisitOperator(*plan);
+	});
+
 	// compress data based on statistics for materializing operators
 	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
 		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
