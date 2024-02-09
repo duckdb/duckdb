@@ -160,9 +160,9 @@ void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state,
 		GetAllColumnIDsInternal(column_ids, types.size());
 	}
 	InitializeVectorFormat(chunk_state.vector_data, types);
-	chunk_state.column_ids = std::move(column_ids);
 
-	for (auto &type : types) {
+	for (auto &col : column_ids) {
+		auto &type = types[col];
 		if (type.Contains(LogicalTypeId::ARRAY)) {
 			auto cast_type = ArrayType::ConvertToList(type);
 			chunk_state.cached_cast_vector_cache.push_back(
@@ -173,6 +173,8 @@ void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state,
 			chunk_state.cached_cast_vector_cache.emplace_back();
 		}
 	}
+
+	chunk_state.column_ids = std::move(column_ids);
 }
 
 void TupleDataCollection::Append(DataChunk &new_chunk, const SelectionVector &append_sel, idx_t append_count) {
@@ -428,11 +430,12 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<colum
 	state.pin_state.properties = properties;
 	state.segment_index = 0;
 	state.chunk_index = 0;
-	state.chunk_state.column_ids = std::move(column_ids);
 
 	auto &chunk_state = state.chunk_state;
 
-	for (auto &type : layout.GetTypes()) {
+	for (auto &col : column_ids) {
+		auto &type = layout.GetTypes()[col];
+
 		if (type.Contains(LogicalTypeId::ARRAY)) {
 			auto cast_type = ArrayType::ConvertToList(type);
 			chunk_state.cached_cast_vector_cache.push_back(
@@ -443,6 +446,8 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<colum
 			chunk_state.cached_cast_vector_cache.emplace_back();
 		}
 	}
+
+	state.chunk_state.column_ids = std::move(column_ids);
 }
 
 void TupleDataCollection::InitializeScan(TupleDataParallelScanState &gstate, TupleDataPinProperties properties) const {
@@ -537,7 +542,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	segment.allocator->InitializeChunkState(segment, pin_state, chunk_state, chunk_index, false);
 	result.Reset();
 
-	for (idx_t i = 0; i < result.ColumnCount(); i++) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (chunk_state.cached_cast_vectors[i]) {
 			chunk_state.cached_cast_vectors[i]->ResetFromCache(*chunk_state.cached_cast_vector_cache[i]);
 		}

@@ -1311,8 +1311,8 @@ static void TupleDataCastToArrayListGather(const TupleDataLayout &layout, Vector
                                            const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
                                            const SelectionVector &target_sel, optional_ptr<Vector> cached_cast_vector,
                                            const vector<TupleDataGatherFunction> &child_functions) {
-	// TODO: Fix
-	if (false) {
+
+	if (cached_cast_vector) {
 		// Reuse the cached cast vector
 		TupleDataListGather(layout, row_locations, col_idx, scan_sel, scan_count, *cached_cast_vector, target_sel,
 		                    cached_cast_vector, child_functions);
@@ -1331,8 +1331,7 @@ static void TupleDataCastToArrayStructGather(const TupleDataLayout &layout, Vect
                                              const SelectionVector &target_sel, optional_ptr<Vector> cached_cast_vector,
                                              const vector<TupleDataGatherFunction> &child_functions) {
 
-	// TODO: Fix
-	if (false) {
+	if (cached_cast_vector) {
 		// Reuse the cached cast vector
 		TupleDataStructGather(layout, row_locations, col_idx, scan_sel, scan_count, *cached_cast_vector, target_sel,
 		                      cached_cast_vector, child_functions);
