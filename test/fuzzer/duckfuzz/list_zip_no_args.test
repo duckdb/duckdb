@@ -1,5 +1,5 @@
 # name: test/fuzzer/duckfuzz/list_zip_no_args.test
-# description: Test List Zip with no arguments. 
+# description: Test List Zip with no arguments.
 # group: [duckfuzz]
 
 require tpch
