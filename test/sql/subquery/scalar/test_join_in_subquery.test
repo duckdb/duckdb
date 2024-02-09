@@ -6,27 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE test (id INTEGER, test_value INTEGER);
+CREATE TABLE test AS FROM VALUES (1, 22), (1, 21), (2, 22) v(id, test_value);
 
 statement ok
-INSERT INTO test VALUES (1, 22)
+CREATE TABLE test2 AS FROM VALUES (1, 44), (2, 42) v(id, test2_value);
 
-statement ok
-INSERT INTO test VALUES (1, 21)
-
-statement ok
-INSERT INTO test VALUES (2, 22)
-
-statement ok
-CREATE TABLE test2 (id INTEGER, test2_value INTEGER);
-
-statement ok
-INSERT INTO test2 VALUES (1, 44)
-
-statement ok
-INSERT INTO test2 VALUES (2, 42)
-
-query IIII
+query IIII rowsort
 SELECT * FROM test, test2 WHERE test.id=test2.id AND test_value*test2_value=(SELECT MIN(test_value*test2_value) FROM test AS a, test2 WHERE a.id=test.id AND a.id=test2.id)
 ----
 1	21	1	44
