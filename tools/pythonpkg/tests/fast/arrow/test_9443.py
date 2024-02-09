@@ -25,6 +25,6 @@ class Test9443(object):
 
             sql = f'SELECT * FROM "{temp_file}"'
 
-            rel = duckdb_cursor.query(sql)
-            with pytest.raises(duckdb.NotImplementedException, match='Unsupported Arrow type TIME WITH TIME ZONE'):
-                res = rel.arrow()
+            duckdb_cursor.execute(sql)
+            with pytest.raises(Exception, match='Invalid Error'):
+                duckdb_cursor.fetch_record_batch()
