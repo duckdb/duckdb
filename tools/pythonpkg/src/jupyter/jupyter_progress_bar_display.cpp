@@ -30,12 +30,19 @@ JupyterProgressBarDisplay::JupyterProgressBarDisplay() : ProgressBarDisplay() {
 }
 
 void JupyterProgressBarDisplay::Update(double progress) {
-	py::gil_scoped_acquire gil;
-	if (progress_bar.ptr() == nullptr) {
-		// First print, we first need to initialize the display
-		Initialize();
+	try {
+		py::gil_scoped_acquire gil;
+		if (progress_bar.ptr() == nullptr) {
+			// First print, we first need to initialize the display
+			Initialize();
+		}
+		progress_bar.attr("value") = py::cast(progress);
+	} catch (py::error_already_set &e) {
+		// ignore any python errors e.g. from KeyboardInterrupt
+		// PendingExecutionResult ClientContext::ExecuteTaskInternal()
+		// in duckdb/src/main/client_context.cpp
+		// is not able to safely process exceptions for now
 	}
-	progress_bar.attr("value") = py::cast(progress);
 }
 
 void JupyterProgressBarDisplay::Finish() {
