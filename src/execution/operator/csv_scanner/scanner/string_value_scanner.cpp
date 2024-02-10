@@ -253,7 +253,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 			result.AddValueToVector(value.GetData(), value.GetSize());
 		} else {
 			result.AddValueToVector(result.buffer_ptr + result.quoted_position + 1,
-			                        buffer_pos - result.quoted_position - 2);
+			                        buffer_pos - result.quoted_position - 2, true);
 		}
 	}
 	result.quoted = false;
@@ -267,7 +267,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	if (result.quoted) {
 		StringValueResult::AddQuotedValue(result, buffer_pos);
 	} else {
-		result.AddValueToVector(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
+		result.AddValueToVector(result.buffer_ptr + result.last_position, buffer_pos - result.last_position, true);
 	}
 	result.last_position = buffer_pos + 1;
 }
@@ -401,7 +401,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			StringValueResult::AddQuotedValue(result, buffer_pos);
 		} else {
-			result.AddValueToVector(result.buffer_ptr + result.last_position, buffer_pos - result.last_position);
+			result.AddValueToVector(result.buffer_ptr + result.last_position, buffer_pos - result.last_position, true);
 		}
 		if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 			if (result.states.states[1] == CSVState::RECORD_SEPARATOR) {
