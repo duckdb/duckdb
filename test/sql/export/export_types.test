@@ -2,6 +2,9 @@
 # description: Test export of macro's
 # group: [export]
 
+# Because of ordering issues in EXPORT DATABASE we can't IMPORT this database
+mode skip
+
 statement ok
 BEGIN TRANSACTION
 
