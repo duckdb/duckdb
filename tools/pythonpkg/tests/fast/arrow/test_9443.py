@@ -18,7 +18,7 @@ class Test9443(object):
 
         print(arrow_table)
 
-        temp_file = tmp_path / "temp_file.parquet"
+        temp_file = tmp_path / "test9443.parquet"
         # Perform operations using temp_file
         with temp_file.open("wb") as file:
             pq.write_table(arrow_table, temp_file)
