@@ -97,12 +97,12 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold), thread_count(1) {
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold), thread_count(0) {
 }
 
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
-	RelaunchThreadsInternal(1);
+	RelaunchThreadsInternal(0);
 #endif
 }
 
@@ -231,18 +231,22 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 int32_t TaskScheduler::NumberOfThreads() {
 	lock_guard<mutex> t(thread_lock);
 	auto &config = DBConfig::GetConfig(db);
-	return threads.size() + config.options.external_threads + 1;
+	return threads.size() + config.options.external_threads;
 }
 
-void TaskScheduler::SetThreads(int32_t n) {
-#ifndef DUCKDB_NO_THREADS
-	if (n < 1) {
-		throw SyntaxException("Must have at least 1 thread!");
+void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
+	if (total_threads == 0) {
+		throw SyntaxException("Number of threads must be positive!");
 	}
-	thread_count = n;
+#ifndef DUCKDB_NO_THREADS
+	if (total_threads < external_threads) {
+		throw SyntaxException("Number of threads can't be smaller than number of external threads!");
+	}
+	thread_count = total_threads - external_threads;
 #else
-	if (n != 1) {
-		throw NotImplementedException("DuckDB was compiled without threads! Setting threads > 1 is not allowed.");
+	if (threads != external_threads) {
+		throw NotImplementedException(
+		    "DuckDB was compiled without threads! Setting threads != external_threads is not allowed.");
 	}
 #endif
 }
@@ -270,10 +274,10 @@ void TaskScheduler::RelaunchThreads() {
 
 void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
-	if (threads.size() == idx_t(n - 1)) {
+	idx_t new_thread_count = n;
+	if (threads.size() == new_thread_count) {
 		return;
 	}
-	idx_t new_thread_count = n - 1;
 	if (threads.size() > new_thread_count) {
 		// we are reducing the number of threads: clear all threads first
 		for (idx_t i = 0; i < threads.size(); i++) {

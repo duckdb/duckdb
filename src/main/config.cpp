@@ -338,14 +338,6 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #endif
 }
 
-void DBConfig::SetDefaultMaxThreads() {
-#ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = GetSystemMaxThreads(*file_system);
-#else
-	options.maximum_threads = 1;
-#endif
-}
-
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
 		return DConstants::INVALID_INDEX;
