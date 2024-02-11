@@ -46,7 +46,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
-	if (dynamic_cast<DuckCatalog*>(catalog.get())) {
+	if (dynamic_cast<DuckCatalog *>(catalog.get())) {
 		// DuckCatalog, instatiante storage
 		storage = make_uniq<SingleFileStorageManager>(*this, info.path, access_mode == AccessMode::READ_ONLY);
 	}

@@ -45,8 +45,14 @@ public:
 		return true;
 	}
 
+protected:
+	struct CheckpointDecision {
+		bool can_checkpoint;
+		string reason;
+	};
+
 private:
-	bool CanCheckpoint(optional_ptr<DuckTransaction> current = nullptr);
+	CheckpointDecision CanCheckpoint(optional_ptr<DuckTransaction> current = nullptr);
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(DuckTransaction &transaction) noexcept;
 	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
@@ -70,6 +76,10 @@ private:
 	mutex transaction_lock;
 
 	bool thread_is_checkpointing;
+
+protected:
+	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {
+	}
 };
 
 } // namespace duckdb
