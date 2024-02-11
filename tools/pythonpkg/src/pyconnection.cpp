@@ -388,8 +388,8 @@ static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQuer
 }
 
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
-    std::atomic<bool> abort_query;
-    abort_query.store(false);
+	std::atomic<bool> abort_query;
+	abort_query.store(false);
 	std::future<void> future = std::async(
 	    std::launch::async,
 	    [](PendingQueryResult *pending_query, std::atomic<bool> *abort_query) {
