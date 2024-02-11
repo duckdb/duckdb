@@ -19,6 +19,7 @@ void Transformer::TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, Quer
 		order_modifier->orders = std::move(orders);
 		node.modifiers.push_back(std::move(order_modifier));
 	}
+
 	if (stmt.limitCount || stmt.limitOffset) {
 		if (stmt.limitCount && stmt.limitCount->type == duckdb_libpgquery::T_PGLimitPercent) {
 			auto limit_percent_modifier = make_uniq<LimitPercentModifier>();
@@ -122,13 +123,12 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
 		if (!result.left || !result.right) {
-			throw Exception("Failed to transform setop children.");
+			throw InternalException("Failed to transform setop children.");
 		}
 
-		bool select_distinct = true;
+		result.setop_all = stmt.all;
 		switch (stmt.op) {
 		case duckdb_libpgquery::PG_SETOP_UNION:
-			select_distinct = !stmt.all;
 			result.setop_type = SetOperationType::UNION;
 			break;
 		case duckdb_libpgquery::PG_SETOP_EXCEPT:
@@ -138,14 +138,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			result.setop_type = SetOperationType::INTERSECT;
 			break;
 		case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME:
-			select_distinct = !stmt.all;
 			result.setop_type = SetOperationType::UNION_BY_NAME;
 			break;
 		default:
-			throw Exception("Unexpected setop type");
-		}
-		if (select_distinct) {
-			result.modifiers.push_back(make_uniq<DistinctModifier>());
+			throw InternalException("Unexpected setop type");
 		}
 		if (stmt.sampleOptions) {
 			throw ParserException("SAMPLE clause is only allowed in regular SELECT statements");

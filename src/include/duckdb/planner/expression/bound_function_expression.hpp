@@ -34,7 +34,8 @@ public:
 	bool is_operator;
 
 public:
-	bool HasSideEffects() const override;
+	bool IsVolatile() const override;
+	bool IsConsistent() const override;
 	bool IsFoldable() const override;
 	string ToString() const override;
 	bool PropagatesNullValues() const override;

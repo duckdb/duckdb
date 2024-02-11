@@ -26,6 +26,13 @@ set ignore_error_messages
 statement ok
 pragma memory_limit='100mb'
 
+statement ok
+set http_timeout=120000;
+
+# More retries (longest wait will be 25600ms)
+statement ok
+set http_retries=6;
+
 # around 200MB worth of data, will require the PartitionedColumnData to spill to disk
 statement ok
 COPY (SELECT i%2::INT32 as part_col, i::INT32 FROM range(0,25000000) tbl(i)) TO 's3://test-bucket/partitioned_memory_spill' (FORMAT parquet, PARTITION_BY part_col, overwrite_or_ignore TRUE);

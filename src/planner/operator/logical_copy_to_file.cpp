@@ -1,11 +1,10 @@
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -32,6 +31,8 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 		serializer.WriteObject(212, "function_data",
 		                       [&](Serializer &obj) { function.serialize(obj, *bind_data, function); });
 	}
+
+	serializer.WriteProperty(213, "file_extension", file_extension);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -70,13 +71,21 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 		if (!function.copy_to_bind) {
 			throw InternalException("Copy function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
-		bind_data = function.copy_to_bind(context, *copy_info, names, expected_types);
+
+		CopyFunctionBindInput function_bind_input(*copy_info);
+		bind_data = function.copy_to_bind(context, function_bind_input, names, expected_types);
 	}
+
+	auto default_extension = function.extension;
+
+	auto file_extension =
+	    deserializer.ReadPropertyWithDefault<string>(213, "file_extension", std::move(default_extension));
 
 	auto result = make_uniq<LogicalCopyToFile>(function, std::move(bind_data), std::move(copy_info));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->filename_pattern = filename_pattern;
+	result->file_extension = file_extension;
 	result->overwrite_or_ignore = overwrite_or_ignore;
 	result->per_thread_output = per_thread_output;
 	result->partition_output = partition_output;

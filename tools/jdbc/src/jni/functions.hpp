@@ -3,6 +3,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "org_duckdb_DuckDBNative.h"
 #include <exception>
 
@@ -178,6 +179,19 @@ void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass param0, jobject par
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string(JNIEnv *env, jclass param0,
                                                                                            jobject param1,
                                                                                            jbyteArray param2);
+
+void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass param0, jobject param1, jlong param2);
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1timestamp(JNIEnv *env,
+                                                                                              jclass param0,
+                                                                                              jobject param1,
+                                                                                              jlong param2);
+
+void _duckdb_jdbc_appender_append_decimal(JNIEnv *env, jclass param0, jobject param1, jobject param2);
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1decimal(JNIEnv *env, jclass param0,
+                                                                                            jobject param1,
+                                                                                            jobject param2);
 
 void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass param0, jobject param1);
 

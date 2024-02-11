@@ -24,16 +24,22 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::UBIGINT;
 	case DUCKDB_TYPE_HUGEINT:
 		return LogicalTypeId::HUGEINT;
+	case DUCKDB_TYPE_UHUGEINT:
+		return LogicalTypeId::UHUGEINT;
 	case DUCKDB_TYPE_FLOAT:
 		return LogicalTypeId::FLOAT;
 	case DUCKDB_TYPE_DOUBLE:
 		return LogicalTypeId::DOUBLE;
 	case DUCKDB_TYPE_TIMESTAMP:
 		return LogicalTypeId::TIMESTAMP;
+	case DUCKDB_TYPE_TIMESTAMP_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_DATE:
 		return LogicalTypeId::DATE;
 	case DUCKDB_TYPE_TIME:
 		return LogicalTypeId::TIME;
+	case DUCKDB_TYPE_TIME_TZ:
+		return LogicalTypeId::TIME_TZ;
 	case DUCKDB_TYPE_VARCHAR:
 		return LogicalTypeId::VARCHAR;
 	case DUCKDB_TYPE_BLOB:
@@ -76,13 +82,16 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_UBIGINT;
 	case LogicalTypeId::HUGEINT:
 		return DUCKDB_TYPE_HUGEINT;
+	case LogicalTypeId::UHUGEINT:
+		return DUCKDB_TYPE_UHUGEINT;
 	case LogicalTypeId::FLOAT:
 		return DUCKDB_TYPE_FLOAT;
 	case LogicalTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
 		return DUCKDB_TYPE_TIMESTAMP;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return DUCKDB_TYPE_TIMESTAMP_TZ;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return DUCKDB_TYPE_TIMESTAMP_S;
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -92,8 +101,9 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return DUCKDB_TYPE_TIME;
+	case LogicalTypeId::TIME_TZ:
+		return DUCKDB_TYPE_TIME_TZ;
 	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
 	case LogicalTypeId::BLOB:
@@ -142,6 +152,7 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(uint32_t);
 	case DUCKDB_TYPE_UBIGINT:
 		return sizeof(uint64_t);
+	case DUCKDB_TYPE_UHUGEINT:
 	case DUCKDB_TYPE_HUGEINT:
 	case DUCKDB_TYPE_UUID:
 		return sizeof(duckdb_hugeint);
@@ -171,6 +182,69 @@ idx_t GetCTypeSize(duckdb_type type) {
 		D_ASSERT(0);
 		return sizeof(const char *);
 	} // LCOV_EXCL_STOP
+}
+
+duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
+	switch (statement_type) {
+	case duckdb::StatementType::SELECT_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_SELECT;
+	case duckdb::StatementType::INVALID_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	case duckdb::StatementType::INSERT_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_INSERT;
+	case duckdb::StatementType::UPDATE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_UPDATE;
+	case duckdb::StatementType::EXPLAIN_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXPLAIN;
+	case duckdb::StatementType::DELETE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_DELETE;
+	case duckdb::StatementType::PREPARE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_PREPARE;
+	case duckdb::StatementType::CREATE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_CREATE;
+	case duckdb::StatementType::EXECUTE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXECUTE;
+	case duckdb::StatementType::ALTER_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_ALTER;
+	case duckdb::StatementType::TRANSACTION_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_TRANSACTION;
+	case duckdb::StatementType::COPY_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_COPY;
+	case duckdb::StatementType::ANALYZE_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_ANALYZE;
+	case duckdb::StatementType::VARIABLE_SET_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_VARIABLE_SET;
+	case duckdb::StatementType::CREATE_FUNC_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_CREATE_FUNC;
+	case duckdb::StatementType::DROP_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_DROP;
+	case duckdb::StatementType::EXPORT_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXPORT;
+	case duckdb::StatementType::PRAGMA_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_PRAGMA;
+	case duckdb::StatementType::VACUUM_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_VACUUM;
+	case duckdb::StatementType::CALL_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_CALL;
+	case duckdb::StatementType::SET_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_SET;
+	case duckdb::StatementType::LOAD_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_LOAD;
+	case duckdb::StatementType::RELATION_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_RELATION;
+	case duckdb::StatementType::EXTENSION_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_EXTENSION;
+	case duckdb::StatementType::LOGICAL_PLAN_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN;
+	case duckdb::StatementType::ATTACH_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_ATTACH;
+	case duckdb::StatementType::DETACH_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_DETACH;
+	case duckdb::StatementType::MULTI_STATEMENT:
+		return DUCKDB_STATEMENT_TYPE_MULTI;
+	default:
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
 }
 
 } // namespace duckdb

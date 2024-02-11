@@ -18,15 +18,13 @@ class TestPandasNA(object):
         # DataFrame containing a single pd.NA
         df = pd.DataFrame(pd.Series([pd.NA]))
 
-        conn = duckdb.connect()
-
-        res = conn.execute("select * from df").fetchall()
+        res = duckdb_cursor.execute("select * from df").fetchall()
         assert res[0][0] == None
 
         # DataFrame containing multiple values, with a pd.NA mixed in
         null_index = 3
         df = pd.DataFrame(pd.Series([3, 1, 2, pd.NA, 8, 6]))
-        res = conn.execute("select * from df").fetchall()
+        res = duckdb_cursor.execute("select * from df").fetchall()
         items = [x[0] for x in [y for y in res]]
         assert_nullness(items, [null_index])
 
@@ -62,13 +60,13 @@ class TestPandasNA(object):
         assert str(nan_df['a'].dtype) == 'float64'
         assert str(na_df['a'].dtype) == 'object'  # pd.NA values turn the column into 'object'
 
-        nan_result = conn.execute("select * from nan_df").df()
-        na_result = conn.execute("select * from na_df").df()
+        nan_result = duckdb_cursor.execute("select * from nan_df").df()
+        na_result = duckdb_cursor.execute("select * from na_df").df()
         pd.testing.assert_frame_equal(nan_result, na_result)
 
         # Mixed with stringified pd.NA values
         na_string_df = pd.DataFrame({'a': [str(pd.NA), str(pd.NA), pd.NA, str(pd.NA), pd.NA, pd.NA, pd.NA, str(pd.NA)]})
         null_indices = [2, 4, 5, 6]
-        res = conn.execute("select * from na_string_df").fetchall()
+        res = duckdb_cursor.execute("select * from na_string_df").fetchall()
         items = [x[0] for x in [y for y in res]]
         assert_nullness(items, null_indices)

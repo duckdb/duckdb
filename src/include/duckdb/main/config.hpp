@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
@@ -22,15 +22,18 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/main/client_properties.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 
 namespace duckdb {
+
 class BufferPool;
 class CastFunctionSet;
 class ClientContext;
@@ -40,6 +43,7 @@ class TableFunctionRef;
 class OperatorExtension;
 class StorageExtension;
 class ExtensionCallback;
+class SecretManager;
 
 struct CompressionFunctionSet;
 struct DBConfig;
@@ -108,16 +112,23 @@ struct DBConfigOptions {
 #else
 	bool autoinstall_known_extensions = false;
 #endif
+	//! Override for the default extension repository
+	string custom_extension_repo = "";
+	//! Override for the default autoload extensoin repository
+	string autoinstall_extension_repo = "";
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
 	idx_t maximum_threads = (idx_t)-1;
-	//! The number of external threads that work on DuckDB tasks. Default: none.
-	idx_t external_threads = 0;
+	//! The number of external threads that work on DuckDB tasks. Default: 1.
+	//! Must be smaller or equal to maximum_threads.
+	idx_t external_threads = 1;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
 	string temporary_directory;
+	//! Whether or not to allow printing unredacted secrets
+	bool allow_unredacted_secrets = false;
 	//! The collation type of the database
 	string collation = string();
 	//! The order type used when none is specified (default: ASC)
@@ -173,6 +184,12 @@ struct DBConfigOptions {
 	static bool debug_print_bindings;
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
+	//! DuckDB API surface
+	string duckdb_api;
+	//! Metadata from DuckDB callers
+	string custom_user_agent;
+	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
+	bool old_implicit_casting = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -183,7 +200,8 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
-	DUCKDB_API DBConfig(std::unordered_map<string, string> &config_dict, bool read_only);
+	DUCKDB_API DBConfig(bool read_only);
+	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
 	mutex config_lock;
@@ -195,6 +213,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
+	//! Secret manager
+	unique_ptr<SecretManager> secret_manager;
 	//! The allocator used by the system
 	unique_ptr<Allocator> allocator;
 	//! Database configuration options
@@ -232,10 +252,10 @@ public:
 	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
 	DUCKDB_API static ConfigurationOption *GetOptionByName(const string &name);
-
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
+	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
@@ -253,16 +273,18 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
-	void SetDefaultMaxThreads();
 	void SetDefaultMaxMemory();
 
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
+	const std::string UserAgent() const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
+	unique_ptr<IndexTypeSet> index_types;
 };
 
 } // namespace duckdb

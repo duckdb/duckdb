@@ -109,6 +109,10 @@ class TestAllTypes(object):
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
+        adjusted_values = {
+            'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
+            'time_tz': """CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS "time_tz" """,
+        }
         min_datetime = datetime.datetime.min
         min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)
         max_datetime = datetime.datetime.max
@@ -120,7 +124,7 @@ class TestAllTypes(object):
             'int': [(-2147483648,), (2147483647,), (None,)],
             'bigint': [(-9223372036854775808,), (9223372036854775807,), (None,)],
             'hugeint': [
-                (-170141183460469231731687303715884105727,),
+                (-170141183460469231731687303715884105728,),
                 (170141183460469231731687303715884105727,),
                 (None,),
             ],
@@ -140,7 +144,7 @@ class TestAllTypes(object):
                 (None,),
             ],
             'uuid': [
-                (UUID('00000000-0000-0000-0000-000000000001'),),
+                (UUID('00000000-0000-0000-0000-000000000000'),),
                 (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),),
                 (None,),
             ],
@@ -198,7 +202,11 @@ class TestAllTypes(object):
                 (None,),
             ],
             'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)],
-            'map': [({'key': [], 'value': []},), ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},), (None,)],
+            'map': [
+                ({'key': [], 'value': []},),
+                ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},),
+                (None,),
+            ],
             'time_tz': [(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)],
             'interval': [
                 (datetime.timedelta(0),),
@@ -215,7 +223,8 @@ class TestAllTypes(object):
         }
         if cur_type in replacement_values:
             result = conn.execute("select " + replacement_values[cur_type]).fetchall()
-            print(cur_type, result)
+        elif cur_type in adjusted_values:
+            result = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').fetchall()
         else:
             result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
         correct_result = correct_answer_map[cur_type]
@@ -293,7 +302,7 @@ class TestAllTypes(object):
             ),
             'uuid': np.ma.array(
                 [
-                    UUID('00000000-0000-0000-0000-000000000001'),
+                    UUID('00000000-0000-0000-0000-000000000000'),
                     UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),
                     UUID('00000000-0000-0000-0000-000000000042'),
                 ],
@@ -421,7 +430,7 @@ class TestAllTypes(object):
                 dtype=object,
             ),
             'time': np.ma.array(
-                ['00:00:00', '23:59:59.999999', None],
+                ['00:00:00', '24:00:00', None],
                 mask=[0, 0, 1],
                 dtype=object,
             ),
@@ -435,6 +444,7 @@ class TestAllTypes(object):
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():
+        # - 'uhugeint'
         # - 'hugeint'
         # - 'dec_4_1'
         # - 'dec_9_4'
@@ -480,6 +490,12 @@ class TestAllTypes(object):
         replacement_values = {'interval': "INTERVAL '2 years'"}
         # We do not round trip enum types
         enum_types = {'small_enum', 'medium_enum', 'large_enum', 'double_array'}
+
+        # uhugeint currently not supported by arrow
+        skip_types = {'uhugeint'}
+        if cur_type in skip_types:
+            return
+
         conn = duckdb.connect()
         if cur_type in replacement_values:
             arrow_table = conn.execute("select " + replacement_values[cur_type]).arrow()
@@ -509,10 +525,15 @@ class TestAllTypes(object):
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
 
+        adjusted_values = {
+            'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
+        }
         conn = duckdb.connect()
         conn.execute("SET timezone = UTC")
         if cur_type in replacement_values:
             dataframe = conn.execute("select " + replacement_values[cur_type]).df()
+        elif cur_type in adjusted_values:
+            dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
         else:
             dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
         print(cur_type)

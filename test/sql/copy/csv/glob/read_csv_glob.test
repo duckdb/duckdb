@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # simple globbing
 query I
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -20,7 +20,7 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/*.csv', auto_detect=1) OR
 2019-08-25
 
 query I
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -31,7 +31,7 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/a?/a*.csv', auto_detect=1) O
 
 # list parameter
 query I
-SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv'], auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/copy/csv/data/glob/a2/a2.csv']) ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -52,7 +52,7 @@ SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/a1/a1.csv', 'test/sql/
 
 # multiple globs
 query I
-SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/csv/data/glob/a?/a*.csv'], auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/csv/data/glob/a?/a*.csv']) ORDER BY 1
 ----
 2019-06-05
 2019-06-05
@@ -69,7 +69,7 @@ SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/a?/a*.csv', 'test/sql/copy/
 
 # more asterisks for directories
 query I
-SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv') ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -79,7 +79,7 @@ SELECT * FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1) ORDER BY 
 2019-07-25
 
 query II
-SELECT a, b LIKE '%a1.csv%' FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_detect=1, filename=1) t1(a,b) ORDER BY 1
+SELECT a, b LIKE '%a1.csv%' FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', filename=1) t1(a,b) ORDER BY 1
 ----
 2019-06-05	1
 2019-06-15	1
@@ -90,7 +90,8 @@ SELECT a, b LIKE '%a1.csv%' FROM read_csv('test/sql/*/*/data/*/a?/a*.csv', auto_
 
 # read-csv auto fails here because of a type mismatch: most files contain dates, but one file contains integers
 statement error
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv') ORDER BY 1
+----
 
 # forcing string parsing works
 query I
@@ -156,13 +157,16 @@ SELECT COUNT(*) FROM glob('test//sql////copy//csv/////data///glob///*//////*.csv
 
 # nothing matches the glob
 statement error
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/a*a.csv') ORDER BY 1
+----
 
 statement error
-SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/*/a*a.csv'], auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/*/a*a.csv']) ORDER BY 1
+----
 
 statement error
 SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/*/a*a.csv']) ORDER BY 1
+----
 
 query I
 SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/a*a.csv')
@@ -226,6 +230,11 @@ SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/*.csv');
 # empty list
 statement error
 SELECT * FROM read_csv_auto([]) ORDER BY 1
+----
+No function matches
+
+statement error
+SELECT * FROM read_csv_auto([]::VARCHAR[]) ORDER BY 1
 ----
 at least one file
 

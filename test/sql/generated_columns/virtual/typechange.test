@@ -23,6 +23,7 @@ SELECT total_profit FROM unit;
 # Typechange is not supported yet
 statement error
 ALTER TABLE unit ALTER COLUMN total_profit TYPE BOOLEAN;
+----
 
 statement ok
 INSERT INTO unit VALUES (5,0);
@@ -41,3 +42,4 @@ CREATE TABLE tbl (
 
 statement error
 INSERT INTO tbl VALUES (5);
+----

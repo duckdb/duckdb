@@ -28,6 +28,9 @@ inputs:
   glibc32:
     description: 'Setup 32bit glibc'
     default: 0
+  nodejs:
+    description: 'Setup NodeJS'
+    default: 0
   gcc_4_8:
     description: 'Setup GCC 4.8 (installs to /usr/bin/g++, default will still be GCC 10)'
     default: 0
@@ -67,6 +70,11 @@ runs:
       shell: bash
       run: scripts/setup_manylinux2014.sh ssh
 
+    - name: Setup NodeJS
+      if: ${{ inputs.nodejs == 1 }}
+      shell: bash
+      run: scripts/setup_manylinux2014.sh nodejs
+
     - name: Setup 32bit compiler
       if: ${{ inputs.glibc32 == 1 }}
       shell: bash
@@ -83,12 +91,12 @@ runs:
       run: scripts/setup_manylinux2014.sh gcc_4_8
 
     # Note instead of using scripts/setup_manylinux2014.sh vcpkg, we prefer to use
-    # lukka/run-vcpkg@v11 here as it configures vcpkg to cache to GH actions.
+    # lukka/run-vcpkg@v11.1 here as it configures vcpkg to cache to GH actions.
     - name: Setup vcpkg
       if: ${{ inputs.vcpkg == 1 }}
-      uses: lukka/run-vcpkg@v11
+      uses: lukka/run-vcpkg@v11.1
       with:
-        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
 
     - name: Install OpenSSL
       if: ${{ inputs.openssl == 1 }}
@@ -97,7 +105,7 @@ runs:
 
     - name: Setup Ccache
       if: ${{ inputs.ccache == 1 }}
-      uses: hendrikmuhs/ccache-action@main
+      uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
       with:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}

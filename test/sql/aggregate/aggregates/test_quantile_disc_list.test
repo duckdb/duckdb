@@ -89,7 +89,7 @@ SELECT quantile_disc('2021-01-01'::TIMESTAMP + interval (r) hour, [0.1, 0.5, 0.9
 query I
 SELECT quantile_disc('1990-01-01'::DATE + interval (r) day, [0.1, 0.5, 0.9]) FROM quantiles
 ----
-[1992-09-26, 2003-09-09, 2014-08-22]
+[1992-09-26 00:00:00, 2003-09-09 00:00:00, 2014-08-22 00:00:00]
 
 query I
 SELECT quantile_disc('00:00:00'::TIME + interval (r) second, [0.1, 0.5, 0.9]) FROM quantiles
@@ -160,19 +160,28 @@ FROM VALUES (0), (1), (2), (10) AS tab(col);
 ----
 [0, 1, 1, 1, 1, 1, 2, 2, 10, 10, 10]
 
+query I
+SELECT quantile_disc(42::UTINYINT, 0.5);
+----
+42
 
 # Invalid use
 statement error
 SELECT quantile_disc(r, [-0.1, 0.5, 0.9]) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, (0.1, 0.5, 1.1)) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, NULL]) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, ["0.1", "0.5", "0.9"]) FROM quantiles
+----
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, 0.9], 50) FROM quantiles
+----

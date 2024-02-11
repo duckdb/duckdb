@@ -14,8 +14,8 @@ JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, Alloca
 
 JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
     : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
-      plain_file_source(file_handle->OnDiskFile() && can_seek), file_size(file_handle->GetFileSize()), read_position(0),
-      requested_reads(0), actual_reads(0), cached_size(0) {
+      file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0), actual_reads(0),
+      last_read_requested(false), cached_size(0) {
 }
 
 bool JSONFileHandle::IsOpen() const {
@@ -23,7 +23,7 @@ bool JSONFileHandle::IsOpen() const {
 }
 
 void JSONFileHandle::Close() {
-	if (IsOpen() && file_handle->OnDiskFile()) {
+	if (IsOpen() && !file_handle->IsPipe()) {
 		file_handle->Close();
 		file_handle = nullptr;
 	}
@@ -34,6 +34,7 @@ void JSONFileHandle::Reset() {
 	read_position = 0;
 	requested_reads = 0;
 	actual_reads = 0;
+	last_read_requested = false;
 	if (IsOpen() && CanSeek()) {
 		file_handle->Reset();
 	}
@@ -55,77 +56,94 @@ bool JSONFileHandle::CanSeek() const {
 	return can_seek;
 }
 
-idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) {
+FileHandle &JSONFileHandle::GetHandle() {
+	return *file_handle;
+}
+
+bool JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t &size, idx_t requested_size) {
 	D_ASSERT(requested_size != 0);
+	if (last_read_requested) {
+		return false;
+	}
 
 	position = read_position;
-	auto actual_size = MinValue<idx_t>(requested_size, Remaining());
-	read_position += actual_size;
-	if (actual_size != 0) {
-		requested_reads++;
+	size = MinValue<idx_t>(requested_size, Remaining());
+	read_position += size;
+
+	requested_reads++;
+	if (size == 0) {
+		last_read_requested = true;
 	}
 
-	return actual_size;
+	return true;
 }
 
-void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run) {
-	D_ASSERT(size != 0);
-	if (plain_file_source) {
-		file_handle->Read(pointer, size, position);
-		actual_reads++;
-
-		return;
-	}
-
-	if (sample_run) { // Cache the buffer
-		file_handle->Read(pointer, size, position);
-		actual_reads++;
-
-		cached_buffers.emplace_back(allocator.Allocate(size));
-		memcpy(cached_buffers.back().get(), pointer, size);
-		cached_size += size;
-
-		return;
-	}
-
-	if (!cached_buffers.empty() || position < cached_size) {
-		ReadFromCache(pointer, size, position);
-		actual_reads++;
-	}
-
+void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, bool &file_done, bool sample_run,
+                                    optional_ptr<FileHandle> override_handle) {
 	if (size != 0) {
-		file_handle->Read(pointer, size, position);
-		actual_reads++;
+		auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
+		if (can_seek) {
+			handle.Read(pointer, size, position);
+		} else if (sample_run) { // Cache the buffer
+			handle.Read(pointer, size, position);
+
+			cached_buffers.emplace_back(allocator.Allocate(size));
+			memcpy(cached_buffers.back().get(), pointer, size);
+			cached_size += size;
+		} else {
+			if (!cached_buffers.empty() || position < cached_size) {
+				ReadFromCache(pointer, size, position);
+			}
+
+			if (size != 0) {
+				handle.Read(pointer, size, position);
+			}
+		}
+	}
+
+	const auto incremented_actual_reads = ++actual_reads;
+	if (incremented_actual_reads > requested_reads) {
+		throw InternalException("JSONFileHandle performed more actual reads than requested reads");
+	}
+
+	if (last_read_requested && incremented_actual_reads == requested_reads) {
+		file_done = true;
 	}
 }
 
-idx_t JSONFileHandle::Read(char *pointer, idx_t requested_size, bool sample_run) {
+bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size, bool &file_done, bool sample_run) {
 	D_ASSERT(requested_size != 0);
-	if (plain_file_source) {
-		auto actual_size = ReadInternal(pointer, requested_size);
-		read_position += actual_size;
-		return actual_size;
+	if (last_read_requested) {
+		return false;
 	}
 
-	if (sample_run) { // Cache the buffer
-		auto actual_size = ReadInternal(pointer, requested_size);
-		if (actual_size > 0) {
-			cached_buffers.emplace_back(allocator.Allocate(actual_size));
-			memcpy(cached_buffers.back().get(), pointer, actual_size);
+	if (can_seek) {
+		read_size = ReadInternal(pointer, requested_size);
+		read_position += read_size;
+	} else if (sample_run) { // Cache the buffer
+		read_size = ReadInternal(pointer, requested_size);
+		if (read_size > 0) {
+			cached_buffers.emplace_back(allocator.Allocate(read_size));
+			memcpy(cached_buffers.back().get(), pointer, read_size);
 		}
-		cached_size += actual_size;
-		read_position += actual_size;
-		return actual_size;
+		cached_size += read_size;
+		read_position += read_size;
+	} else {
+		read_size = 0;
+		if (!cached_buffers.empty() || read_position < cached_size) {
+			read_size += ReadFromCache(pointer, requested_size, read_position);
+		}
+		if (requested_size != 0) {
+			read_size += ReadInternal(pointer, requested_size);
+		}
 	}
 
-	idx_t actual_size = 0;
-	if (!cached_buffers.empty() || read_position < cached_size) {
-		actual_size += ReadFromCache(pointer, requested_size, read_position);
+	if (read_size == 0) {
+		last_read_requested = true;
+		file_done = true;
 	}
-	if (requested_size != 0) {
-		actual_size += ReadInternal(pointer, requested_size);
-	}
-	return actual_size;
+
+	return true;
 }
 
 idx_t JSONFileHandle::ReadInternal(char *pointer, const idx_t requested_size) {
@@ -181,19 +199,6 @@ void BufferedJSONReader::OpenJSONFile() {
 		file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
 	}
 	Reset();
-}
-
-void BufferedJSONReader::CloseJSONFile() {
-	while (true) {
-		lock_guard<mutex> guard(lock);
-		if (!file_handle->IsOpen()) {
-			return; // Already closed
-		}
-		if (file_handle->RequestedReadsComplete()) {
-			file_handle->Close();
-			break;
-		}
-	}
 }
 
 void BufferedJSONReader::Reset() {
@@ -258,10 +263,11 @@ optional_ptr<JSONBufferHandle> BufferedJSONReader::GetBuffer(idx_t buffer_idx) {
 	return it == buffer_map.end() ? nullptr : it->second.get();
 }
 
-AllocatedData BufferedJSONReader::RemoveBuffer(idx_t buffer_idx) {
+AllocatedData BufferedJSONReader::RemoveBuffer(JSONBufferHandle &handle) {
 	lock_guard<mutex> guard(lock);
-	auto it = buffer_map.find(buffer_idx);
+	auto it = buffer_map.find(handle.buffer_index);
 	D_ASSERT(it != buffer_map.end());
+	D_ASSERT(RefersToSameObject(handle, *it->second));
 	auto result = std::move(it->second->buffer);
 	buffer_map.erase(it);
 	return result;
@@ -272,9 +278,12 @@ idx_t BufferedJSONReader::GetBufferIndex() {
 	return buffer_index++;
 }
 
-void BufferedJSONReader::SetBufferLineOrObjectCount(idx_t index, idx_t count) {
+void BufferedJSONReader::SetBufferLineOrObjectCount(JSONBufferHandle &handle, idx_t count) {
 	lock_guard<mutex> guard(lock);
-	buffer_line_or_object_counts[index] = count;
+	D_ASSERT(buffer_map.find(handle.buffer_index) != buffer_map.end());
+	D_ASSERT(RefersToSameObject(handle, *buffer_map.find(handle.buffer_index)->second));
+	D_ASSERT(buffer_line_or_object_counts[handle.buffer_index] == -1);
+	buffer_line_or_object_counts[handle.buffer_index] = count;
 }
 
 idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf) {
@@ -293,11 +302,11 @@ idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in
 					break;
 				} else {
 					line += buffer_line_or_object_counts[b_idx];
-					thrown = true;
 				}
 			}
 		}
 		if (can_throw) {
+			thrown = true;
 			// SQL uses 1-based indexing so I guess we will do that in our exception here as well
 			return line + 1;
 		}

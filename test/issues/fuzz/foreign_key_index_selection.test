@@ -11,10 +11,12 @@ CREATE TABLE s1(t0 INTEGER, a TEXT, b TEXT);
 # key does not exist
 statement error
 CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(tz));
+----
 
 # key does not have an index on it
 statement error
 CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s1(t0));
+----
 
 statement ok
 CREATE TABLE s2(t0 INTEGER, a TEXT, b TEXT, UNIQUE (t0, a));
@@ -22,6 +24,7 @@ CREATE TABLE s2(t0 INTEGER, a TEXT, b TEXT, UNIQUE (t0, a));
 # key does not have an index on it
 statement error
 CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s2(t0));
+----
 
 # this works
 statement ok

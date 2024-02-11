@@ -98,13 +98,44 @@ select interval '-05:12:34.567890' as test_interval;
 ----
 -05:12:34.56789
 
+# Issue #9631 - Parse hms > 24:00:00
+query I
+SELECT ('35:10:00'::interval);
+----
+35:10:00
+
+# Three digits
+query II
+select '876:54:32.101234'::INTERVAL, '-876:54:32.101234'::INTERVAL;
+----
+876:54:32.101234	-876:54:32.101234
+
+# Nine digits should succeed
+query II
+select '999999999:54:32.101234'::INTERVAL, '-999999999:54:32.101234'::INTERVAL;
+----
+999999999:54:32.101234	-999999999:54:32.101234
+
+# Ten digits (hour is signed 32 bits internally)
+statement error
+select '9999999999:54:32.101234'::INTERVAL;
+----
+Conversion Error: Could not convert string '9999999999:54:32.101234' to INTERVAL
+
+statement error
+select '-9999999999:54:32.101234'::INTERVAL;
+----
+Conversion Error: Could not convert string '-9999999999:54:32.101234' to INTERVAL
+
 # FIXME: we can also use the ISO 8601 interval format
 statement error
 SELECT INTERVAL 'P2MT1H1M';
+----
 
 # FIXME: or this format
 statement error
 SELECT INTERVAL 'P00-02-00T01:00:01';
+----
 
 query T
 SELECT INTERVAL '90' DAY;
@@ -151,6 +182,7 @@ SELECT INTERVAL '2 month' - INTERVAL '1 month 3 days';
 # but not multiply
 statement error
 SELECT INTERVAL '2 month' * INTERVAL '1 month 3 days';
+----
 
 # we can, however, multiply/divide intervals by integers
 query T
@@ -172,6 +204,7 @@ SELECT INTERVAL '1 year 2 days 2 seconds' / 2;
 # division cannot!
 statement error
 SELECT 2 / INTERVAL '1 year 2 days 2 seconds';
+----
 
 # division by zero
 query T
@@ -183,31 +216,39 @@ NULL
 # empty interval
 statement error
 SELECT INTERVAL '';
+----
 
 statement error
 SELECT INTERVAL '   	';
+----
 
 # no number
 statement error
 SELECT INTERVAL 'years';
+----
 
 statement error
 SELECT INTERVAL '-years';
+----
 
 # gibberish
 statement error
 SELECT INTERVAL 'aergjaerghiuaehrgiuhaerg';
+----
 
 # overflow in year
 statement error
 SELECT INTERVAL '100000000000000000year';
+----
 
 # overflow in months
 statement error
 SELECT INTERVAL '100000000000000000months';
+----
 
 statement error
 SELECT INTERVAL '4294967296months';
+----
 
 query T
 SELECT INTERVAL '1294967296months';
@@ -216,6 +257,7 @@ SELECT INTERVAL '1294967296months';
 
 statement error
 SELECT INTERVAL '1294967296months 1294967296months';
+----
 
 query T
 SELECT INTERVAL '1294967296months -1294967296months';
@@ -224,20 +266,25 @@ SELECT INTERVAL '1294967296months -1294967296months';
 
 statement error
 SELECT INTERVAL '-1294967296months -1294967296months';
+----
 
 # overflow in days
 statement error
 SELECT INTERVAL '100000000000000000days';
+----
 
 statement error
 SELECT INTERVAL '1294967296days 1294967296days';
+----
 
 # overflow in micro seconds
 statement error
 SELECT INTERVAL '100000000000000000000msecs';
+----
 
 statement error
 SELECT INTERVAL '100000000000000000hours';
+----
 
 query T
 SELECT INTERVAL '2562047788 hours';
@@ -246,6 +293,7 @@ SELECT INTERVAL '2562047788 hours';
 
 statement error
 SELECT INTERVAL '2562047788 hours 2562047788 hours';
+----
 
 query T
 SELECT INTERVAL '-9223372036854775msecs';
@@ -294,31 +342,41 @@ SELECT INTERVAL '2147483647 months 2147483647 days 9223372036854775msecs';
 
 statement error
 SELECT INTERVAL '9223372036854775810msecs';
+----
 
 statement error
 SELECT INTERVAL '-9223372036854775810msecs';
+----
 
 # need a number here
 statement error
 SELECT INTERVAL 'aa' DAY;
+----
 
 statement error
 SELECT INTERVAL '100 months' DAY;
+----
 
 statement error
 SELECT '100'::INTERVAL;
+----
 
 statement error
 SELECT '100 unknowns'::INTERVAL;
+----
 
 statement error
 SELECT '100 months a'::INTERVAL;
+----
 
 statement error
 SELECT '100 months axo'::INTERVAL;
+----
 
 statement error
 SELECT '100 months agb'::INTERVAL;
+----
 
 statement error
 SELECT '100 months agob'::INTERVAL;
+----

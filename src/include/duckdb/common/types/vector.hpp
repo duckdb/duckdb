@@ -38,6 +38,7 @@ struct UnifiedVectorFormat {
 struct RecursiveUnifiedVectorFormat {
 	UnifiedVectorFormat unified;
 	vector<RecursiveUnifiedVectorFormat> children;
+	LogicalType logical_type;
 };
 
 class VectorCache;
@@ -65,6 +66,7 @@ class Vector {
 	friend struct StructVector;
 	friend struct UnionVector;
 	friend struct SequenceVector;
+	friend struct ArrayVector;
 
 	friend class DataChunk;
 	friend class VectorCacheBuffer;
@@ -116,9 +118,9 @@ public:
 	DUCKDB_API void ResetFromCache(const VectorCache &cache);
 
 	//! Creates a reference to a slice of the other vector
-	DUCKDB_API void Slice(Vector &other, idx_t offset, idx_t end);
+	DUCKDB_API void Slice(const Vector &other, idx_t offset, idx_t end);
 	//! Creates a reference to a slice of the other vector
-	DUCKDB_API void Slice(Vector &other, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Slice(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Turns the vector into a dictionary vector with the specified dictionary
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
@@ -169,6 +171,11 @@ public:
 	inline void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
 		auxiliary = std::move(new_buffer);
 	};
+
+	inline void CopyBuffer(Vector &other) {
+		buffer = other.buffer;
+		data = other.data;
+	}
 
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
@@ -445,6 +452,20 @@ struct MapVector {
 struct StructVector {
 	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
+};
+
+struct ArrayVector {
+	//! Gets a reference to the underlying child-vector of an array
+	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	//! Gets a reference to the underlying child-vector of an array
+	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	//! Gets the total size of the underlying child-vector of an array
+	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
+	//! Allocate dummy list entries for a vector
+	//! Note that there is nothing ensuring that the allocated data
+	//! remains valid (e.g. if this vector is resized)
+	//! This is only used during row serialization
+	DUCKDB_API static void AllocateDummyListEntries(Vector &vector);
 };
 
 enum class UnionInvalidReason : uint8_t {

@@ -11,7 +11,6 @@ PRAGMA enable_verification
 query IIII
 FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True)
 ----
-# this file has a bunch of gunk at the top	NULL	NULL	NULL
 one	two	three	four
 1	a	alice	NULL
 2	b	bob	NULL
@@ -21,13 +20,6 @@ query I
 FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False)
 ----
 # this file has a bunch of gunk at the top
-one,two,three,four
-1,a,alice
-2,b,bob
-
-query I
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1)
-----
 one,two,three,four
 1,a,alice
 2,b,bob

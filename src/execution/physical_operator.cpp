@@ -10,6 +10,7 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -106,7 +107,8 @@ SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, Cl
 	return SinkFinalizeType::READY;
 }
 
-void PhysicalOperator::NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
+SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
+	return SinkNextBatchType::READY;
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
@@ -120,7 +122,7 @@ unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &
 idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 	// Memory usage per thread should scale with max mem / num threads
 	// We take 1/4th of this, to be conservative
-	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+	idx_t max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	return (max_memory / num_threads) / 4;
 }
@@ -218,6 +220,7 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::ARRAY:
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructType::GetChildTypes(type);

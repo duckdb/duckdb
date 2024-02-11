@@ -14,7 +14,7 @@ class TestCursorDescription(object):
             ["SELECT {'x': 1, 'y': 2, 'z': 3} AS struct_col", "struct_col", "dict", dict],
             ["SELECT [1, 2, 3] AS list_col", "list_col", "list", list],
             ["SELECT 'Frank' AS str_col", "str_col", "STRING", str],
-            ["SELECT [1, 2, 3]::JSON AS json_col", "json_col", "STRING", str],
+            ["SELECT [1, 2, 3]::JSON AS json_col", "json_col", "JSON", str],
             ["SELECT union_value(tag := 1) AS union_col", "union_col", "UNION(tag INTEGER)", int],
         ],
     )

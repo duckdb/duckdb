@@ -49,6 +49,9 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	names.emplace_back("type_category");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("comment");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -129,6 +132,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
 		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::UHUGEINT:
 			category = "NUMERIC";
 			break;
 		case LogicalTypeId::DATE:
@@ -159,6 +163,8 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 			break;
 		}
 		output.SetValue(col++, count, category.empty() ? Value() : Value(category));
+		// comment, VARCHAR
+		output.SetValue(col++, count, Value(type_entry.comment));
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(type_entry.internal));
 		// labels, VARCHAR[]

@@ -1,0 +1,19 @@
+# name: test/sql/types/alias/recursive_alias.test
+# description: Issue #10141 - DuckDB SIGSEGV when setting up ill-formed custom type
+# group: [alias]
+
+# recursive type definitions are not allowed
+statement error
+CREATE TYPE t4 AS UNION ( v0 SETOF t4 );
+----
+Type with name t4 does not exist
+
+statement error
+CREATE TYPE t4 AS t4[]
+----
+Type with name t4 does not exist
+
+statement error
+CREATE TYPE t4 AS STRUCT(a t4)
+----
+Type with name t4 does not exist

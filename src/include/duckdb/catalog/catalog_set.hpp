@@ -27,46 +27,36 @@ struct AlterInfo;
 
 class ClientContext;
 class DependencyList;
-struct MappingValue;
-struct EntryIndex;
 
 class DuckCatalog;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 
-typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
-
-struct EntryValue {
-	EntryValue() {
-		throw InternalException("EntryValue called without a catalog entry");
+class CatalogEntryMap {
+public:
+	CatalogEntryMap() {
 	}
 
-	explicit EntryValue(unique_ptr<CatalogEntry> entry_p) : entry(std::move(entry_p)), reference_count(0) {
-	}
-	//! enable move constructors
-	EntryValue(EntryValue &&other) noexcept {
-		Swap(other);
-	}
-	EntryValue &operator=(EntryValue &&other) noexcept {
-		Swap(other);
-		return *this;
-	}
-	void Swap(EntryValue &other) {
-		std::swap(entry, other.entry);
-		idx_t count = reference_count;
-		reference_count = other.reference_count.load();
-		other.reference_count = count;
-	}
+public:
+	void AddEntry(unique_ptr<CatalogEntry> entry);
+	void UpdateEntry(unique_ptr<CatalogEntry> entry);
+	void DropEntry(CatalogEntry &entry);
+	case_insensitive_tree_t<unique_ptr<CatalogEntry>> &Entries();
+	optional_ptr<CatalogEntry> GetEntry(const string &name);
 
-	unique_ptr<CatalogEntry> entry;
-	atomic<idx_t> reference_count;
+private:
+	//! Mapping of string to catalog entry
+	case_insensitive_tree_t<unique_ptr<CatalogEntry>> entries;
 };
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
-	friend class DependencyManager;
-	friend class EntryDropper;
-	friend struct EntryIndex;
+public:
+	struct EntryLookup {
+		enum class FailureReason { SUCCESS, DELETED, NOT_PRESENT };
+		optional_ptr<CatalogEntry> result;
+		FailureReason reason;
+	};
 
 public:
 	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
@@ -75,9 +65,9 @@ public:
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
 	DUCKDB_API bool CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-	                            DependencyList &dependencies);
+	                            const DependencyList &dependencies);
 	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-	                            DependencyList &dependencies);
+	                            const DependencyList &dependencies);
 
 	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info);
 
@@ -93,6 +83,7 @@ public:
 	void CleanupEntry(CatalogEntry &catalog_entry);
 
 	//! Returns the entry with the specified name
+	DUCKDB_API EntryLookup GetEntryDetailed(CatalogTransaction transaction, const string &name);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const string &name);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &name);
 
@@ -107,6 +98,8 @@ public:
 	//! Scan the catalog set, invoking the callback method for every committed entry
 	DUCKDB_API void Scan(const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
+	DUCKDB_API void ScanWithPrefix(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback,
+	                               const string &prefix);
 	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
 	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
 
@@ -117,28 +110,27 @@ public:
 		return result;
 	}
 
+	DUCKDB_API bool CreatedByOtherActiveTransaction(CatalogTransaction transaction, transaction_t timestamp);
+	DUCKDB_API bool CommittedAfterStarting(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
 
 	void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 
+	mutex &GetCatalogLock() {
+		return catalog_lock;
+	}
+
 	void Verify(Catalog &catalog);
 
 private:
+	bool DropDependencies(CatalogTransaction transaction, const string &name, bool cascade,
+	                      bool allow_drop_internal = false);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
-	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name,
-	                                            EntryIndex *entry_index);
-	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index);
-	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
-	void DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry, bool cascade);
-	optional_ptr<CatalogEntry> CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
-	optional_ptr<MappingValue> GetMapping(CatalogTransaction transaction, const string &name, bool get_latest = false);
-	void PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index);
-	void DeleteMapping(CatalogTransaction transaction, const string &name);
-	void DropEntryDependencies(CatalogTransaction transaction, EntryIndex &entry_index, CatalogEntry &entry,
-	                           bool cascade);
+	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name);
+	optional_ptr<CatalogEntry> CreateCommittedEntry(unique_ptr<CatalogEntry> entry);
 
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
@@ -146,19 +138,23 @@ private:
 	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name,
 	                                              unique_lock<mutex> &lock);
 
-	EntryIndex PutEntry(idx_t entry_index, unique_ptr<CatalogEntry> entry);
-	void PutEntry(EntryIndex index, unique_ptr<CatalogEntry> entry);
+	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false);
+
+	bool CreateEntryInternal(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
+	                         unique_lock<mutex> &read_lock, bool should_be_empty = true);
+	void CheckCatalogEntryInvariants(CatalogEntry &value, const string &name);
+	//! Verify that the previous entry in the chain is dropped.
+	bool VerifyVacancy(CatalogTransaction transaction, CatalogEntry &entry);
+	//! Start the catalog entry chain with a dummy node
+	bool StartChain(CatalogTransaction transaction, const string &name, unique_lock<mutex> &read_lock);
+	bool RenameEntryInternal(CatalogTransaction transaction, CatalogEntry &old, const string &new_name,
+	                         AlterInfo &alter_info, unique_lock<mutex> &read_lock);
 
 private:
 	DuckCatalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
-	//! The set of catalog entries
-	unordered_map<idx_t, EntryValue> entries;
-	//! Mapping of string to catalog entry
-	case_insensitive_map_t<unique_ptr<MappingValue>> mapping;
-	//! The current catalog entry index
-	idx_t current_entry = 0;
+	CatalogEntryMap map;
 	//! The generator used to generate default internal entries
 	unique_ptr<DefaultGenerator> defaults;
 };

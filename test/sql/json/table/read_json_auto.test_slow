@@ -153,9 +153,40 @@ select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-
 4	NULL
 5	Raising Arizona
 
+# if we require fields to appear in all objects by setting field_appearance_threshold=1, we default to JSON
+query I
+select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=1)
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2}
+{"id":3,"name":"The Firm"}
+{"id":4}
+{"id":5,"name":"Raising Arizona"}
+
+# if we set it to 0.5 it should work already since "name" appears in 3/5 objects, which is greater than 0.5
+query II
+select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=0.5)
+----
+1	O Brother, Where Art Thou?
+2	NULL
+3	The Firm
+4	NULL
+5	Raising Arizona
+
+# can't set it to less than 0 or more than 1
+statement error
+select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=-1)
+----
+Binder Error: read_json_auto "field_appearance_threshold" parameter must be between 0 and 1
+
+statement error
+select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=2)
+----
+Binder Error: read_json_auto "field_appearance_threshold" parameter must be between 0 and 1
+
 # inconsistent schema's - if we only sample 1 row, we get an error, because we only see a NULL value for the 2nd column
 statement error
-select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1)
+select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1, convert_strings_to_integers=true)
 ----
 Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 3
 
@@ -169,15 +200,64 @@ select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_siz
 4	Broadcast News
 5	Raising Arizona
 
-# we can also find bigint in strings (happens a lot in JSON for some reason ...
+# we can also find bigint in strings (happens a lot in JSON for some reason ...)
 statement ok
 copy (select * from (values ('{"id": "26941143801"}'), ('{"id": "26941143807"}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
 
+# but only if we set the parameter to true
 query T
-select typeof(id) from '__TEST_DIR__/my_file.json'
+select typeof(id) from read_json('__TEST_DIR__/my_file.json', convert_strings_to_integers=true)
 ----
 BIGINT
 BIGINT
+
+# empty array and the example file works
+query II
+select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson']);
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# if we only sample the first file, we default to a single JSON column
+query I
+select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=1);
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+# -1 is unlimited
+query II
+select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=-1);
+----
+1	O Brother, Where Art Thou?
+2	Home for the Holidays
+3	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# can't be -2 or lower
+statement error
+select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=-2);
+----
+Binder Error
+
+# can't be 0
+statement error
+select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=0);
+----
+Binder Error
+
+# cannot be NULL either
+statement error
+select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=NULL);
+----
+Binder Error
 
 statement ok
 pragma disable_verification
@@ -186,13 +266,13 @@ require httpfs
 
 # this is one big object - yyjson uses it as a benchmark
 query II
-select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=3);
+select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_depth=3);
 ----
 VARCHAR	STRUCT("type" JSON, properties JSON, geometry JSON)[]
 
 # let's crank up maximum_depth and see if we can fully unnest this big object
 query II
-select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=8);
+select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_depth=8);
 ----
 VARCHAR	STRUCT("type" VARCHAR, properties STRUCT("name" VARCHAR), geometry STRUCT("type" VARCHAR, coordinates DOUBLE[][][]))[]
 
@@ -201,6 +281,6 @@ VARCHAR	STRUCT("type" VARCHAR, properties STRUCT("name" VARCHAR), geometry STRUC
 # the "coordinates" array in "features.geometry" is huge, let's just check the length - not all the values
 query IIIII
 select type, features[1].type, features[1].properties.name, features[1].geometry.type, length(features[1].geometry.coordinates)
-from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=8);
+from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_depth=8);
 ----
 FeatureCollection	Feature	Canada	Polygon	480

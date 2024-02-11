@@ -33,13 +33,14 @@ enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_AND_VALID_VALUES = 4
 };
 
-enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS };
+enum class StatisticsType : uint8_t { NUMERIC_STATS, STRING_STATS, LIST_STATS, STRUCT_STATS, BASE_STATS, ARRAY_STATS };
 
 class BaseStatistics {
 	friend struct NumericStats;
 	friend struct StringStats;
 	friend struct StructStats;
 	friend struct ListStats;
+	friend struct ArrayStats;
 
 public:
 	DUCKDB_API ~BaseStatistics();
@@ -76,12 +77,20 @@ public:
 	void Set(StatsInfo info);
 	void CombineValidity(BaseStatistics &left, BaseStatistics &right);
 	void CopyValidity(BaseStatistics &stats);
-	inline void SetHasNull() {
+	//! Set that the CURRENT level can have null values
+	//! Note that this is not correct for nested types unless this information is propagated in a different manner
+	//! Use Set(StatsInfo::CAN_HAVE_NULL_VALUES) in the general case
+	inline void SetHasNullFast() {
 		has_null = true;
 	}
-	inline void SetHasNoNull() {
+	//! Set that the CURRENT level can have valiod values
+	//! Note that this is not correct for nested types unless this information is propagated in a different manner
+	//! Use Set(StatsInfo::CAN_HAVE_VALID_VALUES) in the general case
+	inline void SetHasNoNullFast() {
 		has_no_null = true;
 	}
+	void SetHasNull();
+	void SetHasNoNull();
 
 	void Merge(const BaseStatistics &other);
 

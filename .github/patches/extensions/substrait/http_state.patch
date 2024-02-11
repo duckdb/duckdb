@@ -1,0 +1,18 @@
+diff --git a/src/from_substrait.cpp b/src/from_substrait.cpp
+index d65e91a..6e1e9ed 100644
+--- a/src/from_substrait.cpp
++++ b/src/from_substrait.cpp
+@@ -64,10 +64,9 @@ std::string SubstraitToDuckDB::RemoveExtension(std::string &function_name) {
+ }
+ 
+ SubstraitToDuckDB::SubstraitToDuckDB(Connection &con_p, const string &serialized, bool json) : con(con_p) {
+-	if (con_p.context->client_data->http_state) {
+-		con_p.context->client_data->http_state->Reset();
+-	}
+-	con_p.context->client_data->http_state = make_uniq<HTTPState>();
++        auto http_state = HTTPState::TryGetState(*con_p.context);
++        http_state->Reset();
++
+ 	if (!json) {
+ 		if (!plan.ParseFromString(serialized)) {
+ 			throw std::runtime_error("Was not possible to convert binary into Substrait plan");

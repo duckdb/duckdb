@@ -137,6 +137,23 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		auto union_type = make_uniq<ArrowType>(LogicalType::UNION(members));
 		union_type->AssignChildren(std::move(children));
 		return union_type;
+	} else if (format == "+r") {
+		child_list_t<LogicalType> members;
+		vector<unique_ptr<ArrowType>> children;
+		idx_t n_children = idx_t(schema.n_children);
+		D_ASSERT(n_children == 2);
+		D_ASSERT(string(schema.children[0]->name) == "run_ends");
+		D_ASSERT(string(schema.children[1]->name) == "values");
+		for (idx_t i = 0; i < n_children; i++) {
+			auto type = schema.children[i];
+			children.emplace_back(ArrowTableFunction::GetArrowLogicalType(*type));
+			members.emplace_back(type->name, children.back()->GetDuckType());
+		}
+
+		auto struct_type = make_uniq<ArrowType>(LogicalType::STRUCT(members));
+		struct_type->AssignChildren(std::move(children));
+		struct_type->SetRunEndEncoded();
+		return struct_type;
 	} else if (format == "+m") {
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
@@ -193,30 +210,6 @@ unique_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schem
 	return arrow_type;
 }
 
-void ArrowTableFunction::RenameArrowColumns(vector<string> &names) {
-	unordered_map<string, idx_t> name_map;
-	for (auto &column_name : names) {
-		// put it all lower_case
-		auto low_column_name = StringUtil::Lower(column_name);
-		if (name_map.find(low_column_name) == name_map.end()) {
-			// Name does not exist yet
-			name_map[low_column_name]++;
-		} else {
-			// Name already exists, we add _x where x is the repetition number
-			string new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
-			auto new_column_name_low = StringUtil::Lower(new_column_name);
-			while (name_map.find(new_column_name_low) != name_map.end()) {
-				// This name is already here due to a previous definition
-				name_map[low_column_name]++;
-				new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
-				new_column_name_low = StringUtil::Lower(new_column_name);
-			}
-			column_name = new_column_name;
-			name_map[new_column_name_low]++;
-		}
-	}
-}
-
 void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, ArrowSchemaWrapper &schema_p,
                                                 vector<string> &names, vector<LogicalType> &return_types) {
 	for (idx_t col_idx = 0; col_idx < (idx_t)schema_p.arrow_schema.n_children; col_idx++) {
@@ -249,9 +242,9 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
 
 	auto &data = *res;
-	stream_factory_get_schema(stream_factory_ptr, data.schema_root);
+	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
 	PopulateArrowTableType(res->arrow_table, data.schema_root, names, return_types);
-	RenameArrowColumns(names);
+	QueryResult::DeduplicateColumns(names);
 	res->all_types = return_types;
 	return std::move(res);
 }
@@ -284,7 +277,7 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	if (parallel_state.done) {
 		return false;
 	}
-	state.chunk_offset = 0;
+	state.Reset();
 	state.batch_index = ++parallel_state.batch_index;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();

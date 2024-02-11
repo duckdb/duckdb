@@ -27,17 +27,42 @@ public:
 	}
 };
 
+struct ArrayBoundCastData : public BoundCastData {
+	explicit ArrayBoundCastData(BoundCastInfo child_cast) : child_cast_info(std::move(child_cast)) {
+	}
+
+	BoundCastInfo child_cast_info;
+
+	static unique_ptr<BoundCastData> BindArrayToArrayCast(BindCastInput &input, const LogicalType &source,
+	                                                      const LogicalType &target);
+	static unique_ptr<FunctionLocalState> InitArrayLocalState(CastLocalStateParameters &parameters);
+
+public:
+	unique_ptr<BoundCastData> Copy() const override {
+		return make_uniq<ArrayBoundCastData>(child_cast_info.Copy());
+	}
+};
+
 struct ListCast {
 	static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 };
 
 struct StructBoundCastData : public BoundCastData {
+	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p, vector<idx_t> child_member_map_p)
+	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)),
+	      child_member_map(std::move(child_member_map_p)) {
+		D_ASSERT(child_cast_info.size() == child_member_map.size());
+	}
 	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p)
 	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)) {
+		for (idx_t i = 0; i < child_cast_info.size(); i++) {
+			child_member_map.push_back(i);
+		}
 	}
 
 	vector<BoundCastInfo> child_cast_info;
 	LogicalType target;
+	vector<idx_t> child_member_map;
 
 	static unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
 	                                                        const LogicalType &target);
@@ -49,7 +74,7 @@ public:
 		for (auto &info : child_cast_info) {
 			copy_info.push_back(info.Copy());
 		}
-		return make_uniq<StructBoundCastData>(std::move(copy_info), target);
+		return make_uniq<StructBoundCastData>(std::move(copy_info), target, child_member_map);
 	}
 };
 

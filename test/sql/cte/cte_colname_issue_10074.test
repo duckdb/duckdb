@@ -1,0 +1,16 @@
+# name: test/sql/cte/cte_colname_issue_10074.test
+# description: Issue #10074 - CTE returns wrong column name
+# group: [cte]
+
+statement ok
+pragma enable_verification
+
+statement ok
+create table t as with q(id,s) as (values(1,42)),
+a(s)as materialized(select 42)
+select id from q join a on q.s=a.s
+
+query I
+select id from t
+----
+1

@@ -19,18 +19,14 @@ statement ok
 INSERT INTO t1(c1) VALUES (2),(3);
 
 # issue 5984, number 22
-# FIXME: eventually, we might want to rethink the way that we null-terminate keys, see #5865
-
 statement ok
 CREATE TABLE t2 (c1 VARCHAR);
 
 statement ok
 CREATE INDEX i2 ON t2 (c1);
 
-statement error
+statement ok
 INSERT INTO t2 VALUES (decode('g\x00'::BLOB)::VARCHAR),('g');
-----
-ART indexes cannot contain BLOBs with zero bytes.
 
 statement ok
 INSERT INTO t2 VALUES ('\0');
@@ -64,7 +60,6 @@ statement ok
 UPDATE t4 SET c1 = NULL;
 
 # issue 5984, number 19
-
 statement ok
 CREATE TABLE t_leak (c1 INT);
 
@@ -77,22 +72,11 @@ CREATE UNIQUE INDEX i_leak ON t_leak (c1);
 Constraint Error: Data contains duplicates on indexed column(s)
 
 # issue 5984, number 22
-# FIXME: eventually, we might want to rethink the way that we null-terminate keys, see #5865
-# FIXME: this fails only with verification enabled and force reload, we should fix this when we
-# FIXME: address the null-terminated keys
-
-require skip_reload
-
 statement ok
 CREATE TABLE t21 (c1 INT);
 
 statement ok
 CREATE INDEX i21 ON t21 (c1, "decode"('\x00'::BLOB));
 
-statement error
+statement ok
 INSERT INTO t21 VALUES (1);
-----
-ART indexes cannot contain BLOBs with zero bytes.
-
-statement error
-CREATE INDEX i21 ON t21 (c1);

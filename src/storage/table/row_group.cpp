@@ -20,6 +20,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
 
@@ -99,7 +101,7 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	auto &block_pointer = column_pointers[c];
 	MetadataReader column_data_reader(metadata_manager, block_pointer);
 	this->columns[c] =
-	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
+	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c]);
 	is_loaded[c] = true;
 	if (this->columns[c]->count != this->count) {
 		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
@@ -125,7 +127,10 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void ColumnScanState::Initialize(const LogicalType &type) {
+void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options) {
+	// Register the options in the state
+	scan_options = options;
+
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		// validity - nothing to initialize
 		return;
@@ -135,15 +140,23 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 		auto &struct_children = StructType::GetChildTypes(type);
 		child_states.resize(struct_children.size() + 1);
 		for (idx_t i = 0; i < struct_children.size(); i++) {
-			child_states[i + 1].Initialize(struct_children[i].second);
+			child_states[i + 1].Initialize(struct_children[i].second, options);
 		}
+		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::LIST) {
 		// validity + list child
 		child_states.resize(2);
-		child_states[1].Initialize(ListType::GetChildType(type));
+		child_states[1].Initialize(ListType::GetChildType(type), options);
+		child_states[0].scan_options = options;
+	} else if (type.InternalType() == PhysicalType::ARRAY) {
+		// validity + array child
+		child_states.resize(2);
+		child_states[0].scan_options = options;
+		child_states[1].Initialize(ArrayType::GetChildType(type), options);
 	} else {
 		// validity
 		child_states.resize(1);
+		child_states[0].scan_options = options;
 	}
 }
 
@@ -154,7 +167,7 @@ void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
-		column_scans[i].Initialize(types[column_ids[i]]);
+		column_scans[i].Initialize(types[column_ids[i]], &GetOptions());
 	}
 }
 
@@ -177,6 +190,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
+			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
@@ -205,6 +219,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state) {
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScan(state.column_scans[i]);
+			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
@@ -349,6 +364,40 @@ bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<storage_t> &co
 	return true;
 }
 
+static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
+	switch (filter.filter_type) {
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		auto &child_state = state.child_states[1 + struct_filter.child_idx]; // +1 for validity
+		auto &child_filter = struct_filter.child_filter;
+		return GetFilterScanCount(child_state, *child_filter);
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_state = filter.Cast<ConjunctionAndFilter>();
+		idx_t max_count = 0;
+		for (auto &child_filter : conjunction_state.child_filters) {
+			max_count = std::max(GetFilterScanCount(state, *child_filter), max_count);
+		}
+		return max_count;
+	}
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_state = filter.Cast<ConjunctionOrFilter>();
+		idx_t max_count = 0;
+		for (auto &child_filter : conjunction_state.child_filters) {
+			max_count = std::max(GetFilterScanCount(state, *child_filter), max_count);
+		}
+		return max_count;
+	}
+	case TableFilterType::IS_NULL:
+	case TableFilterType::IS_NOT_NULL:
+	case TableFilterType::CONSTANT_COMPARISON:
+		return state.current->start + state.current->count;
+	default: {
+		throw NotImplementedException("Unimplemented filter type for zonemap");
+	}
+	}
+}
+
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
@@ -361,8 +410,9 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		const auto &base_column_idx = column_ids[column_idx];
 		bool read_segment = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], *entry.second);
 		if (!read_segment) {
-			idx_t target_row =
-			    state.column_scans[column_idx].current->start + state.column_scans[column_idx].current->count;
+
+			idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], *entry.second);
+
 			D_ASSERT(target_row >= this->start);
 			D_ASSERT(target_row <= this->start + this->count);
 			idx_t target_vector_index = (target_row - this->start) / STANDARD_VECTOR_SIZE;
@@ -664,6 +714,7 @@ void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
 	// append to the current row_group
+	D_ASSERT(chunk.ColumnCount() == GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		col_data.Append(state.states[i], chunk.data[i], append_count);
@@ -755,16 +806,12 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	return result;
 }
 
-bool RowGroup::AllDeleted() {
-	if (HasUnloadedDeletes()) {
-		// deletes aren't loaded yet - we know not everything is deleted
-		return false;
-	}
+idx_t RowGroup::GetCommittedRowCount() {
 	auto &vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return false;
+		return count;
 	}
-	return vinfo->GetCommittedDeletedCount(count) == count;
+	return count - vinfo->GetCommittedDeletedCount(count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
@@ -776,9 +823,7 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
-	RowGroupPointer row_group_pointer;
-
+RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	vector<CompressionType> compression_types;
 	compression_types.reserve(columns.size());
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
@@ -790,16 +835,23 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 		}
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}
-	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+
+	return WriteToDisk(writer.GetPartialBlockManager(), compression_types);
+}
+
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer,
+                                     TableStatistics &global_stats) {
+	RowGroupPointer row_group_pointer;
+
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		global_stats.GetStats(column_idx).Statistics().Merge(result.statistics[column_idx]);
+		global_stats.GetStats(column_idx).Statistics().Merge(write_data.statistics[column_idx]);
 	}
 
 	// construct the row group pointer and write the column meta data to disk
-	D_ASSERT(result.states.size() == columns.size());
+	D_ASSERT(write_data.states.size() == columns.size());
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
-	for (auto &state : result.states) {
+	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
 		auto pointer = data_writer.GetMetaBlockPointer();

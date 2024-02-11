@@ -217,6 +217,23 @@
     ]
   },
   {
+    "class": "SetColumnCommentInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_COLUMN_COMMENT",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "comment",
+        "type": "Value"
+      }
+    ]
+  },
+  {
     "class": "SetNotNullInfo",
     "base": "AlterTableInfo",
     "enum": "SET_NOT_NULL",
@@ -237,6 +254,23 @@
         "id": 400,
         "name": "column_name",
         "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "SetCommentInfo",
+    "base": "AlterInfo",
+    "enum": "SET_COMMENT",
+    "members": [
+      {
+        "id": 300,
+        "name": "entry_catalog_type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 301,
+        "name": "comment_value",
+        "type": "Value"
       }
     ]
   },
@@ -287,6 +321,12 @@
         "id": 202,
         "name": "options",
         "type": "unordered_map<string, Value>"
+      },
+      {
+        "id": 203,
+        "name": "on_conflict",
+        "type": "OnCreateConflict",
+        "default": "OnCreateConflict::ERROR_ON_CONFLICT"
       }
     ]
   },
@@ -402,6 +442,11 @@
         "id": 206,
         "name": "allow_drop_internal",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "extra_drop_info",
+        "type": "unique_ptr<ExtraDropInfo>"
       }
     ]
   },
@@ -446,12 +491,12 @@
       {
         "id": 201,
         "name": "parameters",
-        "type": "vector<Value>"
+        "type": "vector<ParsedExpression*>"
       },
       {
         "id": 202,
         "name": "named_parameters",
-        "type": "named_parameter_map_t"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       }
     ]
   },
@@ -485,5 +530,40 @@
       }
     ],
     "constructor": ["options"]
+  },
+  {
+    "class": "CommentOnInfo",
+    "base": "ParseInfo",
+    "enum": "COMMENT_ON_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/comment_on_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "comment",
+        "type": "Value"
+      }
+    ]
   }
 ]

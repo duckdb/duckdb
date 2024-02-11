@@ -2,6 +2,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 
 namespace duckdb {
 
@@ -69,7 +70,10 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	for (idx_t i = 0; i < column_stats.size(); i++) {
-		column_stats[i]->Merge(*other.column_stats[i]);
+		if (column_stats[i]) {
+			D_ASSERT(other.column_stats[i]);
+			column_stats[i]->Merge(*other.column_stats[i]);
+		}
 	}
 }
 
@@ -103,6 +107,7 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 
 void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
+	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", table_sample, nullptr);
 }
 
 void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
@@ -120,6 +125,7 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 
 		deserializer.Unset<LogicalType>();
 	});
+	table_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "sample", nullptr);
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

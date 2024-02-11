@@ -39,11 +39,11 @@ SET s3_endpoint='false_endpoint';
 statement error
 SELECT * FROM 's3://some-bucket/a-file.csv'
 ----
-IO Error: Connection error for HTTP HEAD to 'https://some-bucket.false_endpoint/a-file.csv'
+Connection error for HTTP HEAD to 'https://some-bucket.false_endpoint/a-file.csv'
 
 # Currently Azure is not yet autoloadable, so it should throw the normal error
 # TODO: enable autoloading for azure
 statement error
 SELECT * FROM 'azure://some-bucket/a-file.csv'
 ----
-IO Error: No files found that match the pattern "azure://some-bucket/a-file.csv"
+No files found that match the pattern "azure://some-bucket/a-file.csv"

@@ -7,6 +7,9 @@
 # 2) Run the script in scripts/generate_storage_version.py
 # 3) Commit the newly generated database file in test/sql/storage_version/storage_version.db
 
+# we cannot read/open a file with a different block size
+require block_size 262144
+
 statement ok
 PRAGMA enable_verification
 

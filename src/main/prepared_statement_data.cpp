@@ -1,6 +1,7 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 
@@ -25,6 +26,10 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 		// no unbound statement!? cannot rebind?
 		return false;
 	}
+	if (properties.always_require_rebind) {
+		// this statement must always be re-bound
+		return true;
+	}
 	if (!properties.bound_all_parameters) {
 		// parameters not yet bound: query always requires a rebind
 		return true;
@@ -36,7 +41,9 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 	for (auto &it : value_map) {
 		auto &identifier = it.first;
 		auto lookup = values->find(identifier);
-		D_ASSERT(lookup != values->end());
+		if (lookup == values->end()) {
+			break;
+		}
 		if (lookup->second.type() != it.second->return_type) {
 			return true;
 		}

@@ -110,6 +110,9 @@ void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t cou
 }
 
 void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
+	if (count == 0) {
+		return;
+	}
 	idx_t row_group_end = row_group_start + count;
 
 	lock_guard<mutex> lock(version_lock);
@@ -119,9 +122,8 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		idx_t vstart = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
 		idx_t vend =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-
-		auto info = vector_info[vector_idx].get();
-		info->CommitAppend(commit_id, vstart, vend);
+		auto &info = *vector_info[vector_idx];
+		info.CommitAppend(commit_id, vstart, vend);
 	}
 }
 
@@ -217,7 +219,8 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
 		if (vector_index >= Storage::ROW_GROUP_VECTOR_COUNT) {
-			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
+			throw InternalException(
+			    "In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
 		}
 		version_info->vector_info[vector_index] = ChunkInfo::Read(source);
 	}

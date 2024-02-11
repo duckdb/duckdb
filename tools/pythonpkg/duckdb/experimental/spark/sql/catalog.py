@@ -37,7 +37,7 @@ class Catalog:
         self._session = session
 
     def listDatabases(self) -> List[Database]:
-        res = self._session.conn.sql('select * from duckdb_databases()').fetchall()
+        res = self._session.conn.sql('select database_name from duckdb_databases()').fetchall()
 
         def transform_to_database(x) -> Database:
             return Database(name=x[0], description=None, locationUri='')
@@ -46,24 +46,24 @@ class Catalog:
         return databases
 
     def listTables(self) -> List[Table]:
-        res = self._session.conn.sql('select * from duckdb_tables()').fetchall()
+        res = self._session.conn.sql('select table_name, database_name, sql, temporary from duckdb_tables()').fetchall()
 
         def transform_to_table(x) -> Table:
-            return Table(name=x[4], database=x[0], description=x[13], tableType='', isTemporary=x[7])
+            return Table(name=x[0], database=x[1], description=x[2], tableType='', isTemporary=x[3])
 
         tables = [transform_to_table(x) for x in res]
         return tables
 
     def listColumns(self, tableName: str, dbName: Optional[str] = None) -> List[Column]:
         query = f"""
-			select * from duckdb_columns() where table_name = '{tableName}'
+			select column_name, data_type, is_nullable from duckdb_columns() where table_name = '{tableName}'
 		"""
         if dbName:
             query += f" and database_name = '{dbName}'"
         res = self._session.conn.sql(query).fetchall()
 
         def transform_to_column(x) -> Column:
-            return Column(name=x[6], description=None, dataType=x[11], nullable=x[8], isPartition=False, isBucket=False)
+            return Column(name=x[0], description=None, dataType=x[1], nullable=x[2], isPartition=False, isBucket=False)
 
         columns = [transform_to_column(x) for x in res]
         return columns

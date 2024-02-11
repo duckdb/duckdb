@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 

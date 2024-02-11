@@ -133,7 +133,8 @@ public:
 	// Sink interface
 
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
-	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
+	//! CAN be called in parallel, proper locking is needed when accessing dat
+	//! a inside the GlobalSinkState.
 	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
@@ -145,8 +146,8 @@ public:
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  OperatorSinkFinalizeInput &input) const;
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
-	//! This allows flushing of the current batch (e.g. to disk) TODO: should this be able to block too?
-	virtual void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const;
+	//! This allows flushing of the current batch (e.g. to disk)
+	virtual SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;

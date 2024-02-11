@@ -16,11 +16,11 @@ catalog/dependency_manager.cpp	5
 common/allocator.cpp	20
 common/arrow/arrow_appender.cpp	23
 common/arrow/appender/map_data.cpp	7
-common/arrow/arrow_converter.cpp	11
+common/arrow/arrow_converter.cpp	13
 common/arrow/arrow_wrapper.cpp	113
 common/assert.cpp	2
 common/bind_helpers.cpp	12
-common/box_renderer.cpp	35
+common/box_renderer.cpp	36
 common/checksum.cpp	2
 common/compressed_file_system.cpp	14
 common/crypto/md5.cpp	2
@@ -34,7 +34,7 @@ common/file_buffer.cpp	5
 common/file_system.cpp	20
 common/fsst.cpp	7
 common/gzip_file_system.cpp	40
-common/hive_partitioning.cpp	54
+common/hive_partitioning.cpp	55
 common/http_state.cpp	36
 common/local_file_system.cpp	22
 common/multi_file_reader.cpp	15
@@ -58,7 +58,7 @@ common/serializer/buffered_file_reader.cpp	11
 common/serializer/buffered_file_writer.cpp	2
 common/serializer/binary_serializer.cpp	11
 common/serializer/memory_stream.cpp	5
-common/sort/comparators.cpp	72
+common/sort/comparators.cpp	103
 common/sort/merge_sorter.cpp	100
 common/sort/partition_state.cpp	44
 common/sort/sort_state.cpp	10
@@ -71,7 +71,7 @@ common/virtual_file_system.cpp	32
 common/types/batched_data_collection.cpp	11
 common/types/bit.cpp	9
 common/types/blob.cpp	3
-common/types/chunk_collection.cpp	94
+common/types/cast_helpers.cpp	2
 common/types/column/column_data_allocator.cpp	13
 common/types/column/column_data_collection.cpp	55
 common/types/column/partitioned_column_data.cpp	8
@@ -91,7 +91,7 @@ common/types/row/row_layout.cpp	4
 common/types/row/tuple_data_allocator.cpp	23
 common/types/row/tuple_data_collection.cpp	76
 common/types/row/tuple_data_iterator.cpp	5
-common/types/row/tuple_data_scatter_gather.cpp	17
+common/types/row/tuple_data_scatter_gather.cpp	19
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
 common/types/time.cpp	25
@@ -100,7 +100,7 @@ common/types/uuid.cpp	3
 common/types/validity_mask.cpp	13
 common/types/value.cpp	180
 common/types/vector.cpp	153
-common/value_operations/comparison_operations.cpp	32
+common/value_operations/comparison_operations.cpp	33
 common/vector_operations/generators.cpp	31
 common/vector_operations/is_distinct_from.cpp	49
 common/vector_operations/null_operations.cpp	15
@@ -111,10 +111,10 @@ common/vector_operations/vector_storage.cpp	13
 core_functions/aggregate/distributive/approx_count.cpp	1
 core_functions/aggregate/distributive/arg_min_max.cpp	10
 core_functions/aggregate/distributive/bitagg.cpp	8
-core_functions/aggregate/distributive/bitstring_agg.cpp	6
+core_functions/aggregate/distributive/bitstring_agg.cpp	8
 core_functions/aggregate/distributive/entropy.cpp	9
 core_functions/aggregate/distributive/kurtosis.cpp	3
-core_functions/aggregate/distributive/minmax.cpp	2
+core_functions/aggregate/distributive/minmax.cpp	3
 core_functions/aggregate/distributive/skew.cpp	2
 core_functions/aggregate/distributive/sum.cpp	10
 core_functions/aggregate/holistic/approximate_quantile.cpp	29
@@ -123,6 +123,9 @@ core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
 core_functions/aggregate/nested/histogram.cpp	1
 core_functions/aggregate/nested/list.cpp	4
+core_functions/scalar/array/array_value.cpp	2
+core_functions/scalar/string/length.cpp	2
+core_functions/lambda_functions.cpp	1
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
 core_functions/scalar/date/date_part.cpp	17
@@ -136,7 +139,7 @@ core_functions/scalar/generic/least.cpp	2
 core_functions/scalar/generic/system_functions.cpp	4
 core_functions/scalar/list/array_slice.cpp	3
 core_functions/scalar/list/flatten.cpp	6
-core_functions/scalar/list/list_aggregates.cpp	2
+core_functions/scalar/list/list_aggregates.cpp	6
 core_functions/scalar/list/list_lambdas.cpp	2
 core_functions/scalar/list/list_sort.cpp	7
 core_functions/scalar/list/range.cpp	6
@@ -197,7 +200,6 @@ execution/operator/join/physical_asof_join.cpp	38
 execution/operator/join/physical_blockwise_nl_join.cpp	2
 execution/operator/join/physical_hash_join.cpp	8
 execution/operator/join/physical_iejoin.cpp	32
-execution/operator/join/physical_index_join.cpp	3
 execution/operator/join/physical_nested_loop_join.cpp	4
 execution/operator/join/physical_piecewise_merge_join.cpp	142
 execution/operator/join/physical_range_join.cpp	62
@@ -255,7 +257,7 @@ function/cast/union_casts.cpp	4
 function/cast/uuid_casts.cpp	2
 function/cast/union/from_struct.cpp	0
 function/cast/vector_cast_helpers.cpp	9
-function/cast_rules.cpp	18
+function/cast_rules.cpp	19
 function/function.cpp	8
 function/function_binder.cpp	18
 function/function_set.cpp	8
@@ -265,11 +267,12 @@ function/pragma_function.cpp	6
 function/scalar/generic/constant_or_null.cpp	5
 function/scalar/list/list_concat.cpp	5
 function/scalar/list/list_extract.cpp	10
-function/scalar/operators/add.cpp	4
+function/scalar/operators/add.cpp	8
 function/scalar/operators/arithmetic.cpp	23
-function/scalar/operators/multiply.cpp	3
+function/scalar/operators/multiply.cpp	4
 function/scalar/operators/subtract.cpp	5
 function/scalar/strftime_format.cpp	31
+function/scalar/string/length.cpp	2
 function/scalar/string/regexp.cpp	5
 function/scalar/string/regexp/regexp_extract_all.cpp	5
 function/scalar/string/substring.cpp	8
@@ -381,7 +384,6 @@ include/duckdb/common/sort/sorted_block.hpp	1
 include/duckdb/common/string_util.hpp	9
 include/duckdb/common/type_util.hpp	2
 include/duckdb/common/types.hpp	5
-include/duckdb/common/types/chunk_collection.hpp	6
 include/duckdb/common/types/column/column_data_allocator.hpp	3
 include/duckdb/common/types/column/partitioned_column_data.hpp	2
 include/duckdb/common/types/datetime.hpp	13
@@ -389,8 +391,10 @@ include/duckdb/common/types/hugeint.hpp	2
 include/duckdb/common/types/row/partitioned_tuple_data.hpp	11
 include/duckdb/common/types/string_type.hpp	5
 include/duckdb/common/types/uuid.hpp	4
+include/duckdb/common/types/uhugeint.hpp	2
 include/duckdb/common/types/validity_mask.hpp	5
 include/duckdb/common/types/value.hpp	6
+include/duckdb/common/types/vector_buffer.hpp	1
 include/duckdb/common/vector_operations/aggregate_executor.hpp	17
 include/duckdb/common/vector_operations/binary_executor.hpp	15
 include/duckdb/common/vector_operations/generic_executor.hpp	9
@@ -486,7 +490,7 @@ main/chunk_scan_state/query_result.cpp	28
 main/capi/data_chunk-c.cpp	30
 main/capi/duckdb-c.cpp	3
 main/capi/duckdb_value-c.cpp	14
-main/capi/helper-c.cpp	49
+main/capi/helper-c.cpp	52
 main/capi/hugeint-c.cpp	5
 main/capi/logical_types-c.cpp	45
 main/capi/pending-c.cpp	32
@@ -581,6 +585,7 @@ parser/expression/case_expression.cpp	3
 parser/expression/collate_expression.cpp	3
 parser/expression/default_expression.cpp	8
 parser/expression/function_expression.cpp	2
+parser/expression/lambdaref_expression.cpp	3
 parser/expression/star_expression.cpp	5
 parser/expression/subquery_expression.cpp	5
 parser/expression/window_expression.cpp	8
@@ -707,7 +712,7 @@ planner/expression/bound_lambdaref_expression.cpp	38
 planner/expression/bound_reference_expression.cpp	12
 planner/expression/bound_subquery_expression.cpp	5
 planner/expression/bound_window_expression.cpp	7
-planner/expression_binder.cpp	7
+planner/expression_binder.cpp	9
 planner/expression_binder/aggregate_binder.cpp	3
 planner/expression_binder/alter_binder.cpp	3
 planner/expression_binder/base_select_binder.cpp	3
@@ -794,6 +799,7 @@ storage/standard_buffer_manager.cpp	128
 storage/statistics/base_statistics.cpp	48
 storage/statistics/column_statistics.cpp	8
 storage/statistics/distinct_statistics.cpp	12
+storage/statistics/array_stats.cpp	1
 storage/statistics/list_stats.cpp	13
 storage/statistics/numeric_stats.cpp	117
 storage/statistics/numeric_stats_union.cpp	3
@@ -812,6 +818,7 @@ storage/table/column_data.cpp	16
 storage/table/column_data_checkpointer.cpp	4
 storage/table/column_segment.cpp	62
 storage/table/list_column_data.cpp	28
+storage/table/array_column_data.cpp	25
 storage/table/row_group.cpp	54
 storage/table/row_group_collection.cpp	7
 storage/table/row_version_manager.cpp	6

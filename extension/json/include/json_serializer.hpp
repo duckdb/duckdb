@@ -24,13 +24,13 @@ private:
 	// Either adds a value to the current object with the current tag, or appends it to the current array
 	void PushValue(yyjson_mut_val *val);
 
+public:
 	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty)
 	    : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null), skip_if_empty(skip_if_empty) {
 		serialize_enum_as_string = true;
 		serialize_default_values = true;
 	}
 
-public:
 	template <class T>
 	static yyjson_mut_val *Serialize(T &value, yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty) {
 		JsonSerializer serializer(doc, skip_if_null, skip_if_empty);
@@ -71,6 +71,7 @@ public:
 	void WriteValue(uint64_t value) final;
 	void WriteValue(int64_t value) final;
 	void WriteValue(hugeint_t value) final;
+	void WriteValue(uhugeint_t value) final;
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
 	void WriteValue(const string_t value) final;

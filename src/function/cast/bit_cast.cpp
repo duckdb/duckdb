@@ -30,6 +30,8 @@ BoundCastInfo DefaultCasts::BitCastSwitch(BindCastInput &input, const LogicalTyp
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uint64_t, CastFromBitToNumeric>);
 	case LogicalTypeId::HUGEINT:
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, hugeint_t, CastFromBitToNumeric>);
+	case LogicalTypeId::UHUGEINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, uhugeint_t, CastFromBitToNumeric>);
 	case LogicalTypeId::FLOAT:
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, float, CastFromBitToNumeric>);
 	case LogicalTypeId::DOUBLE:

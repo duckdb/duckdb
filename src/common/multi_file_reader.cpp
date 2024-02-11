@@ -1,12 +1,15 @@
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -32,6 +35,10 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
 		auto file_name = StringValue::Get(input);
 		files = fs.GlobFiles(file_name, context, options);
+
+		// Sort the files to ensure that the order is deterministic
+		std::sort(files.begin(), files.end());
+
 	} else if (input.type().id() == LogicalTypeId::LIST) {
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
@@ -41,6 +48,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 				throw ParserException("%s reader can only take a list of strings as a parameter", name);
 			}
 			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
+			std::sort(glob_files.begin(), glob_files.end());
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 	} else {
@@ -49,6 +57,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	if (files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s reader needs at least one file to read", name);
 	}
+
 	return files;
 }
 
@@ -102,7 +111,9 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
-		column_map.insert({get.names[get.column_ids[i]], i});
+		if (!IsRowIdColumnId(get.column_ids[i])) {
+			column_map.insert({get.names[get.column_ids[i]], i});
+		}
 	}
 
 	auto start_files = files.size();
@@ -306,6 +317,11 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
                                     const string &initial_file) {
 	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data,
 	                  initial_file);
+	CreateFilterMap(global_types, filters, reader_data);
+}
+
+void MultiFileReader::CreateFilterMap(const vector<LogicalType> &global_types, optional_ptr<TableFilterSet> filters,
+                                      MultiFileReaderData &reader_data) {
 	if (filters) {
 		reader_data.filter_map.resize(global_types.size());
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
@@ -361,8 +377,7 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 		if (union_find != union_names_map.end()) {
 			// given same name , union_col's type must compatible with col's type
 			auto &current_type = union_col_types[union_find->second];
-			LogicalType compatible_type;
-			compatible_type = LogicalType::MaxLogicalType(current_type, sql_types[col]);
+			auto compatible_type = LogicalType::ForceMaxLogicalType(current_type, sql_types[col]);
 			union_col_types[union_find->second] = compatible_type;
 		} else {
 			union_names_map[col_names[col]] = union_col_names.size();
@@ -432,7 +447,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 		}
 		Value value(part.second);
 		for (auto &candidate : candidates) {
-			const bool success = value.TryCastAs(context, candidate);
+			const bool success = value.TryCastAs(context, candidate, true);
 			if (success) {
 				hive_types_schema[name] = candidate;
 				break;

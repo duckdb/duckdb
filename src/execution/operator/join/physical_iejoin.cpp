@@ -24,8 +24,6 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOpe
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);
-	lhs_orders.resize(2);
-	rhs_orders.resize(2);
 	for (idx_t i = 0; i < 2; ++i) {
 		auto &cond = conditions[i];
 		D_ASSERT(cond.left->return_type == cond.right->return_type);
@@ -52,8 +50,8 @@ PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOpe
 		default:
 			throw NotImplementedException("Unimplemented join type for IEJoin");
 		}
-		lhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, std::move(left)));
-		rhs_orders[i].emplace_back(BoundOrderByNode(sense, OrderByNullType::NULLS_LAST, std::move(right)));
+		lhs_orders.emplace_back(sense, OrderByNullType::NULLS_LAST, std::move(left));
+		rhs_orders.emplace_back(sense, OrderByNullType::NULLS_LAST, std::move(right));
 	}
 
 	for (idx_t i = 2; i < conditions.size(); ++i) {
@@ -88,13 +86,13 @@ public:
 		RowLayout lhs_layout;
 		lhs_layout.Initialize(op.children[0]->types);
 		vector<BoundOrderByNode> lhs_order;
-		lhs_order.emplace_back(op.lhs_orders[0][0].Copy());
+		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout);
 
 		RowLayout rhs_layout;
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
-		rhs_order.emplace_back(op.rhs_orders[0][0].Copy());
+		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
 	}
 
@@ -164,7 +162,7 @@ SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 	auto &table = *gstate.tables[gstate.child];
 	auto &global_sort_state = table.global_sort_state;
 
-	if ((gstate.child == 1 && IsRightOuterJoin(join_type)) || (gstate.child == 0 && IsLeftOuterJoin(join_type))) {
+	if ((gstate.child == 1 && PropagatesBuildSide(join_type)) || (gstate.child == 0 && IsLeftOuterJoin(join_type))) {
 		// for FULL/LEFT/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		table.IntializeMatches();
 	}
@@ -369,8 +367,8 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	}
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y )
-	const auto &order1 = op.lhs_orders[0][0];
-	const auto &order2 = op.lhs_orders[1][0];
+	const auto &order1 = op.lhs_orders[0];
+	const auto &order2 = op.lhs_orders[1];
 
 	// 2. if (op1 ∈ {>, ≥}) sort L1 in descending order
 	// 3. else if (op1 ∈ {<, ≤}) sort L1 in ascending order
@@ -399,8 +397,8 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	// RHS has negative rids
 	ExpressionExecutor r_executor(context);
-	r_executor.AddExpression(*op.rhs_orders[0][0].expression);
-	r_executor.AddExpression(*op.rhs_orders[1][0].expression);
+	r_executor.AddExpression(*op.rhs_orders[0].expression);
+	r_executor.AddExpression(*op.rhs_orders[1].expression);
 	AppendKey(t2, r_executor, *l1, -1, -1, b2);
 
 	if (l1->global_sort_state.sorted_blocks.empty()) {
@@ -616,15 +614,14 @@ idx_t IEJoinUnion::JoinComplexBlocks(SelectionVector &lsel, SelectionVector &rse
 			const auto rrid = li[j];
 			++j;
 
+			D_ASSERT(lrid > 0 && rrid < 0);
 			// 15. add tuples w.r.t. (L1[j], L1[i]) to join result
-			if (lrid > 0 && rrid < 0) {
-				lsel.set_index(result_count, sel_t(+lrid - 1));
-				rsel.set_index(result_count, sel_t(-rrid - 1));
-				++result_count;
-				if (result_count == STANDARD_VECTOR_SIZE) {
-					// out of space!
-					return result_count;
-				}
+			lsel.set_index(result_count, sel_t(+lrid - 1));
+			rsel.set_index(result_count, sel_t(-rrid - 1));
+			++result_count;
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				// out of space!
+				return result_count;
 			}
 		}
 		++i;
@@ -1040,8 +1037,8 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
 
 	// Build out RHS
-	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
-	children[1]->BuildPipelines(*rhs_pipeline, child_meta_pipeline);
+	auto &rhs_pipeline = child_meta_pipeline.CreatePipeline();
+	children[1]->BuildPipelines(rhs_pipeline, child_meta_pipeline);
 
 	// Despite having the same sink, RHS and everything created after it need their own (same) PipelineFinishEvent
 	child_meta_pipeline.AddFinishEvent(rhs_pipeline);

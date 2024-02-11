@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -105,6 +105,11 @@ private extension Vector {
     return unsafelyUnwrapElement(as: duckdb_hugeint.self, at: index) { $0.asIntHuge }
   }
   
+  func unwrap(_ type: UIntHuge.Type, at index: Int) throws -> UIntHuge {
+    try assertNonNullTypeMatch(of: type, at: index, withColumnType: .uhugeint)
+    return unsafelyUnwrapElement(as: duckdb_uhugeint.self, at: index) { $0.asUIntHuge }
+  }
+  
   func unwrap(_ type: UUID.Type, at index: Int) throws -> UUID {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .uuid)
     return unsafelyUnwrapElement(as: duckdb_hugeint.self, at: index) { $0.asUUID }
@@ -115,6 +120,11 @@ private extension Vector {
     return unsafelyUnwrapElement(as: duckdb_time.self, at: index) { $0.asTime }
   }
   
+  func unwrap(_ type: TimeTz.Type, at index: Int) throws -> TimeTz {
+    try assertNonNullTypeMatch(of: type, at: index, withColumnType: .timeTz)
+    return unsafelyUnwrapElement(as: duckdb_time_tz.self, at: index) { $0.asTime }
+  }
+
   func unwrap(_ type: Date.Type, at index: Int) throws -> Date {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .date)
     return unsafelyUnwrapElement(as: duckdb_date.self, at: index) { $0.asDate }
@@ -126,7 +136,7 @@ private extension Vector {
   }
   
   func unwrap(_ type: Timestamp.Type, at index: Int) throws -> Timestamp {
-    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampTz, .timestampNS]
     try assertNonNullTypeMatch(of: type, at: index, withColumnTypes: .init(columnTypes))
     return unsafelyUnwrapElement(as: duckdb_timestamp.self, at: index) { ctimestamp in
       switch logicalType.dataType {
@@ -264,6 +274,7 @@ extension Vector.Element {
   func unwrap<T: PrimitiveDatabaseValue>(_ type: T.Type) throws -> T { try vector.unwrap(type, at: index) }
   func unwrap(_ type: String.Type) throws -> String { try vector.unwrap(type, at: index) }
   func unwrap(_ type: IntHuge.Type) throws -> IntHuge { try vector.unwrap(type, at: index) }
+  func unwrap(_ type: UIntHuge.Type) throws -> UIntHuge { try vector.unwrap(type, at: index) }
   func unwrap(_ type: UUID.Type) throws -> UUID { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Time.Type) throws -> Time { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Date.Type) throws -> Date { try vector.unwrap(type, at: index) }
@@ -271,6 +282,7 @@ extension Vector.Element {
   func unwrap(_ type: Timestamp.Type) throws -> Timestamp  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Data.Type) throws -> Data  { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Decimal.Type) throws -> Decimal  { try vector.unwrap(type, at: index) }
+  func unwrap(_ type: TimeTz.Type) throws -> TimeTz { try vector.unwrap(type, at: index) }
 }
 
 // MARK: - Map Contents accessors
