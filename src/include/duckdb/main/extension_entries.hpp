@@ -26,7 +26,8 @@ struct ExtensionEntry {
 	char extension[48];
 };
 
-static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {{"add_parquet_key", "parquet"}}; // END_OF_EXTENSION_FUNCTIONS
+static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
+    {"add_parquet_key", "parquet"}}; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_storage_connection_string", "azure"},

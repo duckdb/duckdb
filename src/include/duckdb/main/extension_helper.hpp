@@ -89,7 +89,8 @@ public:
 
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
-	static pair<string, string> FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
+	static pair<string, string> FindExtensionInFunctionEntries(const string &name,
+	                                                           const ExtensionFunctionEntry (&entries)[N]) {
 		auto lcase = StringUtil::Lower(name);
 
 		auto it = std::find_if(entries, entries + N,

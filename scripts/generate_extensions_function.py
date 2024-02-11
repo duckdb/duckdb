@@ -23,14 +23,22 @@ args = parser.parse_args()
 EXTENSIONS_PATH = os.path.join("..", "build", "extension_configuration", "extensions.txt")
 DUCKDB_PATH = os.path.join("..", 'build', 'release', 'duckdb')
 
+
 class Function(NamedTuple):
     name: str
     type: str
 
+
 class ExtensionFunction(NamedTuple):
-    name: str
     extension: str
+    name: str
     type: str
+
+
+class ExtensionSetting(NamedTuple):
+    extension: str
+    name: str
+
 
 def check_prerequisites():
     if not os.path.isfile(EXTENSIONS_PATH):
@@ -39,9 +47,7 @@ def check_prerequisites():
         )
         exit(1)
     if not os.path.isfile(DUCKDB_PATH):
-        print(
-            "please run `make release` with the desired extension configuration before running the script"
-        )
+        print("please run `make release` with the desired extension configuration before running the script")
         exit(1)
 
 
@@ -56,6 +62,7 @@ def get_extension_names() -> List[str]:
                 continue
             extension_names.append(extension_name)
     return extension_names
+
 
 def get_query(sql_query, load_query):
     # Optionally perform a LOAD of an extension
@@ -91,19 +98,28 @@ def get_settings(load=""):
     """
     return set(get_query(GET_SETTINGS_QUERY, load))
 
+
 class ExtensionData:
     def __init__(self):
+        # Map of extension -> ExtensionFunction
         self.function_map: Dict[str, ExtensionFunction] = {}
-        self.settings_map = {}
-        # Collect a map of extension_name -> extension_path
+        # Map of extension -> ExtensionSetting
+        self.settings_map: Dict[str, ExtensionSetting] = {}
+
+        # Map of extension -> extension_path
         self.extensions: Dict[str, str] = get_extension_path_map()
 
-        self.stored_functions = {
-            'substrait': ["from_substrait", "get_substrait", "get_substrait_json", "from_substrait_json"],
-            'arrow': ["scan_arrow_ipc", "to_arrow_ipc"],
+        self.stored_functions: Dict[str, Function] = {
+            'substrait': [
+                Function("from_substrait", "table"),
+                Function("get_substrait", "table"),
+                Function("get_substrait_json", "table"),
+                Function("from_substrait_json", "table"),
+            ],
+            'arrow': [Function("scan_arrow_ipc", "table"), Function("to_arrow_ipc", "table")],
             'spatial': [],
         }
-        self.stored_settings = {'substrait': [], 'arrow': [], 'spatial': []}
+        self.stored_settings: Dict[str, str] = {'substrait': [], 'arrow': [], 'spatial': []}
 
     def set_base(self):
         self.base_functions: Set[Function] = get_functions()
@@ -137,28 +153,22 @@ class ExtensionData:
     def add_settings(self, extension_name: str, settings_list: List[str]):
         extension_name = extension_name.lower()
 
-        # Add settings
         added_settings: Set[str] = set(settings_list) - self.base_settings
         settings_to_add: Dict[str, str] = {}
         for setting in added_settings:
             setting_name = setting.lower()
-            settings_to_add[setting_name] = extension_name
+            settings_to_add[setting_name] = ExtensionSetting(extension_name, setting_name)
 
         self.settings_map.update(settings_to_add)
 
     def add_functions(self, extension_name: str, function_list: List[Function]):
         extension_name = extension_name.lower()
 
-        # Add functions
         added_functions: Set[Function] = set(function_list) - self.base_functions
         functions_to_add: Dict[str, ExtensionFunction] = {}
         for function in added_functions:
             function_name = function.name.lower()
-            functions_to_add[function_name] = ExtensionFunction(
-                function_name,
-                extension_name,
-                function.type
-            )
+            functions_to_add[function_name] = ExtensionFunction(extension_name, function_name, function.type)
 
         self.function_map.update(functions_to_add)
 
@@ -206,6 +216,7 @@ def print_map_diff(d1, d2):
     diff = str(s1 ^ s2)
     print("Diff between maps: " + diff + "\n")
 
+
 def get_extension_path_map() -> Dict[str, str]:
     extension_paths: Dict[str, str] = {}
     extension_dir = pathlib.Path('../build/release/extension')
@@ -216,17 +227,19 @@ def get_extension_path_map() -> Dict[str, str]:
         extension_paths[name] = location
     return extension_paths
 
+
 if __name__ == '__main__':
-    #check_prerequisites()
+    # check_prerequisites()
 
     functions = {}
     extension_names: List[str] = get_extension_names()
 
     extension_data = ExtensionData()
+    # Collect the list of functions/settings without any extensions loaded
     extension_data.set_base()
 
-    # Get all extension entries from DuckDB's catalog
     for extension_name in extension_names:
+        # For every extension, add the functions/settings added by the extension
         extension_data.add_extension(extension_name)
 
     ext_hpp = os.path.join("..", "src", "include", "duckdb", "main", "extension_entries.hpp")
