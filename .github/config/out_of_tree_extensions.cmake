@@ -24,14 +24,14 @@ if (NOT MINGW)
             )
 endif()
 
-################## AZURE
-#if (NOT MINGW)
-#    duckdb_extension_load(azure
-#            LOAD_TESTS
-#            GIT_URL https://github.com/duckdb/duckdb_azure
-#            GIT_TAG 10d4cf6a0ed00ea8aecb9bf1433fdfff166e6c44
-#            )
-#endif()
+################# AZURE
+if (NOT MINGW)
+    duckdb_extension_load(azure
+            LOAD_TESTS
+            GIT_URL https://github.com/duckdb/duckdb_azure
+            GIT_TAG 10d4cf6a0ed00ea8aecb9bf1433fdfff166e6c44
+            )
+endif()
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
@@ -61,17 +61,17 @@ if (NOT MINGW)
             )
 endif()
 
-################## SPATIAL
-#if (NOT MINGW)
-#    duckdb_extension_load(spatial
-#            DONT_LINK LOAD_TESTS
-#            GIT_URL https://github.com/duckdb/duckdb_spatial.git
-#            GIT_TAG c30d3edec629928174889f18bc472dcff2294d2b
-#            INCLUDE_DIR spatial/include
-#            TEST_DIR test/sql
-#            APPLY_PATCHES
-#            )
-#endif()
+################# SPATIAL
+if (NOT MINGW)
+    duckdb_extension_load(spatial
+            DONT_LINK LOAD_TESTS
+            GIT_URL https://github.com/duckdb/duckdb_spatial.git
+            GIT_TAG c30d3edec629928174889f18bc472dcff2294d2b
+            INCLUDE_DIR spatial/include
+            TEST_DIR test/sql
+            APPLY_PATCHES
+            )
+endif()
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision
