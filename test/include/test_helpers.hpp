@@ -45,6 +45,8 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 void SetTestDirectory(string path);
 void SetDebugInitialize(int value);
 void SetSingleThreaded();
+void AddRequire(string require);
+bool IsRequired(string require);
 string GetTestDirectory();
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);
