@@ -137,16 +137,16 @@ class ExtensionData:
             extension_functions = get_functions(load)
             extension_settings = get_settings(load)
 
-            extension_data.add_settings(extension_name, extension_settings)
-            extension_data.add_functions(extension_name, extension_functions)
+            self.add_settings(extension_name, extension_settings)
+            self.add_functions(extension_name, extension_functions)
         elif extension_name in self.stored_functions or extension_name in self.stored_settings:
             # Retrieve the list of settings/functions from our hardcoded list
             extension_functions = self.stored_functions[extension_name]
             extension_settings = self.stored_settings[extension_name]
 
             print(f"Loading {extension_name} from stored functions: {extension_functions}")
-            extension_data.add_settings(extension_name, extension_settings)
-            extension_data.add_functions(extension_name, extension_functions)
+            self.add_settings(extension_name, extension_settings)
+            self.add_functions(extension_name, extension_functions)
         else:
             print(f"Missing extension {extension_name} and not found in stored_functions/stored_settings")
             exit(1)
@@ -192,9 +192,19 @@ class ExtensionData:
         print(" > functions: " + str(len(parsed_entries['functions'])))
         print(" > settings:  " + str(len(parsed_entries['settings'])))
 
+    def verify_export(self):
+        if len(self.function_map) == 0 or len(self.settings_map) == 0:
+            print(
+                """
+The provided configuration produced an empty function map or empty settings map
+This is likely caused by building DuckDB with extensions linked in
+"""
+            )
+            exit(1)
+
     def export_functions(self) -> str:
         result = """
-        static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
+    static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
         """
         sorted_function = sorted(self.function_map)
 
@@ -208,7 +218,7 @@ class ExtensionData:
 
     def export_settings(self) -> str:
         result = """
-        static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
         """
         sorted_settings = sorted(self.settings_map)
 
@@ -419,6 +429,8 @@ def write_header(data: ExtensionData):
 
     } // namespace duckdb"""
 
+    data.verify_export()
+
     file = open(HEADER_PATH, 'w')
     file.write(INCLUDE_HEADER)
 
@@ -441,6 +453,7 @@ def main():
     extension_data.set_base()
 
     for extension_name in extension_names:
+        print(extension_name)
         # For every extension, add the functions/settings added by the extension
         extension_data.add_extension(extension_name)
 

@@ -15,19 +15,56 @@
 
 namespace duckdb {
 
+struct ExtensionEntry {
+	char name[48];
+	char extension[48];
+};
+
 struct ExtensionFunctionEntry {
 	char name[48];
 	char extension[48];
 	char type[48];
 };
 
-struct ExtensionEntry {
-	char name[48];
-	char extension[48];
-};
-
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
-    {"add_parquet_key", "parquet"}}; // END_OF_EXTENSION_FUNCTIONS
+    {"->>", "json", "scalar"},
+    {"array_to_json", "json", "scalar"},
+    {"from_json", "json", "scalar"},
+    {"from_json_strict", "json", "scalar"},
+    {"json", "json", "macro"},
+    {"json_array", "json", "scalar"},
+    {"json_array_length", "json", "scalar"},
+    {"json_contains", "json", "scalar"},
+    {"json_deserialize_sql", "json", "scalar"},
+    {"json_execute_serialized_sql", "json", "pragma"},
+    {"json_extract", "json", "scalar"},
+    {"json_extract_path", "json", "scalar"},
+    {"json_extract_path_text", "json", "scalar"},
+    {"json_extract_string", "json", "scalar"},
+    {"json_group_array", "json", "macro"},
+    {"json_group_object", "json", "macro"},
+    {"json_group_structure", "json", "macro"},
+    {"json_keys", "json", "scalar"},
+    {"json_merge_patch", "json", "scalar"},
+    {"json_object", "json", "scalar"},
+    {"json_quote", "json", "scalar"},
+    {"json_serialize_plan", "json", "scalar"},
+    {"json_serialize_sql", "json", "scalar"},
+    {"json_structure", "json", "scalar"},
+    {"json_transform", "json", "scalar"},
+    {"json_transform_strict", "json", "scalar"},
+    {"json_type", "json", "scalar"},
+    {"json_valid", "json", "scalar"},
+    {"read_json", "json", "table"},
+    {"read_json_auto", "json", "table"},
+    {"read_json_objects", "json", "table"},
+    {"read_json_objects_auto", "json", "table"},
+    {"read_ndjson", "json", "table"},
+    {"read_ndjson_auto", "json", "table"},
+    {"read_ndjson_objects", "json", "table"},
+    {"row_to_json", "json", "scalar"},
+    {"to_json", "json", "scalar"},
+}; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_storage_connection_string", "azure"},
@@ -100,8 +137,9 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
-    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},
-    {"s3n://", "httpfs"},  {"gcs://", "httpfs"},   {"gs://", "httpfs"}, {"r2://", "httpfs"} // , {"azure://", "azure"}
+    {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"}, {"s3n://", "httpfs"},
+    {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}
+    //    {"azure://", "azure"}
 }; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -131,11 +169,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     //    "azure",
-    "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
+    "autocomplete", "excel", "fts", "httpfs",
     // "inet",
     // "icu",
-    "json", "parquet", "postgres_scanner",
-    // "spatial", TODO: table function isnt always autoloaded so test fails
-    "sqlsmith", "sqlite_scanner", "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "json", "parquet", "sqlsmith", "tpcds", "tpch", "visualizer"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
