@@ -22,6 +22,7 @@ args = parser.parse_args()
 
 EXTENSIONS_PATH = os.path.join("..", "build", "extension_configuration", "extensions.txt")
 DUCKDB_PATH = os.path.join("..", 'build', 'release', 'duckdb')
+HEADER_PATH = os.path.join("..", "src", "include", "duckdb", "main", "extension_entries.hpp")
 
 
 class Function(NamedTuple):
@@ -172,6 +173,52 @@ class ExtensionData:
 
         self.function_map.update(functions_to_add)
 
+    def validate(self):
+        parsed_entries = parse_extension_entries(HEADER_PATH)
+        if self.function_map != parsed_entries['functions']:
+            print("Function map mismatches:")
+            print("Found in " + str(DUCKDB_PATH) + ": " + str(sorted(self.function_map)) + "\n")
+            print("Parsed from extension_entries.hpp: " + str(parsed_entries['functions']) + "\n")
+            print_map_diff(self.function_map, parsed_entries['functions'])
+            exit(1)
+        if self.settings_map != parsed_entries['settings']:
+            print("Settings map mismatches:")
+            print("Found: " + str(self.settings_map) + "\n")
+            print("Parsed from extension_entries.hpp: " + str(parsed_entries['settings']) + "\n")
+            print_map_diff(self.settings_map, parsed_entries['settings'])
+            exit(1)
+
+        print("All entries found: ")
+        print(" > functions: " + str(len(parsed_entries['functions'])))
+        print(" > settings:  " + str(len(parsed_entries['settings'])))
+
+    def export_functions(self) -> str:
+        result = """
+        static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
+        """
+        sorted_function = sorted(self.function_map)
+
+        for function_name in sorted_function:
+            function: ExtensionFunction = self.function_map[function_name]
+            result += "    {"
+            result += f'"{function_name}", "{function.extension}", "{function.type}"'
+            result += "}, \n"
+        result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
+        return result
+
+    def export_settings(self) -> str:
+        result = """
+        static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+        """
+        sorted_settings = sorted(self.settings_map)
+
+        for settings_name in sorted_settings:
+            result += "    {"
+            result += f'"{settings_name.lower()}", "{self.settings_map[settings_name]}"'
+            result += "}, \n"
+        result += "}; // END_OF_EXTENSION_SETTINGS\n"
+        return result
+
 
 # Get the slice of the file containing the var (assumes // END_OF_<varname> comment after var)
 def get_slice_of_file(var_name, file_str):
@@ -228,43 +275,8 @@ def get_extension_path_map() -> Dict[str, str]:
     return extension_paths
 
 
-if __name__ == '__main__':
-    # check_prerequisites()
-
-    functions = {}
-    extension_names: List[str] = get_extension_names()
-
-    extension_data = ExtensionData()
-    # Collect the list of functions/settings without any extensions loaded
-    extension_data.set_base()
-
-    for extension_name in extension_names:
-        # For every extension, add the functions/settings added by the extension
-        extension_data.add_extension(extension_name)
-
-    ext_hpp = os.path.join("..", "src", "include", "duckdb", "main", "extension_entries.hpp")
-    if args.validate:
-        parsed_entries = parse_extension_entries(ext_hpp)
-        if function_map != parsed_entries['functions']:
-            print("Function map mismatches:")
-            print("Found in " + str(DUCKDB_PATH) + ": " + str(sorted(function_map)) + "\n")
-            print("Parsed from extension_entries.hpp: " + str(parsed_entries['functions']) + "\n")
-            print_map_diff(function_map, parsed_entries['functions'])
-            exit(1)
-        if settings_map != parsed_entries['settings']:
-            print("Settings map mismatches:")
-            print("Found: " + str(settings_map) + "\n")
-            print("Parsed from extension_entries.hpp: " + str(parsed_entries['settings']) + "\n")
-            print_map_diff(settings_map, parsed_entries['settings'])
-            exit(1)
-
-        print("All entries found: ")
-        print(" > functions: " + str(len(parsed_entries['functions'])))
-        print(" > settings:  " + str(len(parsed_entries['settings'])))
-    else:
-        # extension_functions
-        file = open(ext_hpp, 'w')
-        header = """//===----------------------------------------------------------------------===//
+def write_header(data: ExtensionData):
+    INCLUDE_HEADER = """//===----------------------------------------------------------------------===//
     //                         DuckDB
     //
     // duckdb/main/extension_entries.hpp
@@ -291,34 +303,9 @@ if __name__ == '__main__':
         char extension[48];
         char type[48];
     };
-
-    static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     """
-        file.write(header)
-        # functions
-        sorted_function = sorted(function_map)
 
-        for function_name in sorted_function:
-            extension_name, function_type = function_map[function_name]
-            file.write("    {")
-            file.write(f'"{function_name}", "{extension_name}", "{function_type}"')
-            file.write("}, \n")
-        file.write("}; // END_OF_EXTENSION_FUNCTIONS\n")
-
-        # settings
-        header = """
-    static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
-    """
-        file.write(header)
-        # Sort Function Map
-        sorted_settings = sorted(settings_map)
-
-        for settings_name in sorted_settings:
-            file.write("    {")
-            file.write(f'"{settings_name.lower()}", "{settings_map[settings_name]}"')
-            file.write("}, \n")
-        footer = """}; // END_OF_EXTENSION_SETTINGS
-        
+    INCLUDE_FOOTER = """
     // Note: these are currently hardcoded in scripts/generate_extensions_function.py
     // TODO: automate by passing though to script via duckdb 
     static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
@@ -431,6 +418,38 @@ if __name__ == '__main__':
     }; // END_OF_AUTOLOADABLE_EXTENSIONS
 
     } // namespace duckdb"""
-        file.write(footer)
 
-        file.close()
+    file = open(HEADER_PATH, 'w')
+    file.write(INCLUDE_HEADER)
+
+    exported_functions = data.export_functions()
+    file.write(exported_functions)
+
+    exported_settings = data.export_settings()
+    file.write(exported_settings)
+    file.write(INCLUDE_FOOTER)
+    file.close()
+
+
+def main():
+    check_prerequisites()
+
+    extension_names: List[str] = get_extension_names()
+
+    extension_data = ExtensionData()
+    # Collect the list of functions/settings without any extensions loaded
+    extension_data.set_base()
+
+    for extension_name in extension_names:
+        # For every extension, add the functions/settings added by the extension
+        extension_data.add_extension(extension_name)
+
+    if args.validate:
+        extension_data.validate()
+        return
+
+    write_header(extension_data)
+
+
+if __name__ == '__main__':
+    main()
