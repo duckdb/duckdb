@@ -21,6 +21,7 @@ using namespace std;
 
 namespace duckdb {
 static string custom_test_directory;
+static RequireMode require_mode = RequireMode::EXIT_ON_FAIL;
 static int debug_initialize_value = -1;
 static bool single_threaded = false;
 
@@ -81,6 +82,10 @@ void SetTestDirectory(string path) {
 	custom_test_directory = path;
 }
 
+void SetRequireMode(RequireMode mode) {
+	require_mode = mode;
+}
+
 void SetDebugInitialize(int value) {
 	debug_initialize_value = value;
 }
@@ -94,6 +99,10 @@ string GetTestDirectory() {
 		return TESTING_DIRECTORY_NAME;
 	}
 	return custom_test_directory;
+}
+
+RequireMode GetRequireMode() {
+	return require_mode;
 }
 
 string TestDirectoryPath() {

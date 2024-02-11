@@ -24,6 +24,16 @@ bool TestMemoryLeaks() {
 	return test_memory_leaks;
 }
 
+RequireMode ParseRequireMode(string mode) {
+	if (mode == "exit") {
+		return RequireMode::EXIT_ON_FAIL;
+	}
+	if (mode == "fail" || mode == "error") {
+		return RequireMode::ERROR_ON_FAIL;
+	}
+	return RequireMode::INVALID;
+}
+
 } // namespace duckdb
 
 int main(int argc, char *argv[]) {
@@ -43,6 +53,13 @@ int main(int argc, char *argv[]) {
 			test_memory_leaks = true;
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);
+		} else if (string(argv[i]) == "--require-mode") {
+			auto mode = ParseRequireMode(string(argv[++i]));
+			if (mode == RequireMode::INVALID) {
+				fprintf(stderr, "--require-mode has to be one of either 'error', 'fail', or 'exit' (default)\n");
+				return 1;
+			}
+			SetRequireMode(mode);
 		} else if (string(argv[i]) == "--test-temp-dir") {
 			delete_test_path = false;
 			auto test_dir = string(argv[++i]);

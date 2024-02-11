@@ -27,6 +27,8 @@
 #include "duckdb/common/types.hpp"
 namespace duckdb {
 
+enum class RequireMode : uint8_t { EXIT_ON_FAIL, ERROR_ON_FAIL, INVALID };
+
 bool TestForceStorage();
 bool TestForceReload();
 bool TestMemoryLeaks();
@@ -42,9 +44,11 @@ string TestDirectoryPath();
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
+void SetRequireMode(RequireMode mode);
 void SetTestDirectory(string path);
 void SetDebugInitialize(int value);
 void SetSingleThreaded();
+RequireMode GetRequireMode();
 string GetTestDirectory();
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);

@@ -481,38 +481,65 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// os specific stuff
 			if (param == "notmingw") {
 #ifdef __MINGW32__
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "mingw") {
 #ifndef __MINGW32__
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "notwindows") {
 #ifdef _WIN32
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "windows") {
 #ifndef _WIN32
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "longdouble") {
 #if LDBL_MANT_DIG < 54
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "64bit") {
 				if (sizeof(void *) != 8) {
+					if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+						parser.Fail(StringUtil::Format("require %s: FAILED", param));
+					}
 					return;
 				}
 			} else if (param == "noforcestorage") {
 				if (TestForceStorage()) {
+					if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+						parser.Fail(StringUtil::Format("require %s: FAILED", param));
+					}
 					return;
 				}
 			} else if (param == "nothreadsan") {
 #ifdef DUCKDB_THREAD_SANITIZER
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "strinline") {
 #ifdef DUCKDB_DEBUG_NO_INLINE
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "vector_size") {
@@ -523,6 +550,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto required_vector_size = std::stoi(token.parameters[1]);
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
 					// vector size is too low for this test: skip it
+					if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+						parser.Fail(StringUtil::Format("require %s: FAILED", param));
+					}
 					return;
 				}
 			} else if (param == "exact_vector_size") {
@@ -533,6 +563,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto required_vector_size = std::stoi(token.parameters[1]);
 				if (STANDARD_VECTOR_SIZE != required_vector_size) {
 					// vector size does not match the required vector size: skip it
+					if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+						parser.Fail(StringUtil::Format("require %s: FAILED", param));
+					}
 					return;
 				}
 			} else if (param == "block_size") {
@@ -543,16 +576,25 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto required_block_size = std::stoi(token.parameters[1]);
 				if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
 					// block size does not match the required block size: skip it
+					if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+						parser.Fail(StringUtil::Format("require %s: FAILED", param));
+					}
 					return;
 				}
 			} else if (param == "skip_reload") {
 				skip_reload = true;
 			} else if (param == "noalternativeverify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+				if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
 				return;
 #endif
 			} else if (param == "no_extension_autoloading") {
 				if (config->options.autoload_known_extensions) {
+					if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+						parser.Fail(StringUtil::Format("require %s: FAILED", param));
+					}
 					return;
 				}
 			} else {
@@ -573,9 +615,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 						parser.Fail("unknown extension type: %s", token.parameters[0]);
 					} else if (result == ExtensionLoadResult::NOT_LOADED) {
 						// extension known but not build: skip this test
+						if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+							parser.Fail(StringUtil::Format("Could not load extension: %s", param));
+						}
 						return;
 					}
 				} else if (excluded_from_autoloading) {
+					if (GetRequireMode() == RequireMode::ERROR_ON_FAIL) {
+						parser.Fail(StringUtil::Format("require %s: FAILED", param));
+					}
 					return;
 				}
 			}
