@@ -244,7 +244,7 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	}
 	thread_count = total_threads - external_threads;
 #else
-	if (threads != external_threads) {
+	if (threads.size() != external_threads) {
 		throw NotImplementedException(
 		    "DuckDB was compiled without threads! Setting threads != external_threads is not allowed.");
 	}
