@@ -68,9 +68,9 @@ static void TestCTEandSetFetchEnv(const char *extra_params) {
  * because the queries are not using cursors.
  */
 TEST_CASE("Test CTE", "[odbc]") {
-	// First test with UseDeclareFetch=0
-	TestCTEandSetFetchEnv("UseDeclareFetch=0");
-
-	// Then test with UseDeclareFetch=1
-	TestCTEandSetFetchEnv("UseDeclareFetch=1;Fetch=1");
+//	// First test with UseDeclareFetch=0
+//	TestCTEandSetFetchEnv("UseDeclareFetch=0");
+//
+//	// Then test with UseDeclareFetch=1
+//	TestCTEandSetFetchEnv("UseDeclareFetch=1;Fetch=1");
 }

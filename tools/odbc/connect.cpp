@@ -140,37 +140,11 @@ SQLRETURN Connect::ParseInputStr() {
 
 SQLRETURN Connect::ReadFromIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
-#if !defined WIN32
-	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
-	std::string home_directory = fs->GetHomeDirectory();
-	std::string odbc_file = fs->JoinPath(home_directory, R"(.odbc.ini)");
-
-	std::cout << "odbc_file: " << odbc_file << std::endl;
-
-	if (!fs->FileExists(odbc_file)) {
-		std::cout << "odbc_file does not exist" << std::endl;
-		return SQL_SUCCESS;
-	}
-
-	// print out the contents of the file
-	std::ifstream in(odbc_file, std::ios::in);
-	std::string str;
-	while (std::getline(in, str)) {
-        std::cout << str << std::endl;
-    }
-	in.close();
-	auto converted_odbc_file = OdbcUtils::ConvertStringToLPCSTR(odbc_file);
-#else
-	auto converted_odbc_file = "odbc.ini";
-#endif
-
 	if (dbc->dsn.empty()) {
 		return SQL_SUCCESS;
 	}
 
 	auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);
-	std::cout << "converted_odbc_file: " << converted_odbc_file << std::endl;
-	std::cout << "converted_dsn: " << converted_dsn << std::endl;
 	for (auto &key_pair : conn_str_keynames) {
 		if (CheckSet(key_pair.first)) {
 			continue;
@@ -180,17 +154,12 @@ SQLRETURN Connect::ReadFromIniFile() {
 		auto converted_key = key_pair.second.c_str();
 		int read_size =
 		    SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, "odbc.ini");
-		std::cout << "key: " << converted_key << ", read_size: " << read_size << std::endl;
-#if WIN32
-		std::cout << "last error: " << GetLastError() << std::endl;
-#endif
 		if (read_size == 0) {
 			continue;
 		} else if (read_size < 0) {
 			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLDriverConnect", "Error reading from .odbc.ini",
 			                                   SQLStateType::ST_01S09, "");
 		}
-		std::cout << "key: " << converted_key << ", val: " << char_val << std::endl;
 		SQLRETURN ret = SetVal(key_pair.first, string(char_val));
 		if (ret != SQL_SUCCESS) {
 			return ret;

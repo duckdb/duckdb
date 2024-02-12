@@ -250,18 +250,13 @@ std::string GetTesterDirectory() {
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	std::string current_directory = fs->GetWorkingDirectory() + "/tools/odbc/test/";
 	if (!fs->DirectoryExists(current_directory)) {
-		std::cout << "current directory: " << fs->GetWorkingDirectory() + "/../../../../tools/odbc/test/" << std::endl;
-
 		return fs->GetWorkingDirectory() + "/../../../../tools/odbc/test/";
 	}
-	std::cout << "current directory: " << current_directory << std::endl;
 	return current_directory;
 }
 
 std::string GetHomeDirectory() {
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
-	std::string home_directory = fs->GetWorkingDirectory();
-	std::cout << "home directory: " << home_directory << std::endl;
 	return fs->GetHomeDirectory();
 }
 

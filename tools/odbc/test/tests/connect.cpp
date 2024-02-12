@@ -194,53 +194,6 @@ static void runSQLInstallerError(bool ret, std::string errorMessage) {
 	REQUIRE(ret == true);
 }
 
-static char *ConvertStringToChar(const std::string &str) {
-	char *cstr = new char[str.length() + 1];
-	strcpy(cstr, str.c_str());
-	return cstr;
-}
-
-static char *CreateAttributeString(const std::string &dsn, const std::string& driverName, const std::string &database, const std::string &access_mode, const std::string &allow_unsigned_extensions) {
-	std::ostringstream oss;
-	oss << "DSN=" << dsn << ";";
-	oss << "database=" << database << ";";
-	oss << "access_mode=" << access_mode << ";";
-	oss << "allow_unsigned_extensions=" << allow_unsigned_extensions << ";";
-
-	char *attrs = ConvertStringToChar(oss.str());
-
-	for (int i = 0; attrs[i]; i++) {
-		if (attrs[i] == ';') {
-			attrs[i] = '\0';
-		}
-	}
-
-	return attrs;
-}
-
-static BOOL AlterDSN(const std::string &dsn, const std::string& driverName, const std::string &database, const std::string &access_mode, const std::string &allow_unsigned_extensions) {
-	char *attrs = CreateAttributeString(dsn, driverName, database, access_mode, allow_unsigned_extensions);
-
-	char *driverName_c = ConvertStringToChar(driverName);
-	std::cout << ">>" << driverName_c << "<<" << std::endl;
-
-//	/* Remove the DSN if it already exists */
-//	if(!SQLConfigDataSource(nullptr, ODBC_REMOVE_SYS_DSN, driverName_c, attrs)) {
-//		runSQLInstallerError(false, "ODBC_REMOVE_SYS_DSN");
-//		return false;
-//
-//	}
-
-	/* then create a new DSN */
-	if (!SQLConfigDataSource(nullptr, ODBC_CONFIG_SYS_DSN, driverName_c, attrs)) {
-	    runSQLInstallerError(false, "ODBC_CONFIG_SYS_DSN");
-		return false;
-	}
-	return true;
-}
-
-//#endif
-
 // Test input from an ini file
 static void TestIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
@@ -250,30 +203,26 @@ static void TestIniFile() {
 	std::string access_mode = "read_only";
 	std::string allow_unsigned_extensions = "true";
 
-//#if !defined WIN32
-//	// Create a temporary ini file
-//	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
-//
-//	if (std::ifstream(ini_file)) {
-//		std::remove(ini_file.c_str());
-//	}
-//
-//	std::ofstream out(ini_file);
-//	out << "[DuckDB]\n";
-//	out << "Driver = DuckDB Driver\n";
-//	out << "database = " + GetTesterDirectory() + "test.duckdb\n";
-//	out << "access_mode = read_only\n";
-//	out << "allow_unsigned_extensions = true\n";
-//	out.close();
-//
-//	std::cout << "ini_file: " << ini_file << std::endl;
-//	if (!std::ifstream(ini_file)) {
-//		FAIL("Failed to create ini file");
-//	}
+#if !defined WIN32
+	// Create a temporary ini file
+	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
 
-//#elif defined WIN32
-//	REQUIRE(AlterDSN(dsn, driverName, database, access_mode, allow_unsigned_extensions) == true);
-//#endif
+	if (std::ifstream(ini_file)) {
+		std::remove(ini_file.c_str());
+	}
+
+	std::ofstream out(ini_file);
+	out << "[" << dsn << "]\n";
+	out << "Driver = " + driverName + "\n";
+	out << "database = " + database + "\n";
+	out << "access_mode = " + access_mode + "\n";
+	out << "allow_unsigned_extensions = " + allow_unsigned_extensions + "\n";
+	out.close();
+
+	if (!std::ifstream(ini_file)) {
+		FAIL("Failed to create ini file");
+	}
+#endif
 
 	// Connect to the database using the ini file
 	SQLHANDLE env;
@@ -292,9 +241,9 @@ static void TestIniFile() {
 	// Disconnect from the database
 	DISCONNECT_FROM_DATABASE(env, dbc);
 
-//#if !defined WIN32
-//	std::remove(ini_file.c_str());
-//#endif
+#if !defined WIN32
+	std::remove(ini_file.c_str());
+#endif
 #endif
 }
 

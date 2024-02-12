@@ -136,7 +136,8 @@ jobs:
     - name: Test Connection ODBC tests
       shell: bash
       run: |
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v access_mode //t REG_SZ //d "READ_WRITE"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v database //t REG_SZ //d "/d/a/duckdb/duckdb/tools/odbc/test/test.duckdb"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v access_mode //t REG_SZ //d "READ_ONLY"
         REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v allow_unsigned_extensions //t REG_SZ //d "true"
         tools/odbc/bin/Release/test_odbc_connection.exe
 
