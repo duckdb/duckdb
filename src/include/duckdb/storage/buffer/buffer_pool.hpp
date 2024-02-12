@@ -11,6 +11,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
@@ -78,9 +79,6 @@ protected:
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 protected:
-	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
-	constexpr static idx_t INSERT_INTERVAL = DEFAULT_STANDARD_VECTOR_SIZE;
-
 	//! The lock for changing the memory limit
 	mutex limit_lock;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
@@ -89,14 +87,24 @@ protected:
 	atomic<idx_t> maximum_memory;
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
-	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
-	atomic<idx_t> evict_queue_insertions;
-	//! Whether a queue purge is currently active
-	atomic<bool> purge_active;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
 	//! Memory usage per tag
 	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
+
+	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
+	constexpr static idx_t INSERT_INTERVAL = DEFAULT_STANDARD_VECTOR_SIZE;
+	//! Defines how many nodes we attempt to purge per bulk purge iteration
+	constexpr static idx_t BULK_PURGE_SIZE = INSERT_INTERVAL / 8;
+	//! Early-out threshold, if we saw more than BULK_PURGE_THRESHOLD alive nodes
+	constexpr static idx_t BULK_PURGE_THRESHOLD = BULK_PURGE_SIZE * 0.25;
+
+	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
+	atomic<idx_t> evict_queue_insertions;
+	//! Whether a queue purge is currently active
+	atomic<bool> purge_active;
+	//! The maximum number of nodes that we purge per bulk purge iteration
+	array<BufferEvictionNode, BULK_PURGE_SIZE> purge_nodes;
 };
 
 } // namespace duckdb

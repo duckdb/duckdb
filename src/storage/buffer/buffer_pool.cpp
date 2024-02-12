@@ -115,12 +115,6 @@ void BufferPool::PurgeQueue() {
 	// we trigger a purge every INSERT_INTERVAL insertions into the queue
 	// we assume that there are alive nodes in the queue, so we never want to purge the whole queue
 
-	// defines how many nodes we attempt to purge per iteration
-	constexpr idx_t BULK_PURGE_SIZE = INSERT_INTERVAL / 8;
-
-	// early-out threshold, if we saw more than BULK_PURGE_THRESHOLD alive nodes
-	constexpr idx_t BULK_PURGE_THRESHOLD = BULK_PURGE_SIZE * 0.25;
-
 	// only one thread purges the queue, all other threads early-out
 	bool actual_purge_active;
 	do {
@@ -138,31 +132,28 @@ void BufferPool::PurgeQueue() {
 		return;
 	}
 
-	vector<BufferEvictionNode> nodes;
-	nodes.resize(BULK_PURGE_SIZE);
-	idx_t alive_nodes = 0;
-
 	// the purge queue is a concurrent structure, so we need to attempt purging the whole queue,
 	// as of the approx_q_size seen. We early-out, if we see too many alive nodes. If not, we
 	// purge as much as we reasonably can, as we assume that new dead nodes are created while purging.
 	idx_t max_purges = approx_q_size / BULK_PURGE_SIZE;
+	idx_t alive_nodes = 0;
 	while (max_purges && alive_nodes < BULK_PURGE_THRESHOLD) {
 
 		// bulk dequeue
-		auto actually_dequeued = queue->q.try_dequeue_bulk(nodes.begin(), BULK_PURGE_SIZE);
+		auto actually_dequeued = queue->q.try_dequeue_bulk(purge_nodes.begin(), BULK_PURGE_SIZE);
 
 		// retrieve all alive nodes that have been wrongly dequeued
 		alive_nodes = 0;
 		for (idx_t i = 0; i < actually_dequeued; i++) {
-			auto &node = nodes[i];
+			auto &node = purge_nodes[i];
 			auto handle = node.TryGetBlockHandle();
 			if (handle) {
-				nodes[alive_nodes++] = std::move(node);
+				purge_nodes[alive_nodes++] = std::move(node);
 			}
 		}
 
 		// bulk enqueue
-		queue->q.enqueue_bulk(nodes.begin(), alive_nodes);
+		queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 		max_purges--;
 	}
 
