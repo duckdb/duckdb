@@ -157,13 +157,15 @@ class TestArrowDictionary(object):
 
     def test_dictionary_lifetime(self, duckdb_cursor):
         tables = []
+        expected = ''
         for i in range(100):
             if i % 3 == 0:
-                input = ['ABCD' for _ in range(17000)]
+                input = 'ABCD' * 17000
             elif i % 3 == 1:
-                input = ['FOOO' for _ in range(17000)]
+                input = 'FOOO' * 17000
             else:
-                input = ['BARR' for _ in range(17000)]
+                input = 'BARR' * 17000
+            expected += input
             array = pa.array(
                 input,
                 type=pa.dictionary(pa.int16(), pa.string()),
@@ -171,7 +173,8 @@ class TestArrowDictionary(object):
             tables.append(pa.table([array], names=["x"]))
         x = ds.dataset(tables)
         res = duckdb_cursor.sql("select * from x").fetchall()
-        # TODO: test result
+        expected = [(x,) for x in expected]
+        assert res == expected
 
     def test_dictionary_batches_parallel(self, duckdb_cursor):
         duckdb_cursor.execute("PRAGMA threads=4")
