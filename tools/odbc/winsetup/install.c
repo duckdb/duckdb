@@ -201,8 +201,6 @@ static BOOL Install(const char *driverpath, const char *dsn, const char *drivern
 	BOOL rc;
 	DWORD usagecount;
 
-	PrintMsg("INSTALLLLLLLL", "HEYOO I'M IN INSTALL", 0);
-
 	/* first, retrieve the path the driver should be installed to
 	 * in path */
 	if (!SQLInstallDriverManager(path, sizeof(path), &pathlen) && ProcessSQLErrorMessages("SQLInstallDriverManager")) {

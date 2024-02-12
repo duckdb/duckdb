@@ -10,7 +10,6 @@ add_executable(
   tests/bind_col.cpp
   tests/bools_as_char.cpp
   tests/catalog_functions.cpp
-  tests/connect.cpp
   tests/diagnostics.cpp
   tests/select.cpp
   tests/row_wise_fetching.cpp
@@ -28,6 +27,12 @@ add_executable(
   tests/col_attribute/int_query.cpp
   tests/col_attribute/utils.cpp)
 
+add_executable(
+  test_connection_odbc
+  common.cpp
+  tests/connect.cpp
+)
+
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
   # System.Data.ODBC tests Visual Studio Generator due to use of C++ CLI and
   # .NET.
@@ -35,3 +40,4 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
 endif()
 
 target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)
+target_link_libraries(test_connection_odbc duckdb_odbc ODBC::ODBC)

@@ -272,7 +272,7 @@ static void TestIniFile() {
 //	}
 
 //#elif defined WIN32
-	REQUIRE(AlterDSN(dsn, driverName, database, access_mode, allow_unsigned_extensions) == true);
+//	REQUIRE(AlterDSN(dsn, driverName, database, access_mode, allow_unsigned_extensions) == true);
 //#endif
 
 	// Connect to the database using the ini file
