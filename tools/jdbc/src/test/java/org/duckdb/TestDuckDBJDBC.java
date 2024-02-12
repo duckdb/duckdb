@@ -59,7 +59,6 @@ import java.util.logging.Logger;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 import static java.time.temporal.ChronoField.DAY_OF_MONTH;
-import static java.time.temporal.ChronoField.MILLI_OF_SECOND;
 import static java.time.temporal.ChronoField.MONTH_OF_YEAR;
 import static java.time.temporal.ChronoField.OFFSET_SECONDS;
 import static java.time.temporal.ChronoField.YEAR_OF_ERA;
@@ -3831,7 +3830,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put(
             "timestamp_tz",
             asList(OffsetDateTime.of(LocalDateTime.of(-290308, 12, 22, 0, 0, 0), ZoneOffset.UTC),
-                   OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 776806000), ZoneOffset.UTC), null));
+                   OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775806000), ZoneOffset.UTC), null));
     }
 
     public static void test_all_types() throws Exception {
@@ -3861,9 +3860,6 @@ public class TestDuckDBJDBC {
 
                         if (actual instanceof Timestamp && expected instanceof Timestamp) {
                             assertEquals(((Timestamp) actual).getTime(), ((Timestamp) expected).getTime(), 500);
-                        } else if (actual instanceof OffsetDateTime && expected instanceof OffsetDateTime) {
-                            assertEquals(((OffsetDateTime) actual).getLong(MILLI_OF_SECOND),
-                                         ((OffsetDateTime) expected).getLong(MILLI_OF_SECOND), 5000);
                         } else if (actual instanceof List) {
                             assertListsEqual((List) actual, (List) expected);
                         } else {

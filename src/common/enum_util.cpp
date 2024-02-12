@@ -63,7 +63,6 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -6938,34 +6937,6 @@ WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TIES")) {
 		return WindowExcludeMode::TIES;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<WithinCollection>(WithinCollection value) {
-	switch(value) {
-	case WithinCollection::NO:
-		return "NO";
-	case WithinCollection::LIST:
-		return "LIST";
-	case WithinCollection::ARRAY:
-		return "ARRAY";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
-	}
-}
-
-template<>
-WithinCollection EnumUtil::FromString<WithinCollection>(const char *value) {
-	if (StringUtil::Equals(value, "NO")) {
-		return WithinCollection::NO;
-	}
-	if (StringUtil::Equals(value, "LIST")) {
-		return WithinCollection::LIST;
-	}
-	if (StringUtil::Equals(value, "ARRAY")) {
-		return WithinCollection::ARRAY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

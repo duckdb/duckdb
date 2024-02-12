@@ -81,7 +81,7 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 
 void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
 	D_ASSERT(buffer_idx < cached_buffers.size() && cached_buffers[buffer_idx]);
-	if (buffer_idx == 0) {
+	if (buffer_idx == 0 && cached_buffers.size() > 1) {
 		cached_buffers[buffer_idx].reset();
 		idx_t cur_buffer = buffer_idx + 1;
 		while (reset_when_possible.find(cur_buffer) != reset_when_possible.end()) {
@@ -92,7 +92,7 @@ void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
 		return;
 	}
 	// We only reset if previous one was also already reset
-	if (!cached_buffers[buffer_idx - 1]) {
+	if (buffer_idx > 0 && !cached_buffers[buffer_idx - 1]) {
 		cached_buffers[buffer_idx].reset();
 		idx_t cur_buffer = buffer_idx + 1;
 		while (reset_when_possible.find(cur_buffer) != reset_when_possible.end()) {

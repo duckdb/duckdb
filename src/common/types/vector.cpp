@@ -2349,12 +2349,4 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChildSize();
 }
 
-void ArrayVector::AllocateDummyListEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::ARRAY);
-	auto array_size = ArrayType::GetSize(vector.GetType());
-	auto array_count = ArrayVector::GetTotalSize(vector) / array_size;
-	vector.buffer = VectorBuffer::CreateStandardVector(LogicalType::HUGEINT, array_count);
-	vector.data = vector.buffer->GetData();
-}
-
 } // namespace duckdb

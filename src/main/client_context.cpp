@@ -43,6 +43,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/main/client_context_state.hpp"
 
 namespace duckdb {
 
@@ -73,8 +74,56 @@ private:
 	BaseQueryResult *open_result = nullptr;
 };
 
+#ifdef DEBUG
+struct DebugClientContextState : public ClientContextState {
+	~DebugClientContextState() override {
+		D_ASSERT(!active_transaction);
+		D_ASSERT(!active_query);
+	}
+
+	bool active_transaction = false;
+	bool active_query = false;
+
+	void QueryBegin(ClientContext &context) override {
+		if (active_query) {
+			throw InternalException("DebugClientContextState::QueryBegin called when a query is already active");
+		}
+		active_query = true;
+	}
+	void QueryEnd(ClientContext &context) override {
+		if (!active_query) {
+			throw InternalException("DebugClientContextState::QueryEnd called when no query is active");
+		}
+		active_query = false;
+	}
+	void TransactionBegin(MetaTransaction &transaction, ClientContext &context) override {
+		if (active_transaction) {
+			throw InternalException(
+			    "DebugClientContextState::TransactionBegin called when a transaction is already active");
+		}
+		active_transaction = true;
+	}
+	void TransactionCommit(MetaTransaction &transaction, ClientContext &context) override {
+		if (!active_transaction) {
+			throw InternalException("DebugClientContextState::TransactionCommit called when no transaction is active");
+		}
+		active_transaction = false;
+	}
+	void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override {
+		if (!active_transaction) {
+			throw InternalException(
+			    "DebugClientContextState::TransactionRollback called when no transaction is active");
+		}
+		active_transaction = false;
+	}
+};
+#endif
+
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+#ifdef DEBUG
+	registered_state["debug_client_context_state"] = make_uniq<DebugClientContextState>();
+#endif
 }
 
 ClientContext::~ClientContext() {
@@ -115,42 +164,37 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	return make_uniq<T>(std::move(error));
 }
 
-void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction) {
+void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
 	auto &db_inst = DatabaseInstance::GetDatabase(*this);
 	if (ValidChecker::IsInvalidated(db_inst)) {
 		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));
 	}
-	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
-	    ValidChecker::IsInvalidated(transaction.ActiveTransaction())) {
-		throw ErrorManager::InvalidatedTransaction(*this);
-	}
 	active_query = make_uniq<ActiveQueryContext>();
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
 	}
-}
-
-void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
-	BeginTransactionInternal(lock, false);
+	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 
 	query_progress.Initialize();
-	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
+	// Notify any registered state of query begin
+	for (auto const &s : registered_state) {
+		s.second->QueryBegin(*this);
+	}
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
 	client_data->profiler->EndQuery();
 
-	// Notify any registered state of query end
-	for (auto const &s : registered_state) {
-		s.second->QueryEnd();
-	}
-
 	if (active_query->executor) {
 		active_query->executor->CancelTasks();
+	}
+	// Notify any registered state of query end
+	for (auto const &s : registered_state) {
+		s.second->QueryEnd(*this);
 	}
 	active_query->progress_bar.reset();
 
@@ -160,17 +204,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	ErrorData error;
 	try {
 		if (transaction.HasActiveTransaction()) {
-			// Move the query profiler into the history
-			auto &prev_profilers = client_data->query_profiler_history->GetPrevProfilers();
-			prev_profilers.emplace_back(transaction.GetActiveQuery(), std::move(client_data->profiler));
-			// Reinitialize the query profiler
-			client_data->profiler = make_shared<QueryProfiler>(*this);
-			// Propagate settings of the saved query into the new profiler.
-			client_data->profiler->Propagate(*prev_profilers.back().second);
-			if (prev_profilers.size() >= client_data->query_profiler_history->GetPrevProfilersSize()) {
-				prev_profilers.pop_front();
-			}
-
 			transaction.ResetActiveQuery();
 			if (transaction.IsAutoCommit()) {
 				if (success) {
