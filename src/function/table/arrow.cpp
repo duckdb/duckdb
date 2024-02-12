@@ -45,8 +45,8 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		std::string s1, s2, s3;
 
 		// Find the positions of the commas
-		size_t pos1 = parameters.find(",");           // Position of the first comma
-		size_t pos2 = parameters.find(",", pos1 + 1); // Position of the second comma
+		size_t pos1 = parameters.find(',');           // Position of the first comma
+		size_t pos2 = parameters.find(',', pos1 + 1); // Position of the second comma
 
 		// Extract substrings using substr
 		// +1 and -1 to adjust positions to exclude ':' and ',' from the substrings
