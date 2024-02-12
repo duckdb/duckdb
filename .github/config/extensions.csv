@@ -8,7 +8,7 @@ parquet,,,
 tpcds,,,
 tpch,,,
 sqlite_scanner,https://github.com/duckdb/sqlite_scanner,078cd16fbd9a4ff96a71c6f5aafc27343e087cbb,
-postgres_scanner,https://github.com/duckdb/postgres_scanner,844f46536b5d5f9e65b57b7ff92f4ce3346e2829,
+postgres_scanner,https://github.com/duckdb/postgres_scanner,883a8f1a8a487264855a5166f7df1f46ad386434,
 substrait,https://github.com/duckdb/substrait,e75ba6a9a43d75d8c72ecc38e6f751fd8e3474a0,no-windows
 arrow,https://github.com/duckdb/arrow,9e10240da11f61ea7fbfe3fc9988ffe672ccd40f,no-windows
 aws,https://github.com/duckdb/duckdb_aws,348ae2625de86ab760f80a43eb76e4441cd01354,

@@ -55,8 +55,7 @@ if (NOT MINGW)
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
-            GIT_TAG ce22bc41da1b876a8d541e013251712cae886ea8
-            APPLY_PATCHES
+            GIT_TAG 883a8f1a8a487264855a5166f7df1f46ad386434
             )
 endif()
 
