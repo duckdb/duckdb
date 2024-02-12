@@ -158,6 +158,11 @@ unique_ptr<SecretEntry> SecretManager::RegisterSecretInternal(CatalogTransaction
 	//! Lookup which backend to store the secret in
 	auto backend = GetSecretStorage(resolved_storage);
 	if (!backend) {
+		if (!config.allow_persistent_secrets &&
+		    (persist_type == SecretPersistType::PERSISTENT || storage == LOCAL_FILE_STORAGE_NAME)) {
+			throw InvalidInputException("Persistent secrets are disabled. Restart DuckDB and enable persistent secrets "
+			                            "through 'SET allow_persistent_secrets=true'");
+		}
 		throw InvalidInputException("Secret storage '%s' not found!", resolved_storage);
 	}
 
@@ -503,9 +508,11 @@ void SecretManager::InitializeSecrets(CatalogTransaction transaction) {
 		// load the tmp storage
 		LoadSecretStorageInternal(make_uniq<TemporarySecretStorage>(TEMPORARY_STORAGE_NAME, *transaction.db));
 
-		// load the persistent storage if enabled
-		LoadSecretStorageInternal(
-		    make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path));
+		if (config.allow_persistent_secrets) {
+			// load the persistent storage if enabled
+			LoadSecretStorageInternal(
+			    make_uniq<LocalFileSecretStorage>(*this, *transaction.db, LOCAL_FILE_STORAGE_NAME, config.secret_path));
+		}
 
 		initialized = true;
 	}
