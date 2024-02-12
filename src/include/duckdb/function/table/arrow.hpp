@@ -111,7 +111,7 @@ public:
 		for (auto &child : children) {
 			child.second->Reset();
 		}
-		dictionary.reset();
+		owned_data.reset();
 	}
 };
 

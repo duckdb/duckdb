@@ -13,9 +13,11 @@ ArrowArrayScanState &ArrowArrayScanState::GetChild(idx_t child_idx) {
 		auto child_p = make_uniq<ArrowArrayScanState>(state);
 		auto &child = *child_p;
 		children.emplace(std::make_pair(child_idx, std::move(child_p)));
-		// Propagate down the ownership, for dictionaries in children
-		child.owned_data = owned_data;
 		return child;
+	}
+	if (!it->second->owned_data) {
+		// Propagate down the ownership, for dictionaries in children
+		it->second->owned_data = owned_data;
 	}
 	return *it->second;
 }
