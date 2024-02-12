@@ -21,6 +21,7 @@ struct INetFunctions {
 	static void Host(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Family(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Escape(DataChunk &args, ExpressionState &state, Vector &result);
+	static void Unescape(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Subtract(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Add(DataChunk &args, ExpressionState &state, Vector &result);
 };

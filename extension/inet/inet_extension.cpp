@@ -41,21 +41,14 @@ void InetExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(
 	    *db.instance, ScalarFunction("family", {inet_type}, LogicalType::UTINYINT, INetFunctions::Family));
 	ExtensionUtil::RegisterFunction(*db.instance, GetEscapeFunctionSet());
+	ExtensionUtil::RegisterFunction(*db.instance, GetUnescapeFunction());
 
 	// Add - function with ALTER_ON_CONFLICT
 	ScalarFunction substract_fun("-", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Subtract);
 	ExtensionUtil::AddFunctionOverload(*db.instance, substract_fun);
-}
 
-ScalarFunctionSet InetExtension::GetEscapeFunctionSet() {
-	ScalarFunctionSet funcs("escape");
-	funcs.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, INetFunctions::Escape, nullptr,
-	                                 nullptr, nullptr, nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                                 FunctionNullHandling::SPECIAL_HANDLING));
-	funcs.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::VARCHAR,
-	                                 INetFunctions::Escape, nullptr, nullptr, nullptr, nullptr, LogicalType::INVALID,
-	                                 FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	return funcs;
+	ScalarFunction add_fun("+", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Add);
+	ExtensionUtil::AddFunctionOverload(*db.instance, add_fun);
 }
 
 std::string InetExtension::Name() {

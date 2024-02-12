@@ -20,6 +20,7 @@ public:
 
 protected:
 	ScalarFunctionSet GetEscapeFunctionSet();
+	ScalarFunction GetUnescapeFunction();
 };
 
 } // namespace duckdb

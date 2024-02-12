@@ -8,6 +8,17 @@ statement ok
 PRAGMA enable_verification
 
 # escape
+query T
+SELECT * FROM (VALUES (escape('&')), (escape('&#')), (escape('&#x')), (escape('&#X')), (escape('&#y')), (escape('&#xy')), (escape('&#Xy;'))) tbl(i);
+----
+&amp;
+&amp;#
+&amp;#x
+&amp;#X
+&amp;#y
+&amp;#xy
+&amp;#Xy;
+
 query I
 SELECT escape('''<script>"&foo;"</script>''');
 ----
@@ -17,6 +28,18 @@ query I
 SELECT escape('''<script>"&foo;"</script>''', false);
 ----
 '&lt;script&gt;"&amp;foo;"&lt;/script&gt;'
+
+# check & followed by invalid chars
+query I
+SELECT escape('&\n&\t& &&');
+----
+&amp;\n&amp;\t&amp; &amp;&amp;
+
+# check & followed by numbers and letters
+query I
+SELECT escape('&0 &9 &a &0; &9; &a;');
+----
+&amp;0 &amp;9 &amp;a &amp;0; &amp;9; &amp;a;
 
 query I
 SELECT escape('duckdb');
@@ -47,4 +70,154 @@ query I
 SELECT escape('', false);
 ----
 (empty)
+
+# unescape
+query I
+SELECT unescape('I&heartsuit;duckdb');
+----
+I♥duckdb
+
+query I
+SELECT unescape('no character references');
+----
+no character references
+
+query I
+SELECT unescape('hey &no character &no reference');
+----
+hey &no character &no reference
+
+# check & followed by invalid chars
+query I
+SELECT unescape('&\n&\t& &&');
+----
+&\n&\t& &&
+
+# check & followed by numbers and letters
+query I
+SELECT unescape('&0 &9 &a &0; &9; &a;');
+----
+&0 &9 &a &0; &9; &a;
+
+query I
+SELECT unescape('&#xD800');
+----
+�
+
+query I
+SELECT unescape('&#x0');
+----
+�
+
+# check invalid charrefs map
+query T
+SELECT * FROM (VALUES (unescape('&#x80')), (unescape('&#x95')), (unescape('&#x82')), (unescape('&#x8b')), (unescape('&#x99')), (unescape('&#x9f'))) tbl(i);
+----
+€
+•
+‚
+‹
+™
+Ÿ
+
+# check code control points of invalid charref map
+query T
+SELECT * FROM (VALUES (unescape('&#x81')), (unescape('&#x8d')), (unescape('&#x8f')), (unescape('&#x90')), (unescape('&#x9d'))) tbl(i);
+----
+\x81
+\x8D
+\x8F
+\x90
+\x9D
+
+# check incomplete entities at the end of the string
+query T
+SELECT * FROM (VALUES (unescape('&')), (unescape('&#')), (unescape('&#x')), (unescape('&#X;')), (unescape('&#y')), (unescape('&#xy')), (unescape('&#Xy;'))) tbl(i);
+----
+&
+&#
+&#x
+&#X;
+&#y
+&#xy
+&#Xy;
+
+# check invalid code points
+query T
+SELECT * FROM (VALUES (unescape('&#xD800;')), (unescape('&#xD801;')), (unescape('&#xDB00')), (unescape('&#xDC00')), (unescape('&#xDFFF')), (unescape('&#x110000')), (unescape('&#x1')), (unescape('&#xb')), (unescape('&#xe')), (unescape('&#x7f')), (unescape('&#xfffe')), (unescape('&#xffff')), (unescape('&#x10fffe')), (unescape('&#x10ffff'))) tbl(i);
+----
+�
+�
+�
+�
+�
+�
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+(empty)
+
+# check that multiple trailing semicolons are handled correctly
+query T
+SELECT * FROM (VALUES (unescape('&quot;;')), (unescape('&#34;;')), (unescape('&#x22;;')), (unescape('&#x22;quot;'))) tbl(i);
+----
+";
+";
+";
+"quot;
+
+query T
+SELECT * FROM (VALUES (unescape('&amp')), (unescape('&AMP;'))) tbl(i);
+----
+&
+&
+
+query I
+SELECT unescape('&not');
+----
+¬
+
+query I
+SELECT unescape('&not&not;');
+----
+¬¬
+
+query I
+SELECT unescape('&notin');
+----
+¬in
+
+query I
+SELECT unescape('&notin;');
+----
+∉
+
+# check a big number
+query I
+SELECT unescape('&#x1000000000000000000');
+----
+�
+
+# longest valid name
+query I
+SELECT unescape('&CounterClockwiseContourIntegral;');
+----
+∳
+
+# check a charref that maps to two unicode chars
+query T
+SELECT * FROM (VALUES (unescape('&acE;')), (unescape('&acE')), (unescape('&#123;'))) tbl(i);
+----
+∾
+&acE
+{
+
+query I
+SELECT unescape('&Eacuteric&Eacute;ric&alphacentauri&alpha;centauri');
+----
+ÉricÉric&alphacentauriαcentauri
 

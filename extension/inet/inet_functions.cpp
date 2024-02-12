@@ -100,56 +100,6 @@ void INetFunctions::Host(DataChunk &args, ExpressionState &state, Vector &result
 	    });
 }
 
-void INetFunctions::Escape(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
-	// set second argument
-	Vector quote(Value::BOOLEAN(true));
-	if (args.ColumnCount() == 2) {
-		UnifiedVectorFormat sec_arg;
-		args.data[1].ToUnifiedFormat(args.size(), sec_arg);
-		if (sec_arg.validity.RowIsValid(0)) { // if not NULL
-			quote.Reinterpret(args.data[1]);
-		}
-	}
-	BinaryExecutor::Execute<string_t, bool, string_t>(args.data[0], quote, result, args.size(),
-	                                                  [&](string_t input_str, bool input_quote) {
-		                                                  auto str = input_str.GetData();
-		                                                  auto str_size = input_str.GetSize();
-		                                                  string escaped;
-		                                                  for (size_t i = 0; i < str_size; ++i) {
-			                                                  char ch = str[i];
-			                                                  switch (ch) {
-			                                                  case '&':
-				                                                  escaped += "&amp;";
-				                                                  break;
-			                                                  case '<':
-				                                                  escaped += "&lt;";
-				                                                  break;
-			                                                  case '>':
-				                                                  escaped += "&gt;";
-				                                                  break;
-			                                                  case '"':
-				                                                  if (input_quote) {
-					                                                  escaped += "&quot;";
-				                                                  } else {
-					                                                  escaped += "\"";
-				                                                  }
-				                                                  break;
-			                                                  case '\'':
-				                                                  if (input_quote) {
-					                                                  escaped += "&#x27;";
-				                                                  } else {
-					                                                  escaped += "\'";
-				                                                  }
-				                                                  break;
-			                                                  default:
-				                                                  escaped += ch;
-			                                                  }
-		                                                  }
-		                                                  return StringVector::AddString(result, escaped);
-	                                                  });
-}
-
 void INetFunctions::Family(DataChunk &args, ExpressionState &state, Vector &result) {
 	GenericExecutor::ExecuteUnary<INET_TYPE, PrimitiveType<uint8_t>>(
 	    args.data[0], result, args.size(), [&](INET_TYPE input) {
