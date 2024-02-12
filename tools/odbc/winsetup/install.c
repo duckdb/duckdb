@@ -161,6 +161,7 @@ static void CreateAttributeString(char *attrs, size_t len, const char *dsn) {
 			attrs[i] = '\0';
 		}
 	}
+	printf("attrs: %s", attrs);
 }
 
 static BOOL AddMyDSN(const char *dsn, const char *drivername) {
