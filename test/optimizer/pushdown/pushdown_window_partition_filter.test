@@ -1,0 +1,30 @@
+# name: test/optimizer/pushdown/pushdown_window_partition_filter.test
+# description: Test pushdown of filters through window operators that are partitioned by.
+# group: [pushdown]
+
+
+statement ok
+create table t1 as from VALUES ('A', 1), ('B', 3), ('C', 12), ('A', 5), ('B', 8), ('C', 9), ('A', 10), ('B', 20), ('C', 3) t(a, b);
+
+statement ok
+create view window_with_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1 where a != 'C';
+
+statement ok
+create view window_no_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1;
+
+
+query III no_sort result_1
+select * from window_with_filter where a != 'C' order by a;
+----
+
+query III no_sort result_1
+select * from window_no_filter where a != 'C' order by a;
+----
+
+statement ok
+pragma explain_output=OPTIMIZED_ONLY
+
+query II
+explain select * from window_no_filter where a != 'C' order by a;
+----
+logical_opt	<REGEX>:.*WINDOW.*FILTER.*

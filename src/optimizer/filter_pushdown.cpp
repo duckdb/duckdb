@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
@@ -10,6 +11,19 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
+}
+
+
+
+static unique_ptr<LogicalOperator> PushdownWindow(unique_ptr<LogicalOperator> op) {
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
+	auto &window = op->Cast<LogicalWindow>();
+	// go into expressions, then look into the partitions.
+	// if the filter applies ONLY to the partition (and is not some arithmetic expression) then you can push the filter into
+	// the children.
+	auto wat = "sdfs";
+	//! Now we try to pushdown the remaining filters to perform zonemap checking
+	return std::move(op);
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
@@ -43,6 +57,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownGet(std::move(op));
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		return PushdownLimit(std::move(op));
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return PushdownWindow(std::move(op));
 	default:
 		return FinishPushdown(std::move(op));
 	}
