@@ -173,7 +173,6 @@ class TestArrowDictionary(object):
         res = duckdb_cursor.sql("select * from x").fetchall()
         # TODO: test result
 
-
     def test_dictionary_batches_parallel(self, duckdb_cursor):
         duckdb_cursor.execute("PRAGMA threads=4")
         duckdb_cursor.execute("PRAGMA verify_parallelism")
