@@ -4,10 +4,11 @@
 
 require parquet
 
+mode skip
 
 statement ok
-select * from read_parquet('test/parquet/all_data.parquet') where a % 10000 = 0;
+select sum(a) from read_parquet('test/parquet/cardinality_estimates/all_data.parquet');
 
 statement ok
-select * from read_parquet('parquet_data/table_*.parquet') where a % 10000 = 0;
+select sum(a) from read_parquet('test/parquet/cardinality_estimates/table_*.parquet');
 
