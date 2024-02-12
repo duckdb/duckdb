@@ -1,0 +1,50 @@
+# name: test/sql/inet/test_inet_escape.test
+# description: Test inet escape function
+# group: [inet]
+
+require inet
+
+statement ok
+PRAGMA enable_verification
+
+# escape
+query I
+SELECT escape('''<script>"&foo;"</script>''');
+----
+&#x27;&lt;script&gt;&quot;&amp;foo;&quot;&lt;/script&gt;&#x27;
+
+query I
+SELECT escape('''<script>"&foo;"</script>''', false);
+----
+'&lt;script&gt;"&amp;foo;"&lt;/script&gt;'
+
+query I
+SELECT escape('duckdb');
+----
+duckdb
+
+query I
+SELECT escape(NULL);
+----
+NULL
+
+query I
+SELECT escape(NULL, NULL);
+----
+NULL
+
+query I
+SELECT escape('<script>', NULL);
+----
+&lt;script&gt;
+
+query I
+SELECT escape('');
+----
+(empty)
+
+query I
+SELECT escape('', false);
+----
+(empty)
+
