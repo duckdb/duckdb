@@ -201,6 +201,8 @@ static BOOL Install(const char *driverpath, const char *dsn, const char *drivern
 	BOOL rc;
 	DWORD usagecount;
 
+	PrintMsg("INSTALLLLLLLL", "HEYOO I'M IN INSTALL", 0);
+
 	/* first, retrieve the path the driver should be installed to
 	 * in path */
 	if (!SQLInstallDriverManager(path, sizeof(path), &pathlen) && ProcessSQLErrorMessages("SQLInstallDriverManager")) {
@@ -277,8 +279,6 @@ int main(int argc, char **argv) {
 		PrintMsg(argv[0], "/CI [/Install | /Uninstall]", 0);
 		exit(1);
 	}
-
-	PrintMsg("ODBC Driver Installer", "This program will install the DuckDB ODBC driver", 0);
 
 	char *parameters = NULL;
 	if (!IsUserAnAdmin()) {
