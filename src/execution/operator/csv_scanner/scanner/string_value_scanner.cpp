@@ -235,6 +235,8 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		if (result.projecting_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
 				result.cur_col_id++;
+				result.quoted = false;
+				result.escaped = false;
 				return;
 			}
 		}
@@ -390,8 +392,8 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		}
 		if (current_line_size > result.state_machine.options.maximum_line_size) {
 			auto csv_error = CSVError::LineSizeError(result.state_machine.options, current_line_size);
-			LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows + 1);
-			result.error_handler.Error(lines_per_batch, csv_error);
+			LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
+			result.error_handler.Error(lines_per_batch, csv_error, true);
 		}
 		result.pre_previous_line_start = result.previous_line_start;
 		result.previous_line_start = current_line_start;

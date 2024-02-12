@@ -365,7 +365,9 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 			if (total_size > thread_limit) {
 				// Out-of-core would be triggered below, try to increase the reservation
-				temporary_memory_state.SetRemainingSize(context, 2 * temporary_memory_state.GetRemainingSize());
+				auto remaining_size =
+				    MaxValue<idx_t>(gstate.active_threads * total_size, temporary_memory_state.GetRemainingSize());
+				temporary_memory_state.SetRemainingSize(context, 2 * remaining_size);
 				thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 			}
 		}
@@ -541,9 +543,12 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 
 	// This many partitions will fit given our reservation (at least 1))
 	auto partitions_fit = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / sink.max_partition_size, 1);
+	// Maximum is either the number of partitions, or the number of threads
+	auto max_possible =
+	    MinValue<idx_t>(sink.partitions.size(), TaskScheduler::GetScheduler(sink.context).NumberOfThreads());
 
-	// Of course, limit it to the number of actual partitions
-	return MinValue<idx_t>(sink.partitions.size(), partitions_fit);
+	// Mininum of the two
+	return MinValue<idx_t>(partitions_fit, max_possible);
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
