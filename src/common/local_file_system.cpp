@@ -354,7 +354,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 						           "using the -readonly parameter in the CLI";
 					}
 				}
-				message += ". See also https://duckdb.org/faq#how-does-duckdb-handle-concurrency";
+				message += ". See also https://duckdb.org/docs/connect/concurrency";
 				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
 				                  path, message);
 			}
