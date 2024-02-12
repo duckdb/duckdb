@@ -42,8 +42,27 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return make_uniq<ArrowType>(LogicalType::DOUBLE);
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
 		std::string parameters = format.substr(format.find(':'));
-		uint8_t width = std::stoi(parameters.substr(1, parameters.find(',')));
-		uint8_t scale = std::stoi(parameters.substr(parameters.find(',') + 1));
+		std::string s1, s2, s3;
+
+		// Find the positions of the commas
+		size_t pos1 = parameters.find(",");           // Position of the first comma
+		size_t pos2 = parameters.find(",", pos1 + 1); // Position of the second comma
+
+		// Extract substrings using substr
+		// +1 and -1 to adjust positions to exclude ':' and ',' from the substrings
+		uint8_t width = std::stoi(parameters.substr(1, pos1 - 1)); // From ':' to the first comma
+		uint8_t scale;
+		if (pos2 != std::string::npos) {
+			// We have a bit-width defined
+			scale = std::stoi(parameters.substr(pos1 + 1, pos2 - pos1 - 1)); // Between the two commas
+			uint32_t bitwidth = std::stoi(parameters.substr(pos2 + 1));
+			if (bitwidth > 128) {
+				throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
+			}
+		} else {
+			// bit-width not defined
+			scale = std::stoi(parameters.substr(pos1 + 1)); // Between the two commas
+		}
 		if (width > 38) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
