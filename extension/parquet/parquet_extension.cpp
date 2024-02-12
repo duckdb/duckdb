@@ -552,7 +552,6 @@ public:
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
-		auto other_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 		result->max_threads = ParquetScanMaxThreads(context, input.bind_data.get());
 		if (input.CanRemoveFilterColumns()) {
 			result->projection_ids = input.projection_ids;
