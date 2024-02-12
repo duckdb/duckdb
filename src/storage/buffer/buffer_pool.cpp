@@ -35,8 +35,8 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 }
 
 BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), evict_queue_insertions(0),
-      purge_active(false), temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
+    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), purge_active(false) {
 }
 BufferPool::~BufferPool() {
 }
