@@ -52,6 +52,8 @@ int main(int argc, char *argv[]) {
 				return 1;
 			}
 			SetTestDirectory(test_dir);
+		} else if (string(argv[i]) == "--require") {
+			AddRequire(string(argv[++i]));
 		} else if (string(argv[i]) == "--zero-initialize") {
 			SetDebugInitialize(0);
 		} else if (string(argv[i]) == "--one-initialize") {
