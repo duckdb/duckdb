@@ -20,7 +20,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 		}
 	}
 	GenerateFilters();
-	return Rewrite(std::move(filter.children[0]));
+	// we don't want to loose the projection map of the filter.
+	// so we rewrite the child with the filters, then keep the filter
+	// operator so we can maintain the projection map.
+	auto child = Rewrite(std::move(filter.children[0]));
+	if (filter.projection_map.empty()) {
+		return child;
+	}
+	// if there is a projection map, you need to keep that information
+	filter.expressions.clear();
+	op->children[0] = std::move(child);
+	return op;
 }
 
 } // namespace duckdb
