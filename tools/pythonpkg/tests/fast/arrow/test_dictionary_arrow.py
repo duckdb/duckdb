@@ -158,17 +158,17 @@ class TestArrowDictionary(object):
     def test_dictionary_lifetime(self, duckdb_cursor):
         tables = []
         for i in range(100):
-            input = []
-            for i in range(17000):
-                if i % 3 == 0:
-                    input.append('ABCD')
-                elif i % 3 == 1:
-                    input.append('FOOO')
-                else:
-                    input.append('BARR')
-            array = pa.array(input, type=pa.dictionary(pa.int16(), pa.string()))
+            if i % 3 == 0:
+                input = ['ABCD' for _ in range(17000)]
+            elif i % 3 == 1:
+                input = ['FOOO' for _ in range(17000)]
+            else:
+                input = ['BARR' for _ in range(17000)]
+            array = pa.array(
+                input,
+                type=pa.dictionary(pa.int16(), pa.string()),
+            )
             tables.append(pa.table([array], names=["x"]))
-
         x = ds.dataset(tables)
         res = duckdb_cursor.sql("select * from x").fetchall()
         # TODO: test result
