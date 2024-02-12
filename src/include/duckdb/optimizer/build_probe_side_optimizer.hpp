@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/filter_pullup.hpp
+// duckdb/optimizer/build_side_probe_side_optimizer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,15 +17,14 @@ namespace duckdb {
 
 class BuildProbeSideOptimizer : LogicalOperatorVisitor {
 public:
-	explicit BuildProbeSideOptimizer()
-	    :  {
-	}
+	explicit BuildProbeSideOptimizer(ClientContext &context);
 
+	void VisitOperator(LogicalOperator &op) override;
+	void VisitExpression(unique_ptr<Expression> *expression) override {};
+
+	void TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
 private:
-
-private:
-
-
+	ClientContext &context;
 };
 
 } // namespace duckdb

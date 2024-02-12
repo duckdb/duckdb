@@ -86,12 +86,6 @@ public:
 	//! products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
 
-	//! after join order optimization, we perform build side probe side optimizations.
-	//! (Basically we put lower expected cardinality columns on the build side, and larger
-	//! tables on the probe side)
-	unique_ptr<LogicalOperator> LeftRightOptimizations(unique_ptr<LogicalOperator> op);
-	void TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
-
 private:
 	vector<reference<LogicalOperator>> filter_operators;
 
