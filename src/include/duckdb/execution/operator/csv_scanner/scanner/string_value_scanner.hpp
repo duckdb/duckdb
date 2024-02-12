@@ -123,6 +123,9 @@ public:
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
+
+	//! Resets the state of the result
+	void Reset();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t

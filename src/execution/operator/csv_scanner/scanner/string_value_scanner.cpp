@@ -231,6 +231,19 @@ DataChunk &StringValueResult::ToChunk() {
 	return parse_chunk;
 }
 
+void StringValueResult::Reset() {
+	if (number_of_rows == 0) {
+		return;
+	}
+	number_of_rows = 0;
+	cur_col_id = 0;
+	chunk_col_id = 0;
+	for (auto &v : validity_mask) {
+		v->SetAllValid(result_size);
+	}
+	buffer_handles.clear();
+}
+
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.escaped) {
 		if (result.projecting_columns) {
@@ -495,12 +508,7 @@ bool StringValueScanner::FinishedIterator() {
 }
 
 StringValueResult &StringValueScanner::ParseChunk() {
-	result.number_of_rows = 0;
-	result.cur_col_id = 0;
-	result.chunk_col_id = 0;
-	for (auto &v : result.validity_mask) {
-		v->SetAllValid(result.result_size);
-	}
+	result.Reset();
 	ParseChunkInternal(result);
 	return result;
 }
@@ -852,6 +860,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 		previous_buffer_handle = cur_buffer_handle;
 		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
+		result.buffer_handles.push_back(cur_buffer_handle);
 		if (!cur_buffer_handle) {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;

@@ -25,7 +25,7 @@ public:
 	                 const idx_t file_idx);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
-	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t buffer_idx);
+	shared_ptr<CSVBufferHandle> GetBuffer(const idx_t buffer_idx);
 
 	void ResetBuffer(const idx_t buffer_idx);
 	//! unique_ptr to the file handle, gets stolen after sniffing
