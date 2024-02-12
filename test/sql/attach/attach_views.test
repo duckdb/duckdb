@@ -76,4 +76,4 @@ endloop
 statement error
 ATTACH 'data/storage/invalid_database_from_the_future.db'
 ----
-Binder Error: Failed reading database 'data/storage/invalid_database_from_the_future.db' due to a deserialization issue
+Binder Error: Failed to attach file 'data/storage/invalid_database_from_the_future.db' due to a deserialization issue
