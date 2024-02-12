@@ -71,3 +71,9 @@ statement ok
 DROP TABLE ${prefix}.t1
 
 endloop
+
+# database has been generated with a branch that never made it into main adding random additional fields that can't be read back
+statement error
+ATTACH 'data/storage/invalid_database_from_the_future.db'
+----
+Binder Error: Failed reading database 'data/storage/invalid_database_from_the_future.db' due to a deserialization issue

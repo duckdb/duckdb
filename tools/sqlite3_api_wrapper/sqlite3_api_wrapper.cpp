@@ -129,7 +129,18 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
-			pDb->last_error = ErrorData(ex);
+			ErrorData error(ex);
+			if (error.Type() == ExceptionType::SERIALIZATION) {
+				pDb->last_error = ErrorData(
+				    ExceptionType::BINDER,
+				    Exception::ConstructMessage(
+				        "Failed reading database '%s' due to a deserialization issue (error message: '%s').\nThe file "
+				        "might have been produced by a future DuckDB version and not be readable from this "
+				        "version.\nSee https://duckdb.org/internals/storage for more information.",
+				        filename, error.RawMessage()));
+			} else {
+				pDb->last_error = error;
+			}
 			pDb->errCode = SQLITE_ERROR;
 		}
 		rc = SQLITE_ERROR;

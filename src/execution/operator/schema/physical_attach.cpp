@@ -95,11 +95,25 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 			return SourceResultType::FINISHED;
 		}
 	}
+	try {
+		// get the database type and attach the database
+		db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
+		auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
+		attached_db->Initialize();
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::SERIALIZATION) {
+			throw BinderException(
+			    "Failed to attach file '%s' due to a deserialization issue (error message: '%s').\nThe file might have "
+			    "been produced by a future DuckDB version and not be readable from this version.\nSee "
+			    "https://duckdb.org/internals/storage for more information.",
+			    path, error.RawMessage());
+		} else {
+			// We might want to wrap the errors also in other cases, but for now covering only the most common one
+			throw ex;
+		}
+	}
 
-	// get the database type and attach the database
-	db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
-	attached_db->Initialize();
 	return SourceResultType::FINISHED;
 }
 
