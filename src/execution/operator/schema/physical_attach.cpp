@@ -109,8 +109,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 			    "https://duckdb.org/internals/storage for more information.",
 			    path, error.RawMessage());
 		} else {
-			// We might want to wrap the errors also in other cases, but for now covering only the most common one
-			throw ex;
+			throw;
 		}
 	}
 
