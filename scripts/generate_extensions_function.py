@@ -35,10 +35,11 @@ class ExtensionFunction(NamedTuple):
     name: str
     type: str
 
-    def create_map(input: List[Tuple[str, str, str]]) -> Dict[str, "ExtensionFunction"]:
+    def create_map(input: List[Tuple[str, str, str]]) -> Dict[Function, "ExtensionFunction"]:
         output: Dict[str, "ExtensionFunction"] = {}
         for x in input:
-            output[x[0]] = ExtensionFunction(x[1], x[0], x[2])
+            key = Function(x[0], x[2])
+            output[key] = ExtensionFunction(x[1], key.name, key.type)
         return output
 
 
@@ -115,7 +116,7 @@ def get_functions(load="") -> Set[Function]:
 
     functions = set()
     for x in results:
-        function_name, function_type = x.split(',')
+        function_name, function_type = [y.lower() for y in x.split(',')]
         functions.add(Function(function_name, function_type))
     return functions
 
@@ -132,7 +133,7 @@ def get_settings(load=""):
 class ExtensionData:
     def __init__(self):
         # Map of extension -> ExtensionFunction
-        self.function_map: Dict[str, ExtensionFunction] = {}
+        self.function_map: Dict[Function, ExtensionFunction] = {}
         # Map of extension -> ExtensionSetting
         self.settings_map: Dict[str, ExtensionSetting] = {}
 
@@ -195,10 +196,9 @@ class ExtensionData:
         extension_name = extension_name.lower()
 
         added_functions: Set[Function] = set(function_list) - self.base_functions
-        functions_to_add: Dict[str, ExtensionFunction] = {}
+        functions_to_add: Dict[Function, ExtensionFunction] = {}
         for function in added_functions:
-            function_name = function.name.lower()
-            functions_to_add[function_name] = ExtensionFunction(extension_name, function_name, function.type)
+            functions_to_add[function] = ExtensionFunction(extension_name, function.name, function.type)
 
         self.function_map.update(functions_to_add)
 
@@ -232,10 +232,10 @@ This is likely caused by building DuckDB with extensions linked in
 	static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {\n"""
         sorted_function = sorted(self.function_map)
 
-        for function_name in sorted_function:
-            function: ExtensionFunction = self.function_map[function_name]
+        for func in sorted_function:
+            function: ExtensionFunction = self.function_map[func]
             result += "\t{"
-            result += f'"{function_name}", "{function.extension}", "{function.type}"'
+            result += f'"{function.name}", "{function.extension}", "{function.type}"'
             result += "},\n"
         result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
         return result
