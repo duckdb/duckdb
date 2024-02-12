@@ -482,7 +482,7 @@ void ScanStructure::AdvancePointers() {
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
                                  const SelectionVector &sel_vector, const idx_t count, const idx_t col_no) {
-	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector);
+	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector, nullptr);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
@@ -849,7 +849,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		auto &vector = result.data[left_column_count + i];
 		const auto output_col_idx = output_columns[i];
 		D_ASSERT(vector.GetType() == layout.GetTypes()[output_col_idx]);
-		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector);
+		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector, nullptr);
 	}
 }
 
