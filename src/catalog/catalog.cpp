@@ -570,6 +570,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 			if (lookup_result.first.empty()) {
 				break;
 			}
+			extension_name = lookup_result.first;
 			auto function_type = ConvertFunctionType(lookup_result.second);
 			if (type == function_type) {
 				// Found the function in an extension and it matches the type that we're looking for.
