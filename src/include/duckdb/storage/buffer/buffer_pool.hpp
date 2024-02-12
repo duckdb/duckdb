@@ -78,6 +78,9 @@ protected:
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 protected:
+	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
+	constexpr static idx_t INSERT_INTERVAL = DEFAULT_STANDARD_VECTOR_SIZE;
+
 	//! The lock for changing the memory limit
 	mutex limit_lock;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
@@ -87,10 +90,7 @@ protected:
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
-	//! This is also the total number of unpinned buffers.
-	atomic<idx_t> unpinned_buffers;
-	//! Total number of buffers that have ever been pinned.
-	atomic<idx_t> pinned_buffers;
+	atomic<idx_t> evict_queue_insertions;
 	//! Whether a queue purge is currently active
 	atomic<bool> purge_active;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
