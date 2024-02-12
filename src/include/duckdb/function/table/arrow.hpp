@@ -86,6 +86,8 @@ public:
 
 public:
 	ArrowScanLocalState &state;
+	// Hold ownership over the Arrow Arrays owned by DuckDB to allow for zero-copy
+	shared_ptr<ArrowArrayWrapper> owned_data;
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
 	// Cache the (optional) dictionary of this array
 	unique_ptr<Vector> dictionary;
@@ -106,6 +108,10 @@ public:
 		// Note: dictionary is not reset
 		// the dictionary should be the same for every array scanned of this column
 		run_end_encoding.Reset();
+		for (auto &child : children) {
+			child.second->Reset();
+		}
+		dictionary.reset();
 	}
 };
 
@@ -117,9 +123,6 @@ public:
 public:
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
-	// This vector hold the Arrow Vectors owned by DuckDB to allow for zero-copy
-	// Note that only DuckDB can release these vectors
-	unordered_map<idx_t, shared_ptr<ArrowArrayWrapper>> arrow_owned_data;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;

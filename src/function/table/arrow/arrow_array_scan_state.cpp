@@ -1,4 +1,6 @@
 #include "duckdb/function/table/arrow.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/types/arrow_aux_data.hpp"
 
 namespace duckdb {
 
@@ -11,13 +13,18 @@ ArrowArrayScanState &ArrowArrayScanState::GetChild(idx_t child_idx) {
 		auto child_p = make_uniq<ArrowArrayScanState>(state);
 		auto &child = *child_p;
 		children.emplace(std::make_pair(child_idx, std::move(child_p)));
+		// Propagate down the ownership, for dictionaries in children
+		child.owned_data = owned_data;
 		return child;
 	}
 	return *it->second;
 }
 
 void ArrowArrayScanState::AddDictionary(unique_ptr<Vector> dictionary_p) {
-	this->dictionary = std::move(dictionary_p);
+	dictionary = std::move(dictionary_p);
+	D_ASSERT(owned_data);
+	// Make sure the data referenced by the dictionary stays alive
+	dictionary->GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(owned_data));
 }
 
 bool ArrowArrayScanState::HasDictionary() const {
