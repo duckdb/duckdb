@@ -278,6 +278,8 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
+	PrintMsg("ODBC Driver Installer", "This program will install the DuckDB ODBC driver", 0);
+
 	char *parameters = NULL;
 	if (!IsUserAnAdmin()) {
 		CopyParameters(argc, argv, &parameters);
