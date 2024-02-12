@@ -288,6 +288,7 @@ BOOL INSTAPI ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attribut
 	}
 
 	if (!SQLWritePrivateProfileString(data.dsn, "allow_unsigned_extensions", "false", "odbc.ini")) {
+		printf("Error writing allow_unsigned_extensions configuration data to registry\n");
 		rc = FALSE;
 		if (parent)
 			MessageBox(parent, "Error writing allow_unsigned_extensions configuration data to registry", NULL, MB_ICONERROR);
