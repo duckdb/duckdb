@@ -49,7 +49,7 @@ public:
 
 class StringValueResult : public ScannerResult {
 public:
-	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
+	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, shared_ptr<CSVBufferHandle> buffer_handle,
 	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
 	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
 	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
@@ -95,6 +95,9 @@ public:
 	unsafe_unique_array<bool> projected_columns;
 	bool projecting_columns = false;
 	idx_t chunk_col_id = 0;
+
+	//! We must ensure that we keep the buffers alive until processing the query result
+	vector<shared_ptr<CSVBufferHandle>> buffer_handles;
 
 	//! If the current row has an error, we have to skip it
 	bool ignore_current_row = false;
@@ -185,7 +188,7 @@ private:
 	vector<LogicalType> types;
 
 	//! Pointer to the previous buffer handle, necessary for overbuffer values
-	unique_ptr<CSVBufferHandle> previous_buffer_handle;
+	shared_ptr<CSVBufferHandle> previous_buffer_handle;
 };
 
 } // namespace duckdb
