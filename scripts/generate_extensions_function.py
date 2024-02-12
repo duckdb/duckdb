@@ -42,13 +42,8 @@ class ExtensionSetting(NamedTuple):
 
 
 def check_prerequisites():
-    if not os.path.isfile(EXTENSIONS_PATH):
-        print(
-            "please run `make extension_configuration` with the desired extension configuration before running the script"
-        )
-        exit(1)
-    if not os.path.isfile(DUCKDB_PATH):
-        print("please run `make release` with the desired extension configuration before running the script")
+    if not os.path.isfile(EXTENSIONS_PATH) or not os.path.isfile(DUCKDB_PATH):
+        print("please run 'DISABLE_BUILTIN_EXTENSIONS=1 BUILD_ALL_EXT=1 make release'")
         exit(1)
 
 
@@ -204,29 +199,28 @@ This is likely caused by building DuckDB with extensions linked in
 
     def export_functions(self) -> str:
         result = """
-    static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
-        """
+	static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {\n"""
         sorted_function = sorted(self.function_map)
 
         for function_name in sorted_function:
             function: ExtensionFunction = self.function_map[function_name]
-            result += "    {"
+            result += "\t\t{"
             result += f'"{function_name}", "{function.extension}", "{function.type}"'
-            result += "}, \n"
-        result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
+            result += "},\n"
+        result += "\t}; // END_OF_EXTENSION_FUNCTIONS\n"
         return result
 
     def export_settings(self) -> str:
         result = """
-    static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
-        """
+	static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {\n"""
         sorted_settings = sorted(self.settings_map)
 
         for settings_name in sorted_settings:
-            result += "    {"
-            result += f'"{settings_name.lower()}", "{self.settings_map[settings_name]}"'
-            result += "}, \n"
-        result += "}; // END_OF_EXTENSION_SETTINGS\n"
+            setting: ExtensionSetting = self.settings_map[settings_name]
+            result += "\t\t{"
+            result += f'"{settings_name.lower()}", "{setting.extension}"'
+            result += "},\n"
+        result += "\t}; // END_OF_EXTENSION_SETTINGS\n"
         return result
 
 
