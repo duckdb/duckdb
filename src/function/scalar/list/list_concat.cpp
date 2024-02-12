@@ -55,13 +55,13 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 		if (lhs_data.validity.RowIsValid(lhs_list_index)) {
 			const auto &lhs_entry = lhs_entries[lhs_list_index];
 			result_entries[i].length += lhs_entry.length;
-			ListVector::Append(result, lhs_child, *lhs_child_data.sel, lhs_entry.offset + lhs_entry.length,
+			ListVector::Append(result, lhs_child, lhs_entry.offset + lhs_entry.length,
 			                   lhs_entry.offset);
 		}
 		if (rhs_data.validity.RowIsValid(rhs_list_index)) {
 			const auto &rhs_entry = rhs_entries[rhs_list_index];
 			result_entries[i].length += rhs_entry.length;
-			ListVector::Append(result, rhs_child, *rhs_child_data.sel, rhs_entry.offset + rhs_entry.length,
+			ListVector::Append(result, rhs_child, rhs_entry.offset + rhs_entry.length,
 			                   rhs_entry.offset);
 		}
 		offset += result_entries[i].length;
