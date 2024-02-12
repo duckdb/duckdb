@@ -154,7 +154,7 @@ static BOOL RemoveMyDriver(const char *drivername) {
 }
 
 static void CreateAttributeString(char *attrs, size_t len, const char *dsn) {
-	snprintf(attrs, len, "DSN=%s;Database=:memory:;", dsn);
+	snprintf(attrs, len, "DSN=%s;Database=:memory:;access_mode=read_only;allow_unsigned_extensions=false;", dsn);
 
 	for (; *attrs; attrs++) {
 		if (*attrs == ';') {
