@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_ship_mode.benchmark
-# description: benchmark ingestion of ship_mode
-# group: [csv]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=ship_mode
-format=csv
-

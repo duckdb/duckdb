@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/parquet/ingest_catalog_page.benchmark
-# description: benchmark ingestion of catalog_page
-# group: [parquet]
-
-template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion_in_memory.benchmark.in
-table_name=catalog_page
-format=parquet

@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/parquet/ingest_call_center.benchmark
-# description: benchmark ingestion of call_center
-# group: [parquet]
-
-template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion_in_memory.benchmark.in
-table_name=call_center
-format=parquet

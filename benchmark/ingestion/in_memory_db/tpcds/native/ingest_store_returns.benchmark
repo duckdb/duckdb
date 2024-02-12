@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/native/ingest_store_returns.benchmark
-# description: benchmark ingestion of store_returns
-# group: [native]
-
-template benchmark/ingestion/in_memory_db/tpcds/native/tpcds_ingest_native.benchmark.in
-table_name=store_returns
-format=native

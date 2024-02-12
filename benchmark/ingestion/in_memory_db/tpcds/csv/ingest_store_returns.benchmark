@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/csv/ingest_store_returns.benchmark
-# description: benchmark ingestion of store_returns
-# group: [csv]
-
-template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion_in_memory.benchmark.in
-table_name=store_returns
-format=csv

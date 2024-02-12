@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/native/ingest_income_band.benchmark
-# description: benchmark ingestion of income_band
-# group: [native]
-
-template benchmark/ingestion/in_memory_db/tpcds/native/tpcds_ingest_native.benchmark.in
-table_name=income_band
-format=native

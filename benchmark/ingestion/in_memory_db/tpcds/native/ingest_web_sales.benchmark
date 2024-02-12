@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/native/ingest_web_sales.benchmark
-# description: benchmark ingestion of web_sales
-# group: [native]
-
-template benchmark/ingestion/in_memory_db/tpcds/native/tpcds_ingest_native.benchmark.in
-table_name=web_sales
-format=native

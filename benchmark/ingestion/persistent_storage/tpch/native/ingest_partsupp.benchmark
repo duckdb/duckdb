@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpch/native/ingest_partsupp.benchmark
-# description: benchmark ingestion of partsupp
-# group: [native]
-
-template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
-table_name=partsupp
-format=native

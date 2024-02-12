@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpch/csv/ingest_region.benchmark
-# description: benchmark ingestion of region
-# group: [csv]
-
-template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
-table_name=region
-format=csv

@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_customer_address.benchmark
-# description: benchmark ingestion of customer_address
-# group: [csv]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=customer_address
-format=csv
-

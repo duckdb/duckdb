@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/parquet/ingest_customer_address.benchmark
-# description: benchmark ingestion of customer_address
-# group: [parquet]
-
-template benchmark/ingestion/in_memory_db/tpcds/tpcds_ingestion_in_memory.benchmark.in
-table_name=customer_address
-format=parquet

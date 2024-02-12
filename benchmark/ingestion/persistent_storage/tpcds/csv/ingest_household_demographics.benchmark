@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/csv/ingest_household_demographics.benchmark
-# description: benchmark ingestion of household_demographics
-# group: [csv]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=household_demographics
-format=csv
-

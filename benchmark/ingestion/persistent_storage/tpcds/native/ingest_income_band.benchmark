@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_income_band.benchmark
-# description: benchmark ingestion of income_band
-# group: [native]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=income_band
-format=native
-

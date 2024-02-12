@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_date_dim.benchmark
-# description: benchmark ingestion of date_dim
-# group: [parquet]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=date_dim
-format=parquet
-

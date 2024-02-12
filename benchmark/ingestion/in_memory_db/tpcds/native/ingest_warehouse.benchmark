@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpcds/native/ingest_warehouse.benchmark
-# description: benchmark ingestion of warehouse
-# group: [native]
-
-template benchmark/ingestion/in_memory_db/tpcds/native/tpcds_ingest_native.benchmark.in
-table_name=warehouse
-format=native

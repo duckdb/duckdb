@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpch/parquet/ingest_region.benchmark
-# description: benchmark ingestion of region
-# group: [parquet]
-
-template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
-table_name=region
-format=parquet

@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/in_memory_db/tpch/native/ingest_nation.benchmark
-# description: benchmark ingestion of nation
-# group: [native]
-
-template benchmark/ingestion/in_memory_db/tpch/native/tpch_ingest_native.benchmark.in
-table_name=nation
-format=native

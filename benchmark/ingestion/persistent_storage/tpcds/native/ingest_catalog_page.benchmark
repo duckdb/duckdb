@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_catalog_page.benchmark
-# description: benchmark ingestion of catalog_page
-# group: [native]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=catalog_page
-format=native
-

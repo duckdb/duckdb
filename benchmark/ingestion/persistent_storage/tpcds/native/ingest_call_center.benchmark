@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/native/ingest_call_center.benchmark
-# description: benchmark ingestion of call_center
-# group: [native]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=call_center
-format=native
-

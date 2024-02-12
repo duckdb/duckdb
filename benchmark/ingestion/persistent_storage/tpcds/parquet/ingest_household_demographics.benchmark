@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_household_demographics.benchmark
-# description: benchmark ingestion of household_demographics
-# group: [parquet]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=household_demographics
-format=parquet
-

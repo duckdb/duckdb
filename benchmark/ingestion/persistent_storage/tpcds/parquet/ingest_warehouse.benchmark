@@ -1,8 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpcds/parquet/ingest_warehouse.benchmark
-# description: benchmark ingestion of warehouse
-# group: [parquet]
-
-template benchmark/ingestion/persistent_storage/tpcds/tpcds_ingestion_persistent.benchmark.in
-table_name=warehouse
-format=parquet
-

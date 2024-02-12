@@ -1,7 +1,0 @@
-# name: benchmark/ingestion/persistent_storage/tpch/parquet/ingest_supplier.benchmark
-# description: benchmark ingestion of supplier
-# group: [parquet]
-
-template benchmark/ingestion/persistent_storage/tpch/tpch_ingestion_persistent.benchmark.in
-table_name=supplier
-format=parquet
