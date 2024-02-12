@@ -4,6 +4,7 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
+ds = pytest.importorskip("pyarrow.dataset")
 np = pytest.importorskip("numpy")
 pd = pytest.importorskip("pandas")
 import datetime
@@ -153,6 +154,25 @@ class TestArrowDictionary(object):
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 10000
         assert rel.execute().fetchall() == result
+
+    def test_dictionary_lifetime(self, duckdb_cursor):
+        tables = []
+        for i in range(100):
+            input = []
+            for i in range(17000):
+                if i % 3 == 0:
+                    input.append('ABCD')
+                elif i % 3 == 1:
+                    input.append('FOOO')
+                else:
+                    input.append('BARR')
+            array = pa.array(input, type=pa.dictionary(pa.int16(), pa.string()))
+            tables.append(pa.table([array], names=["x"]))
+
+        x = ds.dataset(tables)
+        res = duckdb_cursor.sql("select * from x").fetchall()
+        # TODO: test result
+
 
     def test_dictionary_batches_parallel(self, duckdb_cursor):
         duckdb_cursor.execute("PRAGMA threads=4")
