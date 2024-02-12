@@ -35,10 +35,44 @@ class ExtensionFunction(NamedTuple):
     name: str
     type: str
 
+    def create_map(input: List[Tuple[str, str, str]]) -> Dict[str, "ExtensionFunction"]:
+        output: Dict[str, "ExtensionFunction"] = {}
+        for x in input:
+            output[x[0]] = ExtensionFunction(x[1], x[0], x[2])
+        return output
+
 
 class ExtensionSetting(NamedTuple):
     extension: str
     name: str
+
+    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionSetting"]:
+        output: Dict[str, "ExtensionSetting"] = {}
+        for x in input:
+            output[x[0]] = ExtensionSetting(x[1], x[0])
+        return output
+
+
+class ExtensionCopyFunction(NamedTuple):
+    extension: str
+    name: str
+
+    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionCopyFunction"]:
+        output: Dict[str, "ExtensionCopyFunction"] = {}
+        for x in input:
+            output[x[0]] = ExtensionCopyFunction(x[1], x[0])
+        return output
+
+
+class ExtensionType(NamedTuple):
+    extension: str
+    name: str
+
+    def create_map(input: List[Tuple[str, str]]) -> Dict[str, "ExtensionType"]:
+        output: Dict[str, "ExtensionType"] = {}
+        for x in input:
+            output[x[0]] = ExtensionType(x[1], x[0])
+        return output
 
 
 def check_prerequisites():
@@ -172,14 +206,10 @@ class ExtensionData:
         parsed_entries = parse_extension_entries(HEADER_PATH)
         if self.function_map != parsed_entries['functions']:
             print("Function map mismatches:")
-            print("Found in " + str(DUCKDB_PATH) + ": " + str(sorted(self.function_map)) + "\n")
-            print("Parsed from extension_entries.hpp: " + str(parsed_entries['functions']) + "\n")
             print_map_diff(self.function_map, parsed_entries['functions'])
             exit(1)
         if self.settings_map != parsed_entries['settings']:
             print("Settings map mismatches:")
-            print("Found: " + str(self.settings_map) + "\n")
-            print("Parsed from extension_entries.hpp: " + str(parsed_entries['settings']) + "\n")
             print_map_diff(self.settings_map, parsed_entries['settings'])
             exit(1)
 
@@ -233,25 +263,40 @@ def get_slice_of_file(var_name, file_str):
 
 # Parses the extension_entries.hpp file
 def parse_extension_entries(file_path):
+    def parse_contents(input) -> tuple:
+        # Split the string by comma and remove any leading or trailing spaces
+        elements = input.split(",")
+        # Strip any leading or trailing spaces and surrounding double quotes from each element
+        elements = [element.strip().strip('"') for element in elements]
+        return elements
+
     file = open(file_path, 'r')
-    pattern = re.compile("{\"(.*?)\", \"(.*?)\"}[,}\n]")
+    pattern = re.compile("{(\".*\"(?:, )?)}[,}\n]")
     file_blob = file.read()
 
     # Get the extension functions
     ext_functions_file_blob = get_slice_of_file("EXTENSION_FUNCTIONS", file_blob)
-    cur_function_map = dict(pattern.findall(ext_functions_file_blob))
+    res = pattern.findall(ext_functions_file_blob)
+    res = [parse_contents(x) for x in res]
+    cur_function_map = ExtensionFunction.create_map(res)
 
     # Get the extension settings
     ext_settings_file_blob = get_slice_of_file("EXTENSION_SETTINGS", file_blob)
-    cur_settings_map = dict(pattern.findall(ext_settings_file_blob))
+    res = pattern.findall(ext_settings_file_blob)
+    res = [parse_contents(x) for x in res]
+    cur_settings_map = ExtensionSetting.create_map(res)
 
     # Get the extension types
     ext_copy_functions_blob = get_slice_of_file("EXTENSION_COPY_FUNCTIONS", file_blob)
-    cur_copy_functions_map = dict(pattern.findall(ext_copy_functions_blob))
+    res = pattern.findall(ext_copy_functions_blob)
+    res = [parse_contents(x) for x in res]
+    cur_copy_functions_map = ExtensionCopyFunction.create_map(res)
 
     # Get the extension types
     ext_types_file_blob = get_slice_of_file("EXTENSION_TYPES", file_blob)
-    cur_types_map = dict(pattern.findall(ext_types_file_blob))
+    res = pattern.findall(ext_types_file_blob)
+    res = [parse_contents(x) for x in res]
+    cur_types_map = ExtensionType.create_map(res)
 
     return {
         'functions': cur_function_map,
@@ -262,8 +307,9 @@ def parse_extension_entries(file_path):
 
 
 def print_map_diff(d1, d2):
-    s1 = set(d1.items())
-    s2 = set(d2.items())
+    s1 = sorted(set(d1.items()))
+    s2 = sorted(set(d2.items()))
+
     diff = str(s1 ^ s2)
     print("Diff between maps: " + diff + "\n")
 

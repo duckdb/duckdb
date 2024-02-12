@@ -55,7 +55,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_array_length", "json", "scalar"},
     {"json_contains", "json", "scalar"},
     {"json_deserialize_sql", "json", "scalar"},
-    {"json_execute_serialized_sql", "json", "table"},
+    {"json_execute_serialized_sql", "json", "pragma"},
     {"json_extract", "json", "scalar"},
     {"json_extract_path", "json", "scalar"},
     {"json_extract_path_text", "json", "scalar"},
