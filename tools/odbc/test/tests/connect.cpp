@@ -182,6 +182,12 @@ static void runSQLInstallerError(bool ret, std::string errorMessage) {
 	case ODBC_ERROR_INVALID_STR:
 		std::cerr << "ODBC_ERROR_INVALID_STR\n";
 		break;
+	case ODBC_ERROR_INVALID_NAME:
+		std::cerr << "ODBC_ERROR_INVALID_NAME\n";
+		break;
+	case ODBC_ERROR_INVALID_KEYWORD_VALUE:
+		std::cerr << "ODBC_ERROR_INVALID_KEYWORD_VALUE\n";
+		break;
 	}
 	std::cerr << "Error: " << errorCode << "\n";
 	std::cerr << "Message: " << msgText << "\n";
@@ -196,19 +202,14 @@ static char *ConvertStringToChar(const std::string &str) {
 
 static char *CreateAttributeString(const std::string &dsn, const std::string& driverName, const std::string &database, const std::string &access_mode, const std::string &allow_unsigned_extensions) {
 	std::ostringstream oss;
-	oss << "DSN = " << dsn << ";";
-	oss << "Driver = " << driverName << ";";
-	oss << "database = " << database << ";";
-	oss << "access_mode = " << access_mode << ";";
-	oss << "allow_unsigned_extensions = " << allow_unsigned_extensions << ";";
+	oss << "DSN=" << dsn << ";\0";
+	oss << "Driver=" << driverName << ";\0";
+	oss << "database=" << database << ";\0";
+	oss << "access_mode=" << access_mode << ";\0";
+	oss << "allow_unsigned_extensions=" << allow_unsigned_extensions << ";\0\0";
 
 	char *attrs = ConvertStringToChar(oss.str());
 
-	for (; *attrs; attrs++) {
-		if (*attrs == ';') {
-			*attrs = '\0';
-		}
-	}
 	return attrs;
 }
 
@@ -216,13 +217,18 @@ static BOOL AlterDSN(const std::string &dsn, const std::string& driverName, cons
 	char *attrs = CreateAttributeString(dsn, driverName, database, access_mode, allow_unsigned_extensions);
 
 	char *driverName_c = ConvertStringToChar(driverName);
+	std::cout << ">>" << driverName_c << "<<" << std::endl;
 
-	/* Remove the DSN if it already exists */
-	SQLConfigDataSource(nullptr, ODBC_REMOVE_SYS_DSN, driverName_c, attrs);
+//	/* Remove the DSN if it already exists */
+//	if(!SQLConfigDataSource(nullptr, ODBC_REMOVE_SYS_DSN, driverName_c, attrs)) {
+//		runSQLInstallerError(false, "ODBC_REMOVE_SYS_DSN");
+//		return false;
+//
+//	}
 
 	/* then create a new DSN */
-	if (!SQLConfigDataSource(nullptr, ODBC_ADD_SYS_DSN, driverName_c, attrs)) {
-	    runSQLInstallerError(false, "SQLConfigDataSource");
+	if (!SQLConfigDataSource(nullptr, ODBC_CONFIG_SYS_DSN, driverName_c, attrs)) {
+	    runSQLInstallerError(false, "ODBC_CONFIG_SYS_DSN");
 		return false;
 	}
 	return true;
