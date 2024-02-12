@@ -552,6 +552,7 @@ public:
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
+		auto other_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 		result->max_threads = ParquetScanMaxThreads(context, input.bind_data.get());
 		if (input.CanRemoveFilterColumns()) {
 			result->projection_ids = input.projection_ids;
@@ -628,7 +629,10 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return std::max(data.initial_file_row_groups, idx_t(1)) * data.files.size();
+		if (data.files.size() > 1) {
+			return TaskScheduler::GetScheduler(context).NumberOfThreads();
+		}
+		return MaxValue(data.initial_file_row_groups, (idx_t)1);
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files
