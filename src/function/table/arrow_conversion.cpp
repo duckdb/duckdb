@@ -588,9 +588,6 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
-	if (parent_offset != 0) {
-		(void)array_state;
-	}
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
 
@@ -1152,13 +1149,10 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 
 		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
 		if (!array_state.owned_data) {
-			auto arrow_data = make_shared<ArrowArrayWrapper>();
-			arrow_data->arrow_array = scan_state.chunk->arrow_array;
-			scan_state.chunk->arrow_array.release = nullptr;
-			array_state.owned_data = std::move(arrow_data);
+			array_state.owned_data = scan_state.chunk;
 		}
-
 		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+
 		auto array_physical_type = GetArrowArrayPhysicalType(arrow_type);
 
 		switch (array_physical_type) {

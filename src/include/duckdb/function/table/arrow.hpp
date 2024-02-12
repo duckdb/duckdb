@@ -112,12 +112,13 @@ public:
 			child.second->Reset();
 		}
 		owned_data.reset();
+		dictionary.reset();
 	}
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
 public:
-	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
+	explicit ArrowScanLocalState() : chunk() {
 	}
 
 public:
