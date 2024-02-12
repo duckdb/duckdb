@@ -204,10 +204,10 @@ This is likely caused by building DuckDB with extensions linked in
 
         for function_name in sorted_function:
             function: ExtensionFunction = self.function_map[function_name]
-            result += "\t\t{"
+            result += "\t{"
             result += f'"{function_name}", "{function.extension}", "{function.type}"'
             result += "},\n"
-        result += "\t}; // END_OF_EXTENSION_FUNCTIONS\n"
+        result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
         return result
 
     def export_settings(self) -> str:
@@ -217,10 +217,10 @@ This is likely caused by building DuckDB with extensions linked in
 
         for settings_name in sorted_settings:
             setting: ExtensionSetting = self.settings_map[settings_name]
-            result += "\t\t{"
+            result += "\t{"
             result += f'"{settings_name.lower()}", "{setting.extension}"'
             result += "},\n"
-        result += "\t}; // END_OF_EXTENSION_SETTINGS\n"
+        result += "}; // END_OF_EXTENSION_SETTINGS\n"
         return result
 
 
