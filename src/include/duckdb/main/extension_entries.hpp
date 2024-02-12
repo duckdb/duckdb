@@ -209,6 +209,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_storage_connection_string", "azure"},
+    {"binary_as_string", "parquet"},
     {"calendar", "icu"},
     {"force_download", "httpfs"},
     {"http_keep_alive", "httpfs"},

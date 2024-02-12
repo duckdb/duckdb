@@ -89,17 +89,18 @@ public:
 
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
-	static pair<string, string> FindExtensionInFunctionEntries(const string &name,
-	                                                           const ExtensionFunctionEntry (&entries)[N]) {
+	static vector<pair<string, string>> FindExtensionInFunctionEntries(const string &name,
+	                                                                   const ExtensionFunctionEntry (&entries)[N]) {
 		auto lcase = StringUtil::Lower(name);
 
-		auto it = std::find_if(entries, entries + N,
-		                       [&](const ExtensionFunctionEntry &element) { return element.name == lcase; });
-
-		if (it != entries + N && it->name == lcase) {
-			return make_pair(it->extension, it->type);
+		vector<pair<string, string>> result;
+		for (idx_t i = 0; i < N; i++) {
+			auto &element = entries[i];
+			if (element.name == lcase) {
+				result.push_back(make_pair(element.extension, element.type));
+			}
 		}
-		return make_pair("", "");
+		return result;
 	}
 
 	//! Lookup a name in an ExtensionEntry list

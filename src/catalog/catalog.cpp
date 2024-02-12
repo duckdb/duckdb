@@ -499,16 +499,17 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
 			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
-			do {
-				if (lookup_result.first.empty()) {
+			if (lookup_result.empty()) {
+				return false;
+			}
+			for (auto &function : lookup_result) {
+				auto function_type = ConvertFunctionType(function.second);
+				// FIXME: what if there are two functions with the same name, from different extensions?
+				if (type == function_type) {
+					extension_name = function.first;
 					break;
 				}
-				auto function_type = ConvertFunctionType(lookup_result.second);
-				if (type != function_type) {
-					// FIXME: Do we still want to autoload if the function is recognized?
-					return false;
-				}
-			} while (false);
+			}
 		} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
 		} else if (type == CatalogType::TYPE_ENTRY) {
@@ -567,20 +568,39 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
 		auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
 		do {
-			if (lookup_result.first.empty()) {
+			if (lookup_result.empty()) {
 				break;
 			}
-			extension_name = lookup_result.first;
-			auto function_type = ConvertFunctionType(lookup_result.second);
-			if (type == function_type) {
-				// Found the function in an extension and it matches the type that we're looking for.
+			vector<string> other_types;
+			string extension_for_error;
+			for (auto &function : lookup_result) {
+				auto function_type = ConvertFunctionType(function.second);
+				if (type == function_type) {
+					extension_name = function.first;
+					break;
+				}
+				extension_for_error = function.first;
+				other_types.push_back(CatalogTypeToString(function_type));
+			}
+			if (!extension_name.empty()) {
 				break;
 			}
-			auto error = CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists "
-			                              "in the %s extension, but it's of a different type, namely %s",
-			                              CatalogTypeToString(type), entry_name, extension_name,
-			                              CatalogTypeToString(function_type));
-			return error;
+			if (other_types.size() == 1) {
+				auto &function_type = other_types[0];
+				auto error =
+				    CatalogException("%s with name \"%s\" is not in the catalog, a function by this name exists "
+				                     "in the %s extension, but it's of a different type, namely %s",
+				                     CatalogTypeToString(type), entry_name, extension_for_error, function_type);
+				return error;
+			} else {
+				D_ASSERT(!other_types.empty());
+				auto list_of_types = StringUtil::Join(other_types, ", ");
+				auto error =
+				    CatalogException("%s with name \"%s\" is not in the catalog, functions with this name exist "
+				                     "in the %s extension, but they are of different types, namely %s",
+				                     CatalogTypeToString(type), entry_name, extension_for_error, list_of_types);
+				return error;
+			}
 		} while (false);
 	} else if (type == CatalogType::TYPE_ENTRY) {
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
