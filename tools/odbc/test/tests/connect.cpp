@@ -202,13 +202,18 @@ static char *ConvertStringToChar(const std::string &str) {
 
 static char *CreateAttributeString(const std::string &dsn, const std::string& driverName, const std::string &database, const std::string &access_mode, const std::string &allow_unsigned_extensions) {
 	std::ostringstream oss;
-	oss << "DSN=" << dsn << ";\0";
-	oss << "Driver=" << driverName << ";\0";
-	oss << "database=" << database << ";\0";
-	oss << "access_mode=" << access_mode << ";\0";
-	oss << "allow_unsigned_extensions=" << allow_unsigned_extensions << ";\0\0";
+	oss << "DSN=" << dsn << ";";
+	oss << "database=" << database << ";";
+	oss << "access_mode=" << access_mode << ";";
+	oss << "allow_unsigned_extensions=" << allow_unsigned_extensions << ";";
 
 	char *attrs = ConvertStringToChar(oss.str());
+
+	for (int i = 0; attrs[i]; i++) {
+		if (attrs[i] == ';') {
+			attrs[i] = '\0';
+		}
+	}
 
 	return attrs;
 }
