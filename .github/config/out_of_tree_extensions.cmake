@@ -81,7 +81,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 078cd16fbd9a4ff96a71c6f5aafc27343e087cbb
+        GIT_TAG c1343464ef4397665b858db9c193d33fac591b1c
         )
 
 ################# SUBSTRAIT

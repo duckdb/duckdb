@@ -7,7 +7,7 @@ json,,,
 parquet,,,
 tpcds,,,
 tpch,,,
-sqlite_scanner,https://github.com/duckdb/sqlite_scanner,078cd16fbd9a4ff96a71c6f5aafc27343e087cbb,
+sqlite_scanner,https://github.com/duckdb/sqlite_scanner,c1343464ef4397665b858db9c193d33fac591b1c,
 postgres_scanner,https://github.com/duckdb/postgres_scanner,883a8f1a8a487264855a5166f7df1f46ad386434,
 substrait,https://github.com/duckdb/substrait,e75ba6a9a43d75d8c72ecc38e6f751fd8e3474a0,no-windows
 arrow,https://github.com/duckdb/arrow,9e10240da11f61ea7fbfe3fc9988ffe672ccd40f,no-windows
