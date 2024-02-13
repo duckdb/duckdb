@@ -252,9 +252,17 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					left->numerator_filter_strength *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 				} else {
 					// cross product.
-					it->relations.insert(find_table);
-					it->numerator_relations.insert(find_table);
-					// no denominator updates.
+					auto left = it;
+					auto right = FindMatchingSubGraph(*it, find_table, next_subgraph, subgraphs.end());
+					if (right != subgraphs.end()) {
+						for (auto &rel : right->numerator_relations) {
+							left->relations.insert(rel);
+							left->numerator_relations.insert(rel);
+						}
+					} else {
+						it->relations.insert(find_table);
+						it->numerator_relations.insert(find_table);
+					}
 				}
 				found_match = true;
 				break;
