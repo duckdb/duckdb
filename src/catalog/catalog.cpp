@@ -491,13 +491,40 @@ static CatalogType ConvertFunctionType(const string &function_type) {
 	throw InternalException("Unrecognized function type: '%s'", function_type);
 }
 
+static bool IsAutoloadableFunction(CatalogType type) {
+	return (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
+	        type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY);
+}
+
+static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
+	if (type_a == type_b) {
+		// Types are same
+		return true;
+	}
+	if (!IsAutoloadableFunction(type_a)) {
+		D_ASSERT(IsAutoloadableFunction(type_b));
+		// Make sure that `type_a` is an autoloadable function
+		return CompareCatalogTypes(type_b, type_a);
+	}
+	if (type_a == CatalogType::TABLE_FUNCTION_ENTRY) {
+		// These are all table functions
+		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::PRAGMA_FUNCTION_ENTRY;
+	} else if (type_a == CatalogType::SCALAR_FUNCTION_ENTRY) {
+		// These are all scalar functions
+		return type_b == CatalogType::MACRO_ENTRY;
+	} else if (type_a == CatalogType::PRAGMA_FUNCTION_ENTRY) {
+		// These are all table functions
+		return type_b == CatalogType::TABLE_MACRO_ENTRY || type_b == CatalogType::TABLE_FUNCTION_ENTRY;
+	}
+	return false;
+}
+
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(db);
 	if (dbconfig.options.autoload_known_extensions) {
 		string extension_name;
-		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
-		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
+		if (IsAutoloadableFunction(type)) {
 			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
 			if (lookup_result.empty()) {
 				return false;
@@ -505,7 +532,7 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 			for (auto &function : lookup_result) {
 				auto function_type = ConvertFunctionType(function.second);
 				// FIXME: what if there are two functions with the same name, from different extensions?
-				if (type == function_type) {
+				if (CompareCatalogTypes(type, function_type)) {
 					extension_name = function.first;
 					break;
 				}
@@ -575,7 +602,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 			string extension_for_error;
 			for (auto &function : lookup_result) {
 				auto function_type = ConvertFunctionType(function.second);
-				if (type == function_type) {
+				if (CompareCatalogTypes(type, function_type)) {
 					extension_name = function.first;
 					break;
 				}
