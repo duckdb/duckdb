@@ -316,7 +316,8 @@ unique_ptr<LocalTableFunctionState>
 ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunctionInitInput &input,
                                                GlobalTableFunctionState *global_state_p) {
 	auto &global_state = global_state_p->Cast<ArrowScanGlobalState>();
-	auto result = make_uniq<ArrowScanLocalState>();
+	auto current_chunk = make_uniq<ArrowArrayWrapper>();
+	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters.get();
 	if (input.CanRemoveFilterColumns()) {

@@ -118,7 +118,7 @@ public:
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
 public:
-	explicit ArrowScanLocalState() : chunk() {
+	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
 	}
 
 public:
