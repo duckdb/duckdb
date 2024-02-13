@@ -85,6 +85,12 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Checkout Release
+      shell: bash
+      run: |
+        git config --global --add safe.directory '*'
+        git checkout v0.10.0
+
     - name: Setup DuckDB extension build config
       shell: bash
       run: |
@@ -97,12 +103,6 @@ runs:
       uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
-
-    - name: Checkout Release
-      shell: bash
-      run: |
-        git config --global --add safe.directory '*'
-        git checkout v0.10.0
 
     - name: Set vcpkg env variables
       if: inputs.vcpkg_build == 1
