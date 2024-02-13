@@ -2,6 +2,7 @@
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
+#include "duckdb/common/types/arrow_string_view_type.hpp"
 
 namespace duckdb {
 
@@ -132,7 +133,6 @@ struct ArrowVarcharToStringViewData {
 		idx_t last_offset = 0;
 		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
-
 			if (!format.validity.RowIsValid(source_idx)) {
 				// Null value
 				uint8_t current_bit;
@@ -141,33 +141,21 @@ struct ArrowVarcharToStringViewData {
 				SetNull(append_data, validity_data, current_byte, current_bit);
 				continue;
 			}
-
 			// These two are now the same buffer
-			auto arrow_4byte = append_data.main_buffer.GetData<int32_t>();
-			auto string_data = append_data.main_buffer.GetData<char>();
-			// This is the 16 byte index
-			auto result_idx = append_data.row_count + i - from;
-			auto &string_length = arrow_4byte[result_idx * 4];
-			string_length = ArrowVarcharConverter::GetLength(data[source_idx]);
-
-			if (string_length <= 12) {
+			auto arrow_data = append_data.main_buffer.GetData<arrow_string_view_t>();
+			idx_t string_length = ArrowVarcharConverter::GetLength(data[source_idx]);
+			if (string_length <= arrow_string_view_t::max_inlined_bytes) {
 				//	This string is inlined
 				//  | Bytes 0-3  | Bytes 4-15                            |
 				//  |------------|---------------------------------------|
 				//  | length     | data (padded with 0)                  |
-				memcpy(&string_data[i * 16 + 4], data[source_idx].GetData(), string_length);
+				arrow_data[i] = arrow_string_view_t(string_length, data[source_idx].GetData());
 			} else {
-				//* This string is not inlined, we have to check a different buffer and offsets
+				// This string is not inlined, we have to check a different buffer and offsets
 				//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 				//  |------------|------------|------------|-------------|
 				//  | length     | prefix     | buf. index | offset      |
-				// Copy Prefix
-				memcpy(&string_data[i * 16 + 4], data[source_idx].GetPrefix(), 4);
-				// Produced Data Buffer is always 0
-				arrow_4byte[result_idx * 4 + 2] = 0;
-				// Give Offset
-				arrow_4byte[result_idx * 4 + 3] = last_offset;
-				// Copy data to data buffer
+				arrow_data[i] = arrow_string_view_t(string_length, data[source_idx].GetData(), 0, last_offset);
 				auto current_offset = last_offset + string_length;
 				append_data.aux_buffer.resize(current_offset);
 				memcpy(append_data.aux_buffer.data() + last_offset, data[source_idx].GetData(), string_length);

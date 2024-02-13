@@ -5,6 +5,7 @@
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/types/arrow_string_view_type.hpp"
 
 namespace duckdb {
 
@@ -293,37 +294,6 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 		strings[row_idx] = string_t(cptr, str_len);
 	}
 }
-
-union arrow_string_view_t {
-	struct {
-		int32_t length;
-		char data[12];
-	} inlined;
-
-	struct {
-		int32_t length;
-		char prefix[4];
-		int32_t buffer_index, offset;
-	} ref;
-
-	int32_t Length() const {
-		return inlined.length;
-	}
-	bool IsInline() const {
-		return Length() <= 12;
-	}
-	const char *GetInlineData() const {
-		return IsInline() ? inlined.data : ref.prefix;
-	}
-	int32_t GetBufferIndex() {
-		D_ASSERT(!IsInline());
-		return ref.buffer_index;
-	}
-	int32_t GetOffset() {
-		D_ASSERT(!IsInline());
-		return ref.offset;
-	}
-};
 
 static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array) {
 	auto strings = FlatVector::GetData<string_t>(vector);
