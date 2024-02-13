@@ -41,9 +41,15 @@ class TestDateTimeDateTime(object):
         # positive infinity
         con.execute("select $1, $1 = 'infinity'::TIMESTAMP", [datetime.datetime.max])
         res = con.fetchall()
-        assert res == [(datetime.datetime.max, True)]
+        assert res == [(datetime.datetime.max, False)]
 
         # negative infinity
         con.execute("select $1, $1 = '-infinity'::TIMESTAMP", [datetime.datetime.min])
         res = con.fetchall()
-        assert res == [(datetime.datetime.min, True)]
+        assert res == [(datetime.datetime.min, False)]
+
+    def test_convert_negative_interval(self, duckdb_cursor):
+        res = duckdb_cursor.execute(
+            "SELECT CAST('2023-07-22T11:28:07' AS TIMESTAMP) - CAST('2023-07-23T11:28:07' AS TIMESTAMP)"
+        ).fetchall()
+        assert res == [(datetime.timedelta(days=-1),)]

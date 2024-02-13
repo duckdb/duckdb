@@ -21,6 +21,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
+	this->comment = info.comment;
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {
@@ -63,6 +64,7 @@ unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
 	result->constraints.reserve(constraints.size());
 	std::for_each(constraints.begin(), constraints.end(),
 	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
+	result->comment = comment;
 	return std::move(result);
 }
 
@@ -136,8 +138,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		}
 		if (column.Generated()) {
 			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
-		} else if (column.DefaultValue()) {
-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
+		} else if (column.HasDefaultValue()) {
+			ss << " DEFAULT(" << column.DefaultValue().ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed
@@ -151,19 +153,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 }
 
 string TableCatalogEntry::ToSQL() const {
-	std::stringstream ss;
-
-	ss << "CREATE TABLE ";
-
-	if (schema.name != DEFAULT_SCHEMA) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema.name) << ".";
-	}
-
-	ss << KeywordHelper::WriteOptionallyQuoted(name);
-	ss << ColumnsToSQL(columns, constraints);
-	ss << ";";
-
-	return ss.str();
+	auto create_info = GetInfo();
+	return create_info->ToString();
 }
 
 const ColumnList &TableCatalogEntry::GetColumns() const {

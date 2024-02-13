@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
@@ -28,7 +29,7 @@ BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expr
 
 unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                  BoundCastInfo bound_cast, bool try_cast) {
-	if (expr->return_type == target_type) {
+	if (ExpressionBinder::GetExpressionReturnType(*expr) == target_type) {
 		return expr;
 	}
 	auto &expr_type = expr->return_type;
@@ -100,6 +101,14 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
 	GetCastFunctionInput get_input(context);
 	return AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast);
+}
+
+unique_ptr<Expression> BoundCastExpression::AddArrayCastToList(ClientContext &context, unique_ptr<Expression> expr) {
+	if (expr->return_type.id() != LogicalTypeId::ARRAY) {
+		return expr;
+	}
+	auto &child_type = ArrayType::GetChildType(expr->return_type);
+	return BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::LIST(child_type));
 }
 
 bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {

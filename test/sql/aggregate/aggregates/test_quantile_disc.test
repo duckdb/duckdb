@@ -148,7 +148,7 @@ SELECT quantile_disc('2021-01-01'::TIMESTAMP + interval (r) hour, 0.5) FROM quan
 query I
 SELECT quantile_disc('1990-01-01'::DATE + interval (r) day, 0.5) FROM quantile
 ----
-2003-09-09
+2003-09-09 00:00:00
 
 query I
 SELECT quantile_disc('00:00:00'::TIME + interval (r) second, 0.5) FROM quantile
@@ -181,24 +181,31 @@ NULL
 # Invalid usage
 statement error
 SELECT quantile_disc(r, -1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, 1.1) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, "string") FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, NULL) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r) FROM quantile
+----
 
 statement error
 SELECT quantile_disc(r, 0.1, 50) FROM quantile
+----
 
 statement error
 SELECT quantile_cont(r, q) FROM quantile
+----
 
 statement ok
 pragma threads=4

@@ -1,0 +1,100 @@
+# name: test/sql/storage/vacuum/vacuum_partial_deletes_mixed.test_slow
+# description: Verify that deletes get vacuumed correctly through merging of adjacent row groups
+# group: [vacuum]
+
+load __TEST_DIR__/vacuum_partial_deletes_mixed.db
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers SELECT * FROM range(1000000);
+
+# 1M rows, 128K each is around ~9 row groups
+query I
+SELECT COUNT(DISTINCT row_group_id) > 6 AND COUNT(DISTINCT row_group_id) <= 10 FROM pragma_storage_info('integers')
+----
+true
+
+# mix of deletions
+# we use weird/odd numbers here as well for testing purposes
+# 0..157K - delete every other entry
+query I
+DELETE FROM integers WHERE i%2 AND i<157353;
+----
+78676
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
+----
+921324	493809587024	0	999999
+
+# 157K..433K - delete ALL entries
+query I
+DELETE FROM integers WHERE i>=157353 AND i<433427;
+----
+276074
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
+----
+645250	412260226201	0	999999
+
+# 433K..512K - delete every odd 5K entries
+query I
+DELETE FROM integers WHERE (i//4973)%2=0 AND i>=433427 AND i<512933;
+----
+39784
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
+----
+605466	393365969137	0	999999
+
+# 512K..732K - delete every 7 entries
+query I
+DELETE FROM integers WHERE i%7=0 AND i>=512933 AND i<721377
+----
+29777
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
+----
+575689	374988944702	0	999999
+
+# 732K..910K - delete every 3 entries but based on the hash to make it more random
+query I
+DELETE FROM integers WHERE hash(i)::DOUBLE%3=0 AND i>=721377 AND i<909999
+----
+62853
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
+----
+512836	323738360425	0	999999
+
+# 732K..910K - delete every 2 entries but based on the hash to make it more random
+query I
+DELETE FROM integers WHERE hash(i)::DOUBLE%2=0 AND i>=909999
+----
+89983
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
+----
+422853	237804579942	0	987388
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT COUNT(*), SUM(i), MIN(i), MAX(i) FROM integers
+----
+422853	237804579942	0	987388
+
+# after deleting we have 422K rows left, which should be 4 row groups
+# note that achieving exactly 4 row groups is difficult because of the mixed nature of the deletes
+query I
+SELECT COUNT(DISTINCT row_group_id) >= 4 AND COUNT(DISTINCT row_group_id) <= 7 FROM pragma_storage_info('integers')
+----
+true

@@ -12,6 +12,7 @@ add_library_unity(
   arena_allocator.cpp
   buffer_manager.cpp
   checkpoint_manager.cpp
+  temporary_memory_manager.cpp
   block.cpp
   data_pointer.cpp
   data_table.cpp

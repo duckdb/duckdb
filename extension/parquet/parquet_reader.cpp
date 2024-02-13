@@ -1,47 +1,46 @@
 #include "parquet_reader.hpp"
-#include "parquet_timestamp.hpp"
-#include "parquet_statistics.hpp"
-#include "column_reader.hpp"
 
 #include "boolean_column_reader.hpp"
-#include "row_number_column_reader.hpp"
-#include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
+#include "cast_column_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb.hpp"
 #include "list_column_reader.hpp"
+#include "parquet_crypto.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_statistics.hpp"
+#include "parquet_timestamp.hpp"
+#include "row_number_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
-
 #include "thrift_tools.hpp"
-
-#include "parquet_file_metadata_cache.hpp"
-
-#include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
 
-#include <sstream>
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <sstream>
 
 namespace duckdb {
 
 using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::FileCryptoMetaData;
 using duckdb_parquet::format::FileMetaData;
 using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::SchemaElement;
@@ -49,16 +48,18 @@ using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
+CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle) {
+static shared_ptr<ParquetFileMetadataCache>
+LoadMetadata(Allocator &allocator, FileHandle &file_handle,
+             const shared_ptr<const ParquetEncryptionConfig> &encryption_config) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = CreateThriftProtocol(allocator, file_handle, false);
-	auto &transport = reinterpret_cast<ThriftFileTransport &>(*proto->getTransport());
+	auto file_proto = CreateThriftFileProtocol(allocator, file_handle, false);
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
 		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
@@ -69,25 +70,48 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	buf.zero();
 
 	transport.SetLocation(file_size - 8);
-	transport.read((uint8_t *)buf.ptr, 8);
+	transport.read(buf.ptr, 8);
 
-	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
-		if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
-			throw InvalidInputException("Encrypted Parquet files are not supported for file '%s'", file_handle.path);
+	bool footer_encrypted;
+	if (memcmp(buf.ptr + 4, "PAR1", 4) == 0) {
+		footer_encrypted = false;
+		if (encryption_config) {
+			throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set",
+			                            file_handle.path);
 		}
+	} else if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
+		footer_encrypted = true;
+		if (!encryption_config) {
+			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set",
+			                            file_handle.path);
+		}
+	} else {
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
+
 	// read four-byte footer length from just before the end magic bytes
 	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
 	if (footer_len == 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
 	}
+
 	auto metadata_pos = file_size - (footer_len + 8);
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
 
 	auto metadata = make_uniq<FileMetaData>();
-	metadata->read(proto.get());
+	if (footer_encrypted) {
+		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
+		crypto_metadata->read(file_proto.get());
+		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
+			                            file_handle.path);
+		}
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey());
+	} else {
+		metadata->read(file_proto.get());
+	}
+
 	return make_shared<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
 
@@ -179,6 +203,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		case ConvertedType::DECIMAL:
 			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
 				throw IOException("DECIMAL requires a length and scale specifier!");
+			}
+			if (s_ele.precision > DecimalType::MaxWidth()) {
+				return LogicalType::DOUBLE;
 			}
 			switch (s_ele.type) {
 			case Type::BYTE_ARRAY:
@@ -385,8 +412,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
 	}
 	if (parquet_options.file_row_number) {
-		root_struct_reader.child_readers.push_back(
-		    make_uniq<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
+		file_row_number_idx = root_struct_reader.child_readers.size();
+
+		generated_column_schema.push_back(SchemaElement());
+		root_struct_reader.child_readers.push_back(make_uniq<RowNumberColumnReader>(
+		    *this, LogicalType::BIGINT, generated_column_schema.back(), next_file_idx, 0, 0));
 	}
 
 	return ret;
@@ -396,7 +426,10 @@ void ParquetReader::InitializeSchema() {
 	auto file_meta_data = GetFileMetadata();
 
 	if (file_meta_data->__isset.encryption_algorithm) {
-		throw FormatException("Encrypted Parquet files are not supported");
+		if (file_meta_data->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
+			                            file_name);
+		}
 	}
 	// check if we like this schema
 	if (file_meta_data->schema.size() < 2) {
@@ -429,6 +462,25 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
+ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
+	ParquetColumnDefinition result;
+	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
+
+	const auto &column_def = StructValue::GetChildren(column_value)[1];
+	D_ASSERT(column_def.type().id() == LogicalTypeId::STRUCT);
+
+	const auto children = StructValue::GetChildren(column_def);
+	result.name = StringValue::Get(children[0]);
+	result.type = TransformStringToLogicalType(StringValue::Get(children[1]));
+	string error_message;
+	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
+		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
+		                      result.type.ToString());
+	}
+
+	return result;
+}
+
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       parquet_options(std::move(parquet_options_p)) {
@@ -443,12 +495,12 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-		metadata = LoadMetadata(allocator, *file_handle);
+		metadata = LoadMetadata(allocator, *file_handle, parquet_options.encryption_config);
 	} else {
 		auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-			metadata = LoadMetadata(allocator, *file_handle);
+			metadata = LoadMetadata(allocator, *file_handle, parquet_options.encryption_config);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
@@ -499,6 +551,23 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 		}
 	}
 	return column_stats;
+}
+
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
+	if (parquet_options.encryption_config) {
+		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey());
+	} else {
+		return object.read(&iprot);
+	}
+}
+
+uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+                                 const uint32_t buffer_size) {
+	if (parquet_options.encryption_config) {
+		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey());
+	} else {
+		return iprot.getTransport()->read(buffer, buffer_size);
+	}
 }
 
 const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
@@ -627,7 +696,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
 
-	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader();
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -806,6 +875,11 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	case TableFilterType::IS_NULL:
 		FilterIsNull(v, filter_mask, count);
 		break;
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
+		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
+	} break;
 	default:
 		D_ASSERT(0);
 		break;

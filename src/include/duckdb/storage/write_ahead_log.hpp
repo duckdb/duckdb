@@ -8,15 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/enums/wal_type.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
+#include "duckdb/common/enums/wal_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -34,56 +35,7 @@ class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
-
-class ReplayState {
-public:
-	ReplayState(AttachedDatabase &db, ClientContext &context)
-	    : db(db), context(context), catalog(db.GetCatalog()), deserialize_only(false) {
-	}
-
-	AttachedDatabase &db;
-	ClientContext &context;
-	Catalog &catalog;
-	optional_ptr<TableCatalogEntry> current_table;
-	bool deserialize_only;
-	MetaBlockPointer checkpoint_id;
-
-public:
-	void ReplayEntry(WALType entry_type, BinaryDeserializer &deserializer);
-
-protected:
-	virtual void ReplayCreateTable(BinaryDeserializer &deserializer);
-	void ReplayDropTable(BinaryDeserializer &deserializer);
-	void ReplayAlter(BinaryDeserializer &deserializer);
-
-	void ReplayCreateView(BinaryDeserializer &deserializer);
-	void ReplayDropView(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSchema(BinaryDeserializer &deserializer);
-	void ReplayDropSchema(BinaryDeserializer &deserializer);
-
-	void ReplayCreateType(BinaryDeserializer &deserializer);
-	void ReplayDropType(BinaryDeserializer &deserializer);
-
-	void ReplayCreateSequence(BinaryDeserializer &deserializer);
-	void ReplayDropSequence(BinaryDeserializer &deserializer);
-	void ReplaySequenceValue(BinaryDeserializer &deserializer);
-
-	void ReplayCreateMacro(BinaryDeserializer &deserializer);
-	void ReplayDropMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateTableMacro(BinaryDeserializer &deserializer);
-	void ReplayDropTableMacro(BinaryDeserializer &deserializer);
-
-	void ReplayCreateIndex(BinaryDeserializer &deserializer);
-	void ReplayDropIndex(BinaryDeserializer &deserializer);
-
-	void ReplayUseTable(BinaryDeserializer &deserializer);
-	void ReplayInsert(BinaryDeserializer &deserializer);
-	void ReplayDelete(BinaryDeserializer &deserializer);
-	void ReplayUpdate(BinaryDeserializer &deserializer);
-	void ReplayCheckpoint(BinaryDeserializer &deserializer);
-};
+class WriteAheadLogDeserializer;
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -106,6 +58,12 @@ public:
 	int64_t GetWALSize();
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
+
+	BufferedFileWriter &GetWriter() {
+		return *writer;
+	}
+
+	void WriteVersion();
 
 	virtual void WriteCreateTable(const TableCatalogEntry &entry);
 	void WriteDropTable(const TableCatalogEntry &entry);

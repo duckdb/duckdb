@@ -242,7 +242,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        python setup.py install --user
+        pip install --use-pep517 . --user
         cd ../..
 
     - name: Run New Version
@@ -262,7 +262,7 @@ jobs:
       run: |
         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
-        python setup.py install --user
+        pip install --use-pep517 . --user
         cd ../../..
 
     - name: Run Current Version
@@ -321,13 +321,13 @@ jobs:
         cp -r benchmark duckdb/
 
     - name: Regression Test IMDB
-      continue-on-error: true
+      if: always()
       shell: bash
       run: |
         python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/imdb_plan_cost
 
     - name: Regression Test TPCH
-      continue-on-error: true
+      if: always()
       shell: bash
       run: |
         python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpch_plan_cost

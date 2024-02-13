@@ -68,6 +68,12 @@ public:
 			REQUIRE(ErrorMessage() != nullptr);
 		}
 	}
+	void QueryPrepared(duckdb_prepared_statement statement) {
+		success = duckdb_execute_prepared(statement, &result) == DuckDBSuccess;
+		if (!success) {
+			REQUIRE(ErrorMessage() != nullptr);
+		}
+	}
 
 	duckdb_type ColumnType(idx_t col) {
 		return duckdb_column_type(&result, col);
@@ -189,6 +195,8 @@ template <>
 duckdb_timestamp_struct CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_hugeint CAPIResult::Fetch(idx_t col, idx_t row);
+template <>
+duckdb_uhugeint CAPIResult::Fetch(idx_t col, idx_t row);
 
 class CAPITester {
 public:
@@ -224,6 +232,12 @@ public:
 		D_ASSERT(connection);
 		auto result = make_uniq<CAPIResult>();
 		result->Query(connection, query);
+		return result;
+	}
+	duckdb::unique_ptr<CAPIResult> QueryPrepared(duckdb_prepared_statement prepared) {
+		D_ASSERT(connection);
+		auto result = make_uniq<CAPIResult>();
+		result->QueryPrepared(prepared);
 		return result;
 	}
 

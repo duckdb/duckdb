@@ -134,6 +134,11 @@ UserTypeInfo::UserTypeInfo(string name_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
 
+UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+      user_type_name(std::move(name_p)) {
+}
+
 bool UserTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<UserTypeInfo>();
 	return other.user_type_name == user_type_name;
@@ -310,6 +315,49 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(200, "values_count", dict_size);
 	serializer.WriteList(201, "values", dict_size,
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(strings[i]); });
+}
+
+//===--------------------------------------------------------------------===//
+// ArrayTypeInfo
+//===--------------------------------------------------------------------===//
+
+ArrayTypeInfo::ArrayTypeInfo(LogicalType child_type_p, idx_t size_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
+}
+
+bool ArrayTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<ArrayTypeInfo>();
+	return child_type == other.child_type && size == other.size;
+}
+
+//===--------------------------------------------------------------------===//
+// Any Type Info
+//===--------------------------------------------------------------------===//
+AnyTypeInfo::AnyTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::ANY_TYPE_INFO) {
+}
+
+AnyTypeInfo::AnyTypeInfo(LogicalType target_type_p, idx_t cast_score_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::ANY_TYPE_INFO), target_type(std::move(target_type_p)), cast_score(cast_score_p) {
+}
+
+bool AnyTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<AnyTypeInfo>();
+	return target_type == other.target_type && cast_score == other.cast_score;
+}
+
+//===--------------------------------------------------------------------===//
+// Any Type Info
+//===--------------------------------------------------------------------===//
+IntegerLiteralTypeInfo::IntegerLiteralTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO) {
+}
+
+IntegerLiteralTypeInfo::IntegerLiteralTypeInfo(Value constant_value_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), constant_value(std::move(constant_value_p)) {
+}
+
+bool IntegerLiteralTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<IntegerLiteralTypeInfo>();
+	return constant_value == other.constant_value;
 }
 
 } // namespace duckdb

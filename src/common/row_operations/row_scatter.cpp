@@ -12,6 +12,7 @@
 #include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -106,7 +107,8 @@ static void ScatterNestedVector(Vector &vec, UnifiedVectorFormat &col, Vector &r
 	}
 
 	// Serialise the data
-	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, validitymask_locations);
+	NestedValidity parent_validity(validitymask_locations, col_no);
+	RowOperations::HeapScatter(vec, vcount, sel, count, data_locations, &parent_validity);
 }
 
 void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
@@ -146,6 +148,7 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 				break;
 			case PhysicalType::LIST:
 			case PhysicalType::STRUCT:
+			case PhysicalType::ARRAY:
 				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
 				break;
 			default:
@@ -203,6 +206,9 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 		case PhysicalType::INT128:
 			TemplatedScatter<hugeint_t>(col, rows, sel, count, col_offset, col_no);
 			break;
+		case PhysicalType::UINT128:
+			TemplatedScatter<uhugeint_t>(col, rows, sel, count, col_offset, col_no);
+			break;
 		case PhysicalType::FLOAT:
 			TemplatedScatter<float>(col, rows, sel, count, col_offset, col_no);
 			break;
@@ -217,6 +223,7 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 			break;
 		case PhysicalType::LIST:
 		case PhysicalType::STRUCT:
+		case PhysicalType::ARRAY:
 			ScatterNestedVector(vec, col, rows, data_locations, sel, count, col_offset, col_no, vcount);
 			break;
 		default:

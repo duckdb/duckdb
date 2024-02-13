@@ -1,0 +1,9 @@
+# name: test/sql/copy/parquet/file_metadata.test
+# group: [parquet]
+
+require parquet
+
+query IIIIIII
+SELECT * FROM parquet_file_metadata('data/parquet-testing/arrow/alltypes_dictionary.parquet')
+----
+data/parquet-testing/arrow/alltypes_dictionary.parquet	impala version 1.3.0-INTERNAL (build 8a48ddb1eff84592b3fc06bc6f51ec120e1fffc9)	2	1	1	NULL	NULL

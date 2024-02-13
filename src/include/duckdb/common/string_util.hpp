@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/set.hpp"
 
 #include <cstring>
 
@@ -134,6 +135,7 @@ public:
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
+	DUCKDB_API static string Join(const set<string> &input, const string &separator);
 
 	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {
@@ -166,7 +168,7 @@ public:
 	}
 
 	//! Return a string that formats the give number of bytes
-	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes);
+	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes, idx_t multiplier = 1024);
 
 	//! Convert a string to uppercase
 	DUCKDB_API static string Upper(const string &str);
@@ -181,6 +183,9 @@ public:
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
+
+	//! Case insensitive compare
+	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 
 	//! Format a string using printf semantics
 	template <typename... Args>
@@ -240,6 +245,23 @@ public:
 		}
 		return strcmp(s1, s2) == 0;
 	}
+
+	//! JSON method that parses a { string: value } JSON blob
+	//! NOTE: this method ONLY parses a JSON {"key": "value"} object, it does not support ANYTHING else
+	//! NOTE: this method is not efficient
+	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
+	//! empty map is returned
+	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json);
+	//! JSON method that constructs a { string: value } JSON map
+	//! This is the inverse of ParseJSONMap
+	//! NOTE: this method is not efficient
+	DUCKDB_API static string ToJSONMap(ExceptionType type, const string &message,
+	                                   const unordered_map<string, string> &map);
+
+	DUCKDB_API static string GetFileName(const string &file_path);
+	DUCKDB_API static string GetFileExtension(const string &file_name);
+	DUCKDB_API static string GetFileStem(const string &file_name);
+	DUCKDB_API static string GetFilePath(const string &file_path);
 };
 
 } // namespace duckdb

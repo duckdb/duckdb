@@ -41,12 +41,15 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 		    "Window frames starting with unbounded following or ending in unbounded preceding make no sense");
 	}
 
+	if (window_spec.frameOptions & FRAMEOPTION_GROUPS) {
+		throw ParserException("GROUPS mode for window functions is not implemented yet");
+	}
 	const bool rangeMode = (window_spec.frameOptions & FRAMEOPTION_RANGE) != 0;
 	if (window_spec.frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
 		expr.start = WindowBoundary::UNBOUNDED_PRECEDING;
-	} else if (window_spec.frameOptions & FRAMEOPTION_START_VALUE_PRECEDING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_PRECEDING) {
 		expr.start = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (window_spec.frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_START_OFFSET_FOLLOWING) {
 		expr.start = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_START_CURRENT_ROW) {
 		expr.start = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
@@ -54,20 +57,30 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 
 	if (window_spec.frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING) {
 		expr.end = WindowBoundary::UNBOUNDED_FOLLOWING;
-	} else if (window_spec.frameOptions & FRAMEOPTION_END_VALUE_PRECEDING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_PRECEDING) {
 		expr.end = rangeMode ? WindowBoundary::EXPR_PRECEDING_RANGE : WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (window_spec.frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
+	} else if (window_spec.frameOptions & FRAMEOPTION_END_OFFSET_FOLLOWING) {
 		expr.end = rangeMode ? WindowBoundary::EXPR_FOLLOWING_RANGE : WindowBoundary::EXPR_FOLLOWING_ROWS;
 	} else if (window_spec.frameOptions & FRAMEOPTION_END_CURRENT_ROW) {
 		expr.end = rangeMode ? WindowBoundary::CURRENT_ROW_RANGE : WindowBoundary::CURRENT_ROW_ROWS;
 	}
 
 	D_ASSERT(expr.start != WindowBoundary::INVALID && expr.end != WindowBoundary::INVALID);
-	if (((window_spec.frameOptions & (FRAMEOPTION_START_VALUE_PRECEDING | FRAMEOPTION_START_VALUE_FOLLOWING)) &&
+	if (((window_spec.frameOptions & (FRAMEOPTION_START_OFFSET_PRECEDING | FRAMEOPTION_START_OFFSET_FOLLOWING)) &&
 	     !expr.start_expr) ||
-	    ((window_spec.frameOptions & (FRAMEOPTION_END_VALUE_PRECEDING | FRAMEOPTION_END_VALUE_FOLLOWING)) &&
+	    ((window_spec.frameOptions & (FRAMEOPTION_END_OFFSET_PRECEDING | FRAMEOPTION_END_OFFSET_FOLLOWING)) &&
 	     !expr.end_expr)) {
 		throw InternalException("Failed to transform window boundary expression");
+	}
+
+	if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_CURRENT_ROW) {
+		expr.exclude_clause = WindowExcludeMode::CURRENT_ROW;
+	} else if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_GROUP) {
+		expr.exclude_clause = WindowExcludeMode::GROUP;
+	} else if (window_spec.frameOptions & FRAMEOPTION_EXCLUDE_TIES) {
+		expr.exclude_clause = WindowExcludeMode::TIES;
+	} else {
+		expr.exclude_clause = WindowExcludeMode::NO_OTHER;
 	}
 }
 
@@ -135,8 +148,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw InternalException("Unknown/unsupported window function");
 		}
 
-		if (root.agg_distinct) {
-			throw ParserException("DISTINCT is not implemented for window functions!");
+		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root.agg_distinct) {
+			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
 		}
 
 		if (root.agg_order) {
@@ -156,6 +169,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
 		expr->ignore_nulls = root.agg_ignore_nulls;
+		expr->distinct = root.agg_distinct;
 
 		if (root.agg_filter) {
 			auto filter_expr = TransformExpression(root.agg_filter);
@@ -193,7 +207,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		auto window_spec = PGPointerCast<duckdb_libpgquery::PGWindowDef>(root.over);
 		if (window_spec->name) {
-			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
+			auto it = window_clauses.find(string(window_spec->name));
 			if (it == window_clauses.end()) {
 				throw ParserException("window \"%s\" does not exist", window_spec->name);
 			}
@@ -203,7 +217,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto window_ref = window_spec;
 		auto window_name = window_ref->refname;
 		if (window_ref->refname) {
-			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
+			auto it = window_clauses.find(string(window_spec->refname));
 			if (it == window_clauses.end()) {
 				throw ParserException("window \"%s\" does not exist", window_spec->refname);
 			}
@@ -220,7 +234,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		TransformWindowFrame(*window_spec, *expr);
 		in_window_definition = false;
-		expr->query_location = root.location;
+		SetQueryLocation(*expr, root.location);
 		return std::move(expr);
 	}
 
@@ -322,7 +336,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
 	                                              std::move(children), std::move(filter_expr), std::move(order_bys),
 	                                              root.agg_distinct, false, root.export_state);
-	function->query_location = root.location;
+	SetQueryLocation(*function, root.location);
 
 	return std::move(function);
 }

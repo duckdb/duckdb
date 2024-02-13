@@ -2,7 +2,7 @@
 //  DuckDB
 //  https://github.com/duckdb/duckdb-swift
 //
-//  Copyright © 2018-2023 Stichting DuckDB Foundation
+//  Copyright © 2018-2024 Stichting DuckDB Foundation
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to
@@ -113,6 +113,17 @@ extension duckdb_hugeint {
   }
 }
 
+// MARK: - Unsigned Huge Int
+
+extension duckdb_uhugeint {
+  
+  init(_ source: UIntHuge) {
+    self = duckdb_uhugeint(lower: source.low, upper: source.high)
+  }
+  
+  var asUIntHuge: UIntHuge { .init(high: upper, low: lower) }
+}
+
 // MARK: - Time
 
 extension duckdb_time {
@@ -133,6 +144,13 @@ extension duckdb_time_struct {
   
   var asTimeComponents: Time.Components {
     .init(hour: hour, minute: min, second: sec, microsecond: micros)
+  }
+}
+
+extension duckdb_time_tz {
+  var asTime: TimeTz {
+    let res = duckdb_from_time_tz(self)
+    return TimeTz(time: Time(microseconds: res.time.micros), offset: res.offset)
   }
 }
 

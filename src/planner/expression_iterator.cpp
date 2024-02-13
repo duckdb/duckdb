@@ -175,7 +175,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION:
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::BASE_TABLE:
 	case TableReferenceType::CTE:
 		break;
@@ -202,6 +202,7 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 	case QueryNodeType::CTE_NODE: {
 		auto &cte_node = node.Cast<BoundCTENode>();
 		EnumerateQueryNodeChildren(*cte_node.child, callback);
+		EnumerateQueryNodeChildren(*cte_node.query, callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {

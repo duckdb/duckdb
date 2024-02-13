@@ -1,4 +1,4 @@
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
@@ -21,10 +21,15 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 	}
 }
 
-PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string &query,
-                                          unique_ptr<SQLStatement> statement) {
+ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
+
+#ifdef DUCKDB_RUN_SLOW_VERIFIERS
+	bool run_slow_verifiers = true;
+#else
+	bool run_slow_verifiers = false;
+#endif
 
 	// The purpose of this function is to test correctness of otherwise hard to test features:
 	// Copy() of statements and expressions
@@ -37,16 +42,28 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	const auto &stmt = *statement;
 	vector<unique_ptr<StatementVerifier>> statement_verifiers;
 	unique_ptr<StatementVerifier> prepared_statement_verifier;
+
+	// Base Statement verifiers: these are the verifiers we enable for regular builds
 	if (config.query_verification_enabled) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
-#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-		// This verification is quite slow, so we only run it for the async sink/source debug mode
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt));
-#endif
 	}
+
+	// This verifier is enabled explicitly OR by enabling run_slow_verifiers
+	if (config.verify_fetch_row || (run_slow_verifiers && config.query_verification_enabled)) {
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt));
+	}
+
+	// For the DEBUG_ASYNC build we enable this extra verifier
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	if (config.query_verification_enabled) {
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt));
+	}
+#endif
+
+	// Verify external always needs to be explicitly enabled and is never part of default verifier set
 	if (config.verify_external) {
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
 	}
@@ -115,8 +132,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		try {
 			RunStatementInternal(lock, explain_q, std::move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
+			ErrorData error(ex);
 			interrupted = false;
-			return PreservedError("EXPLAIN failed but query did not (" + string(ex.what()) + ")");
+			return ErrorData("EXPLAIN failed but query did not (" + error.RawMessage() + ")");
 		} // LCOV_EXCL_STOP
 
 #ifdef DUCKDB_VERIFY_BOX_RENDERER
@@ -142,11 +160,11 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	for (auto &verifier : statement_verifiers) {
 		auto result = original->CompareResults(*verifier);
 		if (!result.empty()) {
-			return PreservedError(result);
+			return ErrorData(result);
 		}
 	}
 
-	return PreservedError();
+	return ErrorData();
 }
 
 } // namespace duckdb

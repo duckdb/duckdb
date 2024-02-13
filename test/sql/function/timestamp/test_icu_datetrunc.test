@@ -227,3 +227,14 @@ FROM generate_series('2000-01-01 00:00:00-08'::TIMESTAMP, '2023-01-01 00:00:00-0
 # Unknown specifier should fail
 statement error
 SELECT date_trunc('duck', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+----
+
+# Minute truncation within a DST fall back ambiguity
+statement ok
+set timezone='CET';
+
+query I
+select date_trunc('minute', '2022-10-30 02:17:00+02'::TIMESTAMPTZ);
+----
+2022-10-30 02:17:00+02
+

@@ -136,18 +136,6 @@ class TestReadCSV(object):
         print(res)
         assert res == (345, 'TEST6', 'text"2"text')
 
-    def test_parallel_true(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('category.csv'), parallel=True)
-        res = rel.fetchone()
-        print(res)
-        assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
-
-    def test_parallel_true(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('category.csv'), parallel=False)
-        res = rel.fetchone()
-        print(res)
-        assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
-
     def test_date_format_as_datetime(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('datetime.csv'))
         res = rel.fetchone()
@@ -173,10 +161,15 @@ class TestReadCSV(object):
         )
 
     def test_timestamp_format(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), timestamp_format='%m/%d/%Y')
+        rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), timestamp_format='%Y-%m-%d %H:%M:%S')
         res = rel.fetchone()
-        print(res)
-        assert res == (123, 'TEST2', datetime.time(12, 12, 12), datetime.date(2000, 1, 1), '2000-01-01 12:12:00')
+        assert res == (
+            123,
+            'TEST2',
+            datetime.time(12, 12, 12),
+            datetime.date(2000, 1, 1),
+            datetime.datetime(2000, 1, 1, 12, 12),
+        )
 
     def test_sample_size_correct(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=-1)
@@ -202,12 +195,7 @@ class TestReadCSV(object):
 
         rel = duckdb_cursor.read_csv(TestFile('nullpadding.csv'), null_padding=True)
         res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
-            ('one', 'two', 'three', 'four'),
-            ('1', 'a', 'alice', None),
-            ('2', 'b', 'bob', None),
-        ]
+        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=False)
         res = rel.fetchall()
@@ -220,12 +208,7 @@ class TestReadCSV(object):
 
         rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=True)
         res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
-            ('one', 'two', 'three', 'four'),
-            ('1', 'a', 'alice', None),
-            ('2', 'b', 'bob', None),
-        ]
+        assert res == [('one', 'two', 'three', 'four'), ('1', 'a', 'alice', None), ('2', 'b', 'bob', None)]
 
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False)
         res = rel.fetchall()
@@ -239,25 +222,6 @@ class TestReadCSV(object):
         rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True)
         res = rel.fetchall()
         assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
-            ('one', 'two', 'three', 'four'),
-            ('1', 'a', 'alice', None),
-            ('2', 'b', 'bob', None),
-        ]
-
-        rel = duckdb.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False)
-        res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top',),
-            ('one,two,three,four',),
-            ('1,a,alice',),
-            ('2,b,bob',),
-        ]
-
-        rel = duckdb.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True)
-        res = rel.fetchall()
-        assert res == [
-            ('# this file has a bunch of gunk at the top', None, None, None),
             ('one', 'two', 'three', 'four'),
             ('1', 'a', 'alice', None),
             ('2', 'b', 'bob', None),
@@ -459,7 +423,7 @@ class TestReadCSV(object):
         res = con.sql("select * from rel order by all").fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
 
-    def test_read_csv_combined(self):
+    def test_read_csv_combined(self, duckdb_cursor):
         CSV_FILE = TestFile('stress_test.csv')
         COLUMNS = {
             'result': 'VARCHAR',
@@ -479,7 +443,7 @@ class TestReadCSV(object):
         )
         res = rel.fetchall()
 
-        rel2 = duckdb.sql(rel.sql_query())
+        rel2 = duckdb_cursor.sql(rel.sql_query())
         res2 = rel2.fetchall()
 
         # Assert that the results are the same
@@ -536,3 +500,43 @@ class TestReadCSV(object):
                     'f': str,
                 },
             )
+
+    def test_read_csv_multi_file(self):
+        con = duckdb.connect()
+        file1 = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        file2 = StringIO('one,two,three,four\n5,6,7,8\n5,6,7,8\n5,6,7,8')
+        file3 = StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
+        files = [file1, file2, file3]
+        rel = con.read_csv(files)
+        res = rel.fetchall()
+        assert res == [
+            (1, 2, 3, 4),
+            (1, 2, 3, 4),
+            (1, 2, 3, 4),
+            (5, 6, 7, 8),
+            (5, 6, 7, 8),
+            (5, 6, 7, 8),
+            (9, 10, 11, 12),
+            (9, 10, 11, 12),
+            (9, 10, 11, 12),
+        ]
+
+    def test_read_csv_empty_list(self):
+        con = duckdb.connect()
+        files = []
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Please provide a non-empty list of paths or file-like objects'
+        ):
+            rel = con.read_csv(files)
+            res = rel.fetchall()
+
+    def test_read_csv_list_invalid_path(self):
+        con = duckdb.connect()
+        files = [
+            StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4'),
+            'not_valid_path',
+            StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12'),
+        ]
+        with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
+            rel = con.read_csv(files)
+            res = rel.fetchall()

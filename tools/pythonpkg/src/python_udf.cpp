@@ -141,13 +141,17 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 
 			single_array[0] = python_object;
 			single_name[0] = "c0";
-			python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-			    single_array, py::arg("names") = single_name);
+			try {
+				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+				    single_array, py::arg("names") = single_name);
+			} catch (py::error_already_set &ex) {
+				throw InvalidInputException("Could not convert the result into an Arrow Table");
+			}
 		}
 		// Convert the pyarrow result back to a DuckDB datachunk
 		ConvertPyArrowToDataChunk(python_object, result, state.GetContext(), count);
 
-		if (input.AllConstant()) {
+		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	};
@@ -322,14 +326,19 @@ public:
 
 	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects,
 	                           const ClientProperties &client_properties) {
+
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		// Import this module, because importing this from a non-main thread causes a segfault
+		(void)import_cache.numpy.core.multiarray();
+
 		scalar_function_t func;
 		if (vectorized) {
 			func = CreateVectorizedFunction(udf.ptr(), exception_handling);
 		} else {
 			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties);
 		}
-		FunctionSideEffects function_side_effects =
-		    side_effects ? FunctionSideEffects::HAS_SIDE_EFFECTS : FunctionSideEffects::NO_SIDE_EFFECTS;
+		FunctionStability function_side_effects =
+		    side_effects ? FunctionStability::VOLATILE : FunctionStability::CONSISTENT;
 		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
 		                               nullptr, varargs, function_side_effects, null_handling);
 		return scalar_function;

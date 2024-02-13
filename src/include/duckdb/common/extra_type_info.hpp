@@ -23,7 +23,10 @@ enum class ExtraTypeInfoType : uint8_t {
 	STRUCT_TYPE_INFO = 5,
 	ENUM_TYPE_INFO = 6,
 	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8
+	AGGREGATE_STATE_TYPE_INFO = 8,
+	ARRAY_TYPE_INFO = 9,
+	ANY_TYPE_INFO = 10,
+	INTEGER_LITERAL_TYPE_INFO = 11
 };
 
 struct ExtraTypeInfo {
@@ -138,7 +141,10 @@ private:
 
 struct UserTypeInfo : public ExtraTypeInfo {
 	explicit UserTypeInfo(string name_p);
+	UserTypeInfo(string catalog_p, string schema_p, string name_p);
 
+	string catalog;
+	string schema;
 	string user_type_name;
 
 public:
@@ -180,6 +186,52 @@ protected:
 private:
 	EnumDictType dict_type;
 	idx_t dict_size;
+};
+
+struct ArrayTypeInfo : public ExtraTypeInfo {
+	LogicalType child_type;
+	idx_t size;
+	explicit ArrayTypeInfo(LogicalType child_type_p, idx_t size_p);
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &reader);
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+};
+
+struct AnyTypeInfo : public ExtraTypeInfo {
+	AnyTypeInfo(LogicalType target_type, idx_t cast_score);
+
+	LogicalType target_type;
+	idx_t cast_score;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	AnyTypeInfo();
+};
+
+struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
+	IntegerLiteralTypeInfo(Value constant_value);
+
+	Value constant_value;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	IntegerLiteralTypeInfo();
 };
 
 } // namespace duckdb

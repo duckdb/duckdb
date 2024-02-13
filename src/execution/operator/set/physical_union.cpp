@@ -7,8 +7,9 @@
 namespace duckdb {
 
 PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-                             unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality) {
+                             unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality, bool allow_out_of_order)
+    : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
+      allow_out_of_order(allow_out_of_order) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }
@@ -24,6 +25,9 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	// or if the sink preserves order, but does not support batch indices to do so
 	auto sink = meta_pipeline.GetSink();
 	bool order_matters = false;
+	if (!allow_out_of_order) {
+		order_matters = true;
+	}
 	if (current.IsOrderDependent()) {
 		order_matters = true;
 	}
@@ -37,7 +41,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	}
 
 	// create a union pipeline that is identical to 'current'
-	auto union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
+	auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
 
 	// continue with the current pipeline
 	children[0]->BuildPipelines(current, meta_pipeline);
@@ -48,7 +52,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	}
 
 	// build the union pipeline
-	children[1]->BuildPipelines(*union_pipeline, meta_pipeline);
+	children[1]->BuildPipelines(union_pipeline, meta_pipeline);
 
 	// Assign proper batch index to the union pipeline
 	// This needs to happen after the pipelines have been built because unions can be nested

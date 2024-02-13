@@ -72,11 +72,11 @@ SELECT strptime('jun', '%b')
 ----
 1900-06-01 00:00:00
 
-# First Sunday of Monday weeks is Jan 7
+# First Monday of Monday weeks is Jan 1
 query I
 SELECT strptime('1', '%W')
 ----
-1900-01-07 00:00:00
+1900-01-01 00:00:00
 
 # First Sunday of Sunday weeks is Jan 7
 query I
@@ -89,14 +89,30 @@ SELECT strptime('30', '%U'), strftime('1900-07-29'::DATE, '%U')
 ----
 1900-07-29 00:00:00	30
 
-query II
-SELECT strptime('30', '%W'), strftime('1900-07-29'::DATE, '%W')
+# Default ISO year is 1900, which starts on a Monday
+query I
+SELECT strptime('1', '%V')
 ----
-1900-07-29 00:00:00	30
+1900-01-01 00:00:00
+
+query II
+SELECT strptime('30', '%W'), strftime('1900-07-23'::DATE, '%W')
+----
+1900-07-23 00:00:00	30
+
+query II
+SELECT strptime('30', '%V'), strftime('1900-07-23'::DATE, '%V')
+----
+1900-07-23 00:00:00	30
 
 # Ignored
 query I
 SELECT strptime('6', '%w')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT strptime('6', '%u')
 ----
 1900-01-01 00:00:00
 
@@ -106,10 +122,19 @@ SELECT strptime('1-4', '%U-%w'), strftime('1900-01-11'::DATE, '%U-%w')
 ----
 1900-01-11 00:00:00	01-4
 
+query II
+SELECT strptime('2-4', '%V-%u'), strftime('1900-01-11'::DATE, '%V-%u')
+----
+1900-01-11 00:00:00	02-4
 
 # Thursday after 1st Monday
 query II
 SELECT strptime('1-4', '%W-%w'), strftime('1900-01-04'::DATE, '%W-%w')
+----
+1900-01-04 00:00:00	01-4
+
+query II
+SELECT strptime('1-4', '%V-%u'), strftime('1900-01-04'::DATE, '%V-%u')
 ----
 1900-01-04 00:00:00	01-4
 
@@ -137,11 +162,29 @@ SELECT strptime('2021-19-4', '%Y-%W-%w'), strftime('2021-05-13'::DATE, '%Y-%U-%w
 ----
 2021-05-13 00:00:00	2021-19-4
 
+# Year-ISO Week-Weekday
+query II
+SELECT strptime('2021-19-4', '%G-%V-%u'), strftime('2021-05-13'::DATE, '%G-%V-%u')
+----
+2021-05-13 00:00:00	2021-19-4
+
 # Year, Sunday Week 0, Friday
 query II
 SELECT strptime('2021-0-5', '%Y-%U-%w'), strftime('2021-01-01'::DATE, '%Y-%U-%w')
 ----
 2021-01-01 00:00:00	2021-00-5
+
+# Year-ISO Week-Weekday
+query II
+SELECT strptime('2021-19-4', '%G-%V-%u'), strftime('2021-05-13'::DATE, '%G-%V-%u')
+----
+2021-05-13 00:00:00	2021-19-4
+
+# Year-ISO, Week 1, Friday
+query II
+SELECT strptime('2021-1-5', '%G-%V-%u'), strftime('2021-01-08'::DATE, '%G-%V-%u')
+----
+2021-01-08 00:00:00	2021-01-5
 
 # Year, Monday Week 0, Friday
 query II
@@ -158,6 +201,12 @@ SELECT strptime('2021-05-12 19-4', '%Y-%m-%d %U-%w')
 # Year-Monday Week-Weekday Mismatch should defer to the day
 query I
 SELECT strptime('2021-05-12 19-4', '%Y-%m-%d %W-%w')
+----
+2021-05-12 00:00:00
+
+# Year-ISO Week-Weekday Mismatch should defer to the day
+query I
+SELECT strptime('2021-05-12 19-4', '%Y-%m-%d %V-%u')
 ----
 2021-05-12 00:00:00
 
@@ -179,12 +228,23 @@ SELECT * FROM (
 WHERE rt <> dt
 ----
 
+# Round trip ISO weeks
+query III
+SELECT * FROM (
+    SELECT dt, strftime(dt, '%G-%V-%u') AS ft, strptime(strftime(dt, '%G-%V-%u'), '%G-%V-%u') AS rt
+    FROM (SELECT '2021-01-01'::DATE + (INTERVAL (d) DAY) AS dt FROM range(365) tbl(d)) days
+) diffs
+WHERE rt <> dt
+----
+
 # empty specifier and string
 statement error
 SELECT strptime('', '')
+----
 
 statement error
 SELECT strptime(NULL, '')
+----
 
 query I
 SELECT strptime('', NULL)
@@ -261,6 +321,24 @@ select strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
 2020-12-31 03:25:58.745232+00
 
+# infinities should always parse
+
+query I
+select strptime('infinity', '%m/%d/%Y');
+----
+infinity
+
+query I
+select strptime('-infinity', '%m/%d/%Y');
+----
+-infinity
+
+query I
+select strptime('epoch', '%m/%d/%Y');
+----
+1970-01-01 00:00:00
+
+
 # Don't swallow non-spaces
 query I
 SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z)') as fixed;
@@ -288,167 +366,298 @@ Error: Literal does not match, expected /
 
 statement error
 SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z') as broken;
+----
 
 # incorrect usage
 statement error
 select strptime('2020-12-31 21:25:58.745232+0', '%Y-%m-%d %H:%M:%S.%f%z');
+----
 
 statement error
 select strptime('2020-12-31 21:25:58.745232+0X', '%Y-%m-%d %H:%M:%S.%f%z');
+----
 
 statement error
 select strptime('2020-12-31 21:25:58.745232+X0', '%Y-%m-%d %H:%M:%S.%f%z');
+----
 
 statement error
 select strptime('2020-12-31 21:25:58.745232+000', '%Y-%m-%d %H:%M:%S.%f%z');
+----
 
 statement error
 select strptime('2020-12-31 21:25:58.745232X00', '%Y-%m-%d %H:%M:%S.%f%z');
+----
 
 # different errors
 # month out of range
 statement error
 SELECT strptime('2018-20-10', '%Y-%m-%d')
+----
 
 # day out of range
 statement error
 SELECT strptime('2018-10-100', '%Y-%m-%d')
+----
 
 # year without century out of range
 statement error
 SELECT strptime('969-10-10', '%y-%m-%d')
+----
 
 # literal part does not match
 statement error
 SELECT strptime('2000/10/10', '%Y-%m-%d')
+----
 
 # incorrect date
 statement error
 SELECT strptime('2001-02-30', '%Y-%m-%d')
+----
 
 # incorrect date
 statement error
 SELECT strptime('2000-10-hello', '%Y-%m-%d')
+----
 
 # incorrect hour
 statement error
 SELECT strptime('2000-10-01 24:00:00', '%Y-%m-%d %H:%M:%S')
+----
 
 # incorrect hour with 12 hour clock
 statement error
 SELECT strptime('2000-10-01 00:00:00 AM', '%Y-%m-%d %I:%M:%S %p')
+----
 
 statement error
 SELECT strptime('2000-10-01 13:00:00 AM', '%Y-%m-%d %I:%M:%S %p')
+----
 
 # incorrect minute
 statement error
 SELECT strptime('2000-10-01 23:60:00', '%Y-%m-%d %H:%M:%S')
+----
 
 # incorrect seconds
 statement error
 SELECT strptime('2000-10-01 23:59:60', '%Y-%m-%d %H:%M:%S')
+----
 
 # incorrect microseconds
 statement error
 SELECT strptime('2000-10-01 23:59:59.10000000', '%Y-%m-%d %H:%M:%S.%f')
+----
 
 # huge number
 statement error
 SELECT strptime('2000-10-01 23:59:59.1000000000000000000000000000', '%Y-%m-%d %H:%M:%S.%f')
+----
 
 # empty string
 statement error
 SELECT strptime('', '%Y-%m-%d %H:%M:%S.%f')
+----
 
 # empty string with am/pm
 statement error
 SELECT strptime('', '%p')
+----
 
 statement error
 SELECT strptime('a', '%p')
+----
 
 # incorrect am/pm
 statement error
 SELECT strptime('mp', '%p')
+----
 
 statement error
 SELECT strptime('pp', '%p')
+----
 
 statement error
 SELECT strptime('zm', '%p')
+----
 
 # incorrect abbreviated weekday name
 statement error
 SELECT strptime('moa', '%a')
+----
 
 # incorrect weekday name
 statement error
 SELECT strptime('moaday', '%A')
+----
 
 statement error
 SELECT strptime('mondayy', '%A')
+----
 
 # incorrect abbreviated month name
 statement error
 SELECT strptime('juk', '%b')
+----
 
 # incorrect weekday name
 statement error
 SELECT strptime('juke', '%B')
+----
 
 statement error
 SELECT strptime('junee', '%B')
+----
 
 # day of year out of range
 statement error
 SELECT strptime('500', '%j')
+----
 
 statement error
 SELECT strptime('500', '%-j')
+----
 
 statement error
 SELECT strptime('0', '%j')
+----
 
 statement error
 SELECT strptime('0', '%-j')
+----
 
 # week numbers out of range
 statement error
 SELECT strptime('60', '%U')
+----
 
 statement error
 SELECT strptime('60', '%W')
+----
+
+statement error
+SELECT strptime('60', '%V')
+----
+ISO week offset out of range, expected a value between 1 and 53
 
 # weekday out of range
 statement error
 SELECT strptime('9', '%w')
+----
+
+statement error
+SELECT strptime('9', '%u')
+----
+ISO weekday offset out of range, expected a value between 1 and 7
 
 # Multiple offset types
 statement error
 SELECT strptime('20 19', '%U %W')
+----
+
+statement error
+SELECT strptime('20 19', '%U %V')
+----
+Incompatible ISO week offset specified
+
+statement error
+SELECT strptime('20 2021', '%U %G')
+----
 
 statement error
 SELECT strptime('20 19', '%U %j')
+----
+
+statement error
+SELECT strptime('20 19', '%W %U')
+----
+Multiple week offsets specified
+
+statement error
+SELECT strptime('20 19', '%W %V')
+----
+Incompatible ISO week offset specified
+
+statement error
+SELECT strptime('20 2021', '%W %G')
+----
+Incompatible ISO year offset specified
 
 statement error
 SELECT strptime('20 19', '%W %j')
+----
+
+statement error
+SELECT strptime('20 19', '%V %U')
+----
+Multiple week offsets specified
+
+statement error
+SELECT strptime('20 19', '%V %W')
+----
+Multiple week offsets specified
+
+statement error
+SELECT strptime('20 19', '%V %j')
+----
+Multiple year offsets specified
+
+statement error
+SELECT strptime('2021 19', '%G %U')
+----
+Multiple week offsets specified
+
+statement error
+SELECT strptime('2021 19', '%G %W')
+----
+Multiple week offsets specified
+
+statement error
+SELECT strptime('2021 19', '%G %j')
+----
+Multiple year offsets specified
+
+# Years override ISO offsets
+query I
+SELECT strptime('2021 1950', '%G %Y')
+----
+1950-01-01 00:00:00
+
+query I
+SELECT strptime('2021 1950', '%Y %G')
+----
+2021-01-01 00:00:00
+
+query I
+SELECT strptime('20 1950', '%V %Y')
+----
+1950-01-01 00:00:00
+
+query I
+SELECT strptime('2021 19', '%Y %V')
+----
+2021-01-01 00:00:00
 
 # AM/PM out of range
 statement error
 SELECT strptime('Mon 30, December 30, 20:3:5 PM', '%a %d, %B %y, %H:%M:%S %p')
+----
 
 # unrecognized specifier
 statement error
 SELECT strptime('21/10/2018', '%-q/%m/%Y')
+----
 
 # microseconds out of range
 statement error
 SELECT strptime('9999999', '%f')
+----
 
 # millisecond out of range
 statement error
 SELECT strptime('9999', '%g')
+----
 
 statement error
 SELECT strptime('2000/10/10', random()::varchar)
+----

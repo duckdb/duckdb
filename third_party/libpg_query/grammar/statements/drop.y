@@ -66,26 +66,6 @@ DropStmt:	DROP drop_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->concurrent = false;
 					$$ = (PGNode *) n;
 				}
-			| DROP TYPE_P type_name_list opt_drop_behavior
-				{
-					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_TYPE;
-					n->missing_ok = false;
-					n->objects = $3;
-					n->behavior = $4;
-					n->concurrent = false;
-					$$ = (PGNode *) n;
-				}
-			| DROP TYPE_P IF_P EXISTS type_name_list opt_drop_behavior
-				{
-					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_TYPE;
-					n->missing_ok = true;
-					n->objects = $5;
-					n->behavior = $6;
-					n->concurrent = false;
-					$$ = (PGNode *) n;
-				}
 		;
 
 
@@ -107,6 +87,7 @@ drop_type_any_name:
 			| TEXT_P SEARCH DICTIONARY				{ $$ = PG_OBJECT_TSDICTIONARY; }
 			| TEXT_P SEARCH TEMPLATE				{ $$ = PG_OBJECT_TSTEMPLATE; }
 			| TEXT_P SEARCH CONFIGURATION			{ $$ = PG_OBJECT_TSCONFIGURATION; }
+			| TYPE_P								{ $$ = PG_OBJECT_TYPE; }
 		;
 
 

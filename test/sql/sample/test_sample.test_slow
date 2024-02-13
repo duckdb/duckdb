@@ -1,0 +1,227 @@
+# name: test/sql/sample/test_sample.test_slow
+# description: Test SAMPLE keyword
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
+
+# test various limits using count
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 0
+----
+0
+
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 1 ROWS
+----
+1
+
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 3
+----
+3
+
+# sample size exceeds input
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 10
+----
+3
+
+# specify sample
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 3 (reservoir)
+----
+3
+
+# specify seed
+query I
+SELECT COUNT(*) FROM test USING SAMPLE 3 (reservoir, 3)
+----
+3
+
+query II
+SELECT * FROM test USING SAMPLE 10 ORDER BY a, b
+----
+11	22
+12	21
+13	22
+
+# sample on a larger data set
+query I
+SELECT COUNT(*) FROM range(10000) USING SAMPLE 5
+----
+5
+
+# sample on a large data set over RESERVOIR_THRESHOLD = 100000
+query I
+SELECT COUNT(*) FROM range(2000000) USING SAMPLE 1000100
+----
+1000100
+
+
+query I
+SELECT COUNT(*) FROM range(2000000) USING SAMPLE 2
+----
+2
+
+
+# test sample with multiple columns
+# we insert the same data in the entire column
+statement ok
+CREATE TABLE test2 AS SELECT i a, i::VARCHAR b, CONCAT(i, ' - ', i) c FROM repeat(1, 1000) tbl(i)
+
+query III
+SELECT a, b, c FROM test2 USING SAMPLE 3;
+----
+1	1	1 - 1
+1	1	1 - 1
+1	1	1 - 1
+
+# sample in scalar subqueries
+query I
+SELECT (SELECT COUNT(*) FROM test USING SAMPLE 1);
+----
+1
+
+query I
+SELECT (SELECT COUNT(*) + tbl.i FROM test USING SAMPLE 1) FROM range(3) tbl(i) ORDER BY i;
+----
+1
+2
+3
+
+# negative sample size not allowed
+statement error
+SELECT COUNT(*) FROM test USING SAMPLE -1
+----
+
+# must be a number
+statement error
+SELECT COUNT(*) FROM test USING SAMPLE 'hello'
+----
+
+statement error
+SELECT COUNT(*) FROM test USING SAMPLE DATE '1992-01-01'
+----
+
+# we can also use postgres/sqlserver-style tablesample syntax
+statement ok
+create table integers as select i from range(200) tbl(i);
+
+# default is sample_size, which follows postgres syntax rules
+query I
+select count(*) from integers tablesample reservoir(10);
+----
+10
+
+query I
+select count(*) from integers tablesample reservoir(10%);
+----
+20
+
+query I
+select count(*) from integers tablesample reservoir(10 percent);
+----
+20
+
+query I
+select count(*) from integers tablesample reservoir(10 rows);
+----
+10
+
+# we can also use the default sampling method
+query I
+select count(*) from integers tablesample(10 rows);
+----
+10
+
+# we can use our sampling syntax here as well
+query I
+select count(*) from integers tablesample 10;
+----
+10
+
+query I
+select count(*) from integers tablesample 10 rows (reservoir);
+----
+10
+
+query I
+select count(*) from integers tablesample 10 rows (reservoir, 250);
+----
+10
+
+# we can also use this with table-producing functions
+query I
+select count(*) from range(200) tablesample reservoir(10%);
+----
+20
+
+# and subqueries
+query I
+select count(*) from (select * from range(200)) tbl(i) tablesample reservoir(10%);
+----
+20
+
+# specifying a seed leads to repeatable behavior
+loop i 0 10
+
+query I nosort reservoirseed
+select * from range(100) tablesample reservoir(10 rows) repeatable(250)
+----
+
+query I nosort bernoulliseed
+select * from range(100) tablesample bernoulli(10%) repeatable(250)
+----
+
+query I nosort systemseed
+select * from range(100) tablesample system(10%) repeatable(250)
+----
+
+endloop
+
+query I
+select count(*) from range(1000) using sample reservoir(0.01%);
+----
+0
+
+query I
+select count(*) from range(1000) using sample reservoir(0.1%);
+----
+1
+
+# cannot use bernoulli or system sampling with X number of rows
+statement error
+select * from integers using sample bernoulli(5 rows);
+----
+
+statement error
+select * from integers using sample system(5 rows);
+----
+
+# sample_size is out of range
+statement error
+select * from integers using sample 10000%;
+----
+
+query I
+select i from integers using sample (1 rows) repeatable (0);
+----
+130
+
+query I
+select i from integers using sample reservoir(1%) repeatable (0);
+----
+83
+21

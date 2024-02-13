@@ -6,7 +6,16 @@
     db = DBInterface.connect(DuckDB.DB)
     con = DBInterface.connect(db)
 
-    df = DataFrame(DBInterface.execute(con, "SELECT * FROM test_all_types()"))
+    df = DataFrame(
+        DBInterface.execute(
+            con,
+            """SELECT * EXCLUDE(time, time_tz)
+                , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
+                , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz
+            FROM test_all_types()
+            """
+        )
+    )
     #println(names(df))
     # we can also use 'propertynames()' to get the column names as symbols, that might make for a better testing approach
     # If we add a dictionary that maps from the symbol to the expected result
@@ -18,8 +27,9 @@
     @test isequal(df.bigint, [-9223372036854775808, 9223372036854775807, missing])
     @test isequal(
         df.hugeint,
-        [-170141183460469231731687303715884105727, 170141183460469231731687303715884105727, missing]
+        [-170141183460469231731687303715884105728, 170141183460469231731687303715884105727, missing]
     )
+    @test isequal(df.uhugeint, [0, 340282366920938463463374607431768211455, missing])
     @test isequal(df.utinyint, [0, 255, missing])
     @test isequal(df.usmallint, [0, 65535, missing])
     @test isequal(df.uint, [0, 4294967295, missing])
@@ -46,8 +56,7 @@
     @test isequal(df.large_enum, ["enum_0", "enum_69999", missing])
     @test isequal(df.date, [Dates.Date(-5877641, 6, 25), Dates.Date(5881580, 7, 10), missing])
     @test isequal(df.time, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
-    # FIXME: TIMETZ <> TIME
-    # @test isequal(df.time_tz, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
+    @test isequal(df.time_tz, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
     @test isequal(
         df.timestamp,
         [Dates.DateTime(-290308, 12, 22, 0, 0, 0), Dates.DateTime(294247, 1, 10, 4, 0, 54, 775), missing]
@@ -115,7 +124,7 @@
             missing
         ]
     )
-    @test isequal(df.uuid, [UUID(1), UUID(UInt128(340282366920938463463374607431768211455)), missing])
+    @test isequal(df.uuid, [UUID(0), UUID(UInt128(340282366920938463463374607431768211455)), missing])
     @test isequal(df.int_array, [[], [42, 999, missing, missing, -42], missing])
     @test isequal(df.double_array, [[], [42, NaN, Inf, -Inf, missing, -42], missing])
     @test isequal(

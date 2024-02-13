@@ -17,6 +17,8 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 	case JoinType::SEMI:
+	case JoinType::RIGHT_SEMI:
+	case JoinType::RIGHT_ANTI:
 		return true;
 	default:
 		return false;
@@ -26,7 +28,8 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op) {
+void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op,
+                                      bool build_rhs) {
 	op.op_state.reset();
 	op.sink_state.reset();
 
@@ -37,11 +40,13 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	// save the last added pipeline to set up dependencies later (in case we need to add a child pipeline)
 	vector<shared_ptr<Pipeline>> pipelines_so_far;
 	meta_pipeline.GetPipelines(pipelines_so_far, false);
-	auto last_pipeline = pipelines_so_far.back().get();
+	auto &last_pipeline = *pipelines_so_far.back();
 
-	// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
-	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op);
-	child_meta_pipeline.Build(*op.children[1]);
+	if (build_rhs) {
+		// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
+		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op);
+		child_meta_pipeline.Build(*op.children[1]);
+	}
 
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);

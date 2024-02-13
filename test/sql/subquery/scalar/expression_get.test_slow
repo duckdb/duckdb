@@ -13,7 +13,7 @@ statement ok
 CREATE TABLE test AS SELECT CAST((i % 10) AS INTEGER) AS i, CAST(((i * 2) % 10) AS INTEGER) AS j FROM generate_series(0, 9, 1) tbl(i);
 
 query III
-SELECT i, j, (SELECT max(x) FROM (VALUES (i), (j)) AS X(x)) as maxn FROM test;
+SELECT i, j, (SELECT max(x) FROM (VALUES (i), (j)) AS X(x)) as maxn FROM test ORDER BY ALL;
 ----
 0	0	0
 1	2	2
@@ -28,7 +28,7 @@ SELECT i, j, (SELECT max(x) FROM (VALUES (i), (j)) AS X(x)) as maxn FROM test;
 
 # mix of correlated and non-correlated values
 query III
-SELECT i, j, (SELECT max(x) FROM (VALUES (i), (j), (3), (NULL), (5)) AS X(x)) as maxn FROM test;
+SELECT i, j, (SELECT max(x) FROM (VALUES (i), (j), (3), (NULL), (5)) AS X(x)) as maxn FROM test ORDER BY ALL;
 ----
 0	0	5
 1	2	5

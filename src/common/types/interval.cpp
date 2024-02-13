@@ -22,7 +22,7 @@ bool Interval::FromString(const string &str, interval_t &result) {
 }
 
 template <class T>
-void IntervalTryAddition(T &target, int64_t input, int64_t multiplier) {
+void IntervalTryAddition(T &target, int64_t input, int64_t multiplier, int64_t fraction = 0) {
 	int64_t addition;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, multiplier, addition)) {
 		throw OutOfRangeException("interval value is out of range");
@@ -30,6 +30,15 @@ void IntervalTryAddition(T &target, int64_t input, int64_t multiplier) {
 	T addition_base = Cast::Operation<int64_t, T>(addition);
 	if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
 		throw OutOfRangeException("interval value is out of range");
+	}
+	if (fraction) {
+		//	Add in (fraction * multiplier) / MICROS_PER_SEC
+		//	This is always in range
+		addition = (fraction * multiplier) / Interval::MICROS_PER_SEC;
+		addition_base = Cast::Operation<int64_t, T>(addition);
+		if (!TryAddOperator::Operation<T, T, T>(target, addition_base, target)) {
+			throw OutOfRangeException("interval fraction is out of range");
+		}
 	}
 }
 
@@ -39,6 +48,7 @@ bool Interval::FromCString(const char *str, idx_t len, interval_t &result, strin
 	bool negative;
 	bool found_any = false;
 	int64_t number;
+	int64_t fraction;
 	DatePartSpecifier specifier;
 	string specifier_str;
 
@@ -103,8 +113,19 @@ interval_parse_number:
 			// finished the number, parse it from the string
 			string_t nr_string(str + start_pos, pos - start_pos);
 			number = Cast::Operation<string_t, int64_t>(nr_string);
+			fraction = 0;
+			if (c == '.') {
+				// we expect some microseconds
+				int32_t mult = 100000;
+				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
+					if (mult > 0) {
+						fraction += int64_t(str[pos] - '0') * mult;
+					}
+				}
+			}
 			if (negative) {
 				number = -number;
+				fraction = -fraction;
 			}
 			goto interval_parse_identifier;
 		}
@@ -114,7 +135,7 @@ interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
 	idx_t pos;
-	if (!Time::TryConvertTime(str + start_pos, len - start_pos, pos, time)) {
+	if (!Time::TryConvertInterval(str + start_pos, len - start_pos, pos, time)) {
 		return false;
 	}
 	result.micros += time.micros;
@@ -146,6 +167,24 @@ interval_parse_identifier:
 		}
 	}
 	specifier_str = string(str + start_pos, pos - start_pos);
+
+	// Special case SS[.FFFFFF] - implied SECONDS/MICROSECONDS
+	if (specifier_str.empty() && !found_any) {
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC);
+		IntervalTryAddition<int64_t>(result.micros, fraction, 1);
+		found_any = true;
+		// parse any trailing whitespace
+		for (; pos < len; pos++) {
+			char c = str[pos];
+			if (c == ' ' || c == '\t' || c == '\n') {
+				continue;
+			} else {
+				return false;
+			}
+		}
+		goto end_of_string;
+	}
+
 	if (!TryGetDatePartSpecifier(specifier_str, specifier)) {
 		HandleCastError::AssignError(StringUtil::Format("extract specifier \"%s\" not recognized", specifier_str),
 		                             error_message);
@@ -154,43 +193,55 @@ interval_parse_identifier:
 	// add the specifier to the interval
 	switch (specifier) {
 	case DatePartSpecifier::MILLENNIUM:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM, fraction);
 		break;
 	case DatePartSpecifier::CENTURY:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_CENTURY);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_CENTURY, fraction);
 		break;
 	case DatePartSpecifier::DECADE:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_DECADE);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_DECADE, fraction);
 		break;
 	case DatePartSpecifier::YEAR:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_YEAR);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_YEAR, fraction);
 		break;
 	case DatePartSpecifier::QUARTER:
-		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_QUARTER);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_QUARTER, fraction);
+		// Reduce to fraction of a month
+		fraction *= MONTHS_PER_QUARTER;
+		fraction %= MICROS_PER_SEC;
+		IntervalTryAddition<int32_t>(result.days, 0, DAYS_PER_MONTH, fraction);
 		break;
 	case DatePartSpecifier::MONTH:
 		IntervalTryAddition<int32_t>(result.months, number, 1);
+		IntervalTryAddition<int32_t>(result.days, 0, DAYS_PER_MONTH, fraction);
 		break;
 	case DatePartSpecifier::DAY:
 		IntervalTryAddition<int32_t>(result.days, number, 1);
+		IntervalTryAddition<int64_t>(result.micros, 0, MICROS_PER_DAY, fraction);
 		break;
 	case DatePartSpecifier::WEEK:
-		IntervalTryAddition<int32_t>(result.days, number, DAYS_PER_WEEK);
+		IntervalTryAddition<int32_t>(result.days, number, DAYS_PER_WEEK, fraction);
+		// Reduce to fraction of a day
+		fraction *= DAYS_PER_WEEK;
+		fraction %= MICROS_PER_SEC;
+		IntervalTryAddition<int64_t>(result.micros, 0, MICROS_PER_DAY, fraction);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
+		// Round the fraction
+		number += (fraction * 2) / MICROS_PER_SEC;
 		IntervalTryAddition<int64_t>(result.micros, number, 1);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MSEC);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MSEC, fraction);
 		break;
 	case DatePartSpecifier::SECOND:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC, fraction);
 		break;
 	case DatePartSpecifier::MINUTE:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MINUTE);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MINUTE, fraction);
 		break;
 	case DatePartSpecifier::HOUR:
-		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_HOUR);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_HOUR, fraction);
 		break;
 	default:
 		HandleCastError::AssignError(
@@ -460,6 +511,10 @@ dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 		date.days--;
 	}
 	return left;
+}
+
+dtime_tz_t Interval::Add(dtime_tz_t left, interval_t right, date_t &date) {
+	return dtime_tz_t(Interval::Add(left.time(), right, date), left.offset());
 }
 
 timestamp_t Interval::Add(timestamp_t left, interval_t right) {

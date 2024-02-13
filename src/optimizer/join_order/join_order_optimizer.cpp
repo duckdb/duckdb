@@ -1,15 +1,12 @@
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
-
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-
-#include <algorithm>
-#include <cmath>
 
 namespace duckdb {
 
@@ -60,13 +57,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		new_logical_plan = std::move(plan);
 		if (relation_stats.size() == 1) {
 			new_logical_plan->estimated_cardinality = relation_stats.at(0).cardinality;
+			new_logical_plan->has_estimated_cardinality = true;
 		}
 	}
 
 	// only perform left right optimizations when stats is null (means we have the top level optimize call)
 	// Don't check reorderability because non-reorderable joins will result in 1 relation, but we can
 	// still switch the children.
-	// TODO: put this in a different optimizer maybe?
 	if (stats == nullptr && HasJoin(new_logical_plan.get())) {
 		new_logical_plan = query_graph_manager.LeftRightOptimizations(std::move(new_logical_plan));
 	}
@@ -76,7 +73,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto cardinality = new_logical_plan->EstimateCardinality(context);
 		auto bindings = new_logical_plan->GetColumnBindings();
 		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
-		new_stats.cardinality = MaxValue(cardinality, new_stats.cardinality);
+		new_stats.cardinality = cardinality;
 		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
 	}
 

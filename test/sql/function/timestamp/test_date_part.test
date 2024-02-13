@@ -194,6 +194,22 @@ WHERE p <> f
 
 endloop
 
+# Cast injection for DOUBLE types
+foreach tstype TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
+
+query I
+SELECT EXTRACT(EPOCH FROM ${tstype} '1992-09-20 11:30:00.0');
+----
+716988600.0
+
+query I
+SELECT EXTRACT(JULIAN FROM ${tstype} '1992-09-20 00:00:00.0');
+----
+2448886.0
+
+endloop
+
+
 #
 # Structs
 #
@@ -821,22 +837,27 @@ statement error
 SELECT ts, DATE_PART(['duck', 'month', 'day'], ts) AS parts
 FROM timestamps
 ORDER BY 1;
+----
 
 # Duplicate parts
 statement error
 SELECT ts, DATE_PART(['year', 'month', 'day', 'year'], ts) AS parts
 FROM timestamps
 ORDER BY 1;
+----
 
 # Empty parts
 statement error
 SELECT DATE_PART([], ts) FROM timestamps;
+----
 
 # Null parts
 statement error
 SELECT DATE_PART(['year', NULL, 'month'], ts) FROM timestamps;
+----
 
 # Non-constant parts
 statement error
 WITH parts(p) AS (VALUES (['year', 'month', 'day']), (['hour', 'minute', 'microsecond']))
 SELECT DATE_PART(p, ts) FROM parts, timestamps;
+----

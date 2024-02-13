@@ -27,8 +27,9 @@ public:
 	DUCKDB_API static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false);
 	DUCKDB_API static bool TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result,
 	                                        bool strict = false);
-	//!	Format is ±[HH]HH[:MM[:SS]]
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int32_t &offset);
+	// No hour limit
+	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
+	                                          bool strict = false);
 
 	//! Convert a time object to a string in the format "hh:mm:ss"
 	DUCKDB_API static string ToString(dtime_t time);
@@ -36,6 +37,9 @@ public:
 	DUCKDB_API static string ToUTCOffset(int hour_offset, int minute_offset);
 
 	DUCKDB_API static dtime_t FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds = 0);
+
+	//! Normalize a TIME_TZ by adding the offset to the time part and returning the TIME
+	DUCKDB_API static dtime_t NormalizeTimeTZ(dtime_tz_t timetz);
 
 	//! Extract the time from a given timestamp object
 	DUCKDB_API static void Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec,

@@ -10,6 +10,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -177,7 +178,7 @@ unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool
 
 	auto conversion =
 	    make_uniq<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
-	return std::move(conversion);
+	return conversion;
 }
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk,
@@ -224,39 +225,36 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays or categorical
 	// types
 	py::dict res;
-	unordered_map<string, idx_t> names;
-	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
-		if (names[result->names[col_idx]]++ == 0) {
-			FillNumpy(res, col_idx, conversion, result->names[col_idx].c_str());
-		} else {
-			auto name = result->names[col_idx] + "_" + to_string(names[result->names[col_idx]]);
-			while (names[name] > 0) {
-				// This entry already exists
-				name += "_" + to_string(names[name]);
-			}
-			names[name]++;
-			FillNumpy(res, col_idx, conversion, name.c_str());
-		}
+	auto names = result->names;
+	QueryResult::DeduplicateColumns(names);
+	for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
+		auto &name = names[col_idx];
+		FillNumpy(res, col_idx, conversion, name.c_str());
 	}
 	return res;
 }
 
 // TODO: unify these with an enum/flag to indicate which conversions to do
 void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
+	auto names = df.attr("columns").cast<vector<string>>();
+
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC then convert to timezone_config
-			auto utc_local = df[result->names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
-			df[result->names[i].c_str()] = utc_local.attr("dt").attr("tz_convert")(result->client_properties.time_zone);
+			auto utc_local = df[names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
+			df.attr("__setitem__")(names[i].c_str(),
+			                       utc_local.attr("dt").attr("tz_convert")(result->client_properties.time_zone));
 		}
 	}
 }
 
 // TODO: unify these with an enum/flag to indicate which conversions to perform
 void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
+	auto names = df.attr("columns").cast<vector<string>>();
+
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::DATE) {
-			df[result->names[i].c_str()] = df[result->names[i].c_str()].attr("dt").attr("date");
+			df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("dt").attr("date"));
 		}
 	}
 }
@@ -299,7 +297,8 @@ py::dict DuckDBPyResult::FetchTF() {
 	return result_dict;
 }
 
-bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch) {
+bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch,
+                                     bool to_polars) {
 	ArrowArray data;
 	idx_t count;
 	auto &query_result = *result.get();
@@ -311,13 +310,14 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, query_result.names,
-	                              query_result.client_properties);
+	auto names = query_result.names;
+	QueryResult::DeduplicateColumns(names);
+	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
 
-py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch) {
+py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch, bool to_polars) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
@@ -325,16 +325,20 @@ py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch) {
 
 	py::list batches;
 	QueryResultChunkScanState scan_state(*result.get());
-	while (FetchArrowChunk(scan_state, batches, rows_per_batch)) {
+	while (FetchArrowChunk(scan_state, batches, rows_per_batch, to_polars)) {
 	}
 	return batches;
 }
 
-duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
+duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, bool to_polars) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	return pyarrow::ToArrowTable(result->types, result->names, FetchAllArrowChunks(rows_per_batch),
+	auto names = result->names;
+	if (to_polars) {
+		QueryResult::DeduplicateColumns(names);
+	}
+	return pyarrow::ToArrowTable(result->types, names, FetchAllArrowChunks(rows_per_batch, to_polars),
 	                             result->client_properties);
 }
 
@@ -364,13 +368,19 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL: {
 		return py::str("NUMBER");
 	}
-	case LogicalTypeId::VARCHAR:
-		return py::str("STRING");
+	case LogicalTypeId::VARCHAR: {
+		if (type.HasAlias() && type.GetAlias() == "JSON") {
+			return py::str("JSON");
+		} else {
+			return py::str("STRING");
+		}
+	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
 		return py::str("BINARY");

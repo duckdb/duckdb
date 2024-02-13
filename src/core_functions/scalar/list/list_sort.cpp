@@ -1,7 +1,8 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
@@ -10,14 +11,15 @@
 namespace duckdb {
 
 struct ListSortBindData : public FunctionData {
-	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, const LogicalType &return_type_p,
-	                 const LogicalType &child_type_p, ClientContext &context_p);
+	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up,
+	                 const LogicalType &return_type_p, const LogicalType &child_type_p, ClientContext &context_p);
 	~ListSortBindData() override;
 
 	OrderType order_type;
 	OrderByNullType null_order;
 	LogicalType return_type;
 	LogicalType child_type;
+	bool is_grade_up;
 
 	vector<LogicalType> types;
 	vector<LogicalType> payload_types;
@@ -31,11 +33,11 @@ public:
 	unique_ptr<FunctionData> Copy() const override;
 };
 
-ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p,
+ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up_p,
                                    const LogicalType &return_type_p, const LogicalType &child_type_p,
                                    ClientContext &context_p)
     : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
-      context(context_p) {
+      is_grade_up(is_grade_up_p), context(context_p) {
 
 	// get the vector types
 	types.emplace_back(LogicalType::USMALLINT);
@@ -57,12 +59,12 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 }
 
 unique_ptr<FunctionData> ListSortBindData::Copy() const {
-	return make_uniq<ListSortBindData>(order_type, null_order, return_type, child_type, context);
+	return make_uniq<ListSortBindData>(order_type, null_order, is_grade_up, return_type, child_type, context);
 }
 
 bool ListSortBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListSortBindData>();
-	return order_type == other.order_type && null_order == other.null_order;
+	return order_type == other.order_type && null_order == other.null_order && is_grade_up == other.is_grade_up;
 }
 
 ListSortBindData::~ListSortBindData() {
@@ -120,18 +122,20 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
 
+	Vector sort_result_vec = info.is_grade_up ? Vector(input_lists.GetType()) : result;
+
 	// this ensures that we do not change the order of the entries in the input chunk
-	VectorOperations::Copy(input_lists, result, count, 0, 0);
+	VectorOperations::Copy(input_lists, sort_result_vec, count, 0, 0);
 
 	// get the child vector
-	auto lists_size = ListVector::GetListSize(result);
-	auto &child_vector = ListVector::GetEntry(result);
+	auto lists_size = ListVector::GetListSize(sort_result_vec);
+	auto &child_vector = ListVector::GetEntry(sort_result_vec);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
 	UnifiedVectorFormat lists_data;
-	result.ToUnifiedFormat(count, lists_data);
+	sort_result_vec.ToUnifiedFormat(count, lists_data);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// create the lists_indices vector, this contains an element for each list's entry,
@@ -191,6 +195,13 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		              local_sort_state, data_to_sort, lists_indices);
 	}
 
+	if (info.is_grade_up) {
+		ListVector::Reserve(result, lists_size);
+		ListVector::SetListSize(result, lists_size);
+		auto result_data = ListVector::GetData(result);
+		memcpy(result_data, list_entries, count * sizeof(list_entry_t));
+	}
+
 	if (data_to_sort) {
 		// add local state to global state, which sorts the data
 		global_sort_state.AddLocalState(local_sort_state);
@@ -224,8 +235,19 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
-		child_vector.Slice(sel_sorted, sel_sorted_idx);
-		child_vector.Flatten(sel_sorted_idx);
+		if (info.is_grade_up) {
+			auto &result_entry = ListVector::GetEntry(result);
+			auto result_data = ListVector::GetData(result);
+			for (idx_t i = 0; i < count; i++) {
+				for (idx_t j = result_data[i].offset; j < result_data[i].offset + result_data[i].length; j++) {
+					auto b = sel_sorted.get_index(j) - result_data[i].offset;
+					result_entry.SetValue(j, Value::BIGINT(b + 1));
+				}
+			}
+		} else {
+			child_vector.Slice(sel_sorted, sel_sorted_idx);
+			child_vector.Flatten(sel_sorted_idx);
+		}
 	}
 
 	if (args.AllConstant()) {
@@ -242,14 +264,16 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
 		bound_function.return_type = LogicalType::SQLNULL;
 		child_type = bound_function.return_type;
-		return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
+		return make_uniq<ListSortBindData>(order, null_order, false, bound_function.return_type, child_type, context);
 	}
+
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
-	child_type = ListType::GetChildType(arguments[0]->return_type);
 
-	return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
+	return make_uniq<ListSortBindData>(order, null_order, false, bound_function.return_type, child_type, context);
 }
 
 template <class T>
@@ -260,6 +284,31 @@ static T GetOrder(ClientContext &context, Expression &expr) {
 	Value order_value = ExpressionExecutor::EvaluateScalar(context, expr);
 	auto order_name = StringUtil::Upper(order_value.ToString());
 	return EnumUtil::FromString<T>(order_name.c_str());
+}
+
+static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFunction &bound_function,
+                                                vector<unique_ptr<Expression>> &arguments) {
+
+	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
+	auto order = OrderType::ORDER_DEFAULT;
+	auto null_order = OrderByNullType::ORDER_DEFAULT;
+
+	// get the sorting order
+	if (arguments.size() >= 2) {
+		order = GetOrder<OrderType>(context, *arguments[1]);
+	}
+	// get the null sorting order
+	if (arguments.size() == 3) {
+		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
+	}
+	auto &config = DBConfig::GetConfig(context);
+	order = config.ResolveOrder(order);
+	null_order = config.ResolveNullOrder(order, null_order);
+
+	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.return_type = LogicalType::LIST(LogicalTypeId::BIGINT);
+	auto child_type = ListType::GetChildType(arguments[0]->return_type);
+	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.return_type, child_type, context);
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
@@ -324,6 +373,26 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 	list_sort.AddFunction(sort_order);
 	list_sort.AddFunction(sort_orders);
 	return list_sort;
+}
+
+ScalarFunctionSet ListGradeUpFun::GetFunctions() {
+	// one parameter: list
+	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
+	                    ListGradeUpBind);
+
+	// two parameters: list, order
+	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
+	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+
+	// three parameters: list, order, null order
+	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+
+	ScalarFunctionSet list_grade_up;
+	list_grade_up.AddFunction(sort);
+	list_grade_up.AddFunction(sort_order);
+	list_grade_up.AddFunction(sort_orders);
+	return list_grade_up;
 }
 
 ScalarFunctionSet ListReverseSortFun::GetFunctions() {

@@ -1,0 +1,16 @@
+# name: benchmark/micro/csv/projection_pushdown.benchmark
+# description: Runs the CSV Scanner with Projection Pushdown
+# group: [csv]
+
+name CSV Projection Pushdown
+group csv
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load benchmark/tpch/sf1/load.sql
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+run
+SELECT l_returnflag, MIN(l_orderkey) FROM '${BENCHMARK_DIR}/lineitem.csv' GROUP BY l_returnflag;

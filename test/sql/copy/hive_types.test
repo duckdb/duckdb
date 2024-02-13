@@ -89,11 +89,11 @@ BIGINT	VARCHAR	DATE
 
 # Complex filter filtering first file, filter should be pruned completely if hive_partitioning=1
 query II
-explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=0, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1'::DATE;
+explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=0, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
 ----
 physical_plan	<REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
 
 query II
-explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1'::DATE;
+explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1';
 ----
 physical_plan	<REGEX>:.*(PARQUET_SCAN.*File Filters: \(aired \<).*

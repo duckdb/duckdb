@@ -14,7 +14,7 @@ WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type,
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), catalog(std::move(catalog_name)), schema(std::move(schema)),
-      function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
+      function_name(StringUtil::Lower(function_name)), ignore_nulls(false), distinct(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -70,10 +70,16 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	if (a.ignore_nulls != b.ignore_nulls) {
 		return false;
 	}
+	if (a.distinct != b.distinct) {
+		return false;
+	}
 	if (!ParsedExpression::ListEquals(a.children, b.children)) {
 		return false;
 	}
 	if (a.start != b.start || a.end != b.end) {
+		return false;
+	}
+	if (a.exclude_clause != b.exclude_clause) {
 		return false;
 	}
 	// check if the framing expressions are equivalentbind_
@@ -127,11 +133,13 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 
 	new_window->start = start;
 	new_window->end = end;
+	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
+	new_window->distinct = distinct;
 
 	return std::move(new_window);
 }

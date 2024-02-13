@@ -17,16 +17,21 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
-	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
-	if (!alias_result.HasError()) {
+	BindResult alias_result;
+	auto found_alias = column_alias_binder.BindAlias(*this, expr, depth, root_expression, alias_result);
+	if (found_alias) {
 		if (depth > 0) {
-			throw BinderException("Having clause cannot reference alias in correlated subquery");
+			throw BinderException("Having clause cannot reference alias \"%s\" in correlated subquery",
+			                      expr.GetColumnName());
 		}
 		return alias_result;
 	}
+
 	if (aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 		if (depth > 0) {
-			throw BinderException("Having clause cannot reference column in correlated subquery and group by all");
+			throw BinderException(
+			    "Having clause cannot reference column \"%s\" in correlated subquery and group by all",
+			    expr.GetColumnName());
 		}
 		auto expr = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
 		if (expr.HasError()) {
