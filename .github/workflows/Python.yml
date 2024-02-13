@@ -12,53 +12,6 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-   manylinux-extensions-x64:
-    name: Linux Extensions (linux_amd64_gcc4)
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Checkout Release
-      shell: bash
-      run: |
-        git config --global --add safe.directory '*'
-        git checkout v0.10.0
-
-    - uses: ./.github/actions/manylinux_2014_setup
-      with:
-        aws-cli: 1
-        ninja-build: 1
-        ccache: 1
-        nodejs: 1
-        ssh: 1
-        python_alias: 1
-        openssl: 1
-
-    - uses: ./.github/actions/build_extensions
-      with:
-        vcpkg_target_triplet: x64-linux
-        post_install: rm build/release/src/libduckdb*
-        deploy_as: linux_amd64_gcc4
-        s3_id: ${{ secrets.S3_ID }}
-        s3_key: ${{ secrets.S3_KEY }}
-        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        run_tests: 0
-        run_autoload_tests: 0
-        treat_warn_as_error: 0
-        ninja: 1
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: manylinux-extensions-x64
-        path: |
-          build/release/extension/*/*.duckdb_extension
-
    linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
@@ -86,7 +39,6 @@ jobs:
             python_build: 'cp311-*'
           - isRelease: false
             arch: aarch64
-    needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
@@ -102,12 +54,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Checkout Release
-      shell: bash
-      run: |
-        git config --global --add safe.directory '*'
-        git checkout v0.10.0
+        ref: v0.10.0
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v2
@@ -122,12 +69,6 @@ jobs:
       run: |
         pip install 'cibuildwheel>=2.16.2' twine build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
-
-    - uses: actions/download-artifact@v3
-      if: ${{ matrix.arch == 'x86_64' }}
-      with:
-        name: manylinux-extensions-x64
-        path: tools/pythonpkg
 
     - name: List extensions to be tested
       shell: bash
