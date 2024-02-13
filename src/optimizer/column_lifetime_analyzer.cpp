@@ -63,10 +63,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
-		    comp_join.join_type == JoinType::ANTI) {
-			break;
-		}
 		// FIXME for now, we only push into the projection map for equality (hash) joins
 		// FIXME: add projection to LHS as well
 		bool has_equality = false;
@@ -80,17 +76,19 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 			break;
 		}
 		// visit current operator expressions so they are added to the referenced_columns
-		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+//		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 
 		column_binding_set_t unused_bindings;
-		auto old_op_bindings = op.GetColumnBindings();
+		auto old_bindings = op.GetColumnBindings();
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		LogicalOperatorVisitor::VisitOperatorChildren(op);
+		StandardVisitOperator(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
+		auto new_bindings = op.GetColumnBindings();
+		auto break_here = "sadfg";
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
@@ -129,14 +127,14 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
-		// first visit operator expressions to populate referenced columns
-		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+//		// first visit operator expressions to populate referenced columns
+//		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		// filter, figure out which columns are not needed after the filter
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
-		LogicalOperatorVisitor::VisitOperatorChildren(op);
+		StandardVisitOperator(op);
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[0]->GetColumnBindings(), unused_bindings, filter.projection_map);
