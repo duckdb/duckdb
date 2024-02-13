@@ -131,9 +131,11 @@ unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPatt
 unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClause &root) {
 	auto match_info = make_uniq<MatchExpression>();
 	match_info->pg_name = root.pg_name; // Name of the property graph to bind to
-
-	auto alias = TransformQualifiedName(*root.graph_table);
-	match_info->alias = alias.name;
+	string alias_name;
+	if (root.graph_table) {
+		alias_name = TransformQualifiedName(*root.graph_table).name;
+	}
+	match_info->alias = alias_name.empty() ? "unnamed_graphtable" : alias_name;
 
 	if (root.where_clause) {
 		match_info->where_clause = TransformExpression(root.where_clause);

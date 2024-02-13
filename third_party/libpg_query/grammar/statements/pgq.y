@@ -245,9 +245,15 @@ GraphTableWhereOptional:
 		/* EMPTY */				{ $$ = NULL; }
 		;
 
+GraphTableNameOptional:
+        qualified_name          { $$ = $1; }
+    |
+        /* EMPTY */				{ $$ = NULL; }
+        ;
+
 GraphTableStmt:
 		'(' PGQ_IDENT MATCH PathPatternList KeepOptional GraphTableWhereOptional
-		COLUMNS '(' ColumnList ')' ')' qualified_name
+		COLUMNS '(' ColumnList ')' ')' GraphTableNameOptional
 			{
 				PGMatchClause *n = makeNode(PGMatchClause);
 				n->pg_name = $2;
