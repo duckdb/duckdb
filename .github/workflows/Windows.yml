@@ -27,12 +27,6 @@ jobs:
        with:
          fetch-depth: 0
 
-     - name: Checkout Release
-       shell: bash
-       run: |
-         git config --global --add safe.directory '*'
-         git checkout v0.10.0
-
      - uses: actions/setup-python@v4
        with:
          python-version: '3.7'
