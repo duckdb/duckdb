@@ -1,0 +1,18 @@
+# name: test/optimizer/column_lifetime_analyzer/must_visit_operator_expressions_first.test
+# description: Test column lifetime analyzer
+# group: [column_lifetime_analyzer]
+
+
+statement ok
+create table t5 as select (range + 1000) a5, range b5, (range + 50)::INT::VARCHAR || '__suffix__' c5 from range(50);
+
+statement ok
+create table t1 as select range::INT a1, (range + 45)::INT b1, (range + 50)::INT::VARCHAR || '__suffix__' c1 from range(900);
+
+query I
+select a5 from t1, t5 where b5=b1;
+----
+1045
+1046
+1047
+1048
