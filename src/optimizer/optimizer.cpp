@@ -201,12 +201,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	}
 
 	Planner::VerifyPlan(context, plan);
-	if (!plan->children.empty() && plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		auto join_bindings = plan->children[0]->GetColumnBindings();
-		auto right_bindings = plan->children[0]->children[1]->GetColumnBindings();
-		auto left_bindings = plan->children[0]->children[0]->GetColumnBindings();
-		auto break_here = 0;
-	}
+//	if (!plan->children.empty() && plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+//		auto join_bindings = plan->children[0]->GetColumnBindings();
+//		auto right_bindings = plan->children[0]->children[1]->GetColumnBindings();
+//		auto left_bindings = plan->children[0]->children[0]->GetColumnBindings();
+//		auto break_here = 0;
+//	}
 
 	return std::move(plan);
 }
