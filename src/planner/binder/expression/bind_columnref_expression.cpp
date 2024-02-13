@@ -423,7 +423,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	if (!expr) {
 		if (!col_ref_p.IsQualified()) {
 			// column was not found - check if it is a SQL value function
-			auto value_function = GetSQLValueFunction(col_ref_p.GetName());
+			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
 			if (value_function) {
 				return BindExpression(value_function, depth);
 			}
