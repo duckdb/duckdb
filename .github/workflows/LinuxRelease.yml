@@ -30,6 +30,12 @@ jobs:
         openssl: 1
         ccache: 1
 
+    - name: Report Git Information
+      shell: bash
+      run: |
+        git log -1 --format=%h
+        git describe --tags --abbrev=0
+
     - uses: ./.github/actions/build_extensions
       with:
         vcpkg_target_triplet: x64-linux
