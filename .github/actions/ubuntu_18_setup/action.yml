@@ -48,6 +48,7 @@ runs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        ref: v0.10.0
 
     - name: Install CMake 3.21
       shell: bash
