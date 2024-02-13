@@ -202,7 +202,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	auto error = transaction.Commit(db, commit_id, checkpoint_decision.can_checkpoint);
 	if (error.HasError()) {
 		// commit unsuccessful: rollback the transaction instead
-		checkpoint_decision = CheckpointDecision{false, error.Message()};
+		checkpoint_decision = CheckpointDecision {false, error.Message()};
 		transaction.commit_id = 0;
 		transaction.Rollback();
 	}
