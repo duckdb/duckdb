@@ -88,7 +88,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
 		auto new_bindings = op.GetColumnBindings();
-		auto break_here = "sadfg";
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
