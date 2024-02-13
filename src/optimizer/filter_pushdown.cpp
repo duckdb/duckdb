@@ -21,6 +21,13 @@ static unique_ptr<LogicalOperator> PushdownWindow(unique_ptr<LogicalOperator> op
 	// go into expressions, then look into the partitions.
 	// if the filter applies ONLY to the partition (and is not some arithmetic expression) then you can push the filter into
 	// the children.
+	for (auto &expr: window.expressions) {
+		if (expr->expression_class != ExpressionClass::BOUND_WINDOW) {
+			continue;
+		}
+		auto &window_expr = expr->Cast<WindowExpression>();
+		auto partitions = window_expr.partitions;
+	}
 	auto wat = "sdfs";
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
 	return std::move(op);
