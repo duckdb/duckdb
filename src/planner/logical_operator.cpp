@@ -100,12 +100,8 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
-			if (index < bindings.size()) {
-				result_bindings.push_back(bindings[index]);
-			}
-			// sometimes the projection map can index bindings that no longer exists
-			// after statistics propagation. Statistics propagation will turn a mark join
-			// into a semi join, thereby reducing the number of bindings/table_bindings a join might have.
+			D_ASSERT(index < bindings.size());
+			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
 	}
