@@ -151,10 +151,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				}
 			}
 
-			if (chosen_filter->join_type == JoinType::SEMI || chosen_filter->join_type == JoinType::ANTI ||
-			    chosen_filter->join_type == JoinType::MARK) {
-				auto break_here = "dfs";
-			}
 			auto join = make_uniq<LogicalComparisonJoin>(chosen_filter->join_type);
 			// Here we optimize build side probe side. Our build side is the right side
 			// So the right plans should have lower cardinalities.
