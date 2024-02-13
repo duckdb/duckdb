@@ -19,12 +19,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout Release
-        shell: bash
-        run: |
-          git config --global --add safe.directory '*'
-          git checkout v0.10.0
-
       - uses: ./.github/actions/manylinux_2014_setup
         with:
           aws-cli: 1

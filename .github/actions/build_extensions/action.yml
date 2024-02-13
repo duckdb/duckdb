@@ -98,6 +98,12 @@ runs:
       with:
         vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
 
+    - name: Checkout Release
+      shell: bash
+      run: |
+        git config --global --add safe.directory '*'
+        git checkout v0.10.0
+
     - name: Set vcpkg env variables
       if: inputs.vcpkg_build == 1
       shell: bash
