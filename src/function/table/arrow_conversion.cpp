@@ -294,29 +294,59 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 	}
 }
 
+union arrow_string_view_t {
+	struct {
+		int32_t length;
+		char data[12];
+	} inlined;
+
+	struct {
+		int32_t length;
+		char prefix[4];
+		int32_t buffer_index, offset;
+	} ref;
+
+	int32_t Length() const {
+		return inlined.length;
+	}
+	bool IsInline() const {
+		return Length() <= 12;
+	}
+	const char *GetInlineData() const {
+		return IsInline() ? inlined.data : ref.prefix;
+	}
+	int32_t GetBufferIndex() {
+		D_ASSERT(!IsInline());
+		return ref.buffer_index;
+	}
+	int32_t GetOffset() {
+		D_ASSERT(!IsInline());
+		return ref.offset;
+	}
+};
+
 static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array) {
 	auto strings = FlatVector::GetData<string_t>(vector);
-	auto length_buffer = ArrowBufferData<int32_t>(array, 1);
-	auto views_buffer = ArrowBufferData<char>(array, 1);
+	auto arrow_string = ArrowBufferData<arrow_string_view_t>(array, 1);
 
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 		if (FlatVector::IsNull(vector, row_idx)) {
 			continue;
 		}
-		int32_t length = length_buffer[row_idx * 4];
-		if (length <= 12) {
+		int32_t length = arrow_string[row_idx].Length();
+		if (arrow_string[row_idx].IsInline()) {
 			//	This string is inlined
 			//  | Bytes 0-3  | Bytes 4-15                            |
 			//  |------------|---------------------------------------|
 			//  | length     | data (padded with 0)                  |
-			strings[row_idx] = string_t(&views_buffer[row_idx * 16 + 4], length);
+			strings[row_idx] = string_t(arrow_string[row_idx].GetInlineData(), length);
 		} else {
-			//* This string is not inlined, we have to check a different buffer and offsets
+			//  This string is not inlined, we have to check a different buffer and offsets
 			//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 			//  |------------|------------|------------|-------------|
 			//  | length     | prefix     | buf. index | offset      |
-			int32_t buffer_index = length_buffer[row_idx * 4 + 2];
-			int32_t offset = length_buffer[row_idx * 4 + 3];
+			int32_t buffer_index = arrow_string[row_idx].GetBufferIndex();
+			int32_t offset = arrow_string[row_idx].GetOffset();
 			auto c_data = ArrowBufferData<char>(array, 2 + buffer_index);
 			strings[row_idx] = string_t(&c_data[offset], length);
 		}
