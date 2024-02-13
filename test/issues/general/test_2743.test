@@ -158,17 +158,17 @@ WITH RECURSIVE connections(source, dest, carrier) AS (
       FROM connections c, trains r
       WHERE c.dest = r.source)
 )
-SELECT * FROM connections;
+SELECT * FROM connections ORDER BY source, dest, carrier;
 ----
 A	B	C1
 A	C	C2
+A	C	Rail
 A	D	C1
-A	E	Rail
 A	D	C3
 A	E	C3
-A	C	Rail
-A	E	Rail
 A	E	C3
+A	E	Rail
+A	E	Rail
 A	E	Rail
 
 query I
@@ -240,7 +240,7 @@ WITH RECURSIVE foo(i) AS
     SELECT i+1 FROM foo WHERE i < 2
       UNION
     SELECT i+1 FROM foo WHERE i < 2)
-) SELECT * FROM foo;
+) SELECT * FROM foo ORDER BY i;
 ----
 1
 2

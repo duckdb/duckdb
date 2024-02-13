@@ -108,7 +108,8 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(PivotRef &ref, vector<uniqu
 		for (auto &pivot_column : ref.pivots) {
 			for (auto &pivot_expr : pivot_column.pivot_expressions) {
 				auto column_ref = make_uniq<CastExpression>(LogicalType::VARCHAR, pivot_expr->Copy());
-				auto constant_value = make_uniq<ConstantExpression>(pivot_value.values[pivot_value_idx++]);
+				auto constant_value = make_uniq<ConstantExpression>(
+				    pivot_value.values[pivot_value_idx++].DefaultCastAs(LogicalType::VARCHAR));
 				auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
 				                                                 std::move(column_ref), std::move(constant_value));
 				if (filter) {
@@ -355,13 +356,13 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	// parse the aggregate, and extract the referenced columns from the aggregate
 	for (auto &aggr : ref.aggregates) {
 		if (aggr->type != ExpressionType::FUNCTION) {
-			throw BinderException(FormatError(*aggr, "Pivot expression must be an aggregate"));
+			throw BinderException(*aggr, "Pivot expression must be an aggregate");
 		}
 		if (aggr->HasSubquery()) {
-			throw BinderException(FormatError(*aggr, "Pivot expression cannot contain subqueries"));
+			throw BinderException(*aggr, "Pivot expression cannot contain subqueries");
 		}
 		if (aggr->IsWindow()) {
-			throw BinderException(FormatError(*aggr, "Pivot expression cannot contain window functions"));
+			throw BinderException(*aggr, "Pivot expression cannot contain window functions");
 		}
 		// bind the function as an aggregate to ensure it is an aggregate and not a scalar function
 		auto &aggr_function = aggr->Cast<FunctionExpression>();
@@ -376,9 +377,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		if (!pivot.pivot_enum.empty()) {
 			auto type = Catalog::GetType(context, INVALID_CATALOG, INVALID_SCHEMA, pivot.pivot_enum);
 			if (type.id() != LogicalTypeId::ENUM) {
-				throw BinderException(
-				    FormatError(ref, StringUtil::Format("Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
-				                                        pivot.pivot_enum, type.ToString())));
+				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
+				                      pivot.pivot_enum, type.ToString());
 			}
 			auto enum_size = EnumType::GetSize(type);
 			for (idx_t i = 0; i < enum_size; i++) {
@@ -404,12 +404,11 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 				val = Value::LIST(LogicalType::VARCHAR, entry.values);
 			}
 			if (pivots.find(val) != pivots.end()) {
-				throw BinderException(FormatError(
-				    ref, StringUtil::Format("The value \"%s\" was specified multiple times in the IN clause",
-				                            val.ToString())));
+				throw BinderException(ref, "The value \"%s\" was specified multiple times in the IN clause",
+				                      val.ToString());
 			}
 			if (entry.values.size() != pivot.pivot_expressions.size()) {
-				throw ParserException("PIVOT IN list - inconsistent amount of rows - expected %d but got %d",
+				throw BinderException(ref, "PIVOT IN list - inconsistent amount of rows - expected %d but got %d",
 				                      pivot.pivot_expressions.size(), entry.values.size());
 			}
 			pivots.insert(val);
@@ -418,7 +417,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	auto &client_config = ClientConfig::GetConfig(context);
 	auto pivot_limit = client_config.pivot_limit;
 	if (total_pivots >= pivot_limit) {
-		throw BinderException("Pivot column limit of %llu exceeded. Use SET pivot_limit=X to increase the limit.",
+		throw BinderException(ref, "Pivot column limit of %llu exceeded. Use SET pivot_limit=X to increase the limit.",
 		                      client_config.pivot_limit);
 	}
 
@@ -527,8 +526,8 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	}
 	if (!handled_columns.empty()) {
 		for (auto &entry : handled_columns) {
-			throw BinderException("Column \"%s\" referenced in UNPIVOT but no matching entry was found in the table",
-			                      entry);
+			throw BinderException(
+			    ref, "Column \"%s\" referenced in UNPIVOT but no matching entry was found in the table", entry);
 		}
 	}
 	vector<Value> unpivot_names;
@@ -550,6 +549,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	for (idx_t v_idx = 1; v_idx < unpivot.entries.size(); v_idx++) {
 		if (unpivot.entries[v_idx].values.size() != unpivot.entries[0].values.size()) {
 			throw BinderException(
+			    ref,
 			    "UNPIVOT value count mismatch - entry has %llu values, but expected all entries to have %llu values",
 			    unpivot.entries[v_idx].values.size(), unpivot.entries[0].values.size());
 		}
@@ -559,7 +559,8 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		vector<unique_ptr<ParsedExpression>> expressions;
 		expressions.reserve(unpivot.entries.size());
 		for (auto &entry : unpivot.entries) {
-			expressions.push_back(make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString()));
+			auto colref = make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString());
+			expressions.push_back(std::move(colref));
 		}
 		unpivot_expressions.push_back(std::move(expressions));
 	}
@@ -575,8 +576,8 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 
 	// construct the UNNEST expression for the set of unpivoted columns
 	if (ref.unpivot_names.size() != unpivot_expressions.size()) {
-		throw BinderException("UNPIVOT name count mismatch - got %d names but %d expressions", ref.unpivot_names.size(),
-		                      unpivot_expressions.size());
+		throw BinderException(ref, "UNPIVOT name count mismatch - got %d names but %d expressions",
+		                      ref.unpivot_names.size(), unpivot_expressions.size());
 	}
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
 		auto list_expr = make_uniq<FunctionExpression>("list_value", std::move(unpivot_expressions[i]));

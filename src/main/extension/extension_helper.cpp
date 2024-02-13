@@ -203,33 +203,39 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
+			auto &config = DBConfig::GetConfig(context);
 			ExtensionHelper::InstallExtension(context, extension_name, false,
-			                                  context.config.autoinstall_extension_repo);
+			                                  config.options.autoinstall_extension_repo);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
 	} catch (...) {
 		return false;
 	}
-	return false;
 }
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
-	if (context.db->ExtensionIsLoaded(extension_name)) {
+	return ExtensionHelper::AutoLoadExtension(*context.db, extension_name);
+}
+
+void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &extension_name) {
+	if (db.ExtensionIsLoaded(extension_name)) {
 		// Avoid downloading again
 		return;
 	}
-	auto &dbconfig = DBConfig::GetConfig(context);
+	auto &dbconfig = DBConfig::GetConfig(db);
 	try {
+		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
-			ExtensionHelper::InstallExtension(context, extension_name, false,
-			                                  context.config.autoinstall_extension_repo);
+			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false,
+			                                  dbconfig.options.autoinstall_extension_repo);
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(context, extension_name);
-	} catch (Exception &e) {
-		throw AutoloadException(extension_name, e);
+		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
+	} catch (std::exception &e) {
+		ErrorData error(e);
+		throw AutoloadException(extension_name, error.RawMessage());
 	}
 }
 
@@ -340,13 +346,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #if DUCKDB_EXTENSION_HTTPFS_LINKED
 		db.LoadExtension<HttpfsExtension>();
 #else
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "visualizer") {
-#if DUCKDB_EXTENSION_VISUALIZER_LINKED
-		db.LoadExtension<VisualizerExtension>();
-#else
-		// visualizer extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "json") {

@@ -12,8 +12,12 @@ unique_ptr<SQLStatement> SetStatement::Copy() const {
 
 // Set Variable
 
-SetVariableStatement::SetVariableStatement(std::string name_p, Value value_p, SetScope scope_p)
+SetVariableStatement::SetVariableStatement(std::string name_p, unique_ptr<ParsedExpression> value_p, SetScope scope_p)
     : SetStatement(std::move(name_p), scope_p, SetType::SET), value(std::move(value_p)) {
+}
+
+SetVariableStatement::SetVariableStatement(const SetVariableStatement &other)
+    : SetVariableStatement(other.name, other.value->Copy(), other.scope) {
 }
 
 unique_ptr<SQLStatement> SetVariableStatement::Copy() const {

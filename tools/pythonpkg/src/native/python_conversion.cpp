@@ -5,6 +5,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include "datetime.h" //From Python
 
@@ -81,13 +82,19 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 	return Value::STRUCT(std::move(struct_values));
 }
 
-Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
+Value TransformStructFormatDictionaryToMap(const PyDictionary &dict, const LogicalType &target_type) {
 	if (dict.len == 0) {
 		return EmptyMapValue();
 	}
 
+	if (target_type.id() != LogicalTypeId::MAP) {
+		throw InvalidInputException("Please provide a valid target type for transform from Python to Value");
+	}
 	auto size = py::len(dict.keys);
 	D_ASSERT(size == py::len(dict.values));
+
+	auto key_target = MapType::KeyType(target_type);
+	auto value_target = MapType::ValueType(target_type);
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
@@ -95,11 +102,11 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 	vector<Value> elements;
 	for (idx_t i = 0; i < size; i++) {
 
-		Value new_key = TransformPythonValue(dict.keys.attr("__getitem__")(i));
-		Value new_value = TransformPythonValue(dict.values.attr("__getitem__")(i));
+		Value new_key = TransformPythonValue(dict.keys.attr("__getitem__")(i), key_target);
+		Value new_value = TransformPythonValue(dict.values.attr("__getitem__")(i), value_target);
 
-		key_type = LogicalType::MaxLogicalType(key_type, new_key.type());
-		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
+		key_type = LogicalType::ForceMaxLogicalType(key_type, new_key.type());
+		value_type = LogicalType::ForceMaxLogicalType(value_type, new_value.type());
 
 		child_list_t<Value> struct_values;
 		struct_values.emplace_back(make_pair("key", std::move(new_key)));
@@ -116,7 +123,7 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
 Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	if (target_type.id() != LogicalTypeId::UNKNOWN && !DictionaryHasMapFormat(dict)) {
 		// dict == { 'k1': v1, 'k2': v2, ..., 'kn': vn }
-		return TransformStructFormatDictionaryToMap(dict);
+		return TransformStructFormatDictionaryToMap(dict, target_type);
 	}
 
 	auto keys = dict.values.attr("__getitem__")(0);
@@ -141,8 +148,8 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 		Value new_key = ListValue::GetChildren(key_list)[i];
 		Value new_value = ListValue::GetChildren(value_list)[i];
 
-		key_type = LogicalType::MaxLogicalType(key_type, new_key.type());
-		value_type = LogicalType::MaxLogicalType(value_type, new_value.type());
+		key_type = LogicalType::ForceMaxLogicalType(key_type, new_key.type());
+		value_type = LogicalType::ForceMaxLogicalType(value_type, new_value.type());
 
 		child_list_t<Value> struct_values;
 		struct_values.emplace_back(make_pair("key", std::move(new_key)));
@@ -196,7 +203,7 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 	for (idx_t i = 0; i < size; i++) {
 		auto &child_type = list_target ? ListType::GetChildType(target_type) : LogicalType::UNKNOWN;
 		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
-		element_type = LogicalType::MaxLogicalType(element_type, new_value.type());
+		element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
 		values.push_back(std::move(new_value));
 	}
 
@@ -295,6 +302,13 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 		res = Value::HUGEINT(value);
 		return true;
 	}
+	case LogicalTypeId::UHUGEINT: {
+		if (value < 0) {
+			return false;
+		}
+		res = Value::UHUGEINT(value);
+		return true;
+	}
 	case LogicalTypeId::BIGINT: {
 		res = Value::BIGINT(value);
 		return true;
@@ -363,7 +377,9 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 
 	if (ele.is_none()) {
 		return PythonObjectType::None;
-	} else if (py::isinstance(ele, import_cache.pandas().libs.NAType())) {
+	} else if (ele.is(import_cache.pandas.NaT())) {
+		return PythonObjectType::None;
+	} else if (ele.is(import_cache.pandas.NA())) {
 		return PythonObjectType::None;
 	} else if (py::isinstance<py::bool_>(ele)) {
 		return PythonObjectType::Bool;
@@ -371,17 +387,17 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Integer;
 	} else if (py::isinstance<py::float_>(ele)) {
 		return PythonObjectType::Float;
-	} else if (py::isinstance(ele, import_cache.decimal().Decimal())) {
+	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		return PythonObjectType::Decimal;
-	} else if (py::isinstance(ele, import_cache.uuid().UUID())) {
+	} else if (py::isinstance(ele, import_cache.uuid.UUID())) {
 		return PythonObjectType::Uuid;
-	} else if (py::isinstance(ele, import_cache.datetime().datetime())) {
+	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		return PythonObjectType::Datetime;
-	} else if (py::isinstance(ele, import_cache.datetime().time())) {
+	} else if (py::isinstance(ele, import_cache.datetime.time())) {
 		return PythonObjectType::Time;
-	} else if (py::isinstance(ele, import_cache.datetime().date())) {
+	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		return PythonObjectType::Date;
-	} else if (py::isinstance(ele, import_cache.datetime().timedelta())) {
+	} else if (py::isinstance(ele, import_cache.datetime.timedelta())) {
 		return PythonObjectType::Timedelta;
 	} else if (py::isinstance<py::str>(ele)) {
 		return PythonObjectType::String;
@@ -397,11 +413,11 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
-	} else if (py::isinstance(ele, import_cache.numpy().ndarray())) {
+	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
-	} else if (py::isinstance(ele, import_cache.numpy().datetime64())) {
+	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
 		return PythonObjectType::NdDatetime;
-	} else if (py::isinstance(ele, import_cache.pyduckdb().value())) {
+	} else if (py::isinstance(ele, import_cache.duckdb.Value())) {
 		return PythonObjectType::Value;
 	} else {
 		return PythonObjectType::Other;
@@ -453,8 +469,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	case PythonObjectType::Datetime: {
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		bool is_nat = false;
-		if (import_cache.pandas().isnull.IsLoaded()) {
-			auto isnull_result = import_cache.pandas().isnull()(ele);
+		if (import_cache.pandas.isnull(false)) {
+			auto isnull_result = import_cache.pandas.isnull()(ele);
 			is_nat = string(py::str(isnull_result)) == "True";
 		}
 		if (is_nat) {

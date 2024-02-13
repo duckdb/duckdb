@@ -2,8 +2,14 @@
 # description: Test storage bitpacking, but simple and for hugeints
 # group: [bitpacking]
 
-# load the DB from disk
+# for small block sizes, this test will default to another compression function, as the bitpacking groups
+# no longer fit the blocks
+require block_size 262144
+
 load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+pragma verify_fetch_row
 
 statement ok
 PRAGMA force_compression='bitpacking'
@@ -17,10 +23,12 @@ PRAGMA force_bitpacking_mode='${bitpacking_mode}'
 statement ok
 CREATE TABLE test (id VARCHAR, a HUGEINT);
 
-# Insert multiple ranges so that each method can be used on at least on the the ranges
-# bit-width > 96
+# insert multiple ranges so that each method can be used on at least on the the ranges bit-width > 96
+
 statement ok
 INSERT INTO test SELECT i::VARCHAR, -i::HUGEINT + -1234567891011121314151617180000::HUGEINT FROM range(0, 10000) tbl(i);
+
+statement ok
 INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,10000) tbl(i);
 
 statement ok

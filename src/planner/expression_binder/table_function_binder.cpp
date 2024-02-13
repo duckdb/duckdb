@@ -8,18 +8,23 @@ namespace duckdb {
 TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
+BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
+	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
+	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
+	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
+}
+
 BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, idx_t depth, bool root_expression) {
 
-	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
-	// which we capture and remove later
-	if (lambda_bindings) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
-		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
-			if (colref.GetColumnName() == (*lambda_bindings)[i].dummy_name) {
-				return (*lambda_bindings)[i].Bind(colref, i, depth);
-			}
+	// try binding as a lambda parameter
+	auto &col_ref = expr.Cast<ColumnRefExpression>();
+	if (!col_ref.IsQualified()) {
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
+		if (lambda_ref) {
+			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
 		}
 	}
+
 	auto value_function = ExpressionBinder::GetSQLValueFunction(expr.GetColumnName());
 	if (value_function) {
 		return BindExpression(value_function, depth, root_expression);
@@ -33,6 +38,8 @@ BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> &exp
                                                bool root_expression) {
 	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::LAMBDA_REF:
+		return BindLambdaReference(expr.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth, root_expression);
 	case ExpressionClass::SUBQUERY:

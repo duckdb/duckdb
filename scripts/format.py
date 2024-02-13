@@ -10,13 +10,14 @@ import subprocess
 import difflib
 import re
 from python_helpers import open_utf8
-from importlib import import_module
-from importlib.metadata import version
 
 try:
-    import_module('black')
-except ImportError as e:
-    print('you need to run `pip install black`', e)
+    ver = subprocess.check_output(('black', '--version'), text=True)
+    if int(ver.split(' ')[1].split('.')[0]) < 24:
+        print('you need to run `pip install "black>=24"`', ver)
+        exit(-1)
+except Exception as e:
+    print('you need to run `pip install "black>=24"`', e)
     exit(-1)
 
 try:

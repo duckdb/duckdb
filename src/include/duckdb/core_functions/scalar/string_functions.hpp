@@ -93,16 +93,25 @@ struct FormatFun {
 struct FormatBytesFun {
 	static constexpr const char *Name = "format_bytes";
 	static constexpr const char *Parameters = "bytes";
-	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)";
 	static constexpr const char *Example = "format_bytes(1000 * 16)";
 
 	static ScalarFunction GetFunction();
 };
 
-struct FormatreadabledecimalsizeFun {
+struct FormatreadablesizeFun {
 	using ALIAS = FormatBytesFun;
 
+	static constexpr const char *Name = "formatReadableSize";
+};
+
+struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
+	static constexpr const char *Parameters = "bytes";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)";
+	static constexpr const char *Example = "format_bytes(1000 * 16)";
+
+	static ScalarFunction GetFunction();
 };
 
 struct HammingFun {
@@ -268,6 +277,42 @@ struct MD5NumberUpperFun {
 	static constexpr const char *Example = "md5_number_upper('123')";
 
 	static ScalarFunction GetFunction();
+};
+
+struct ParseDirnameFun {
+	static constexpr const char *Name = "parse_dirname";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_dirname('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParseDirpathFun {
+	static constexpr const char *Name = "parse_dirpath";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_dirpath('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParseFilenameFun {
+	static constexpr const char *Name = "parse_filename";
+	static constexpr const char *Parameters = "string,trim_extension,separator";
+	static constexpr const char *Description = "Returns the last component of the path similarly to Python's os.path.basename. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_filename('path/to/file.csv', true, 'forward_slash')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ParsePathFun {
+	static constexpr const char *Name = "parse_path";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.PurePath::parts. separator options: system, both_slash (default), forward_slash, backslash";
+	static constexpr const char *Example = "parse_path('path/to/file.csv', 'system')";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct PrintfFun {
@@ -469,6 +514,15 @@ struct ToBaseFun {
 	static constexpr const char *Example = "to_base(42, 16)";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct RegexpEscapeFun {
+	static constexpr const char *Name = "regexp_escape";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Escapes all potentially meaningful regexp characters in the input string";
+	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
+
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb

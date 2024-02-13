@@ -55,10 +55,17 @@
     {
         "name": "format_bytes",
         "parameters": "bytes",
-        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)",
         "example": "format_bytes(1000 * 16)",
         "type": "scalar_function",
-        "aliases": ["formatReadableDecimalSize"]
+        "aliases": ["formatReadableSize"]
+    },
+    {
+        "name": "formatReadableDecimalSize",
+        "parameters": "bytes",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)",
+        "example": "format_bytes(1000 * 16)",
+        "type": "scalar_function"
     },
     {
         "name": "hamming",
@@ -172,6 +179,38 @@
         "example": "md5_number_upper('123')",
         "type": "scalar_function",
         "struct": "MD5NumberUpperFun"
+    },
+    {
+        "name": "parse_dirname",
+        "parameters": "string,separator",
+        "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_dirname('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParseDirnameFun"
+    },
+    {
+        "name": "parse_dirpath",
+        "parameters": "string,separator",
+        "description": "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_dirpath('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParseDirpathFun"
+    },
+    {
+        "name": "parse_filename",
+        "parameters": "string,trim_extension,separator",
+        "description": "Returns the last component of the path similarly to Python's os.path.basename. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_filename('path/to/file.csv', true, 'forward_slash')",
+        "type": "scalar_function_set",
+        "struct": "ParseFilenameFun"
+    },
+    {
+        "name": "parse_path",
+        "parameters": "string,separator",
+        "description": "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.PurePath::parts. separator options: system, both_slash (default), forward_slash, backslash",
+        "example": "parse_path('path/to/file.csv', 'system')",
+        "type": "scalar_function_set",
+        "struct": "ParsePathFun"
     },
     {
         "name": "printf",
@@ -297,5 +336,13 @@
         "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
         "example": "to_base(42, 16)",
         "type": "scalar_function_set"
+    },
+    {
+        "name": "regexp_escape",
+        "parameters": "string",
+        "description": "Escapes all potentially meaningful regexp characters in the input string",
+        "example": "regexp_escape('https://duckdb.org')",
+        "struct": "RegexpEscapeFun",
+        "type": "scalar_function"
     }
 ]

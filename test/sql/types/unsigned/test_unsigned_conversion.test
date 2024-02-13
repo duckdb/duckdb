@@ -29,28 +29,36 @@ SELECT '7'::UBIGINT, '130'::UBIGINT, '18446744073709551615'::UBIGINT
 # Numbers that do not fit the unsigned type
 statement error
 SELECT '265'::UTINYINT
+----
 
 statement error
 SELECT '65536'::USMALLINT
+----
 
 statement error
 SELECT '4294967296'::UINTEGER
+----
 
 statement error
 SELECT '18446744073709551616'::UBIGINT
+----
 
 # Negative Numbers
 statement error
 SELECT '-1'::UTINYINT
+----
 
 statement error
 SELECT '-1'::USMALLINT
+----
 
 statement error
 SELECT '-1'::UINTEGER
+----
 
 statement error
 SELECT '-1'::UBIGINT
+----
 
 # zero
 query II
@@ -83,12 +91,15 @@ SELECT 42::TINYINT::UBIGINT, 42::SMALLINT::UBIGINT, 42::INTEGER::UBIGINT, 42::BI
 # cast various types to unsigned (Larger than they can fit)
 statement error
 SELECT (9223372036854775807)::BIGINT::UTINYINT
+----
 
 statement error
 SELECT (9223372036854775807)::BIGINT::USMALLINT
+----
 
 statement error
 SELECT (9223372036854775807)::BIGINT::UINTEGER
+----
 
 # These should fit though
 query I
@@ -101,18 +112,27 @@ SELECT (9223372036854775808)::HUGEINT::UBIGINT
 ----
 9223372036854775808
 
+query I
+SELECT (9223372036854775808)::UHUGEINT::UBIGINT
+----
+9223372036854775808
+
 # Negative Values
 statement error
 SELECT (-42)::TINYINT::UTINYINT
+----
 
 statement error
 SELECT (-42)::TINYINT::USMALLINT
+----
 
 statement error
 SELECT (-42)::TINYINT::UINTEGER
+----
 
 statement error
 SELECT (-42)::TINYINT::UBIGINT
+----
 
 query I
 SELECT -42::TINYINT::UTINYINT
@@ -136,15 +156,19 @@ SELECT -42::TINYINT::UBIGINT
 
 statement error
 SELECT (-42)::SMALLINT::UTINYINT
+----
 
 statement error
 SELECT (-42)::SMALLINT::USMALLINT
+----
 
 statement error
 SELECT (-42)::SMALLINT::UINTEGER
+----
 
 statement error
 SELECT (-42)::SMALLINT::UBIGINT
+----
 
 query I
 SELECT -42::SMALLINT::UTINYINT
@@ -168,15 +192,19 @@ SELECT -42::SMALLINT::UBIGINT
 
 statement error
 SELECT (-42)::INTEGER::UTINYINT
+----
 
 statement error
 SELECT (-42)::INTEGER::USMALLINT
+----
 
 statement error
 SELECT (-42)::INTEGER::UINTEGER
+----
 
 statement error
 SELECT (-42)::INTEGER::UBIGINT
+----
 
 query I
 SELECT -42::INTEGER::UTINYINT
@@ -200,15 +228,19 @@ SELECT -42::INTEGER::UBIGINT
 
 statement error
 SELECT (-42)::BIGINT::UTINYINT
+----
 
 statement error
 SELECT (-42)::BIGINT::USMALLINT
+----
 
 statement error
 SELECT (-42)::BIGINT::UINTEGER
+----
 
 statement error
 SELECT (-42)::BIGINT::UBIGINT
+----
 
 query I
 SELECT -42::BIGINT::UTINYINT
@@ -232,15 +264,19 @@ SELECT -42::BIGINT::UBIGINT
 
 statement error
 SELECT (-42)::FLOAT::UTINYINT
+----
 
 statement error
 SELECT (-42)::FLOAT::USMALLINT
+----
 
 statement error
 SELECT (-42)::FLOAT::UINTEGER
+----
 
 statement error
 SELECT (-42)::FLOAT::UBIGINT
+----
 
 query I
 SELECT -42::FLOAT::UTINYINT
@@ -264,15 +300,19 @@ SELECT -42::FLOAT::UBIGINT
 
 statement error
 SELECT (-42)::DOUBLE::UTINYINT
+----
 
 statement error
 SELECT (-42)::DOUBLE::USMALLINT
+----
 
 statement error
 SELECT (-42)::DOUBLE::UINTEGER
+----
 
 statement error
 SELECT (-42)::DOUBLE::UBIGINT
+----
 
 query I
 SELECT -42::DOUBLE::UTINYINT
@@ -297,6 +337,7 @@ SELECT -42::DOUBLE::UBIGINT
 # Convert unsigned to signed
 statement error
 SELECT (200)::UTINYINT::TINYINT
+----
 
 query I
 SELECT (10)::UTINYINT::TINYINT
@@ -320,9 +361,11 @@ SELECT (10)::UTINYINT::BIGINT
 
 statement error
 SELECT (200)::USMALLINT::TINYINT
+----
 
 statement error
 SELECT (33000)::USMALLINT::SMALLINT
+----
 
 query I
 SELECT (10)::USMALLINT::TINYINT
@@ -346,12 +389,15 @@ SELECT (10)::USMALLINT::BIGINT
 
 statement error
 SELECT (200)::UINTEGER::TINYINT
+----
 
 statement error
 SELECT (33000)::UINTEGER::SMALLINT
+----
 
 statement error
 SELECT (3147483647)::UINTEGER::INTEGER
+----
 
 query I
 SELECT (10)::UINTEGER::TINYINT
@@ -375,16 +421,20 @@ SELECT (10)::UINTEGER::BIGINT
 
 statement error
 SELECT (200)::UBIGINT::TINYINT
+----
 
 statement error
 SELECT (33000)::UBIGINT::SMALLINT
+----
 
 statement error
 SELECT (3147483647)::UBIGINT::INTEGER
+----
 
 
 statement error
 SELECT (10223372036854775807)::UBIGINT::INTEGER
+----
 
 query I
 SELECT (10)::UBIGINT::TINYINT
@@ -409,9 +459,11 @@ SELECT (10)::UBIGINT::BIGINT
 
 statement error
 SELECT (9223372036854775807)::BIGINT::USMALLINT
+----
 
 statement error
 SELECT (9223372036854775807)::BIGINT::UINTEGER
+----
 
 # These should fit though
 query I
@@ -424,6 +476,10 @@ SELECT (9223372036854775808)::HUGEINT::UBIGINT
 ----
 9223372036854775808
 
+query I
+SELECT (9223372036854775808)::UHUGEINT::UBIGINT
+----
+9223372036854775808
 
 
 # Cast Decimal to Unsigned Values
@@ -434,6 +490,7 @@ SELECT (200.32)::DECIMAL::UTINYINT
 
 statement error
 SELECT (260.32)::DECIMAL::UTINYINT
+----
 
 query I
 SELECT (200.32)::DECIMAL::USMALLINT
@@ -447,6 +504,7 @@ SELECT (65535.32)::DECIMAL::USMALLINT
 
 statement error
 SELECT (65536.32)::DECIMAL::USMALLINT
+----
 
 
 query I
@@ -461,6 +519,7 @@ SELECT (4294967295.32)::DECIMAL::UINTEGER
 
 statement error
 SELECT (4294967296.32)::DECIMAL::UINTEGER
+----
 
 query I
 SELECT (200.32)::DECIMAL::UBIGINT
@@ -475,6 +534,7 @@ SELECT (200.32)::REAL::UTINYINT
 
 statement error
 SELECT (260.32)::REAL::UTINYINT
+----
 
 query I
 SELECT (200.32)::REAL::USMALLINT
@@ -488,6 +548,7 @@ SELECT (65534.32)::REAL::USMALLINT
 
 statement error
 SELECT (65536.32)::REAL::USMALLINT
+----
 
 
 query I

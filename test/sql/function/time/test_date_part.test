@@ -74,69 +74,91 @@ endloop
 # time gives errors for date-only parts
 statement error
 SELECT era(i) FROM times
+----
 
 statement error
 SELECT year(i) FROM times
+----
 
 statement error
 SELECT month(i) FROM times
+----
 
 statement error
 SELECT day(i) FROM times
+----
 
 statement error
 SELECT decade(i) FROM times
+----
 
 statement error
 SELECT century(i) FROM times
+----
 
 statement error
 SELECT millennium(i) FROM times
+----
 
 statement error
 SELECT quarter(i) FROM times
+----
 
 statement error
 SELECT dayofweek(i) FROM times
+----
 
 statement error
 SELECT isodow(i) FROM times
+----
 
 statement error
 SELECT dayofyear(i) FROM times
+----
 
 statement error
 SELECT week(i) FROM times
+----
 
 statement error
 SELECT yearweek(i) FROM times
+----
 
 statement error
 select extract(dow from time '10:00:00');
+----
 
 statement error
 select extract(doy from time '10:00:00');
+----
 
 statement error
 select extract(yearweek from time '10:00:00');
+----
 
 statement error
 select extract(century from time '10:00:00');
+----
 
 statement error
 SELECT era(i) FROM times
+----
 
 statement error
 select extract(era from time '10:00:00');
+----
 
 statement error
 select date_part('era', time '10:00:00');
+----
 
 statement error
 select extract(julian from time '10:00:00');
+----
 
 statement error
 select date_part('julian', time '10:00:00');
+----
 
 # Correctness: Compare date_part against function value
 foreach partcode hour minute second millisecond microsecond epoch
@@ -221,5 +243,6 @@ statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts
 FROM times
 ORDER BY 1;
+----
 
 endloop

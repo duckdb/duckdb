@@ -1,4 +1,5 @@
 #include "duckdb/common/types/list_segment.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -56,6 +57,28 @@ static const LinkedList *GetListChildData(const ListSegment *segment) {
 static LinkedList *GetListChildData(ListSegment *segment) {
 	return reinterpret_cast<LinkedList *>(data_ptr_cast(segment) + sizeof(ListSegment) +
 	                                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
+}
+
+//===--------------------------------------------------------------------===//
+// Array
+//===--------------------------------------------------------------------===//
+static idx_t GetAllocationSizeArray(uint16_t capacity) {
+	// Only store the null mask for the array segment, length is fixed so we don't need to store it
+	return AlignValue(sizeof(ListSegment) + capacity * (sizeof(bool)) + sizeof(LinkedList));
+}
+
+static data_ptr_t AllocateArrayData(ArenaAllocator &allocator, uint16_t capacity) {
+	return allocator.Allocate(GetAllocationSizeArray(capacity));
+}
+
+static const LinkedList *GetArrayChildData(const ListSegment *segment) {
+	return reinterpret_cast<const LinkedList *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                            segment->capacity * sizeof(bool));
+}
+
+static LinkedList *GetArrayChildData(ListSegment *segment) {
+	return reinterpret_cast<LinkedList *>(data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                      segment->capacity * sizeof(bool));
 }
 
 //===--------------------------------------------------------------------===//
@@ -139,6 +162,22 @@ static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, A
 		auto child_segment = child_function.create_segment(child_function, allocator, capacity);
 		Store<ListSegment *>(child_segment, data_ptr_cast(child_segments + i));
 	}
+
+	return segment;
+}
+
+static ListSegment *CreateArraySegment(const ListSegmentFunctions &, ArenaAllocator &allocator, uint16_t capacity) {
+	// allocate data and set header
+	auto segment = reinterpret_cast<ListSegment *>(AllocateArrayData(allocator, capacity));
+
+	segment->capacity = capacity;
+	segment->count = 0;
+	segment->next = nullptr;
+
+	// create an empty linked list for the child vector
+	auto linked_child_list = GetArrayChildData(segment);
+	LinkedList linked_list(0, nullptr, nullptr);
+	Store<LinkedList>(linked_list, data_ptr_cast(linked_child_list));
 
 	return segment;
 }
@@ -291,6 +330,28 @@ static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Aren
 	}
 }
 
+static void WriteDataToArraySegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                    ListSegment *segment, RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
+	auto sel_entry_idx = input_data.unified.sel->get_index(entry_idx);
+
+	// write null validity
+	auto null_mask = GetNullMask(segment);
+	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
+	null_mask[segment->count] = !valid;
+
+	// Arrays require there to be values in the child even when the entry is NULL.
+	auto array_size = ArrayType::GetSize(input_data.logical_type);
+	auto array_offset = sel_entry_idx * array_size;
+
+	auto child_segments = Load<LinkedList>(data_ptr_cast(GetArrayChildData(segment)));
+	D_ASSERT(functions.child_functions.size() == 1);
+	for (idx_t elem_idx = array_offset; elem_idx < array_offset + array_size; elem_idx++) {
+		functions.child_functions[0].AppendRow(allocator, child_segments, input_data.children.back(), elem_idx);
+	}
+	// store the updated linked list
+	Store<LinkedList>(child_segments, data_ptr_cast(GetArrayChildData(segment)));
+}
+
 void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &linked_list,
                                      RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) const {
 
@@ -437,14 +498,34 @@ static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, con
 	}
 }
 
-void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result,
-                                           idx_t &initial_total_count) const {
+static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
+                                     idx_t &total_count) {
+
+	auto &aggr_vector_validity = FlatVector::Validity(result);
+
+	// set NULLs
+	auto null_mask = GetNullMask(segment);
+	for (idx_t i = 0; i < segment->count; i++) {
+		if (null_mask[i]) {
+			aggr_vector_validity.SetInvalid(total_count + i);
+		}
+	}
+
+	auto &child_vector = ArrayVector::GetEntry(result);
+	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetArrayChildData(segment)));
+	auto array_size = ArrayType::GetSize(result.GetType());
+	auto child_size = array_size * total_count;
+
+	// recurse into the linked list of child values
+	D_ASSERT(functions.child_functions.size() == 1);
+	functions.child_functions[0].BuildListVector(linked_child_list, child_vector, child_size);
+}
+
+void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector &result, idx_t total_count) const {
 	auto &read_data_from_segment = *this;
-	idx_t total_count = initial_total_count;
 	auto segment = linked_list.first_segment;
 	while (segment) {
 		read_data_from_segment.read_data(read_data_from_segment, segment, result, total_count);
-
 		total_count += segment->count;
 		segment = segment->next;
 	}
@@ -505,6 +586,9 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 	case PhysicalType::INT128:
 		SegmentPrimitiveFunction<hugeint_t>(functions);
 		break;
+	case PhysicalType::UINT128:
+		SegmentPrimitiveFunction<uhugeint_t>(functions);
+		break;
 	case PhysicalType::INTERVAL:
 		SegmentPrimitiveFunction<interval_t>(functions);
 		break;
@@ -538,6 +622,16 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 			functions.child_functions.emplace_back();
 			GetSegmentDataFunctions(functions.child_functions.back(), child_types[i].second);
 		}
+		break;
+	}
+	case PhysicalType::ARRAY: {
+		functions.create_segment = CreateArraySegment;
+		functions.write_data = WriteDataToArraySegment;
+		functions.read_data = ReadDataFromArraySegment;
+
+		// recurse
+		functions.child_functions.emplace_back();
+		GetSegmentDataFunctions(functions.child_functions.back(), ArrayType::GetChildType(type));
 		break;
 	}
 	default:

@@ -161,15 +161,15 @@ shared_ptr<Relation> Relation::CrossProduct(const shared_ptr<Relation> &other, J
 }
 
 shared_ptr<Relation> Relation::Union(const shared_ptr<Relation> &other) {
-	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::UNION);
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::UNION, true);
 }
 
 shared_ptr<Relation> Relation::Except(const shared_ptr<Relation> &other) {
-	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::EXCEPT);
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::EXCEPT, true);
 }
 
 shared_ptr<Relation> Relation::Intersect(const shared_ptr<Relation> &other) {
-	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::INTERSECT);
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::INTERSECT, true);
 }
 
 shared_ptr<Relation> Relation::Distinct() {
@@ -334,11 +334,11 @@ unique_ptr<QueryResult> Relation::Explain(ExplainType type) {
 }
 
 void Relation::Update(const string &update, const string &condition) {
-	throw Exception("UPDATE can only be used on base tables!");
+	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 
 void Relation::Delete(const string &condition) {
-	throw Exception("DELETE can only be used on base tables!");
+	throw InvalidInputException("DELETE can only be used on base tables!");
 }
 
 shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values,

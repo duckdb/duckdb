@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -22,7 +23,7 @@ struct CommittedVersionOperator {
 	}
 
 	static bool UseDeletedVersion(transaction_t min_start_time, transaction_t min_transaction_id, transaction_t id) {
-		return (id >= min_start_time && id < TRANSACTION_ID_START) || (id >= min_transaction_id);
+		return (id >= min_start_time && id < TRANSACTION_ID_START) || id == NOT_DELETED_ID;
 	}
 };
 

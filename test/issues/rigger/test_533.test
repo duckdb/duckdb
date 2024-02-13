@@ -14,4 +14,5 @@ INSERT INTO t0(c0) VALUES (10000000000);
 
 statement error
 SELECT t0.c0 ::INT FROM t0;
+----
 

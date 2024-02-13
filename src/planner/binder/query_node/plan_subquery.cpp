@@ -333,6 +333,11 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 	if (!op.children.empty()) {
+		// Collect all recursive CTEs during recursive descend
+		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
+			binder.recursive_ctes[rec_cte.table_index] = &op;
+		}
 		root = std::move(op.children[0]);
 		D_ASSERT(root);
 		if (root->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
@@ -432,6 +437,11 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	// we only need to create the join conditions between the LHS and the RHS
 	// fetch the set of columns
 	auto plan_columns = dependent_join->GetColumnBindings();
+
+	// in case of a materialized CTE, the output is defined by the second children operator
+	if (dependent_join->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+		plan_columns = dependent_join->children[1]->GetColumnBindings();
+	}
 
 	// now create the join conditions
 	// start off with the conditions that were passed in (if any)

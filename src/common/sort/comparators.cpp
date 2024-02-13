@@ -2,6 +2,7 @@
 
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -55,6 +56,7 @@ int Comparators::CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, cons
 	case PhysicalType::VARCHAR:
 		return TemplatedCompareVal<string_t>(l_ptr, r_ptr);
 	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
 	case PhysicalType::STRUCT: {
 		auto l_nested_ptr = Load<data_ptr_t>(l_ptr);
 		auto r_nested_ptr = Load<data_ptr_t>(r_ptr);
@@ -134,6 +136,8 @@ int Comparators::CompareValAndAdvance(data_ptr_t &l_ptr, data_ptr_t &r_ptr, cons
 		return TemplatedCompareAndAdvance<uint64_t>(l_ptr, r_ptr);
 	case PhysicalType::INT128:
 		return TemplatedCompareAndAdvance<hugeint_t>(l_ptr, r_ptr);
+	case PhysicalType::UINT128:
+		return TemplatedCompareAndAdvance<uhugeint_t>(l_ptr, r_ptr);
 	case PhysicalType::FLOAT:
 		return TemplatedCompareAndAdvance<float>(l_ptr, r_ptr);
 	case PhysicalType::DOUBLE:
@@ -146,6 +150,8 @@ int Comparators::CompareValAndAdvance(data_ptr_t &l_ptr, data_ptr_t &r_ptr, cons
 		return CompareListAndAdvance(l_ptr, r_ptr, ListType::GetChildType(type), valid);
 	case PhysicalType::STRUCT:
 		return CompareStructAndAdvance(l_ptr, r_ptr, StructType::GetChildTypes(type), valid);
+	case PhysicalType::ARRAY:
+		return CompareArrayAndAdvance(l_ptr, r_ptr, ArrayType::GetChildType(type), valid, ArrayType::GetSize(type));
 	default:
 		throw NotImplementedException("Unimplemented CompareValAndAdvance for type %s", type.ToString());
 	}
@@ -222,6 +228,119 @@ int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 	return comp_res;
 }
 
+int Comparators::CompareArrayAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type,
+                                        bool valid, idx_t array_size) {
+	if (!valid) {
+		return 0;
+	}
+
+	// Load array validity masks
+	ValidityBytes left_validity(left_ptr);
+	ValidityBytes right_validity(right_ptr);
+	left_ptr += (array_size + 7) / 8;
+	right_ptr += (array_size + 7) / 8;
+
+	int comp_res = 0;
+	if (TypeIsConstantSize(type.InternalType())) {
+		// Templated code for fixed-size types
+		switch (type.InternalType()) {
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
+			comp_res = TemplatedCompareListLoop<int8_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::INT16:
+			comp_res =
+			    TemplatedCompareListLoop<int16_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::INT32:
+			comp_res =
+			    TemplatedCompareListLoop<int32_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::INT64:
+			comp_res =
+			    TemplatedCompareListLoop<int64_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::UINT8:
+			comp_res =
+			    TemplatedCompareListLoop<uint8_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::UINT16:
+			comp_res =
+			    TemplatedCompareListLoop<uint16_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::UINT32:
+			comp_res =
+			    TemplatedCompareListLoop<uint32_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::UINT64:
+			comp_res =
+			    TemplatedCompareListLoop<uint64_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::INT128:
+			comp_res =
+			    TemplatedCompareListLoop<hugeint_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::FLOAT:
+			comp_res = TemplatedCompareListLoop<float>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::DOUBLE:
+			comp_res = TemplatedCompareListLoop<double>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		case PhysicalType::INTERVAL:
+			comp_res =
+			    TemplatedCompareListLoop<interval_t>(left_ptr, right_ptr, left_validity, right_validity, array_size);
+			break;
+		default:
+			throw NotImplementedException("CompareListAndAdvance for fixed-size type %s", type.ToString());
+		}
+	} else {
+		// Variable-sized array entries
+		bool left_valid;
+		bool right_valid;
+		idx_t entry_idx;
+		idx_t idx_in_entry;
+		// Size (in bytes) of all variable-sizes entries is stored before the entries begin,
+		// to make deserialization easier. We need to skip over them
+		left_ptr += array_size * sizeof(idx_t);
+		right_ptr += array_size * sizeof(idx_t);
+		for (idx_t i = 0; i < array_size; i++) {
+			ValidityBytes::GetEntryIndex(i, entry_idx, idx_in_entry);
+			left_valid = left_validity.RowIsValid(left_validity.GetValidityEntry(entry_idx), idx_in_entry);
+			right_valid = right_validity.RowIsValid(right_validity.GetValidityEntry(entry_idx), idx_in_entry);
+			if (left_valid && right_valid) {
+				switch (type.InternalType()) {
+				case PhysicalType::LIST:
+					comp_res = CompareListAndAdvance(left_ptr, right_ptr, ListType::GetChildType(type), left_valid);
+					break;
+				case PhysicalType::ARRAY:
+					comp_res = CompareArrayAndAdvance(left_ptr, right_ptr, ArrayType::GetChildType(type), left_valid,
+					                                  ArrayType::GetSize(type));
+					break;
+				case PhysicalType::VARCHAR:
+					comp_res = CompareStringAndAdvance(left_ptr, right_ptr, left_valid);
+					break;
+				case PhysicalType::STRUCT:
+					comp_res =
+					    CompareStructAndAdvance(left_ptr, right_ptr, StructType::GetChildTypes(type), left_valid);
+					break;
+				default:
+					throw NotImplementedException("CompareArrayAndAdvance for variable-size type %s", type.ToString());
+				}
+			} else if (!left_valid && !right_valid) {
+				comp_res = 0;
+			} else if (left_valid) {
+				comp_res = -1;
+			} else {
+				comp_res = 1;
+			}
+			if (comp_res != 0) {
+				break;
+			}
+		}
+	}
+	return comp_res;
+}
+
 int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type,
                                        bool valid) {
 	if (!valid) {
@@ -271,6 +390,9 @@ int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_p
 		case PhysicalType::INT128:
 			comp_res = TemplatedCompareListLoop<hugeint_t>(left_ptr, right_ptr, left_validity, right_validity, count);
 			break;
+		case PhysicalType::UINT128:
+			comp_res = TemplatedCompareListLoop<uhugeint_t>(left_ptr, right_ptr, left_validity, right_validity, count);
+			break;
 		case PhysicalType::FLOAT:
 			comp_res = TemplatedCompareListLoop<float>(left_ptr, right_ptr, left_validity, right_validity, count);
 			break;
@@ -301,6 +423,10 @@ int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_p
 				switch (type.InternalType()) {
 				case PhysicalType::LIST:
 					comp_res = CompareListAndAdvance(left_ptr, right_ptr, ListType::GetChildType(type), left_valid);
+					break;
+				case PhysicalType::ARRAY:
+					comp_res = CompareArrayAndAdvance(left_ptr, right_ptr, ArrayType::GetChildType(type), left_valid,
+					                                  ArrayType::GetSize(type));
 					break;
 				case PhysicalType::VARCHAR:
 					comp_res = CompareStringAndAdvance(left_ptr, right_ptr, left_valid);

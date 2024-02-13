@@ -86,7 +86,7 @@ select json_object('nested', map(['duck', 'goose'], [42, 7]))
 {"nested":{"duck":42,"goose":7}}
 
 query T
-select json_object('nested', map([0, 'goose'], [42, 7]))
+select json_object('nested', map(['0', 'goose'], [42, 7]))
 ----
 {"nested":{"0":42,"goose":7}}
 
@@ -167,6 +167,7 @@ select json_quote(map(list(c), list(d))) from test
 # Histogram not implemented for INT[]
 statement error
 select json_quote(map(list(d), list(e))) from test
+----
 
 query T
 select json_quote(map(list(c), list(e))) from test
@@ -191,6 +192,7 @@ NULL
 
 statement error
 select row_to_json([42])
+----
 
 query T
 select array_to_json([42])
@@ -209,6 +211,7 @@ NULL
 
 statement error
 select array_to_json({a: 42})
+----
 
 # Some SQLite tests
 query T
@@ -224,6 +227,7 @@ SELECT json_object('a',1,'b',2.5,'c',null,'d','String Test');
 # must have even number of args
 statement error
 SELECT json_object('a',1,'b');
+----
 
 query T
 SELECT json_array(1,2.5,null,'hello');

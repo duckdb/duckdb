@@ -9,7 +9,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_left_delim_join.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -101,7 +101,8 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
 	case PhysicalOperatorType::IE_JOIN:
-	case PhysicalOperatorType::DELIM_JOIN:
+	case PhysicalOperatorType::LEFT_DELIM_JOIN:
+	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
 	case PhysicalOperatorType::UNION:
 	case PhysicalOperatorType::RECURSIVE_CTE:
 	case PhysicalOperatorType::EMPTY_RESULT:
@@ -381,15 +382,14 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
-	if (context.client_data->http_state && !context.client_data->http_state->IsEmpty()) {
-		string read =
-		    "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_state->total_bytes_received);
-		string written =
-		    "out: " + StringUtil::BytesToHumanReadableString(context.client_data->http_state->total_bytes_sent);
-		string head = "#HEAD: " + to_string(context.client_data->http_state->head_count);
-		string get = "#GET: " + to_string(context.client_data->http_state->get_count);
-		string put = "#PUT: " + to_string(context.client_data->http_state->put_count);
-		string post = "#POST: " + to_string(context.client_data->http_state->post_count);
+	auto http_state = HTTPState::TryGetState(context, false);
+	if (http_state && !http_state->IsEmpty()) {
+		string read = "in: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_received);
+		string written = "out: " + StringUtil::BytesToHumanReadableString(http_state->total_bytes_sent);
+		string head = "#HEAD: " + to_string(http_state->head_count);
+		string get = "#GET: " + to_string(http_state->get_count);
+		string put = "#PUT: " + to_string(http_state->put_count);
+		string post = "#POST: " + to_string(http_state->post_count);
 
 		constexpr idx_t TOTAL_BOX_WIDTH = 39;
 		ss << "┌─────────────────────────────────────┐\n";

@@ -52,6 +52,9 @@ footer = '''
 } // namespace duckdb
 '''
 
+templated_base = '''
+template <typename ${TEMPLATE_NAME}>'''
+
 serialize_base = '''
 void ${CLASS_NAME}::Serialize(Serializer &serializer) const {
 ${MEMBERS}}
@@ -138,11 +141,15 @@ def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
 
 
+def get_default_argument(default_value):
+    return f'{default_value}'.lower() if type(default_value) == bool else f'{default_value}'
+
+
 def get_serialize_element(
     property_name, property_id, property_key, property_type, has_default, default_value, is_deleted, pointer_type
 ):
     assignment = '.' if pointer_type == 'none' else '->'
-    default_argument = '' if default_value is None else f', {default_value}'
+    default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
     template = serialize_element
     if is_deleted:
         template = "\t/* [Deleted] (${PROPERTY_TYPE}) \"${PROPERTY_NAME}\" */\n"
@@ -171,7 +178,7 @@ def get_deserialize_element_template(
 ):
     # read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
-    default_argument = '' if default_value is None else f', {default_value}'
+    default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
     if is_deleted:
         template = template.replace(', result${ASSIGNMENT}${PROPERTY_NAME}', '').replace(
             'ReadProperty', 'ReadDeletedProperty'
@@ -254,6 +261,8 @@ def has_default_by_default(type):
         return True
     if is_container(type):
         if 'IndexVector' in type:
+            return False
+        if 'CSVOption' in type:
             return False
         return True
     if type == 'string':
@@ -616,8 +625,19 @@ def generate_class_code(class_entry):
     deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
 
     class_generation = ''
-    class_generation += serialize_base.replace('${CLASS_NAME}', class_entry.name).replace('${MEMBERS}', class_serialize)
-    class_generation += (
+    pattern = re.compile(r'<\w+>')
+    templated_type = ''
+
+    # Check if is a templated class
+    is_templated = pattern.search(class_entry.name)
+    if is_templated:
+        templated_type = templated_base.replace('${TEMPLATE_NAME}', is_templated.group()[1:-1])
+
+    class_generation += templated_type + serialize_base.replace('${CLASS_NAME}', class_entry.name).replace(
+        '${MEMBERS}', class_serialize
+    )
+
+    class_generation += templated_type + (
         deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return)
         .replace('${CLASS_NAME}', class_entry.name)
         .replace('${MEMBERS}', class_deserialize)

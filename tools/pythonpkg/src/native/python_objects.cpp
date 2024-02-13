@@ -7,6 +7,8 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/core_functions/to_interval.hpp"
 
 #include "datetime.h" // Python datetime initialize #1
 
@@ -26,19 +28,17 @@ PyTimeDelta::PyTimeDelta(py::handle &obj) {
 }
 
 interval_t PyTimeDelta::ToInterval() {
-	interval_t interval;
+	interval_t result;
 
-	// Timedelta stores any amount of seconds lower than a day only
-	D_ASSERT(seconds < Interval::SECS_PER_DAY);
+	auto micros_interval = Interval::FromMicro(microseconds);
+	auto days_interval = interval_t {/*months = */ 0,
+	                                 /*days = */ days,
+	                                 /*micros = */ 0};
+	auto seconds_interval = ToSecondsOperator::Operation<int64_t, interval_t>(seconds);
 
-	// Convert overflow of days to months
-	interval.months = days / Interval::DAYS_PER_MONTH;
-	days -= interval.months * Interval::DAYS_PER_MONTH;
-
-	microseconds += seconds * Interval::MICROS_PER_SEC;
-	interval.days = days;
-	interval.micros = microseconds;
-	return interval;
+	result = AddOperator::Operation<interval_t, interval_t, interval_t>(micros_interval, days_interval);
+	result = AddOperator::Operation<interval_t, interval_t, interval_t>(result, seconds_interval);
+	return result;
 }
 
 int64_t PyTimeDelta::GetDays(py::handle &obj) {
@@ -274,23 +274,7 @@ timestamp_t PyDateTime::ToTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
-bool PyDateTime::IsPositiveInfinity() const {
-	return year == 9999 && month == 12 && day == 31 && hour == 23 && minute == 59 && second == 59 && micros == 999999;
-}
-
-bool PyDateTime::IsNegativeInfinity() const {
-	return year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0 && micros == 0;
-}
-
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
-	if (IsPositiveInfinity()) {
-		// FIXME: respect the target_type ?
-		return Value::TIMESTAMP(timestamp_t::infinity());
-	}
-	if (IsNegativeInfinity()) {
-		// FIXME: respect the target_type ?
-		return Value::TIMESTAMP(timestamp_t::ninfinity());
-	}
 	auto timestamp = ToTimestamp();
 	if (!py::none().is(tzone_obj)) {
 		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
@@ -363,21 +347,8 @@ PyDate::PyDate(py::handle &ele) {
 }
 
 Value PyDate::ToDuckValue() {
-	if (IsPositiveInfinity()) {
-		return Value::DATE(date_t::infinity());
-	}
-	if (IsNegativeInfinity()) {
-		return Value::DATE(date_t::ninfinity());
-	}
-	return Value::DATE(year, month, day);
-}
-
-bool PyDate::IsPositiveInfinity() const {
-	return year == 9999 && month == 12 && day == 31;
-}
-
-bool PyDate::IsNegativeInfinity() const {
-	return year == 1 && month == 1 && day == 1;
+	auto value = Value::DATE(year, month, day);
+	return value;
 }
 
 void PythonObject::Initialize() {
@@ -394,6 +365,32 @@ InfinityType GetTimestampInfinityType(timestamp_t &timestamp) {
 		return InfinityType::NEGATIVE;
 	}
 	return InfinityType::NONE;
+}
+
+py::object PythonObject::FromStruct(const Value &val, const LogicalType &type,
+                                    const ClientProperties &client_properties) {
+	auto &struct_values = StructValue::GetChildren(val);
+
+	auto &child_types = StructType::GetChildTypes(type);
+	if (StructType::IsUnnamed(type)) {
+		py::tuple py_tuple(struct_values.size());
+		for (idx_t i = 0; i < struct_values.size(); i++) {
+			auto &child_entry = child_types[i];
+			D_ASSERT(child_entry.first.empty());
+			auto &child_type = child_entry.second;
+			py_tuple[i] = FromValue(struct_values[i], child_type, client_properties);
+		}
+		return std::move(py_tuple);
+	} else {
+		py::dict py_struct;
+		for (idx_t i = 0; i < struct_values.size(); i++) {
+			auto &child_entry = child_types[i];
+			auto &child_name = child_entry.first;
+			auto &child_type = child_entry.second;
+			py_struct[child_name.c_str()] = FromValue(struct_values[i], child_type, client_properties);
+		}
+		return std::move(py_struct);
+	}
 }
 
 py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
@@ -423,12 +420,14 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		return py::cast(val.GetValue<uint64_t>());
 	case LogicalTypeId::HUGEINT:
 		return py::reinterpret_steal<py::object>(PyLong_FromString(val.GetValue<string>().c_str(), nullptr, 10));
+	case LogicalTypeId::UHUGEINT:
+		return py::reinterpret_steal<py::object>(PyLong_FromString(val.GetValue<string>().c_str(), nullptr, 10));
 	case LogicalTypeId::FLOAT:
 		return py::cast(val.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
 		return py::cast(val.GetValue<double>());
 	case LogicalTypeId::DECIMAL: {
-		return import_cache.decimal().Decimal()(val.ToString());
+		return import_cache.decimal.Decimal()(val.ToString());
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
@@ -462,10 +461,10 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		// Deal with infinity
 		switch (infinity) {
 		case InfinityType::POSITIVE: {
-			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.max());
+			return py::reinterpret_borrow<py::object>(import_cache.datetime.datetime.max());
 		}
 		case InfinityType::NEGATIVE: {
-			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.min());
+			return py::reinterpret_borrow<py::object>(import_cache.datetime.datetime.min());
 		}
 		case InfinityType::NONE:
 			break;
@@ -480,9 +479,9 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		    py::reinterpret_steal<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
 			// We have to add the timezone info
-			auto tz_utc = import_cache.pytz().timezone()("UTC");
+			auto tz_utc = import_cache.pytz.timezone()("UTC");
 			auto timestamp_utc = tz_utc.attr("localize")(py_timestamp);
-			auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
+			auto tz_info = import_cache.pytz.timezone()(client_properties.time_zone);
 			return timestamp_utc.attr("astimezone")(tz_info);
 		}
 		return py_timestamp;
@@ -500,9 +499,9 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		int32_t year, month, day;
 		if (!duckdb::Date::IsFinite(date)) {
 			if (date == date_t::infinity()) {
-				return py::reinterpret_borrow<py::object>(import_cache.datetime().date.max());
+				return py::reinterpret_borrow<py::object>(import_cache.datetime.date.max());
 			}
-			return py::reinterpret_borrow<py::object>(import_cache.datetime().date.min());
+			return py::reinterpret_borrow<py::object>(import_cache.datetime.date.min());
 		}
 		duckdb::Date::Convert(date, year, month, day);
 		return py::reinterpret_steal<py::object>(PyDate_FromDate(year, month, day));
@@ -535,27 +534,17 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		return std::move(py_struct);
 	}
 	case LogicalTypeId::STRUCT: {
-		auto &struct_values = StructValue::GetChildren(val);
-
-		py::dict py_struct;
-		auto &child_types = StructType::GetChildTypes(type);
-		for (idx_t i = 0; i < struct_values.size(); i++) {
-			auto &child_entry = child_types[i];
-			auto &child_name = child_entry.first;
-			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = FromValue(struct_values[i], child_type, client_properties);
-		}
-		return std::move(py_struct);
+		return FromStruct(val, type, client_properties);
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return import_cache.uuid().UUID()(UUID::ToString(uuid_value));
+		return import_cache.uuid.UUID()(UUID::ToString(uuid_value));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
-		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
-		return import_cache.datetime().timedelta()(py::arg("days") = days,
-		                                           py::arg("microseconds") = interval_value.micros);
+		int64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
+		return import_cache.datetime.timedelta()(py::arg("days") = days,
+		                                         py::arg("microseconds") = interval_value.micros);
 	}
 
 	default:

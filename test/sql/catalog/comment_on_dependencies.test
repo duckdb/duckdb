@@ -1,0 +1,16 @@
+# name: test/sql/catalog/comment_on_dependencies.test
+# description: Test COMMENT ON a catalog entry with dependencies
+# group: [catalog]
+
+### Create some test data
+statement ok
+CREATE TABLE t1 AS SELECT 1 as c1
+
+statement ok
+CREATE INDEX test_index ON t1 using art(c1)
+
+# TODO: this doesn't work: we should fix it
+statement error
+COMMENT ON TABLE t1 IS 'very niceee'
+----
+Dependency Error: Cannot alter entry "t1" because there are entries that depend on it.

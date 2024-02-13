@@ -1,6 +1,6 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/string_util.hpp"
-
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
@@ -38,6 +38,14 @@ string OptimizerTypeToString(OptimizerType type) {
 		}
 	}
 	throw InternalException("Invalid optimizer type");
+}
+
+vector<string> ListAllOptimizers() {
+	vector<string> result;
+	for (idx_t i = 0; internal_optimizer_types[i].name; i++) {
+		result.push_back(internal_optimizer_types[i].name);
+	}
+	return result;
 }
 
 OptimizerType OptimizerTypeFromString(const string &str) {

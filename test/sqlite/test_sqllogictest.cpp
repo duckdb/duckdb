@@ -59,8 +59,8 @@ static void testRunner() {
 
 		std::size_t found = name.rfind("test/sql");
 		if (found == std::string::npos) {
-			throw Exception("Failed to auto detect working dir for test '" + name +
-			                "' because a non-standard path was used!");
+			throw InvalidInputException("Failed to auto detect working dir for test '" + name +
+			                            "' because a non-standard path was used!");
 		}
 		auto test_working_dir = name.substr(0, found);
 

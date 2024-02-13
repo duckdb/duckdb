@@ -1,6 +1,8 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-#include "duckdb/parallel/concurrentqueue.hpp"
+
 #include "duckdb/common/exception.hpp"
+#include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
 
@@ -33,7 +35,11 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 }
 
 BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0) {
+    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0),
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
+	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
+		memory_usage_per_tag[i] = 0;
+	}
 }
 BufferPool::~BufferPool() {
 }
@@ -50,21 +56,31 @@ void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	queue->q.enqueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
 }
 
-void BufferPool::IncreaseUsedMemory(idx_t size) {
+void BufferPool::IncreaseUsedMemory(MemoryTag tag, idx_t size) {
 	current_memory += size;
+	memory_usage_per_tag[uint8_t(tag)] += size;
 }
 
-idx_t BufferPool::GetUsedMemory() {
+idx_t BufferPool::GetUsedMemory() const {
 	return current_memory;
 }
-idx_t BufferPool::GetMaxMemory() {
+
+idx_t BufferPool::GetMaxMemory() const {
 	return maximum_memory;
 }
 
-BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
+idx_t BufferPool::GetQueryMaxMemory() const {
+	return GetMaxMemory();
+}
+
+TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
+	return *temporary_memory_manager;
+}
+
+BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {
 	BufferEvictionNode node;
-	TempBufferPoolReservation r(*this, extra_memory);
+	TempBufferPoolReservation r(tag, *this, extra_memory);
 	while (current_memory > memory_limit) {
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
@@ -115,7 +131,7 @@ void BufferPool::PurgeQueue() {
 void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	lock_guard<mutex> l_lock(limit_lock);
 	// try to evict until the limit is reached
-	if (!EvictBlocks(0, limit).success) {
+	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit).success) {
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
@@ -124,7 +140,7 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	// set the global maximum memory to the new limit if successful
 	maximum_memory = limit;
 	// evict again
-	if (!EvictBlocks(0, limit).success) {
+	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit).success) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
 		throw OutOfMemoryException(

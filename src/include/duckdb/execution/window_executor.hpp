@@ -176,6 +176,7 @@ class WindowAggregateExecutor : public WindowExecutor {
 public:
 	bool IsConstantAggregate();
 	bool IsCustomAggregate();
+	bool IsDistinctAggregate();
 
 	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
 	                        const ValidityMask &partition_mask, const ValidityMask &order_mask,
@@ -257,6 +258,7 @@ public:
 	                    const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) override;
+	unique_ptr<WindowExecutorState> GetExecutorState() const override;
 
 protected:
 	// IGNORE NULLS

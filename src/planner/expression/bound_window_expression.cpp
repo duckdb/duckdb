@@ -12,7 +12,7 @@ BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType re
                                              unique_ptr<AggregateFunction> aggregate,
                                              unique_ptr<FunctionData> bind_info)
     : Expression(type, ExpressionClass::BOUND_WINDOW, std::move(return_type)), aggregate(std::move(aggregate)),
-      bind_info(std::move(bind_info)), ignore_nulls(false) {
+      bind_info(std::move(bind_info)), ignore_nulls(false), distinct(false) {
 }
 
 string BoundWindowExpression::ToString() const {
@@ -30,8 +30,27 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (ignore_nulls != other.ignore_nulls) {
 		return false;
 	}
+	if (distinct != other.distinct) {
+		return false;
+	}
 	if (start != other.start || end != other.end) {
 		return false;
+	}
+	if (exclude_clause != other.exclude_clause) {
+		return false;
+	}
+
+	// If there are aggregates, check they are equal
+	if (aggregate.get() != other.aggregate.get()) {
+		if (!aggregate || !other.aggregate || *aggregate != *other.aggregate) {
+			return false;
+		}
+	}
+	// If there's function data, check if they are equal
+	if (bind_info.get() != other.bind_info.get()) {
+		if (!bind_info || !other.bind_info || !bind_info->Equals(*other.bind_info)) {
+			return false;
+		}
 	}
 	// check if the child expressions are equivalent
 	if (!Expression::ListEquals(children, other.children)) {
@@ -51,9 +70,39 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	return KeysAreCompatible(other);
 }
 
+bool BoundWindowExpression::PartitionsAreEquivalent(const BoundWindowExpression &other) const {
+	// Partitions are not order sensitive.
+	if (partitions.size() != other.partitions.size()) {
+		return false;
+	}
+	// TODO: Should partitions be an expression_set_t?
+	expression_set_t others;
+	for (const auto &partition : other.partitions) {
+		others.insert(*partition);
+	}
+	for (const auto &partition : partitions) {
+		if (!others.count(*partition)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+idx_t BoundWindowExpression::GetSharedOrders(const BoundWindowExpression &other) const {
+	const auto overlap = MinValue<idx_t>(orders.size(), other.orders.size());
+
+	idx_t result = 0;
+	for (; result < overlap; ++result) {
+		if (!orders[result].Equals(other.orders[result])) {
+			return false;
+		}
+	}
+
+	return result;
+}
+
 bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other) const {
-	// check if the partitions are equivalent
-	if (!Expression::ListEquals(partitions, other.partitions)) {
+	if (!PartitionsAreEquivalent(other)) {
 		return false;
 	}
 	// check if the orderings are equivalent
@@ -99,12 +148,21 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 
 	new_window->start = start;
 	new_window->end = end;
+	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
+	new_window->distinct = distinct;
 
+	for (auto &es : expr_stats) {
+		if (es) {
+			new_window->expr_stats.push_back(es->ToUnique());
+		} else {
+			new_window->expr_stats.push_back(nullptr);
+		}
+	}
 	return std::move(new_window);
 }
 
@@ -126,6 +184,8 @@ void BoundWindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(209, "end_expr", end_expr, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(210, "offset_expr", offset_expr, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(211, "default_expr", default_expr, unique_ptr<Expression>());
+	serializer.WriteProperty(212, "exclude_clause", exclude_clause);
+	serializer.WriteProperty(213, "distinct", distinct);
 }
 
 unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserializer) {
@@ -153,6 +213,8 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault(209, "end_expr", result->end_expr, unique_ptr<Expression>());
 	deserializer.ReadPropertyWithDefault(210, "offset_expr", result->offset_expr, unique_ptr<Expression>());
 	deserializer.ReadPropertyWithDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
+	deserializer.ReadProperty(212, "exclude_clause", result->exclude_clause);
+	deserializer.ReadProperty(213, "distinct", result->distinct);
 	return std::move(result);
 }
 

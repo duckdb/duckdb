@@ -98,6 +98,24 @@
     ]
   },
   {
+    "class": "ArrayTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ARRAY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "child_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "size",
+        "type": "uint32_t"
+      }
+    ],
+    "constructor": ["child_type", "size"]
+  },
+  {
     "class": "UserTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "USER_TYPE_INFO",
@@ -106,6 +124,18 @@
         "id": 200,
         "name": "user_type_name",
         "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string",
+        "default": "string()"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string",
+        "default": "string()"
       }
     ]
   },
@@ -126,5 +156,34 @@
     "base": "ExtraTypeInfo",
     "enum": "GENERIC_TYPE_INFO",
     "custom_switch_code": "result = make_shared<ExtraTypeInfo>(type);\nbreak;"
+  },
+  {
+    "class": "AnyTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ANY_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "target_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 201,
+        "name": "cast_score",
+        "type": "idx_t"
+      }
+    ]
+  },
+  {
+    "class": "IntegerLiteralTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "INTEGER_LITERAL_TYPE_INFO",
+    "members": [
+      {
+        "id": 200,
+        "name": "constant_value",
+        "type": "Value"
+      }
+    ]
   }
 ]

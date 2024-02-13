@@ -7,6 +7,7 @@ add_library_unity(
   joinref.cpp
   matchref.cpp
   pivotref.cpp
+  showref.cpp
   subqueryref.cpp
   table_function.cpp)
 set(ALL_OBJECT_FILES

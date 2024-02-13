@@ -25,20 +25,22 @@ public:
 	}
 
 	static optional_idx Invalid() {
-		return INVALID_INDEX;
+		return optional_idx();
 	}
 
 	bool IsValid() const {
-		return index != DConstants::INVALID_INDEX;
+		return index != INVALID_INDEX;
 	}
-	void Invalidate() {
-		index = INVALID_INDEX;
-	}
+
 	idx_t GetIndex() const {
 		if (index == INVALID_INDEX) {
 			throw InternalException("Attempting to get the index of an optional_idx that is not set");
 		}
 		return index;
+	}
+
+	inline bool operator==(const optional_idx &rhs) const {
+		return index == rhs.index;
 	}
 
 private:

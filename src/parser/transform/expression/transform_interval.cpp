@@ -44,6 +44,10 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	constexpr int32_t SECOND_MASK = 1 << 12;
 	constexpr int32_t MILLISECOND_MASK = 1 << 13;
 	constexpr int32_t MICROSECOND_MASK = 1 << 14;
+	constexpr int32_t WEEK_MASK = 1 << 24;
+	constexpr int32_t DECADE_MASK = 1 << 25;
+	constexpr int32_t CENTURY_MASK = 1 << 26;
+	constexpr int32_t MILLENNIUM_MASK = 1 << 27;
 
 	// we need to check certain combinations
 	// because certain interval masks (e.g. INTERVAL '10' HOURS TO DAYS) set multiple bits
@@ -51,6 +55,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	// (we might add support if someone complains about it)
 
 	string fname;
+	LogicalType parse_type = LogicalType::DOUBLE;
 	LogicalType target_type;
 	if (mask & YEAR_MASK && mask & MONTH_MASK) {
 		// DAY TO HOUR
@@ -96,20 +101,44 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	} else if (mask & SECOND_MASK) {
 		// SECOND
 		fname = "to_seconds";
-		target_type = LogicalType::BIGINT;
+		target_type = LogicalType::DOUBLE;
 	} else if (mask & MILLISECOND_MASK) {
 		// MILLISECOND
 		fname = "to_milliseconds";
-		target_type = LogicalType::BIGINT;
+		target_type = LogicalType::DOUBLE;
 	} else if (mask & MICROSECOND_MASK) {
-		// SECOND
+		// MICROSECOND
 		fname = "to_microseconds";
 		target_type = LogicalType::BIGINT;
+	} else if (mask & WEEK_MASK) {
+		// WEEK
+		fname = "to_weeks";
+		target_type = LogicalType::INTEGER;
+	} else if (mask & DECADE_MASK) {
+		// DECADE
+		fname = "to_decades";
+		target_type = LogicalType::INTEGER;
+	} else if (mask & CENTURY_MASK) {
+		// CENTURY
+		fname = "to_centuries";
+		target_type = LogicalType::INTEGER;
+	} else if (mask & MILLENNIUM_MASK) {
+		// MILLENNIUM
+		fname = "to_millennia";
+		target_type = LogicalType::INTEGER;
 	} else {
 		throw InternalException("Unsupported interval post-fix");
 	}
-	// first push a cast to the target type
-	expr = make_uniq<CastExpression>(target_type, std::move(expr));
+	// first push a cast to the parse type
+	expr = make_uniq<CastExpression>(parse_type, std::move(expr));
+
+	// next, truncate it if the target type doesn't match the parse type
+	if (target_type != parse_type) {
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(std::move(expr));
+		expr = make_uniq<FunctionExpression>("trunc", std::move(children));
+		expr = make_uniq<CastExpression>(target_type, std::move(expr));
+	}
 	// now push the operation
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(expr));

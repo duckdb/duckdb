@@ -8,12 +8,11 @@ PRAGMA enable_verification
 statement error
 select * from read_csv_auto('data/csv/invalid_utf8.csv')
 ----
-Invalid unicode (byte sequence mismatch) detected in CSV file.
+Invalid unicode (byte sequence mismatch) detected
 
-statement error
+query I
 select * from read_csv_auto('data/csv/empty.csv')
 ----
-Invalid Input Error: Error in file "data/csv/empty.csv": CSV options could not be auto-detected. Consider setting parser options manually.
 
 query II
 select * from read_csv_auto('data/csv/small_file.csv', sample_size=1)

@@ -11,6 +11,10 @@ SelectNode::SelectNode()
 }
 
 string SelectNode::ToString() const {
+	if (from_table && from_table->type == TableReferenceType::SHOW_REF) {
+		D_ASSERT(select_list.size() == 1);
+		return from_table->ToString();
+	}
 	string result;
 	result = cte_map.ToString();
 	result += "SELECT ";
@@ -41,7 +45,7 @@ string SelectNode::ToString() const {
 			result += StringUtil::Format(" AS %s", SQLIdentifier(select_list[i]->alias));
 		}
 	}
-	if (from_table && from_table->type != TableReferenceType::EMPTY) {
+	if (from_table && from_table->type != TableReferenceType::EMPTY_FROM) {
 		result += " FROM " + from_table->ToString();
 	}
 	if (where_clause) {

@@ -14,6 +14,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -44,8 +46,9 @@ public:
 	}
 
 	Transaction &GetTransaction(AttachedDatabase &db);
+	void RemoveTransaction(AttachedDatabase &db);
 
-	string Commit();
+	ErrorData Commit();
 	void Rollback();
 
 	idx_t GetActiveQuery();
@@ -58,9 +61,9 @@ public:
 
 private:
 	//! The set of active transactions for each database
-	unordered_map<AttachedDatabase *, Transaction *> transactions;
+	reference_map_t<AttachedDatabase, reference<Transaction>> transactions;
 	//! The set of transactions in order of when they were started
-	vector<optional_ptr<AttachedDatabase>> all_transactions;
+	vector<reference<AttachedDatabase>> all_transactions;
 	//! The database we are modifying - we can only modify one database per transaction
 	optional_ptr<AttachedDatabase> modified_database;
 };

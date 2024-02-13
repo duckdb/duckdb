@@ -141,40 +141,52 @@ SELECT FINALIZE(corr(d, d+1) EXPORT_STATE), FINALIZE(covar_pop(d, d+1) EXPORT_ST
 
 statement error
 SELECT list(d) EXPORT_STATE from dummy;
+----
 
 statement error
 SELECT string_agg(d, ',') EXPORT_STATE from dummy;
+----
 
 statement error
 SELECT string_agg(d) EXPORT_STATE from dummy;
+----
 
 statement error
 SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE, AVG(d) EXPORT_STATE)) FROM dummy;
+----
 
 statement error
 SELECT combine(NULL, NULL);
+----
 
 statement error
 SELECT combine(42, 42);
+----
 
 statement error
 SELECT finalize(NULL);
+----
 
 statement error
 SELECT finalize(42);
+----
 
 statement error
 SELECT finalize(sum(d)) from dummy;
+----
 
 statement error
 SELECT finalize(sum(d)) from dummy group by g;
+----
 
 # can't finalize twice
 statement error
 SELECT finalize(finalize(sum(d) EXPORT_STATE)) from dummy;
+----
 
 statement error
 select sum(42) EXPORT_STATE over ();
+----
 
 
 # tests with ze persistence
@@ -215,15 +227,19 @@ SELECT FINALIZE(COMBINE(SUM(42) EXPORT_STATE, (SUM(42) EXPORT_STATE)::BLOB));
 
 statement error
 SELECT (SUM(42) EXPORT_STATE)::INTEGER;
+----
 
 statement error
 SELECT COMBINE(SUM(42) EXPORT_STATE, 42);
+----
 
 statement error
 SELECT COMBINE(SUM(42) EXPORT_STATE, 'ASDF'::BLOB);
+----
 
 statement error
 SELECT COMBINE((SUM(42) EXPORT_STATE)::BLOB, SUM(42) EXPORT_STATE);
+----
 
 # simulate round tripping
 require parquet

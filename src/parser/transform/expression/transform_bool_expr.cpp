@@ -46,6 +46,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 		}
 		}
 	}
+	SetQueryLocation(*result, root.location);
 	return result;
 }
 

@@ -85,9 +85,11 @@ SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER
 # returning multiple columns should fail though
 statement error
 SELECT * FROM integers WHERE i=(SELECT 1, 2)
+----
 
 statement error
 SELECT * FROM integers WHERE i=(SELECT i, i + 2 FROM integers)
+----
 
 # but not for EXISTS queries!
 query I
@@ -115,6 +117,7 @@ SELECT (SELECT * FROM integers WHERE i=1)
 # but not if the star expands to more than one column!
 statement error
 SELECT (SELECT * FROM integers i1, integers i2)
+----
 
 #  uncorrelated subquery in SELECT
 query I

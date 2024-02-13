@@ -4,8 +4,12 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "httpfs.hpp"
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
@@ -16,6 +20,20 @@
 #include <iostream>
 
 namespace duckdb {
+
+struct S3AuthParams {
+	string region;
+	string access_key_id;
+	string secret_access_key;
+	string session_token;
+	string endpoint;
+	string url_style;
+	bool use_ssl = true;
+	bool s3_url_compatibility_mode = false;
+
+	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
+	static unique_ptr<S3AuthParams> ReadFromStoredCredentials(FileOpener *opener, string path);
+};
 
 struct AWSEnvironmentCredentialsProvider {
 	static constexpr const char *REGION_ENV_VAR = "AWS_REGION";
@@ -32,25 +50,15 @@ struct AWSEnvironmentCredentialsProvider {
 
 	void SetExtensionOptionValue(string key, const char *env_var);
 	void SetAll();
-};
-
-struct S3AuthParams {
-	string region;
-	string access_key_id;
-	string secret_access_key;
-	string session_token;
-	string endpoint;
-	string url_style;
-	bool use_ssl;
-	bool s3_url_compatibility_mode;
-
-	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
+	S3AuthParams CreateParams();
 };
 
 struct ParsedS3Url {
 	const string http_proto;
+	const string prefix;
 	const string host;
 	const string bucket;
+	const string key;
 	const string path;
 	const string query_param;
 	const string trimmed_s3_url;
@@ -68,6 +76,15 @@ struct S3ConfigParams {
 	uint64_t max_upload_threads;
 
 	static S3ConfigParams ReadFrom(FileOpener *opener);
+};
+
+class S3SecretHelper {
+public:
+	//! Create an S3 type secret
+	static unique_ptr<KeyValueSecret> CreateSecret(vector<string> &prefix_paths_p, string &type, string &provider,
+	                                               string &name, S3AuthParams &params);
+	//! Parse S3AuthParams from secret
+	static S3AuthParams GetParams(const KeyValueSecret &secret);
 };
 
 class S3FileSystem;
@@ -103,14 +120,16 @@ public:
 	S3FileHandle(FileSystem &fs, string path_p, uint8_t flags, const HTTPParams &http_params,
 	             const S3AuthParams &auth_params_p, const S3ConfigParams &config_params_p)
 	    : HTTPFileHandle(fs, std::move(path_p), flags, http_params), auth_params(auth_params_p),
-	      config_params(config_params_p) {
-
+	      config_params(config_params_p), uploads_in_progress(0), parts_uploaded(0), upload_finalized(false),
+	      uploader_has_error(false), upload_exception(nullptr) {
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
 		} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}
 	}
+	~S3FileHandle() override;
+
 	S3AuthParams auth_params;
 	const S3ConfigParams config_params;
 
@@ -139,7 +158,7 @@ protected:
 
 	//! Info for upload
 	atomic<uint16_t> parts_uploaded;
-	bool upload_finalized;
+	bool upload_finalized = true;
 
 	//! Error handling in upload threads
 	atomic<bool> uploader_has_error {false};

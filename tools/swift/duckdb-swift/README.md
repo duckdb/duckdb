@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="https://duckdb.org/images/DuckDB_Logo_dl.png" height="50">
+  <img src="https://duckdb.org/images/logo-dl/DuckDB_Logo-stacked.svg" height="120">
 </div>
-<p>&nbsp;</p>
+<br>
 
 <p align="center">
   <a href="https://github.com/duckdb/duckdb/actions">
@@ -27,18 +27,22 @@ DuckDB is a high-performance analytical database system. It is designed to be fa
 
 ## Installation
 To use DuckDB in your Swift based project:
-  1. Add DuckDB to your `Swift.package` dependencies:
-     ```swift
-     .package(url: "https://github.com/duckdb/duckdb-swift", .upToNextMinor(from: .init(0, x, 0))),
-     ```
-  2. Add `DuckDB` as a dependency to your target:
+
+1. Add DuckDB to your `Swift.package` dependencies:
+
+    ```swift
+    .package(url: "https://github.com/duckdb/duckdb-swift", .upToNextMinor(from: .init(0, x, 0))),
+    ```
+
+2. Add `DuckDB` as a dependency to your target:
+ 
     ```swift
     .target(name: "TargetName", dependencies: [
       .product(name: "DuckDB", package: "duckdb-swift"),
-      ...
+    ...
     ]),
     ```
-    
+
 ## Source and file format stability
 DuckDB is in early release mode and API is subject to change between minor version updates. DuckDB's file format is also subject to change and – in the short-term – it is recommended to make use of [DuckDB's CSV import/export capabilities](https://duckdb.org/docs/csv_import.html) to ensure your data remains accessible between DuckDB version updates.
 
@@ -64,4 +68,4 @@ Development is managed through [the main DuckDB repository](https://github.com/d
   ```
   4. Open the Xcode workspace at `tools/swift/duckdb-swift/DuckDB.xcworkspace`
 
-Please also refer to our [Contribution Guide](https://github.com/duckdb/duckdb/CONTRIBUTING.md).
+Please also refer to our [Contribution Guide](https://github.com/duckdb/duckdb/blob/main/CONTRIBUTING.md).
