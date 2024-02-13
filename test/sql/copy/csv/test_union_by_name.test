@@ -189,6 +189,7 @@ NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 ----
+Mismatch between the number of columns (2) in the CSV file and what is expected in the scanner (3).
 
 query IIII
 SELECT id, value, a, part

@@ -1,0 +1,43 @@
+# name: test/sql/function/timestamp/test_now_prepared.test
+# description: NOW function with prepared statements
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timestamps(ts TIMESTAMP);
+
+# the NOW function should not be cached in prepared statements
+statement ok
+PREPARE v1 AS INSERT INTO timestamps VALUES(NOW());
+
+statement ok
+EXECUTE v1;
+
+sleep 1 second
+
+statement ok
+EXECUTE v1
+
+query I
+SELECT COUNT(DISTINCT ts) FROM timestamps
+----
+2
+
+# with DEFAULT values
+statement ok
+CREATE TABLE timestamps_default(ts TIMESTAMP DEFAULT NOW());
+
+statement ok
+INSERT INTO timestamps_default DEFAULT VALUES
+
+sleep 1 second
+
+statement ok
+INSERT INTO timestamps_default DEFAULT VALUES
+
+query I
+SELECT COUNT(DISTINCT ts) FROM timestamps_default
+----
+2

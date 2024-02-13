@@ -10,8 +10,7 @@ namespace duckdb {
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 
-	result.Reinterpret(args.data[0]);
-
+	MapUtil::ReinterpretMap(result, args.data[0], count);
 	MapVector::MapConversionVerify(result, count);
 	result.Verify(count);
 

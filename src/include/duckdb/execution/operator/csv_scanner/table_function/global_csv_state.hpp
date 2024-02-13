@@ -45,7 +45,7 @@ public:
 	CSVIterator current_boundary;
 
 private:
-	//! Reference to the cient context that created this scan
+	//! Reference to the client context that created this scan
 	ClientContext &context;
 
 	vector<shared_ptr<CSVFileScan>> file_scans;
@@ -74,6 +74,7 @@ private:
 	atomic<idx_t> scanner_idx;
 
 	atomic<idx_t> last_file_idx;
+	shared_ptr<CSVBufferUsage> current_buffer_in_use;
 };
 
 } // namespace duckdb

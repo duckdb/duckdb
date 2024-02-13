@@ -63,8 +63,13 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 
 CompressionType ForceCompression(vector<optional_ptr<CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
-	// On of the force_compression flags has been set
-	// check if this compression method is available
+// On of the force_compression flags has been set
+// check if this compression method is available
+#ifdef DEBUG
+	if (CompressionTypeIsDeprecated(compression_type)) {
+		throw InternalException("Deprecated compression type: %s", CompressionTypeToString(compression_type));
+	}
+#endif
 	bool found = false;
 	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		auto &compression_function = *compression_functions[i];
@@ -120,7 +125,10 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 			if (!compression_functions[i]) {
 				continue;
 			}
-			auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			bool success = false;
+			if (analyze_states[i]) {
+				success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			}
 			if (!success) {
 				// could not use this compression function on this data set
 				// erase it

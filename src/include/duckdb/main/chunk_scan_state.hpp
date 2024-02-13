@@ -2,7 +2,7 @@
 
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 
@@ -21,9 +21,9 @@ public:
 	ChunkScanState &operator=(ChunkScanState &&other) = default;
 
 public:
-	virtual bool LoadNextChunk(PreservedError &error) = 0;
+	virtual bool LoadNextChunk(ErrorData &error) = 0;
 	virtual bool HasError() const = 0;
-	virtual PreservedError &GetError() = 0;
+	virtual ErrorData &GetError() = 0;
 	virtual const vector<LogicalType> &Types() const = 0;
 	virtual const vector<string> &Names() const = 0;
 	idx_t CurrentOffset() const;

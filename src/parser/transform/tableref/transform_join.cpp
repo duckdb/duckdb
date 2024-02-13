@@ -54,8 +54,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr &r
 	default:
 		break;
 	}
-	result->query_location = root.location;
-
+	SetQueryLocation(*result, root.location);
 	if (root.usingClause && root.usingClause->length > 0) {
 		// usingClause is a list of strings
 		for (auto node = root.usingClause->head; node != nullptr; node = node->next) {

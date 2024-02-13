@@ -172,72 +172,90 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		auto &result_cc = ArrayVector::GetEntry(result);
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 
-		bool all_lengths_match = true;
-
-		// Now, here's where things get funky.
-		// We need to slice out the data from the child vector, since the list
-		// wont store child data for null entries, which is the case for arrays.
-		// So we need to preserve the "gaps" for null entries when we copy into
-		// the result vector. In short 'len(source_child) <= len(result_child)'
-		// depending on how many NULL's the source has. so we "unslice" the
-		// child data so that len(payload_vector) == len(result_child).
-
 		auto child_count = array_size * count;
-		Vector payload_vector(source_cc.GetType(), child_count);
-		SelectionVector sel(child_count);
+		SelectionVector child_sel(child_count);
+
+		bool all_ok = true;
 
 		for (idx_t i = 0; i < count; i++) {
-			// If the list is null, set the entire array to null
 			if (FlatVector::IsNull(source, i)) {
 				FlatVector::SetNull(result, i, true);
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
-					FlatVector::SetNull(payload_vector, i * array_size + array_elem, true);
-					// just select the first value, it won't be used anyway
-					sel.set_index(i * array_size + array_elem, 0);
+					FlatVector::SetNull(result_cc, i * array_size + array_elem, true);
+					child_sel.set_index(i * array_size + array_elem, 0);
 				}
 			} else if (ldata[i].length != array_size) {
-				if (all_lengths_match) {
-					// Cant cast to array, list size mismatch
-					all_lengths_match = false;
+				if (all_ok) {
+					all_ok = false;
 					auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u",
 					                              ldata[i].length, array_size);
 					HandleCastError::AssignError(msg, parameters.error_message);
 				}
 				FlatVector::SetNull(result, i, true);
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
-					FlatVector::SetNull(payload_vector, i * array_size + array_elem, true);
-					// just select the first value, it won't be used anyway
-					sel.set_index(i * array_size + array_elem, 0);
+					FlatVector::SetNull(result_cc, i * array_size + array_elem, true);
+					child_sel.set_index(i * array_size + array_elem, 0);
 				}
 			} else {
-				// Set the selection vector to point to the correct offsets
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
-					sel.set_index(i * array_size + array_elem, ldata[i].offset + array_elem);
-				}
-			}
-		}
-
-		// Perform the actual copy
-		VectorOperations::Copy(source_cc, payload_vector, sel, child_count, 0, 0);
-
-		// Take a last pass and null out the child elems
-		for (idx_t i = 0; i < count; i++) {
-			if (FlatVector::IsNull(source, i) || FlatVector::IsNull(result, i)) {
-				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
-					FlatVector::SetNull(payload_vector, i * array_size + array_elem, true);
+					child_sel.set_index(i * array_size + array_elem, ldata[i].offset + array_elem);
 				}
 			}
 		}
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-		bool child_succeeded =
-		    cast_data.child_cast_info.function(payload_vector, result_cc, child_count, child_parameters);
 
-		if (!child_succeeded) {
-			HandleCastError::AssignError(*child_parameters.error_message, parameters.error_message);
+		// Fast path: No lists are null
+		// We can just cast the child vector directly
+		// Note: Its worth doing a CheckAllValid here, the slow path is significantly more expensive
+		if (FlatVector::Validity(source).CheckAllValid(count)) {
+			Vector payload_vector(result_cc.GetType(), child_count);
+
+			bool ok = cast_data.child_cast_info.function(source_cc, payload_vector, child_count, child_parameters);
+			if (all_ok && !ok) {
+				all_ok = false;
+				HandleCastError::AssignError(*child_parameters.error_message, parameters.error_message);
+			}
+			// Now do the actual copy onto the result vector, making sure to slice properly in case the lists are out of
+			// order
+			VectorOperations::Copy(payload_vector, result_cc, child_sel, child_count, 0, 0);
+			return all_ok;
 		}
 
-		return all_lengths_match && child_succeeded;
+		// Slow path: Some lists are null, so we need to copy the data list by list to the right place
+		auto list_data = FlatVector::GetData<list_entry_t>(source);
+		DataChunk cast_chunk;
+		cast_chunk.Initialize(Allocator::DefaultAllocator(), {source_cc.GetType(), result_cc.GetType()}, array_size);
+
+		for (idx_t i = 0; i < count; i++) {
+			if (FlatVector::IsNull(source, i)) {
+				FlatVector::SetNull(result, i, true);
+				// Also null the array children
+				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
+					FlatVector::SetNull(result_cc, i * array_size + array_elem, true);
+				}
+			} else {
+				auto &list_cast_input = cast_chunk.data[0];
+				auto &list_cast_output = cast_chunk.data[1];
+				auto list_entry = list_data[i];
+
+				VectorOperations::Copy(source_cc, list_cast_input, list_entry.offset + array_size, list_entry.offset,
+				                       0);
+
+				bool ok =
+				    cast_data.child_cast_info.function(list_cast_input, list_cast_output, array_size, child_parameters);
+				if (all_ok && !ok) {
+					all_ok = false;
+					HandleCastError::AssignError(*child_parameters.error_message, parameters.error_message);
+				}
+				VectorOperations::Copy(list_cast_output, result_cc, array_size, 0, i * array_size);
+
+				// Reset the cast_chunk
+				cast_chunk.Reset();
+			}
+		}
+
+		return all_ok;
 	}
 }
 
@@ -258,5 +276,9 @@ BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalTy
 		return DefaultCasts::TryVectorNullCast;
 	}
 }
+
+/*
+
+ */
 
 } // namespace duckdb

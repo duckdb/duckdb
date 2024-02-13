@@ -56,8 +56,8 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 		if (*star) {
 			// we can have multiple
 			if (!(*star)->Equals(current_star)) {
-				throw BinderException(
-				    FormatError(*expr, "Multiple different STAR/COLUMNS in the same expression are not supported"));
+				throw BinderException(*expr,
+				                      "Multiple different STAR/COLUMNS in the same expression are not supported");
 			}
 			return true;
 		}
@@ -123,7 +123,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			duckdb_re2::RE2 regex(regex_str);
 			if (!regex.error().empty()) {
 				auto err = StringUtil::Format("Failed to compile regex \"%s\": %s", regex_str, regex.error());
-				throw BinderException(FormatError(*star, err));
+				throw BinderException(*star, err);
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
@@ -135,7 +135,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			if (new_list.empty()) {
 				auto err = StringUtil::Format("No matching columns found that match regex \"%s\"", regex_str);
-				throw BinderException(FormatError(*star, err));
+				throw BinderException(*star, err);
 			}
 			star_list = std::move(new_list);
 		} else if (val.type().id() == LogicalTypeId::LIST &&
@@ -144,7 +144,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			if (val.IsNull() || ListValue::GetChildren(val).empty()) {
 				auto err =
 				    StringUtil::Format("Star expression \"%s\" resulted in an empty set of columns", star->ToString());
-				throw BinderException(FormatError(*star, err));
+				throw BinderException(*star, err);
 			}
 			auto &children = ListValue::GetChildren(val);
 			vector<unique_ptr<ParsedExpression>> new_list;
@@ -171,8 +171,8 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			star_list = std::move(new_list);
 		} else {
-			throw BinderException(FormatError(
-			    *star, "COLUMNS expects either a VARCHAR argument (regex) or a LIST of VARCHAR (list of columns)"));
+			throw BinderException(
+			    *star, "COLUMNS expects either a VARCHAR argument (regex) or a LIST of VARCHAR (list of columns)");
 		}
 	}
 

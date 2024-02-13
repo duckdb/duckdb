@@ -68,7 +68,7 @@ struct MiniZStreamWrapper : public StreamWrapper {
 	~MiniZStreamWrapper() override;
 
 	CompressedFile *file = nullptr;
-	duckdb_miniz::mz_stream *mz_stream_ptr = nullptr;
+	unique_ptr<duckdb_miniz::mz_stream> mz_stream_ptr;
 	bool writing = false;
 	duckdb_miniz::mz_ulong crc;
 	idx_t total_size;
@@ -98,8 +98,8 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	Close();
 	this->file = &file;
-	mz_stream_ptr = new duckdb_miniz::mz_stream();
-	memset(mz_stream_ptr, 0, sizeof(duckdb_miniz::mz_stream));
+	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
+	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
 	this->writing = write;
 
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
@@ -111,7 +111,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		MiniZStream::InitializeGZIPHeader(gzip_hdr);
 		file.child_handle->Write(gzip_hdr, GZIP_HEADER_MINSIZE);
 
-		auto ret = mz_deflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, duckdb_miniz::MZ_DEFAULT_LEVEL, MZ_DEFLATED,
+		auto ret = mz_deflateInit2(mz_stream_ptr.get(), duckdb_miniz::MZ_DEFAULT_LEVEL, MZ_DEFLATED,
 		                           -MZ_DEFAULT_WINDOW_BITS, 1, 0);
 		if (ret != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
@@ -135,7 +135,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		}
 		file.child_handle->Seek(data_start);
 		// stream is now set to beginning of payload data
-		auto ret = duckdb_miniz::mz_inflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+		auto ret = duckdb_miniz::mz_inflateInit2(mz_stream_ptr.get(), -MZ_DEFAULT_WINDOW_BITS);
 		if (ret != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
 		}
@@ -182,8 +182,8 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 			Close();
 			return true;
 		}
-		duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
-		auto sta = duckdb_miniz::mz_inflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+		duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
+		auto sta = duckdb_miniz::mz_inflateInit2(mz_stream_ptr.get(), -MZ_DEFAULT_WINDOW_BITS);
 		if (sta != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
 		}
@@ -195,7 +195,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	mz_stream_ptr->avail_in = (uint32_t)(sd.in_buff_end - sd.in_buff_start);
 	mz_stream_ptr->next_out = data_ptr_cast(sd.out_buff_end);
 	mz_stream_ptr->avail_out = (uint32_t)((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_end);
-	auto ret = duckdb_miniz::mz_inflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+	auto ret = duckdb_miniz::mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 	if (ret != duckdb_miniz::MZ_OK && ret != duckdb_miniz::MZ_STREAM_END) {
 		throw IOException("Failed to decode gzip stream: %s", duckdb_miniz::mz_error(ret));
 	}
@@ -228,7 +228,7 @@ void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t 
 		mz_stream_ptr->next_out = sd.out_buff_start;
 		mz_stream_ptr->avail_out = output_remaining;
 
-		auto res = mz_deflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+		auto res = mz_deflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 		if (res != duckdb_miniz::MZ_OK) {
 			D_ASSERT(res != duckdb_miniz::MZ_STREAM_END);
 			throw InternalException("Failed to compress GZIP block");
@@ -254,7 +254,7 @@ void MiniZStreamWrapper::FlushStream() {
 		mz_stream_ptr->next_out = sd.out_buff_start;
 		mz_stream_ptr->avail_out = output_remaining;
 
-		auto res = mz_deflate(mz_stream_ptr, duckdb_miniz::MZ_FINISH);
+		auto res = mz_deflate(mz_stream_ptr.get(), duckdb_miniz::MZ_FINISH);
 		sd.out_buff_start += (output_remaining - mz_stream_ptr->avail_out);
 		if (sd.out_buff_start > sd.out_buff.get()) {
 			file->child_handle->Write(sd.out_buff.get(), sd.out_buff_start - sd.out_buff.get());
@@ -282,11 +282,10 @@ void MiniZStreamWrapper::Close() {
 		MiniZStream::InitializeGZIPFooter(gzip_footer, crc, total_size);
 		file->child_handle->Write(gzip_footer, MiniZStream::GZIP_FOOTER_SIZE);
 
-		duckdb_miniz::mz_deflateEnd(mz_stream_ptr);
+		duckdb_miniz::mz_deflateEnd(mz_stream_ptr.get());
 	} else {
-		duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+		duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
 	}
-	delete mz_stream_ptr;
 	mz_stream_ptr = nullptr;
 	file = nullptr;
 }
@@ -321,8 +320,8 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	// decompress file
 	auto body_ptr = in.data();
 
-	auto mz_stream_ptr = new duckdb_miniz::mz_stream();
-	memset(mz_stream_ptr, 0, sizeof(duckdb_miniz::mz_stream));
+	auto mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
+	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
 
 	uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
 
@@ -349,7 +348,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	}
 
 	// stream is now set to beginning of payload data
-	auto status = duckdb_miniz::mz_inflateInit2(mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+	auto status = duckdb_miniz::mz_inflateInit2(mz_stream_ptr.get(), -MZ_DEFAULT_WINDOW_BITS);
 	if (status != duckdb_miniz::MZ_OK) {
 		throw InternalException("Failed to initialize miniz");
 	}
@@ -364,13 +363,14 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	while (status == duckdb_miniz::MZ_OK) {
 		mz_stream_ptr->next_out = decompress_buffer;
 		mz_stream_ptr->avail_out = sizeof(decompress_buffer);
-		status = mz_inflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+		status = mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
 			throw IOException("Failed to uncompress");
 		}
 		decompressed.append(char_ptr_cast(decompress_buffer), mz_stream_ptr->total_out - decompressed.size());
 	}
-	duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+	duckdb_miniz::mz_inflateEnd(mz_stream_ptr.get());
+
 	if (decompressed.empty()) {
 		throw IOException("Failed to uncompress");
 	}

@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -51,6 +52,10 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		} else {
 			return false;
 		}
+	}
+
+	if (pos >= len) {
+		return false;
 	}
 
 	// fetch the separator

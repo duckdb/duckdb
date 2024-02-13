@@ -3,6 +3,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/http_state.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
@@ -127,7 +128,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (err == duckdb_httplib_openssl::Error::Success) {
-				throw IOException("Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
+				throw HTTPException(response, "Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
 			} else {
 				throw IOException("%s error for HTTP %s to '%s'", to_string(err), method, url);
 			}
@@ -315,7 +316,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 					    error += " This could mean the file was changed. Try disabling the duckdb http metadata cache "
 					             "if enabled, and confirm the server supports range requests.";
 				    }
-				    throw IOException(error);
+				    throw HTTPException(response, error);
 			    }
 			    if (response.status < 300) { // done redirecting
 				    out_offset = 0;
@@ -605,8 +606,8 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 				}
 				res = std::move(range_res);
 			} else {
-				throw IOException("Unable to connect to URL \"%s\": %s (%s)", res->http_url, to_string(res->code),
-				                  res->error);
+				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
+				                    to_string(res->code), res->error);
 			}
 		}
 	}
@@ -639,11 +640,18 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			// Try to fully download the file first
 			auto full_download_result = hfs.GetRequest(*this, path, {});
 			if (full_download_result->code != 200) {
-				throw IOException("Full download failed to to URL \"%s\": %s (%s)", full_download_result->http_url,
-				                  to_string(full_download_result->code), full_download_result->error);
+				throw HTTPException(*res, "Full download failed to to URL \"%s\": %s (%s)",
+				                    full_download_result->http_url, to_string(full_download_result->code),
+				                    full_download_result->error);
 			}
-			// Mark the file as initialized, unlocking it and allowing parallel reads
-			cached_file_handle->SetInitialized();
+
+			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
+			cached_file_handle->SetInitialized(length);
+
+			// We shouldn't write these to cache
+			should_write_cache = false;
+		} else {
+			length = cached_file_handle->GetSize();
 		}
 	}
 

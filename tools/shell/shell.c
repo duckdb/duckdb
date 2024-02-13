@@ -452,8 +452,9 @@ static char *Argv0;
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
 */
-static char mainPrompt[20];     /* First line prompt. default: "sqlite> "*/
-static char continuePrompt[20]; /* Continuation prompt. default: "   ...> " */
+static char mainPrompt[20];             /* First line prompt. default: "D "*/
+static char continuePrompt[20];         /* Continuation prompt. default: "   ...> " */
+static char continuePromptSelected[20]; /* Selected continuation prompt. default: "   ...> " */
 
 /*
 ** Render output like fprintf().  Except, if the output is going to the
@@ -18290,7 +18291,10 @@ static int do_meta_command(char *zLine, ShellState *p){
     if( nArg >= 3) {
       strncpy(continuePrompt,azArg[2],(int)ArraySize(continuePrompt)-1);
     }
-  }else
+    if( nArg >= 4) {
+      strncpy(continuePromptSelected,azArg[3],(int)ArraySize(continuePromptSelected)-1);
+    }
+  } else
 
   if( c=='q' && strncmp(azArg[0], "quit", n)==0 ){
     rc = 2;
@@ -19969,7 +19973,11 @@ static void main_init(ShellState *data) {
   sqlite3_config(SQLITE_CONFIG_LOG, shellLog, data);
   sqlite3_config(SQLITE_CONFIG_MULTITHREAD);
   sqlite3_snprintf(sizeof(mainPrompt), mainPrompt, "D ");
-  sqlite3_snprintf(sizeof(continuePrompt), continuePrompt, "> ");
+  sqlite3_snprintf(sizeof(continuePrompt), continuePrompt, "· ");
+  sqlite3_snprintf(sizeof(continuePromptSelected), continuePromptSelected, "‣ ");
+#ifdef HAVE_LINENOISE
+  linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+#endif
 }
 
 /*

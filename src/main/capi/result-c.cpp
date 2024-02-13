@@ -483,7 +483,7 @@ bool *duckdb_nullmask_data(duckdb_result *result, idx_t col) {
 }
 
 const char *duckdb_result_error(duckdb_result *result) {
-	if (!result) {
+	if (!result || !result->internal_data) {
 		return nullptr;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));

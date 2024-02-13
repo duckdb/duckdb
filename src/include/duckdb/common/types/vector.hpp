@@ -172,6 +172,11 @@ public:
 		auxiliary = std::move(new_buffer);
 	};
 
+	inline void CopyBuffer(Vector &other) {
+		buffer = other.buffer;
+		data = other.data;
+	}
+
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 
@@ -456,11 +461,6 @@ struct ArrayVector {
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
 	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
-	//! Allocate dummy list entries for a vector
-	//! Note that there is nothing ensuring that the allocated data
-	//! remains valid (e.g. if this vector is resized)
-	//! This is only used during row serialization
-	DUCKDB_API static void AllocateDummyListEntries(Vector &vector);
 };
 
 enum class UnionInvalidReason : uint8_t {

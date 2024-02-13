@@ -44,6 +44,10 @@ public:
 	DUCKDB_API const string &Name() const;
 	void SetName(const string &name);
 
+	//! comment
+	DUCKDB_API const Value &Comment() const;
+	void SetComment(const Value &comment);
+
 	//! compression_type
 	const duckdb::CompressionType &CompressionType() const;
 	void SetCompressionType(duckdb::CompressionType compression_type);
@@ -98,6 +102,8 @@ private:
 	//! The default value of the column (for non-generated columns)
 	//! The generated column expression (for generated columns)
 	unique_ptr<ParsedExpression> expression;
+	//! Comment on this column
+	Value comment;
 };
 
 } // namespace duckdb

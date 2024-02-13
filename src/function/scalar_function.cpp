@@ -8,9 +8,8 @@ FunctionLocalState::~FunctionLocalState() {
 ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
                                scalar_function_t function, bind_scalar_function_t bind,
                                dependency_function_t dependency, function_statistics_t statistics,
-                               init_local_state_t init_local_state, LogicalType varargs,
-                               FunctionSideEffects side_effects, FunctionNullHandling null_handling,
-                               bind_lambda_function_t bind_lambda)
+                               init_local_state_t init_local_state, LogicalType varargs, FunctionStability side_effects,
+                               FunctionNullHandling null_handling, bind_lambda_function_t bind_lambda)
     : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type), side_effects,
                          std::move(varargs), null_handling),
       function(std::move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
@@ -20,8 +19,8 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
 ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
                                bind_scalar_function_t bind, dependency_function_t dependency,
                                function_statistics_t statistics, init_local_state_t init_local_state,
-                               LogicalType varargs, FunctionSideEffects side_effects,
-                               FunctionNullHandling null_handling, bind_lambda_function_t bind_lambda)
+                               LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
+                               bind_lambda_function_t bind_lambda)
     : ScalarFunction(string(), std::move(arguments), std::move(return_type), std::move(function), bind, dependency,
                      statistics, init_local_state, std::move(varargs), side_effects, null_handling, bind_lambda) {
 }
