@@ -166,7 +166,7 @@ struct ArrowVarcharToStringViewData {
 	}
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
-		result->n_buffers = 2;
+		result->n_buffers = 3;
 		result->buffers[1] = append_data.main_buffer.data();
 		result->buffers[2] = append_data.aux_buffer.data();
 	}
