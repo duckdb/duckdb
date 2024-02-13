@@ -204,6 +204,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"parquet_metadata", "parquet", "table"},
     {"parquet_scan", "parquet", "table"},
     {"parquet_schema", "parquet", "table"},
+    {"add_parquet_key", "parquet", "pragma"},
+    {"read_parquet", "parquet", "table"},
     {"tpcds", "tpcds", "pragma"},
     {"tpcds_answers", "tpcds", "table"},
     {"tpcds_queries", "tpcds", "table"},
