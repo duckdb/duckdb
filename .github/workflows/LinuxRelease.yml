@@ -19,21 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        ref: v0.10.0
+
     - uses: ./.github/actions/ubuntu_18_setup
       with:
         vcpkg: 1
         openssl: 1
         ccache: 1
-
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Checkout Release
-      shell: bash
-      run: |
-        git config --global --add safe.directory '*'
-        git checkout v0.10.0
 
     - uses: ./.github/actions/build_extensions
       with:
