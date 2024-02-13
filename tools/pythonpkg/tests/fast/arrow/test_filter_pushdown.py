@@ -745,7 +745,10 @@ class TestArrowFilterPushdown(object):
         """
         ).fetchall()
 
-        match = re.search(".*ARROW_SCAN.*Filters: s\\.a<2 AND s\\.a IS.*NOT NULL.*", query_res[0][1], flags=re.DOTALL)
+        input = query_res[0][1]
+        if 'PANDAS_SCAN' in input:
+            pytest.skip(reason="This version of pandas does not produce an Arrow object")
+        match = re.search(".*ARROW_SCAN.*Filters: s\\.a<2 AND s\\.a IS.*NOT NULL.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -812,9 +815,10 @@ class TestArrowFilterPushdown(object):
         """
         ).fetchall()
 
-        match = re.search(
-            ".*ARROW_SCAN.*Filters: s\\.a\\.b<2 AND s\\.a\\.b.*IS NOT NULL.*", query_res[0][1], flags=re.DOTALL
-        )
+        input = query_res[0][1]
+        if 'PANDAS_SCAN' in input:
+            pytest.skip(reason="This version of pandas does not produce an Arrow object")
+        match = re.search(".*ARROW_SCAN.*Filters: s\\.a\\.b<2 AND s\\.a\\.b.*IS NOT NULL.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly

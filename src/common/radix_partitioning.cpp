@@ -204,7 +204,7 @@ void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, i
                                                         Vector &partition_indices) const {
 	Vector intermediate(LogicalType::HASH);
 	partitions[0]->Gather(row_locations, *FlatVector::IncrementalSelectionVector(), count, hash_col_idx, intermediate,
-	                      *FlatVector::IncrementalSelectionVector());
+	                      *FlatVector::IncrementalSelectionVector(), nullptr);
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, intermediate, partition_indices, count);
 }
 

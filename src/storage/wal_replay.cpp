@@ -548,7 +548,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 			// read the data into a buffer handle
 			shared_ptr<BlockHandle> block_handle;
-			buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
+			buffer_manager.Allocate(MemoryTag::ART_INDEX, Storage::BLOCK_SIZE, false, &block_handle);
 			auto buffer_handle = buffer_manager.Pin(block_handle);
 			auto data_ptr = buffer_handle.Ptr();
 
@@ -615,9 +615,11 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto index_instance =
-	    index_type->create_instance(info.index_name, info.constraint_type, info.column_ids, unbound_expressions,
-	                                TableIOManager::Get(data_table), data_table.db, index_info);
+
+	CreateIndexInput input(TableIOManager::Get(data_table), data_table.db, info.constraint_type, info.index_name,
+	                       info.column_ids, unbound_expressions, index_info, info.options);
+
+	auto index_instance = index_type->create_instance(input);
 	data_table.info->indexes.AddIndex(std::move(index_instance));
 }
 

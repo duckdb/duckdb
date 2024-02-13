@@ -15,6 +15,18 @@
 
 namespace duckdb {
 
+struct CSVBufferUsage {
+	CSVBufferUsage(CSVBufferManager &buffer_manager_p, idx_t buffer_idx_p)
+	    : buffer_manager(buffer_manager_p), buffer_idx(buffer_idx_p) {
+
+	                                        };
+	~CSVBufferUsage() {
+		buffer_manager.ResetBuffer(buffer_idx);
+	}
+	CSVBufferManager &buffer_manager;
+	idx_t buffer_idx;
+};
+
 //! Class that keeps track of line starts, used for line size verification
 class LinePosition {
 public:
@@ -37,9 +49,9 @@ public:
 
 class StringValueResult : public ScannerResult {
 public:
-	StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
-	                  Allocator &buffer_allocator, idx_t result_size, idx_t buffer_position,
-	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
+	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
+	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator, idx_t result_size,
+	                  idx_t buffer_position, CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
 	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
 
 	//! Information on the vector
@@ -83,6 +95,12 @@ public:
 	unsafe_unique_array<bool> projected_columns;
 	bool projecting_columns = false;
 	idx_t chunk_col_id = 0;
+
+	//! We must ensure that we keep the buffers alive until processing the query result
+	vector<shared_ptr<CSVBufferHandle>> buffer_handles;
+
+	//! If the current row has an error, we have to skip it
+	bool ignore_current_row = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Value to the result
@@ -105,6 +123,9 @@ public:
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
+
+	//! Resets the state of the result
+	void Reset();
 };
 
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
@@ -141,6 +162,9 @@ public:
 
 	const idx_t scanner_idx;
 
+	//! Variable that manages buffer tracking
+	shared_ptr<CSVBufferUsage> buffer_tracker;
+
 private:
 	void Initialize() override;
 
@@ -167,7 +191,7 @@ private:
 	vector<LogicalType> types;
 
 	//! Pointer to the previous buffer handle, necessary for overbuffer values
-	unique_ptr<CSVBufferHandle> previous_buffer_handle;
+	shared_ptr<CSVBufferHandle> previous_buffer_handle;
 };
 
 } // namespace duckdb

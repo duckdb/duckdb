@@ -23,34 +23,6 @@
 
 namespace duckdb {
 
-vector<string> GetUniqueNames(const vector<string> &original_names) {
-	unordered_set<string> name_set;
-	vector<string> unique_names;
-	unique_names.reserve(original_names.size());
-
-	for (auto &name : original_names) {
-		auto insert_result = name_set.insert(name);
-		if (insert_result.second == false) {
-			// Could not be inserted, name already exists
-			idx_t index = 1;
-			string postfixed_name;
-			while (true) {
-				postfixed_name = StringUtil::Format("%s:%d", name, index);
-				auto res = name_set.insert(postfixed_name);
-				if (!res.second) {
-					index++;
-					continue;
-				}
-				break;
-			}
-			unique_names.push_back(postfixed_name);
-		} else {
-			unique_names.push_back(name);
-		}
-	}
-	return unique_names;
-}
-
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 }
@@ -160,7 +132,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		}
 	}
 
-	auto unique_column_names = GetUniqueNames(select_node.names);
+	auto unique_column_names = select_node.names;
+	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
 
 	auto function_data =

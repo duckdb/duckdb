@@ -36,6 +36,8 @@ public:
 	vector<string> aliases;
 	//! The returned types of the view
 	vector<LogicalType> types;
+	//! The returned names of the view
+	vector<string> names;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;

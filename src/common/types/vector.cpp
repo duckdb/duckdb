@@ -28,7 +28,7 @@
 namespace duckdb {
 
 Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
-    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr) {
+    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
 		Initialize(zero_data, capacity);
 	}
@@ -908,6 +908,8 @@ void Vector::Flatten(idx_t count) {
 			//	             =>    ..   | 1 |
 			//                          | 2 |
 			// 							 ...
+
+			child.Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
@@ -2345,14 +2347,6 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		return ArrayVector::GetTotalSize(child);
 	}
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChildSize();
-}
-
-void ArrayVector::AllocateDummyListEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::ARRAY);
-	auto array_size = ArrayType::GetSize(vector.GetType());
-	auto array_count = ArrayVector::GetTotalSize(vector) / array_size;
-	vector.buffer = VectorBuffer::CreateStandardVector(LogicalType::HUGEINT, array_count);
-	vector.data = vector.buffer->GetData();
 }
 
 } // namespace duckdb
