@@ -54,8 +54,10 @@ private:
    [POINTER]
    [POINTER]
    [POINTER]
-   The pointers are either NULL
+   The pointers are either NULL if the cell is free or point to the start of the linked list.
 */
+
+
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
@@ -66,7 +68,7 @@ public:
 	//! probe.
 	struct ScanStructure {
 		TupleDataChunkState &key_state;
-		//! Directly point to the entry in the hash table - &ht + index(hash)
+		//! Directly point to the entry in the hash table
 		Vector pointers;
 		idx_t count;
 		SelectionVector sel_vector;
@@ -218,11 +220,15 @@ private:
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	//! Apply a bitmask to the hashes
-	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
+	inline idx_t ApplyBitmask(hash_t hash) const;
+	void ApplyBitmask(Vector &hashes, idx_t count);
+
+	//! Gets a pointer to the entry in the HT for each of the hashes
+	void GetRowPointers(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
 
 private:
-	//! Insert the given set of locations into the HT with the given set of hashes
-	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel);
+	//! Insert the given set of locations into the HT with the given set of hashes_v
+	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, bool parallel);
 
 	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
@@ -233,8 +239,13 @@ private:
 	unique_ptr<PartitionedTupleData> sink_collection;
 	//! The DataCollection holding the main data of the hash table
 	unique_ptr<TupleDataCollection> data_collection;
+
+	//! The capacity of the HT. Is the same as hash_map.GetSize() / sizeof(aggr_ht_entry_t)
+	idx_t capacity;
+
 	//! The hash map of the HT, created after finalization
 	AllocatedData hash_map;
+	aggr_ht_entry_t *entries;  // todo: Maybe rename to ht_entry_t and put into separate file
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 
