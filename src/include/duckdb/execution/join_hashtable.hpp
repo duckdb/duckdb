@@ -66,6 +66,7 @@ public:
 	//! probe.
 	struct ScanStructure {
 		TupleDataChunkState &key_state;
+		//! Directly point to the entry in the hash table - &ht + index(hash)
 		Vector pointers;
 		idx_t count;
 		SelectionVector sel_vector;
@@ -78,7 +79,7 @@ public:
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Are pointer chains all pointing to NULL?
-		bool PointersExhausted();
+		bool PointersExhausted() const;
 
 	private:
 		//! Next operator for the inner join
@@ -174,11 +175,14 @@ public:
 	//! Efficiently matches rows
 	RowMatcher row_matcher;
 	RowMatcher row_matcher_no_match_sel;
+	//! Matches the rows during the build phase of the hash join to prevent
+	//! duplicates in a list because of hash-collisions
+	RowMatcher row_matcher_build;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
 	idx_t tuple_size;
-	//! Next pointer offset in tuple
+	//! Next pointer offset in tuple, also used for the position of the hash, which then gets overwritten by the pointer
 	idx_t pointer_offset;
 	//! A constant false column for initialising right outer joins
 	Vector vfound;
@@ -214,7 +218,6 @@ private:
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	//! Apply a bitmask to the hashes
-	void ApplyBitmask(Vector &hashes, idx_t count);
 	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
 
 private:

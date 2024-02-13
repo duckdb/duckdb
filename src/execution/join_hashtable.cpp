@@ -51,8 +51,13 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	}
 	layout_types.emplace_back(LogicalType::HASH);
 	layout.Initialize(layout_types, false);
+
+	// Initialize the row matcher
 	row_matcher.Initialize(false, layout, predicates);
 	row_matcher_no_match_sel.Initialize(true, layout, predicates);
+
+	// todo: What happens if there is a predicate that is dependent on the probe side? Need to filter this out
+	row_matcher_build.Initialize(false, layout, predicates);
 
 	const auto &offsets = layout.GetOffsets();
 	tuple_size = offsets[condition_types.size() + build_types.size()];
@@ -84,20 +89,6 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	}
 
 	sink_collection->Combine(*other.sink_collection);
-}
-
-void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
-	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		D_ASSERT(!ConstantVector::IsNull(hashes));
-		auto indices = ConstantVector::GetData<hash_t>(hashes);
-		*indices = *indices & bitmask;
-	} else {
-		hashes.Flatten(count);
-		auto indices = FlatVector::GetData<hash_t>(hashes);
-		for (idx_t i = 0; i < count; i++) {
-			indices[i] &= bitmask;
-		}
-	}
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers) {
@@ -244,22 +235,30 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 }
 
 template <bool PARALLEL>
-static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], const hash_t indices[], const idx_t count,
-                                    const data_ptr_t key_locations[], const idx_t pointer_offset) {
+static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], atomic<data_ptr_t> *pointers_into_ht[],
+                                    const idx_t count, const data_ptr_t key_locations[], const idx_t pointer_offset) {
 	for (idx_t i = 0; i < count; i++) {
-		const auto index = indices[i];
 		if (PARALLEL) {
-			data_ptr_t head;
+			data_ptr_t *head;
 			do {
-				head = pointers[index];
-				Store<data_ptr_t>(head, key_locations[i] + pointer_offset);
-			} while (!std::atomic_compare_exchange_weak(&pointers[index], &head, key_locations[i]));
+				head = (data_ptr_t *)pointers_into_ht[i];
+				Store<data_ptr_t>(*head, key_locations[i] + pointer_offset);
+			} while (!std::atomic_compare_exchange_weak(pointers_into_ht[i], head, key_locations[i]));
 		} else {
+
+			auto *pointer = (data_ptr_t *)pointers_into_ht[i];
+
+			// cast to data_ptr_t
+			data_ptr_t address_at_pointer = *pointer;
+			if (address_at_pointer) {
+				data_ptr_t value_at_pointer = Load<data_ptr_t>(address_at_pointer + pointer_offset);
+			}
+
 			// set prev in current key to the value (NOTE: this will be nullptr if there is none)
-			Store<data_ptr_t>(pointers[index], key_locations[i] + pointer_offset);
+			Store<data_ptr_t>(*pointers_into_ht[i], key_locations[i] + pointer_offset);
 
 			// set pointer to current tuple
-			pointers[index] = key_locations[i];
+			*pointer = key_locations[i];
 		}
 	}
 }
@@ -267,20 +266,53 @@ static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], const hash_t 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel) {
 	D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
 
+	Vector pointers_into_ht_vec {LogicalType::POINTER};
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+
+	for (idx_t i = 0; i < count; i++) {
+		sel.set_index(i, i);
+	}
+
 	// use bitmask to get position in array
-	ApplyBitmask(hashes, count);
+	ApplyBitmask(hashes, sel, count, pointers_into_ht_vec);
 
 	hashes.Flatten(count);
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 
+	// Get the hash table array
 	auto pointers = reinterpret_cast<atomic<data_ptr_t> *>(hash_map.get());
-	auto indices = FlatVector::GetData<hash_t>(hashes);
 
+	// pointers is the hash table array that is indexed using the hashes
+	auto pointers_into_ht_data = FlatVector::GetData<data_ptr_t>(pointers_into_ht_vec);
+	auto pointers_into_ht = reinterpret_cast<atomic<data_ptr_t> **>(pointers_into_ht_data);
+
+	// todo: ZIdea: Maybe leave this the same and add the linear probing and key checking before this
 	if (parallel) {
-		InsertHashesLoop<true>(pointers, indices, count, key_locations, pointer_offset);
+		InsertHashesLoop<true>(pointers, pointers_into_ht, count, key_locations, pointer_offset);
 	} else {
-		InsertHashesLoop<false>(pointers, indices, count, key_locations, pointer_offset);
+		InsertHashesLoop<false>(pointers, pointers_into_ht, count, key_locations, pointer_offset);
 	}
+
+	Vector heads_vec {LogicalType::POINTER};
+	auto heads_data = FlatVector::GetData<data_ptr_t>(heads_vec);
+	idx_t data_count = 0;
+
+	for (idx_t i = 0; i < count; i++) {
+		auto pointer = pointers_into_ht[i];
+		data_ptr_t head_index = *pointer;
+
+		if (head_index) {
+			heads_data[data_count++] = head_index;
+		}
+	}
+	// Get the heads_data from the right hand side
+	DataChunk data_collection_chunk;
+	data_collection->InitializeChunk(data_collection_chunk);
+	data_collection_chunk.SetCardinality(data_count);
+
+	data_collection->Gather(heads_vec, sel, data_count, data_collection_chunk,
+	                        *FlatVector::IncrementalSelectionVector());
+	data_collection_chunk.Print();
 }
 
 void JoinHashTable::InitializePointerTable() {
@@ -317,6 +349,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	                                chunk_idx_to, false);
 	const auto row_locations = iterator.GetRowLocations();
 	do {
+
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
@@ -406,7 +439,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	}
 }
 
-bool ScanStructure::PointersExhausted() {
+bool ScanStructure::PointersExhausted() const {
 	// AdvancePointers creates a "new_count" for every pointer advanced during the
 	// previous advance pointers call. If no pointers are advanced, new_count = 0.
 	// count is then set ot new_count.
