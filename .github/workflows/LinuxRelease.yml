@@ -50,18 +50,6 @@ jobs:
         openssl: 1
         ccache: 1
 
-    - name: Checkout Release
-      shell: bash
-      run: |
-        git config --global --add safe.directory '*'
-        git checkout v0.10.0
-
-    - name: Report Git Information
-      shell: bash
-      run: |
-        git log -1 --format=%h
-        git describe --tags --abbrev=0
-
     - uses: ./.github/actions/build_extensions
       with:
         vcpkg_target_triplet: x64-linux
