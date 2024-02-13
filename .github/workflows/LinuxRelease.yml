@@ -15,6 +15,31 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:18.04
     steps:
+    - name: Install
+      shell: bash
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev openssh-client pkg-config
+
+    - name: Install
+      shell: bash
+      if: ${{ inputs.aarch64_cross_compile == 1 }}
+      run: |
+        apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+    - name: Install Git 2.18.5
+      shell: bash
+      run: |
+        wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
+        tar xvf v2.18.5.tar.gz
+        cd git-2.18.5
+        make
+        make prefix=/usr install
+        git --version
+
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
