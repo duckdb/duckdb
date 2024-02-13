@@ -162,3 +162,39 @@ class TestToCSV(object):
         rel.to_csv(temp_file_name, compression="gzip", header=False)
         csv_rel = duckdb.read_csv(temp_file_name, compression="gzip")
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_partition(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category": ['a', 'a', 'b', 'b'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category"])
+        csv_rel = duckdb.sql(f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);''') # TODO: update read_csv to add hive_partitioning argument
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_to_csv_overwrite(self, pandas):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pandas.DataFrame(
+            {
+                "c_category_1": ['a', 'a', 'b', 'b'],
+                "c_category_2": ['c', 'c', 'd', 'd'],
+                "c_bool": [True, False, True, True],
+                "c_float": [1.0, 3.2, 3.0, 4.0],
+                "c_int": [42, None, 123, 321],
+                "c_string": ["a", "b,c", "e", "f"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"]) # csv to be overwritten
+        rel.to_csv(temp_file_name, header=True, partition_by=["c_category_2"], overwrite=True)
+        csv_rel = duckdb.sql(f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);''') # TODO: update read_csv to add hive_partitioning argument
+        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
