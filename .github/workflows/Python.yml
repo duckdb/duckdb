@@ -12,9 +12,9 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        arch: [x86_64]
-        python_build: [cp310-*, cp311-*, cp312-*]
-        manylinux: [manylinux2014]
+        arch: [x86_64, aarch64]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        manylinux: [manylinux2014, manylinux_2_28]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || 1 }}
         exclude:
@@ -32,6 +32,8 @@ jobs:
             python_build: 'cp310-*'
           - isRelease: false
             python_build: 'cp311-*'
+          - isRelease: false
+            arch: aarch64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
@@ -93,10 +95,10 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
       shell: bash
       run: |
-        # python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
+        python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
         ls -lah tools/pythonpkg/wheelhouse/*.whl
         ls -lah tools/pythonpkg/dist/duckdb-*.tar.gz
-        # twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+        twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
     - uses: actions/upload-artifact@v3
       with:
