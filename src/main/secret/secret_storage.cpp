@@ -193,7 +193,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 				throw IOException("Failed to initialize persistent storage directory. (original error: '%s')",
 				                  error.RawMessage());
 			}
-			throw ex;
+			throw;
 		}
 	}
 
@@ -226,7 +226,7 @@ void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound 
 			                  "instance. (original error: '%s')",
 			                  file, error.RawMessage());
 		}
-		throw ex;
+		throw;
 	}
 }
 
