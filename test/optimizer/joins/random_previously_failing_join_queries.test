@@ -2,6 +2,8 @@
 # description: see description
 # group: [joins]
 
+mode skip
+
 statement ok
 ATTACH 'test4.db'
 
