@@ -16,7 +16,6 @@ jobs:
     # Builds extensions for osx_arm64 and osx_amd64
     name: OSX Extensions Release
     runs-on: macos-latest
-    needs: xcode-debug
     strategy:
       matrix:
         label: [ 'x86_64' ]
