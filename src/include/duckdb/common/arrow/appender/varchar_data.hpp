@@ -115,7 +115,7 @@ struct ArrowVarcharData {
 
 struct ArrowVarcharToStringViewData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
-		result.main_buffer.reserve((capacity + 1) * 16);
+		result.main_buffer.reserve((capacity + 1) * sizeof(arrow_string_view_t));
 		result.aux_buffer.reserve(capacity);
 	}
 
@@ -132,33 +132,35 @@ struct ArrowVarcharToStringViewData {
 		auto data = UnifiedVectorFormat::GetData<string_t>(format);
 		idx_t last_offset = 0;
 		for (idx_t i = from; i < to; i++) {
+			auto result_idx = append_data.row_count + i - from;
+			auto arrow_data = append_data.main_buffer.GetData<arrow_string_view_t>();
 			auto source_idx = format.sel->get_index(i);
 			if (!format.validity.RowIsValid(source_idx)) {
 				// Null value
 				uint8_t current_bit;
 				idx_t current_byte;
-				GetBitPosition(append_data.row_count + i - from, current_byte, current_bit);
+				GetBitPosition(result_idx, current_byte, current_bit);
 				SetNull(append_data, validity_data, current_byte, current_bit);
 				continue;
 			}
 			// These two are now the same buffer
-			auto arrow_data = append_data.main_buffer.GetData<arrow_string_view_t>();
 			idx_t string_length = ArrowVarcharConverter::GetLength(data[source_idx]);
+			auto string_data = data[source_idx].GetData();
 			if (string_length <= arrow_string_view_t::max_inlined_bytes) {
 				//	This string is inlined
 				//  | Bytes 0-3  | Bytes 4-15                            |
 				//  |------------|---------------------------------------|
 				//  | length     | data (padded with 0)                  |
-				arrow_data[i] = arrow_string_view_t(string_length, data[source_idx].GetData());
+				arrow_data[result_idx] = arrow_string_view_t(string_length, string_data);
 			} else {
 				// This string is not inlined, we have to check a different buffer and offsets
 				//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 				//  |------------|------------|------------|-------------|
 				//  | length     | prefix     | buf. index | offset      |
-				arrow_data[i] = arrow_string_view_t(string_length, data[source_idx].GetData(), 0, last_offset);
+				arrow_data[result_idx] = arrow_string_view_t(string_length, string_data, 0, last_offset);
 				auto current_offset = last_offset + string_length;
 				append_data.aux_buffer.resize(current_offset);
-				memcpy(append_data.aux_buffer.data() + last_offset, data[source_idx].GetData(), string_length);
+				memcpy(append_data.aux_buffer.data() + last_offset, string_data, string_length);
 				last_offset = current_offset;
 			}
 		}

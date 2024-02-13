@@ -14,6 +14,7 @@ def RoundTripStringView(query, array):
     con.execute("SET produce_arrow_string_view=True")
     arrow_tbl = con.execute(query).arrow()
     # Assert that we spit the same as the defined array
+    print(arrow_tbl[0].combine_chunks().tolist())
     assert arrow_tbl[0].combine_chunks().tolist() == array.tolist()
 
     # Generate an arrow table
@@ -37,9 +38,15 @@ class TestArrowReplacementScan(object):
             pa.array(["0.0", "10.0", "200.0", "3000.0", "40000.0"], type=pa.string_view()),
         )
 
+    # Test Small Inlined String View With Nulls
+    def test_inlined_string_view_null(self, duckdb_cursor):
+        RoundTripStringView(
+            "SELECT (i*10^i)::varchar str FROM range(5) tbl(i) UNION Select NULL Order By str",
+            pa.array(["0.0", "10.0", "200.0", "3000.0", "40000.0", None], type=pa.string_view()),
+        )
+
 
 # Test Small Inlined String View
 
-# Test Small Inlined String View With Nulls
 
 # Test Large Inlined String View
