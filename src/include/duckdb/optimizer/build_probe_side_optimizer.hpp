@@ -23,6 +23,7 @@ public:
 	void VisitExpression(unique_ptr<Expression> *expression) override {};
 
 	void TryFlipChildren(LogicalOperator &op, idx_t cardinality_ratio = 1);
+
 private:
 	ClientContext &context;
 };

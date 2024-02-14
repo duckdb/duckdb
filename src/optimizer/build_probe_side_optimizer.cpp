@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context) : context(context) {}
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context) : context(context) {
+}
 
 static void FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
@@ -79,7 +80,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
-		if (join.join_type == JoinType::LEFT &&	 join.right_projection_map.empty()) {
+		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
 			TryFlipChildren(join, 2);
 		} else if (join.join_type == JoinType::INNER) {
 			TryFlipChildren(join, 1);
@@ -99,7 +100,5 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	}
 	VisitOperatorChildren(op);
 }
-
-
 
 } // namespace duckdb
