@@ -9,6 +9,7 @@ create table t5 as select (range + 1000) a5, range b5, (range + 50)::INT::VARCHA
 statement ok
 create table t1 as select range::INT a1, (range + 45)::INT b1, (range)::INT::VARCHAR || '__suffix__' c1 from range(900);
 
+
 query II
 select a5, c1 from t1, t5 where b5=b1;
 ----
