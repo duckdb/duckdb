@@ -140,35 +140,36 @@ TEST_CASE("Test Using SQLFetchScroll with different orrientations", "[odbc]") {
 	HSTMT hstmt = SQL_NULL_HSTMT;
 
 	// Perform the tests for both SMALL and LARGE tables and different fetch sizes
-//	ESize size[] = {SMALL, LARGE};
-//	for (int i = 0; i < 2; i++) {
-//		// Connect to the database using SQLDriverConnect with UseDeclareFetch=1
-//		DRIVER_CONNECT_TO_DATABASE(env, dbc, "UseDeclareFetch=1");
-//
-//		// Allocate a statement handle
-//		EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
-//
-//		// Create a temporary table and insert size[i] rows
-//		TemporaryTable(hstmt, size[i]);
-//
-//		SQLINTEGER *id = new SQLINTEGER[TABLE_SIZE[size[i]]];
-//		SQLLEN *id_ind = new SQLLEN[TABLE_SIZE[size[i]]];
-//		// Block cursor, fetch rows in blocks of size[i]
-//		BlockCursor(hstmt, size[i], id, id_ind);
-//
-//		// Scroll cursor, fetch rows one by one
-//		ScrollNext(hstmt, size[i]);
-//
-//		// Fetch rows using SQL_FETCH_ABSOLUTE
-//		FetchAbsolute(hstmt, size[i]);
-//
-//		delete[] id;
-//		delete[] id_ind;
-//
-//		// Free the statement handle
-//		EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
-//		EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
-//
-//		DISCONNECT_FROM_DATABASE(env, dbc);
-//	}
+	ESize size[] = {SMALL, LARGE};
+	for (int i = 0; i < 2; i++) {
+		// Connect to the database using SQLConnect
+		// TODO: Test with SQLDriverConnect using 'UseDeclareFetch=1'
+		CONNECT_TO_DATABASE(env, dbc);
+
+		// Allocate a statement handle
+		EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
+
+		// Create a temporary table and insert size[i] rows
+		TemporaryTable(hstmt, size[i]);
+
+		SQLINTEGER *id = new SQLINTEGER[TABLE_SIZE[size[i]]];
+		SQLLEN *id_ind = new SQLLEN[TABLE_SIZE[size[i]]];
+		// Block cursor, fetch rows in blocks of size[i]
+		BlockCursor(hstmt, size[i], id, id_ind);
+
+		// Scroll cursor, fetch rows one by one
+		ScrollNext(hstmt, size[i]);
+
+		// Fetch rows using SQL_FETCH_ABSOLUTE
+		FetchAbsolute(hstmt, size[i]);
+
+		delete[] id;
+		delete[] id_ind;
+
+		// Free the statement handle
+		EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
+		EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
+
+		DISCONNECT_FROM_DATABASE(env, dbc);
+	}
 }
