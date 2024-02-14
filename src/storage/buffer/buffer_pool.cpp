@@ -37,11 +37,15 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), purge_active(false) {
+	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
+		memory_usage_per_tag[i] = 0;
+	}
 }
 BufferPool::~BufferPool() {
 }
 
 void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+	constexpr int INSERT_INTERVAL = 1024;
 
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;

@@ -9,9 +9,10 @@
 
 namespace duckdb {
 
-StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine, CSVBufferHandle &buffer_handle,
-                                     Allocator &buffer_allocator, idx_t result_size_p, idx_t buffer_position,
-                                     CSVErrorHandler &error_hander_p, CSVIterator &iterator_p, bool store_line_size_p,
+StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
+                                     const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
+                                     idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
+                                     CSVIterator &iterator_p, bool store_line_size_p,
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p)
     : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
@@ -20,14 +21,14 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
-
+	buffer_handles.push_back(buffer_handle);
 	// Buffer Information
-	buffer_ptr = buffer_handle.Ptr();
-	buffer_size = buffer_handle.actual_size;
+	buffer_ptr = buffer_handle->Ptr();
+	buffer_size = buffer_handle->actual_size;
 	last_position = buffer_position;
 
 	// Current Result information
-	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle.actual_size};
+	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
 	pre_previous_line_start = previous_line_start;
 	// Fill out Parse Types
 	vector<LogicalType> logical_types;
@@ -228,6 +229,19 @@ Value StringValueResult::GetValue(idx_t row_idx, idx_t col_idx) {
 DataChunk &StringValueResult::ToChunk() {
 	parse_chunk.SetCardinality(number_of_rows);
 	return parse_chunk;
+}
+
+void StringValueResult::Reset() {
+	if (number_of_rows == 0) {
+		return;
+	}
+	number_of_rows = 0;
+	cur_col_id = 0;
+	chunk_col_id = 0;
+	for (auto &v : validity_mask) {
+		v->SetAllValid(result_size);
+	}
+	buffer_handles.clear();
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -462,7 +476,7 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
                                        const shared_ptr<CSVFileScan> &csv_file_scan, CSVIterator boundary,
                                        idx_t result_size)
     : BaseScanner(buffer_manager, state_machine, error_handler, csv_file_scan, boundary), scanner_idx(scanner_idx_p),
-      result(states, *state_machine, *cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
+      result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read) {
 }
@@ -471,7 +485,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
                                        const shared_ptr<CSVStateMachine> &state_machine,
                                        const shared_ptr<CSVErrorHandler> &error_handler)
     : BaseScanner(buffer_manager, state_machine, error_handler, nullptr, {}), scanner_idx(0),
-      result(states, *state_machine, *cur_buffer_handle, Allocator::DefaultAllocator(), STANDARD_VECTOR_SIZE,
+      result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), STANDARD_VECTOR_SIZE,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read) {
 }
@@ -494,12 +508,7 @@ bool StringValueScanner::FinishedIterator() {
 }
 
 StringValueResult &StringValueScanner::ParseChunk() {
-	result.number_of_rows = 0;
-	result.cur_col_id = 0;
-	result.chunk_col_id = 0;
-	for (auto &v : result.validity_mask) {
-		v->SetAllValid(result.result_size);
-	}
+	result.Reset();
 	ParseChunkInternal(result);
 	return result;
 }
@@ -849,8 +858,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 
 bool StringValueScanner::MoveToNextBuffer() {
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
-		previous_buffer_handle = std::move(cur_buffer_handle);
+		previous_buffer_handle = cur_buffer_handle;
 		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
+		result.buffer_handles.push_back(cur_buffer_handle);
 		if (!cur_buffer_handle) {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
@@ -1070,7 +1080,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		iterator.done = FinishedFile();
 		if (result.null_padding && result.number_of_rows < STANDARD_VECTOR_SIZE) {
-			while (result.cur_col_id < result.number_of_columns) {
+			while (result.chunk_col_id < result.parse_chunk.ColumnCount()) {
 				result.validity_mask[result.chunk_col_id++]->SetInvalid(result.number_of_rows);
 				result.cur_col_id++;
 			}

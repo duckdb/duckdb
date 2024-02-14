@@ -62,6 +62,9 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
       temporary_id(MAXIMUM_BLOCK), buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree,
                                                     BufferAllocatorRealloc, make_uniq<BufferAllocatorData>(*this)) {
 	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
+	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
+		evicted_data_per_tag[i] = 0;
+	}
 }
 
 StandardBufferManager::~StandardBufferManager() {
