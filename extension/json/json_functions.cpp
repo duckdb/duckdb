@@ -248,7 +248,7 @@ void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
 
 	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions
 	auto null_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::VARCHAR) + 1;
-	casts.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::ReinterpretCast,
+	casts.RegisterCastFunction(LogicalType::SQLNULL, LogicalType::JSON(), DefaultCasts::TryVectorNullCast,
 	                           null_to_json_cost);
 }
 

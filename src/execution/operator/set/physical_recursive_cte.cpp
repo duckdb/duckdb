@@ -38,6 +38,7 @@ public:
 	unique_ptr<GroupedAggregateHashTable> ht;
 
 	bool intermediate_empty = true;
+	mutex intermediate_table_lock;
 	ColumnDataCollection intermediate_table;
 	ColumnDataScanState scan_state;
 	bool initialized = false;
@@ -63,6 +64,8 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
+
+	lock_guard<mutex> guard(gstate.intermediate_table_lock);
 	if (!union_all) {
 		idx_t match_count = ProbeHT(chunk, gstate);
 		if (match_count > 0) {

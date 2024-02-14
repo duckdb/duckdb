@@ -257,6 +257,11 @@ public:
 	//! NOTE: this method is not efficient
 	DUCKDB_API static string ToJSONMap(ExceptionType type, const string &message,
 	                                   const unordered_map<string, string> &map);
+
+	DUCKDB_API static string GetFileName(const string &file_path);
+	DUCKDB_API static string GetFileExtension(const string &file_name);
+	DUCKDB_API static string GetFileStem(const string &file_name);
+	DUCKDB_API static string GetFilePath(const string &file_path);
 };
 
 } // namespace duckdb

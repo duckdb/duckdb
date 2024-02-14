@@ -22,6 +22,12 @@ SELECT UsEr
 ----
 duckdb
 
+# Issue #10363 - we also prefer table-as-struct over value functions
+query I
+SELECT user FROM (VALUES (42)) user(x)
+----
+{'x': 42}
+
 # run all SQL value functions
 # need to run without verification since CURRENT_TIME etc break verification
 statement ok

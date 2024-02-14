@@ -242,7 +242,7 @@ fastfloat_really_inline uint64_t _umul128(uint64_t ab, uint64_t cd,
 fastfloat_really_inline value128 full_multiplication(uint64_t a,
                                                      uint64_t b) {
   value128 answer;
-#ifdef _M_ARM64
+#if defined(FASTFLOAT_VISUAL_STUDIO) && defined(_M_ARM64)
   // ARM64 has native support for 64-bit multiplications, no need to emulate
   answer.high = __umulh(a, b);
   answer.low = a * b;

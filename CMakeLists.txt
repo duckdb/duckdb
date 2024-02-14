@@ -292,7 +292,7 @@ endif()
 
 string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
 
-if(DUCKDB_EXTENSION_FOLDER_IS_VERSION)
+if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND DEFINED GIT_COMMIT_HASH)
   set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
 else()
   set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
@@ -415,10 +415,6 @@ endif()
 
 if(DEBUG_ALLOCATION)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ALLOCATION")
-endif()
-
-if(DEBUG_STACKTRACE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_STACKTRACE")
 endif()
 
 if(DEBUG_MOVE)
@@ -669,6 +665,7 @@ else()
   set(LOCAL_EXTENSION_REPO_DIR ${LOCAL_EXTENSION_REPO})
 endif()
 
+set(LOCAL_EXTENSION_REPO FALSE)
 if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
   if (NOT Python3_FOUND)
     MESSAGE(STATUS "Could not find python3, create extension directory step will be skipped")
@@ -676,17 +673,18 @@ if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TID
     add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
-          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "${EXTENSION_POSTFIX}"
+          ${Python3_EXECUTABLE} scripts/create_local_extension_repo.py "${DUCKDB_NORMALIZED_VERSION}" "${CMAKE_CURRENT_BINARY_DIR}/duckdb_platform_out" "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO_DIR}" "${EXTENSION_POSTFIX}"
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
     add_dependencies(duckdb_local_extension_repo duckdb_platform)
+    set(LOCAL_EXTENSION_REPO TRUE)
     message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO_DIR}")
   endif()
 endif()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
-  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+  if (LOCAL_EXTENSION_REPO)
     add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
   endif()
   # all parameters after output_directory
@@ -1117,10 +1115,13 @@ if(BUILD_PYTHON)
       DUCKDB_BINARY_DIR=${PROJECT_BINARY_DIR}
       DUCKDB_COMPILE_FLAGS=${ALL_COMPILE_FLAGS}
       DUCKDB_LIBS="${duckdb_libs}"
-      pip
-      install
-      --editable
-      .)
+	)
+
+  if(PYTHON_EDITABLE_BUILD)
+    set(PIP_COMMAND ${PIP_COMMAND} pip install --editable .)
+  else()
+    set(PIP_COMMAND ${PIP_COMMAND} pip install .)
+  endif()
 
   if(USER_SPACE)
     set(PIP_COMMAND ${PIP_COMMAND} --user)
@@ -1146,7 +1147,7 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
                                          ${PROJECT_BINARY_DIR})
   add_custom_target(
           duckdb_platform ALL
-          COMMAND duckdb_platform_binary > duckdb_platform_out
+          COMMAND duckdb_platform_binary > duckdb_platform_out || (echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1)
           )
   add_dependencies(duckdb_platform duckdb_platform_binary)
 else()

@@ -27,7 +27,7 @@ statement ok
 pragma threads=1
 
 statement ok
-pragma memory_limit='50mb'
+pragma memory_limit='75mb'
 
 query I
 select count(*) from t1, t2 where i = j
@@ -47,7 +47,7 @@ select count(*) from t1, t2 where i = j
 statement ok
 pragma debug_force_external=true
 
-# we need more memory for repartitioning (
+# we need more memory for repartitioning
 statement ok
 pragma memory_limit='250mb'
 

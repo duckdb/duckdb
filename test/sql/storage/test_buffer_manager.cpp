@@ -205,7 +205,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 
 	idx_t requested_size = Storage::BLOCK_SIZE;
 	shared_ptr<BlockHandle> block;
-	auto handle = buffer_manager.Allocate(requested_size, false, &block);
+	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
 	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	for (; requested_size < limit; requested_size *= 2) {
 		// increase size
@@ -249,7 +249,7 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 
 	idx_t requested_size = 424242;
 	shared_ptr<BlockHandle> block;
-	auto pin = buffer_manager.Allocate(requested_size, false, &block);
+	auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
 	CHECK(buffer_manager.GetUsedMemory() >= requested_size + Storage::BLOCK_HEADER_SIZE);
 
 	pin.Destroy();
@@ -280,7 +280,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	blocks.reserve(block_count);
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, Storage::BLOCK_SIZE, false, &blocks.back());
 		// used memory should increment by exactly one block at a time, up to 10
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * Storage::BLOCK_ALLOC_SIZE);
 	}
@@ -301,7 +301,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", alloc_size * pin_count)));
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(block_size, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false, &blocks.back());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
@@ -314,7 +314,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	// again, the same but incrementing block_size by 1 for every block (has same alloc_size)
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(block_size, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false, &blocks.back());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size++;
@@ -331,7 +331,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	block_size = 424242;
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(block_size, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false, &blocks.back());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size--;

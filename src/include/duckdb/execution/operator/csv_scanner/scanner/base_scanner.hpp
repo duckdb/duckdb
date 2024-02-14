@@ -95,7 +95,7 @@ protected:
 
 	//! Unique pointer to the buffer_handle, this is unique per scanner, since it also contains the necessary counters
 	//! To offload buffers to disk if necessary
-	unique_ptr<CSVBufferHandle> cur_buffer_handle;
+	shared_ptr<CSVBufferHandle> cur_buffer_handle;
 
 	//! Hold the current buffer ptr
 	char *buffer_handle_ptr = nullptr;

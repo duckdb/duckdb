@@ -222,11 +222,17 @@ public:
 class IOException : public Exception {
 public:
 	DUCKDB_API explicit IOException(const string &msg);
+	DUCKDB_API explicit IOException(const string &msg, const unordered_map<string, string> &extra_info);
 	explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
 	}
 
 	template <typename... Args>
 	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
+	}
+
+	template <typename... Args>
+	explicit IOException(const string &msg, const unordered_map<string, string> &extra_info, Args... params)
+	    : IOException(ConstructMessage(msg, params...), extra_info) {
 	}
 };
 
