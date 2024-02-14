@@ -5,6 +5,7 @@ add_subdirectory(extension)
 add_subdirectory(relation)
 add_subdirectory(secret)
 add_subdirectory(settings)
+add_subdirectory(buffered_data)
 add_subdirectory(chunk_scan_state)
 
 if(FORCE_QUERY_LOG)

@@ -10,6 +10,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
@@ -35,23 +37,30 @@ struct DummyBinding;
 
 struct BoundColumnReferenceInfo {
 	string name;
-	idx_t query_location;
+	optional_idx query_location;
 };
 
 struct BindResult {
 	BindResult() {
 	}
-	explicit BindResult(string error) : error(error) {
+	explicit BindResult(const Exception &ex) : error(ex) {
+	}
+	explicit BindResult(const string &error_msg) : error(ExceptionType::BINDER, error_msg) {
+	}
+	explicit BindResult(ErrorData error) : error(std::move(error)) {
 	}
 	explicit BindResult(unique_ptr<Expression> expr) : expression(std::move(expr)) {
 	}
 
-	bool HasError() {
-		return !error.empty();
+	bool HasError() const {
+		return error.HasError();
+	}
+	void SetError(const string &error_message) {
+		error = ErrorData(ExceptionType::BINDER, error_message);
 	}
 
 	unique_ptr<Expression> expression;
-	string error;
+	ErrorData error;
 };
 
 class ExpressionBinder {
@@ -80,7 +89,7 @@ public:
 		return bound_columns;
 	}
 
-	string Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
+	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);
 
 	//! Returns the STRUCT_EXTRACT operator expression
 	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name);
@@ -90,11 +99,11 @@ public:
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
 	//! Returns a qualified column reference from a column name
-	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, ErrorData &error);
 	//! Returns a qualified column reference from a column reference with column_names.size() > 2
-	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Returns a qualified column reference from a column reference
-	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
 	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
 	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
@@ -108,9 +117,9 @@ public:
 	                          bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
-	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, string error_message);
+	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message);
 
-	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
+	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, ErrorData &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
 	static bool ContainsNullType(const LogicalType &type);

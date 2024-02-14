@@ -66,10 +66,16 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (!stream->release) {
 		return -1;
 	}
+	out->release = nullptr;
 	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	if (!my_stream->column_types.empty()) {
-		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-		                              my_stream->result->client_properties);
+		try {
+			ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+			                              my_stream->result->client_properties);
+		} catch (std::runtime_error &e) {
+			my_stream->last_error = ErrorData(e);
+			return -1;
+		}
 		return 0;
 	}
 
@@ -81,7 +87,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (result.type == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
-			my_stream->last_error = PreservedError("Query Stream is closed");
+			my_stream->last_error = ErrorData("Query Stream is closed");
 			return -1;
 		}
 	}
@@ -89,8 +95,13 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-	                              my_stream->result->client_properties);
+	try {
+		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+		                              my_stream->result->client_properties);
+	} catch (std::runtime_error &e) {
+		my_stream->last_error = ErrorData(e);
+		return -1;
+	}
 	return 0;
 }
 
@@ -118,10 +129,10 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->column_names = result.names;
 	}
 	idx_t result_count;
-	PreservedError error;
+	ErrorData error;
 	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count,
 	                              error)) {
-		D_ASSERT(error);
+		D_ASSERT(error.HasError());
 		my_stream->last_error = error;
 		return -1;
 	}
@@ -166,7 +177,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 }
 
 bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t batch_size, ArrowArray *out,
-                              idx_t &count, PreservedError &error) {
+                              idx_t &count, ErrorData &error) {
 	count = 0;
 	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options));
 	auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
@@ -210,7 +221,7 @@ bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties optio
 }
 
 idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out) {
-	PreservedError error;
+	ErrorData error;
 	idx_t result_count;
 	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error)) {
 		error.Throw();

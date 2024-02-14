@@ -9,7 +9,7 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	buffer_manager.Allocate(capacity, false, &handle);
+	buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false, &handle);
 }
 
 TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept {

@@ -102,7 +102,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		}
 	} else {
 		auto &smask = CopyValidityMask(*source);
-		if (smask.IsMaskSet()) {
+		if (smask.IsMaskSet() || tmask.IsMaskSet()) {
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto idx = sel->get_index(source_offset + i);
 

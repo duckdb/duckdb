@@ -68,7 +68,7 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
-def getTimeSeriesData(nper=None, freq: "Frequency" = "B") -> dict[str, "Series"]:
+def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
     from pandas import DatetimeIndex, bdate_range, Series
     from datetime import datetime
     from pandas._typing import Frequency
@@ -102,9 +102,9 @@ def pandas_2_or_higher():
 
 def pandas_supports_arrow_backend():
     try:
-        from pandas.compat import pa_version_under7p0
+        from pandas.compat import pa_version_under11p0
 
-        if pa_version_under7p0 == True:
+        if pa_version_under11p0 == True:
             return False
     except ImportError:
         return False

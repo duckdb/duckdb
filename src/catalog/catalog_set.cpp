@@ -13,6 +13,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 
@@ -308,12 +309,20 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		throw InternalException("Cannot AlterEntry without client context");
 	}
 
-	// Use the existing entry to create the altered entry
 	auto &context = *transaction.context;
-	auto value = entry->AlterEntry(context, alter_info);
-	if (!value) {
-		// alter failed, but did not result in an error
-		return true;
+
+	unique_ptr<CatalogEntry> value;
+	if (alter_info.type == AlterType::SET_COMMENT) {
+		// Copy the existing entry; we are only changing metadata here
+		value = entry->Copy(context);
+		value->comment = alter_info.Cast<SetCommentInfo>().comment_value;
+	} else {
+		// Use the existing entry to create the altered entry
+		value = entry->AlterEntry(context, alter_info);
+		if (!value) {
+			// alter failed, but did not result in an error
+			return true;
+		}
 	}
 
 	// Mark this entry as being created by this transaction

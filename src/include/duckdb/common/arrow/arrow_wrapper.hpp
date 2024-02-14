@@ -9,7 +9,7 @@
 #pragma once
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
 #include "duckdb/main/client_properties.hpp"
 
@@ -62,10 +62,10 @@ public:
 class ArrowUtil {
 public:
 	static bool TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
-	                          idx_t &result_count, PreservedError &error);
+	                          idx_t &result_count, ErrorData &error);
 	static idx_t FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out);
 
 private:
-	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, PreservedError &error);
+	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, ErrorData &error);
 };
 } // namespace duckdb

@@ -44,7 +44,8 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string
 		original.Set(sniffed.GetValue(), false);
 	}
 }
-void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error) {
+void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error, bool found_date,
+                                    bool found_timestamp) {
 	MatchAndReplace(original.header, sniffed.header, "Header", error);
 	if (sniffed.state_machine_options.new_line.GetValue() != NewLineIdentifier::NOT_SET) {
 		// Is sniffed line is not set (e.g., single-line file) , we don't try to replace and match.
@@ -56,15 +57,28 @@ void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sn
 	                error);
 	MatchAndReplace(original.state_machine_options.quote, sniffed.state_machine_options.quote, "Quote", error);
 	MatchAndReplace(original.state_machine_options.escape, sniffed.state_machine_options.escape, "Escape", error);
-	MatchAndReplace(original.date_format[LogicalTypeId::DATE], sniffed.date_format[LogicalTypeId::DATE], "Date Format",
-	                error);
-	MatchAndReplace(original.date_format[LogicalTypeId::TIMESTAMP], sniffed.date_format[LogicalTypeId::TIMESTAMP],
-	                "Timestamp Format", error);
+	if (found_date) {
+		MatchAndReplace(original.date_format[LogicalTypeId::DATE], sniffed.date_format[LogicalTypeId::DATE],
+		                "Date Format", error);
+	}
+	if (found_timestamp) {
+		MatchAndReplace(original.date_format[LogicalTypeId::TIMESTAMP], sniffed.date_format[LogicalTypeId::TIMESTAMP],
+		                "Timestamp Format", error);
+	}
 }
 // Set the CSV Options in the reference
 void CSVSniffer::SetResultOptions() {
+	bool found_date = false;
+	bool found_timestamp = false;
+	for (auto &type : detected_types) {
+		if (type == LogicalType::DATE) {
+			found_date = true;
+		} else if (type == LogicalType::TIMESTAMP) {
+			found_timestamp = true;
+		}
+	}
 	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
-	                               options.sniffer_user_mismatch_error);
+	                               options.sniffer_user_mismatch_error, found_date, found_timestamp);
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 }
 

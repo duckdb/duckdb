@@ -59,7 +59,6 @@ import java.util.logging.Logger;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 import static java.time.temporal.ChronoField.DAY_OF_MONTH;
-import static java.time.temporal.ChronoField.MILLI_OF_SECOND;
 import static java.time.temporal.ChronoField.MONTH_OF_YEAR;
 import static java.time.temporal.ChronoField.OFFSET_SECONDS;
 import static java.time.temporal.ChronoField.YEAR_OF_ERA;
@@ -1186,6 +1185,18 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    public static void test_set_date() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT ?")) {
+            Date date = Date.valueOf("1969-01-01");
+            stmt.setDate(1, date);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                assertEquals(rs.getDate(1), date);
+            }
+        }
+    }
+
     public static void test_lots_of_decimals() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
@@ -2150,6 +2161,17 @@ public class TestDuckDBJDBC {
         assertNull(d.connect("jdbc:h2:", null));
     }
 
+    public static void test_new_connection_wrong_url_bug10441() throws Exception {
+        assertThrows(() -> {
+            Connection connection = DuckDBConnection.newConnection("jdbc:duckdb@", false, new Properties());
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                // ignored
+            }
+        }, SQLException.class);
+    }
+
     public static void test_parquet_reader() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
@@ -3023,7 +3045,7 @@ public class TestDuckDBJDBC {
 
         String message = assertThrows(() -> DriverManager.getConnection(JDBC_URL, info), SQLException.class);
 
-        assertTrue(message.contains("Failed to set configuration option \"ordered_aggregate_threshold\""));
+        assertTrue(message.contains("Could not set option \"ordered_aggregate_threshold\" as a global option"));
     }
 
     private static String getSetting(Connection conn, String settingName) throws Exception {
@@ -3808,7 +3830,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put(
             "timestamp_tz",
             asList(OffsetDateTime.of(LocalDateTime.of(-290308, 12, 22, 0, 0, 0), ZoneOffset.UTC),
-                   OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 776806000), ZoneOffset.UTC), null));
+                   OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775806000), ZoneOffset.UTC), null));
     }
 
     public static void test_all_types() throws Exception {
@@ -3838,9 +3860,6 @@ public class TestDuckDBJDBC {
 
                         if (actual instanceof Timestamp && expected instanceof Timestamp) {
                             assertEquals(((Timestamp) actual).getTime(), ((Timestamp) expected).getTime(), 500);
-                        } else if (actual instanceof OffsetDateTime && expected instanceof OffsetDateTime) {
-                            assertEquals(((OffsetDateTime) actual).getLong(MILLI_OF_SECOND),
-                                         ((OffsetDateTime) expected).getLong(MILLI_OF_SECOND), 5000);
                         } else if (actual instanceof List) {
                             assertListsEqual((List) actual, (List) expected);
                         } else {

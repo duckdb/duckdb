@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/main/chunk_scan_state.hpp"
-#include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/error_data.hpp"
 
 namespace duckdb {
 
@@ -13,14 +13,14 @@ public:
 	~QueryResultChunkScanState();
 
 public:
-	bool LoadNextChunk(PreservedError &error) override;
+	bool LoadNextChunk(ErrorData &error) override;
 	bool HasError() const override;
-	PreservedError &GetError() override;
+	ErrorData &GetError() override;
 	const vector<LogicalType> &Types() const override;
 	const vector<string> &Names() const override;
 
 private:
-	bool InternalLoad(PreservedError &error);
+	bool InternalLoad(ErrorData &error);
 
 private:
 	QueryResult &result;
