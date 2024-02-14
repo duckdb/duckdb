@@ -48,8 +48,8 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 			offset_data[offset_idx] = current_offset;
 
 			// resize the string buffer if required, and write the string data
-			append_data.aux_buffer.resize(current_offset);
-			WriteData(append_data.aux_buffer.data() + last_offset, data[i]);
+			append_data.aux_buffer[0].resize(current_offset);
+			WriteData(append_data.aux_buffer[0].data() + last_offset, data[i]);
 
 			last_offset = current_offset;
 		}

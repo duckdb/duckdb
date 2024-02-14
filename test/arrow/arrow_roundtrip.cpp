@@ -98,8 +98,8 @@ TEST_CASE("Test Arrow String View", "[arrow][.]") {
 	TestArrowRoundtripStringView("SELECT 'Imaverybigstringmuchbiggerthanfourbytes' str FROM range(5) tbl(i)");
 
 	// Test Big Strings + Nulls
-	TestArrowRoundtripStringView(
-	    "SELECT 'Imaverybigstringmuchbiggerthanfourbytes' str FROM range(5) tbl(i) UNION SELECT NULL");
+	TestArrowRoundtripStringView("SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(5) "
+	                             "tbl(i) UNION SELECT NULL order by str");
 
 	// Test Mix of Small/Big/NULL Strings
 	TestArrowRoundtripStringView(

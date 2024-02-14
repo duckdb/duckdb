@@ -3,6 +3,7 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -37,8 +38,7 @@ template <class SRC = string_t, class OP = ArrowVarcharConverter, class BUFTYPE 
 struct ArrowVarcharData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.main_buffer.reserve((capacity + 1) * sizeof(BUFTYPE));
-
-		result.aux_buffer.reserve(capacity);
+		result.aux_buffer[0].reserve(capacity);
 	}
 
 	template <bool LARGE_STRING>
@@ -89,8 +89,8 @@ struct ArrowVarcharData {
 			offset_data[offset_idx] = current_offset;
 
 			// resize the string buffer if required, and write the string data
-			append_data.aux_buffer.resize(current_offset);
-			OP::WriteData(append_data.aux_buffer.data() + last_offset, data[source_idx]);
+			append_data.aux_buffer[0].resize(current_offset);
+			OP::WriteData(append_data.aux_buffer[0].data() + last_offset, data[source_idx]);
 
 			last_offset = current_offset;
 		}
@@ -109,14 +109,15 @@ struct ArrowVarcharData {
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 3;
 		result->buffers[1] = append_data.main_buffer.data();
-		result->buffers[2] = append_data.aux_buffer.data();
+		result->buffers[2] = append_data.aux_buffer[0].data();
 	}
 };
 
 struct ArrowVarcharToStringViewData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
-		result.main_buffer.reserve((capacity + 1) * sizeof(arrow_string_view_t));
-		result.aux_buffer.reserve(capacity);
+		result.main_buffer.reserve((capacity) * sizeof(arrow_string_view_t));
+		result.aux_buffer[0].reserve(capacity);
+		result.aux_buffer[1].reserve(sizeof(int64_t));
 	}
 
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
@@ -128,9 +129,9 @@ struct ArrowVarcharToStringViewData {
 		ResizeValidity(append_data.validity, append_data.row_count + size);
 		auto validity_data = (uint8_t *)append_data.validity.data();
 
+		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(arrow_string_view_t) * (size));
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		auto data = UnifiedVectorFormat::GetData<string_t>(format);
-		idx_t last_offset = 0;
 		for (idx_t i = from; i < to; i++) {
 			auto result_idx = append_data.row_count + i - from;
 			auto arrow_data = append_data.main_buffer.GetData<arrow_string_view_t>();
@@ -157,20 +158,28 @@ struct ArrowVarcharToStringViewData {
 				//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
 				//  |------------|------------|------------|-------------|
 				//  | length     | prefix     | buf. index | offset      |
-				arrow_data[result_idx] = arrow_string_view_t(string_length, string_data, 0, last_offset);
-				auto current_offset = last_offset + string_length;
-				append_data.aux_buffer.resize(current_offset);
-				memcpy(append_data.aux_buffer.data() + last_offset, string_data, string_length);
-				last_offset = current_offset;
+				arrow_data[result_idx] = arrow_string_view_t(string_length, string_data, 0, append_data.offset);
+				auto current_offset = append_data.offset + string_length;
+				append_data.aux_buffer[0].resize(current_offset);
+				ArrowVarcharConverter::WriteData(append_data.aux_buffer[0].data() + append_data.offset,
+				                                 data[source_idx]);
+				append_data.offset = current_offset;
 			}
 		}
 		append_data.row_count += size;
 	}
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
-		result->n_buffers = 3;
+		// We output four buffers
+		result->n_buffers = 4;
+		// Buffer 0 is the validity mask
+		// Buffer 1 is our string views (short/long strings)
 		result->buffers[1] = append_data.main_buffer.data();
-		result->buffers[2] = append_data.aux_buffer.data();
+		// Buffer 2 is our only data buffer, could theoretically be more [ buffers ]
+		result->buffers[2] = append_data.aux_buffer[0].data();
+		// Buffer 3 is the data-buffer lengths buffer, and we also populate it in to finalize
+		reinterpret_cast<int64_t *>(append_data.aux_buffer[1].data())[0] = append_data.offset;
+		result->buffers[3] = append_data.aux_buffer[1].data();
 	}
 };
 

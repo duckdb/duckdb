@@ -32,7 +32,7 @@ struct ArrowAppendData {
 	// the buffers of the arrow vector
 	ArrowBuffer validity;
 	ArrowBuffer main_buffer;
-	ArrowBuffer aux_buffer;
+	ArrowBuffer aux_buffer[2];
 
 	idx_t row_count = 0;
 	idx_t null_count = 0;
@@ -47,13 +47,15 @@ struct ArrowAppendData {
 
 	// the arrow array C API data, only set after Finalize
 	unique_ptr<ArrowArray> array;
-	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
+	duckdb::array<const void *, 4> buffers = {{nullptr, nullptr, nullptr, nullptr}};
 	vector<ArrowArray *> child_pointers;
 	// Arrays so the children can be moved
 	vector<ArrowArray> child_arrays;
 	ArrowArray dictionary;
 
 	ClientProperties options;
+
+	idx_t offset = 0;
 };
 
 //===--------------------------------------------------------------------===//

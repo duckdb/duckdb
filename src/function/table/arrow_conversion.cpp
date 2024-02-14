@@ -295,9 +295,9 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 	}
 }
 
-static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array) {
+static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, idx_t current_pos) {
 	auto strings = FlatVector::GetData<string_t>(vector);
-	auto arrow_string = ArrowBufferData<arrow_string_view_t>(array, 1);
+	auto arrow_string = ArrowBufferData<arrow_string_view_t>(array, 1) + current_pos;
 
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 		if (FlatVector::IsNull(vector, row_idx)) {
@@ -689,7 +689,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			break;
 		}
 		case ArrowVariableSizeType::VIEW: {
-			SetVectorStringView(vector, size, array);
+			SetVectorStringView(vector, size, array,
+			                    GetEffectiveOffset(array, parent_offset, scan_state, nested_offset));
 			break;
 		}
 		}
