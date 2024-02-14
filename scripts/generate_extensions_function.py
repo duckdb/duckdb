@@ -331,8 +331,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "parquet",
     "sqlsmith",
     "tpcds",
-    "tpch",
-    "visualizer"
+    "tpch"
 }; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb"""
