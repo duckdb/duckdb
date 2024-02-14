@@ -51,4 +51,3 @@ if __name__ == "__main__":
         raise Exception(f"Error: file '{file_path}' does not exist")
 
     enum_dict = parse_enum(file_path)
-
