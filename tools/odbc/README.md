@@ -1,7 +1,7 @@
 ## Adding a new Connect Attribute
 
 ### 1. Add the attribute to the JSON file
-In the [connection_string_attributes.json](./connection_string_attributes.json) file, add a new attribute to the `attributes` array. The following fields are required:
+In the [connection_string_attributes.json](connect/connection_string_attributes.json) file, add a new attribute to the `attributes` array. The following fields are required:
 - `keyword`: the keyword associated with the attribute
 - `enum`: an enum value that represents the attribute in CAPS
 - `description`: a description of the attribute
@@ -30,7 +30,7 @@ python3 tools/odbc/scripts/generate_connection_string_attributes.py
 
 Do not change the `connect.hpp` file directly, as it will be overwritten by the script.
 
-### 3. Implement the Attribute function in [`connect.cpp`](./connect.cpp)
+### 3. Implement the Attribute function in [`connect.cpp`](connect/connect.cpp)
 A function signature for the attribute has been generated in the `connect.hpp` file,
 which needs to be implemented in the `connect.cpp` file.
 The functions return a `SQLRETURN` and take a `const string &` as an argument.

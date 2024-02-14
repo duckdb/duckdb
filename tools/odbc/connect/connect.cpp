@@ -1,7 +1,6 @@
 #include "connect.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include <iostream>
-#include <fstream>
 
 #if WIN32
 #include <windows.h>
