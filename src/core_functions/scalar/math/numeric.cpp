@@ -1396,7 +1396,6 @@ static void ConstUnsignedRHSDivideOperationFast(DataChunk &args, ExpressionState
 	}
 	RHS rhs = args.data[1].GetValue(0).GetValue<RHS>();
 
-	ValidityMask &validity = FlatVector::Validity(result);
 	if (rhs == 0) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
