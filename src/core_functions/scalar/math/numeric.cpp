@@ -1,21 +1,25 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "fastmod.h"
 
 #include <cmath>
+#include <cstdint>
+#include <duckdb/common/vector_operations/unary_executor.hpp>
 #include <errno.h>
+#include <limits>
 #include <type_traits>
 
 namespace duckdb {
@@ -1330,6 +1334,30 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 // [divide_by_const]
 //===--------------------------------------------------------------------===//
 
+static uint64_t ComputeM(uint32_t rhs) {
+	return (UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1);
+}
+
+static uint64_t ComputeM(int32_t rhs) {
+	if (rhs < 0)
+		rhs = -rhs;
+	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
+}
+
+// fastdiv computes (a / d) given precomputed M for d>1
+inline static uint32_t Fastdiv(uint32_t a, uint64_t m, uint32_t d) {
+	return Uhugeint::Multiply<false>(uhugeint_t(a), uhugeint_t(m)).upper;
+}
+
+static uint32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
+	uint64_t highbits = Hugeint::Multiply<false>(hugeint_t(a), hugeint_t(m)).upper;
+	highbits += (a < 0 ? 1 : 0);
+	if (d < 0) {
+		return -(int32_t)(highbits);
+	}
+	return (int32_t)(highbits);
+}
+
 template <class LHS, class RHS, class RESULT>
 static void ConstRHSDivideOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (args.data[1].GetVectorType() != VectorType::CONSTANT_VECTOR) {
@@ -1366,11 +1394,23 @@ static void ConstUnsignedRHSDivideOperationFast(DataChunk &args, ExpressionState
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-
-	uint64_t optimised_rhs = fastmod::computeM_u32(rhs);
-	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(
-	    args.data[0], result, args.size(),
-	    [&](LHS lhs, ValidityMask &validity, idx_t idx) { return fastmod::fastdiv_s32(lhs, optimised_rhs, rhs); });
+	if (rhs == 1) {
+		result.Reinterpret(args.data[0]);
+	}
+	if (std::is_signed<RHS>() && rhs == RHS(-1)) {
+		UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(), [&](LHS lhs) {
+			if (lhs == std::numeric_limits<LHS>::min()) {
+				throw OutOfRangeException("Overflow in division of %d / %d", lhs, rhs);
+			}
+			return -lhs;
+		});
+	}
+	if (std::is_signed<RHS>() && rhs == std::numeric_limits<RHS>::min()) {
+		UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(), [&](LHS lhs) { return lhs == rhs; });
+	}
+	auto optimised_rhs = ComputeM(rhs);
+	UnaryExecutor::Execute<LHS, RESULT>(args.data[0], result, args.size(),
+	                                    [&](LHS lhs) { return Fastdiv(lhs, optimised_rhs, rhs); });
 }
 
 static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
@@ -1381,7 +1421,7 @@ static scalar_function_t GetConstDivideFunction(const LogicalType &type) {
 	case LogicalTypeId::SMALLINT:
 		return ConstRHSDivideOperation<int16_t, int16_t, int16_t>;
 	case LogicalTypeId::INTEGER:
-		return ConstRHSDivideOperation<int32_t, int32_t, int32_t>;
+		return ConstUnsignedRHSDivideOperationFast<int32_t, int32_t, int32_t>;
 	case LogicalTypeId::BIGINT:
 		return ConstRHSDivideOperation<int64_t, int64_t, int64_t>;
 	case LogicalTypeId::HUGEINT:
