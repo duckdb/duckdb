@@ -150,50 +150,6 @@ static void TestSettingConfigs() {
 	          "READ_WRITE");
 }
 
-//#if defined WIN32
-static void runSQLInstallerError(bool ret, std::string errorMessage) {
-	if (ret == true) {
-		REQUIRE(ret == true);
-	}
-
-	DWORD errorCode;
-	CHAR msgText[SQL_MAX_MESSAGE_LENGTH];
-	WORD msgTextLen;
-
-	SQLInstallerError(1, &errorCode, reinterpret_cast<LPSTR>(msgText), sizeof(msgText), &msgTextLen);
-
-	// Print or handle the error information
-	std::cerr << errorMessage << "\n";
-	switch (errorCode) {
-	case ODBC_ERROR_GENERAL_ERR:
-		std::cerr << "ODBC_ERROR_GENERAL_ERR\n";
-		break;
-	case ODBC_ERROR_INVALID_PATH:
-		std::cerr << "ODBC_ERROR_INVALID_PATH\n";
-		break;
-	case ODBC_ERROR_INVALID_REQUEST_TYPE:
-		std::cerr << "ODBC_ERROR_INVALID_REQUEST_TYPE\n";
-	case ODBC_ERROR_REQUEST_FAILED:
-		std::cerr << "ODBC_ERROR_REQUEST_FAILED\n";
-		break;
-	case ODBC_ERROR_OUT_OF_MEM:
-		std::cerr << "ODBC_ERROR_OUT_OF_MEM\n";
-		break;
-	case ODBC_ERROR_INVALID_STR:
-		std::cerr << "ODBC_ERROR_INVALID_STR\n";
-		break;
-	case ODBC_ERROR_INVALID_NAME:
-		std::cerr << "ODBC_ERROR_INVALID_NAME\n";
-		break;
-	case ODBC_ERROR_INVALID_KEYWORD_VALUE:
-		std::cerr << "ODBC_ERROR_INVALID_KEYWORD_VALUE\n";
-		break;
-	}
-	std::cerr << "Error: " << errorCode << "\n";
-	std::cerr << "Message: " << msgText << "\n";
-	REQUIRE(ret == true);
-}
-
 // Test input from an ini file
 static void TestIniFile() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
@@ -251,22 +207,22 @@ TEST_CASE("Test SQLConnect and SQLDriverConnect", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
-//	// Connect to the database using SQLConnect
-//	CONNECT_TO_DATABASE(env, dbc);
-//	DISCONNECT_FROM_DATABASE(env, dbc);
-//
-//	// Connect to the database using SQLDriverConnect
-//	DRIVER_CONNECT_TO_DATABASE(env, dbc, "");
-//	DISCONNECT_FROM_DATABASE(env, dbc);
-//
-//	TestIncorrectParams();
-//
-//	TestSettingDatabase();
-//
-//	TestSettingConfigs();
-//
-//	ConnectWithoutDSN(env, dbc);
-//	DISCONNECT_FROM_DATABASE(env, dbc);
+	// Connect to the database using SQLConnect
+	CONNECT_TO_DATABASE(env, dbc);
+	DISCONNECT_FROM_DATABASE(env, dbc);
+
+	// Connect to the database using SQLDriverConnect
+	DRIVER_CONNECT_TO_DATABASE(env, dbc, "");
+	DISCONNECT_FROM_DATABASE(env, dbc);
+
+	TestIncorrectParams();
+
+	TestSettingDatabase();
+
+	TestSettingConfigs();
+
+	ConnectWithoutDSN(env, dbc);
+	DISCONNECT_FROM_DATABASE(env, dbc);
 
 	TestIniFile();
 }
@@ -325,29 +281,29 @@ TEST_CASE("Test user_agent - named database", "[odbc][useragent]") {
 
 // In-memory databases are a singleton from duckdb_odbc.hpp, so cannot have custom options
 TEST_CASE("Test user_agent - named database, custom useragent", "[odbc][useragent]") {
-	//	SQLHANDLE env;
-	//	SQLHANDLE dbc;
-	//
-	//	HSTMT hstmt = SQL_NULL_HSTMT;
-	//
-	//	// Connect to the database using SQLConnect with a custom user_agent
-	//	DRIVER_CONNECT_TO_DATABASE(env, dbc, "Database=test_odbc_named_ua.db;custom_user_agent=CUSTOM_STRING");
-	//
-	//	// Allocate a statement handle
-	//	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
-	//
-	//	// Execute a simple query
-	//	EXECUTE_AND_CHECK(
-	//	    "SQLExecDirect (get user_agent)", SQLExecDirect, hstmt,
-	//	    ConvertToSQLCHAR(
-	//	        "SELECT regexp_matches(user_agent, '^duckdb/.*(.*) odbc CUSTOM_STRING') FROM pragma_user_agent()"),
-	//	    SQL_NTS);
-	//
-	//	EXECUTE_AND_CHECK("SQLFetch (get user_agent)", SQLFetch, hstmt);
-	//	DATA_CHECK(hstmt, 1, "true");
-	//
-	//	// Free the env handle
-	//	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
-	//
-	//	DISCONNECT_FROM_DATABASE(env, dbc);
+	SQLHANDLE env;
+	SQLHANDLE dbc;
+
+	HSTMT hstmt = SQL_NULL_HSTMT;
+
+	// Connect to the database using SQLConnect with a custom user_agent
+	DRIVER_CONNECT_TO_DATABASE(env, dbc, "Database=test_odbc_named_ua.db;custom_user_agent=CUSTOM_STRING");
+
+	// Allocate a statement handle
+	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
+
+	// Execute a simple query
+	EXECUTE_AND_CHECK(
+		"SQLExecDirect (get user_agent)", SQLExecDirect, hstmt,
+		ConvertToSQLCHAR(
+			"SELECT regexp_matches(user_agent, '^duckdb/.*(.*) odbc CUSTOM_STRING') FROM pragma_user_agent()"),
+		SQL_NTS);
+
+	EXECUTE_AND_CHECK("SQLFetch (get user_agent)", SQLFetch, hstmt);
+	DATA_CHECK(hstmt, 1, "true");
+
+	// Free the env handle
+	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
+
+	DISCONNECT_FROM_DATABASE(env, dbc);
 }

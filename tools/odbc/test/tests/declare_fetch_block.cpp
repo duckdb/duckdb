@@ -135,11 +135,11 @@ static void FetchAbsolute(HSTMT &hstmt, ESize S) {
 }
 
 TEST_CASE("Test Using SQLFetchScroll with different orrientations", "[odbc]") {
-//	SQLHANDLE env;
-//	SQLHANDLE dbc;
-//	HSTMT hstmt = SQL_NULL_HSTMT;
-//
-//	// Perform the tests for both SMALL and LARGE tables and different fetch sizes
+	SQLHANDLE env;
+	SQLHANDLE dbc;
+	HSTMT hstmt = SQL_NULL_HSTMT;
+
+	// Perform the tests for both SMALL and LARGE tables and different fetch sizes
 //	ESize size[] = {SMALL, LARGE};
 //	for (int i = 0; i < 2; i++) {
 //		// Connect to the database using SQLDriverConnect with UseDeclareFetch=1
