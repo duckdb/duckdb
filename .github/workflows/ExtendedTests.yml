@@ -28,7 +28,7 @@ env:
 jobs:
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)
-     runs-on: macos-14
+     runs-on: macos-latest
      env:
        CC: clang
        CXX: clang++
@@ -45,7 +45,7 @@ jobs:
 
      - uses: actions/setup-python@v4
        with:
-         python-version: '3.12'
+         python-version: '3.7'
 
      - name: Install
        shell: bash
@@ -110,7 +110,7 @@ jobs:
 
   regression-clang16-vs-clang14-benchmark-runner:
      name: Benchmark runner clang-16 vs clang-14 (OSX)
-     runs-on: macos-14
+     runs-on: macos-latest
      env:
        CC: clang
        CXX: clang++
@@ -127,7 +127,7 @@ jobs:
 
      - uses: actions/setup-python@v4
        with:
-         python-version: '3.12'
+         python-version: '3.7'
 
      - name: Install
        shell: bash
@@ -209,7 +209,7 @@ jobs:
 
        - uses: actions/setup-python@v4
          with:
-           python-version: '3.12'
+           python-version: '3.7'
 
        - name: Install
          shell: bash
@@ -296,7 +296,7 @@ jobs:
 
        - uses: actions/setup-python@v4
          with:
-           python-version: '3.12'
+           python-version: '3.7'
 
        - name: Install
          shell: bash
