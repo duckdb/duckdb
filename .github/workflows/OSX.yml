@@ -183,7 +183,7 @@ jobs:
     # Builds extensions for osx_arm64 and osx_amd64
     name: OSX Extensions Release
     runs-on: macos-14
-    needs: xcode-debug
+#    needs: xcode-debug
     strategy:
       matrix:
         label: [ 'x86_64', 'arm64' ]
@@ -192,12 +192,12 @@ jobs:
             osx_arch: x86_64
             duckdb_arch: osx_amd64
             vcpkg_triplet: x64-osx
-            run_autoload_tests: 1
+            run_autoload_tests: 0
           - label: arm64
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            run_autoload_tests: 0
+            run_autoload_tests: 1
 
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
