@@ -294,10 +294,10 @@ TEST_CASE("Test user_agent - named database, custom useragent", "[odbc][useragen
 
 	// Execute a simple query
 	EXECUTE_AND_CHECK(
-		"SQLExecDirect (get user_agent)", SQLExecDirect, hstmt,
-		ConvertToSQLCHAR(
-			"SELECT regexp_matches(user_agent, '^duckdb/.*(.*) odbc CUSTOM_STRING') FROM pragma_user_agent()"),
-		SQL_NTS);
+	    "SQLExecDirect (get user_agent)", SQLExecDirect, hstmt,
+	    ConvertToSQLCHAR(
+	        "SELECT regexp_matches(user_agent, '^duckdb/.*(.*) odbc CUSTOM_STRING') FROM pragma_user_agent()"),
+	    SQL_NTS);
 
 	EXECUTE_AND_CHECK("SQLFetch (get user_agent)", SQLFetch, hstmt);
 	DATA_CHECK(hstmt, 1, "true");

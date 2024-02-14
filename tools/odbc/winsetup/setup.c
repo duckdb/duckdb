@@ -291,7 +291,8 @@ BOOL INSTAPI ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attribut
 		printf("Error writing allow_unsigned_extensions configuration data to registry\n");
 		rc = FALSE;
 		if (parent)
-			MessageBox(parent, "Error writing allow_unsigned_extensions configuration data to registry", NULL, MB_ICONERROR);
+			MessageBox(parent, "Error writing allow_unsigned_extensions configuration data to registry", NULL,
+			           MB_ICONERROR);
 		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error writing configuration data to registry");
 		goto finish;
 	}
@@ -311,7 +312,6 @@ BOOL INSTAPI ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attribut
 		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error writing configuration data to registry");
 		goto finish;
 	}
-
 
 finish:
 	if (data.dsn)
