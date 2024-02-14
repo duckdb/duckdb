@@ -28,6 +28,7 @@ struct ExtensionFunctionEntry {
 
 static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"->>", "json", "scalar"},
+    {"add_parquet_key", "parquet", "pragma"},
     {"array_to_json", "json", "scalar"},
     {"create_fts_index", "fts", "pragma"},
     {"current_localtime", "icu", "scalar"},
@@ -77,6 +78,11 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_valid", "json", "scalar"},
     {"load_aws_credentials", "aws", "table"},
     {"make_timestamptz", "icu", "scalar"},
+    {"parquet_file_metadata", "parquet", "table"},
+    {"parquet_kv_metadata", "parquet", "table"},
+    {"parquet_metadata", "parquet", "table"},
+    {"parquet_scan", "parquet", "table"},
+    {"parquet_schema", "parquet", "table"},
     {"pg_clear_cache", "postgres_scanner", "table"},
     {"pg_timezone_names", "icu", "table"},
     {"postgres_attach", "postgres_scanner", "table"},
@@ -90,6 +96,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"read_ndjson", "json", "table"},
     {"read_ndjson_auto", "json", "table"},
     {"read_ndjson_objects", "json", "table"},
+    {"read_parquet", "parquet", "table"},
     {"reduce_sql_statement", "sqlsmith", "table"},
     {"row_to_json", "json", "scalar"},
     {"scan_arrow_ipc", "arrow", "table"},
@@ -199,13 +206,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"text", "excel", "scalar"},
     {"to_arrow_ipc", "arrow", "table"},
     {"to_json", "json", "scalar"},
-    {"parquet_file_metadata", "parquet", "table"},
-    {"parquet_kv_metadata", "parquet", "table"},
-    {"parquet_metadata", "parquet", "table"},
-    {"parquet_scan", "parquet", "table"},
-    {"parquet_schema", "parquet", "table"},
-    {"add_parquet_key", "parquet", "pragma"},
-    {"read_parquet", "parquet", "table"},
     {"tpcds", "tpcds", "pragma"},
     {"tpcds_answers", "tpcds", "table"},
     {"tpcds_queries", "tpcds", "table"},
@@ -320,6 +320,6 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete", "excel", "fts", "httpfs",
     // "inet",
     // "icu",
-    "json", "parquet", "sqlsmith", "tpcds", "tpch", "visualizer"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "json", "parquet", "sqlsmith", "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
