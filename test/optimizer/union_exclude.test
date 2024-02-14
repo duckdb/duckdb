@@ -1,0 +1,50 @@
+# name: test/optimizer/union_exclude.test
+# description: Test union and exclude
+# group: [optimizer]
+
+
+statement ok
+CREATE TABLE test_df_a(number BIGINT, date VARCHAR, rn BIGINT);
+
+statement ok
+INSERT INTO test_df_a VALUES(7058,'2015-07-31',1);
+
+statement ok
+INSERT INTO test_df_a VALUES(7058,'2015-07-31',2);
+
+statement ok
+INSERT INTO test_df_a VALUES(7075,'2016-07-31',1);
+
+statement ok
+INSERT INTO test_df_a VALUES(7076,'2017-07-31',1);
+
+statement ok
+INSERT INTO test_df_a VALUES(7076,'2017-07-31',2);
+
+statement ok
+CREATE TABLE test_df_b(number BIGINT, date VARCHAR, rn BIGINT);;
+
+statement ok
+INSERT INTO test_df_b VALUES(7058,'2015-07-31',1);
+
+statement ok
+INSERT INTO test_df_b VALUES(7058,'2015-07-31',2);
+
+statement ok
+INSERT INTO test_df_b VALUES(7012,'2015-07-31',1);
+
+statement ok
+INSERT INTO test_df_b VALUES(7075,'2016-07-31',1);
+
+statement ok
+INSERT INTO test_df_b VALUES(7076,'2017-07-31',1);
+
+query II
+with t as (select * from test_df_a UNION select * from test_df_b) select * exclude rn from t;
+----
+7076	2017-07-31
+7012	2015-07-31
+7075	2016-07-31
+7058	2015-07-31
+7058	2015-07-31
+7076	2017-07-31
