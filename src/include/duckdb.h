@@ -102,37 +102,37 @@ typedef enum DUCKDB_TYPE {
 	// duckdb_hugeint
 	DUCKDB_TYPE_HUGEINT = 16,
 	// duckdb_uhugeint
-	DUCKDB_TYPE_UHUGEINT = 17,
+	DUCKDB_TYPE_UHUGEINT = 32,
 	// const char*
-	DUCKDB_TYPE_VARCHAR = 18,
+	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
-	DUCKDB_TYPE_BLOB = 19,
+	DUCKDB_TYPE_BLOB = 18,
 	// decimal
-	DUCKDB_TYPE_DECIMAL = 20,
+	DUCKDB_TYPE_DECIMAL = 19,
 	// duckdb_timestamp, in seconds
-	DUCKDB_TYPE_TIMESTAMP_S = 21,
+	DUCKDB_TYPE_TIMESTAMP_S = 20,
 	// duckdb_timestamp, in milliseconds
-	DUCKDB_TYPE_TIMESTAMP_MS = 22,
+	DUCKDB_TYPE_TIMESTAMP_MS = 21,
 	// duckdb_timestamp, in nanoseconds
-	DUCKDB_TYPE_TIMESTAMP_NS = 23,
+	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
-	DUCKDB_TYPE_ENUM = 24,
+	DUCKDB_TYPE_ENUM = 23,
 	// list type, only useful as logical type
-	DUCKDB_TYPE_LIST = 25,
+	DUCKDB_TYPE_LIST = 24,
 	// struct type, only useful as logical type
-	DUCKDB_TYPE_STRUCT = 26,
+	DUCKDB_TYPE_STRUCT = 25,
 	// map type, only useful as logical type
-	DUCKDB_TYPE_MAP = 27,
+	DUCKDB_TYPE_MAP = 26,
 	// duckdb_hugeint
-	DUCKDB_TYPE_UUID = 28,
+	DUCKDB_TYPE_UUID = 27,
 	// union type, only useful as logical type
-	DUCKDB_TYPE_UNION = 29,
+	DUCKDB_TYPE_UNION = 28,
 	// duckdb_bit
-	DUCKDB_TYPE_BIT = 30,
+	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
-	DUCKDB_TYPE_TIME_TZ = 31,
+	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp
-	DUCKDB_TYPE_TIMESTAMP_TZ = 32,
+	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
