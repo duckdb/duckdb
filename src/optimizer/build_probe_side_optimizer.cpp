@@ -76,8 +76,6 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 
 	auto build_sizes = GetBuildSide(op);
 
-	auto flip_bc_cardinality = rhs_cardinality > (lhs_cardinality * cardinality_ratio);
-
 	// special math.
 	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
 	auto right_side_metric = rhs_cardinality * build_sizes.right_side;
