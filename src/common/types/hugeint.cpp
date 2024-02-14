@@ -292,8 +292,7 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 }
 
 // Multiply without overflow check
-template <>
-hugeint_t Hugeint::SlowMultiply<false>(hugeint_t lhs, hugeint_t rhs) {
+hugeint_t Hugeint::SlowMultiply(hugeint_t lhs, hugeint_t rhs) {
 	hugeint_t result;
 	bool lhs_negative = lhs.upper < 0;
 	bool rhs_negative = rhs.upper < 0;

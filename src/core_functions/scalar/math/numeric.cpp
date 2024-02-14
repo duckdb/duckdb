@@ -17,6 +17,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <duckdb/common/hugeint.hpp>
 #include <duckdb/common/vector_operations/unary_executor.hpp>
 #include <errno.h>
 #include <limits>
@@ -1335,7 +1336,7 @@ ScalarFunctionSet LeastCommonMultipleFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 
 static uint64_t ComputeM(uint32_t rhs) {
-	return (UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1);
+	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1;
 }
 
 static uint64_t ComputeM(int32_t rhs) {
@@ -1346,11 +1347,19 @@ static uint64_t ComputeM(int32_t rhs) {
 
 // fastdiv computes (a / d) given precomputed M for d>1
 inline static uint32_t Fastdiv(uint32_t a, uint64_t m, uint32_t d) {
-	return Uhugeint::Multiply<false>(uhugeint_t(a), uhugeint_t(m)).upper;
+	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
+	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
+	return ((((m & 0xFFFFFFFF) * a)>>32) + ((m >> 32) * a))>>32;
 }
 
 static uint32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
-	uint64_t highbits = Hugeint::Multiply<false>(hugeint_t(a), hugeint_t(m)).upper;
+	hugeint_t lhs ;
+	if (a<0){
+		lhs = hugeint_t(0xffffffffffffffff, a);
+	}else{
+		lhs = hugeint_t(0, a);
+	}
+	uint64_t highbits = Hugeint::Multiply<false>(lhs, hugeint_t(0,m)).upper;
 	highbits += (a < 0 ? 1 : 0);
 	if (d < 0) {
 		return -(int32_t)(highbits);
