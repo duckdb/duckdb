@@ -13,6 +13,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
@@ -23,6 +24,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
@@ -246,6 +248,12 @@ jobs:
    runs-on: windows-latest
    needs: win-release-64
    steps:
+     - name: Keep \n line endings
+       shell: bash
+       run: |
+         git config --global core.autocrlf false
+         git config --global core.eol lf
+
      - uses: actions/checkout@v3
        with:
          fetch-depth: 0
@@ -262,6 +270,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-         run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+         run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
+         run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe

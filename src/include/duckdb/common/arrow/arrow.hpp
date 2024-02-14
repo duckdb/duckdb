@@ -22,7 +22,7 @@ extern "C" {
 #define ARROW_FLAG_MAP_KEYS_SORTED    4
 
 struct ArrowSchema {
-	// Array type description
+	//! Array type description
 	const char *format;
 	const char *name;
 	const char *metadata;
@@ -31,14 +31,22 @@ struct ArrowSchema {
 	struct ArrowSchema **children;
 	struct ArrowSchema *dictionary;
 
-	// Release callback
+	//! Release callback
 	void (*release)(struct ArrowSchema *);
-	// Opaque producer-specific data
+	//! Opaque producer-specific data
 	void *private_data;
+
+	//! Initialize all fields
+	void Init() {
+		flags = 0;
+		n_children = 0;
+		release = nullptr;
+		private_data = nullptr;
+	}
 };
 
 struct ArrowArray {
-	// Array data description
+	//! Array data description
 	int64_t length;
 	int64_t null_count;
 	int64_t offset;
@@ -48,10 +56,21 @@ struct ArrowArray {
 	struct ArrowArray **children;
 	struct ArrowArray *dictionary;
 
-	// Release callback
+	//! Release callback
 	void (*release)(struct ArrowArray *);
-	// Opaque producer-specific data
+	//! Opaque producer-specific data
 	void *private_data;
+
+	//! Initialize all fields
+	void Init() {
+		length = 0;
+		null_count = 0;
+		offset = 0;
+		n_buffers = 0;
+		n_children = 0;
+		release = nullptr;
+		private_data = nullptr;
+	}
 };
 #endif
 

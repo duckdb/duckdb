@@ -184,13 +184,13 @@ ScalarFunction ToDaysFun::GetFunction() {
 }
 
 ScalarFunction ToHoursFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<double, interval_t, ToHoursOperator>);
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
 }
 
 ScalarFunction ToMinutesFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::INTERVAL,
-	                      ScalarFunction::UnaryFunction<double, interval_t, ToMinutesOperator>);
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
 }
 
 ScalarFunction ToSecondsFun::GetFunction() {

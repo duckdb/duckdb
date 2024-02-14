@@ -39,6 +39,7 @@ static jclass J_String;
 static jclass J_Timestamp;
 static jclass J_TimestampTZ;
 static jclass J_Decimal;
+static jclass J_ByteArray;
 
 static jmethodID J_Bool_booleanValue;
 static jmethodID J_Byte_byteValue;
@@ -147,6 +148,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	env->DeleteLocalRef(tmpLocalRef);
 	tmpLocalRef = env->FindClass("java/math/BigDecimal");
 	J_Decimal = (jclass)env->NewGlobalRef(tmpLocalRef);
+	env->DeleteLocalRef(tmpLocalRef);
+	tmpLocalRef = env->FindClass("[B");
+	J_ByteArray = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("java/util/Map");
@@ -278,6 +282,38 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
 	auto j_cb = env->CallObjectMethod(J_Charset_UTF8, J_Charset_decode, bb);
 	auto j_str = env->CallObjectMethod(j_cb, J_CharBuffer_toString);
 	return j_str;
+}
+
+static Value create_value_from_bigdecimal(JNIEnv *env, jobject decimal) {
+	jint precision = env->CallIntMethod(decimal, J_Decimal_precision);
+	jint scale = env->CallIntMethod(decimal, J_Decimal_scale);
+
+	// Java BigDecimal type can have scale that exceeds the precision
+	// Which our DECIMAL type does not support (assert(width >= scale))
+	if (scale > precision) {
+		precision = scale;
+	}
+
+	// DECIMAL scale is unsigned, so negative values are not supported
+	if (scale < 0) {
+		throw InvalidInputException("Converting from a BigDecimal with negative scale is not supported");
+	}
+
+	Value val;
+
+	if (precision <= 18) { // normal sizes -> avoid string processing
+		jobject no_point_dec = env->CallObjectMethod(decimal, J_Decimal_scaleByPowTen, scale);
+		jlong result = env->CallLongMethod(no_point_dec, J_Decimal_longValue);
+		val = Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale);
+	} else if (precision <= 38) { // larger than int64 -> get string and cast
+		jobject str_val = env->CallObjectMethod(decimal, J_Decimal_toPlainString);
+		auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
+		val = Value(str_char);
+		val = val.DefaultCastAs(LogicalType::DECIMAL(precision, scale));
+		env->ReleaseStringUTFChars((jstring)str_val, str_char);
+	}
+
+	return val;
 }
 
 /**
@@ -534,37 +570,14 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 				duckdb_params.push_back(Value::DOUBLE(env->CallDoubleMethod(param, J_Double_doubleValue)));
 				continue;
 			} else if (env->IsInstanceOf(param, J_Decimal)) {
-				jint precision = env->CallIntMethod(param, J_Decimal_precision);
-				jint scale = env->CallIntMethod(param, J_Decimal_scale);
-
-				// Java BigDecimal type can have scale that exceeds the precision
-				// Which our DECIMAL type does not support (assert(width >= scale))
-				if (scale > precision) {
-					precision = scale;
-				}
-
-				// DECIMAL scale is unsigned, so negative values are not supported
-				if (scale < 0) {
-					throw InvalidInputException("Converting from a BigDecimal with negative scale is not supported");
-				}
-
-				if (precision <= 18) { // normal sizes -> avoid string processing
-					jobject no_point_dec = env->CallObjectMethod(param, J_Decimal_scaleByPowTen, scale);
-					jlong result = env->CallLongMethod(no_point_dec, J_Decimal_longValue);
-					duckdb_params.push_back(Value::DECIMAL((int64_t)result, (uint8_t)precision, (uint8_t)scale));
-				} else if (precision <= 38) { // larger than int64 -> get string and cast
-					jobject str_val = env->CallObjectMethod(param, J_Decimal_toPlainString);
-					auto *str_char = env->GetStringUTFChars((jstring)str_val, 0);
-					Value val = Value(str_char);
-					val = val.DefaultCastAs(LogicalType::DECIMAL(precision, scale));
-
-					duckdb_params.push_back(val);
-					env->ReleaseStringUTFChars((jstring)str_val, str_char);
-				}
+				Value val = create_value_from_bigdecimal(env, param);
+				duckdb_params.push_back(val);
 				continue;
 			} else if (env->IsInstanceOf(param, J_String)) {
 				auto param_string = jstring_to_string(env, (jstring)param);
 				duckdb_params.push_back(Value(param_string));
+			} else if (env->IsInstanceOf(param, J_ByteArray)) {
+				duckdb_params.push_back(Value::BLOB_RAW(byte_array_to_string(env, (jbyteArray)param)));
 			} else if (env->IsInstanceOf(param, J_UUID)) {
 				auto most_significant = (jlong)env->CallObjectMethod(param, J_UUID_getMostSignificantBits);
 				auto least_significant = (jlong)env->CallObjectMethod(param, J_UUID_getLeastSignificantBits);
@@ -770,6 +783,9 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		break;
 	case LogicalTypeId::HUGEINT:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+		break;
+	case LogicalTypeId::UHUGEINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uhugeint_t));
 		break;
 	case LogicalTypeId::FLOAT:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
@@ -977,6 +993,11 @@ void _duckdb_jdbc_appender_append_double(JNIEnv *env, jclass, jobject appender_r
 void _duckdb_jdbc_appender_append_timestamp(JNIEnv *env, jclass, jobject appender_ref_buf, jlong value) {
 	timestamp_t timestamp = timestamp_t((int64_t)value);
 	get_appender(env, appender_ref_buf)->Append(Value::TIMESTAMP(timestamp));
+}
+
+void _duckdb_jdbc_appender_append_decimal(JNIEnv *env, jclass, jobject appender_ref_buf, jobject value) {
+	Value val = create_value_from_bigdecimal(env, value);
+	get_appender(env, appender_ref_buf)->Append(val);
 }
 
 void _duckdb_jdbc_appender_append_string(JNIEnv *env, jclass, jobject appender_ref_buf, jbyteArray value) {

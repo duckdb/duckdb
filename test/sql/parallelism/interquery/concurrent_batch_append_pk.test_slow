@@ -23,5 +23,6 @@ concurrentloop threadid 0 10
 
 statement error
 INSERT INTO test VALUES ({${threadid} * 17171)
+----
 
 endloop

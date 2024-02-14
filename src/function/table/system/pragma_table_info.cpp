@@ -17,10 +17,12 @@
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
-	explicit PragmaTableFunctionData(CatalogEntry &entry_p) : entry(entry_p) {
+	explicit PragmaTableFunctionData(CatalogEntry &entry_p, bool is_table_info)
+	    : entry(entry_p), is_table_info(is_table_info) {
 	}
 
 	CatalogEntry &entry;
+	bool is_table_info;
 };
 
 struct PragmaTableOperatorData : public GlobalTableFunctionState {
@@ -29,71 +31,11 @@ struct PragmaTableOperatorData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
-
-	names.emplace_back("cid");
-	return_types.emplace_back(LogicalType::INTEGER);
-
-	names.emplace_back("name");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	names.emplace_back("type");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	names.emplace_back("notnull");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	names.emplace_back("dflt_value");
-	return_types.emplace_back(LogicalType::VARCHAR);
-
-	names.emplace_back("pk");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
-
-	// look up the table name in the catalog
-	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
-	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
-	return make_uniq<PragmaTableFunctionData>(entry);
-}
-
-unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<PragmaTableOperatorData>();
-}
-
-static void CheckConstraints(TableCatalogEntry &table, const ColumnDefinition &column, bool &out_not_null,
-                             bool &out_pk) {
-	out_not_null = false;
-	out_pk = false;
-	// check all constraints
-	// FIXME: this is pretty inefficient, it probably doesn't matter
-	for (auto &constraint : table.GetConstraints()) {
-		switch (constraint->type) {
-		case ConstraintType::NOT_NULL: {
-			auto &not_null = constraint->Cast<NotNullConstraint>();
-			if (not_null.index == column.Logical()) {
-				out_not_null = true;
-			}
-			break;
-		}
-		case ConstraintType::UNIQUE: {
-			auto &unique = constraint->Cast<UniqueConstraint>();
-			if (unique.is_primary_key) {
-				if (unique.index == column.Logical()) {
-					out_pk = true;
-				}
-				if (std::find(unique.columns.begin(), unique.columns.end(), column.GetName()) != unique.columns.end()) {
-					out_pk = true;
-				}
-			}
-			break;
-		}
-		default:
-			break;
-		}
-	}
-}
+struct ColumnConstraintInfo {
+	bool not_null = false;
+	bool pk = false;
+	bool unique = false;
+};
 
 static Value DefaultValue(const ColumnDefinition &def) {
 	if (def.Generated()) {
@@ -106,7 +48,171 @@ static Value DefaultValue(const ColumnDefinition &def) {
 	return Value(value.ToString());
 }
 
-static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
+struct PragmaTableInfoHelper {
+	static void GetSchema(vector<LogicalType> &return_types, vector<string> &names) {
+		names.emplace_back("cid");
+		return_types.emplace_back(LogicalType::INTEGER);
+
+		names.emplace_back("name");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("type");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("notnull");
+		return_types.emplace_back(LogicalType::BOOLEAN);
+
+		names.emplace_back("dflt_value");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("pk");
+		return_types.emplace_back(LogicalType::BOOLEAN);
+	}
+
+	static void GetTableColumns(const ColumnDefinition &column, ColumnConstraintInfo constraint_info, DataChunk &output,
+	                            idx_t index) {
+		// return values:
+		// "cid", PhysicalType::INT32
+		output.SetValue(0, index, Value::INTEGER((int32_t)column.Oid()));
+		// "name", PhysicalType::VARCHAR
+		output.SetValue(1, index, Value(column.Name()));
+		// "type", PhysicalType::VARCHAR
+		output.SetValue(2, index, Value(column.Type().ToString()));
+		// "notnull", PhysicalType::BOOL
+		output.SetValue(3, index, Value::BOOLEAN(constraint_info.not_null));
+		// "dflt_value", PhysicalType::VARCHAR
+		output.SetValue(4, index, DefaultValue(column));
+		// "pk", PhysicalType::BOOL
+		output.SetValue(5, index, Value::BOOLEAN(constraint_info.pk));
+	}
+
+	static void GetViewColumns(idx_t i, const string &name, const LogicalType &type, DataChunk &output, idx_t index) {
+		// return values:
+		// "cid", PhysicalType::INT32
+		output.SetValue(0, index, Value::INTEGER((int32_t)i));
+		// "name", PhysicalType::VARCHAR
+		output.SetValue(1, index, Value(name));
+		// "type", PhysicalType::VARCHAR
+		output.SetValue(2, index, Value(type.ToString()));
+		// "notnull", PhysicalType::BOOL
+		output.SetValue(3, index, Value::BOOLEAN(false));
+		// "dflt_value", PhysicalType::VARCHAR
+		output.SetValue(4, index, Value());
+		// "pk", PhysicalType::BOOL
+		output.SetValue(5, index, Value::BOOLEAN(false));
+	}
+};
+
+struct PragmaShowHelper {
+	static void GetSchema(vector<LogicalType> &return_types, vector<string> &names) {
+		names.emplace_back("column_name");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("column_type");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("null");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("key");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("default");
+		return_types.emplace_back(LogicalType::VARCHAR);
+
+		names.emplace_back("extra");
+		return_types.emplace_back(LogicalType::VARCHAR);
+	}
+
+	static void GetTableColumns(const ColumnDefinition &column, ColumnConstraintInfo constraint_info, DataChunk &output,
+	                            idx_t index) {
+		// "column_name", PhysicalType::VARCHAR
+		output.SetValue(0, index, Value(column.Name()));
+		// "column_type", PhysicalType::VARCHAR
+		output.SetValue(1, index, Value(column.Type().ToString()));
+		// "null", PhysicalType::VARCHAR
+		output.SetValue(2, index, Value(constraint_info.not_null ? "NO" : "YES"));
+		// "key", PhysicalType::VARCHAR
+		Value key;
+		if (constraint_info.pk || constraint_info.unique) {
+			key = Value(constraint_info.pk ? "PRI" : "UNI");
+		}
+		output.SetValue(3, index, key);
+		// "default", VARCHAR
+		output.SetValue(4, index, DefaultValue(column));
+		// "extra", VARCHAR
+		output.SetValue(5, index, Value());
+	}
+
+	static void GetViewColumns(idx_t i, const string &name, const LogicalType &type, DataChunk &output, idx_t index) {
+		// "column_name", PhysicalType::VARCHAR
+		output.SetValue(0, index, Value(name));
+		// "column_type", PhysicalType::VARCHAR
+		output.SetValue(1, index, Value(type.ToString()));
+		// "null", PhysicalType::VARCHAR
+		output.SetValue(2, index, Value("YES"));
+		// "key", PhysicalType::VARCHAR
+		output.SetValue(3, index, Value());
+		// "default", VARCHAR
+		output.SetValue(4, index, Value());
+		// "extra", VARCHAR
+		output.SetValue(5, index, Value());
+	}
+};
+
+template <bool IS_PRAGMA_TABLE_INFO>
+static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, TableFunctionBindInput &input,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	if (IS_PRAGMA_TABLE_INFO) {
+		PragmaTableInfoHelper::GetSchema(return_types, names);
+	} else {
+		PragmaShowHelper::GetSchema(return_types, names);
+	}
+
+	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
+
+	// look up the table name in the catalog
+	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
+	return make_uniq<PragmaTableFunctionData>(entry, IS_PRAGMA_TABLE_INFO);
+}
+
+unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<PragmaTableOperatorData>();
+}
+
+static ColumnConstraintInfo CheckConstraints(TableCatalogEntry &table, const ColumnDefinition &column) {
+	ColumnConstraintInfo result;
+	// check all constraints
+	for (auto &constraint : table.GetConstraints()) {
+		switch (constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null = constraint->Cast<NotNullConstraint>();
+			if (not_null.index == column.Logical()) {
+				result.not_null = true;
+			}
+			break;
+		}
+		case ConstraintType::UNIQUE: {
+			auto &unique = constraint->Cast<UniqueConstraint>();
+			bool &constraint_info = unique.is_primary_key ? result.pk : result.unique;
+			if (unique.index == column.Logical()) {
+				constraint_info = true;
+			}
+			if (std::find(unique.columns.begin(), unique.columns.end(), column.GetName()) != unique.columns.end()) {
+				constraint_info = true;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	return result;
+}
+
+static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output,
+                                 bool is_table_info) {
 	if (data.offset >= table.GetColumns().LogicalColumnCount()) {
 		// finished returning values
 		return;
@@ -117,30 +223,22 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
-		bool not_null, pk;
 		auto index = i - data.offset;
 		auto &column = table.GetColumn(LogicalIndex(i));
 		D_ASSERT(column.Oid() < (idx_t)NumericLimits<int32_t>::Maximum());
-		CheckConstraints(table, column, not_null, pk);
+		auto constraint_info = CheckConstraints(table, column);
 
-		// return values:
-		// "cid", PhysicalType::INT32
-		output.SetValue(0, index, Value::INTEGER((int32_t)column.Oid()));
-		// "name", PhysicalType::VARCHAR
-		output.SetValue(1, index, Value(column.Name()));
-		// "type", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(column.Type().ToString()));
-		// "notnull", PhysicalType::BOOL
-		output.SetValue(3, index, Value::BOOLEAN(not_null));
-		// "dflt_value", PhysicalType::VARCHAR
-		output.SetValue(4, index, DefaultValue(column));
-		// "pk", PhysicalType::BOOL
-		output.SetValue(5, index, Value::BOOLEAN(pk));
+		if (is_table_info) {
+			PragmaTableInfoHelper::GetTableColumns(column, constraint_info, output, index);
+		} else {
+			PragmaShowHelper::GetTableColumns(column, constraint_info, output, index);
+		}
 	}
 	data.offset = next;
 }
 
-static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry &view, DataChunk &output) {
+static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry &view, DataChunk &output,
+                                bool is_table_info) {
 	if (data.offset >= view.types.size()) {
 		// finished returning values
 		return;
@@ -154,20 +252,12 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 		auto index = i - data.offset;
 		auto type = view.types[i];
 		auto &name = view.aliases[i];
-		// return values:
-		// "cid", PhysicalType::INT32
 
-		output.SetValue(0, index, Value::INTEGER((int32_t)i));
-		// "name", PhysicalType::VARCHAR
-		output.SetValue(1, index, Value(name));
-		// "type", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(type.ToString()));
-		// "notnull", PhysicalType::BOOL
-		output.SetValue(3, index, Value::BOOLEAN(false));
-		// "dflt_value", PhysicalType::VARCHAR
-		output.SetValue(4, index, Value());
-		// "pk", PhysicalType::BOOL
-		output.SetValue(5, index, Value::BOOLEAN(false));
+		if (is_table_info) {
+			PragmaTableInfoHelper::GetViewColumns(i, name, type, output, index);
+		} else {
+			PragmaShowHelper::GetViewColumns(i, name, type, output, index);
+		}
 	}
 	data.offset = next;
 }
@@ -177,10 +267,10 @@ static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &
 	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
 	switch (bind_data.entry.type) {
 	case CatalogType::TABLE_ENTRY:
-		PragmaTableInfoTable(state, bind_data.entry.Cast<TableCatalogEntry>(), output);
+		PragmaTableInfoTable(state, bind_data.entry.Cast<TableCatalogEntry>(), output, bind_data.is_table_info);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		PragmaTableInfoView(state, bind_data.entry.Cast<ViewCatalogEntry>(), output);
+		PragmaTableInfoView(state, bind_data.entry.Cast<ViewCatalogEntry>(), output, bind_data.is_table_info);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");
@@ -189,7 +279,9 @@ static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, PragmaTableInfoFunction,
-	                              PragmaTableInfoBind, PragmaTableInfoInit));
+	                              PragmaTableInfoBind<true>, PragmaTableInfoInit));
+	set.AddFunction(TableFunction("pragma_show", {LogicalType::VARCHAR}, PragmaTableInfoFunction,
+	                              PragmaTableInfoBind<false>, PragmaTableInfoInit));
 }
 
 } // namespace duckdb

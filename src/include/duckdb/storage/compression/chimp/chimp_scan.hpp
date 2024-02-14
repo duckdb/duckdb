@@ -263,7 +263,7 @@ template <class T>
 void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
 	using INTERNAL_TYPE = typename ChimpType<T>::type;
-	auto &scan_state = (ChimpScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -280,7 +280,7 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 
 template <class T>
 void ChimpSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto &scan_state = (ChimpScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
 

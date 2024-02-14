@@ -105,6 +105,7 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 	// fetch validity mask
 	if (state.child_states.empty()) {
 		ColumnScanState child_state;
+		child_state.scan_options = state.scan_options;
 		state.child_states.push_back(std::move(child_state));
 	}
 	auto scan_count = ColumnData::Fetch(state, row_id, result);
@@ -189,8 +190,13 @@ StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManag
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
                                                                  PartialBlockManager &partial_block_manager,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
-	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	// we need to checkpoint the main column data first
+	// that is because the checkpointing of the main column data ALSO scans the validity data
+	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
+	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
+	// flushed to disk by a different thread than the one that wrote it, causing a data race
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;
@@ -204,10 +210,10 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
-void StandardColumnData::DeserializeColumn(Deserializer &deserializer) {
-	ColumnData::DeserializeColumn(deserializer);
-	deserializer.ReadObject(101, "validity",
-	                        [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+void StandardColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
+	ColumnData::DeserializeColumn(deserializer, target_stats);
+	deserializer.ReadObject(
+	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
 }
 
 void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

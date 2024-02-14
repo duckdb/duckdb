@@ -53,7 +53,7 @@ world r
 
 # complex agg with distinct and order by and conversion from int to string
 query IIITTT
-SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(DISTINCT g ORDER BY g DESC) FROM strings GROUP BY g ORDER BY g;
+SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(DISTINCT g::VARCHAR ORDER BY g DESC) FROM strings GROUP BY g ORDER BY g;
 ----
 0
 2
@@ -105,9 +105,11 @@ world r
 # unsupported aggregates
 statement error
 SELECT SUM(s) FROM strings GROUP BY g ORDER BY g
+----
 
 statement error
 SELECT AVG(s) FROM strings GROUP BY g ORDER BY g
+----
 
 # booleans
 statement ok
@@ -162,9 +164,11 @@ NULL
 
 statement error
 SELECT SUM(b) FROM booleans GROUP BY g ORDER BY g
+----
 
 statement error
 SELECT AVG(b) FROM booleans GROUP BY g ORDER BY g
+----
 
 statement ok
 CREATE TABLE integers(i INTEGER, g INTEGER)

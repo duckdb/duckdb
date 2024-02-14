@@ -32,6 +32,7 @@ EXECUTE v
 # if we try to drop integers we get a conflict though
 statement error con2
 DROP TABLE integers CASCADE
+----
 
 # now we rollback
 statement ok con2
@@ -40,6 +41,7 @@ ROLLBACK
 # now we can't use the prepared statement anymore
 statement error con2
 EXECUTE v
+----
 
 # case two: prepared statement is created inside transaction
 statement ok con1
@@ -73,3 +75,4 @@ COMMIT
 # after committing we can no longer use the prepared statement
 statement error con2
 EXECUTE v
+----

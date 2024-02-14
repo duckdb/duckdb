@@ -175,7 +175,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION:
-	case TableReferenceType::EMPTY:
+	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::BASE_TABLE:
 	case TableReferenceType::CTE:
 		break;

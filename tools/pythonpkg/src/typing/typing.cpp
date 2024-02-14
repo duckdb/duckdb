@@ -15,6 +15,7 @@ static void DefineBaseTypes(py::handle &m) {
 	m.attr("BIGINT") = make_shared<DuckDBPyType>(LogicalType::BIGINT);
 	m.attr("UBIGINT") = make_shared<DuckDBPyType>(LogicalType::UBIGINT);
 	m.attr("HUGEINT") = make_shared<DuckDBPyType>(LogicalType::HUGEINT);
+	m.attr("UHUGEINT") = make_shared<DuckDBPyType>(LogicalType::UHUGEINT);
 	m.attr("UUID") = make_shared<DuckDBPyType>(LogicalType::UUID);
 	m.attr("FLOAT") = make_shared<DuckDBPyType>(LogicalType::FLOAT);
 	m.attr("DOUBLE") = make_shared<DuckDBPyType>(LogicalType::DOUBLE);

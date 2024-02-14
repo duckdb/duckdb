@@ -9,7 +9,7 @@ CREATE TABLE dates (d DATE);
 statement error
 COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (AUTO_DETECT 0, HEADER 0)
 ----
-line 1
+Line: 1
 
 statement ok
 COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%d/%m/%Y')
@@ -91,6 +91,8 @@ SELECT * FROM new_timestamps ORDER BY 1
 # incorrect date/timestamp format results in an error
 statement error
 COPY dates FROM 'test/sql/copy/csv/data/test/dateformat.csv' (HEADER 0, DATEFORMAT '%')
+----
 
 statement error
 COPY timestamps FROM 'test/sql/copy/csv/data/test/timestampformat.csv' (HEADER 0, DELIMITER '|', TIMESTAMPFORMAT '%')
+----

@@ -5,6 +5,9 @@
 # data/storage/index_0-9-1.db was written with a 64-bit version of duckdb
 require 64bit
 
+# cannot read a database with a different block size
+require block_size 262144
+
 # SQL to create index_0-9-1.db
 
 # CREATE TABLE pk_tbl (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE);
@@ -123,6 +126,9 @@ SELECT used_blocks < 10 FROM pragma_database_size();
 
 statement ok
 INSERT INTO idx_tbl SELECT range, range, range FROM range(30000);
+
+statement ok
+checkpoint;
 
 query I
 SELECT used_blocks > 10 FROM pragma_database_size();

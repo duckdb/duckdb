@@ -129,6 +129,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
 		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::UHUGEINT:
 			category = "NUMERIC";
 			break;
 		case LogicalTypeId::DATE:

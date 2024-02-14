@@ -13,6 +13,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '!tools/shell/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/OSX.yml'
@@ -204,6 +205,7 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       GEN: ninja
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
       - uses: actions/checkout@v3
@@ -229,6 +231,7 @@ jobs:
           run_tests: 0
           osx_arch: ${{ matrix.osx_arch }}
           vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
+          duckdb_arch: ${{ matrix.duckdb_arch }}
           build_in_tree_extensions: 1
           build_out_of_tree_extensions: 1
           run_autoload_tests: ${{ matrix.run_autoload_tests }}
@@ -256,15 +259,16 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
+            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
+            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
           else
-            echo "would do: ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
+            echo "would do: ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
           fi
 
       - name: Test loadable extensions

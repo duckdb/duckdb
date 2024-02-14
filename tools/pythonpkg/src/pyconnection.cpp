@@ -123,7 +123,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	m.def("create_function", &DuckDBPyConnection::RegisterScalarUDF,
 	      "Create a DuckDB function out of the passing in Python function so it can be used in queries",
-	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
+	      py::arg("name"), py::arg("function"), py::arg("parameters") = py::none(), py::arg("return_type") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
 	      py::arg("exception_handling") = 0, py::arg("side_effects") = false);
 
@@ -1453,12 +1453,12 @@ static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string
 	return nullptr;
 }
 
-unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_dict) {
-	unordered_map<string, string> config_dict;
+case_insensitive_map_t<Value> TransformPyConfigDict(const py::dict &py_config_dict) {
+	case_insensitive_map_t<Value> config_dict;
 	for (auto &kv : py_config_dict) {
 		auto key = py::str(kv.first);
 		auto val = py::str(kv.second);
-		config_dict[key] = val;
+		config_dict[key] = Value(val);
 	}
 	return config_dict;
 }
@@ -1466,6 +1466,9 @@ unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_di
 void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig &config) {
 	// We don't cache unnamed memory instances (i.e., :memory:)
 	bool cache_instance = database != ":memory:" && !database.empty();
+	if (config.options.enable_external_access) {
+		config.replacement_scans.emplace_back(ScanReplacement);
+	}
 	res.database = instance_cache.CreateInstance(database, config, cache_instance);
 	res.connection = make_uniq<Connection>(*res.database);
 	auto &context = *res.connection->context;
@@ -1478,13 +1481,6 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	catalog.CreateTableFunction(context, &scan_info);
 	catalog.CreateTableFunction(context, &map_info);
 	context.transaction.Commit();
-	auto &db_config = res.database->instance->config;
-	db_config.AddExtensionOption("pandas_analyze_sample",
-	                             "The maximum number of rows to sample when analyzing a pandas object column.",
-	                             LogicalType::UBIGINT, Value::UBIGINT(1000));
-	if (db_config.options.enable_external_access) {
-		db_config.replacement_scans.emplace_back(ScanReplacement);
-	}
 }
 
 static bool HasJupyterProgressBarDependencies() {
@@ -1532,7 +1528,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	return res;
 }
 
-bool IsDefaultConnectionString(const string &database, bool read_only, unordered_map<string, string> &config) {
+bool IsDefaultConnectionString(const string &database, bool read_only, case_insensitive_map_t<Value> &config) {
 	bool is_default = StringUtil::CIEquals(database, ":default:");
 	if (!is_default) {
 		return false;
@@ -1551,8 +1547,13 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		return DuckDBPyConnection::DefaultConnection();
 	}
 
-	DBConfig config(config_dict, read_only);
-	config.SetOptionByName("duckdb_api", "python");
+	DBConfig config(read_only);
+	config.AddExtensionOption("pandas_analyze_sample",
+	                          "The maximum number of rows to sample when analyzing a pandas object column.",
+	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
+	config_dict["duckdb_api"] = Value("python");
+	config.SetOptionsByName(config_dict);
+
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
 	SetDefaultConfigArguments(client_context);

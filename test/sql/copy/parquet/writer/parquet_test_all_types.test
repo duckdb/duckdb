@@ -16,14 +16,15 @@ SELECT * EXCLUDE (bit, "union") REPLACE (
 FROM test_all_types();
 
 statement ok
-COPY all_types TO '__TEST_DIR__/all_types.parquet' (FORMAT PARQUET);
+COPY all_types TO "__TEST_DIR__/all_types.parquet" (FORMAT PARQUET);
 
 # we have to make some replacements to get result equivalence
-# hugeint is stored as double -> we have to cast
+# hugeint/uhugeint is stored as double -> we have to cast
 # TIME WITH TIME ZONE loses the offset
 query I nosort alltypes
 SELECT * REPLACE (
 	hugeint::DOUBLE AS hugeint,
+	uhugeint::DOUBLE AS uhugeint,
 	time_tz::TIME::TIMETZ AS time_tz
 )
 FROM all_types

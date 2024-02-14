@@ -234,9 +234,11 @@ WHERE rt <> dt
 # empty specifier and string
 statement error
 SELECT try_strptime('', '')
+----
 
 statement error
 SELECT try_strptime(NULL, '')
+----
 
 query I
 SELECT try_strptime('', NULL)

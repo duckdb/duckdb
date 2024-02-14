@@ -69,6 +69,7 @@ True
 # this wouldn't work if we would upcast to integer
 statement error
 SELECT bool_and(i) FROM (SELECT * FROM (SELECT NULL::INTEGER) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
+----
 
 # cross product
 query II

@@ -11,6 +11,7 @@ PRAGMA verify_external
 #Corner cases
 statement error
 select argmin()
+----
 
 query I
 select argmin(NULL,NULL)
@@ -24,6 +25,7 @@ select argmin(1,1)
 
 statement error
 select argmin(*)
+----
 
 query I
 select argmin(i,i) from range (100) tbl(i);
@@ -37,6 +39,7 @@ NULL
 
 statement error
 select argmax()
+----
 
 query I
 select argmax(NULL,NULL)
@@ -50,6 +53,7 @@ select argmax(1,1)
 
 statement error
 select argmax(*)
+----
 
 query I
 select argmax(i,i) from range (100) tbl(i);
@@ -90,7 +94,7 @@ select argmin(b,a), argmax(b,a)  from blobs ;
 \xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
 
 query II
-select argmin(a,b), argmax(a,b)  from blobs ;
+select argmin(a,b), argmax(a,b)  from blobs;
 ----
 5	20
 

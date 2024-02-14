@@ -8,6 +8,9 @@ statement ok
 pragma enable_verification;
 
 statement ok
+pragma verify_fetch_row;
+
+statement ok
 pragma disable_optimizer;
 
 statement ok

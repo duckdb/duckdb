@@ -22,12 +22,22 @@ select distinct proname from pg_proc where proname='sqrt';
 ----
 sqrt
 
-query IIII
-select proisagg, prorettype, proargtypes, proargnames FROM pg_proc WHERE proname='corr';
+query IIIIII
+select proisagg, prorettype, proargtypes, proargnames, pronargs, provolatile FROM pg_proc WHERE proname='corr';
 ----
-true	DOUBLE	[DOUBLE, DOUBLE]	[y, x]
+true	DOUBLE	[DOUBLE, DOUBLE]	[y, x]	2	i
 
 query IIII
 select provariadic, prorettype, proargtypes, proargnames FROM pg_proc WHERE proname='printf';
 ----
 ANY	VARCHAR	[VARCHAR]	[format]
+
+query II
+SELECT prokind, provolatile FROM pg_proc WHERE proname = 'random' 
+----
+f	v
+
+query I
+SELECT length(prosqlbody) > 0 FROM pg_proc WHERE proname = 'add_default1'
+----
+true
