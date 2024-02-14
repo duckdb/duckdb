@@ -1349,17 +1349,17 @@ static uint64_t ComputeM(int32_t rhs) {
 inline static uint32_t Fastdiv(uint32_t a, uint64_t m, uint32_t d) {
 	// Compute the bottom 32 bits, then the top 32 bits, add them, and only keep the top 32 bits
 	// The reason we need the bottom 32 bits, is because the carry will roll into the top 32 bits.
-	return ((((m & 0xFFFFFFFF) * a)>>32) + ((m >> 32) * a))>>32;
+	return ((((m & 0xFFFFFFFF) * a) >> 32) + ((m >> 32) * a)) >> 32;
 }
 
 static uint32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
-	hugeint_t lhs ;
-	if (a<0){
+	hugeint_t lhs;
+	if ( a < 0 ) {
 		lhs = hugeint_t(0xffffffffffffffff, a);
-	}else{
+	} else {
 		lhs = hugeint_t(0, a);
 	}
-	uint64_t highbits = Hugeint::Multiply<false>(lhs, hugeint_t(0,m)).upper;
+	uint64_t highbits = Hugeint::Multiply<false>(lhs, hugeint_t(0, m)).upper;
 	highbits += (a < 0 ? 1 : 0);
 	if (d < 0) {
 		return -(int32_t)(highbits);
