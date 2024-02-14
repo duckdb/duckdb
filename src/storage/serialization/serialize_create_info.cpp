@@ -75,8 +75,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->internal = internal;
 	result->on_conflict = on_conflict;
 	result->sql = std::move(sql);
-	result->dependencies = dependencies;
 	result->comment = comment;
+	result->dependencies = dependencies;
 	return result;
 }
 
