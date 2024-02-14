@@ -145,7 +145,7 @@ jobs:
     - name: Test Connection ODBC tests
       shell: bash
       run: |
-        tools/odbc/bin/Release/test_odbc_connection.exe
+        tools/odbc/bin/Release/test_connection_odbc.exe
 
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
