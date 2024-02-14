@@ -143,26 +143,19 @@ static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector
 	to_add.clear();
 }
 
-catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, const string &catalog) {
-	catalog_entry_vector_t schemas;
-	catalog_entry_vector_t custom_types;
-	catalog_entry_vector_t sequences;
-	catalog_entry_vector_t tables;
-	catalog_entry_vector_t views;
-	catalog_entry_vector_t indexes;
-	catalog_entry_vector_t macros;
-
+catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &context, Catalog &catalog) {
 	// gather all catalog types to export
 	ExportEntries entries;
-	auto schema_list = Catalog::GetSchemas(context, catalog);
+	auto schema_list = catalog.GetSchemas(context);
 	PhysicalExport::ExtractEntries(context, schema_list, entries);
 
-	ReorderTableEntries(tables);
+	ReorderTableEntries(entries.tables);
 
 	// order macro's by timestamp so nested macro's are imported nicely
-	sort(macros.begin(), macros.end(), [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
-		return lhs.get().oid < rhs.get().oid;
-	});
+	sort(entries.macros.begin(), entries.macros.end(),
+	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
+		     return lhs.get().oid < rhs.get().oid;
+	     });
 
 	catalog_entry_vector_t catalog_entries;
 	AddEntries(catalog_entries, entries.schemas);
@@ -195,7 +188,7 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 		auto transaction = catalog.GetCatalogTransaction(context.client);
 		catalog_entries = dependency_manager.GetExportOrder(&transaction);
 	} else {
-		catalog_entries = GetNaiveExportOrder(context.client, info->catalog);
+		catalog_entries = GetNaiveExportOrder(context.client, catalog);
 	}
 
 	// write the schema.sql file

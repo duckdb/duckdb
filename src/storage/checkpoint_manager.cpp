@@ -35,8 +35,6 @@
 
 namespace duckdb {
 
-void ReorderTableEntries(catalog_entry_vector_t &tables);
-
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
     : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT) {
 }
