@@ -78,8 +78,8 @@ defaults = []
 
 print(os.getcwd())
 
-header_path = '../include/connect.hpp'
-json_path = '../connection_string_attributes.json'
+header_path = 'tools/odbc/include/connect.hpp'
+json_path = 'tools/odbc/connection_string_attributes.json'
 with open(json_path, 'r') as f:
     parsed_json = json.load(f)
 for entry in parsed_json:
