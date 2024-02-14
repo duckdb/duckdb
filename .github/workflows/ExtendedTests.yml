@@ -28,7 +28,7 @@ env:
 jobs:
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)
-     runs-on: macos-latest
+     runs-on: macos-14
      env:
        CC: clang
        CXX: clang++
@@ -110,7 +110,7 @@ jobs:
 
   regression-clang16-vs-clang14-benchmark-runner:
      name: Benchmark runner clang-16 vs clang-14 (OSX)
-     runs-on: macos-latest
+     runs-on: macos-14
      env:
        CC: clang
        CXX: clang++
