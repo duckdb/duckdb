@@ -2,8 +2,44 @@
 # description: Test CSV projection pushdown
 # group: [csv]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
+
+query II
+select l_returnflag, l_linenumber from read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim='|', header=False, columns={
+	'l_orderkey': 'INT',
+	'l_partkey': 'INT',
+	'l_suppkey': 'INT',
+	'l_linenumber': 'INT',
+	'l_quantity': 'INTEGER',
+	'l_extendedprice': 'DECIMAL(15,2)',
+	'l_discount': 'DECIMAL(15,2)',
+	'l_tax': 'DECIMAL(15,2)',
+	'l_returnflag': 'VARCHAR(1)',
+	'l_linestatus': 'VARCHAR(1)',
+	'l_shipdate': 'DATE',
+	'l_commitdate': 'DATE',
+	'l_receiptdate': 'DATE',
+	'l_shipinstruct': 'VARCHAR(25)',
+	'l_shipmode': 'VARCHAR(10)',
+	'l_comment': 'VARCHAR(44)'
+})
+----
+N	1
+N	2
+N	3
+N	4
+N	5
+N	6
+N	1
+R	1
+R	2
+A	3
+
+query I
+SELECT COUNT(*) FROM 'test/sql/copy/csv/data/real/lineitem_sample.csv'
+----
+10
 
 statement ok
 CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', delim='|', header=False, columns={

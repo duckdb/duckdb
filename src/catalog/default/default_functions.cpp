@@ -143,6 +143,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "list_first", {"l", nullptr}, "list_aggr(l, 'first')"},
 	{DEFAULT_SCHEMA, "list_any_value", {"l", nullptr}, "list_aggr(l, 'any_value')"},
 	{DEFAULT_SCHEMA, "list_kurtosis", {"l", nullptr}, "list_aggr(l, 'kurtosis')"},
+	{DEFAULT_SCHEMA, "list_kurtosis_pop", {"l", nullptr}, "list_aggr(l, 'kurtosis_pop')"},
 	{DEFAULT_SCHEMA, "list_min", {"l", nullptr}, "list_aggr(l, 'min')"},
 	{DEFAULT_SCHEMA, "list_max", {"l", nullptr}, "list_aggr(l, 'max')"},
 	{DEFAULT_SCHEMA, "list_product", {"l", nullptr}, "list_aggr(l, 'product')"},
@@ -160,6 +161,9 @@ static DefaultMacro internal_macros[] = {
 
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
+
+    // storage helper functions
+    {DEFAULT_SCHEMA, "get_block_size", {"db_name"}, "(SELECT block_size FROM pragma_database_size() WHERE database_name = db_name)"},
 
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};

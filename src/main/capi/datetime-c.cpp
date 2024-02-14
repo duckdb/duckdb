@@ -44,6 +44,20 @@ duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	return result;
 }
 
+duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz input) {
+	duckdb::dtime_tz_t time(input.bits);
+	duckdb_time_tz_struct result;
+	result.time.micros = time.time().micros;
+	result.offset = time.offset();
+	return result;
+}
+
+duckdb_time_tz duckdb_create_time_tz(int64_t micros, int32_t offset) {
+	duckdb_time_tz time;
+	time.bits = duckdb::dtime_tz_t(duckdb::dtime_t(micros), offset).bits;
+	return time;
+}
+
 duckdb_time duckdb_to_time(duckdb_time_struct time) {
 	duckdb_time result;
 	result.micros = Time::FromTime(time.hour, time.min, time.sec, time.micros).micros;

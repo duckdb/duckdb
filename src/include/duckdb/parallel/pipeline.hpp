@@ -21,6 +21,26 @@ namespace duckdb {
 class Executor;
 class Event;
 class MetaPipeline;
+class PipelineExecutor;
+class Pipeline;
+
+class PipelineTask : public ExecutorTask {
+	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
+
+public:
+	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p);
+
+	Pipeline &pipeline;
+	shared_ptr<Event> event;
+	unique_ptr<PipelineExecutor> pipeline_executor;
+
+public:
+	const PipelineExecutor &GetPipelineExecutor() const;
+	bool TaskBlockedOnResult() const override;
+
+public:
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
+};
 
 class PipelineBuildState {
 public:

@@ -245,6 +245,23 @@ public:
 		}
 		return strcmp(s1, s2) == 0;
 	}
+
+	//! JSON method that parses a { string: value } JSON blob
+	//! NOTE: this method ONLY parses a JSON {"key": "value"} object, it does not support ANYTHING else
+	//! NOTE: this method is not efficient
+	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
+	//! empty map is returned
+	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json);
+	//! JSON method that constructs a { string: value } JSON map
+	//! This is the inverse of ParseJSONMap
+	//! NOTE: this method is not efficient
+	DUCKDB_API static string ToJSONMap(ExceptionType type, const string &message,
+	                                   const unordered_map<string, string> &map);
+
+	DUCKDB_API static string GetFileName(const string &file_path);
+	DUCKDB_API static string GetFileExtension(const string &file_name);
+	DUCKDB_API static string GetFileStem(const string &file_name);
+	DUCKDB_API static string GetFilePath(const string &file_path);
 };
 
 } // namespace duckdb

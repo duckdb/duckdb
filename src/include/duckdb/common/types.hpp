@@ -213,6 +213,7 @@ enum class LogicalTypeId : uint8_t {
 	TIME_TZ = 34,
 	BIT = 36,
 	STRING_LITERAL = 37, /* string literals, used for constant strings - only exists while binding */
+	INTEGER_LITERAL = 38,/* integer literals, used for constant integers - only exists while binding */
 
 	UHUGEINT = 49,
 	HUGEINT = 50,
@@ -252,6 +253,19 @@ struct LogicalType {
 	}
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
+	}
+	inline bool IsNested() const {
+		auto internal = InternalType();
+		if (internal == PhysicalType::STRUCT) {
+			return true;
+		}
+		if (internal == PhysicalType::LIST) {
+			return true;
+		}
+		if (internal == PhysicalType::ARRAY) {
+			return true;
+		}
+		return false;
 	}
 
 	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
@@ -307,6 +321,8 @@ struct LogicalType {
 	DUCKDB_API static bool TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right, LogicalType &result);
 	//! Forcibly returns a maximum logical type - similar to MaxLogicalType but never throws. As a fallback either left or right are returned.
 	DUCKDB_API static LogicalType ForceMaxLogicalType(const LogicalType &left, const LogicalType &right);
+	//! Normalize a type - removing literals
+	DUCKDB_API static LogicalType NormalizeType(const LogicalType &type);
 
 
 		//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
@@ -315,6 +331,10 @@ struct LogicalType {
 	DUCKDB_API void Verify() const;
 
 	DUCKDB_API bool IsValid() const;
+
+	template<class F>
+	bool Contains(F &&predicate) const;
+	bool Contains(LogicalTypeId type_id) const;
 
 private:
 	LogicalTypeId id_;
@@ -374,6 +394,10 @@ public:
 	// an array of unknown size (only used for binding)
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child);        // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
+	// ANY but with special rules (default is LogicalType::ANY, 5)
+	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
+	//! Integer literal of the specified value
+	DUCKDB_API static LogicalType INTEGER_LITERAL(const Value &constant);               // NOLINT
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
@@ -427,6 +451,7 @@ struct StructType {
 	DUCKDB_API static const child_list_t<LogicalType> &GetChildTypes(const LogicalType &type);
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
+	DUCKDB_API static idx_t GetChildIndexUnsafe(const LogicalType &type, const string &name);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
 	DUCKDB_API static bool IsUnnamed(const LogicalType &type);
 };
@@ -449,11 +474,25 @@ struct ArrayType {
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static bool IsAnySize(const LogicalType &type);
 	DUCKDB_API static constexpr idx_t MAX_ARRAY_SIZE = 100000; // 100k for now
+	//! Recursively replace all ARRAY types to LIST types within the given type
+	DUCKDB_API static LogicalType ConvertToList(const LogicalType &type);
 };
 
 struct AggregateStateType {
 	DUCKDB_API static const string GetTypeName(const LogicalType &type);
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
+};
+
+struct AnyType {
+	DUCKDB_API static LogicalType GetTargetType(const LogicalType &type);
+	DUCKDB_API static idx_t GetCastScore(const LogicalType &type);
+};
+
+struct IntegerLiteral {
+	//! Returns the type that this integer literal "prefers"
+	DUCKDB_API static LogicalType GetType(const LogicalType &type);
+	//! Whether or not the integer literal fits into the target numeric type
+	DUCKDB_API static bool FitsInType(const LogicalType &type, const LogicalType &target);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.
@@ -490,5 +529,38 @@ struct aggregate_state_t {
 	LogicalType return_type;
 	vector<LogicalType> bound_argument_types;
 };
+
+template<class F>
+bool LogicalType::Contains(F &&predicate) const {
+	if(predicate(*this)) {
+		return true;
+	}
+	switch(id()) {
+	case LogicalTypeId::STRUCT: {
+		for(const auto &child : StructType::GetChildTypes(*this)) {
+			if(child.second.Contains(predicate)) {
+				return true;
+			}
+		}
+		}
+		break;
+	case LogicalTypeId::LIST:
+		return ListType::GetChildType(*this).Contains(predicate);
+	case LogicalTypeId::MAP:
+		return MapType::KeyType(*this).Contains(predicate) || MapType::ValueType(*this).Contains(predicate);
+	case LogicalTypeId::UNION:
+		for(const auto &child : UnionType::CopyMemberTypes(*this)) {
+			if(child.second.Contains(predicate)) {
+				return true;
+			}
+		}
+		break;
+	case LogicalTypeId::ARRAY:
+		return ArrayType::GetChildType(*this).Contains(predicate);
+	default:
+		return false;
+	}
+	return false;
+}
 
 } // namespace duckdb

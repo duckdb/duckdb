@@ -59,6 +59,8 @@ struct ClientConfig {
 	bool query_verification_enabled = false;
 	//! Whether or not verification of external operators is enabled, used for testing
 	bool verify_external = false;
+	//! Whether or not verification of fetch row code is enabled, used for testing
+	bool verify_fetch_row = false;
 	//! Whether or not we should verify the serializer
 	bool verify_serializer = false;
 	//! Enable the running of optimizers
@@ -73,6 +75,8 @@ struct ClientConfig {
 	bool force_no_cross_product = false;
 	//! Force use of IEJoin to implement AsOfJoin, used for testing
 	bool force_asof_iejoin = false;
+	//! Force use of fetch row instead of scan, used for testing
+	bool force_fetch_row = false;
 	//! Use range joins for inequalities, even if there are equality predicates
 	bool prefer_range_joins = false;
 	//! If this context should also try to use the available replacement scans
@@ -87,11 +91,6 @@ struct ClientConfig {
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
 
-	//! Override for the default extension repository
-	string custom_extension_repo = "";
-	//! Override for the default autoload extensoin repository
-	string autoinstall_extension_repo = "";
-
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 
@@ -103,6 +102,9 @@ struct ClientConfig {
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
+
+	//! Output error messages as structured JSON instead of as a raw string
+	bool errors_as_json = false;
 
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
@@ -116,7 +118,7 @@ public:
 	static const ClientConfig &GetConfig(const ClientContext &context);
 
 	bool AnyVerification() {
-		return query_verification_enabled || verify_external || verify_serializer;
+		return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
 	}
 };
 

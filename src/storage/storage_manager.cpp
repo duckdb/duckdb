@@ -263,7 +263,8 @@ void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_chec
 			SingleFileCheckpointWriter checkpointer(db, *block_manager);
 			checkpointer.CreateCheckpoint();
 		} catch (std::exception &ex) {
-			throw FatalException("Failed to create checkpoint because of error: %s", ex.what());
+			ErrorData error(ex);
+			throw FatalException("Failed to create checkpoint because of error: %s", error.RawMessage());
 		}
 	}
 	if (delete_wal) {

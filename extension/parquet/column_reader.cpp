@@ -180,11 +180,7 @@ idx_t ColumnReader::GroupRowsAvailable() {
 }
 
 unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
-	if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT ||
-	    Type().id() == LogicalTypeId::MAP || Type().id() == LogicalTypeId::ARRAY) {
-		return nullptr;
-	}
-	return ParquetStatisticsUtils::TransformColumnStatistics(Schema(), Type(), columns[file_idx]);
+	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns);
 }
 
 void ColumnReader::Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, // NOLINT

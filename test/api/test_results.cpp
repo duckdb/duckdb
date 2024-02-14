@@ -159,11 +159,7 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	// now create a streaming result
 	auto result = con.SendQuery("SELECT CAST(v AS INTEGER) FROM strings");
 	REQUIRE_NO_FAIL(*result);
-	// initial query does not fail!
 	auto chunk = result->Fetch();
-	REQUIRE(chunk);
-	// but subsequent query fails!
-	chunk = result->Fetch();
 	REQUIRE(!chunk);
 	REQUIRE(result->HasError());
 	auto str = result->ToString();

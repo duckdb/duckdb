@@ -39,7 +39,7 @@ int64_t SubtractOperator::Operation(date_t left, date_t right);
 template <>
 date_t SubtractOperator::Operation(date_t left, int32_t right);
 template <>
-date_t SubtractOperator::Operation(date_t left, interval_t right);
+timestamp_t SubtractOperator::Operation(date_t left, interval_t right);
 template <>
 timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right);
 template <>

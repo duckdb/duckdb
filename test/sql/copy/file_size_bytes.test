@@ -13,7 +13,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv1' (FORMAT CSV, FILE_SIZE_BYTES 1000);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv1/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv1/*.csv', header = 1)
 ----
 10000
 
@@ -28,7 +28,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv2' (FORMAT CSV, FILE_SIZE_BYTES '1kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv2/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv2/*.csv', header = 1)
 ----
 10000
 
@@ -89,7 +89,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv3' (FORMAT CSV, FILE_SIZE_BYTES '500kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv3/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv3/*.csv', header = 1)
 ----
 100000
 
@@ -104,7 +104,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv4' (FORMAT CSV, FILE_SIZE_BYTES '200kb');
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv4/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv4/*.csv', header = 1)
 ----
 100000
 
@@ -121,7 +121,7 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv5' (FORMAT CSV, FILE_SIZE_BYTES '700kb', PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv5/*.csv', header = 1)
 ----
 100000
 
@@ -137,13 +137,13 @@ statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv', header = 1)
 ----
 100000
 
 # ~2 files per thread, around 8 in total
 query I
-SELECT count(*) BETWEEN 7 AND 9 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT count(*) BETWEEN 6 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 1
 

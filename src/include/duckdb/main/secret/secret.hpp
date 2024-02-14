@@ -85,7 +85,7 @@ public:
 	    : prefix_paths(prefix_paths), type(type), provider(provider), name(name), serializable(false) {
 		D_ASSERT(!type.empty());
 	}
-	BaseSecret(BaseSecret &other)
+	BaseSecret(const BaseSecret &other)
 	    : prefix_paths(other.prefix_paths), type(other.type), provider(other.provider), name(other.name),
 	      serializable(other.serializable) {
 		D_ASSERT(!type.empty());
@@ -99,6 +99,11 @@ public:
 	virtual string ToString(SecretDisplayType mode = SecretDisplayType::REDACTED) const;
 	//! Serialize this secret
 	virtual void Serialize(Serializer &serializer) const;
+
+	virtual unique_ptr<const BaseSecret> Clone() const {
+		D_ASSERT(typeid(BaseSecret) == typeid(*this));
+		return make_uniq<BaseSecret>(*this);
+	}
 
 	//! Getters
 	const vector<string> &GetScope() const {
@@ -147,7 +152,7 @@ public:
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		serializable = true;
 	};
-	KeyValueSecret(KeyValueSecret &secret)
+	KeyValueSecret(const KeyValueSecret &secret)
 	    : BaseSecret(secret.GetScope(), secret.GetType(), secret.GetProvider(), secret.GetName()) {
 		secret_map = secret.secret_map;
 		redact_keys = secret.redact_keys;
@@ -185,7 +190,11 @@ public:
 			result->redact_keys.insert(entry.ToString());
 		}
 
-		return result;
+		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
+	}
+
+	unique_ptr<const BaseSecret> Clone() const override {
+		return make_uniq<KeyValueSecret>(*this);
 	}
 
 	//! the map of key -> values that make up the secret

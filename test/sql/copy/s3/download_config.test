@@ -113,16 +113,16 @@ COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
 statement error
 SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
 ----
-IO Error: Unable to connect to URL "http://test-bucket-public.
+Unable to connect to URL "http://test-bucket-public.
 
 # Connection error
 statement error
 SELECT i FROM "http://test-bucket-public.duckdb-minio-non-existent-host.com:9000/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
 ----
-IO Error: Connection error for HTTP HEAD to 'http://test-bucket-public.
+Connection error for HTTP HEAD to 'http://test-bucket-public.
 
 # S3 errors should throw on
 statement error
 SELECT * FROM parquet_scan('s3://this-aint-no-bucket/no-path/no-file');
 ----
-IO Error: Unable to connect to URL "http://
+Unable to connect to URL "http://

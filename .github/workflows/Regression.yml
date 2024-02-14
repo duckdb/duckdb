@@ -321,13 +321,13 @@ jobs:
         cp -r benchmark duckdb/
 
     - name: Regression Test IMDB
-      continue-on-error: true
+      if: always()
       shell: bash
       run: |
         python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/imdb_plan_cost
 
     - name: Regression Test TPCH
-      continue-on-error: true
+      if: always()
       shell: bash
       run: |
         python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpch_plan_cost

@@ -628,7 +628,10 @@ public:
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<ParquetReadBindData>();
-		return std::max(data.initial_file_row_groups, idx_t(1)) * data.files.size();
+		if (data.files.size() > 1) {
+			return TaskScheduler::GetScheduler(context).NumberOfThreads();
+		}
+		return MaxValue(data.initial_file_row_groups, (idx_t)1);
 	}
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files
@@ -908,12 +911,12 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 	}
 }
 
-unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, const CopyInfo &info, const vector<string> &names,
-                                          const vector<LogicalType> &sql_types) {
+unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
+                                          const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
-	for (auto &option : info.options) {
+	for (auto &option : input.info.options) {
 		const auto loption = StringUtil::Lower(option.first);
 		if (option.second.size() != 1) {
 			// All parquet write options require exactly one argument

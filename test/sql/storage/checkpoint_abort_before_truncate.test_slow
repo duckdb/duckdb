@@ -4,7 +4,6 @@
 
 require skip_reload
 
-
 load __TEST_DIR__/checkpoint_abort.db
 
 statement ok
@@ -20,7 +19,7 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-PRAGMA debug_checkpoint_abort='before_truncate'
+PRAGMA debug_checkpoint_abort='before_truncate';
 
 statement ok
 INSERT INTO integers SELECT * FROM range(100000, 200000) tbl(i);
@@ -33,7 +32,7 @@ restart
 
 # verify that the change was correctly loaded from disk
 query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 ----
 0	199999	200000
 
@@ -49,7 +48,7 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-PRAGMA debug_checkpoint_abort='before_truncate'
+PRAGMA debug_checkpoint_abort='before_truncate';
 
 statement ok
 UPDATE integers SET i=i;
@@ -62,13 +61,13 @@ restart
 
 # verify that the change was correctly loaded from disk
 query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+SELECT MIN(i), MAX(i), COUNT(*) FROM integers;
 ----
 0	199999	200000
 
-query I
-select total_blocks < 25 from pragma_database_size();
-----
-true
+# ensure that the expected total storage size is the same as in the first iteration of the loop
+
+query I nosort expected_blocks
+SELECT total_blocks FROM pragma_database_size();
 
 endloop

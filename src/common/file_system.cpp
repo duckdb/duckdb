@@ -215,7 +215,7 @@ string FileSystem::GetWorkingDirectory() {
 
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
-	return a + PathSeparator(a) + b;
+	return a.empty() ? b : a + PathSeparator(a) + b;
 }
 
 string FileSystem::ConvertSeparators(const string &path) {

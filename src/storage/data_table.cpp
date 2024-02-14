@@ -19,12 +19,12 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 
 namespace duckdb {
 
@@ -32,6 +32,10 @@ DataTableInfo::DataTableInfo(AttachedDatabase &db, shared_ptr<TableIOManager> ta
                              string table)
     : db(db), table_io_manager(std::move(table_io_manager_p)), cardinality(0), schema(std::move(schema)),
       table(std::move(table)) {
+}
+
+void DataTableInfo::InitializeIndexes(ClientContext &context) {
+	indexes.InitializeIndexes(context, *this);
 }
 
 bool DataTableInfo::IsTemporary() const {
@@ -84,6 +88,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
+
+	// try to initialize unknown indexes
+	info->InitializeIndexes(context);
 	// first check if there are any indexes that exist that point to the removed column
 	info->indexes.Scan([&](Index &index) {
 		for (auto &column_id : index.column_ids) {
@@ -148,6 +155,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
+	// try to initialize unknown indexes
+	info->InitializeIndexes(context);
+
 	// first check if there are any indexes that exist that point to the changed column
 	info->indexes.Scan([&](Index &index) {
 		for (auto &column_id : index.column_ids) {
@@ -288,8 +298,9 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 	} catch (InternalException &ex) {
 		throw;
 	} catch (std::exception &ex) {
+		ErrorData error(ex);
 		throw ConstraintException("Incorrect value for generated column \"%s %s AS (%s)\" : %s", col.Name(),
-		                          col.Type().ToString(), col.GeneratedExpression().ToString(), ex.what());
+		                          col.Type().ToString(), col.GeneratedExpression().ToString(), error.RawMessage());
 	}
 }
 
@@ -300,7 +311,8 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
-		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, ex.what());
+		ErrorData error(ex);
+		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, error.RawMessage());
 	} catch (...) { // LCOV_EXCL_START
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
 	} // LCOV_EXCL_STOP
@@ -369,13 +381,9 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
                                                         DataChunk &input) {
 
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
-
 	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-	D_ASSERT(index.index_type == "ART");
-	auto &art_index = index.Cast<ART>();
-	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
-	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);
-	throw ConstraintException(exception_msg);
+	auto message = index.GetConstraintViolationMessage(verify_type, failed_index, input);
+	throw ConstraintException(message);
 }
 
 bool IsForeignKeyConstraintError(bool is_append, idx_t input_count, const ManagedSelection &matches) {
@@ -868,8 +876,8 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-PreservedError DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
-	PreservedError error;
+ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
+	ErrorData error;
 	if (indexes.Empty()) {
 		return error;
 	}
@@ -883,12 +891,10 @@ PreservedError DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &ch
 	indexes.Scan([&](Index &index) {
 		try {
 			error = index.Append(chunk, row_identifiers);
-		} catch (Exception &ex) {
-			error = PreservedError(ex);
 		} catch (std::exception &ex) {
-			error = PreservedError(ex);
+			error = ErrorData(ex);
 		}
-		if (error) {
+		if (error.HasError()) {
 			append_failed = true;
 			return true;
 		}
@@ -906,7 +912,7 @@ PreservedError DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &ch
 	return error;
 }
 
-PreservedError DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+ErrorData DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
 	return AppendToIndexes(info->indexes, chunk, row_start);
 }

@@ -606,10 +606,11 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 
 			FunctionBinder function_binder(context);
 			vector<LogicalType> types {arguments[0]->return_type, arguments[0]->return_type};
-			string error;
+			ErrorData error;
 			idx_t best_function = function_binder.BindFunction(func_entry.name, func_entry.functions, types, error);
 			if (best_function == DConstants::INVALID_INDEX) {
-				throw BinderException(string("Fail to find corresponding function for collation min/max: ") + error);
+				throw BinderException(string("Fail to find corresponding function for collation min/max: ") +
+				                      error.Message());
 			}
 			function = func_entry.functions.GetFunctionByOffset(best_function);
 

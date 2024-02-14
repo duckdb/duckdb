@@ -323,3 +323,24 @@ SELECT my_macro(x := 42);
 statement error
 SELECT my_macro(a := 42, a := 42);
 ----
+
+# internal issue 1044
+statement ok
+create macro zz1(x) as (select 10+x);
+
+statement ok
+create macro zz2(x) as 20+x;
+
+query II
+select zz1(1),zz2(2);
+----
+11	22
+
+# should not return any results (because we shouldn't display "macro_parameters"
+query III
+select function_name, parameters, macro_definition
+from duckdb_functions()
+where function_name like 'zz%'
+and macro_definition like '%macro_parameters%';
+----
+

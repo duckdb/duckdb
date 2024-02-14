@@ -15,10 +15,10 @@ using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinCondition> &conditions_p,
-                             vector<LogicalType> btypes, JoinType type_p)
-    : buffer_manager(buffer_manager_p), conditions(conditions_p), build_types(std::move(btypes)), entry_size(0),
-      tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
+                             vector<LogicalType> btypes, JoinType type_p, const vector<idx_t> &output_columns_p)
+    : buffer_manager(buffer_manager_p), conditions(conditions_p), build_types(std::move(btypes)),
+      output_columns(output_columns_p), entry_size(0), tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p),
+      finalized(false), has_null(false), radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
 
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -290,12 +290,9 @@ void JoinHashTable::InitializePointerTable() {
 	if (hash_map.get()) {
 		// There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(data_ptr_t);
-		if (capacity > current_capacity) {
-			// Need more space
+		if (capacity != current_capacity) {
+			// Different size, re-allocate
 			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
-		} else {
-			// Just use the current hash map
-			capacity = current_capacity;
 		}
 	} else {
 		// Allocate a hash map
@@ -485,7 +482,7 @@ void ScanStructure::AdvancePointers() {
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
                                  const SelectionVector &sel_vector, const idx_t count, const idx_t col_no) {
-	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector);
+	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector, nullptr);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
@@ -495,7 +492,7 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
-		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.build_types.size());
+		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.output_columns.size());
 	}
 	if (this->count == 0) {
 		// no pointers left to chase
@@ -524,10 +521,11 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			result.Slice(left, result_vector, result_count);
 
 			// on the RHS, we need to fetch the data from the hash table
-			for (idx_t i = 0; i < ht.build_types.size(); i++) {
+			for (idx_t i = 0; i < ht.output_columns.size(); i++) {
 				auto &vector = result.data[left.ColumnCount() + i];
-				D_ASSERT(vector.GetType() == ht.build_types[i]);
-				GatherResult(vector, result_vector, result_count, i + ht.condition_types.size());
+				const auto output_col_idx = ht.output_columns[i];
+				D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
+				GatherResult(vector, result_vector, result_count, output_col_idx);
 			}
 		}
 		AdvancePointers();
@@ -773,7 +771,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 		result.data[i].Reference(input.data[i]);
 	}
 	// now fetch the data from the RHS
-	for (idx_t i = 0; i < ht.build_types.size(); i++) {
+	for (idx_t i = 0; i < ht.output_columns.size(); i++) {
 		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
 		for (idx_t j = 0; j < input.size(); j++) {
@@ -781,8 +779,9 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 				FlatVector::SetNull(vector, j, true);
 			}
 		}
-		// for the remaining values we fetch the values
-		GatherResult(vector, result_sel, result_sel, result_count, i + ht.condition_types.size());
+		const auto output_col_idx = ht.output_columns[i];
+		D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
+		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
 	}
 	result.SetCardinality(input.size());
 
@@ -833,7 +832,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	}
 	result.SetCardinality(found_entries);
 
-	idx_t left_column_count = result.ColumnCount() - build_types.size();
+	idx_t left_column_count = result.ColumnCount() - output_columns.size();
 	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {
 		left_column_count = 0;
 	}
@@ -846,11 +845,11 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	}
 
 	// gather the values from the RHS
-	for (idx_t i = 0; i < build_types.size(); i++) {
+	for (idx_t i = 0; i < output_columns.size(); i++) {
 		auto &vector = result.data[left_column_count + i];
-		D_ASSERT(vector.GetType() == build_types[i]);
-		const auto col_no = condition_types.size() + i;
-		data_collection->Gather(addresses, sel_vector, found_entries, col_no, vector, sel_vector);
+		const auto output_col_idx = output_columns[i];
+		D_ASSERT(vector.GetType() == layout.GetTypes()[output_col_idx]);
+		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector, nullptr);
 	}
 }
 

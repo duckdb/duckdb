@@ -141,11 +141,15 @@ def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
 
 
+def get_default_argument(default_value):
+    return f'{default_value}'.lower() if type(default_value) == bool else f'{default_value}'
+
+
 def get_serialize_element(
     property_name, property_id, property_key, property_type, has_default, default_value, is_deleted, pointer_type
 ):
     assignment = '.' if pointer_type == 'none' else '->'
-    default_argument = '' if default_value is None else f', {default_value}'
+    default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
     template = serialize_element
     if is_deleted:
         template = "\t/* [Deleted] (${PROPERTY_TYPE}) \"${PROPERTY_NAME}\" */\n"
@@ -174,7 +178,7 @@ def get_deserialize_element_template(
 ):
     # read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
-    default_argument = '' if default_value is None else f', {default_value}'
+    default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
     if is_deleted:
         template = template.replace(', result${ASSIGNMENT}${PROPERTY_NAME}', '').replace(
             'ReadProperty', 'ReadDeletedProperty'

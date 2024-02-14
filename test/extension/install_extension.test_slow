@@ -35,6 +35,21 @@ LOAD 'loadable_extension_demo';
 # need to restart to unload extensions
 restart
 
+# this will succeed on MacOS due to case insensitive filesystem
+statement maybe
+FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_DEMO.duckdb_extension';
+----
+IO Error: Failed to read extension from
+
+statement ok
+FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+LOAD 'Loadable_Extension_DEMO';
+
+# need to restart to unload extensions
+restart
+
 # can't find extension in non-default extension location
 statement ok
 SET extension_directory='__TEST_DIR__/extension_directory'

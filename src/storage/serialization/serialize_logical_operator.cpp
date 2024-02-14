@@ -157,9 +157,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_SET:
 		result = LogicalSet::Deserialize(deserializer);
 		break;
-	case LogicalOperatorType::LOGICAL_SHOW:
-		result = LogicalShow::Deserialize(deserializer);
-		break;
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		result = LogicalTopN::Deserialize(deserializer);
 		break;
@@ -674,19 +671,6 @@ unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deser
 	auto setop_all = deserializer.ReadPropertyWithDefault<bool>(202, "setop_all", true);
 	auto allow_out_of_order = deserializer.ReadPropertyWithDefault<bool>(203, "allow_out_of_order", true);
 	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>(), setop_all, allow_out_of_order));
-	return std::move(result);
-}
-
-void LogicalShow::Serialize(Serializer &serializer) const {
-	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(200, "types_select", types_select);
-	serializer.WritePropertyWithDefault<vector<string>>(201, "aliases", aliases);
-}
-
-unique_ptr<LogicalOperator> LogicalShow::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<LogicalShow>(new LogicalShow());
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(200, "types_select", result->types_select);
-	deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases", result->aliases);
 	return std::move(result);
 }
 

@@ -245,6 +245,10 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	return PushFinalize();
 }
 
+bool PipelineExecutor::RemainingSinkChunk() const {
+	return remaining_sink_chunk;
+}
+
 PipelineExecuteResult PipelineExecutor::Execute() {
 	return Execute(NumericLimits<idx_t>::Maximum());
 }
@@ -346,78 +350,6 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	local_sink_state.reset();
 
 	return PipelineExecuteResult::FINISHED;
-}
-
-// TODO: Refactoring the StreamingQueryResult to use Push-based execution should eliminate the need for this code
-void PipelineExecutor::ExecutePull(DataChunk &result) {
-	if (IsFinished()) {
-		return;
-	}
-	auto &executor = pipeline.executor;
-	try {
-		D_ASSERT(!pipeline.sink);
-		D_ASSERT(!requires_batch_index);
-		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
-		while (result.size() == 0 && (!exhausted_source || !in_process_operators.empty())) {
-			if (in_process_operators.empty()) {
-				source_chunk.Reset();
-
-				auto done_signal = make_shared<InterruptDoneSignalState>();
-				interrupt_state = InterruptState(done_signal);
-				SourceResultType source_result;
-
-				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times
-				while (true) {
-					D_ASSERT(!exhausted_source);
-					source_result = FetchFromSource(source_chunk);
-
-					// No interrupt happened, all good.
-					if (source_result != SourceResultType::BLOCKED) {
-						break;
-					}
-
-					// Busy wait for async callback from source operator
-					done_signal->Await();
-				}
-
-				if (source_result == SourceResultType::FINISHED) {
-					exhausted_source = true;
-					if (source_chunk.size() == 0) {
-						break;
-					}
-				}
-			}
-			if (!pipeline.operators.empty()) {
-				auto state = Execute(source_chunk, result);
-				if (state == OperatorResultType::FINISHED) {
-					break;
-				}
-			}
-		}
-	} catch (const Exception &ex) { // LCOV_EXCL_START
-		if (executor.HasError()) {
-			executor.ThrowException();
-		}
-		throw;
-	} catch (std::exception &ex) {
-		if (executor.HasError()) {
-			executor.ThrowException();
-		}
-		throw;
-	} catch (...) {
-		if (executor.HasError()) {
-			executor.ThrowException();
-		}
-		throw;
-	} // LCOV_EXCL_STOP
-}
-
-void PipelineExecutor::PullFinalize() {
-	if (finalized) {
-		throw InternalException("Calling PullFinalize on a pipeline that has been finalized already");
-	}
-	finalized = true;
-	pipeline.executor.Flush(thread);
 }
 
 void PipelineExecutor::GoToSource(idx_t &current_idx, idx_t initial_idx) {

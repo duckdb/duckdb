@@ -777,6 +777,21 @@ end
 #     return ccall((:duckdb_from_timestamp, libduckdb), Ptr{Cvoid}, (Ptr{Cvoid},), ts)
 # end
 #
+
+"""
+Decompose a TIME_TZ objects into micros and a timezone offset.
+
+Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
+
+* micros: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+* out_micros: The microsecond component of the time.
+* out_offset: The timezone offset component of the time.
+"""
+function duckdb_from_time_tz(val)
+    return ccall((:duckdb_from_time_tz, libduckdb), duckdb_time_tz, (UInt64,), val)
+end
+
+#
 # """
 # duckdb_to_timestamp(ts)
 # Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
@@ -1318,6 +1333,28 @@ function duckdb_pending_prepared_streaming(prepared_statement, out_pending)
         (duckdb_prepared_statement, Ref{duckdb_pending_result}),
         prepared_statement,
         out_pending
+    )
+end
+
+"""
+Checks the state of the execution, returning it.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result to check the state of.
+* returns: The state of the pending result.
+"""
+function duckdb_pending_execute_check_state(pending_result)
+    return ccall(
+        (:duckdb_pending_execute_check_state, libduckdb),
+        duckdb_pending_state,
+        (duckdb_pending_result,),
+        pending_result
     )
 end
 
@@ -2661,7 +2698,7 @@ Append a duckdb_time value to the appender.
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 """
 function duckdb_append_time(appender, value)
-    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -2669,7 +2706,7 @@ Append a duckdb_timestamp value to the appender.
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
 """
 function duckdb_append_timestamp(appender, value)
-    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """

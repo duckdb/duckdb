@@ -8,7 +8,6 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
@@ -24,6 +23,8 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -182,12 +183,15 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 				}
 			}
 		}
-	} catch (SerializationException &ex) { // LCOV_EXCL_START
-		                                   // serialization exception - torn WAL
-		                                   // continue reading
-	} catch (std::exception &ex) {
-		Printer::PrintF("Exception in WAL playback during initial read: %s\n", ex.what());
-		return false;
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		ErrorData error(ex);
+		if (error.Type() == ExceptionType::SERIALIZATION) {
+			// serialization exception - torn WAL
+			// continue reading
+		} else {
+			Printer::PrintF("Exception in WAL playback during initial read: %s\n", error.RawMessage());
+			return false;
+		}
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback during initial read");
 		return false;
@@ -225,13 +229,13 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 				con.BeginTransaction();
 			}
 		}
-	} catch (SerializationException &ex) { // LCOV_EXCL_START
-		// serialization error during WAL replay: rollback
-		con.Rollback();
-	} catch (std::exception &ex) {
-		// FIXME: this should report a proper warning in the connection
-		Printer::PrintF("Exception in WAL playback: %s\n", ex.what());
-		// exception thrown in WAL replay: rollback
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::SERIALIZATION) {
+			// FIXME: this should report a proper warning in the connection
+			Printer::PrintF("Exception in WAL playback: %s\n", error.RawMessage());
+			// exception thrown in WAL replay: rollback
+		}
 		con.Rollback();
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback: %s\n");
@@ -472,10 +476,7 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
-	if (usage_count > seq.usage_count) {
-		seq.usage_count = usage_count;
-		seq.counter = counter;
-	}
+	seq.ReplayValue(usage_count, counter);
 }
 
 //===--------------------------------------------------------------------===//
@@ -547,7 +548,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 			// read the data into a buffer handle
 			shared_ptr<BlockHandle> block_handle;
-			buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
+			buffer_manager.Allocate(MemoryTag::ART_INDEX, Storage::BLOCK_SIZE, false, &block_handle);
 			auto buffer_handle = buffer_manager.Pin(block_handle);
 			auto data_ptr = buffer_handle.Ptr();
 
@@ -565,10 +566,20 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	}
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
+	// Ensure the index type exists
+	if (info.index_type.empty()) {
+		info.index_type = ART::TYPE_NAME;
+	}
+
+	auto index_type = context.db->config.GetIndexTypes().FindByName(info.index_type);
+	if (!index_type) {
+		throw InternalException("Index type \"%s\" not recognized", info.index_type);
+	}
+
 	// create the index in the catalog
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
-	index.info = table.GetStorage().info;
+	index.info = make_shared<IndexDataTableInfo>(table.GetStorage().info, index.name);
 
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
@@ -604,9 +615,12 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	}
 
 	auto &data_table = table.GetStorage();
-	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
-	                          std::move(unbound_expressions), data_table.db, nullptr, index_info);
-	data_table.info->indexes.AddIndex(std::move(art));
+
+	CreateIndexInput input(TableIOManager::Get(data_table), data_table.db, info.constraint_type, info.index_name,
+	                       info.column_ids, unbound_expressions, index_info, info.options);
+
+	auto index_instance = index_type->create_instance(input);
+	data_table.info->indexes.AddIndex(std::move(index_instance));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
@@ -640,7 +654,7 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		return;
 	}
 	if (!state.current_table) {
-		throw Exception("Corrupt WAL: insert without table");
+		throw InternalException("Corrupt WAL: insert without table");
 	}
 
 	// append to the current table

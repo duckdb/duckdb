@@ -5,7 +5,6 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -23,34 +22,6 @@
 #include <algorithm>
 
 namespace duckdb {
-
-vector<string> GetUniqueNames(const vector<string> &original_names) {
-	unordered_set<string> name_set;
-	vector<string> unique_names;
-	unique_names.reserve(original_names.size());
-
-	for (auto &name : original_names) {
-		auto insert_result = name_set.insert(name);
-		if (insert_result.second == false) {
-			// Could not be inserted, name already exists
-			idx_t index = 1;
-			string postfixed_name;
-			while (true) {
-				postfixed_name = StringUtil::Format("%s:%d", name, index);
-				auto res = name_set.insert(postfixed_name);
-				if (!res.second) {
-					index++;
-					continue;
-				}
-				break;
-			}
-			unique_names.push_back(postfixed_name);
-		} else {
-			unique_names.push_back(name);
-		}
-	}
-	return unique_names;
-}
 
 static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 	return arg.empty() || arg[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
@@ -80,14 +51,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
+
 	bool use_tmp_file = true;
 	bool overwrite_or_ignore = false;
 	FilenamePattern filename_pattern;
-	string file_extension = copy_function.function.extension;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	optional_idx file_size_bytes;
 	vector<idx_t> partition_cols;
+
+	CopyFunctionBindInput bind_input(*stmt.info);
+
+	bind_input.file_extension = copy_function.function.extension;
 
 	auto original_options = stmt.info->options;
 	stmt.info->options.clear();
@@ -109,7 +84,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			if (option.second.empty()) {
 				throw IOException("FILE_EXTENSION cannot be empty");
 			}
-			file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+			bind_input.file_extension = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 		} else if (loption == "per_thread_output") {
 			per_thread_output = GetBooleanArg(context, option.second);
 		} else if (loption == "file_size_bytes") {
@@ -157,18 +132,20 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		}
 	}
 
-	auto unique_column_names = GetUniqueNames(select_node.names);
+	auto unique_column_names = select_node.names;
+	QueryResult::DeduplicateColumns(unique_column_names);
 	auto file_path = stmt.info->file_path;
 
 	auto function_data =
-	    copy_function.function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
+	    copy_function.function.copy_to_bind(context, bind_input, unique_column_names, select_node.types);
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
 	copy->filename_pattern = filename_pattern;
-	copy->file_extension = file_extension;
+	copy->file_extension = bind_input.file_extension;
 	copy->per_thread_output = per_thread_output;
 	if (file_size_bytes.IsValid()) {
 		copy->file_size_bytes = file_size_bytes;
