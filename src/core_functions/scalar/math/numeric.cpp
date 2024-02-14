@@ -1399,7 +1399,7 @@ static void ConstUnsignedRHSDivideOperationFast(DataChunk &args, ExpressionState
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	
+
 	if (rhs == 1) {
 		result.Reinterpret(args.data[0]);
 	}
