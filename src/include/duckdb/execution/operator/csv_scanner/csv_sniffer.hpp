@@ -1,17 +1,17 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp
+// duckdb/execution/operator/csv_scanner/csv_sniffer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/quote_rules.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/column_count_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
+#include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 
 namespace duckdb {
 struct DateTimestampSniffing {
