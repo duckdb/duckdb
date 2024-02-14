@@ -2843,6 +2843,7 @@ namespace Catch {
 // start catch_totals.h
 
 #include <cstddef>
+#include <map>
 
 namespace Catch {
 
@@ -2870,6 +2871,7 @@ namespace Catch {
         std::size_t skippedTests = 0;
         Counts assertions;
         Counts testCases;
+        std::map<std::string, std::size_t> skippedTestReasons;
     };
 }
 
@@ -5504,7 +5506,6 @@ namespace Catch {
 
 #include <string>
 #include <iosfwd>
-#include <map>
 #include <set>
 #include <memory>
 #include <algorithm>
@@ -8214,8 +8215,7 @@ namespace Catch {
         bool m_lastAssertionPassed = false;
         bool m_shouldReportUnexpected = true;
         bool m_includeSuccessfulResults;
-        bool m_skippedTest = false;
-        std::map<std::string, std::size_t> skipReasons;
+        std::string m_skippedTestReason;
     };
 
     void seedRng(IConfig const& config);
@@ -12828,6 +12828,7 @@ namespace Catch {
 
         if (skippedTest()) {
             m_totals.skippedTests++;
+            m_totals.skippedTestReasons[m_skippedTestReason]++;
         }
         Totals deltaTotals = m_totals.delta(prevTotals);
         if (testInfo.expectedToFail() && deltaTotals.testCases.passed > 0) {
@@ -12973,16 +12974,15 @@ namespace Catch {
     }
 
     void RunContext::onTestBegin() {
-        m_skippedTest = false;
+        m_skippedTestReason = std::string();
     }
 
     void RunContext::skipTestDuringRun( std::string message ) {
-        m_skippedTest = true;
-        skipReasons[message] += 1;
+        m_skippedTestReason = std::move(message);
     }
 
     bool RunContext::skippedTest() {
-        return m_skippedTest;
+        return !m_skippedTestReason.empty();
     }
 
     std::string RunContext::getCurrentTestName() const {
@@ -15412,6 +15412,9 @@ namespace Catch {
         assertions += other.assertions;
         testCases += other.testCases;
         skippedTests += other.skippedTests;
+        for(auto &entry : other.skippedTestReasons) {
+            skippedTestReasons[entry.first] += entry.second;
+        }
         return *this;
     }
 
@@ -16860,6 +16863,13 @@ void ConsoleReporter::printTotals( Totals const& totals ) {
 
         printSummaryRow("test cases", columns, 0);
         printSummaryRow("assertions", columns, 1);
+    }
+    if (!totals.skippedTestReasons.empty()) {
+        stream << '\n';
+        stream << Colour(Colour::Warning) << "Skipped tests for the following reasons:" << '\n';
+        for(auto &entry : totals.skippedTestReasons) {
+            stream << Colour(Colour::Warning) << entry.first << ": " << entry.second << '\n';
+        }
     }
 }
 void ConsoleReporter::printSummaryRow(std::string const& label, std::vector<SummaryColumn> const& cols, std::size_t row) {
