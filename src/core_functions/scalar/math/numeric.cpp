@@ -1339,8 +1339,9 @@ static uint64_t ComputeM(uint32_t rhs) {
 }
 
 static uint64_t ComputeM(int32_t rhs) {
-	if (rhs < 0)
+	if (rhs < 0) {
 		rhs = -rhs;
+	}
 	return UINT64_C(0xFFFFFFFFFFFFFFFF) / rhs + 1 + ((rhs & (rhs - 1)) == 0 ? 1 : 0);
 }
 
