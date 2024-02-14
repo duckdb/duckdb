@@ -65,7 +65,7 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 	file_handle.Read(handle.Ptr(), actual_buffer_size);
 }
 
-unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {
+shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	if (can_seek && block->IsUnloaded()) {
 		// We have to reload it from disk
@@ -73,8 +73,8 @@ unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has
 		Reload(file_handle);
 		has_seeked = true;
 	}
-	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, last_buffer, file_number,
-	                                  buffer_idx);
+	return make_shared<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, last_buffer, file_number,
+	                                    buffer_idx);
 }
 
 void CSVBuffer::Unpin() {

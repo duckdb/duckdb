@@ -463,8 +463,7 @@ def write_header(data: ExtensionData):
         "parquet",
         "sqlsmith",
         "tpcds",
-        "tpch",
-        "visualizer"
+        "tpch"
     }; // END_OF_AUTOLOADABLE_EXTENSIONS
 
     } // namespace duckdb"""
