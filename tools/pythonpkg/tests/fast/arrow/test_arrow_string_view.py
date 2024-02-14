@@ -123,3 +123,16 @@ class TestArrowReplacementScan(object):
         RoundTripDuckDBInternal(
             '''select * from (SELECT i::varchar str FROM range(10000) tbl(i) UNION SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str'''
         )
+
+    def test_multiple_data_buffers(self, duckdb_cursor):
+        arr = pa.array(["Imaverybigstringmuchbiggerthanfourbytes"], type=pa.string_view())
+        arr = pa.concat_arrays([arr, arr, arr, arr, arr, arr, arr, arr, arr, arr])
+        RoundTripStringView(
+            "SELECT 'Imaverybigstringmuchbiggerthanfourbytes' str FROM range(10) tbl(i)",
+            arr,
+        )
+        arr = pa.concat_arrays([arr, arr])
+        RoundTripStringView(
+            "SELECT 'Imaverybigstringmuchbiggerthanfourbytes' str FROM range(20) tbl(i)",
+            arr,
+        )
