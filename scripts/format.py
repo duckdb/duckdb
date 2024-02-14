@@ -411,6 +411,7 @@ def format_directory(directory):
     for thread in threads:
         thread.join()
 
+
 if format_all:
     try:
         os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
