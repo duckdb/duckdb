@@ -89,6 +89,8 @@ public:
 	// Hold ownership over the Arrow Arrays owned by DuckDB to allow for zero-copy
 	shared_ptr<ArrowArrayWrapper> owned_data;
 	unordered_map<idx_t, unique_ptr<ArrowArrayScanState>> children;
+	// Optionally holds the pointer that was used to create the cached dictionary
+	optional_ptr<ArrowArray> arrow_dictionary = nullptr;
 	// Cache the (optional) dictionary of this array
 	unique_ptr<Vector> dictionary;
 	//! Run-end-encoding state
@@ -96,8 +98,9 @@ public:
 
 public:
 	ArrowArrayScanState &GetChild(idx_t child_idx);
-	void AddDictionary(unique_ptr<Vector> dictionary_p);
+	void AddDictionary(unique_ptr<Vector> dictionary_p, ArrowArray *arrow_dict);
 	bool HasDictionary() const;
+	bool CacheOutdated(ArrowArray *dictionary) const;
 	Vector &GetDictionary();
 	ArrowRunEndEncodingState &RunEndEncoding() {
 		return run_end_encoding;
@@ -112,7 +115,6 @@ public:
 			child.second->Reset();
 		}
 		owned_data.reset();
-		dictionary.reset();
 	}
 };
 

@@ -1070,7 +1070,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	D_ASSERT(arrow_type.HasDictionary());
 	auto &scan_state = array_state.state;
 	const bool has_nulls = CanContainNull(array, parent_mask);
-	if (!array_state.HasDictionary()) {
+	if (array_state.CacheOutdated(array.dictionary)) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, 0, has_nulls);
@@ -1092,7 +1092,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		};
-		array_state.AddDictionary(std::move(base_vector));
+		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
 	auto offset_type = arrow_type.GetDuckType();
 	//! Get Pointer to Indices of Dictionary
