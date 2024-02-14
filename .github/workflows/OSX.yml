@@ -79,6 +79,11 @@ jobs:
         clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
         clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
 
+    - name: Verify C enum integrity
+      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      shell: bash
+      run: python scripts/verify_enum_integrity.py src/include/duckdb.h
+
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
