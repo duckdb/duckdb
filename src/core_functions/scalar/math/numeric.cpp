@@ -1360,7 +1360,7 @@ static uint32_t Fastdiv(int32_t a, uint64_t m, int32_t d) {
 	}
 	uint64_t highbits = Hugeint::Multiply<false>(lhs, hugeint_t(0, m)).upper;
 	highbits += (a < 0 ? 1 : 0);
-	if (d < 0) {
+	if ( d < 0) {
 		return -(int32_t)(highbits);
 	}
 	return (int32_t)(highbits);
