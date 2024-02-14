@@ -13,7 +13,6 @@
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "fastmod.h"
 
 #include <cmath>
 #include <cstdint>
