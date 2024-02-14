@@ -210,6 +210,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 
 	if (sel_valid) {
 		result_child_vector->Slice(sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -286,6 +287,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -318,7 +320,9 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data.size() == 3 || args.data.size() == 4);
 	auto count = args.size();
 
-	Vector &list_or_str_vector = args.data[0];
+	Vector &list_or_str_vector = result;
+	// this ensures that we do not change the input chunk
+	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
 		auto &result_validity = FlatVector::Validity(result);
 		result_validity.SetInvalid(0);
