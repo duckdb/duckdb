@@ -17,6 +17,12 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     help='If set will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.',
 )
+parser.add_argument(
+    '--extension_dir',
+    action='store',
+    help="The root directory to look for the '<extension_name>/<extension>.duckdb_extension' files, relative to the location of this script",
+    default='/tmp/',  # Locally, try: '../build/release/extension/'
+)
 
 args = parser.parse_args()
 
@@ -78,7 +84,12 @@ class ExtensionType(NamedTuple):
 
 def check_prerequisites():
     if not os.path.isfile(EXTENSIONS_PATH) or not os.path.isfile(DUCKDB_PATH):
-        print("please run 'DISABLE_BUILTIN_EXTENSIONS=1 BUILD_ALL_EXT=1 make release'")
+        print(
+            "please run 'DISABLE_BUILTIN_EXTENSIONS=1 BUILD_ALL_EXT=1 make release', you might have to manually add DONT_LINK to all extension_configs"
+        )
+        exit(1)
+    if not os.path.isdir(args.extension_dir):
+        print(f"provided --extension_dir '{args.extension_dir}' is not a valid directory")
         exit(1)
 
 
@@ -140,7 +151,7 @@ class ExtensionData:
         # Map of extension -> extension_path
         self.extensions: Dict[str, str] = get_extension_path_map()
 
-        self.stored_functions: Dict[str, Function] = {
+        self.stored_functions: Dict[str, List[Function]] = {
             'substrait': [
                 Function("from_substrait", "table"),
                 Function("get_substrait", "table"),
@@ -150,7 +161,7 @@ class ExtensionData:
             'arrow': [Function("scan_arrow_ipc", "table"), Function("to_arrow_ipc", "table")],
             'spatial': [],
         }
-        self.stored_settings: Dict[str, str] = {'substrait': [], 'arrow': [], 'spatial': []}
+        self.stored_settings: Dict[str, List[str]] = {'substrait': [], 'arrow': [], 'spatial': []}
 
     def set_base(self):
         self.base_functions: Set[Function] = get_functions()
@@ -178,7 +189,9 @@ class ExtensionData:
             self.add_settings(extension_name, extension_settings)
             self.add_functions(extension_name, extension_functions)
         else:
-            print(f"Missing extension {extension_name} and not found in stored_functions/stored_settings")
+            error = f"""Missing extension {extension_name} and not found in stored_functions/stored_settings
+Please double check if '{args.extension_dir}' is the right location to look for ./**/*.duckdb_extension files"""
+            print(error)
             exit(1)
 
     def add_settings(self, extension_name: str, settings_list: List[str]):
@@ -229,7 +242,7 @@ This is likely caused by building DuckDB with extensions linked in
 
     def export_functions(self) -> str:
         result = """
-	static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {\n"""
+    static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {\n"""
         sorted_function = sorted(self.function_map)
 
         for func in sorted_function:
@@ -242,7 +255,7 @@ This is likely caused by building DuckDB with extensions linked in
 
     def export_settings(self) -> str:
         result = """
-	static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {\n"""
+    static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {\n"""
         sorted_settings = sorted(self.settings_map)
 
         for settings_name in sorted_settings:
@@ -316,9 +329,9 @@ def print_map_diff(d1, d2):
 
 def get_extension_path_map() -> Dict[str, str]:
     extension_paths: Dict[str, str] = {}
-    extension_dir = pathlib.Path('../build/release/extension')
-    # extension_dir = pathlib.Path('/tmp/') / '**/*.duckdb_extension'
-    for location in glob.iglob(str(extension_dir / '**/*.duckdb_extension'), recursive=True):
+    # extension_dir = pathlib.Path('../build/release/extension')
+    extension_dir = args.extension_dir
+    for location in glob.iglob(extension_dir + '**/*.duckdb_extension', recursive=True):
         name, _ = os.path.splitext(os.path.basename(location))
         print(f"Located extension: {name} in path: '{location}'")
         extension_paths[name] = location
