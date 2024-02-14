@@ -1373,13 +1373,11 @@ static void ConstRHSDivideOperation(DataChunk &args, ExpressionState &state, Vec
 	}
 	RHS rhs = args.data[1].GetValue(0).GetValue<RHS>();
 
-	ValidityMask &validity = FlatVector::Validity(result);
 	if (rhs == 0) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	validity.Copy(FlatVector::Validity(args.data[0]), args.data.size());
 	UnaryExecutor::ExecuteWithNulls<LHS, RESULT>(
 	    args.data[0], result, args.size(), [&](LHS lhs, ValidityMask &validity, idx_t idx) {
 		    if (std::is_signed<RHS>() && rhs == RHS(-1) && lhs == NumericLimits<LHS>::Minimum()) {
@@ -1401,6 +1399,7 @@ static void ConstUnsignedRHSDivideOperationFast(DataChunk &args, ExpressionState
 		ConstantVector::SetNull(result, true);
 		return;
 	}
+	
 	if (rhs == 1) {
 		result.Reinterpret(args.data[0]);
 	}
