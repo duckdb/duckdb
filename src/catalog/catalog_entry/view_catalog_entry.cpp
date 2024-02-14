@@ -14,6 +14,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
 	this->types = info.types;
+	this->names = info.names;
 	this->temporary = info.temporary;
 	this->sql = info.sql;
 	this->internal = info.internal;
@@ -33,6 +34,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->sql = sql;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	result->aliases = aliases;
+	result->names = names;
 	result->types = types;
 	result->dependencies = dependencies;
 	result->temporary = temporary;

@@ -188,6 +188,11 @@
         "id": 203,
         "name": "query",
         "type": "SelectStatement*"
+      },
+      {
+        "id": 204,
+        "name": "names",
+        "type": "vector<string>"
       }
     ]
   },

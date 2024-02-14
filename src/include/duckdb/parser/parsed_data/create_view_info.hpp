@@ -28,6 +28,8 @@ public:
 	vector<string> aliases;
 	//! Return types
 	vector<LogicalType> types;
+	//! Names of the query
+	vector<string> names;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
 

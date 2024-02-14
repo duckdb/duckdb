@@ -4,6 +4,8 @@
 
 require fts
 
+require noalternativeverify
+
 statement ok
 CREATE TABLE data (context VARCHAR, question VARCHAR, id BIGINT)
 

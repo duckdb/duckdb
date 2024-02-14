@@ -106,6 +106,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			names = sniffer_result.names;
 			return_types = sniffer_result.return_types;
 		}
+		result->csv_types = return_types;
+		result->csv_names = names;
 	}
 
 	D_ASSERT(return_types.size() == names.size());
@@ -131,13 +133,16 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				}
 			}
 		}
+		result->csv_types = return_types;
+		result->csv_names = names;
 	} else {
+		result->csv_types = return_types;
+		result->csv_names = names;
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
 	result->return_types = return_types;
 	result->return_names = names;
-	result->csv_types = return_types;
-	result->csv_names = names;
+
 	result->FinalizeRead(context);
 	return std::move(result);
 }

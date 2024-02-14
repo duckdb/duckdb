@@ -234,8 +234,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			filter.expressions.erase(filter.expressions.begin() + i);
 			i--;
 			if (filter.expressions.empty()) {
-				// all conditions have been erased: remove the entire filter
-				*node_ptr = std::move(filter.children[0]);
+				// just break. The physical filter planner will plan a projection instead
 				break;
 			}
 		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
