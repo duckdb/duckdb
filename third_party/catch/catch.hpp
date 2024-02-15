@@ -16857,9 +16857,9 @@ void ConsoleReporter::printTotals( Totals const& totals ) {
         columns.push_back(SummaryColumn("failed", Colour::ResultError)
                           .addRow(totals.testCases.failed)
                           .addRow(totals.assertions.failed));
-        columns.push_back(SummaryColumn("failed as expected", Colour::ResultExpectedFailure)
-                          .addRow(totals.testCases.failedButOk)
-                          .addRow(totals.assertions.failedButOk));
+        columns.push_back(SummaryColumn("skipped", Colour::ResultExpectedFailure)
+                          .addRow(totals.testCases.failedButOk + totals.skippedTests)
+                          .addRow(totals.assertions.failedButOk + totals.skippedTests));
 
         printSummaryRow("test cases", columns, 0);
         printSummaryRow("assertions", columns, 1);
