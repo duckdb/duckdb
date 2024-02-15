@@ -4,7 +4,31 @@ from enum import Enum, auto
 from typing import List, Dict, Optional
 import json
 
-from sqllogic_parser import Token, TokenType, BaseStatement, Statement, Require, NoOp, Mode, Halt
+from sqllogic_parser import (
+    Token,
+    TokenType,
+    BaseStatement,
+    Statement,
+    Require,
+    NoOp,
+    Mode,
+    Halt,
+    Set,
+    Load,
+    SkipIf,
+    OnlyIf,
+    Query,
+    HashThreshold,
+    Loop,
+    ConcurrentLoop,
+    Foreach,
+    ConcurrentForeach,
+    Endloop,
+    RequireEnv,
+    Restart,
+    Reconnect,
+    Sleep,
+)
 
 # TODO: add 'dbpath' with argparse
 
@@ -188,14 +212,14 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_SKIP_IF: None,
             TokenType.SQLLOGIC_ONLY_IF: None,
             TokenType.SQLLOGIC_MODE: None,
-            TokenType.SQLLOGIC_SET: None,
+            TokenType.SQLLOGIC_SET: self.parse_set,
             TokenType.SQLLOGIC_LOOP: None,
             TokenType.SQLLOGIC_CONCURRENT_LOOP: None,
             TokenType.SQLLOGIC_FOREACH: None,
             TokenType.SQLLOGIC_CONCURRENT_FOREACH: None,
             TokenType.SQLLOGIC_ENDLOOP: None,
             TokenType.SQLLOGIC_REQUIRE_ENV: None,
-            TokenType.SQLLOGIC_LOAD: None,
+            TokenType.SQLLOGIC_LOAD: self.parse_load,
             TokenType.SQLLOGIC_RESTART: None,
             TokenType.SQLLOGIC_RECONNECT: None,
             TokenType.SQLLOGIC_SLEEP: None,
@@ -283,7 +307,7 @@ class SQLLogicParser:
     def parse_query(self, header: Token) -> BaseStatement:
         if len(header.parameters) < 1:
             self.fail("query requires at least one parameter (query III)")
-        statement = BaseStatement(header)
+        statement = Query(header, self.current_line + 1)
 
         # parse the expected column count
         statement.expected_column_count = 0
@@ -292,10 +316,11 @@ class SQLLogicParser:
         if not all(x in accepted_chars for x in column_text):
             self.fail(f"Found unknown character in {column_text}, expected {create_formatted_list(accepted_chars)}")
         expected_column_count = len(column_text)
+
+        statement.expected_column_count = expected_column_count
         if statement.expected_column_count == 0:
             self.fail("Query requires at least a single column in the result")
 
-        statement.expected_column_count = expected_column_count
         statement.file_name = self.current_test.path
         statement.query_line = self.current_line + 1
         # extract the SQL statement
@@ -333,7 +358,7 @@ class SQLLogicParser:
 
         # figure out the sort style
         sort_style = get_sort_style(header.parameters)
-        if statement.sort_style == SortStyle.UNKNOWN:
+        if sort_style == SortStyle.UNKNOWN:
             sort_style = SortStyle.NO_SORT
             statement.set_connection(header.parameters[1])
         statement.sort_style = sort_style
@@ -372,6 +397,30 @@ class SQLLogicParser:
 
     def parse_require(self, header: Token) -> Optional[BaseStatement]:
         return Require(header, self.current_line + 1)
+
+    def parse_set(self, header: Token) -> Optional[BaseStatement]:
+        parameters = header.parameters
+        if len(parameters) < 1:
+            self.fail("set requires at least 1 parameter (e.g. set ignore_error_messages HTTP Error)")
+        if parameters[0] == "ignore_error_messages" or parameters[0] == "always_fail_error_messages":
+            # TODO: handle these
+            # Since we plan to parse everything first and then execute
+            # These should return BaseStatements that can be handled by the executor
+
+            string_set = []
+            # Parse the parameter list as a comma separated list of strings that can contain spaces
+            # e.g. `set ignore_error_messages This is an error message, This_is_another, and   another`
+            tmp = [[y.strip() for y in x.split(',') if y.strip() != ''] for x in parameters[1:]]
+            for x in tmp:
+                string_set.extend(x)
+            statement = Set(header, self.current_line + 1)
+            statement.add_parameters(string_set)
+            return statement
+        else:
+            self.fail("unrecognized set parameter: %s" % parameters[0])
+
+    def parse_load(self, header: Token) -> Optional[BaseStatement]:
+        return Load(header, self.current_line + 1)
 
     def parse(self, file_path: str) -> Optional[SQLLogicTest]:
         if not self.open_file(file_path):
@@ -416,17 +465,6 @@ class SQLLogicParser:
                 raise Exception(f"Parser did not produce a statement for {token.type.name}")
             self.current_test.add_statement(statement)
 
-        #    elif token.type == TokenType.SQLLOGIC_MODE:
-        #        if len(token.parameters) != 1:
-        #            self.fail("mode requires one parameter")
-        #        parameter = token.parameters[0]
-        #        if parameter == "skip":
-        #            skip_level += 1
-        #        elif parameter == "unskip":
-        #            skip_level -= 1
-        #        else:
-        #            command = ModeCommand(parameter)
-        #            execute_command(command)
         #    elif token.type == TokenType.SQLLOGIC_SET:
         #        if len(token.parameters) < 1:
         #            self.fail("set requires at least 1 parameter (e.g. set ignore_error_messages HTTP Error)")

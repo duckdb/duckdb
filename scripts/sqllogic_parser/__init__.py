@@ -1,5 +1,50 @@
 from .token import TokenType, Token
 from .base_statement import BaseStatement
-from .statement import Statement, NoOp, Require, Mode, Halt
+from .statement import (
+    Statement,
+    NoOp,
+    Require,
+    Mode,
+    Halt,
+    Load,
+    Set,
+    SkipIf,
+    OnlyIf,
+    Query,
+    HashThreshold,
+    Loop,
+    ConcurrentLoop,
+    Foreach,
+    ConcurrentForeach,
+    Endloop,
+    RequireEnv,
+    Restart,
+    Reconnect,
+    Sleep,
+)
 
-all = [TokenType, Token, BaseStatement, Statement, NoOp, Require, Mode, Halt]
+all = [
+    TokenType,
+    Token,
+    BaseStatement,
+    Statement,
+    NoOp,
+    Require,
+    Mode,
+    Halt,
+    Load,
+    Set,
+    SkipIf,
+    OnlyIf,
+    Query,
+    HashThreshold,
+    Loop,
+    ConcurrentLoop,
+    Foreach,
+    ConcurrentForeach,
+    Endloop,
+    RequireEnv,
+    Restart,
+    Reconnect,
+    Sleep,
+]
