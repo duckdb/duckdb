@@ -3,9 +3,9 @@ from sqllogic_parser.token import Token
 
 
 class BaseStatement:
-    def __init__(self, header: Token):
+    def __init__(self, header: Token, line: int):
         self.header: Token = header
-        self.query_line: Optional[int] = None
+        self.query_line: int = line
         self.file_name: Optional[str] = None
 
         self.lines: List[str] = []

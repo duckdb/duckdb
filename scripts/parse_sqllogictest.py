@@ -4,7 +4,7 @@ from enum import Enum, auto
 from typing import List, Dict, Optional
 import json
 
-from sqllogic_parser import Token, TokenType, BaseStatement, Statement, Require
+from sqllogic_parser import Token, TokenType, BaseStatement, Statement, Require, NoOp, Mode, Halt
 
 # TODO: add 'dbpath' with argparse
 
@@ -24,10 +24,10 @@ class ExpectedResult:
 
     def __init__(self, type: "ExpectedResult.Type"):
         self.type = type
-        self.lines = []
+        self.lines: Optional[List[str]] = None
 
     def add_lines(self, lines: List[str]):
-        self.lines.extend(lines)
+        self.lines = lines
 
 
 class SQLLogicTest:
@@ -52,13 +52,25 @@ class SQLLogicEncoder(json.JSONEncoder):
             'parameters': header.parameters,
         }
 
+    def encode_expected_lines(self, expected: ExpectedResult):
+        if expected.lines != None:
+            return {'lines': expected.lines}
+        else:
+            return {}
+
     def default(self, obj):
+        if isinstance(obj, ExpectedResult):
+            return {'type': obj.type.name, **self.encode_expected_lines(obj)}
         if isinstance(obj, SQLLogicTest):
             return {'path': obj.path, 'statements': [x for x in obj.statements]}
         if isinstance(obj, BaseStatement):
             match obj.header.type:
                 case TokenType.SQLLOGIC_STATEMENT:
-                    return {**self.encode_header(obj.header), 'lines': obj.lines}
+                    return {
+                        **self.encode_header(obj.header),
+                        'lines': obj.lines,
+                        'expected_result': obj.expected_result,
+                    }
                 case TokenType.SQLLOGIC_QUERY:
                     return {
                         **self.encode_header(obj.header),
@@ -189,6 +201,19 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_SLEEP: None,
         }
 
+    def peek(self):
+        if self.current_line >= len(self.lines):
+            raise Exception("File already fully consumed")
+        return self.lines[self.current_line].strip()
+
+    def consume(self):
+        if self.current_line >= len(self.lines):
+            raise Exception("File already fully consumed")
+        self.current_line += 1
+
+    def fail(self, message):
+        raise Exception(message)
+
     def is_skipped(self) -> bool:
         return self.skip_level > 0
 
@@ -205,24 +230,24 @@ class SQLLogicParser:
 
     def extract_expected_result(self) -> Optional[List[str]]:
         end_of_file = self.current_line >= len(self.lines)
-        if end_of_file or self.lines[self.current_line] != "----":
+        if end_of_file or self.peek() != "----":
             return None
 
-        self.current_line += 1
+        self.consume()
         result = []
-        while self.current_line < len(self.lines) and self.lines[self.current_line].strip():
-            result.append(self.lines[self.current_line])
-            self.current_line += 1
+        while self.current_line < len(self.lines) and self.peek():
+            result.append(self.peek())
+            self.consume()
         return result
 
     def parse_statement(self, header: Token) -> Optional[BaseStatement]:
+        options = ['ok', 'error', 'maybe']
         if len(header.parameters) < 1:
-            self.fail("statement requires at least one parameter (statement ok/error)")
+            self.fail(f"statement requires at least one parameter ({create_formatted_list(options)})")
         expected_result = self.get_expected_result(header.parameters[0])
 
-        statement = Statement(header)
+        statement = Statement(header, self.current_line + 1)
         statement.file_name = self.current_test.path
-        statement.query_line = self.current_line + 1
 
         self.next_line()
         statement_text = self.extract_statement()
@@ -243,10 +268,12 @@ class SQLLogicParser:
                 if expected_lines != None:
                     expected_result.add_lines(expected_lines)
                 elif not self.current_test.is_sqlite_test():
+                    print(statement)
                     self.fail('Failed to parse statement: statement error needs to have an expected error message')
             case _:
                 raise Exception(f"Unexpected ExpectedResult Type: {expected_result.type.name}")
 
+        statement.expected_result = expected_result
         # perform any renames in the text
         # TODO: deal with renames
         if len(header.parameters) >= 2:
@@ -328,23 +355,23 @@ class SQLLogicParser:
             self.fail("hash-threshold must be a number")
 
     def parse_halt(self, header: Token) -> Optional[BaseStatement]:
-        # TODO: handle halt
-        pass
+        return Halt(header, self.current_line + 1)
 
     def parse_mode(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 1:
             self.fail("mode requires one parameter")
         parameter = header.parameters[0]
         if parameter == "skip":
-            skip_level += 1
+            self.skip_level += 1
+            return NoOp(header, self.current_line + 1)
         elif parameter == "unskip":
-            skip_level -= 1
+            self.skip_level -= 1
+            return NoOp(header, self.current_line + 1)
         else:
-            command = ModeCommand(parameter)
-            execute_command(command)
+            return Mode(parameter, self.current_line + 1)
 
     def parse_require(self, header: Token) -> Optional[BaseStatement]:
-        return Require(header)
+        return Require(header, self.current_line + 1)
 
     def parse(self, file_path: str) -> Optional[SQLLogicTest]:
         if not self.open_file(file_path):
@@ -544,27 +571,27 @@ class SQLLogicParser:
 
     def next_statement(self):
         if self.seen_statement:
-            while self.current_line < len(self.lines) and not self.empty_or_comment(self.lines[self.current_line]):
-                self.current_line += 1
+            while self.current_line < len(self.lines) and not self.empty_or_comment(self.peek()):
+                self.consume()
         self.seen_statement = True
 
-        while self.current_line < len(self.lines) and self.empty_or_comment(self.lines[self.current_line]):
-            self.current_line += 1
+        while self.current_line < len(self.lines) and self.empty_or_comment(self.peek()):
+            self.consume()
 
         return self.current_line < len(self.lines)
 
     def next_line(self):
-        self.current_line += 1
+        self.consume()
 
     def extract_statement(self):
         statement = []
 
-        while self.current_line < len(self.lines) and not self.empty_or_comment(self.lines[self.current_line]):
-            if self.lines[self.current_line] == "----":
+        while self.current_line < len(self.lines) and not self.empty_or_comment(self.peek()):
+            line = self.peek()
+            if line == "----":
                 break
-            line = self.lines[self.current_line].strip()
             statement.append(line)
-            self.current_line += 1
+            self.consume()
         return statement
 
     def fail_recursive(self, msg, values):
@@ -577,7 +604,7 @@ class SQLLogicParser:
             result.type = TokenType.SQLLOGIC_INVALID
             return result
 
-        line = self.lines[self.current_line]
+        line = self.peek()
         argument_list = line.split()
         argument_list = [x for x in line.strip().split() if x != '']
 

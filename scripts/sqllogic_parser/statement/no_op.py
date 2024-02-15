@@ -3,5 +3,5 @@ from sqllogic_parser.token import Token
 
 
 class NoOp(BaseStatement):
-    def __init__(self, header: Token):
-        super().__init__(header)
+    def __init__(self, header: Token, line: int):
+        super().__init__(header, line)
