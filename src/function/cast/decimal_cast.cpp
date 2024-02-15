@@ -15,17 +15,17 @@ static bool FromDecimalCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto scale = DecimalType::GetScale(source_type);
 	switch (source_type.InternalType()) {
 	case PhysicalType::INT16:
-		return VectorCastHelpers::TemplatedDecimalCast<int16_t, T, TryCastFromDecimal>(
-		    source, result, count, parameters, width, scale);
+		return VectorCastHelpers::TemplatedDecimalCast<int16_t, T, TryCastFromDecimal>(source, result, count,
+		                                                                               parameters, width, scale);
 	case PhysicalType::INT32:
-		return VectorCastHelpers::TemplatedDecimalCast<int32_t, T, TryCastFromDecimal>(
-		    source, result, count, parameters, width, scale);
+		return VectorCastHelpers::TemplatedDecimalCast<int32_t, T, TryCastFromDecimal>(source, result, count,
+		                                                                               parameters, width, scale);
 	case PhysicalType::INT64:
-		return VectorCastHelpers::TemplatedDecimalCast<int64_t, T, TryCastFromDecimal>(
-		    source, result, count, parameters, width, scale);
+		return VectorCastHelpers::TemplatedDecimalCast<int64_t, T, TryCastFromDecimal>(source, result, count,
+		                                                                               parameters, width, scale);
 	case PhysicalType::INT128:
-		return VectorCastHelpers::TemplatedDecimalCast<hugeint_t, T, TryCastFromDecimal>(
-		    source, result, count, parameters, width, scale);
+		return VectorCastHelpers::TemplatedDecimalCast<hugeint_t, T, TryCastFromDecimal>(source, result, count,
+		                                                                                 parameters, width, scale);
 	default:
 		throw InternalException("Unimplemented internal type for decimal");
 	}
@@ -33,7 +33,8 @@ static bool FromDecimalCast(Vector &source, Vector &result, idx_t count, CastPar
 
 template <class LIMIT_TYPE, class FACTOR_TYPE = LIMIT_TYPE>
 struct DecimalScaleInput {
-	DecimalScaleInput(Vector &result_p, FACTOR_TYPE factor_p, CastParameters &parameters) : result(result_p), vector_cast_data(result, parameters), factor(factor_p) {
+	DecimalScaleInput(Vector &result_p, FACTOR_TYPE factor_p, CastParameters &parameters)
+	    : result(result_p), vector_cast_data(result, parameters), factor(factor_p) {
 	}
 	DecimalScaleInput(Vector &result_p, LIMIT_TYPE limit_p, FACTOR_TYPE factor_p, CastParameters &parameters,
 	                  uint8_t source_width_p, uint8_t source_scale_p)
@@ -42,7 +43,7 @@ struct DecimalScaleInput {
 	}
 
 	Vector &result;
-    VectorTryCastData vector_cast_data;
+	VectorTryCastData vector_cast_data;
 	LIMIT_TYPE limit;
 	FACTOR_TYPE factor;
 	uint8_t source_width;
@@ -89,8 +90,7 @@ bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count, CastPa
 	} else {
 		// type might not fit: check limit
 		auto limit = POWERS_SOURCE::POWERS_OF_TEN[target_width];
-		DecimalScaleInput<SOURCE, DEST> input(result, limit, multiply_factor, parameters, source_width,
-		                                      source_scale);
+		DecimalScaleInput<SOURCE, DEST> input(result, limit, multiply_factor, parameters, source_width, source_scale);
 		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleUpCheckOperator>(source, result, count, &input,
 		                                                                         parameters.error_message);
 		return input.vector_cast_data.all_converted;
@@ -139,7 +139,7 @@ bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, Cast
 		auto limit = POWERS_SOURCE::POWERS_OF_TEN[target_width];
 		DecimalScaleInput<SOURCE> input(result, limit, divide_factor, parameters, source_width, source_scale);
 		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownCheckOperator>(source, result, count, &input,
-                                                                                   parameters.error_message);
+		                                                                           parameters.error_message);
 		return input.vector_cast_data.all_converted;
 	}
 }
@@ -174,17 +174,13 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 		// divide
 		switch (result.GetType().InternalType()) {
 		case PhysicalType::INT16:
-			return TemplatedDecimalScaleDown<SOURCE, int16_t, POWERS_SOURCE>(source, result, count,
-			                                                                 parameters);
+			return TemplatedDecimalScaleDown<SOURCE, int16_t, POWERS_SOURCE>(source, result, count, parameters);
 		case PhysicalType::INT32:
-			return TemplatedDecimalScaleDown<SOURCE, int32_t, POWERS_SOURCE>(source, result, count,
-			                                                                 parameters);
+			return TemplatedDecimalScaleDown<SOURCE, int32_t, POWERS_SOURCE>(source, result, count, parameters);
 		case PhysicalType::INT64:
-			return TemplatedDecimalScaleDown<SOURCE, int64_t, POWERS_SOURCE>(source, result, count,
-			                                                                 parameters);
+			return TemplatedDecimalScaleDown<SOURCE, int64_t, POWERS_SOURCE>(source, result, count, parameters);
 		case PhysicalType::INT128:
-			return TemplatedDecimalScaleDown<SOURCE, hugeint_t, POWERS_SOURCE>(source, result, count,
-			                                                                   parameters);
+			return TemplatedDecimalScaleDown<SOURCE, hugeint_t, POWERS_SOURCE>(source, result, count, parameters);
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
 		}

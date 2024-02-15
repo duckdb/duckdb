@@ -60,14 +60,13 @@ struct VectorTryCastErrorOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (VectorTryCastData *)dataptr;
 		RESULT_TYPE output;
-		if (DUCKDB_LIKELY(
-		        OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->parameters.error_message, data->parameters.strict))) {
+		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->parameters))) {
 			return output;
 		}
 		bool has_error = data->parameters.error_message && !data->parameters.error_message->empty();
 		return HandleVectorCastError::Operation<RESULT_TYPE>(
 		    has_error ? *data->parameters.error_message : CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx,
-            *data);
+		    *data);
 	}
 };
 
@@ -77,8 +76,8 @@ struct VectorTryCastStringOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (VectorTryCastData *)dataptr;
 		RESULT_TYPE output;
-		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result,
-		                                                                  data->parameters.error_message, data->parameters.strict))) {
+		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(
+		        input, output, data->result, data->parameters))) {
 			return output;
 		}
 		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
@@ -91,7 +90,7 @@ struct VectorDecimalCastData {
 	    : vector_cast_data(result, parameters), width(width_p), scale(scale_p) {
 	}
 
-    VectorTryCastData vector_cast_data;
+	VectorTryCastData vector_cast_data;
 	uint8_t width;
 	uint8_t scale;
 };
@@ -102,8 +101,8 @@ struct VectorDecimalCastOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (VectorDecimalCastData *)dataptr;
 		RESULT_TYPE result_value;
-		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, result_value, data->vector_cast_data.parameters.error_message, data->width,
-		                                                     data->scale)) {
+		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(
+		        input, result_value, data->vector_cast_data.parameters, data->width, data->scale)) {
 			return HandleVectorCastError::Operation<RESULT_TYPE>("Failed to cast decimal value", mask, idx,
 			                                                     data->vector_cast_data);
 		}
@@ -154,8 +153,8 @@ struct VectorCastHelpers {
 	}
 
 	template <class SRC, class T, class OP>
-	static bool TemplatedDecimalCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters, uint8_t width,
-	                                 uint8_t scale) {
+	static bool TemplatedDecimalCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters,
+	                                 uint8_t width, uint8_t scale) {
 		VectorDecimalCastData input(result, parameters, width, scale);
 		UnaryExecutor::GenericExecute<SRC, T, VectorDecimalCastOperator<OP>>(source, result, count, (void *)&input,
 		                                                                     parameters.error_message);
@@ -169,17 +168,14 @@ struct VectorCastHelpers {
 		auto scale = DecimalType::GetScale(result_type);
 		switch (result_type.InternalType()) {
 		case PhysicalType::INT16:
-			return TemplatedDecimalCast<T, int16_t, TryCastToDecimal>(source, result, count, parameters,
-			                                                          width, scale);
+			return TemplatedDecimalCast<T, int16_t, TryCastToDecimal>(source, result, count, parameters, width, scale);
 		case PhysicalType::INT32:
-			return TemplatedDecimalCast<T, int32_t, TryCastToDecimal>(source, result, count, parameters,
-			                                                          width, scale);
+			return TemplatedDecimalCast<T, int32_t, TryCastToDecimal>(source, result, count, parameters, width, scale);
 		case PhysicalType::INT64:
-			return TemplatedDecimalCast<T, int64_t, TryCastToDecimal>(source, result, count, parameters,
-			                                                          width, scale);
+			return TemplatedDecimalCast<T, int64_t, TryCastToDecimal>(source, result, count, parameters, width, scale);
 		case PhysicalType::INT128:
-			return TemplatedDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count, parameters,
-			                                                            width, scale);
+			return TemplatedDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count, parameters, width,
+			                                                            scale);
 		default:
 			throw InternalException("Unimplemented internal type for decimal");
 		}

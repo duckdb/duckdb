@@ -102,7 +102,8 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
-		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], nullptr, width,
+		CastParameters parameters;
+		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], parameters, width,
 		                                      scale);
 		return;
 	}

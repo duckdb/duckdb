@@ -35,8 +35,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 			// key doesn't exist on result enum
 			if (!parameters.error_message) {
 				result_data[i] = HandleVectorCastError::Operation<RES_TYPE>(
-				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i,
-					vector_cast_data);
+				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i, vector_cast_data);
 			} else {
 				result_mask.SetInvalid(i);
 			}

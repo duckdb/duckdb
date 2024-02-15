@@ -20,9 +20,8 @@ bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, 
 		if (source_mask.RowIsValid(source_idx)) {
 			auto pos = EnumType::GetPos(result_type, source_data[source_idx]);
 			if (pos == -1) {
-				result_data[i] =
-				    HandleVectorCastError::Operation<T>(CastExceptionText<string_t, T>(source_data[source_idx]),
-				                                        result_mask, i, vector_cast_data);
+				result_data[i] = HandleVectorCastError::Operation<T>(
+				    CastExceptionText<string_t, T>(source_data[source_idx]), result_mask, i, vector_cast_data);
 			} else {
 				result_data[i] = pos;
 			}
@@ -45,7 +44,7 @@ bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters 
 		auto result_data = ConstantVector::GetData<T>(result);
 		auto &result_mask = ConstantVector::Validity(result);
 
-        VectorTryCastData vector_cast_data(result, parameters);
+		VectorTryCastData vector_cast_data(result, parameters);
 		return StringEnumCastLoop(source_data, source_mask, source.GetType(), result_data, result_mask,
 		                          result.GetType(), 1, vector_cast_data, nullptr);
 	}
@@ -61,7 +60,7 @@ bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters 
 		auto result_data = FlatVector::GetData<T>(result);
 		auto &result_mask = FlatVector::Validity(result);
 
-        VectorTryCastData vector_cast_data(result, parameters);
+		VectorTryCastData vector_cast_data(result, parameters);
 		return StringEnumCastLoop(source_data, source_mask, source.GetType(), result_data, result_mask,
 		                          result.GetType(), count, vector_cast_data, source_sel);
 	}
@@ -145,7 +144,7 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	auto list_data = ListVector::GetData(result);
 	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
 
-    VectorTryCastData vector_cast_data(result, parameters);
+	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = i;
@@ -171,7 +170,7 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
 	return cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
-            vector_cast_data.all_converted;
+	       vector_cast_data.all_converted;
 }
 
 static LogicalType InitVarcharStructType(const LogicalType &target) {
@@ -205,7 +204,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 		child_masks[child_idx].get().SetAllInvalid(count);
 	}
 
-    VectorTryCastData vector_cast_data(result, parameters);
+	VectorTryCastData vector_cast_data(result, parameters);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = i;
 		if (sel) {
@@ -238,7 +237,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 		auto &child_cast_info = cast_data.child_cast_info[child_idx];
 		CastParameters child_parameters(parameters, child_cast_info.cast_data, lstate.local_states[child_idx]);
 		if (!child_cast_info.function(child_varchar_vector, result_child_vector, count, child_parameters)) {
-            vector_cast_data.all_converted = false;
+			vector_cast_data.all_converted = false;
 		}
 	}
 	return vector_cast_data.all_converted;
@@ -286,8 +285,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 	ListVector::SetListSize(result, total_elements);
 	auto list_data = ListVector::GetData(result);
 
-
-    VectorTryCastData vector_cast_data(result, parameters);
+	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = i;
@@ -318,11 +316,11 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 
 	CastParameters key_params(parameters, cast_data.key_cast.cast_data, lstate.key_state);
 	if (!cast_data.key_cast.function(varchar_key_vector, result_key_child, total_elements, key_params)) {
-        vector_cast_data.all_converted = false;
+		vector_cast_data.all_converted = false;
 	}
 	CastParameters val_params(parameters, cast_data.value_cast.cast_data, lstate.value_state);
 	if (!cast_data.value_cast.function(varchar_val_vector, result_val_child, total_elements, val_params)) {
-        vector_cast_data.all_converted = false;
+		vector_cast_data.all_converted = false;
 	}
 
 	auto &key_validity = FlatVector::Validity(result_key_child);
@@ -382,7 +380,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 	Vector varchar_vector(LogicalType::VARCHAR, child_count);
 	auto child_data = FlatVector::GetData<string_t>(varchar_vector);
 
-    VectorTryCastData vector_cast_data(result, parameters);
+	VectorTryCastData vector_cast_data(result, parameters);
 	idx_t total = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = i;

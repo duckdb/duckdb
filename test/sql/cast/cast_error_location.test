@@ -1,0 +1,84 @@
+# name: test/sql/cast/cast_error_location.test
+# description: Test reporting error location of casts
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+# unimplemented cast
+statement error
+SELECT 1::STRUCT(i INTEGER)
+----
+^
+
+# out of range integer cast
+statement error
+SELECT 1000::utinyint
+----
+^
+
+# string cast
+statement error
+SELECT 'hello'::int
+----
+^
+
+# numeric -> decimal cast
+statement error
+SELECT 1000::decimal(2,1)
+----
+^
+
+# decimal -> decimal cast
+statement error
+SELECT 1000.0::decimal(5,1)::decimal(2,1)
+----
+^
+
+# list cast
+statement error
+SELECT [1000]::utinyint[]
+----
+^
+
+# struct cast
+statement error
+SELECT {'x': 1000}::row(x tinyint)
+----
+^
+
+# double -> float
+statement error
+select 1e308::float
+----
+^
+
+# double -> hugeint
+statement error
+select 1e308::hugeint
+----
+^
+
+# hugeint -> int
+statement error
+select 1000000000000000000000000000000::hugeint::int
+----
+^
+
+# automatically added cast
+statement error
+select nth_value(42, 'hello') over ()
+----
+^
+
+# dates
+statement error
+select '1900'::date
+----
+^
+
+statement error
+select 42::utinyint + 'hello'
+----
+^
+

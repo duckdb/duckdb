@@ -14,8 +14,7 @@
 namespace duckdb {
 
 struct VectorTryCastData {
-	VectorTryCastData(Vector &result_p, CastParameters &parameters)
-			: result(result_p), parameters(parameters) {
+	VectorTryCastData(Vector &result_p, CastParameters &parameters) : result(result_p), parameters(parameters) {
 	}
 
 	Vector &result;
