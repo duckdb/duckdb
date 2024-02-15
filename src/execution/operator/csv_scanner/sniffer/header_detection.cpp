@@ -181,9 +181,10 @@ void CSVSniffer::DetectHeader() {
 			}
 		}
 		// Our header is only false if types are not all varchar, and rows are consistent
-		if (all_varchar || first_row_nulls) {
-			// Can't be the header
+		if (all_varchar) {
 			has_header = false;
+		} else if (first_row_nulls) {
+			has_header = true;
 		} else {
 			has_header = !first_row_consistent;
 		}
