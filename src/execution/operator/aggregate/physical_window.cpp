@@ -89,33 +89,31 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 }
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
-                                                        const ValidityMask &partition_mask,
-                                                        const ValidityMask &order_mask, const idx_t payload_count,
                                                         WindowAggregationMode mode) {
 	switch (wexpr.type) {
 	case ExpressionType::WINDOW_AGGREGATE:
-		return make_uniq<WindowAggregateExecutor>(wexpr, context, payload_count, partition_mask, order_mask, mode);
+		return make_uniq<WindowAggregateExecutor>(wexpr, context, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowRowNumberExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowDenseRankExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowRankExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowPercentRankExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowCumeDistExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowNtileExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowLastValueExecutor>(wexpr, context);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
+		return make_uniq<WindowNthValueExecutor>(wexpr, context);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
@@ -257,6 +255,8 @@ public:
 	using ExecutorPtr = unique_ptr<WindowExecutor>;
 	using Executors = vector<ExecutorPtr>;
 	using OrderMasks = PartitionGlobalHashGroup::OrderMasks;
+	using ExecutorGlobalStatePtr = unique_ptr<WindowExecutorGlobalState>;
+	using ExecutorGlobalStates = vector<ExecutorGlobalStatePtr>;
 
 	WindowPartitionSourceState(ClientContext &context, WindowGlobalSourceState &gsource)
 	    : context(context), op(gsource.gsink.op), gsource(gsource), read_block_idx(0), unscanned(0) {
@@ -284,6 +284,8 @@ public:
 	bool external;
 	//! The current execution functions
 	Executors executors;
+	//! The current execution functions
+	ExecutorGlobalStates gestates;
 
 	//! The bin number
 	idx_t hash_bin;
@@ -412,7 +414,8 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
 		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
-		auto wexec = WindowExecutorFactory(wexpr, context, partition_mask, order_mask, count, gstate.mode);
+		auto wexec = WindowExecutorFactory(wexpr, context, gstate.mode);
+		gestates.emplace_back(wexec->GetGlobalState(count, partition_mask, order_mask));
 		executors.emplace_back(std::move(wexec));
 	}
 
@@ -429,15 +432,15 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 		}
 
 		//	TODO: Parallelization opportunity
-		for (auto &wexec : executors) {
-			wexec->Sink(input_chunk, input_idx, scanner->Count());
+		for (idx_t w = 0; w < executors.size(); ++w) {
+			executors[w]->Sink(input_chunk, input_idx, scanner->Count(), *gestates[w]);
 		}
 		input_idx += input_chunk.size();
 	}
 
 	//	TODO: Parallelization opportunity
-	for (auto &wexec : executors) {
-		wexec->Finalize();
+	for (idx_t w = 0; w < executors.size(); ++w) {
+		executors[w]->Finalize(*gestates[w]);
 	}
 
 	// External scanning assumes all blocks are swizzled.
@@ -450,7 +453,7 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 // Per-thread scan state
 class WindowLocalSourceState : public LocalSourceState {
 public:
-	using ReadStatePtr = unique_ptr<WindowExecutorState>;
+	using ReadStatePtr = unique_ptr<WindowExecutorLocalState>;
 	using ReadStates = vector<ReadStatePtr>;
 
 	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
@@ -610,8 +613,10 @@ bool WindowLocalSourceState::NextPartition() {
 		UpdateBatchIndex();
 	}
 
-	for (auto &wexec : partition_source->executors) {
-		read_states.emplace_back(wexec->GetExecutorState());
+	auto &executors = partition_source->executors;
+	auto &gestates = partition_source->gestates;
+	for (idx_t w = 0; w < executors.size(); ++w) {
+		read_states.emplace_back(executors[w]->GetLocalState(*gestates[w]));
 	}
 
 	return true;
@@ -638,12 +643,14 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 	scanner->Scan(input_chunk);
 
 	auto &executors = partition_source->executors;
+	auto &gestates = partition_source->gestates;
 	output_chunk.Reset();
 	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
 		auto &executor = *executors[expr_idx];
+		auto &gstate = *gestates[expr_idx];
 		auto &lstate = *read_states[expr_idx];
 		auto &result = output_chunk.data[expr_idx];
-		executor.Evaluate(position, input_chunk, result, lstate);
+		executor.Evaluate(position, input_chunk, result, lstate, gstate);
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify();
