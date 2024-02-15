@@ -17,9 +17,8 @@ OrderedAggregateOptimizer::OrderedAggregateOptimizer(ExpressionRewriter &rewrite
 	root->expr_class = ExpressionClass::BOUND_AGGREGATE;
 }
 
-unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
-                                                        bool &changes_made, bool is_root) {
-	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
+unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, BoundAggregateExpression &aggr,
+                                                        vector<unique_ptr<Expression>> &groups, bool &changes_made) {
 	if (!aggr.order_bys) {
 		// no ORDER BYs defined
 		return nullptr;
@@ -32,7 +31,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 	}
 
 	// Remove unnecessary ORDER BY clauses and return if nothing remains
-	if (aggr.order_bys->Simplify(op.Cast<LogicalAggregate>().groups)) {
+	if (aggr.order_bys->Simplify(groups)) {
 		aggr.order_bys.reset();
 		changes_made = true;
 		return nullptr;
@@ -51,7 +50,6 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 		return nullptr;
 	}
 
-	auto &context = rewriter.context;
 	FunctionBinder binder(context);
 	vector<unique_ptr<Expression>> sort_children;
 	for (auto &order : aggr.order_bys->orders) {
@@ -93,8 +91,12 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vec
 	auto bound_function = func.functions.GetFunctionByOffset(best_function);
 	return binder.BindAggregateFunction(bound_function, std::move(children), std::move(aggr.filter),
 	                                    aggr.IsDistinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+}
 
-	return nullptr;
+unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                        bool &changes_made, bool is_root) {
+	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
+	return Apply(rewriter.context, aggr, op.Cast<LogicalAggregate>().groups, changes_made);
 }
 
 } // namespace duckdb
