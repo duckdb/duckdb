@@ -102,12 +102,12 @@ jobs:
               run: |
                   pip install awscli
 
-            - name: Sign and deploy Wasm extensions
+            - name: Sign and deploy Wasm extensions (no credentials)
               if: ${{ ! inputs.release_s3 }}
               run: |
                   bash ./scripts/extension-upload-wasm.sh ${{ matrix.duckdb_arch }} ${{ inputs.duckdb_ref }}
 
-            - name: Sign and deploy Wasm extensions
+            - name: Sign and deploy Wasm extensions (with credentials)
               if: ${{ inputs.release_s3 }}
               env:
                   AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
