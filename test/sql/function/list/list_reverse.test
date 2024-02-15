@@ -147,7 +147,7 @@ tattarrattat
 statement ok
 DROP TABLE palindromes;
 
-query I
+query I rowsort
 WITH example AS (
   SELECT [1, 2, 3] AS arr UNION ALL
   SELECT [4, 5] AS arr UNION ALL

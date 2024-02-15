@@ -217,6 +217,23 @@
     ]
   },
   {
+    "class": "SetColumnCommentInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_COLUMN_COMMENT",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "comment",
+        "type": "Value"
+      }
+    ]
+  },
+  {
     "class": "SetNotNullInfo",
     "base": "AlterTableInfo",
     "enum": "SET_NOT_NULL",
@@ -237,6 +254,23 @@
         "id": 400,
         "name": "column_name",
         "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "SetCommentInfo",
+    "base": "AlterInfo",
+    "enum": "SET_COMMENT",
+    "members": [
+      {
+        "id": 300,
+        "name": "entry_catalog_type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 301,
+        "name": "comment_value",
+        "type": "Value"
       }
     ]
   },
@@ -408,6 +442,11 @@
         "id": 206,
         "name": "allow_drop_internal",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "extra_drop_info",
+        "type": "unique_ptr<ExtraDropInfo>"
       }
     ]
   },
@@ -491,5 +530,40 @@
       }
     ],
     "constructor": ["options"]
+  },
+  {
+    "class": "CommentOnInfo",
+    "base": "ParseInfo",
+    "enum": "COMMENT_ON_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/comment_on_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "comment",
+        "type": "Value"
+      }
+    ]
   }
 ]

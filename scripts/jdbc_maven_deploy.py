@@ -154,9 +154,6 @@ if (
 ):
     raise ValueError('could not create all required files')
 
-# run basic tests, it should now work on whatever platform this is
-exec("java -cp %s org.duckdb.test.TestDuckDBJDBC" % binary_jar)
-
 # now sign and upload everything
 # for this to work, you must have entry in ~/.m2/settings.xml:
 

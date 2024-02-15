@@ -133,6 +133,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGCreateFunctionStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateType(duckdb_libpgquery::PGCreateTypeStmt &stmt);
+	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
+	unique_ptr<AlterStatement> TransformCommentOn(duckdb_libpgquery::PGCommentOnStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement
 	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGAlterSeqStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
@@ -352,6 +354,10 @@ private:
 
 	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
 	                                 duckdb_libpgquery::PGNode *arg);
+
+public:
+	static void SetQueryLocation(ParsedExpression &expr, int query_location);
+	static void SetQueryLocation(TableRef &ref, int query_location);
 
 private:
 	//! Current stack depth

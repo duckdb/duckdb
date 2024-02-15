@@ -23,7 +23,7 @@ class TransactionManager;
 //! current transaction
 class TransactionContext {
 public:
-	TransactionContext(ClientContext &context);
+	explicit TransactionContext(ClientContext &context);
 	~TransactionContext();
 
 	MetaTransaction &ActiveTransaction() {
@@ -33,8 +33,8 @@ public:
 		return *current_transaction;
 	}
 
-	bool HasActiveTransaction() {
-		return !!current_transaction;
+	bool HasActiveTransaction() const {
+		return current_transaction.get();
 	}
 
 	void BeginTransaction();
@@ -43,7 +43,7 @@ public:
 	void ClearTransaction();
 
 	void SetAutoCommit(bool value);
-	bool IsAutoCommit() {
+	bool IsAutoCommit() const {
 		return auto_commit;
 	}
 

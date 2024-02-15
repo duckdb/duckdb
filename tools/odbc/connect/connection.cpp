@@ -1074,8 +1074,9 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 		try {
 			dbc->conn->Rollback();
 			return SQL_SUCCESS;
-		} catch (duckdb::Exception &ex) {
-			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLEndTran", std::string(ex.what()),
+		} catch (std::exception &ex) {
+			duckdb::ErrorData parsed_error(ex);
+			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLEndTran", parsed_error.RawMessage(),
 			                                   SQLStateType::ST_HY115, dbc->GetDataSourceName());
 		}
 	default:

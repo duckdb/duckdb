@@ -21,6 +21,17 @@ SequenceData::SequenceData(CreateSequenceInfo &info)
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
     : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), data(info) {
 	this->temporary = info.temporary;
+	this->comment = info.comment;
+}
+
+unique_ptr<CatalogEntry> SequenceCatalogEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateSequenceInfo>();
+
+	auto result = make_uniq<SequenceCatalogEntry>(catalog, schema, cast_info);
+	result->data = GetData();
+
+	return std::move(result);
 }
 
 SequenceData SequenceCatalogEntry::GetData() const {
@@ -87,6 +98,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	result->max_value = seq_data.max_value;
 	result->start_value = seq_data.counter;
 	result->cycle = seq_data.cycle;
+	result->comment = comment;
 	return std::move(result);
 }
 

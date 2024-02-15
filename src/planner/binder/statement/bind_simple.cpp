@@ -17,6 +17,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
+
 	auto entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
 	                               stmt.info->name, stmt.info->if_not_found);
 	if (entry) {

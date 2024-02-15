@@ -135,10 +135,10 @@ public:
 	inline V *GetData() const {
 		return validity_mask;
 	}
-	inline void Reset() {
+	inline void Reset(idx_t target_count_p = STANDARD_VECTOR_SIZE) {
 		validity_mask = nullptr;
 		validity_data.reset();
-		target_count = STANDARD_VECTOR_SIZE;
+		target_count = target_count_p;
 	}
 
 	static inline idx_t EntryCount(idx_t count) {

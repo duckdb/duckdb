@@ -47,8 +47,8 @@ public:
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
-	static CSVError CastError(const CSVReaderOptions &options, DataChunk &parse_chunk, idx_t chunk_row,
-	                          string &column_name, string &cast_error, idx_t &column_idx, vector<Value> &row);
+	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
+	                          idx_t column_idx, vector<Value> &row);
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size);
 	//! Produces error for when the sniffer couldn't find viable options
@@ -97,6 +97,8 @@ private:
 	unordered_map<idx_t, LinesPerBoundary> lines_per_batch_map;
 	idx_t max_line_length = 0;
 	bool ignore_errors = false;
+
+	bool got_borked = false;
 };
 
 } // namespace duckdb

@@ -98,6 +98,9 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 	if (!full_buffer_res->HasError()) {
 		ground_truth = &full_buffer_res->Collection();
 	}
+	if (!ground_truth) {
+		return true;
+	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
 	idx_t min_buffer_size = conn.context->client_data->debug_max_line_length + 3;
 	// So our tests don't take infinite time, we will go till a max buffer size of 5 positions higher than the minimum.

@@ -29,8 +29,6 @@ if os.name == 'nt':
 with open(duckdb_platform_out, 'r') as f:
     duckdb_platform = [line.split(None, 1)[0] for line in f][0]
 
-print(f"Paths as received: {extension_path}, {dst_path} + '/{duckdb_version}/{duckdb_platform}/")
-
 # Create destination path
 dest_path = os.path.join(dst_path, duckdb_version, duckdb_platform)
 if not os.path.exists(dest_path):
@@ -39,8 +37,6 @@ if not os.path.exists(dest_path):
 # Now copy over the extensions to the correct path
 glob_string = os.path.join(extension_path, 'extension', '*', '*.' + postfix)
 
-print("Copying extensions into repository:")
 for file in glob.glob(glob_string):
     dest_file = os.path.join(dest_path, os.path.basename(file))
-    print(f" > {file} -> {dest_file}")
     shutil.copy(file, dest_file)
