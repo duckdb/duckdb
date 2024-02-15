@@ -232,8 +232,14 @@ TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const Ph
 }
 
 TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg)
+    : TypeMismatchException(optional_idx(), type_1, type_2, msg) {
+}
+
+TypeMismatchException::TypeMismatchException(optional_idx error_location, const LogicalType &type_1,
+                                             const LogicalType &type_2, const string &msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
-                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
+                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg,
+                Exception::InitializeExtraInfo(error_location)) {
 }
 
 TypeMismatchException::TypeMismatchException(const string &msg) : Exception(ExceptionType::MISMATCH_TYPE, msg) {

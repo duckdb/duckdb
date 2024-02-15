@@ -119,6 +119,7 @@ struct BindCastInput {
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
+	optional_idx query_location;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
