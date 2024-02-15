@@ -37,8 +37,8 @@ class CSVCast {
 
 	template <class OP, class T>
 	static bool TemplatedTryCastDecimalVector(const CSVReaderOptions &options, Vector &input_vector,
-	                                          Vector &result_vector, idx_t count, CastParameters &parameters, uint8_t width,
-	                                          uint8_t scale) {
+	                                          Vector &result_vector, idx_t count, CastParameters &parameters,
+	                                          uint8_t width, uint8_t scale) {
 		D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
@@ -68,7 +68,7 @@ class CSVCast {
 	template <class OP, class T>
 	static bool TemplatedTryCastDateVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options,
 	                                       Vector &input_vector, Vector &result_vector, idx_t count,
-										   CastParameters &parameters, idx_t &line_error) {
+	                                       CastParameters &parameters, idx_t &line_error) {
 		D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 		bool all_converted = true;
 		idx_t cur_line = 0;
@@ -88,11 +88,11 @@ public:
 	static bool TryCastDateVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
 	                              Vector &result_vector, idx_t count, CastParameters &parameters, idx_t &line_error) {
 		return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
-																	   parameters, line_error);
+		                                                               parameters, line_error);
 	}
 	static bool TryCastTimestampVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options,
 	                                   Vector &input_vector, Vector &result_vector, idx_t count,
-									   CastParameters &parameters) {
+	                                   CastParameters &parameters) {
 		idx_t line_error;
 		return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
 		                                                                         count, parameters, line_error);

@@ -56,8 +56,7 @@ struct BoundCastData {
 struct CastParameters {
 	CastParameters() {
 	}
-	CastParameters(bool strict, string *error_message)
-			: CastParameters(nullptr, strict, error_message, nullptr) {
+	CastParameters(bool strict, string *error_message) : CastParameters(nullptr, strict, error_message, nullptr) {
 	}
 	CastParameters(BoundCastData *cast_data, bool strict, string *error_message,
 	               optional_ptr<FunctionLocalState> local_state)

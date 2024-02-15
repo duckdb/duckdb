@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -15,7 +16,12 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	if (!root.tryCast && target_type == LogicalType::BLOB && root.arg->type == duckdb_libpgquery::T_PGAConst) {
 		auto c = PGPointerCast<duckdb_libpgquery::PGAConst>(root.arg);
 		if (c->val.type == duckdb_libpgquery::T_PGString) {
-			return make_uniq<ConstantExpression>(Value::BLOB(string(c->val.val.str)));
+			CastParameters parameters;
+			if (root.location >= 0) {
+				parameters.query_location = root.location;
+			}
+			auto blob_data = Blob::ToBlob(string(c->val.val.str), parameters);
+			return make_uniq<ConstantExpression>(Value::BLOB_RAW(blob_data));
 		}
 	}
 	// transform the expression node

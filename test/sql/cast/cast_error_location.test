@@ -82,3 +82,81 @@ select 42::utinyint + 'hello'
 ----
 ^
 
+# bit
+statement error
+SELECT bitstring('1', 9)::BOOL;
+----
+^
+
+# array
+statement error
+SELECT [1,2,3]::INT[2]
+----
+^
+
+# blob
+statement error
+SELECT '\x'::BYTEA
+----
+^
+
+# now with a table
+statement ok
+CREATE TABLE cast_table(i INTEGER, s VARCHAR, d DECIMAL(5,1), l INT[], int_struct ROW(i INTEGER), dbl DOUBLE, hge HUGEINT);
+
+statement ok
+INSERT INTO cast_table VALUES (1000, 'hello', 1000.0, [1000], {'i': 1000}, 1e308, 1000000000000000000000000000000)
+
+# out of range integer cast
+statement error
+SELECT i::utinyint from cast_table
+----
+^
+
+# string cast
+statement error
+SELECT s::int FROM cast_table
+----
+^
+
+# numeric -> decimal cast
+statement error
+SELECT i::decimal(2,1) FROM cast_table
+----
+^
+
+# decimal -> decimal cast
+statement error
+SELECT d::decimal(2,1) FROM cast_data
+----
+^
+
+# list cast
+statement error
+SELECT l::utinyint[] FROM cast_data
+----
+^
+
+# struct cast
+statement error
+SELECT int_struct::row(x tinyint) FROM cast_data
+----
+^
+
+# double -> float
+statement error
+select dbl::float FROM cast_data
+----
+^
+
+# double -> hugeint
+statement error
+select dbl::hugeint
+----
+^
+
+# hugeint -> int
+statement error
+select hge::hugeint::int
+----
+^

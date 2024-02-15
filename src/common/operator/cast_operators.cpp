@@ -1333,7 +1333,7 @@ string_t CastFromPointer::Operation(uintptr_t input, Vector &vector) {
 template <>
 bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
 	idx_t result_size;
-	if (!Blob::TryGetBlobSize(input, result_size, parameters.error_message)) {
+	if (!Blob::TryGetBlobSize(input, result_size, parameters)) {
 		return false;
 	}
 
@@ -1374,7 +1374,8 @@ bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, CastPara
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(hugeint_t)) {
-		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s", GetTypeId<hugeint_t>());
+		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
+		                          GetTypeId<hugeint_t>());
 	}
 	Bit::BitToNumeric(input, result);
 	return (true);
@@ -1385,7 +1386,8 @@ bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, CastPar
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(uhugeint_t)) {
-		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s", GetTypeId<uhugeint_t>());
+		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
+		                          GetTypeId<uhugeint_t>());
 	}
 	Bit::BitToNumeric(input, result);
 	return (true);
@@ -1951,17 +1953,20 @@ bool TryDecimalStringCast(string_t input, T &result, CastParameters &parameters,
 }
 
 template <>
-bool TryCastToDecimal::Operation(string_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(string_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return TryDecimalStringCast<int16_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(string_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(string_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return TryDecimalStringCast<int32_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(string_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(string_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return TryDecimalStringCast<int64_t>(input, result, parameters, width, scale);
 }
 
@@ -1972,26 +1977,26 @@ bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, CastParamete
 }
 
 template <>
-bool TryCastToDecimalCommaSeparated::Operation(string_t input, int16_t &result, CastParameters &parameters, uint8_t width,
-                                               uint8_t scale) {
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int16_t &result, CastParameters &parameters,
+                                               uint8_t width, uint8_t scale) {
 	return TryDecimalStringCast<int16_t, ','>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimalCommaSeparated::Operation(string_t input, int32_t &result, CastParameters &parameters, uint8_t width,
-                                               uint8_t scale) {
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int32_t &result, CastParameters &parameters,
+                                               uint8_t width, uint8_t scale) {
 	return TryDecimalStringCast<int32_t, ','>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimalCommaSeparated::Operation(string_t input, int64_t &result, CastParameters &parameters, uint8_t width,
-                                               uint8_t scale) {
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, int64_t &result, CastParameters &parameters,
+                                               uint8_t width, uint8_t scale) {
 	return TryDecimalStringCast<int64_t, ','>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
-                                               uint8_t scale) {
+bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result, CastParameters &parameters,
+                                               uint8_t width, uint8_t scale) {
 	return TryDecimalStringCast<hugeint_t, ','>(input, result, parameters, width, scale);
 }
 
@@ -2031,42 +2036,50 @@ bool TryCastBoolToDecimal(bool input, T &result, CastParameters &parameters, uin
 }
 
 template <>
-bool TryCastToDecimal::Operation(bool input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(bool input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return TryCastBoolToDecimal<int16_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(bool input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(bool input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return TryCastBoolToDecimal<int32_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(bool input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(bool input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return TryCastBoolToDecimal<int64_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(bool input, hugeint_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(bool input, hugeint_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return TryCastBoolToDecimal<hugeint_t, Hugeint>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, bool &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int16_t input, bool &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCast::Operation<int16_t, bool>(input, result);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, bool &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int32_t input, bool &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCast::Operation<int32_t, bool>(input, result);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, bool &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int64_t input, bool &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCast::Operation<int64_t, bool>(input, result);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, bool &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(hugeint_t input, bool &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCast::Operation<hugeint_t, bool>(input, result);
 }
 
@@ -2118,19 +2131,23 @@ bool NumericToHugeDecimalCast(SRC input, hugeint_t &result, CastParameters &para
 // Cast int8_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(int8_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int8_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int8_t, int16_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int8_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int8_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int8_t, int32_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int8_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int8_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int8_t, int64_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int8_t input, hugeint_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int8_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return NumericToHugeDecimalCast<int8_t>(input, result, parameters, width, scale);
 }
 
@@ -2138,15 +2155,18 @@ bool TryCastToDecimal::Operation(int8_t input, hugeint_t &result, CastParameters
 // Cast int16_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(int16_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int16_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int16_t, int16_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int16_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int16_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int16_t, int32_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int16_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int16_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int16_t, int64_t>(input, result, parameters, width, scale);
 }
 template <>
@@ -2159,15 +2179,18 @@ bool TryCastToDecimal::Operation(int16_t input, hugeint_t &result, CastParameter
 // Cast int32_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(int32_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int32_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int32_t, int16_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int32_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int32_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int32_t, int32_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int32_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int32_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int32_t, int64_t>(input, result, parameters, width, scale);
 }
 template <>
@@ -2180,15 +2203,18 @@ bool TryCastToDecimal::Operation(int32_t input, hugeint_t &result, CastParameter
 // Cast int64_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(int64_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int64_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int64_t, int16_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int64_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int64_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int64_t, int32_t>(input, result, parameters, width, scale);
 }
 template <>
-bool TryCastToDecimal::Operation(int64_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(int64_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return StandardNumericToDecimalCast<int64_t, int64_t>(input, result, parameters, width, scale);
 }
 template <>
@@ -2201,19 +2227,22 @@ bool TryCastToDecimal::Operation(int64_t input, hugeint_t &result, CastParameter
 // Cast uint8_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(uint8_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint8_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                 width, scale);
+bool TryCastToDecimal::Operation(uint8_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint8_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                 scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint8_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint8_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                 width, scale);
+bool TryCastToDecimal::Operation(uint8_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint8_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                 scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint8_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint8_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                 width, scale);
+bool TryCastToDecimal::Operation(uint8_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint8_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                 scale);
 }
 template <>
 bool TryCastToDecimal::Operation(uint8_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
@@ -2225,19 +2254,22 @@ bool TryCastToDecimal::Operation(uint8_t input, hugeint_t &result, CastParameter
 // Cast uint16_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(uint16_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint16_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint16_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint16_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint16_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint16_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint16_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint16_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint16_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint16_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint16_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint16_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
 bool TryCastToDecimal::Operation(uint16_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
@@ -2249,19 +2281,22 @@ bool TryCastToDecimal::Operation(uint16_t input, hugeint_t &result, CastParamete
 // Cast uint32_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(uint32_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint32_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint32_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint32_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint32_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint32_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint32_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint32_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint32_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint32_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint32_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint32_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
 bool TryCastToDecimal::Operation(uint32_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
@@ -2273,19 +2308,22 @@ bool TryCastToDecimal::Operation(uint32_t input, hugeint_t &result, CastParamete
 // Cast uint64_t -> Decimal
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToDecimal::Operation(uint64_t input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint64_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint64_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint64_t, int16_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint64_t input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint64_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint64_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint64_t, int32_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
-bool TryCastToDecimal::Operation(uint64_t input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
-	return StandardNumericToDecimalCast<uint64_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters,
-	                                                                                  width, scale);
+bool TryCastToDecimal::Operation(uint64_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
+	return StandardNumericToDecimalCast<uint64_t, int64_t, UnsignedToDecimalOperator>(input, result, parameters, width,
+	                                                                                  scale);
 }
 template <>
 bool TryCastToDecimal::Operation(uint64_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
@@ -2392,42 +2430,50 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 }
 
 template <>
-bool TryCastToDecimal::Operation(float input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(float input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<float, int16_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(float input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(float input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<float, int32_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(float input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(float input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<float, int64_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(float input, hugeint_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(float input, hugeint_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<float, hugeint_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(double input, int16_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(double input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<double, int16_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(double input, int32_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(double input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<double, int32_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(double input, int64_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(double input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<double, int64_t>(input, result, parameters, width, scale);
 }
 
 template <>
-bool TryCastToDecimal::Operation(double input, hugeint_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastToDecimal::Operation(double input, hugeint_t &result, CastParameters &parameters, uint8_t width,
+                                 uint8_t scale) {
 	return DoubleToDecimalCast<double, hugeint_t>(input, result, parameters, width, scale);
 }
 
@@ -2468,15 +2514,18 @@ bool TryCastHugeDecimalToNumeric(hugeint_t input, DST &result, CastParameters &p
 // Cast Decimal -> int8_t
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, int8_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int16_t input, int8_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToNumeric<int16_t, int8_t>(input, result, parameters, scale);
 }
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, int8_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int32_t input, int8_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToNumeric<int32_t, int8_t>(input, result, parameters, scale);
 }
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, int8_t &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int64_t input, int8_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToNumeric<int64_t, int8_t>(input, result, parameters, scale);
 }
 template <>
@@ -2712,17 +2761,20 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
 
 // DECIMAL -> FLOAT
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, float &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int16_t input, float &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToFloatingPoint<int16_t, float>(input, result, scale);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, float &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int32_t input, float &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToFloatingPoint<int32_t, float>(input, result, scale);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, float &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int64_t input, float &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToFloatingPoint<int64_t, float>(input, result, scale);
 }
 
@@ -2734,17 +2786,20 @@ bool TryCastFromDecimal::Operation(hugeint_t input, float &result, CastParameter
 
 // DECIMAL -> DOUBLE
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, double &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int16_t input, double &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToFloatingPoint<int16_t, double>(input, result, scale);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, double &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int32_t input, double &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToFloatingPoint<int32_t, double>(input, result, scale);
 }
 
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, double &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
+bool TryCastFromDecimal::Operation(int64_t input, double &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale) {
 	return TryCastDecimalToFloatingPoint<int64_t, double>(input, result, scale);
 }
 

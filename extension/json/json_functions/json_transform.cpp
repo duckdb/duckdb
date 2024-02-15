@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-JSONTransformOptions::JSONTransformOptions() : 	parameters(false, &error_message) {
+JSONTransformOptions::JSONTransformOptions() : parameters(false, &error_message) {
 }
 
 JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplicate_key_p, bool error_missing_key_p,
@@ -146,8 +146,7 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 		success = OP::template Operation<bool, T>(unsafe_yyjson_get_bool(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-		success =
-		    OP::template Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, options.parameters, w, s);
+		success = OP::template Operation<uint64_t, T>(unsafe_yyjson_get_uint(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
 		success = OP::template Operation<int64_t, T>(unsafe_yyjson_get_sint(val), result, options.parameters, w, s);

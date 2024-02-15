@@ -76,8 +76,8 @@ struct VectorTryCastStringOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (VectorTryCastData *)dataptr;
 		RESULT_TYPE output;
-		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(
-		        input, output, data->result, data->parameters))) {
+		if (DUCKDB_LIKELY(
+		        OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result, data->parameters))) {
 			return output;
 		}
 		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
@@ -101,8 +101,8 @@ struct VectorDecimalCastOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (VectorDecimalCastData *)dataptr;
 		RESULT_TYPE result_value;
-		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(
-		        input, result_value, data->vector_cast_data.parameters, data->width, data->scale)) {
+		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, result_value, data->vector_cast_data.parameters,
+		                                                     data->width, data->scale)) {
 			return HandleVectorCastError::Operation<RESULT_TYPE>("Failed to cast decimal value", mask, idx,
 			                                                     data->vector_cast_data);
 		}

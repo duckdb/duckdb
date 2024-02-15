@@ -26,7 +26,7 @@ public:
 	}
 	template <typename... Args>
 	explicit ConversionException(optional_idx error_location, const string &msg, Args... params)
-			: ConversionException(error_location, ConstructMessage(msg, params...)) {
+	    : ConversionException(error_location, ConstructMessage(msg, params...)) {
 	}
 };
 

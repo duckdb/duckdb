@@ -38,14 +38,16 @@ struct TryCast {
 struct TryCastErrorMessage {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
-		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
+		                              GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 };
 
 struct TryCastErrorMessageCommaSeparated {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, CastParameters &parameters) {
-		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+		throw NotImplementedException(parameters.query_location, "Unimplemented type for cast (%s -> %s)",
+		                              GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 };
 
@@ -514,7 +516,8 @@ DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, double &result, C
 template <>
 DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, CastParameters &parameters);
 template <>
-DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, CastParameters &parameters);
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result,
+                                                             CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // Date Casts
@@ -852,7 +855,8 @@ struct CastFromBitToNumeric {
 		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type
 		// Currently only allows bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
-			throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s", GetTypeId<DST>());
+			throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
+			                          GetTypeId<DST>());
 		}
 		Bit::BitToNumeric(input, result);
 		return (true);
@@ -904,7 +908,7 @@ struct TryCastToUUID {
 
 template <>
 DUCKDB_API bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector,
-										 CastParameters &parameters);
+                                         CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // Pointers
