@@ -213,8 +213,8 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_ONLY_IF: None,
             TokenType.SQLLOGIC_MODE: None,
             TokenType.SQLLOGIC_SET: self.parse_set,
-            TokenType.SQLLOGIC_LOOP: None,
-            TokenType.SQLLOGIC_CONCURRENT_LOOP: None,
+            TokenType.SQLLOGIC_LOOP: self.parse_loop,
+            TokenType.SQLLOGIC_CONCURRENT_LOOP: self.parse_loop,
             TokenType.SQLLOGIC_FOREACH: None,
             TokenType.SQLLOGIC_CONCURRENT_FOREACH: None,
             TokenType.SQLLOGIC_ENDLOOP: None,
@@ -237,9 +237,6 @@ class SQLLogicParser:
 
     def fail(self, message):
         raise Exception(message)
-
-    def is_skipped(self) -> bool:
-        return self.skip_level > 0
 
     def get_expected_result(self, statement_type: str) -> ExpectedResult:
         type_map = {
@@ -422,6 +419,22 @@ class SQLLogicParser:
     def parse_load(self, header: Token) -> Optional[BaseStatement]:
         return Load(header, self.current_line + 1)
 
+    def parse_loop(self, header: Token) -> Optional[BaseStatement]:
+        if len(header.parameters) != 3:
+            self.fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)")
+        # TODO: unroll loops
+        pass
+        # def loop:
+        #    loop_iterator_name = header.parameters[0]
+        #    try:
+        #        loop_start = int(header.parameters[1])
+        #        loop_end = int(header.parameters[2])
+        #    except:
+        #        self.fail("loop_start and loop_end must be a number")
+        #    loop_idx = loop_start
+        #    is_parallel = header.type == TokenType.SQLLOGIC_CONCURRENT_LOOP
+        # start_loop(def)
+
     def parse(self, file_path: str) -> Optional[SQLLogicTest]:
         if not self.open_file(file_path):
             return None
@@ -451,9 +464,8 @@ class SQLLogicParser:
                     break
                 self.next_line()
                 token = self.tokenize()
+
             if skip_statement:
-                continue
-            if self.is_skipped() and token.type != TokenType.SQLLOGIC_MODE:
                 continue
 
             method = self.PARSER.get(token.type)
@@ -465,49 +477,6 @@ class SQLLogicParser:
                 raise Exception(f"Parser did not produce a statement for {token.type.name}")
             self.current_test.add_statement(statement)
 
-        #    elif token.type == TokenType.SQLLOGIC_SET:
-        #        if len(token.parameters) < 1:
-        #            self.fail("set requires at least 1 parameter (e.g. set ignore_error_messages HTTP Error)")
-        #        if token.parameters[0] == "ignore_error_messages" or token.parameters[0] == "always_fail_error_messages":
-        #            string_set = ignore_error_messages if token.parameters[0] == "ignore_error_messages" else always_fail_error_messages
-        #            # the set command overrides the default values
-        #            string_set.clear()
-        #            # Parse the parameter list as a comma separated list of strings that can contain spaces
-        #            # e.g. `set ignore_error_messages This is an error message, This_is_another, and   another`
-        #            if len(token.parameters) > 1:
-        #                current_string = ""
-        #                token_idx = 1
-        #                substr_idx = 0
-        #                while token_idx < len(token.parameters):
-        #                    comma_pos = token.parameters[token_idx].find(',', substr_idx)
-        #                    if comma_pos == -1:
-        #                        current_string += token.parameters[token_idx][substr_idx:] + " "
-        #                        token_idx += 1
-        #                        substr_idx = 0
-        #                    else:
-        #                        current_string += token.parameters[token_idx][substr_idx:comma_pos]
-        #                        StringUtil.trim(current_string)
-        #                        string_set.add(current_string)
-        #                        current_string = ""
-        #                        substr_idx = comma_pos + 1
-        #                StringUtil.trim(current_string)
-        #                string_set.add(current_string)
-        #                string_set.discard("")
-        #        else:
-        #            self.fail("unrecognized set parameter: %s" % token.parameters[0])
-        #    elif token.type == TokenType.SQLLOGIC_LOOP or token.type == TokenType.SQLLOGIC_CONCURRENT_LOOP:
-        #        if len(token.parameters) != 3:
-        #            self.fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)")
-        #        def loop:
-        #            loop_iterator_name = token.parameters[0]
-        #            try:
-        #                loop_start = int(token.parameters[1])
-        #                loop_end = int(token.parameters[2])
-        #            except:
-        #                self.fail("loop_start and loop_end must be a number")
-        #            loop_idx = loop_start
-        #            is_parallel = token.type == TokenType.SQLLOGIC_CONCURRENT_LOOP
-        #        start_loop(def)
         #    elif token.type == TokenType.SQLLOGIC_FOREACH or token.type == TokenType.SQLLOGIC_CONCURRENT_FOREACH:
         #        if len(token.parameters) < 2:
         #            self.fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer "
