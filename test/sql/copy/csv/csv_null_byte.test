@@ -14,7 +14,6 @@ val1	val\02	val3
 query III
 select * from read_csv('data/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR', 'col3': 'VARCHAR'}, delim='|');
 ----
-col1	col2	col3
 val1	val\02	val3
 
 query II

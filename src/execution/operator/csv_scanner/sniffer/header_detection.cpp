@@ -96,7 +96,6 @@ static string NormalizeColumnName(const string &col_name) {
 
 // If our columns were set by the user, we verify if their names match with the first row
 bool CSVSniffer::DetectHeaderWithSetColumn() {
-	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	bool has_header = true;
 	bool all_varchar = true;
 	bool first_row_consistent = true;
@@ -123,12 +122,16 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 			const auto &sql_type = (*set_columns.types)[col];
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
+				if (!TryCastValue(options.dialect_options, options.decimal_separator, dummy_val, sql_type)) {
 					first_row_consistent = false;
 				}
 			}
 		}
-		return !(first_row_consistent && !all_varchar);
+		if (all_varchar) {
+			// Can't be the header
+			return false;
+		}
+		return !first_row_consistent;
 	}
 	return has_header;
 }
@@ -157,7 +160,6 @@ void CSVSniffer::DetectHeader() {
 		error_handler->Error(error);
 	}
 	bool all_varchar = true;
-	bool set_columns_match = true;
 	bool has_header;
 
 	if (set_columns.IsSet()) {
@@ -172,17 +174,18 @@ void CSVSniffer::DetectHeader() {
 			const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 			if (sql_type != LogicalType::VARCHAR) {
 				all_varchar = false;
-				if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
+				if (!TryCastValue(sniffer_state_machine.dialect_options,
+				                  sniffer_state_machine.options.decimal_separator, dummy_val, sql_type)) {
 					first_row_consistent = false;
 				}
 			}
 		}
-		if (first_row_nulls) {
-			// the first row has a null value, it can't be a header
+		// Our header is only false if types are not all varchar, and rows are consistent
+		if (all_varchar || first_row_nulls) {
+			// Can't be the header
 			has_header = false;
 		} else {
-			// Our header is only false if types are not all varchar, and rows are consistent
-			has_header = !(first_row_consistent && !all_varchar) || (set_columns.IsSet() && set_columns_match);
+			has_header = !first_row_consistent;
 		}
 	}
 

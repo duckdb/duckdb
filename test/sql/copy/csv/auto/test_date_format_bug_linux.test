@@ -2,7 +2,7 @@
 # group: [auto]
 
 query I
-SELECT *  FROM read_csv_auto('test/sql/copy/csv/data/auto/date_format_bug_linux.csv')
+SELECT *  FROM read_csv_auto('test/sql/copy/csv/data/auto/date_format_bug_linux.csv', header = 1)
 ----
 8cb123cb8
 34fd321
