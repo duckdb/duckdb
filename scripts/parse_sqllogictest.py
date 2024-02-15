@@ -20,9 +20,7 @@ from sqllogic_parser import (
     Query,
     HashThreshold,
     Loop,
-    ConcurrentLoop,
     Foreach,
-    ConcurrentForeach,
     Endloop,
     RequireEnv,
     Restart,
@@ -33,11 +31,49 @@ from sqllogic_parser import (
 # TODO: add 'dbpath' with argparse
 
 
+def create_formatted_list(items) -> str:
+    res = ''
+    for i, option in enumerate(items):
+        if i + 1 == len(items):
+            spacer = ' or '
+        elif i != 0:
+            spacer = ', '
+        else:
+            spacer = ''
+        res += f"{spacer}'{option}'"
+    return res
+
+
 class SortStyle(Enum):
     NO_SORT = (auto(),)
     ROW_SORT = (auto(),)
     VALUE_SORT = (auto(),)
     UNKNOWN = auto()
+
+
+class SleepUnit(Enum):
+    SECOND = auto()
+    MILLISECOND = auto()
+    MICROSECOND = auto()
+    NANOSECOND = auto()
+
+
+def get_sleep_unit(unit):
+    seconds = ["second", "seconds", "sec"]
+    miliseconds = ["millisecond", "milliseconds", "milli"]
+    microseconds = ["microsecond", "microseconds", "micro"]
+    nanoseconds = ["nanosecond", "nanoseconds", "nano"]
+    if unit in seconds:
+        return SleepUnit.SECOND
+    elif unit in miliseconds:
+        return SleepUnit.MILLISECOND
+    elif unit in microseconds:
+        return SleepUnit.MICROSECOND
+    elif unit in nanoseconds:
+        return SleepUnit.NANOSECOND
+    else:
+        options = ['second', 'millisecond', 'microsecond', 'nanosecond']
+        raise RuntimeError(f"Unrecognized sleep mode - expected {create_formatted_list(options)}")
 
 
 class ExpectedResult:
@@ -177,28 +213,12 @@ class SQLLogicEncoder(json.JSONEncoder):
 ### -------- PARSER ----------
 
 
-def create_formatted_list(items) -> str:
-    res = ''
-    for i, option in enumerate(items):
-        if i + 1 == len(items):
-            spacer = ' or '
-        elif i != 0:
-            spacer = ', '
-        else:
-            spacer = ''
-        res += f"{spacer}'{option}'"
-    return res
-
-
 class SQLLogicParser:
     def reset(self):
         self.current_line = 0
-        self.skip_level = 0
         self.seen_statement = False
-        self.skip_level = 0
         self.lines = []
         self.current_test = None
-        self.hash_threshold = 0
 
     def __init__(self):
         self.reset()
@@ -208,21 +228,21 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_REQUIRE: self.parse_require,
             TokenType.SQLLOGIC_HASH_THRESHOLD: self.parse_hash_threshold,
             TokenType.SQLLOGIC_HALT: self.parse_halt,
-            TokenType.SQLLOGIC_INVALID: None,
-            TokenType.SQLLOGIC_SKIP_IF: None,
-            TokenType.SQLLOGIC_ONLY_IF: None,
-            TokenType.SQLLOGIC_MODE: None,
+            TokenType.SQLLOGIC_SKIP_IF: self.parse_skipif,
+            TokenType.SQLLOGIC_ONLY_IF: self.parse_onlyif,
+            TokenType.SQLLOGIC_MODE: self.parse_mode,
             TokenType.SQLLOGIC_SET: self.parse_set,
             TokenType.SQLLOGIC_LOOP: self.parse_loop,
             TokenType.SQLLOGIC_CONCURRENT_LOOP: self.parse_loop,
-            TokenType.SQLLOGIC_FOREACH: None,
-            TokenType.SQLLOGIC_CONCURRENT_FOREACH: None,
-            TokenType.SQLLOGIC_ENDLOOP: None,
-            TokenType.SQLLOGIC_REQUIRE_ENV: None,
+            TokenType.SQLLOGIC_FOREACH: self.parse_foreach,
+            TokenType.SQLLOGIC_CONCURRENT_FOREACH: self.parse_foreach,
+            TokenType.SQLLOGIC_ENDLOOP: self.parse_endloop,
+            TokenType.SQLLOGIC_REQUIRE_ENV: self.parse_require_env,
             TokenType.SQLLOGIC_LOAD: self.parse_load,
-            TokenType.SQLLOGIC_RESTART: None,
-            TokenType.SQLLOGIC_RECONNECT: None,
-            TokenType.SQLLOGIC_SLEEP: None,
+            TokenType.SQLLOGIC_RESTART: self.parse_restart,
+            TokenType.SQLLOGIC_RECONNECT: self.parse_reconnect,
+            TokenType.SQLLOGIC_SLEEP: self.parse_sleep,
+            TokenType.SQLLOGIC_INVALID: None,
         }
 
     def peek(self):
@@ -371,10 +391,8 @@ class SQLLogicParser:
     def parse_hash_threshold(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 1:
             self.fail("hash-threshold requires a parameter")
-        try:
-            self.hash_threshold = int(header.parameters[0])
-        except:
-            self.fail("hash-threshold must be a number")
+        threshold = int(header.parameters[0])
+        return HashThreshold(header, self.current_line + 1, threshold)
 
     def parse_halt(self, header: Token) -> Optional[BaseStatement]:
         return Halt(header, self.current_line + 1)
@@ -417,23 +435,59 @@ class SQLLogicParser:
             self.fail("unrecognized set parameter: %s" % parameters[0])
 
     def parse_load(self, header: Token) -> Optional[BaseStatement]:
-        return Load(header, self.current_line + 1)
+        statement = Load(header, self.current_line + 1)
+        if len(header.parameters) > 1 and header.parameters[1] == "readonly":
+            statement.set_readonly()
+        return statement
 
     def parse_loop(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 3:
             self.fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)")
-        # TODO: unroll loops
-        pass
-        # def loop:
-        #    loop_iterator_name = header.parameters[0]
-        #    try:
-        #        loop_start = int(header.parameters[1])
-        #        loop_end = int(header.parameters[2])
-        #    except:
-        #        self.fail("loop_start and loop_end must be a number")
-        #    loop_idx = loop_start
-        #    is_parallel = header.type == TokenType.SQLLOGIC_CONCURRENT_LOOP
-        # start_loop(def)
+        is_parallel = header.type == TokenType.SQLLOGIC_CONCURRENT_LOOP
+        statement = Loop(header, self.current_line + 1, is_parallel)
+        statement.set_name(header.parameters[0])
+        statement.set_start(int(header.parameters[1]))
+        statement.set_end(int(header.parameters[2]))
+        return statement
+
+    def parse_foreach(self, header: Token) -> Optional[BaseStatement]:
+        if len(header.parameters) < 2:
+            self.fail(
+                "Expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer " "smallint float)"
+            )
+        is_parallel = header.type == TokenType.SQLLOGIC_CONCURRENT_FOREACH
+        statement = Foreach(header, self.current_line + 1, is_parallel)
+        statement.set_name(header.parameters[0])
+        statement.set_values(header.parameters[1:])
+        return statement
+
+    def parse_endloop(self, header: Token) -> Optional[BaseStatement]:
+        return Endloop(header, self.current_line + 1)
+
+    def parse_require_env(self, header: Token) -> Optional[BaseStatement]:
+        if len(header.parameters) != 1 and len(header.parameters) != 2:
+            self.fail("require-env requires 1 argument: <env name> [optional: <expected env val>]")
+        return RequireEnv(header, self.current_line + 1)
+
+    def parse_restart(self, header: Token) -> Optional[BaseStatement]:
+        return Restart(header, self.current_line + 1)
+
+    def parse_reconnect(self, header: Token) -> Optional[BaseStatement]:
+        return Reconnect(header, self.current_line + 1)
+
+    def parse_sleep(self, header: Token) -> Optional[BaseStatement]:
+        if len(header.parameters) != 2:
+            self.fail("sleep requires two parameter (e.g. sleep 1 second)")
+        # require a specific block size
+        sleep_duration = int(header.parameters[0])
+        sleep_unit = get_sleep_unit(header.parameters[1])
+        return Sleep(header, self.current_line + 1, sleep_duration, sleep_unit)
+
+    def parse_skipif(self, header: Token) -> Optional[BaseStatement]:
+        return SkipIf(header, self.current_line + 1)
+
+    def parse_onlyif(self, header: Token) -> Optional[BaseStatement]:
+        return OnlyIf(header, self.current_line + 1)
 
     def parse(self, file_path: str) -> Optional[SQLLogicTest]:
         if not self.open_file(file_path):
@@ -446,27 +500,29 @@ class SQLLogicParser:
             if self.is_single_line_statement(token) and not self.next_line_empty_or_comment():
                 self.fail("All test statements need to be separated by an empty line")
 
-            skip_statement = False
-            while token.type == TokenType.SQLLOGIC_SKIP_IF or token.type == TokenType.SQLLOGIC_ONLY_IF:
-                # skipif/onlyif
-                skip_if = token.type == TokenType.SQLLOGIC_SKIP_IF
-                if len(token.parameters) < 1:
-                    self.fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)")
-                system_name = token.parameters[0].lower()
-                our_system = system_name == "duckdb"
-                if self.current_test.is_sqlite_test():
-                    our_system = our_system or system_name == "postgresql"
-                if our_system == skip_if:
-                    # we skip this command in two situations
-                    # (1) skipif duckdb
-                    # (2) onlyif <other_system>
-                    skip_statement = True
-                    break
-                self.next_line()
-                token = self.tokenize()
+            # skip_statement = False
+            # while token.type == TokenType.SQLLOGIC_SKIP_IF or token.type == TokenType.SQLLOGIC_ONLY_IF:
+            #    skip_if = token.type == TokenType.SQLLOGIC_SKIP_IF
+            #    if len(token.parameters) < 1:
+            #        self.fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)")
+            #    system_name = token.parameters[0].lower()
+            #    accepted_systems = [
+            #        'duckdb'
+            #    ]
+            #    if self.current_test.is_sqlite_test():
+            #        accepted_systems.append('postgresql')
+            #    condition = system_name in accepted_systems
+            #    if condition == skip_if:
+            #        # we skip this command in two situations
+            #        # (1) skipif duckdb
+            #        # (2) onlyif <other_system>
+            #        skip_statement = True
+            #        break
+            #    self.next_line()
+            #    token = self.tokenize()
 
-            if skip_statement:
-                continue
+            # if skip_statement:
+            #    continue
 
             method = self.PARSER.get(token.type)
             if method:
@@ -476,85 +532,6 @@ class SQLLogicParser:
             if not statement:
                 raise Exception(f"Parser did not produce a statement for {token.type.name}")
             self.current_test.add_statement(statement)
-
-        #    elif token.type == TokenType.SQLLOGIC_FOREACH or token.type == TokenType.SQLLOGIC_CONCURRENT_FOREACH:
-        #        if len(token.parameters) < 2:
-        #            self.fail("expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer "
-        #                        "smallint float)")
-        #        def loop:
-        #            loop_iterator_name = token.parameters[0]
-        #            tokens = []
-        #            for i in range(1, len(token.parameters)):
-        #                if not token.parameters[i]:
-        #                    continue
-        #                if not for_each_token_replace(token.parameters[i], def.tokens):
-        #                    def.tokens.append(token.parameters[i])
-        #            loop_idx = 0
-        #            loop_start = 0
-        #            loop_end = len(def.tokens)
-        #            is_parallel = token.type == TokenType.SQLLOGIC_CONCURRENT_FOREACH
-        #        start_loop(def)
-        #    elif token.type == TokenType.SQLLOGIC_ENDLOOP:
-        #        end_loop()
-        #    elif token.type == TokenType.SQLLOGIC_REQUIRE_ENV:
-        #        if in_loop():
-        #            self.fail("require-env cannot be called in a loop")
-        #        if len(token.parameters) != 1 and len(token.parameters) != 2:
-        #            self.fail("require-env requires 1 argument: <env name> [optional: <expected env val>]")
-        #        env_var = token.parameters[0]
-        #        env_actual = os.getenv(env_var)
-        #        if env_actual is None:
-        #            # Environment variable was not found, this test should not be run
-        #            return
-        #        if len(token.parameters) == 2:
-        #            # Check that the value is the same as the expected value
-        #            env_value = token.parameters[1]
-        #            if env_actual != env_value:
-        #                # It's not, check the test
-        #                return
-        #        if env_var in environment_variables:
-        #            self.fail(StringUtil.format("Environment variable '%s' has already been defined" % env_var))
-        #        environment_variables[env_var] = env_actual
-        #    elif token.type == TokenType.SQLLOGIC_LOAD:
-        #        if in_loop():
-        #            self.fail("load cannot be called in a loop")
-        #        readonly = len(token.parameters) > 1 and token.parameters[1] == "readonly"
-        #        if token.parameters:
-        #            dbpath = replace_keywords(token.parameters[0])
-        #            if not readonly:
-        #                # delete the target database file, if it exists
-        #                delete_database(dbpath)
-        #        else:
-        #            dbpath = ""
-        #        # set up the config file
-        #        if readonly:
-        #            config.options.use_temporary_directory = False
-        #            config.options.access_mode = AccessMode.READ_ONLY
-        #        else:
-        #            config.options.use_temporary_directory = True
-        #            config.options.access_mode = AccessMode.AUTOMATIC
-        #        # now create the database file
-        #        load_database(dbpath)
-        #    elif token.type == TokenType.SQLLOGIC_RESTART:
-        #        if not dbpath:
-        #            self.fail("cannot restart an in-memory database, did you forget to call \"load\"?")
-        #        # restart the current database
-        #        command = RestartCommand()
-        #        execute_command(command)
-        #    elif token.type == TokenType.SQLLOGIC_RECONNECT:
-        #        command = ReconnectCommand()
-        #        execute_command(command)
-        #    elif token.type == TokenType.SQLLOGIC_SLEEP:
-        #        if len(token.parameters) != 2:
-        #            self.fail("sleep requires two parameter (e.g. sleep 1 second)")
-        #        # require a specific block size
-        #        sleep_duration = int(token.parameters[0])
-        #        sleep_unit = Sleepstatement.parse_unit(token.parameters[1])
-        #        command = SleepCommand(sleep_duration, sleep_unit)
-        #        execute_command(command)
-
-        # if in_loop():
-        #    self.fail("Missing endloop!")
         return self.current_test
 
     def open_file(self, path):
