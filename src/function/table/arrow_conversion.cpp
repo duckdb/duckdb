@@ -317,6 +317,7 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 			//  | length     | prefix     | buf. index | offset      |
 			int32_t buffer_index = arrow_string[row_idx].GetBufferIndex();
 			int32_t offset = arrow_string[row_idx].GetOffset();
+			D_ASSERT(array.n_buffers > 2 + buffer_index);
 			auto c_data = ArrowBufferData<char>(array, 2 + buffer_index);
 			strings[row_idx] = string_t(&c_data[offset], length);
 		}
