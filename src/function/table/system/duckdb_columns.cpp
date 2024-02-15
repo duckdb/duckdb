@@ -178,7 +178,7 @@ public:
 		return true;
 	}
 	const Value ColumnComment(idx_t col) override {
-		return Value();
+		return entry.column_comments[col];
 	}
 
 private:

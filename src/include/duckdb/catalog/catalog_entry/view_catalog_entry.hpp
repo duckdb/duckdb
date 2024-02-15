@@ -38,6 +38,8 @@ public:
 	vector<LogicalType> types;
 	//! The returned names of the view
 	vector<string> names;
+	//! The comments on the columns of the view
+	vector<Value> column_comments;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;

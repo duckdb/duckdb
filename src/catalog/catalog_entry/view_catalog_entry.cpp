@@ -19,6 +19,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->sql = info.sql;
 	this->internal = info.internal;
 	this->comment = info.comment;
+	this->column_comments = !info.column_comments.empty() ? info.column_comments : vector<Value>(info.types.size());
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
@@ -37,11 +38,31 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->types = types;
 	result->temporary = temporary;
 	result->comment = comment;
+	result->column_comments = column_comments;
 	return std::move(result);
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
+
+	// Edge case: column comments are set
+	if (info.type == AlterType::SET_COLUMN_COMMENT) {
+		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
+		auto copied_view = Copy(context);
+
+		// find the column idx
+		for (idx_t i = 0; i < names.size(); i++) {
+			const auto &col_name = names[i];
+			if (col_name == comment_on_column_info.column_name) {
+				auto &copied_view_entry = copied_view->Cast<ViewCatalogEntry>();
+				copied_view_entry.column_comments[i] = comment_on_column_info.comment_value;
+				return copied_view;
+			}
+		}
+		throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
+		                      comment_on_column_info.column_name);
+	}
+
 	if (info.type != AlterType::ALTER_VIEW) {
 		throw CatalogException("Can only modify view with ALTER VIEW statement");
 	}
