@@ -6,7 +6,6 @@ namespace duckdb {
 
 template <class SRC_TYPE, class RES_TYPE>
 bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	bool all_converted = true;
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto &str_vec = EnumType::GetValuesInsertOrder(source.GetType());
@@ -24,6 +23,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 	auto result_data = FlatVector::GetData<RES_TYPE>(result);
 	auto &result_mask = FlatVector::Validity(result);
 
+	VectorTryCastData vector_cast_data(result, parameters);
 	for (idx_t i = 0; i < count; i++) {
 		auto src_idx = source_sel->get_index(i);
 		if (!source_mask.RowIsValid(src_idx)) {
@@ -36,7 +36,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 			if (!parameters.error_message) {
 				result_data[i] = HandleVectorCastError::Operation<RES_TYPE>(
 				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i,
-				    parameters.error_message, all_converted);
+					vector_cast_data);
 			} else {
 				result_mask.SetInvalid(i);
 			}
@@ -44,7 +44,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 		}
 		result_data[i] = key;
 	}
-	return all_converted;
+	return vector_cast_data.all_converted;
 }
 
 template <class SRC_TYPE>

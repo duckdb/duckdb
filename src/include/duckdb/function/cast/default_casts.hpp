@@ -73,6 +73,8 @@ struct CastParameters {
 	string *error_message = nullptr;
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
+	//! Query location (if any)
+	optional_idx query_location;
 };
 
 struct CastLocalStateParameters {

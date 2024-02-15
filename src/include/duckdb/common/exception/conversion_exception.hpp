@@ -9,12 +9,14 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
 class ConversionException : public Exception {
 public:
 	DUCKDB_API explicit ConversionException(const string &msg);
+	DUCKDB_API explicit ConversionException(optional_idx error_location, const string &msg);
 	DUCKDB_API ConversionException(const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API ConversionException(const LogicalType &origType, const LogicalType &newType);
 

@@ -23,7 +23,9 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	bool try_cast = root.tryCast;
 
 	// now create a cast operation
-	return make_uniq<CastExpression>(target_type, std::move(expression), try_cast);
+	auto result = make_uniq<CastExpression>(target_type, std::move(expression), try_cast);
+	SetQueryLocation(*result, root.location);
+	return std::move(result);
 }
 
 } // namespace duckdb

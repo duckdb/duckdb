@@ -32,6 +32,10 @@ bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastPara
 	return true;
 }
 
+void HandleCastError::AssignError(const string &error_message, CastParameters &parameters) {
+    AssignError(error_message, parameters.error_message, parameters.query_location);
+}
+
 static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
 	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
 }
@@ -41,7 +45,7 @@ bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count
 	bool success = true;
 	if (VectorOperations::HasNotNull(source, count)) {
 		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()),
-		                             parameters.error_message);
+		                             parameters);
 		success = false;
 	}
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);

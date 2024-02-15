@@ -23,6 +23,7 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
+struct CastParameters;
 struct ValidityMask;
 class Vector;
 
@@ -74,9 +75,10 @@ struct Cast {
 };
 
 struct HandleCastError {
-	static void AssignError(const string &error_message, string *error_message_ptr) {
+    static void AssignError(const string &error_message, CastParameters &parameters);
+	static void AssignError(const string &error_message, string *error_message_ptr, optional_idx error_location = optional_idx()) {
 		if (!error_message_ptr) {
-			throw ConversionException(error_message);
+			throw ConversionException(error_location, error_message);
 		}
 		if (error_message_ptr->empty()) {
 			*error_message_ptr = error_message;

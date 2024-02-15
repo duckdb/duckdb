@@ -982,7 +982,7 @@ static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 
 	auto success = TransformFunctionInternal(source, count, result, alc, options);
 	if (!success) {
-		HandleCastError::AssignError(options.error_message, parameters.error_message);
+		HandleCastError::AssignError(options.error_message, parameters);
 	}
 	return success;
 }

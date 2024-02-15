@@ -225,7 +225,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 			    mask.SetInvalid(idx);
 			    if (success) {
 				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
-				                                 parameters.error_message);
+				                                 parameters);
 				    success = false;
 			    }
 		    }

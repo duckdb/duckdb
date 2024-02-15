@@ -215,19 +215,6 @@ void Exception::SetQueryLocation(optional_idx error_location, unordered_map<stri
 	}
 }
 
-ConversionException::ConversionException(const PhysicalType orig_type, const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION,
-                "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
-}
-
-ConversionException::ConversionException(const LogicalType &orig_type, const LogicalType &new_type)
-    : Exception(ExceptionType::CONVERSION,
-                "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
-}
-
-ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
-}
-
 InvalidTypeException::InvalidTypeException(PhysicalType type, const string &msg)
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
 }
