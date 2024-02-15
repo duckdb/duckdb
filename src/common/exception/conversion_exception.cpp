@@ -1,4 +1,5 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
