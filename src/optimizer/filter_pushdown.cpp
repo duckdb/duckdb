@@ -13,9 +13,11 @@ using Filter = FilterPushdown::Filter;
 FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
 }
 
+static bool FilterIsOnPartition(column_binding_set_t parition_bindings, Expression &filter_expression) {
+	return true;
+}
 
-
-static unique_ptr<LogicalOperator> PushdownWindow(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = op->Cast<LogicalWindow>();
 	// go into expressions, then look into the partitions.
@@ -25,12 +27,37 @@ static unique_ptr<LogicalOperator> PushdownWindow(unique_ptr<LogicalOperator> op
 		if (expr->expression_class != ExpressionClass::BOUND_WINDOW) {
 			continue;
 		}
-		auto &window_expr = expr->Cast<WindowExpression>();
-		auto partitions = window_expr.partitions;
+		auto &window_expr = expr->Cast<BoundWindowExpression>();
+		auto &partitions = window_expr.partitions;
+		column_binding_set_t parition_bindings;
+		for (auto &partition_expr : partitions) {
+			switch (partition_expr->type) {
+			case ExpressionType::BOUND_COLUMN_REF: {
+				auto &partition_col = partition_expr->Cast<BoundColumnRefExpression>();
+				parition_bindings.insert(partition_col.binding);
+				break;
+			}
+			default:
+				break;
+			}
+		}
+		vector<unique_ptr<Filter>> leftover_filters;
+		for (auto &filter : filters) {
+			if (FilterIsOnPartition(parition_bindings, *filter->filter)) {
+				auto pushdown = FilterPushdown(optimizer);
+				pushdown.filters.push_back(std::move(filter));
+				op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+				continue;
+			}
+			leftover_filters.push_back(std::move(filter));
+			// check if a filter is on the partition
+			// create new filter pushdown with the filter,
+			// push into children
+		}
+		filters = std::move(leftover_filters);
 	}
-	auto wat = "sdfs";
-	//! Now we try to pushdown the remaining filters to perform zonemap checking
-	return std::move(op);
+	return FinishPushdown(std::move(op));
+//	return std::move(op);
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
