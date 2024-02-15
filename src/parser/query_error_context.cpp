@@ -29,7 +29,6 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 			if (i + 1 >= error_location || query[i + 1] != '\n') {
 				// not \r\n
 				is_newline = true;
-				break;
 			}
 			break;
 		case '\n':
