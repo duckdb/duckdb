@@ -136,8 +136,15 @@ void CSVSniffer::DetectHeader() {
 	}
 	bool has_header;
 	if (!sniffer_state_machine.options.dialect_options.header.IsSetByUser()) {
-		has_header = (!first_row_consistent || first_row_nulls) && !all_varchar;
+		if (first_row_nulls){
+			// the first row has a null value, it can't be a header
+			has_header = false;
+		} else{
+			// Our header is only false if types are not all varchar, and rows are consistent
+			has_header = !(first_row_consistent && !all_varchar);
+		}
 	} else {
+		// Header is defined by user, use that.
 		has_header = sniffer_state_machine.options.dialect_options.header.GetValue();
 	}
 	// update parser info, and read, generate & set col_names based on previous findings
