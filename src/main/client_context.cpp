@@ -44,6 +44,9 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 
+#include <thread>         // std::this_thread::sleep_for
+#include <chrono>         // std::chrono::seconds
+
 namespace duckdb {
 
 struct ActiveQueryContext {
@@ -402,6 +405,8 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
 			active_query->progress_bar->Update(is_finished);
 			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
+			std::this_thread::sleep_for (std::chrono::seconds(3));
+			throw int(0); // Throw a non standard exception to simulate a python exception
 		}
 		return query_result;
 	} catch (std::exception &ex) {
