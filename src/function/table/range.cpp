@@ -240,6 +240,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 	TableFunction range_function({LogicalType::BIGINT}, RangeFunction, RangeFunctionBind<false>, RangeFunctionInit);
 	range_function.cardinality = RangeCardinality;
+	// WITH ORDINALITY implemented for both range and generate_series
+	range_function.supports_ordinality = true;
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
 	range.AddFunction(range_function);

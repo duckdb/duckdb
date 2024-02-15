@@ -46,6 +46,7 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction glob_function("glob", {LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit);
+	glob_function.supports_ordinality = true;
 	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 }
 

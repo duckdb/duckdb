@@ -39,7 +39,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		// no column statistics to get
 		return std::move(node_stats);
 	}
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
+
+	idx_t num_column_ids = get.column_ids.size();
+	for (idx_t i = 0; i < num_column_ids; i++) {
+		if (get.bind_data) {
+			if (get.bind_data->with_ordinality && get.column_ids[i] == get.bind_data->original_ordinality_id) {
+				continue;
+			}
+		}
 		auto stats = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
 		if (stats) {
 			ColumnBinding binding(get.table_index, i);

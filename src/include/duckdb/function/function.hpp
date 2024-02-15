@@ -50,6 +50,8 @@ struct FunctionData {
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
+	bool with_ordinality = false;
+	idx_t original_ordinality_id = 0;
 
 	template <class TARGET>
 	TARGET &Cast() {

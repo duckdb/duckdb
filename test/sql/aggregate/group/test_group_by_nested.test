@@ -195,7 +195,6 @@ UNION ALL
 	select 34 as i, list(r) as pk from range(2000) tbl(r)
 ) sv(v, k);
 
-# mode output_hash
 
 # Single hash
 query II

@@ -151,6 +151,14 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			}
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
+		idx_t id = return_types.size();
+		if (table_function.with_ordinality) {
+			D_ASSERT(id == return_names.size());
+			return_types.emplace_back(LogicalType::BIGINT);
+			return_names.emplace_back("ordinality");
+			bind_data->original_ordinality_id = id;
+			bind_data->with_ordinality = true;
+		}
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
 			auto &arrow_bind = bind_data->Cast<PyTableFunctionData>();
 			arrow_bind.external_dependency = std::move(external_dependency);
@@ -257,7 +265,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		error.Throw();
 	}
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx);
-
+	table_function.with_ordinality = ref.with_ordinality;
+	if (table_function.with_ordinality && !table_function.supports_ordinality) {
+		throw NotImplementedException("WITH ORDINALITY not implemented for " + ref.ToString());
+	}
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 

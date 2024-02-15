@@ -211,7 +211,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	if (bind_data.parquet_options.schema.empty()) {
 		MultiFileReader::InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind, bind_data.types,
 		                                  bind_data.names, global_column_ids, table_filters, bind_data.files[0],
-		                                  context);
+		                                  context, bind_data.with_ordinality, bind_data.original_ordinality_id);
 		return;
 	}
 
@@ -321,6 +321,7 @@ public:
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
+		table_function.supports_ordinality = true;
 		return MultiFileReader::CreateFunctionSet(table_function);
 	}
 

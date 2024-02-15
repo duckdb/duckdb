@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
+#include "duckdb/function/table/ordinality_data.hpp"
 
 namespace duckdb {
 
@@ -11,6 +12,7 @@ public:
 	idx_t row_index;
 	bool new_row;
 	DataChunk input_chunk;
+	OrdinalityData ordinality_data;
 };
 
 class TableInOutGlobalState : public GlobalOperatorState {
@@ -57,9 +59,16 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();
 	auto &state = state_p.Cast<TableInOutLocalState>();
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	state.ordinality_data.with_ordinality = bind_data->with_ordinality;
+	state.ordinality_data.column_id = bind_data->original_ordinality_id;
 	if (projected_input.empty()) {
 		// straightforward case - no need to project input
-		return function.in_out_function(context, data, input, chunk);
+		OperatorResultType result = function.in_out_function(context, data, input, chunk);
+		if (function.with_ordinality) {
+			state.ordinality_data.SetOrdinality(chunk, column_ids);
+			state.ordinality_data.idx += chunk.size();
+		}
+		return result;
 	}
 	// when project_input is set we execute the input function row-by-row
 	if (state.new_row) {
@@ -79,6 +88,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		state.input_chunk.SetCardinality(1);
 		state.row_index++;
 		state.new_row = false;
+		state.ordinality_data.reset = true;
 	}
 	// set up the output data in "chunk"
 	D_ASSERT(chunk.ColumnCount() > projected_input.size());
@@ -90,6 +100,9 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
+	if (state.ordinality_data.with_ordinality) {
+		state.ordinality_data.SetOrdinality(chunk, column_ids);
+	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;
 	}
@@ -97,6 +110,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		// we finished processing this row: move to the next row
 		state.new_row = true;
 	}
+	state.ordinality_data.idx += chunk.size();
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 

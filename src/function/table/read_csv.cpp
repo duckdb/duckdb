@@ -10,6 +10,9 @@
 #include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -20,10 +23,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
-
-#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
 
 #include <limits>
 
@@ -111,6 +110,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 
 	D_ASSERT(return_types.size() == names.size());
+
 	result->options.dialect_options.num_cols = names.size();
 	if (options.file_options.union_by_name) {
 		result->reader_bind =
@@ -322,6 +322,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
+	read_csv.supports_ordinality = true;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
@@ -330,6 +331,7 @@ TableFunction ReadCSVTableFunction::GetAutoFunction() {
 	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
 	read_csv_auto.name = "read_csv_auto";
 	read_csv_auto.bind = ReadCSVBind;
+	read_csv_auto.supports_ordinality = true;
 	return read_csv_auto;
 }
 

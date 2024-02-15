@@ -61,6 +61,7 @@ void RepeatRowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	repeat_row.varargs = LogicalType::ANY;
 	repeat_row.named_parameters["num_rows"] = LogicalType::BIGINT;
 	repeat_row.cardinality = RepeatRowCardinality;
+	repeat_row.supports_ordinality = true;
 	set.AddFunction(repeat_row);
 }
 

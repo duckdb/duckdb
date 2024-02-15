@@ -32,6 +32,9 @@ public:
 	// External dependencies of this table function
 	unique_ptr<ExternalDependency> external_dependency;
 
+	// for propagating if WITH ORDINALITY is requested
+	bool with_ordinality = false;
+
 public:
 	string ToString() const override;
 

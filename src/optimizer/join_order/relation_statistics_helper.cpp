@@ -79,6 +79,11 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	// first push back basic distinct counts for each column (if we have them).
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		bool have_distinct_count_stats = false;
+		if (get.bind_data) {
+			if (get.bind_data->with_ordinality && get.column_ids[i] == get.bind_data->original_ordinality_id) {
+				continue;
+			}
+		}
 		if (get.function.statistics) {
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
 			if (column_statistics && have_catalog_table_statistics) {

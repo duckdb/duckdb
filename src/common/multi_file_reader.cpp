@@ -250,7 +250,8 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
                                         const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data, const string &initial_file) {
+                                        MultiFileReaderData &reader_data, const string &initial_file,
+                                        const bool with_ordinality, const idx_t original_ordinality_id) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
@@ -258,6 +259,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 	for (idx_t col_idx = 0; col_idx < local_names.size(); col_idx++) {
 		name_map[local_names[col_idx]] = col_idx;
 	}
+
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		// check if this is a constant column
 		bool constant = false;
@@ -273,6 +275,11 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		}
 		// not constant - look up the column in the name map
 		auto global_id = global_column_ids[i];
+		if (with_ordinality && global_id == original_ordinality_id) {
+			// this is the column (added during binding) used to display ordinality information and is therefore not
+			// found in the file
+			continue;
+		}
 		if (global_id >= global_types.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
@@ -314,9 +321,10 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-                                    const string &initial_file) {
+                                    const string &initial_file, const bool with_ordinality,
+                                    const idx_t original_ordinality_id) {
 	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data,
-	                  initial_file);
+	                  initial_file, with_ordinality, original_ordinality_id);
 	CreateFilterMap(global_types, filters, reader_data);
 }
 
