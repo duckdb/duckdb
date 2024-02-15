@@ -35,7 +35,7 @@ analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
 
 # right table can be a subquery, but using equality we still flip
 query II
-explain analyze SELECT * FROM left_table SEMI JOIN (SELECT a as foo from right_table where b > 1) buzz ON left_table.a = buzz.foo
+explain analyze SELECT * FROM left_table SEMI JOIN (SELECT a as foo from right_table) buzz ON left_table.a = buzz.foo
 ----
 analyzed_plan	<REGEX>:.*RIGHT_SEMI.*
 
