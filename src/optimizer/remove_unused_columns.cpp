@@ -109,48 +109,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		break;
 	case LogicalOperatorType::LOGICAL_UNION:
-		if (!everything_referenced) {
-			// for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
-			// encounter a UNION node that is not preceded by a DISTINCT)
-			// this happens when UNION ALL is used
-			auto &setop = op.Cast<LogicalSetOperation>();
-			vector<idx_t> entries;
-			for (idx_t i = 0; i < setop.column_count; i++) {
-				entries.push_back(i);
-			}
-			ClearUnusedExpressions(entries, setop.table_index);
-			if (entries.size() < setop.column_count) {
-				if (entries.empty()) {
-					// no columns referenced: this happens in the case of a COUNT(*)
-					// extract the first column
-					entries.push_back(0);
-				}
-				// columns were cleared
-				setop.column_count = entries.size();
-
-				for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
-					RemoveUnusedColumns remove(binder, context, true);
-					auto &child = op.children[child_idx];
-
-					// we push a projection under this child that references the required columns of the union
-					child->ResolveOperatorTypes();
-					auto bindings = child->GetColumnBindings();
-					vector<unique_ptr<Expression>> expressions;
-					expressions.reserve(entries.size());
-					for (auto &column_idx : entries) {
-						expressions.push_back(
-						    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
-					}
-					auto new_projection =
-					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-					new_projection->children.push_back(std::move(child));
-					op.children[child_idx] = std::move(new_projection);
-
-					remove.VisitOperator(*op.children[child_idx]);
-				}
-				return;
-			}
-		}
+		// you cannot remove unused columns into a union.
+		// If only 2 columns are selected from a union of 3 columns. The third column could have an effect on the reuslt
+		// of the union. If it is projected out before the union, then the result could be different.
 		for (auto &child : op.children) {
 			RemoveUnusedColumns remove(binder, context, true);
 			remove.VisitOperator(*child);
