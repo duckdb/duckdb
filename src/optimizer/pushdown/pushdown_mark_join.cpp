@@ -35,16 +35,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 #endif
 			// this filter references the marker
 			// we can turn this into a SEMI join if the filter is on only the marker
-//			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
-//				// filter just references the marker: turn into semi join
-//#ifdef DEBUG
-//				simplified_mark_join = true;
-//#endif
-//				join.join_type = JoinType::SEMI;
-//				filters.erase(filters.begin() + i);
-//				i--;
-//				continue;
-//			}
+			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
+				// filter just references the marker: turn into semi join
+#ifdef DEBUG
+				simplified_mark_join = true;
+#endif
+				join.join_type = JoinType::SEMI;
+				filters.erase(filters.begin() + i);
+				i--;
+				continue;
+			}
 			// if the filter is on NOT(marker) AND the join conditions are all set to "null_values_are_equal" we can
 			// turn this into an ANTI join if all join conditions have null_values_are_equal=true, then the result of
 			// the MARK join is always TRUE or FALSE, and never NULL this happens in the case of a correlated EXISTS
@@ -61,16 +61,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 							break;
 						}
 					}
-//					if (all_null_values_are_equal) {
-//#ifdef DEBUG
-//						simplified_mark_join = true;
-//#endif
-//						// all null values are equal, convert to ANTI join
-//						join.join_type = JoinType::ANTI;
-//						filters.erase(filters.begin() + i);
-//						i--;
-//						continue;
-//					}
+					if (all_null_values_are_equal) {
+#ifdef DEBUG
+						simplified_mark_join = true;
+#endif
+						// all null values are equal, convert to ANTI join
+						join.join_type = JoinType::ANTI;
+						filters.erase(filters.begin() + i);
+						i--;
+						continue;
+					}
 				}
 			}
 		}
