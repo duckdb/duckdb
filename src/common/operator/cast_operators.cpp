@@ -1126,37 +1126,49 @@ bool TryCast::Operation(interval_t input, interval_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 template <>
 duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(Timestamp::FromEpochNanoSeconds(input.value), result);
+	return StringCast::Operation<timestamp_t>(CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input), result);
 }
 template <>
 duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(Timestamp::FromEpochMs(input.value), result);
+	return StringCast::Operation<timestamp_t>(CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input), result);
 }
 template <>
 duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(Timestamp::FromEpochSeconds(input.value), result);
+	return StringCast::Operation<timestamp_t>(CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input), result);
 }
 
 template <>
 timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	timestamp_t cast_timestamp(Timestamp::GetEpochMs(input));
 	return cast_timestamp;
 }
 
 template <>
 timestamp_t CastTimestampUsToNs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	timestamp_t cast_timestamp(Timestamp::GetEpochNanoSeconds(input));
 	return cast_timestamp;
 }
 
 template <>
 timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	timestamp_t cast_timestamp(Timestamp::GetEpochSeconds(input));
 	return cast_timestamp;
 }
 
 template <>
 timestamp_t CastTimestampMsToUs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	return Timestamp::FromEpochMs(input.value);
 }
 
@@ -1172,17 +1184,36 @@ dtime_t CastTimestampMsToTime::Operation(timestamp_t input) {
 
 template <>
 timestamp_t CastTimestampMsToNs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	auto us = CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
 }
 
 template <>
 timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	return Timestamp::FromEpochNanoSeconds(input.value);
 }
 
 template <>
+timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
+	return Timestamp::FromEpochSeconds(input.value);
+}
+
+template <>
 date_t CastTimestampNsToDate::Operation(timestamp_t input) {
+	if (input == timestamp_t::infinity()) {
+		return date_t::infinity();
+	} else if (input == timestamp_t::ninfinity()) {
+		return date_t::ninfinity();
+	}
 	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
 	return Timestamp::GetDate(us);
 }
@@ -1195,17 +1226,18 @@ dtime_t CastTimestampNsToTime::Operation(timestamp_t input) {
 
 template <>
 timestamp_t CastTimestampSecToMs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(us);
 }
 
 template <>
-timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
-	return Timestamp::FromEpochSeconds(input.value);
-}
-
-template <>
 timestamp_t CastTimestampSecToNs::Operation(timestamp_t input) {
+	if (!Timestamp::IsFinite(input)) {
+		return input;
+	}
 	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
 	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
 }
@@ -1230,7 +1262,15 @@ bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool s
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
-	result = Timestamp::GetEpochNanoSeconds(result);
+	if (!Timestamp::IsFinite(result)) {
+		return true;
+	}
+
+	int64_t nanoseconds;
+	if (!Timestamp::TryGetEpochNanoSeconds(result, nanoseconds)) {
+		throw ConversionException("Could not convert VARCHAR value '%s' to Timestamp(NS)", input.GetString());
+	}
+	result = nanoseconds;
 	return true;
 }
 
@@ -1238,6 +1278,9 @@ template <>
 bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool strict) {
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
+	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
 	}
 	result = Timestamp::GetEpochMs(result);
 	return true;
@@ -1248,6 +1291,9 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
+	}
 	result = Timestamp::GetEpochSeconds(result);
 	return true;
 }
@@ -1256,6 +1302,9 @@ template <>
 bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
+	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
 	}
 	if (!TryMultiplyOperator::Operation(result.value, Interval::NANOS_PER_MICRO, result.value)) {
 		return false;
@@ -1268,6 +1317,9 @@ bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool str
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
+	}
 	result.value /= Interval::MICROS_PER_MSEC;
 	return true;
 }
@@ -1276,6 +1328,9 @@ template <>
 bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
+	}
+	if (!Timestamp::IsFinite(result)) {
+		return true;
 	}
 	result.value /= Interval::MICROS_PER_MSEC * Interval::MSECS_PER_SEC;
 	return true;
