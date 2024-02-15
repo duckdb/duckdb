@@ -282,33 +282,7 @@ BOOL INSTAPI ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attribut
 	if (!SQLWritePrivateProfileString(data.dsn, "database", data.database, "odbc.ini")) {
 		rc = FALSE;
 		if (parent)
-			MessageBox(parent, "Error writing database configuration data to registry", NULL, MB_ICONERROR);
-		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error writing configuration data to registry");
-		goto finish;
-	}
-
-	if (!SQLWritePrivateProfileString(data.dsn, "allow_unsigned_extensions", "false", "odbc.ini")) {
-		printf("Error writing allow_unsigned_extensions configuration data to registry\n");
-		rc = FALSE;
-		if (parent)
-			MessageBox(parent, "Error writing allow_unsigned_extensions configuration data to registry", NULL,
-			           MB_ICONERROR);
-		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error writing configuration data to registry");
-		goto finish;
-	}
-
-	if (!SQLWritePrivateProfileString(data.dsn, "access_mode", "READ_WRITE", "odbc.ini")) {
-		rc = FALSE;
-		if (parent)
-			MessageBox(parent, "Error writing access_mode configuration data to registry", NULL, MB_ICONERROR);
-		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error writing configuration data to registry");
-		goto finish;
-	}
-
-	if (!SQLWritePrivateProfileString(data.dsn, "custom_user_agent", "", "odbc.ini")) {
-		rc = FALSE;
-		if (parent)
-			MessageBox(parent, "Error writing custom_user_agent configuration data to registry", NULL, MB_ICONERROR);
+			MessageBox(parent, "Error writing configuration data to registry", NULL, MB_ICONERROR);
 		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error writing configuration data to registry");
 		goto finish;
 	}

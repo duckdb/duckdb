@@ -30,9 +30,8 @@ add_executable(
   tests/col_attribute/int_query.cpp
   tests/col_attribute/utils.cpp)
 
-add_executable(test_connection_odbc common.cpp
-        tests/connect_with_ini.cpp
-        connect_helpers.cpp)
+add_executable(test_connection_odbc common.cpp tests/connect_with_ini.cpp
+                                    connect_helpers.cpp)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
   # System.Data.ODBC tests Visual Studio Generator due to use of C++ CLI and

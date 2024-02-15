@@ -255,9 +255,4 @@ std::string GetTesterDirectory() {
 	return current_directory;
 }
 
-std::string GetHomeDirectory() {
-	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
-	return fs->GetHomeDirectory();
-}
-
 } // namespace odbc_test

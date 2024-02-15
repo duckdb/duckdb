@@ -65,3 +65,14 @@ SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQ
 
 	return connect.SetConnection();
 }
+
+SQLRETURN SQL_API SQLDisconnect(SQLHDBC connection_handle) {
+	duckdb::OdbcHandleDbc *dbc = nullptr;
+	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
+
+	dbc->conn.reset();
+	return SQL_SUCCESS;
+}

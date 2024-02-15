@@ -512,7 +512,6 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 
 		std::string db_name = dbc->GetDatabaseName();
 		if (db_name == ":memory:") {
-			printf("->HELLO FROM :memory:<-");
 			db_name = "";
 		}
 		duckdb::OdbcUtils::WriteString(db_name, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
@@ -1083,15 +1082,4 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLEndTran", "Invalid completion type.",
 		                                   SQLStateType::ST_HY012, dbc->GetDataSourceName());
 	}
-}
-
-SQLRETURN SQL_API SQLDisconnect(SQLHDBC connection_handle) {
-	duckdb::OdbcHandleDbc *dbc = nullptr;
-	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
-	if (ret != SQL_SUCCESS) {
-		return ret;
-	}
-
-	dbc->conn.reset();
-	return SQL_SUCCESS;
 }

@@ -125,7 +125,6 @@ SQLPOINTER ConvertToSQLPOINTER(const char *str);
 std::string ConvertHexToString(SQLCHAR val[16], int precision);
 
 std::string GetTesterDirectory();
-std::string GetHomeDirectory();
 
 } // namespace odbc_test
 
