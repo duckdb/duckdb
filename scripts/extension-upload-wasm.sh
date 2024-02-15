@@ -8,8 +8,13 @@ set -e
 shopt -s nullglob
 
 if [[ -z "${DUCKDB_EXTENSION_SIGNING_PK}" ]]; then
+	# no private key provided, use the test private key (NOT SAFE)
+	# this is made so private.pem at the end of the block will be in
+	# a valid state, and the rest of the signing process can be tested
+	# even without providing the key
 	cp test/mbedtls/private.pem private.pem
 else
+	# actual private key provided
 	echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 fi
 
@@ -50,4 +55,5 @@ do
 	fi
 done
 
+# remove private key
 rm private.pem
