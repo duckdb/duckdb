@@ -115,4 +115,4 @@ jobs:
                   AWS_DEFAULT_REGION: us-east-1
                   DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
               run: |
-                  bash ./scripts/extension-upload-wasm.sh ${{ env.DUCKDB_PLATFORM }} ${{ inputs.duckdb_ref }}
+                  bash ./scripts/extension-upload-wasm.sh ${{ matrix.duckdb_arch }} ${{ inputs.duckdb_ref }}
