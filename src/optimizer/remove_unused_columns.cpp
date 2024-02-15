@@ -111,10 +111,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_UNION: {
 		auto &setop = op.Cast<LogicalSetOperation>();
 		if (setop.setop_all) {
-			// for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
-			// encounter a UNION node that is not preceded by a DISTINCT)
-			// this happens when UNION ALL is used
-
+			// for UNION we can remove unreferenced columns if union all is used
+			// it's possible not all columns are referenced, but unreferenced columns in the union can
+			// still have an affect on the result of the union
 			vector<idx_t> entries;
 			for (idx_t i = 0; i < setop.column_count; i++) {
 				entries.push_back(i);
