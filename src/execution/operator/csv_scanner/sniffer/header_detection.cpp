@@ -93,9 +93,47 @@ static string NormalizeColumnName(const string &col_name) {
 	}
 	return col_name_cleaned;
 }
+
+// If our columns were set by the user, we verify if their names match with the first row
+bool CSVSniffer::DetectHeaderWithSetColumn() {
+	auto &sniffer_state_machine = best_candidate->GetStateMachine();
+	bool has_header = true;
+	bool all_varchar = true;
+	bool first_row_consistent = true;
+	// User set the names, we must check if they match the first row
+	if (set_columns.Size() != best_header_row.size()) {
+		return false;
+	} else {
+		// Let's do a match-aroo
+		for (idx_t i = 0; i < set_columns.Size(); i++) {
+			if (best_header_row[i].IsNull()) {
+				return false;
+			}
+			if (best_header_row[i] != (*set_columns.names)[i]) {
+				has_header = false;
+				break;
+			}
+		}
+	}
+	if (!has_header) {
+		// We verify if the types are consistent
+		for (idx_t col = 0; col < set_columns.Size(); col++) {
+			auto dummy_val = best_header_row[col];
+			// try cast to sql_type of column
+			const auto &sql_type = (*set_columns.types)[col];
+			if (sql_type != LogicalType::VARCHAR) {
+				all_varchar = false;
+				if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
+					first_row_consistent = false;
+				}
+			}
+		}
+		return !(first_row_consistent && !all_varchar);
+	}
+	return has_header;
+}
 void CSVSniffer::DetectHeader() {
 	auto &sniffer_state_machine = best_candidate->GetStateMachine();
-
 	if (best_header_row.empty()) {
 		sniffer_state_machine.dialect_options.header = false;
 		for (idx_t col = 0; col < sniffer_state_machine.dialect_options.num_cols; col++) {
@@ -119,31 +157,36 @@ void CSVSniffer::DetectHeader() {
 		error_handler->Error(error);
 	}
 	bool all_varchar = true;
-	for (idx_t col = 0; col < best_header_row.size(); col++) {
-		auto dummy_val = best_header_row[col];
-		if (!dummy_val.IsNull()) {
-			first_row_nulls = false;
-		}
+	bool set_columns_match = true;
+	bool has_header;
 
-		// try cast to sql_type of column
-		const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
-		if (sql_type != LogicalType::VARCHAR) {
-			all_varchar = false;
-			if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
-				first_row_consistent = false;
+	if (set_columns.IsSet()) {
+		has_header = DetectHeaderWithSetColumn();
+	} else {
+		for (idx_t col = 0; col < best_header_row.size(); col++) {
+			auto dummy_val = best_header_row[col];
+			if (!dummy_val.IsNull()) {
+				first_row_nulls = false;
+			}
+			// try cast to sql_type of column
+			const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
+			if (sql_type != LogicalType::VARCHAR) {
+				all_varchar = false;
+				if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
+					first_row_consistent = false;
+				}
 			}
 		}
-	}
-	bool has_header;
-	if (!sniffer_state_machine.options.dialect_options.header.IsSetByUser()) {
-		if (first_row_nulls){
+		if (first_row_nulls) {
 			// the first row has a null value, it can't be a header
 			has_header = false;
-		} else{
+		} else {
 			// Our header is only false if types are not all varchar, and rows are consistent
-			has_header = !(first_row_consistent && !all_varchar);
+			has_header = !(first_row_consistent && !all_varchar) || (set_columns.IsSet() && set_columns_match);
 		}
-	} else {
+	}
+
+	if (sniffer_state_machine.options.dialect_options.header.IsSetByUser()) {
 		// Header is defined by user, use that.
 		has_header = sniffer_state_machine.options.dialect_options.header.GetValue();
 	}

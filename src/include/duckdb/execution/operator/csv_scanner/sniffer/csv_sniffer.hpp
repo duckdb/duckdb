@@ -178,6 +178,7 @@ private:
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//
 	void DetectHeader();
+	bool DetectHeaderWithSetColumn();
 	vector<string> names;
 
 	//! ------------------------------------------------------//
