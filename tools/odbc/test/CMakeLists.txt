@@ -1,15 +1,18 @@
 include_directories(../include)
+include_directories(./include)
 include_directories(../../../third_party/catch/)
 include_directories(${ODBC_INCLUDE_DIRS})
 
 add_executable(
   test_odbc
   common.cpp
+  connect_helpers.cpp
   tests/alter.cpp
   tests/basic_usage.cpp
   tests/bind_col.cpp
   tests/bools_as_char.cpp
   tests/catalog_functions.cpp
+  tests/connect.cpp
   tests/diagnostics.cpp
   tests/select.cpp
   tests/row_wise_fetching.cpp
@@ -27,7 +30,9 @@ add_executable(
   tests/col_attribute/int_query.cpp
   tests/col_attribute/utils.cpp)
 
-add_executable(test_connection_odbc common.cpp tests/connect.cpp)
+add_executable(test_connection_odbc common.cpp
+        tests/connect_with_ini.cpp
+        connect_helpers.cpp)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
   # System.Data.ODBC tests Visual Studio Generator due to use of C++ CLI and

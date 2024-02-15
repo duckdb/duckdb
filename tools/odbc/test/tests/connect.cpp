@@ -1,6 +1,5 @@
-#include "../common.h"
+#include "connect_helpers.h"
 
-#include <fstream>
 #include <iostream>
 #include <odbcinst.h>
 
@@ -61,27 +60,6 @@ static void TestIncorrectParams() {
 	ConnectWithIncorrectParam("this_doesnt_exist=?", {"Invalid keyword"});
 }
 
-// Check if database is correctly set
-static void CheckDatabase(SQLHANDLE &dbc) {
-	HSTMT hstmt = SQL_NULL_HSTMT;
-	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
-
-	// Select * from customers
-	EXECUTE_AND_CHECK("SQLExecDirect (SELECT * FROM customer)", SQLExecDirect, hstmt,
-	                  ConvertToSQLCHAR("SELECT * FROM customer"), SQL_NTS);
-
-	// Fetch the first row
-	idx_t i = 1;
-	while (SQLFetch(hstmt) == SQL_SUCCESS) {
-		// Fetch the next row
-		DATA_CHECK(hstmt, 1, std::to_string(i++));
-	}
-	REQUIRE(i == 15001);
-
-	// Free the statement handle
-	EXECUTE_AND_CHECK("SQLFreeStmt (SQL_CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
-}
-
 // Test setting a database from the connection string
 static void TestSettingDatabase() {
 	SQLHANDLE env;
@@ -97,23 +75,6 @@ static void TestSettingDatabase() {
 
 	// Disconnect from the database
 	DISCONNECT_FROM_DATABASE(env, dbc);
-}
-
-// Checks if config is correctly set
-static void CheckConfig(SQLHANDLE &dbc, const std::string &setting, const std::string &expected_content) {
-	HSTMT hstmt = SQL_NULL_HSTMT;
-	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
-
-	// Check if the setting is successfully changed
-	EXECUTE_AND_CHECK("SQLExecDirect (select current_setting('" + setting + "'))", SQLExecDirect, hstmt,
-	                  ConvertToSQLCHAR("select current_setting('" + setting + "')"), SQL_NTS);
-
-	// Fetch the first row
-	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
-	DATA_CHECK(hstmt, 1, duckdb::StringUtil::Lower(expected_content));
-
-	// Free the statement handle
-	EXECUTE_AND_CHECK("SQLFreeStmt (SQL_CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
 }
 
 // Connect with connection string that sets a specific config then checks if correctly set
@@ -150,59 +111,6 @@ static void TestSettingConfigs() {
 	          "READ_WRITE");
 }
 
-// Test input from an ini file
-static void TestIniFile() {
-#if defined ODBC_LINK_ODBCINST || defined WIN32
-	std::string dsn = "DuckDB";
-	std::string driverName = "DuckDB Driver";
-	std::string database = GetTesterDirectory() + "test.duckdb";
-	std::string access_mode = "read_only";
-	std::string allow_unsigned_extensions = "true";
-
-#if !defined WIN32
-	// Create a temporary ini file
-	std::string ini_file = GetHomeDirectory() + "/.odbc.ini";
-
-	if (std::ifstream(ini_file)) {
-		std::remove(ini_file.c_str());
-	}
-
-	std::ofstream out(ini_file);
-	out << "[" << dsn << "]\n";
-	out << "Driver = " + driverName + "\n";
-	out << "database = " + database + "\n";
-	out << "access_mode = " + access_mode + "\n";
-	out << "allow_unsigned_extensions = " + allow_unsigned_extensions + "\n";
-	out.close();
-
-	if (!std::ifstream(ini_file)) {
-		FAIL("Failed to create ini file");
-	}
-#endif
-
-	// Connect to the database using the ini file
-	SQLHANDLE env;
-	SQLHANDLE dbc;
-	DRIVER_CONNECT_TO_DATABASE(env, dbc, "DSN=DuckDB");
-
-	// Check that the database is set
-	CheckDatabase(dbc);
-
-	// Check that database is read only
-	CheckConfig(dbc, "access_mode", "read_only");
-
-	// Check that allow_unsigned_extensions is set
-	CheckConfig(dbc, "allow_unsigned_extensions", "true");
-
-	// Disconnect from the database
-	DISCONNECT_FROM_DATABASE(env, dbc);
-
-#if !defined WIN32
-	std::remove(ini_file.c_str());
-#endif
-#endif
-}
-
 TEST_CASE("Test SQLConnect and SQLDriverConnect", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
@@ -223,8 +131,6 @@ TEST_CASE("Test SQLConnect and SQLDriverConnect", "[odbc]") {
 
 	ConnectWithoutDSN(env, dbc);
 	DISCONNECT_FROM_DATABASE(env, dbc);
-
-	TestIniFile();
 }
 
 TEST_CASE("Test user_agent - in-memory database", "[odbc][useragent]") {
