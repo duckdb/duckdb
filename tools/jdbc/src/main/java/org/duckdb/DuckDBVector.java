@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Calendar;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 class DuckDBVector {
     // Constant to construct BigDecimals from hugeint_t
@@ -130,7 +131,9 @@ class DuckDBVector {
         }
 
         if (isType(DuckDBColumnType.TIME)) {
-            return LocalTime.ofNanoOfDay(getbuf(idx, 8).getLong() * 1000);
+            long microseconds = getbuf(idx, 8).getLong();
+            long nanoseconds = TimeUnit.MICROSECONDS.toNanos(microseconds);
+            return LocalTime.ofNanoOfDay(nanoseconds);
         }
 
         String lazyString = getLazyString(idx);
@@ -321,7 +324,9 @@ class DuckDBVector {
         }
 
         if (isType(DuckDBColumnType.TIME)) {
-            return new Time(getbuf(idx, 8).getLong());
+            long microseconds = getbuf(idx, 8).getLong();
+            long milliseconds = TimeUnit.MICROSECONDS.toMillis(microseconds);
+            return new Time(milliseconds);
         }
 
         String string_value = getLazyString(idx);
