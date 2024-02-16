@@ -58,4 +58,16 @@ struct IsIntegral<uhugeint_t> {
 	static constexpr bool value = true;
 };
 
+template <class IN, class OUT>
+OUT CheckedCast(IN val) {
+	// TODO deal with signedness
+#ifdef DEBUG
+	if (val > NumericLimits<OUT>::Maximum() || val < NumericLimits<OUT>::Minimum()) {
+		// TODO more details in error message
+		throw InternalException("Information loss on integer cast");
+	}
+#endif
+	return static_cast<OUT>(val);
+}
+
 } // namespace duckdb

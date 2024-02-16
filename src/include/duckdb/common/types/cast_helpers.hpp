@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -399,9 +400,9 @@ struct DateToStringCast {
 			ptr[0] = '-';
 			if (date[i] < 10) {
 				ptr[1] = '0';
-				ptr[2] = '0' + date[i];
+				ptr[2] = '0' + CheckedCast<int32_t, char>(date[i]);
 			} else {
-				auto index = static_cast<unsigned>(date[i] * 2);
+				auto index = static_cast<idx_t>(date[i] * 2);
 				ptr[1] = duckdb_fmt::internal::data::digits[index];
 				ptr[2] = duckdb_fmt::internal::data::digits[index + 1];
 			}
@@ -456,7 +457,7 @@ struct TimeToStringCast {
 		D_ASSERT(value >= 0 && value <= 99);
 		if (value < 10) {
 			ptr[0] = '0';
-			ptr[1] = '0' + value;
+			ptr[1] = '0' + CheckedCast<int32_t, char>(value);
 		} else {
 			auto index = static_cast<unsigned>(value * 2);
 			ptr[0] = duckdb_fmt::internal::data::digits[index];
