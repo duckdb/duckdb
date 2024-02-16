@@ -102,12 +102,7 @@ class SQLLogicEncoder(json.JSONEncoder):
             return {}
 
     def encode_base_decorator(self, base: BaseStatement):
-        return {
-            'type': base.header.type.name,
-            'parameters': base.header.parameters,
-            'query_line': base.query_line,
-            **self.encode_decorators(base),
-        }
+        return {'type': base.token.type.name, 'parameters': base.token.parameters}
 
     def encode_base_statement(self, base: BaseStatement):
         return {
@@ -126,14 +121,14 @@ class SQLLogicEncoder(json.JSONEncoder):
     def default(self, obj):
         # Decorators
         if isinstance(obj, SkipIf):
-            assert obj.header.type == TokenType.SQLLOGIC_SKIP_IF, "Object is not an instance of SkipIf"
+            assert obj.token.type == TokenType.SQLLOGIC_SKIP_IF, "Object is not an instance of SkipIf"
             return {
-                **self.encode_base_statement(obj),
+                **self.encode_base_decorator(obj),
             }
         if isinstance(obj, OnlyIf):
-            assert obj.header.type == TokenType.SQLLOGIC_ONLY_IF, "Object is not an instance of OnlyIf"
+            assert obj.token.type == TokenType.SQLLOGIC_ONLY_IF, "Object is not an instance of OnlyIf"
             return {
-                **self.encode_base_statement(obj),
+                **self.encode_base_decorator(obj),
             }
 
         if isinstance(obj, ExpectedResult):
