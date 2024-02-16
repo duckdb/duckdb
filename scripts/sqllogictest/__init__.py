@@ -22,6 +22,7 @@ from .statement import (
 )
 from .decorator import SkipIf, OnlyIf
 from .expected_result import ExpectedResult
+from .parser import SQLLogicParser, SQLLogicEncoder, SQLLogicTest
 
 all = [
     TokenType,
@@ -48,4 +49,5 @@ all = [
     Unskip,
     SkipIf,
     OnlyIf,
+    SQLLogicParser,
 ]
