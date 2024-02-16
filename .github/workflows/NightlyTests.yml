@@ -69,6 +69,7 @@ jobs:
     name: Release Assertions
     runs-on: ubuntu-20.04
     needs: linux-memory-leaks
+    timeout-minutes: 120
     env:
       CC: gcc-10
       CXX: g++-10
@@ -107,7 +108,6 @@ jobs:
 
     - name: Test
       shell: bash
-      timeout-minutes: 120
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit
 
