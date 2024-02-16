@@ -56,10 +56,13 @@ public class Assertions {
         try {
             thrower.run();
         } catch (Throwable e) {
-            assertEquals(e.getClass(), exception);
+            if (!exception.isAssignableFrom(e.getClass())) {
+                throw new Exception("Expected to throw " + exception.getName() + ", but threw " +
+                                    e.getClass().getName());
+            }
             return e;
         }
-        throw new Exception("Expected to throw " + exception.getName());
+        throw new Exception("Expected to throw " + exception.getName() + ", but no exception thrown");
     }
 
     // Asserts we are either throwing the correct exception, or not throwing at all
