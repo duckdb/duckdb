@@ -306,8 +306,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    //    "azure",
-    "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
+    "azure", "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
     // "inet",
     // "icu",
     "json", "parquet", "postgres_scanner",
