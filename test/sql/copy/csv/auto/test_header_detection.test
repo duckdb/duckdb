@@ -55,7 +55,7 @@ DROP TABLE test;
 
 # CSV file with two lines both only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_multi_line.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_multi_line.csv', header = 0);
 
 query TTT
 SELECT * FROM test ORDER BY column0;

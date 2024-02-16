@@ -1,0 +1,26 @@
+# name: test/sql/copy/csv/test_auto_detection_headers.test
+# description: Test auto detection of headers
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+from read_csv('/Users/holanda/Documents/Projects/duckdb/data/csv/headers/undetected_type.csv', delim = ';')
+----
+68,527.00
+
+query I
+from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/all_varchar.csv'
+----
+Pedro
+
+query II
+from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/single_line.csv'
+----
+
+query I
+from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/borked_type.csv'
+----
+02/01/2019
+08//01/2019

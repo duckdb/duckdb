@@ -8,7 +8,6 @@ PRAGMA enable_verification
 query III
 select * from 'data/csv/nullbyte.csv';
 ----
-col1	col2	col3
 val1	val\02	val3
 
 query III
