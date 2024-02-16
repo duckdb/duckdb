@@ -221,10 +221,10 @@ private:
 
 	//! Apply a bitmask to the hashes
 	inline idx_t ApplyBitmask(hash_t hash) const;
-	void ApplyBitmask(Vector &hashes, idx_t count);
 
-	//! Gets a pointer to the entry in the HT for each of the hashes
-	void GetRowPointers(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
+	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing
+	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, Vector &hashes_v, const SelectionVector &sel, idx_t count, Vector &pointers);
+
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
