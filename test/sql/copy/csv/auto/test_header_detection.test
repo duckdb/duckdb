@@ -68,7 +68,7 @@ DROP TABLE test;
 
 # CSV file with one line, two columns, only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_single_line.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_single_line.csv', header = 0);
 
 query TT
 SELECT column0, column1 FROM test ORDER BY column0;
@@ -97,7 +97,6 @@ CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/s
 query T
 SELECT * FROM test;
 ----
-Test
 
 statement ok
 DROP TABLE test;

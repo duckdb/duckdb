@@ -24,3 +24,9 @@ from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/borked_type.csv'
 ----
 02/01/2019
 08//01/2019
+
+# This should work even with only one line
+query I
+from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/integer.csv'
+----
+32

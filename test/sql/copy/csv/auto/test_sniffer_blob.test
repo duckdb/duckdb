@@ -11,7 +11,7 @@ Auto Type Candidate of type BLOB is not accepted as a valid input
 # All this is cool and should work.
 
 query I
-select count(*) from read_csv('test/sql/copy/csv/data/test/blob.csv',types=['blob'])
+select count(*) from read_csv('test/sql/copy/csv/data/test/blob.csv',types=['blob'], header = 0)
 ----
 1
 

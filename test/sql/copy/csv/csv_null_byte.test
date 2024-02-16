@@ -18,7 +18,6 @@ val1	val\02	val3
 query II
 select * from 'data/csv/nullbyte_header.csv';
 ----
-col1	col\02
 val1	val2
 
 query II
