@@ -140,7 +140,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.7"
+          python-version: "3.12"
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
@@ -188,7 +188,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.7"
+          python-version: "3.12"
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
