@@ -1,13 +1,10 @@
 from .statement import Statement
-from .no_op import NoOp
 from .require import Require
 from .mode import Mode
 from .halt import Halt
 from .load import Load
 from .set import Set
 from .load import Load
-from .skip_if import SkipIf, Skip, Unskip
-from .only_if import OnlyIf
 from .query import Query
 from .hash_threshold import HashThreshold
 from .loop import Loop
@@ -18,16 +15,15 @@ from .restart import Restart
 from .reconnect import Reconnect
 from .sleep import Sleep
 
+from .skip import Skip, Unskip
+
 all = [
     Statement,
-    NoOp,
     Require,
     Mode,
     Halt,
     Load,
     Set,
-    SkipIf,
-    OnlyIf,
     Query,
     HashThreshold,
     Loop,

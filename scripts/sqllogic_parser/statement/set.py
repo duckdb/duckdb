@@ -6,7 +6,7 @@ from typing import List
 class Set(BaseStatement):
     def __init__(self, header: Token, line: int):
         super().__init__(header, line)
-        self.parameters = []
+        self.error_messages = []
 
-    def add_parameters(self, parameters: List[str]):
-        self.parameters.extend(parameters)
+    def add_error_messages(self, error_messages: List[str]):
+        self.error_messages.extend(error_messages)

@@ -4,19 +4,17 @@ from enum import Enum, auto
 from typing import List, Dict, Optional
 import json
 
-from sqllogic_parser import (
-    Token,
-    TokenType,
-    BaseStatement,
+from sqllogic_parser.token import Token, TokenType
+
+from sqllogic_parser.expected_result import ExpectedResult
+
+from sqllogic_parser.statement import (
     Statement,
     Require,
-    NoOp,
     Mode,
     Halt,
     Set,
     Load,
-    SkipIf,
-    OnlyIf,
     Query,
     HashThreshold,
     Loop,
@@ -30,7 +28,10 @@ from sqllogic_parser import (
     Unskip,
 )
 
-# TODO: add 'dbpath' with argparse
+from sqllogic_parser.decorator import SkipIf, OnlyIf
+
+from sqllogic_parser.base_decorator import BaseDecorator
+from sqllogic_parser.base_statement import BaseStatement
 
 
 def create_formatted_list(items) -> str:
@@ -78,20 +79,6 @@ def get_sleep_unit(unit):
         raise RuntimeError(f"Unrecognized sleep mode - expected {create_formatted_list(options)}")
 
 
-class ExpectedResult:
-    class Type(Enum):
-        SUCCES = (auto(),)
-        ERROR = (auto(),)
-        UNKNOWN = auto()
-
-    def __init__(self, type: "ExpectedResult.Type"):
-        self.type = type
-        self.lines: Optional[List[str]] = None
-
-    def add_lines(self, lines: List[str]):
-        self.lines = lines
-
-
 class SQLLogicTest:
     def __init__(self, path):
         self.path = path
@@ -118,6 +105,18 @@ class SQLLogicEncoder(json.JSONEncoder):
             return {}
 
     def default(self, obj):
+        # Decorators
+        if isinstance(obj, SkipIf):
+            assert obj.header.type == TokenType.SQLLOGIC_SKIP_IF, "Object is not an instance of SkipIf"
+            return {
+                **self.encode_base(obj),
+            }
+        if isinstance(obj, OnlyIf):
+            assert obj.header.type == TokenType.SQLLOGIC_ONLY_IF, "Object is not an instance of OnlyIf"
+            return {
+                **self.encode_base(obj),
+            }
+
         if isinstance(obj, ExpectedResult):
             return {'type': obj.type.name, **self.encode_expected_lines(obj)}
         if isinstance(obj, SQLLogicTest):
@@ -138,16 +137,6 @@ class SQLLogicEncoder(json.JSONEncoder):
             }
         elif isinstance(obj, Require):
             assert obj.header.type == TokenType.SQLLOGIC_REQUIRE, "Object is not an instance of Require"
-            return {
-                **self.encode_base(obj),
-            }
-        elif isinstance(obj, SkipIf):
-            assert obj.header.type == TokenType.SQLLOGIC_SKIP_IF, "Object is not an instance of SkipIf"
-            return {
-                **self.encode_base(obj),
-            }
-        elif isinstance(obj, OnlyIf):
-            assert obj.header.type == TokenType.SQLLOGIC_ONLY_IF, "Object is not an instance of OnlyIf"
             return {
                 **self.encode_base(obj),
             }
@@ -178,9 +167,7 @@ class SQLLogicEncoder(json.JSONEncoder):
             }
         elif isinstance(obj, Set):
             assert obj.header.type == TokenType.SQLLOGIC_SET, "Object is not an instance of Set"
-            return {
-                **self.encode_base(obj),
-            }
+            return {**self.encode_base(obj), 'error_messages': self.error_messages}
         elif isinstance(obj, Loop):
             type = obj.header.type
             assert (
@@ -246,27 +233,29 @@ class SQLLogicParser:
 
     def __init__(self):
         self.reset()
-        self.PARSER = {
-            TokenType.SQLLOGIC_STATEMENT: self.parse_statement,
-            TokenType.SQLLOGIC_QUERY: self.parse_query,
-            TokenType.SQLLOGIC_REQUIRE: self.parse_require,
-            TokenType.SQLLOGIC_HASH_THRESHOLD: self.parse_hash_threshold,
-            TokenType.SQLLOGIC_HALT: self.parse_halt,
-            TokenType.SQLLOGIC_SKIP_IF: self.parse_skipif,
-            TokenType.SQLLOGIC_ONLY_IF: self.parse_onlyif,
-            TokenType.SQLLOGIC_MODE: self.parse_mode,
-            TokenType.SQLLOGIC_SET: self.parse_set,
-            TokenType.SQLLOGIC_LOOP: self.parse_loop,
-            TokenType.SQLLOGIC_CONCURRENT_LOOP: self.parse_loop,
-            TokenType.SQLLOGIC_FOREACH: self.parse_foreach,
-            TokenType.SQLLOGIC_CONCURRENT_FOREACH: self.parse_foreach,
-            TokenType.SQLLOGIC_ENDLOOP: self.parse_endloop,
-            TokenType.SQLLOGIC_REQUIRE_ENV: self.parse_require_env,
-            TokenType.SQLLOGIC_LOAD: self.parse_load,
-            TokenType.SQLLOGIC_RESTART: self.parse_restart,
-            TokenType.SQLLOGIC_RECONNECT: self.parse_reconnect,
-            TokenType.SQLLOGIC_SLEEP: self.parse_sleep,
+        self.STATEMENTS = {
+            TokenType.SQLLOGIC_STATEMENT: self.statement_statement,
+            TokenType.SQLLOGIC_QUERY: self.statement_query,
+            TokenType.SQLLOGIC_REQUIRE: self.statement_require,
+            TokenType.SQLLOGIC_HASH_THRESHOLD: self.statement_hash_threshold,
+            TokenType.SQLLOGIC_HALT: self.statement_halt,
+            TokenType.SQLLOGIC_MODE: self.statement_mode,
+            TokenType.SQLLOGIC_SET: self.statement_set,
+            TokenType.SQLLOGIC_LOOP: self.statement_loop,
+            TokenType.SQLLOGIC_CONCURRENT_LOOP: self.statement_loop,
+            TokenType.SQLLOGIC_FOREACH: self.statement_foreach,
+            TokenType.SQLLOGIC_CONCURRENT_FOREACH: self.statement_foreach,
+            TokenType.SQLLOGIC_ENDLOOP: self.statement_endloop,
+            TokenType.SQLLOGIC_REQUIRE_ENV: self.statement_require_env,
+            TokenType.SQLLOGIC_LOAD: self.statement_load,
+            TokenType.SQLLOGIC_RESTART: self.statement_restart,
+            TokenType.SQLLOGIC_RECONNECT: self.statement_reconnect,
+            TokenType.SQLLOGIC_SLEEP: self.statement_sleep,
             TokenType.SQLLOGIC_INVALID: None,
+        }
+        self.DECORATORS = {
+            TokenType.SQLLOGIC_SKIP_IF: self.decorator_skipif,
+            TokenType.SQLLOGIC_ONLY_IF: self.decorator_onlyif,
         }
 
     def peek(self):
@@ -293,7 +282,7 @@ class SQLLogicParser:
             self.fail(error)
         return ExpectedResult(type_map[statement_type])
 
-    def extract_expected_result(self) -> Optional[List[str]]:
+    def extract_expected_lines(self) -> Optional[List[str]]:
         end_of_file = self.current_line >= len(self.lines)
         if end_of_file or self.peek() != "----":
             return None
@@ -305,7 +294,7 @@ class SQLLogicParser:
             self.consume()
         return result
 
-    def parse_statement(self, header: Token) -> Optional[BaseStatement]:
+    def statement_statement(self, header: Token) -> Optional[BaseStatement]:
         options = ['ok', 'error', 'maybe']
         if len(header.parameters) < 1:
             self.fail(f"statement requires at least one parameter ({create_formatted_list(options)})")
@@ -320,7 +309,7 @@ class SQLLogicParser:
             self.fail("Unexpected empty statement text")
         statement.add_lines(statement_text)
 
-        expected_lines: Optional[List[str]] = self.extract_expected_result()
+        expected_lines: Optional[List[str]] = self.extract_expected_lines()
         match expected_result.type:
             case ExpectedResult.Type.SUCCES:
                 if expected_lines != None:
@@ -339,13 +328,11 @@ class SQLLogicParser:
                 raise Exception(f"Unexpected ExpectedResult Type: {expected_result.type.name}")
 
         statement.expected_result = expected_result
-        # perform any renames in the text
-        # TODO: deal with renames
         if len(header.parameters) >= 2:
             statement.set_connection(header.parameters[1])
         return statement
 
-    def parse_query(self, header: Token) -> BaseStatement:
+    def statement_query(self, header: Token) -> BaseStatement:
         if len(header.parameters) < 1:
             self.fail("query requires at least one parameter (query III)")
         statement = Query(header, self.current_line + 1)
@@ -367,14 +354,11 @@ class SQLLogicParser:
         # extract the SQL statement
         self.next_line()
         statement_text = self.extract_statement()
-        # perform any renames in the text
-        # TODO: perform replacements
-        # statement.base_sql_query = replace_keywords(statement_text)
         statement.add_lines(statement_text)
 
         # extract the expected result
         expected_result = self.get_expected_result('ok')
-        expected_lines: Optional[List[str]] = self.extract_expected_result()
+        expected_lines: Optional[List[str]] = self.extract_expected_lines()
         if expected_lines == None:
             self.fail("'query' did not provide an expected result")
         expected_result.add_lines(expected_lines)
@@ -409,16 +393,16 @@ class SQLLogicParser:
             statement.set_label(header.parameters[2])
         return statement
 
-    def parse_hash_threshold(self, header: Token) -> Optional[BaseStatement]:
+    def statement_hash_threshold(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 1:
             self.fail("hash-threshold requires a parameter")
         threshold = int(header.parameters[0])
         return HashThreshold(header, self.current_line + 1, threshold)
 
-    def parse_halt(self, header: Token) -> Optional[BaseStatement]:
+    def statement_halt(self, header: Token) -> Optional[BaseStatement]:
         return Halt(header, self.current_line + 1)
 
-    def parse_mode(self, header: Token) -> Optional[BaseStatement]:
+    def statement_mode(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 1:
             self.fail("mode requires one parameter")
         parameter = header.parameters[0]
@@ -429,37 +413,33 @@ class SQLLogicParser:
         else:
             return Mode(header, self.current_line + 1, parameter)
 
-    def parse_require(self, header: Token) -> Optional[BaseStatement]:
+    def statement_require(self, header: Token) -> Optional[BaseStatement]:
         return Require(header, self.current_line + 1)
 
-    def parse_set(self, header: Token) -> Optional[BaseStatement]:
+    def statement_set(self, header: Token) -> Optional[BaseStatement]:
         parameters = header.parameters
         if len(parameters) < 1:
             self.fail("set requires at least 1 parameter (e.g. set ignore_error_messages HTTP Error)")
         if parameters[0] == "ignore_error_messages" or parameters[0] == "always_fail_error_messages":
-            # TODO: handle these
-            # Since we plan to parse everything first and then execute
-            # These should return BaseStatements that can be handled by the executor
-
-            string_set = []
+            error_messages = []
             # Parse the parameter list as a comma separated list of strings that can contain spaces
             # e.g. `set ignore_error_messages This is an error message, This_is_another, and   another`
             tmp = [[y.strip() for y in x.split(',') if y.strip() != ''] for x in parameters[1:]]
             for x in tmp:
-                string_set.extend(x)
+                error_messages.extend(x)
             statement = Set(header, self.current_line + 1)
-            statement.add_parameters(string_set)
+            statement.add_error_messages(error_messages)
             return statement
         else:
             self.fail("unrecognized set parameter: %s" % parameters[0])
 
-    def parse_load(self, header: Token) -> Optional[BaseStatement]:
+    def statement_load(self, header: Token) -> Optional[BaseStatement]:
         statement = Load(header, self.current_line + 1)
         if len(header.parameters) > 1 and header.parameters[1] == "readonly":
             statement.set_readonly()
         return statement
 
-    def parse_loop(self, header: Token) -> Optional[BaseStatement]:
+    def statement_loop(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 3:
             self.fail("Expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)")
         is_parallel = header.type == TokenType.SQLLOGIC_CONCURRENT_LOOP
@@ -469,7 +449,7 @@ class SQLLogicParser:
         statement.set_end(int(header.parameters[2]))
         return statement
 
-    def parse_foreach(self, header: Token) -> Optional[BaseStatement]:
+    def statement_foreach(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) < 2:
             self.fail(
                 "Expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer " "smallint float)"
@@ -480,33 +460,34 @@ class SQLLogicParser:
         statement.set_values(header.parameters[1:])
         return statement
 
-    def parse_endloop(self, header: Token) -> Optional[BaseStatement]:
+    def statement_endloop(self, header: Token) -> Optional[BaseStatement]:
         return Endloop(header, self.current_line + 1)
 
-    def parse_require_env(self, header: Token) -> Optional[BaseStatement]:
+    def statement_require_env(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 1 and len(header.parameters) != 2:
             self.fail("require-env requires 1 argument: <env name> [optional: <expected env val>]")
         return RequireEnv(header, self.current_line + 1)
 
-    def parse_restart(self, header: Token) -> Optional[BaseStatement]:
+    def statement_restart(self, header: Token) -> Optional[BaseStatement]:
         return Restart(header, self.current_line + 1)
 
-    def parse_reconnect(self, header: Token) -> Optional[BaseStatement]:
+    def statement_reconnect(self, header: Token) -> Optional[BaseStatement]:
         return Reconnect(header, self.current_line + 1)
 
-    def parse_sleep(self, header: Token) -> Optional[BaseStatement]:
+    def statement_sleep(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 2:
             self.fail("sleep requires two parameter (e.g. sleep 1 second)")
-        # require a specific block size
         sleep_duration = int(header.parameters[0])
         sleep_unit = get_sleep_unit(header.parameters[1])
         return Sleep(header, self.current_line + 1, sleep_duration, sleep_unit)
 
-    def parse_skipif(self, header: Token) -> Optional[BaseStatement]:
-        return SkipIf(header, self.current_line + 1)
+    # Decorators
 
-    def parse_onlyif(self, header: Token) -> Optional[BaseStatement]:
-        return OnlyIf(header, self.current_line + 1)
+    def decorator_skipif(self, token: Token) -> Optional[BaseDecorator]:
+        return SkipIf(token)
+
+    def decorator_onlyif(self, token: Token) -> Optional[BaseDecorator]:
+        return OnlyIf(token)
 
     def parse(self, file_path: str) -> Optional[SQLLogicTest]:
         if not self.open_file(file_path):
@@ -519,37 +500,26 @@ class SQLLogicParser:
             if self.is_single_line_statement(token) and not self.next_line_empty_or_comment():
                 self.fail("All test statements need to be separated by an empty line")
 
-            # skip_statement = False
-            # while token.type == TokenType.SQLLOGIC_SKIP_IF or token.type == TokenType.SQLLOGIC_ONLY_IF:
-            #    skip_if = token.type == TokenType.SQLLOGIC_SKIP_IF
-            #    if len(token.parameters) < 1:
-            #        self.fail("skipif/onlyif requires a single parameter (e.g. skipif duckdb)")
-            #    system_name = token.parameters[0].lower()
-            #    accepted_systems = [
-            #        'duckdb'
-            #    ]
-            #    if self.current_test.is_sqlite_test():
-            #        accepted_systems.append('postgresql')
-            #    condition = system_name in accepted_systems
-            #    if condition == skip_if:
-            #        # we skip this command in two situations
-            #        # (1) skipif duckdb
-            #        # (2) onlyif <other_system>
-            #        skip_statement = True
-            #        break
-            #    self.next_line()
-            #    token = self.tokenize()
+            # Parse any number of decorators first
+            parse_method = self.DECORATORS.get(token.type)
+            decorators: List[BaseDecorator] = []
+            while parse_method != None:
+                decorator = parse_method(token)
+                if not decorator:
+                    raise Exception(f"Parser did not produce a decorator for {token.type.name}")
+                decorators.append(decorator)
+                self.next_line()
+                token = self.tokenize()
+                parse_method = self.DECORATORS.get(token.type)
 
-            # if skip_statement:
-            #    continue
-
-            method = self.PARSER.get(token.type)
-            if method:
-                statement = method(token)
+            parse_method = self.STATEMENTS.get(token.type)
+            if parse_method:
+                statement = parse_method(token)
             else:
                 raise Exception(f"Unexpected token type: {token.type.name}")
             if not statement:
                 raise Exception(f"Parser did not produce a statement for {token.type.name}")
+            statement.add_decorators(decorators)
             self.current_test.add_statement(statement)
         return self.current_test
 

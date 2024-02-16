@@ -1,15 +1,13 @@
 from .token import TokenType, Token
 from .base_statement import BaseStatement
+from .base_decorator import BaseDecorator
 from .statement import (
     Statement,
-    NoOp,
     Require,
     Mode,
     Halt,
     Load,
     Set,
-    SkipIf,
-    OnlyIf,
     Query,
     HashThreshold,
     Loop,
@@ -22,20 +20,21 @@ from .statement import (
     Skip,
     Unskip,
 )
+from .decorator import SkipIf, OnlyIf
+from .expected_result import ExpectedResult
 
 all = [
     TokenType,
     Token,
     BaseStatement,
+    BaseDecorator,
     Statement,
-    NoOp,
+    ExpectedResult,
     Require,
     Mode,
     Halt,
     Load,
     Set,
-    SkipIf,
-    OnlyIf,
     Query,
     HashThreshold,
     Loop,
@@ -47,4 +46,6 @@ all = [
     Sleep,
     Skip,
     Unskip,
+    SkipIf,
+    OnlyIf,
 ]

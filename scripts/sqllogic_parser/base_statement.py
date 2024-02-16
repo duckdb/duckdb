@@ -1,25 +1,25 @@
-from typing import Optional, List
-from sqllogic_parser.token import Token
+from sqllogic_parser.token import Token, TokenType
+from sqllogic_parser.base_decorator import BaseDecorator
+from typing import List
 
 
 class BaseStatement:
     def __init__(self, header: Token, line: int):
         self.header: Token = header
         self.query_line: int = line
-        self.file_name: Optional[str] = None
+        self.decorators: List[BaseDecorator] = []
 
-        self.lines: List[str] = []
-        self.expected_result: Optional[List[str]] = None
-        self.connection_name: Optional[str] = None
+    def add_decorators(self, decorators: List[BaseDecorator]):
+        self.decorators = decorators
 
-    def add_lines(self, lines: List[str]):
-        self.lines.extend(lines)
+    def get_decorators(self) -> List[BaseDecorator]:
+        return self.decorators
 
-    def set_connection(self, connection: str):
-        self.connection_name = connection
+    def get_query_line(self) -> int:
+        return self.query_line
 
-    def perform_rename(self):
-        # TODO: handle renames:
-        # environment variables
-        # keywords
-        pass
+    def get_type(self) -> TokenType:
+        return self.header.type
+
+    def get_parameters(self) -> List[str]:
+        return self.header.parameters
