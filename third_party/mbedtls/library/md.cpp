@@ -347,7 +347,7 @@ int mbedtls_md_clone( mbedtls_md_context_t *dst,
 #endif
 #if defined(MBEDTLS_SHA512_C)
         case MBEDTLS_MD_SHA512:
-            mbedtls_sha512_clone((mbedtls_sha512_context *) dst->md_ctx, (mbedtls_sha512_context *)src->md_ctx );
+            mbedtls_sha512_clone((mbedtls_sha512_context *) dst->md_ctx, (mbedtls_sha512_context *) src->md_ctx );
             break;
 #endif
         default:
