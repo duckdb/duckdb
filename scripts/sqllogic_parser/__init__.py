@@ -19,6 +19,8 @@ from .statement import (
     Restart,
     Reconnect,
     Sleep,
+    Skip,
+    Unskip,
 )
 
 all = [
@@ -43,4 +45,6 @@ all = [
     Restart,
     Reconnect,
     Sleep,
+    Skip,
+    Unskip,
 ]

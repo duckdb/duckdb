@@ -6,7 +6,7 @@ from .halt import Halt
 from .load import Load
 from .set import Set
 from .load import Load
-from .skip_if import SkipIf
+from .skip_if import SkipIf, Skip, Unskip
 from .only_if import OnlyIf
 from .query import Query
 from .hash_threshold import HashThreshold
@@ -37,4 +37,6 @@ all = [
     Restart,
     Reconnect,
     Sleep,
+    Skip,
+    Unskip,
 ]

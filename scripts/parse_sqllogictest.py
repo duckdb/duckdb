@@ -26,6 +26,8 @@ from sqllogic_parser import (
     Restart,
     Reconnect,
     Sleep,
+    Skip,
+    Unskip,
 )
 
 # TODO: add 'dbpath' with argparse
@@ -123,90 +125,115 @@ class SQLLogicEncoder(json.JSONEncoder):
             return {'type': obj.type.name, **self.encode_expected_lines(obj)}
         if isinstance(obj, SQLLogicTest):
             return {'path': obj.path, 'statements': [x for x in obj.statements]}
-        if isinstance(obj, BaseStatement):
-            match obj.header.type:
-                case TokenType.SQLLOGIC_STATEMENT:
-                    return {
-                        **self.encode_header(obj.header),
-                        'lines': obj.lines,
-                        'expected_result': obj.expected_result,
-                    }
-                case TokenType.SQLLOGIC_QUERY:
-                    return {
-                        **self.encode_header(obj.header),
-                        'lines': obj.lines,
-                        'expected_result': obj.expected_result,
-                    }
-                case TokenType.SQLLOGIC_REQUIRE:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_SKIP_IF:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_ONLY_IF:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_HASH_THRESHOLD:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_HALT:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_MODE:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_SET:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_LOOP:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_CONCURRENT_LOOP:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_FOREACH:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_CONCURRENT_FOREACH:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_ENDLOOP:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_REQUIRE_ENV:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_LOAD:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_RESTART:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_RECONNECT:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case TokenType.SQLLOGIC_SLEEP:
-                    return {
-                        **self.encode_header(obj.header),
-                    }
-                case _:
-                    raise Exception(f"Invalid TokenType ({obj.header.type.name})")
+        if isinstance(obj, Statement):
+            assert obj.header.type == TokenType.SQLLOGIC_STATEMENT, "Object is not an instance of Statement"
+            return {
+                **self.encode_header(obj.header),
+                'lines': obj.lines,
+                'expected_result': obj.expected_result,
+            }
+        elif isinstance(obj, Query):
+            assert obj.header.type == TokenType.SQLLOGIC_QUERY, "Object is not an instance of Query"
+            return {
+                **self.encode_header(obj.header),
+                'lines': obj.lines,
+                'expected_result': obj.expected_result,
+            }
+        elif isinstance(obj, Require):
+            assert obj.header.type == TokenType.SQLLOGIC_REQUIRE, "Object is not an instance of Require"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, SkipIf):
+            assert obj.header.type == TokenType.SQLLOGIC_SKIP_IF, "Object is not an instance of SkipIf"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, OnlyIf):
+            assert obj.header.type == TokenType.SQLLOGIC_ONLY_IF, "Object is not an instance of OnlyIf"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, HashThreshold):
+            assert obj.header.type == TokenType.SQLLOGIC_HASH_THRESHOLD, "Object is not an instance of HashThreshold"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Halt):
+            assert obj.header.type == TokenType.SQLLOGIC_HALT, "Object is not an instance of Halt"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Mode):
+            assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Mode"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Skip):
+            assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Skip"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Unskip):
+            assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Unskip"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Set):
+            assert obj.header.type == TokenType.SQLLOGIC_SET, "Object is not an instance of Set"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Loop):
+            type = obj.header.type
+            assert (
+                type == TokenType.SQLLOGIC_LOOP or type == TokenType.SQLLOGIC_CONCURRENT_LOOP
+            ), "Object is not an instance of Loop"
+            return {
+                **self.encode_header(obj.header),
+                'parallel': obj.parallel,
+                'name': obj.name,
+                'start': obj.start,
+                'end': obj.end,
+            }
+        elif isinstance(obj, Foreach):
+            type = obj.header.type
+            assert (
+                type == TokenType.SQLLOGIC_FOREACH or type == TokenType.SQLLOGIC_CONCURRENT_FOREACH
+            ), "Object is not an instance of Foreach"
+            return {**self.encode_header(obj.header), 'parallel': obj.parallel, 'name': obj.name, 'values': obj.values}
+        elif isinstance(obj, Endloop):
+            assert obj.header.type == TokenType.SQLLOGIC_ENDLOOP, "Object is not an instance of Endloop"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, RequireEnv):
+            assert obj.header.type == TokenType.SQLLOGIC_REQUIRE_ENV, "Object is not an instance of RequireEnv"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Load):
+            assert obj.header.type == TokenType.SQLLOGIC_LOAD, "Object is not an instance of Load"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Restart):
+            assert obj.header.type == TokenType.SQLLOGIC_RESTART, "Object is not an instance of Restart"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Reconnect):
+            assert obj.header.type == TokenType.SQLLOGIC_RECONNECT, "Object is not an instance of Reconnect"
+            return {
+                **self.encode_header(obj.header),
+            }
+        elif isinstance(obj, Sleep):
+            assert obj.header.type == TokenType.SQLLOGIC_SLEEP, "Object is not an instance of Sleep"
+            return {
+                **self.encode_header(obj.header),
+            }
+        else:
+            raise Exception(f"Invalid TokenType ({obj.header.type.name})")
         return super().default(obj)
 
 
@@ -382,10 +409,7 @@ class SQLLogicParser:
 
         # check the label of the query
         if len(header.parameters) > 2:
-            statement.query_has_label = True
-            statement.query_label = header.parameters[2]
-        else:
-            statement.query_has_label = False
+            statement.set_label(header.parameters[2])
         return statement
 
     def parse_hash_threshold(self, header: Token) -> Optional[BaseStatement]:
@@ -402,13 +426,11 @@ class SQLLogicParser:
             self.fail("mode requires one parameter")
         parameter = header.parameters[0]
         if parameter == "skip":
-            self.skip_level += 1
-            return NoOp(header, self.current_line + 1)
+            return Skip(header, self.current_line + 1)
         elif parameter == "unskip":
-            self.skip_level -= 1
-            return NoOp(header, self.current_line + 1)
+            return Unskip(header, self.current_line + 1)
         else:
-            return Mode(parameter, self.current_line + 1)
+            return Mode(header, self.current_line + 1, parameter)
 
     def parse_require(self, header: Token) -> Optional[BaseStatement]:
         return Require(header, self.current_line + 1)
