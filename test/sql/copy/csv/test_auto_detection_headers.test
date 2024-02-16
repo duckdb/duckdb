@@ -6,27 +6,27 @@ statement ok
 PRAGMA enable_verification
 
 query I
-from read_csv('/Users/holanda/Documents/Projects/duckdb/data/csv/headers/undetected_type.csv', delim = ';')
+from read_csv('data/csv/headers/undetected_type.csv', delim = ';')
 ----
 68,527.00
 
 query I
-from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/all_varchar.csv'
+from 'data/csv/headers/all_varchar.csv'
 ----
 Pedro
 
 query II
-from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/single_line.csv'
+from 'data/csv/headers/single_line.csv'
 ----
 
 query I
-from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/borked_type.csv'
+from 'data/csv/headers/borked_type.csv'
 ----
 02/01/2019
 08//01/2019
 
 # This should work even with only one line
 query I
-from '/Users/holanda/Documents/Projects/duckdb/data/csv/headers/integer.csv'
+from 'data/csv/headers/integer.csv'
 ----
 32
