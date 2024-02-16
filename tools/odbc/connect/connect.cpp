@@ -13,21 +13,19 @@ using namespace duckdb;
 DBInstanceCache instance_cache;
 
 bool Connect::SetSuccessWithInfo(SQLRETURN ret) {
-	if (SQL_SUCCEEDED(ret)) {
-		if (ret == SQL_SUCCESS_WITH_INFO) {
-			success_with_info = true;
-		}
-		return true;
+	if (!SQL_SUCCEEDED(ret)) {
+		return false;
 	}
-	return false;
+	if (ret == SQL_SUCCESS_WITH_INFO) {
+		success_with_info = true;
+	}
+	return true;
 }
 
 SQLRETURN Connect::FindMatchingKey(const std::string &input, string &key) {
-	for (auto &key_pair: set_config_options) {
-		if (key_pair.first == input) {
-			key = key_pair.first;
-			return SQL_SUCCESS;
-		}
+	if (seen_config_options.find(input) != seen_config_options.end()) {
+		key = input;
+		return SQL_SUCCESS;
 	}
 
 	auto config_names = DBConfig::GetOptionNames();
@@ -55,7 +53,7 @@ SQLRETURN Connect::FindKeyValPair(const std::string &row) {
 	}
 
 	config_map[key] = row.substr(val_pos + 1);
-	set_config_options[key] = true;
+	seen_config_options[key] = true;
 	return SQL_SUCCESS;
 }
 
@@ -85,8 +83,8 @@ SQLRETURN Connect::ParseInputStr() {
 		return ret;
 	}
 
-	// Extract the DSN from the config map
-	dbc->dsn = set_config_options["dsn"] ? config_map["dsn"].ToString() : "DuckDB";
+	// Extract the DSN from the config map as it is needed to read from the .odbc.ini file
+	dbc->dsn = seen_config_options["dsn"] ? config_map["dsn"].ToString() : "";
 
 	return SQL_SUCCESS;
 }
@@ -98,12 +96,12 @@ SQLRETURN Connect::ReadFromIniFile() {
 	}
 
 	auto converted_dsn = OdbcUtils::ConvertStringToLPCSTR(dbc->dsn);
-	for (auto &key_pair : set_config_options) {
+	for (auto &key_pair : seen_config_options) {
 		// if the key has already been set, skip it
 		if (key_pair.second) {
 			continue;
 		}
-		const int max_val_len = 256;
+		const idx_t max_val_len = 256;
 		char char_val[max_val_len];
 		auto converted_key = key_pair.first.c_str();
 		int read_size = SQLGetPrivateProfileString(converted_dsn, converted_key, "", char_val, max_val_len, "odbc.ini");
@@ -114,7 +112,7 @@ SQLRETURN Connect::ReadFromIniFile() {
 			                                   SQLStateType::ST_01S09, "");
 		}
 		config_map[key_pair.first] = std::string(char_val);
-		set_config_options[key_pair.first] = true;
+		seen_config_options[key_pair.first] = true;
 	}
 #endif
 	return SQL_SUCCESS;
@@ -124,7 +122,7 @@ SQLRETURN Connect::SetConnection() {
 #if defined ODBC_LINK_ODBCINST || defined WIN32
 	ReadFromIniFile();
 #endif
-	auto database = set_config_options["database"] ? config_map["database"].ToString() : ":memory:";
+	auto database = seen_config_options["database"] ? config_map["database"].ToString() : IN_MEMORY_PATH;
 	dbc->SetDatabaseName(database);
 
 	// remove the database and dsn from the config map since they aren't config options
@@ -134,7 +132,7 @@ SQLRETURN Connect::SetConnection() {
 	config.SetOptionByName("duckdb_api", "odbc");
 	config.SetOptionsByName(config_map);
 
-	bool cache_instance = database != ":memory:";
+	bool cache_instance = database != IN_MEMORY_PATH;
 	dbc->env->db = instance_cache.GetOrCreateInstance(database, config, cache_instance);
 
 	if (!dbc->conn) {
@@ -149,8 +147,8 @@ Connect::Connect(OdbcHandleDbc *dbc_p, string input_str_p) : dbc(dbc_p), input_s
 	auto config_options = DBConfig::GetOptionNames();
 	for (auto &option : config_options) {
 		// They are all set to false as they haven't been set yet
-		set_config_options[option] = false;
+		seen_config_options[option] = false;
 	}
-	set_config_options["dsn"] = false;
-	set_config_options["database"] = false;
+	seen_config_options["dsn"] = false;
+	seen_config_options["database"] = false;
 }

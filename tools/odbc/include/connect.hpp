@@ -36,7 +36,7 @@ private:
 	std::string input_str;
 	bool success_with_info = false;
 
-	map<string, bool> set_config_options;
+	map<string, bool> seen_config_options;
 	case_insensitive_map_t<Value> config_map;
 	duckdb::DBConfig config;
 };
