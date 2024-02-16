@@ -9,7 +9,8 @@ struct TryCastFloatingOperator {
 	static bool Operation(string_t input) {
 		T result;
 		string error_message;
-		return OP::Operation(input, result, &error_message);
+		CastParameters parameters(false, &error_message);
+		return OP::Operation(input, result, parameters);
 	}
 };
 

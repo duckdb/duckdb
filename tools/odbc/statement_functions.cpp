@@ -406,7 +406,8 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		} else {
 			hugeint_t huge_int;
 			string error_message;
-			if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, &error_message,
+			CastParameters parameters(false, &error_message);
+			if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, parameters,
 			                                                              numeric->precision, numeric->scale)) {
 				return SQL_ERROR;
 			}
