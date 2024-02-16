@@ -47,7 +47,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
 
-	// Edge case: column comments
+	// Column comments have a special alter type
 	if (info.type == AlterType::SET_COLUMN_COMMENT) {
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);

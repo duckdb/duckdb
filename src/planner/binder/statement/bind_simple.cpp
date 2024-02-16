@@ -22,7 +22,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	optional_ptr<CatalogEntry> entry;
 
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
-		// Edge case: for these we need to resolve their types
+		// for column comments we need to an extra step: they can alter a table or a view, we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
 		entry = info.TryResolveCatalogEntry(context);
 	} else {
