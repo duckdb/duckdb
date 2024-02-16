@@ -48,6 +48,12 @@ def write_result(benchmark_name, nrun, t):
         print_msg(bench_result)
 
 
+def close_result():
+    if not hasattr(write_result, 'file'):
+        return
+    write_result.file.close()
+
+
 class BenchmarkResult:
     def __init__(self, duration, run_number):
         self.duration = duration
@@ -174,6 +180,7 @@ def main():
             run_number = res.run_number
             duration = res.duration
             write_result(benchmark_name, run_number, duration)
+    close_result()
 
 
 if __name__ == '__main__':
