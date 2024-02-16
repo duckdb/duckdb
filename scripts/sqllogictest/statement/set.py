@@ -1,5 +1,5 @@
-from sqllogic_parser.base_statement import BaseStatement
-from sqllogic_parser.token import Token
+from sqllogictest.base_statement import BaseStatement
+from sqllogictest.token import Token
 from typing import List
 
 

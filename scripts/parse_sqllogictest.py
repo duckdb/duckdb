@@ -4,11 +4,11 @@ from enum import Enum, auto
 from typing import List, Dict, Optional
 import json
 
-from sqllogic_parser.token import Token, TokenType
+from sqllogictest.token import Token, TokenType
 
-from sqllogic_parser.expected_result import ExpectedResult
+from sqllogictest.expected_result import ExpectedResult
 
-from sqllogic_parser.statement import (
+from sqllogictest.statement import (
     Statement,
     Require,
     Mode,
@@ -28,10 +28,10 @@ from sqllogic_parser.statement import (
     Unskip,
 )
 
-from sqllogic_parser.decorator import SkipIf, OnlyIf
+from sqllogictest.decorator import SkipIf, OnlyIf
 
-from sqllogic_parser.base_decorator import BaseDecorator
-from sqllogic_parser.base_statement import BaseStatement
+from sqllogictest.base_decorator import BaseDecorator
+from sqllogictest.base_statement import BaseStatement
 
 
 def create_formatted_list(items) -> str:

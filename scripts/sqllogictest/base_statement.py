@@ -1,5 +1,5 @@
-from sqllogic_parser.token import Token, TokenType
-from sqllogic_parser.base_decorator import BaseDecorator
+from sqllogictest.token import Token, TokenType
+from sqllogictest.base_decorator import BaseDecorator
 from typing import List
 
 

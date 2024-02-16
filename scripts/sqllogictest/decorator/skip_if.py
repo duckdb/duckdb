@@ -1,5 +1,5 @@
-from sqllogic_parser.base_decorator import BaseDecorator
-from sqllogic_parser.token import Token
+from sqllogictest.base_decorator import BaseDecorator
+from sqllogictest.token import Token
 
 
 class SkipIf(BaseDecorator):

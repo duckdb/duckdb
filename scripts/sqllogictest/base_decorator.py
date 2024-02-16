@@ -1,4 +1,4 @@
-from sqllogic_parser.token import Token
+from sqllogictest.token import Token
 
 
 class BaseDecorator:
