@@ -242,7 +242,7 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 
 //! Test case with specific parameters that allow us to run the bug_7578.csv we were skipping
 TEST_CASE("Test Parallel CSV All Files - data/csv/bug_7578.csv", "[parallel-csv][.]") {
-	string add_parameters = ", delim=\'\\t\', header=true, quote = \'`\', columns={ \'transaction_id\': \'VARCHAR\', "
+	string add_parameters = ", delim=\'\\t\', quote = \'`\', columns={ \'transaction_id\': \'VARCHAR\', "
 	                        "\'team_id\': \'INT\', \'direction\': \'INT\', \'amount\':\'DOUBLE\', "
 	                        "\'account_id\':\'INT\', \'transaction_date\':\'DATE\', \'recorded_date\':\'DATE\', "
 	                        "\'tags.transaction_id\':\'VARCHAR\', \'tags.team_id\':\'INT\', \'tags\':\'varchar\'}";

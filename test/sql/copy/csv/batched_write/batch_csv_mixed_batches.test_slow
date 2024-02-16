@@ -125,7 +125,7 @@ COPY v4 TO '__TEST_DIR__/mixed_batches_v4.csv' (HEADER)
 0
 
 query I
-CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM read_csv_auto('__TEST_DIR__/mixed_batches_v4.csv', header=True)
+CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM read_csv_auto('__TEST_DIR__/mixed_batches_v4.csv')
 ----
 0
 
