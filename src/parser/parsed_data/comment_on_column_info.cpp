@@ -18,7 +18,7 @@ SetColumnCommentInfo::SetColumnCommentInfo(string catalog, string schema, string
 unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
 	auto result = make_uniq<SetColumnCommentInfo>(catalog, schema, name, column_name, comment_value, if_not_found);
 	result->type = type;
-	return result;
+	return std::move(result);
 }
 
 optional_ptr<CatalogEntry> SetColumnCommentInfo::TryResolveCatalogEntry(ClientContext &context) {

@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/common/limits.hpp"
 
 #include <algorithm>
@@ -45,12 +46,11 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
 
-	// Edge case: column comments are set
+	// Edge case: column comments
 	if (info.type == AlterType::SET_COLUMN_COMMENT) {
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
-		// find the column idx
 		for (idx_t i = 0; i < names.size(); i++) {
 			const auto &col_name = names[i];
 			if (col_name == comment_on_column_info.column_name) {
