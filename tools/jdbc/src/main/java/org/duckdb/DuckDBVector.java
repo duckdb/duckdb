@@ -139,6 +139,14 @@ class DuckDBVector {
     }
 
     LocalDate getLocalDate(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+
+        if (isType(DuckDBColumnType.DATE)) {
+            return LocalDate.ofEpochDay(getbuf(idx, 4).getInt());
+        }
+
         String lazyString = getLazyString(idx);
 
         if ("infinity".equals(lazyString))
@@ -284,7 +292,11 @@ class DuckDBVector {
         if (check_and_null(idx)) {
             return null;
         }
-        // TODO: load from native format
+
+        if (isType(DuckDBColumnType.DATE)) {
+            return new Date(getbuf(idx, 8).getLong());
+        }
+
         String string_value = getLazyString(idx);
         if (string_value == null) {
             return null;
