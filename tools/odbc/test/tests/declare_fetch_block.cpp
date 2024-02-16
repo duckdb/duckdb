@@ -141,7 +141,7 @@ TEST_CASE("Test Using SQLFetchScroll with different orientations", "[odbc]") {
 
 	// Perform the tests for both SMALL and LARGE tables
 	ESize size[] = {SMALL, LARGE};
-	for (auto & i : size) {
+	for (auto &i : size) {
 		// Connect to the database using SQLConnect
 		CONNECT_TO_DATABASE(env, dbc);
 

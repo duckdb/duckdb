@@ -33,8 +33,7 @@ SQLRETURN Connect::FindMatchingKey(const std::string &input, string &key) {
 	// If the input doesn't match a keyname, find a similar keyname
 	auto msg = StringUtil::CandidatesErrorMessage(config_names, input, "Did you mean: ");
 	return SetDiagnosticRecord(dbc, SQL_SUCCESS_WITH_INFO, "SQLDriverConnect",
-									   "Invalid keyword: '" + input + "'. " + msg,
-									   SQLStateType::ST_01S09, "");
+	                           "Invalid keyword: '" + input + "'. " + msg, SQLStateType::ST_01S09, "");
 }
 
 SQLRETURN Connect::FindKeyValPair(const std::string &row) {
@@ -44,7 +43,7 @@ SQLRETURN Connect::FindKeyValPair(const std::string &row) {
 	if (val_pos == std::string::npos) {
 		// an equal '=' char must be present (syntax error)
 		return (SetDiagnosticRecord(dbc, SQL_ERROR, "SQLDriverConnect", "Invalid connection string",
-		                                    SQLStateType::ST_HY000, ""));
+		                            SQLStateType::ST_HY000, ""));
 	}
 
 	SQLRETURN ret = FindMatchingKey(StringUtil::Lower(row.substr(0, val_pos)), key);
@@ -109,7 +108,7 @@ SQLRETURN Connect::ReadFromIniFile() {
 			continue;
 		} else if (read_size < 0) {
 			return SetDiagnosticRecord(dbc, SQL_ERROR, "SQLDriverConnect", "Error reading from .odbc.ini",
-			                                   SQLStateType::ST_01S09, "");
+			                           SQLStateType::ST_01S09, "");
 		}
 		config_map[key_pair.first] = std::string(char_val);
 		seen_config_options[key_pair.first] = true;

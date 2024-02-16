@@ -7,7 +7,7 @@
 #include <locale>
 #include <odbcinst.h>
 
-#define ROW_DEL ';'
+#define ROW_DEL     ';'
 #define KEY_VAL_DEL '='
 
 namespace duckdb {
@@ -27,9 +27,13 @@ public:
 	// Executes the connection
 	SQLRETURN SetConnection();
 
-// getters
-	std::string GetInputStr() { return input_str; }
-	bool GetSuccessWithInfo() const { return success_with_info; }
+	// getters
+	std::string GetInputStr() {
+		return input_str;
+	}
+	bool GetSuccessWithInfo() const {
+		return success_with_info;
+	}
 
 private:
 	OdbcHandleDbc *dbc;
