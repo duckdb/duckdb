@@ -296,11 +296,15 @@ class DuckDBVector {
     }
 
     Time getTime(int idx) {
-        // TODO: load from native format
-        String string_value = getLazyString(idx);
-        if (string_value == null) {
+        if (check_and_null(idx)) {
             return null;
         }
+
+        if (isType(DuckDBColumnType.TIME)) {
+            return new Time(getbuf(idx, 8).getLong());
+        }
+
+        String string_value = getLazyString(idx);
         try {
             return Time.valueOf(string_value);
         } catch (Exception e) {
