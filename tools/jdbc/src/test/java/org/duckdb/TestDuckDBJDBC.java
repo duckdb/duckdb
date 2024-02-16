@@ -1733,7 +1733,7 @@ public class TestDuckDBJDBC {
         ResultSet rs = stmt.executeQuery("SELECT '5131-08-05 (BC)'::date d");
 
         assertTrue(rs.next());
-        assertNull(rs.getDate("d"));
+        assertEquals(rs.getDate("d"), Date.valueOf(LocalDate.of(-5130, 8, 5)));
 
         assertFalse(rs.next());
         rs.close();
