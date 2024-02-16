@@ -20,12 +20,25 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key)));
-	auto extract_function = StructExtractFun::GetFunction();
+	auto extract_function = StructExtractFun::KeyExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
 	                                                 std::move(bind_info));
 	result->alias = std::move(key);
+	return std::move(result);
+}
+
+unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, unique_ptr<Expression> expr, idx_t key) {
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(std::move(expr));
+	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(int64_t(key))));
+	auto extract_function = StructExtractFun::IndexExtractFunction();
+	auto bind_info = extract_function.bind(context, extract_function, arguments);
+	auto return_type = extract_function.return_type;
+	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
+	                                                 std::move(bind_info));
+	result->alias = "element" + to_string(key);
 	return std::move(result);
 }
 
@@ -185,8 +198,15 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 				if (expr->return_type.id() == LogicalTypeId::STRUCT) {
 					// struct! push a struct_extract
 					auto &child_types = StructType::GetChildTypes(expr->return_type);
-					for (auto &entry : child_types) {
-						new_expressions.push_back(CreateBoundStructExtract(context, expr->Copy(), entry.first));
+					if (StructType::IsUnnamed(expr->return_type)) {
+						for (idx_t child_index = 0; child_index < child_types.size(); child_index++) {
+							new_expressions.push_back(
+							    CreateBoundStructExtractIndex(context, expr->Copy(), child_index + 1));
+						}
+					} else {
+						for (auto &entry : child_types) {
+							new_expressions.push_back(CreateBoundStructExtract(context, expr->Copy(), entry.first));
+						}
 					}
 					has_structs = true;
 				} else {

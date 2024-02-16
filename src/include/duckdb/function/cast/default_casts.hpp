@@ -56,13 +56,16 @@ struct BoundCastData {
 struct CastParameters {
 	CastParameters() {
 	}
+	CastParameters(bool strict, string *error_message) : CastParameters(nullptr, strict, error_message, nullptr) {
+	}
 	CastParameters(BoundCastData *cast_data, bool strict, string *error_message,
 	               optional_ptr<FunctionLocalState> local_state)
 	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state) {
 	}
 	CastParameters(CastParameters &parent, optional_ptr<BoundCastData> cast_data,
 	               optional_ptr<FunctionLocalState> local_state)
-	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message), local_state(local_state) {
+	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message), local_state(local_state),
+	      query_location(parent.query_location) {
 	}
 
 	//! The bound cast data (if any)
@@ -73,6 +76,8 @@ struct CastParameters {
 	string *error_message = nullptr;
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
+	//! Query location (if any)
+	optional_idx query_location;
 };
 
 struct CastLocalStateParameters {
@@ -114,6 +119,7 @@ struct BindCastInput {
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
+	optional_idx query_location;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);

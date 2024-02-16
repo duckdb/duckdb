@@ -365,7 +365,9 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 			if (total_size > thread_limit) {
 				// Out-of-core would be triggered below, try to increase the reservation
-				temporary_memory_state.SetRemainingSize(context, 2 * temporary_memory_state.GetRemainingSize());
+				auto remaining_size =
+				    MaxValue<idx_t>(gstate.active_threads * total_size, temporary_memory_state.GetRemainingSize());
+				temporary_memory_state.SetRemainingSize(context, 2 * remaining_size);
 				thread_limit = temporary_memory_state.GetReservation() / gstate.active_threads;
 			}
 		}
@@ -541,9 +543,12 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 
 	// This many partitions will fit given our reservation (at least 1))
 	auto partitions_fit = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / sink.max_partition_size, 1);
+	// Maximum is either the number of partitions, or the number of threads
+	auto max_possible =
+	    MinValue<idx_t>(sink.partitions.size(), TaskScheduler::GetScheduler(sink.context).NumberOfThreads());
 
-	// Of course, limit it to the number of actual partitions
-	return MinValue<idx_t>(sink.partitions.size(), partitions_fit);
+	// Mininum of the two
+	return MinValue<idx_t>(partitions_fit, max_possible);
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
@@ -639,20 +644,17 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 
 	// We first try to assign a Scan task, then a Finalize task if that didn't work
 	bool scan_assigned = false;
-	{
-		lock_guard<mutex> gstate_guard(lock);
-		if (scan_idx < n_partitions && sink.partitions[scan_idx]->finalized) {
-			lstate.task_idx = scan_idx++;
-			scan_assigned = true;
-			if (scan_idx == n_partitions) {
-				// We will never be able to assign another task, unblock blocked tasks
-				lock_guard<mutex> sink_guard(sink.lock);
-				if (!sink.blocked_tasks.empty()) {
-					for (auto &state : sink.blocked_tasks) {
-						state.Callback();
-					}
-					sink.blocked_tasks.clear();
+	if (scan_idx < n_partitions && sink.partitions[scan_idx]->finalized) {
+		lstate.task_idx = scan_idx++;
+		scan_assigned = true;
+		if (scan_idx == n_partitions) {
+			// We will never be able to assign another task, unblock blocked tasks
+			lock_guard<mutex> sink_guard(sink.lock);
+			if (!sink.blocked_tasks.empty()) {
+				for (auto &state : sink.blocked_tasks) {
+					state.Callback();
 				}
+				sink.blocked_tasks.clear();
 			}
 		}
 	}
@@ -749,6 +751,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	partition.data->Combine(*ht->GetPartitionedData()->GetPartitions()[0]);
 
 	// Mark partition as ready to scan
+	lock_guard<mutex> glock(gstate.lock);
 	partition.finalized = true;
 
 	if (++sink.finalize_done == sink.partitions.size()) {
@@ -757,18 +760,15 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	// Unblock blocked tasks so they can scan this partition
-	{
-		lock_guard<mutex> sink_guard(sink.lock);
-		if (!sink.blocked_tasks.empty()) {
-			for (auto &state : sink.blocked_tasks) {
-				state.Callback();
-			}
-			sink.blocked_tasks.clear();
+	lock_guard<mutex> sink_guard(sink.lock);
+	if (!sink.blocked_tasks.empty()) {
+		for (auto &state : sink.blocked_tasks) {
+			state.Callback();
 		}
+		sink.blocked_tasks.clear();
 	}
 
 	// Make sure this thread's aggregate allocator does not get lost
-	lock_guard<mutex> guard(sink.lock);
 	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
 }
 
@@ -900,18 +900,19 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	}
 
 	while (!gstate.finished && chunk.size() == 0) {
-		if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
-			lstate.ExecuteTask(sink, gstate, chunk);
-		} else {
+		if (lstate.TaskFinished()) {
 			lock_guard<mutex> gstate_guard(gstate.lock);
-			if (gstate.scan_idx < sink.partitions.size()) {
-				lock_guard<mutex> sink_guard(sink.lock);
-				sink.blocked_tasks.push_back(input.interrupt_state);
-				return SourceResultType::BLOCKED;
-			} else {
-				return SourceResultType::FINISHED;
+			if (!gstate.AssignTask(sink, lstate)) {
+				if (gstate.scan_idx < sink.partitions.size()) {
+					lock_guard<mutex> sink_guard(sink.lock);
+					sink.blocked_tasks.push_back(input.interrupt_state);
+					return SourceResultType::BLOCKED;
+				} else {
+					return SourceResultType::FINISHED;
+				}
 			}
 		}
+		lstate.ExecuteTask(sink, gstate, chunk);
 	}
 
 	if (chunk.size() != 0) {

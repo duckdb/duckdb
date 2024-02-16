@@ -178,10 +178,15 @@ void InterpretedBenchmark::LoadBenchmark() {
 			}
 			extensions.insert(splits[1]);
 		} else if (splits[0] == "cache") {
-			if (splits.size() != 2) {
-				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
+			if (splits.size() == 2) {
+				cache_db = splits[1];
+			} else if (splits.size() == 3 && splits[2] == "no_connect") {
+				cache_db = splits[1];
+				cache_no_connect = true;
+			} else {
+				throw std::runtime_error(
+				    reader.FormatException("cache requires a db file, and optionally a no_connect"));
 			}
-			cache_db = splits[1];
 		} else if (splits[0] == "storage") {
 			if (splits.size() != 2) {
 				throw std::runtime_error(reader.FormatException("storage requires a single parameter"));
@@ -377,6 +382,18 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 		result = std::move(result->next);
 	}
+
+	// if a cache db is required but no connection, then reset the connection
+	if (!cache_db.empty() && cache_no_connect) {
+		cache_db = "";
+		in_memory = true;
+		cache_no_connect = false;
+		if (!load_query.empty()) {
+			queries.erase("load");
+		}
+		return Initialize(config);
+	}
+
 	if (config.profile_info == BenchmarkProfileInfo::NORMAL) {
 		state->con.Query("PRAGMA enable_profiling");
 	} else if (config.profile_info == BenchmarkProfileInfo::DETAILED) {
@@ -467,13 +484,13 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, Materialize
 }
 
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
-	if (result_column_count == 0) {
-		// no result specified
-		return string();
-	}
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (state.result->HasError()) {
 		return state.result->GetError();
+	}
+	if (result_column_count == 0) {
+		// no result specified
+		return string();
 	}
 	if (!result_query.empty()) {
 		// we are running a result query

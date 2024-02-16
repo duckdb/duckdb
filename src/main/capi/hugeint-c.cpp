@@ -77,6 +77,7 @@ double duckdb_decimal_to_double(duckdb_decimal val) {
 	hugeint_t value;
 	value.lower = val.value.lower;
 	value.upper = val.value.upper;
-	duckdb::TryCastFromDecimal::Operation<hugeint_t, double>(value, result, nullptr, val.width, val.scale);
+	duckdb::CastParameters parameters;
+	duckdb::TryCastFromDecimal::Operation<hugeint_t, double>(value, result, parameters, val.width, val.scale);
 	return result;
 }

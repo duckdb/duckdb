@@ -65,7 +65,7 @@ public:
 	void Reload(CSVFileHandle &file_handle);
 	//! Wrapper for the Pin Function, if it can seek, it means that the buffer might have been destroyed, hence we must
 	//! Scan it from the disk file again.
-	unique_ptr<CSVBufferHandle> Pin(CSVFileHandle &file_handle, bool &has_seeked);
+	shared_ptr<CSVBufferHandle> Pin(CSVFileHandle &file_handle, bool &has_seeked);
 	//! Wrapper for the unpin
 	void Unpin();
 	char *Ptr() {

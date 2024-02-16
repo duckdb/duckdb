@@ -103,7 +103,6 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(PivotLimitSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_GLOBAL(PreserveInsertionOrder),
-                                                 DUCKDB_LOCAL(ProfilerHistorySize),
                                                  DUCKDB_LOCAL(ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProfilingModeSetting),
                                                  DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
@@ -336,14 +335,6 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #endif
 #else
 	return 1;
-#endif
-}
-
-void DBConfig::SetDefaultMaxThreads() {
-#ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = GetSystemMaxThreads(*file_system);
-#else
-	options.maximum_threads = 1;
 #endif
 }
 
