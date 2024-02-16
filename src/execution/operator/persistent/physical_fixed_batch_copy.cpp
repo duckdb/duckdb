@@ -35,11 +35,16 @@ public:
 //===--------------------------------------------------------------------===//
 // States
 //===--------------------------------------------------------------------===//
+struct FixedPreparedBatchData {
+	idx_t row_count;
+	unique_ptr<PreparedBatchData> prepared_data;
+};
+
 class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
 	explicit FixedBatchCopyGlobalState(unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), global_state(std::move(global_state)), batch_size(0), scheduled_batch_index(0),
-	      flushed_batch_index(0), any_flushing(false), any_finished(false) {
+	      flushed_batch_index(0), any_flushing(false), any_finished(false), unflushed_rows(0), min_batch_index(0) {
 	}
 
 	mutex lock;
@@ -50,10 +55,10 @@ public:
 	unique_ptr<GlobalFunctionData> global_state;
 	//! The desired batch size (if any)
 	idx_t batch_size;
-	//! Unpartitioned batches - only used in case batch_size is required
+	//! Unpartitioned batches
 	map<idx_t, unique_ptr<ColumnDataCollection>> raw_batches;
 	//! The prepared batch data by batch index - ready to flush
-	map<idx_t, unique_ptr<PreparedBatchData>> batch_data;
+	map<idx_t, unique_ptr<FixedPreparedBatchData>> batch_data;
 	//! The index of the latest batch index that has been scheduled
 	atomic<idx_t> scheduled_batch_index;
 	//! The index of the latest batch index that has been flushed
@@ -62,6 +67,14 @@ public:
 	atomic<bool> any_flushing;
 	//! Whether or not any threads are finished
 	atomic<bool> any_finished;
+	//! Total amount of unflushed rows
+	atomic<idx_t> unflushed_rows;
+	//! The approximate row size (for approximating memory usage)
+	idx_t approximate_row_size;
+	//! Minimum batch size
+	atomic<idx_t> min_batch_index;
+	//! Blocked task lock
+	mutex blocked_task_lock;
 
 	void AddTask(unique_ptr<BatchCopyTask> task) {
 		lock_guard<mutex> l(task_lock);
@@ -83,13 +96,24 @@ public:
 		return task_queue.size();
 	}
 
-	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch) {
+	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t row_count) {
 		// move the batch data to the set of prepared batch data
 		lock_guard<mutex> l(lock);
-		auto entry = batch_data.insert(make_pair(batch_index, std::move(new_batch)));
+		auto prepared_data = make_uniq<FixedPreparedBatchData>();
+		prepared_data->prepared_data = std::move(new_batch);
+		prepared_data->row_count = row_count;
+		auto entry = batch_data.insert(make_pair(batch_index, std::move(prepared_data)));
 		if (!entry.second) {
 			throw InternalException("Duplicate batch index %llu encountered in PhysicalFixedBatchCopy", batch_index);
 		}
+	}
+
+	void UpdateMinBatchIndex(idx_t current_min_batch_index) {
+		if (min_batch_index >= current_min_batch_index) {
+			return;
+		}
+		lock_guard<mutex> l(blocked_task_lock);
+		min_batch_index = MaxValue<idx_t>(min_batch_index, current_min_batch_index);
 	}
 
 private:
@@ -127,9 +151,32 @@ public:
 SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	if (!state.collection) {
 		state.InitializeCollection(context.client, *this);
 		state.batch_index = state.partition_info.batch_index.GetIndex();
+	}
+	auto current_unflushed_rows = (gstate.unflushed_rows += chunk.size());
+	if (state.partition_info.batch_index.GetIndex() != state.partition_info.min_batch_index.GetIndex()) {
+		gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
+
+		// we are not processing the current min batch index
+		// check if we have exceeded the maximum number of unflushed rows
+		constexpr static idx_t MAX_UNFLUSHED_ROWS = 100000;
+		if (current_unflushed_rows >= MAX_UNFLUSHED_ROWS) {
+			// unflushed rows is bigger than we would like
+			// execute tasks until it is back to a low amount
+			while (true) {
+				ExecuteTask(context.client, input.global_state);
+				if (state.partition_info.batch_index.GetIndex() == gstate.min_batch_index) {
+					// we are now the min batch index
+					break;
+				}
+				if (gstate.unflushed_rows < MAX_UNFLUSHED_ROWS) {
+					break;
+				}
+			}
+		}
 	}
 	state.rows_copied += chunk.size();
 	state.collection->Append(state.append_state, chunk);
@@ -146,6 +193,7 @@ SinkCombineResultType PhysicalFixedBatchCopy::Combine(ExecutionContext &context,
 		lock_guard<mutex> l(gstate.lock);
 		gstate.any_finished = true;
 	}
+	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	ExecuteTasks(context.client, gstate);
 
 	return SinkCombineResultType::FINISHED;
@@ -269,9 +317,10 @@ public:
 
 	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+		auto row_count = collection->Count();
 		auto batch_data =
 		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(collection));
-		gstate.AddBatchData(batch_index, std::move(batch_data));
+		gstate.AddBatchData(batch_index, std::move(batch_data), row_count);
 		if (batch_index == gstate.flushed_batch_index) {
 			gstate.AddTask(make_uniq<RepartitionedFlushTask>());
 		}
@@ -406,7 +455,7 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 	}
 	ActiveFlushGuard active_flush(gstate.any_flushing);
 	while (true) {
-		unique_ptr<PreparedBatchData> batch_data;
+		unique_ptr<FixedPreparedBatchData> batch_data;
 		{
 			lock_guard<mutex> l(gstate.lock);
 			if (gstate.batch_data.empty()) {
@@ -424,7 +473,9 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 			batch_data = std::move(entry->second);
 			gstate.batch_data.erase(entry);
 		}
-		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data);
+		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
+		batch_data->prepared_data.reset();
+		gstate.unflushed_rows -= batch_data->row_count;
 		gstate.flushed_batch_index++;
 	}
 }
@@ -455,6 +506,7 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 	auto &lstate = input.local_state;
 	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
@@ -468,6 +520,7 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		FlushBatchData(context.client, gstate_p, min_batch_index);
 	}
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
+	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 
 	state.InitializeCollection(context.client, *this);
 	return SinkNextBatchType::READY;
