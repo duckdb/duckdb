@@ -125,7 +125,7 @@ class DuckDBVector {
         }
     }
 
-    LocalTime getLocalTime(int idx) throws SQLException {
+    LocalTime getLocalTime(int idx) {
         if (check_and_null(idx)) {
             return null;
         }
@@ -141,7 +141,7 @@ class DuckDBVector {
         return lazyString == null ? null : LocalTime.parse(lazyString);
     }
 
-    LocalDate getLocalDate(int idx) throws SQLException {
+    LocalDate getLocalDate(int idx) {
         if (check_and_null(idx)) {
             return null;
         }
@@ -297,7 +297,7 @@ class DuckDBVector {
         }
 
         if (isType(DuckDBColumnType.DATE)) {
-            return new Date(getbuf(idx, 8).getLong());
+            return Date.valueOf(this.getLocalDate(idx));
         }
 
         String string_value = getLazyString(idx);
@@ -324,9 +324,7 @@ class DuckDBVector {
         }
 
         if (isType(DuckDBColumnType.TIME)) {
-            long microseconds = getbuf(idx, 8).getLong();
-            long milliseconds = TimeUnit.MICROSECONDS.toMillis(microseconds);
-            return new Time(milliseconds);
+            return Time.valueOf(getLocalTime(idx));
         }
 
         String string_value = getLazyString(idx);
