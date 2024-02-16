@@ -210,18 +210,14 @@ query IIII rowsort
 SELECT *
 FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/small1.csv',
-    header = true,
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table_left',
-    ignore_errors=true,
-	auto_detect=false) as L
+    ignore_errors=true) as L
 JOIN read_csv(
     'test/sql/copy/csv/data/error/mismatch/small2.csv',
-    header = true,
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table_right',
-    ignore_errors=true,
-	auto_detect=false) as R
+    ignore_errors=true) as R
 ON L.num = R.num;
 ----
 1	A	1	A
@@ -253,19 +249,15 @@ query IIII rowsort
 SELECT *
 FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/small1.csv',
-    header = true,
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table_left',
-    ignore_errors=true,
-	auto_detect=false) as L
+    ignore_errors=true) as L
 JOIN read_csv(
     'test/sql/copy/csv/data/error/mismatch/small2.csv',
-    header = true,
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     rejects_table='csv_rejects_table_right',
 	rejects_limit=1,
-    ignore_errors=true,
-	auto_detect=false) as R
+    ignore_errors=true) as R
 ON L.num = R.num;
 ----
 1	A	1	A
