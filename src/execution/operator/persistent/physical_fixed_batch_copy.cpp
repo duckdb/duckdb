@@ -44,7 +44,8 @@ class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
 	explicit FixedBatchCopyGlobalState(unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), global_state(std::move(global_state)), batch_size(0), scheduled_batch_index(0),
-	      flushed_batch_index(0), any_flushing(false), any_finished(false), unflushed_rows(0), min_batch_index(0) {
+	      flushed_batch_index(0), any_flushing(false), any_finished(false), unflushed_rows(0), min_batch_index(0),
+	      waiting_threads(0) {
 	}
 
 	mutex lock;
@@ -73,6 +74,8 @@ public:
 	idx_t approximate_row_size;
 	//! Minimum batch size
 	atomic<idx_t> min_batch_index;
+	//! Number of threads waiting
+	atomic<idx_t> waiting_threads;
 	//! Blocked task lock
 	mutex blocked_task_lock;
 
@@ -164,6 +167,7 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 		// check if we have exceeded the maximum number of unflushed rows
 		constexpr static idx_t MAX_UNFLUSHED_ROWS = 100000;
 		if (current_unflushed_rows >= MAX_UNFLUSHED_ROWS) {
+			gstate.waiting_threads++;
 			// unflushed rows is bigger than we would like
 			// execute tasks until it is back to a low amount
 			while (true) {
@@ -175,7 +179,9 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 				if (gstate.unflushed_rows < MAX_UNFLUSHED_ROWS) {
 					break;
 				}
+				FlushBatchData(context.client, gstate, gstate.min_batch_index);
 			}
+			gstate.waiting_threads--;
 		}
 	}
 	state.rows_copied += chunk.size();
@@ -507,6 +513,7 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
@@ -515,12 +522,14 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		AddRawBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
 		// attempt to repartition to our desired batch size
 		RepartitionBatches(context.client, gstate_p, min_batch_index);
-		// execute a single batch task
-		ExecuteTask(context.client, gstate_p);
-		FlushBatchData(context.client, gstate_p, min_batch_index);
+		if (gstate.waiting_threads == 0) {
+			// execute a single batch task and flush
+			// but ONLY if no other threads are waiting to do so
+			ExecuteTask(context.client, gstate_p);
+			FlushBatchData(context.client, gstate_p, min_batch_index);
+		}
 	}
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
-	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 
 	state.InitializeCollection(context.client, *this);
 	return SinkNextBatchType::READY;
