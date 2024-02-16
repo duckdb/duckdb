@@ -37,7 +37,7 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
-	std::string_view ca_cert_file = DEFAULT_CA_CERT_FILE;
+	string ca_cert_file = DEFAULT_CA_CERT_FILE;
 
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -62,10 +62,12 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 		enable_server_cert_verification = value.GetValue<bool>();
 	}
 	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", value)) {
-		ca_cert_file = value.GetValue<std::string_view>();
+		ca_cert_file = value.ToString();
 	}
 
-	return {timeout, retries, retry_wait_ms, retry_backoff, force_download, keep_alive};
+	return {
+	    timeout,     retries, retry_wait_ms, retry_backoff, force_download, keep_alive, enable_server_cert_verification,
+	    ca_cert_file};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
