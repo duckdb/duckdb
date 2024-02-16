@@ -4245,6 +4245,15 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_fractional_time() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT '01:02:03.123'::TIME");
+             ResultSet rs = stmt.executeQuery()) {
+            assertTrue(rs.next());
+            assertEquals(rs.getTime(1), Time.valueOf(LocalTime.of(1, 2, 3, 123)));
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.exit(runTests(args, TestDuckDBJDBC.class, TestExtensionTypes.class));
     }
