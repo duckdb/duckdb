@@ -30,13 +30,13 @@ INSERT INTO ubn3 VALUES (100,101), (102, 103);
 # Write them to temporary files
 
 statement ok
-COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (HEADER 1, DELIMITER ',');
+COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH ( DELIMITER ',');
 
 statement ok
-COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (HEADER 1, DELIMITER ',');
+COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (DELIMITER ',');
 
 statement ok
-COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
+COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (DELIMITER ',');
 
 # Read from them (the order matters)
 

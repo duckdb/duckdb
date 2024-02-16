@@ -14,7 +14,7 @@ CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal
 Line: 2
 
 statement ok
-CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', header=1, column_types={'commas': 'double'}, delim=';', decimal_separator=',')
+CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'double'}, delim=';', decimal_separator=',')
 
 query II
 SELECT commas, periods FROM decimal_separators;

@@ -9,7 +9,7 @@ statement ok
 INSERT INTO people VALUES (1, 'Mark'), (2, 'Hannes');
 
 statement ok
-COPY people TO '__TEST_DIR__/test.tsv' WITH (HEADER 1, DELIMITER '\t');
+COPY people TO '__TEST_DIR__/test.tsv' WITH (DELIMITER '\t');
 
 query II
 SELECT * FROM '__TEST_DIR__/test.tsv'

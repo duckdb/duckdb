@@ -100,7 +100,8 @@ bool CSVSniffer::DetectHeaderWithSetColumn() {
 	bool all_varchar = true;
 	bool first_row_consistent = true;
 	// User set the names, we must check if they match the first row
-	if (set_columns.Size() != best_header_row.size()) {
+	// We do a +1 to check for situations where the csv file has an extra all null column
+	if (set_columns.Size() != best_header_row.size() && set_columns.Size()+1 != best_header_row.size()) {
 		return false;
 	} else {
 		// Let's do a match-aroo

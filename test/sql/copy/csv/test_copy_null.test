@@ -111,7 +111,7 @@ statement ok
 DELETE FROM test_null_option;
 
 query I
-COPY test_null_option FROM '__TEST_DIR__/test_null_option_2.csv' (HEADER 1);
+COPY test_null_option FROM '__TEST_DIR__/test_null_option_2.csv';
 ----
 3
 
@@ -124,7 +124,7 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 
 # explicitly using default NULL value
 query I
-COPY test_null_option TO '__TEST_DIR__/test_null_option_3.csv' (NULL '', HEADER 1);
+COPY test_null_option TO '__TEST_DIR__/test_null_option_3.csv' (NULL '');
 ----
 3
 
@@ -132,7 +132,7 @@ statement ok
 DELETE FROM test_null_option;
 
 query I
-COPY test_null_option FROM '__TEST_DIR__/test_null_option_3.csv' (NULL '', HEADER 1);
+COPY test_null_option FROM '__TEST_DIR__/test_null_option_3.csv' (NULL '');
 ----
 3
 
@@ -145,7 +145,7 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 
 # setting specific NULL value
 query I
-COPY test_null_option TO '__TEST_DIR__/test_null_option_4.csv' (NULL 'null', HEADER 1);
+COPY test_null_option TO '__TEST_DIR__/test_null_option_4.csv' (NULL 'null');
 ----
 3
 
@@ -153,7 +153,7 @@ statement ok
 DELETE FROM test_null_option;
 
 query I
-COPY test_null_option FROM '__TEST_DIR__/test_null_option_4.csv' (NULL 'null', HEADER 1);
+COPY test_null_option FROM '__TEST_DIR__/test_null_option_4.csv' (NULL 'null');
 ----
 3
 
