@@ -567,7 +567,6 @@ class SQLLogicParser:
         statement = []
 
         res = self.peek_no_strip().strip('\n')
-        print(f"'{res}'")
         while self.current_line < len(self.lines) and not self.empty_or_comment(self.peek_no_strip()):
             line = self.peek_no_strip()
             if line.strip('\n') == "----":
