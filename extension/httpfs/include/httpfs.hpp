@@ -37,7 +37,7 @@ struct HTTPParams {
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
-	static constexpr string DEFAULT_CA_CERT_FILE = "";
+	inline static const string DEFAULT_CA_CERT_FILE = "";
 
 	uint64_t timeout;
 	uint64_t retries;
@@ -46,7 +46,7 @@ struct HTTPParams {
 	bool force_download;
 	bool keep_alive;
 	bool enable_server_cert_verification;
-	string ca_cert_file;
+	std::string ca_cert_file;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };

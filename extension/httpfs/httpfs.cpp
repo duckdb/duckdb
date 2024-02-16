@@ -37,7 +37,7 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
-	string ca_cert_file = DEFAULT_CA_CERT_FILE;
+	std::string ca_cert_file = DEFAULT_CA_CERT_FILE;
 
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -199,7 +199,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_follow_location(true);
 	client->set_keep_alive(http_params.keep_alive);
 	if (!http_params.ca_cert_file.empty()) {
-		client->set_ca_cert_path(http_params.ca_cert_file);
+		client->set_ca_cert_path(http_params.ca_cert_file.c_str());
 	}
 	client->enable_server_certificate_verification(http_params.enable_server_cert_verification);
 	client->set_write_timeout(http_params.timeout);
