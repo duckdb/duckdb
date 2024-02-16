@@ -125,6 +125,14 @@ class DuckDBVector {
     }
 
     LocalTime getLocalTime(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+
+        if (isType(DuckDBColumnType.TIME)) {
+            return LocalTime.ofNanoOfDay(getbuf(idx, 8).getLong() * 1000);
+        }
+
         String lazyString = getLazyString(idx);
 
         return lazyString == null ? null : LocalTime.parse(lazyString);
