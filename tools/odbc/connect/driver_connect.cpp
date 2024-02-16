@@ -33,8 +33,6 @@ SQLRETURN SQL_API SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_han
 		return ret;
 	}
 
-	std::string db_name = dbc->GetDatabaseName();
-
 	ret = connect.SetConnection();
 	if (!connect.SetSuccessWithInfo(ret)) {
 		return ret;
@@ -61,7 +59,6 @@ SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQ
 	}
 
 	duckdb::Connect connect(dbc, OdbcUtils::ConvertSQLCHARToString(server_name));
-	connect.HandleDsn(connect.GetInputStr());
 
 	return connect.SetConnection();
 }

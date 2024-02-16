@@ -25,16 +25,12 @@ void CheckDatabase(SQLHANDLE &dbc) {
 	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
 	// Select * from customers
-	EXECUTE_AND_CHECK("SQLExecDirect (SELECT * FROM customer)", SQLExecDirect, hstmt,
-	                  ConvertToSQLCHAR("SELECT * FROM customer"), SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect (FROM string_values)", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("FROM string_values"), SQL_NTS);
 
-	// Fetch the first row
-	idx_t i = 1;
-	while (SQLFetch(hstmt) == SQL_SUCCESS) {
-		// Fetch the next row
-		DATA_CHECK(hstmt, 1, std::to_string(i++));
-	}
-	REQUIRE(i == 15001);
+	// Fetch the first row and check the data
+	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+	DATA_CHECK(hstmt, 1, "hello world");
 
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (SQL_CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);

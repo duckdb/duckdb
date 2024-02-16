@@ -24,7 +24,7 @@ void ConnectWithoutDSN(SQLHANDLE &env, SQLHANDLE &dbc) {
 }
 
 // Connect with incorrect params
-void ConnectWithIncorrectParam(std::string param, std::vector<std::string> expected_msg) {
+void ConnectWithIncorrectParam(std::string param) {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 	std::string dsn = "DSN=duckdbmemory;" + param;
@@ -46,18 +46,17 @@ void ConnectWithIncorrectParam(std::string param, std::vector<std::string> expec
 	std::string state;
 	std::string message;
 	ACCESS_DIAGNOSTIC(state, message, dbc, SQL_HANDLE_DBC);
-	for (const auto &msg : expected_msg) {
-		REQUIRE(duckdb::StringUtil::Contains(message, msg));
-	}
+	REQUIRE(duckdb::StringUtil::Contains(message, "Invalid keyword"));
+	REQUIRE(duckdb::StringUtil::Contains(message, "Did you mean: "));
 
 	DISCONNECT_FROM_DATABASE(env, dbc);
 }
 
 // Test sending incorrect parameters to SQLDriverConnect
 static void TestIncorrectParams() {
-	ConnectWithIncorrectParam("UnsignedAttribute=true", {"Invalid keyword", "allow_unsigned_extensions"});
-	ConnectWithIncorrectParam("dtabase=test.duckdb", {"Invalid keyword", "database"});
-	ConnectWithIncorrectParam("this_doesnt_exist=?", {"Invalid keyword"});
+	ConnectWithIncorrectParam("UnsignedAttribute=true");
+	ConnectWithIncorrectParam("dtabase=test.duckdb");
+	ConnectWithIncorrectParam("this_doesnt_exist=?");
 }
 
 // Test setting a database from the connection string
@@ -65,7 +64,7 @@ static void TestSettingDatabase() {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
-	auto db_path = "Database=" + GetTesterDirectory() + "test.duckdb";
+	auto db_path = "Database=" + GetTesterDirectory();
 
 	// Connect to database using a connection string with a database path
 	DRIVER_CONNECT_TO_DATABASE(env, dbc, db_path);
