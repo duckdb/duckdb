@@ -95,8 +95,27 @@ class SQLLogicTest:
 
 
 class SQLLogicEncoder(json.JSONEncoder):
-    def encode_base(self, base: BaseStatement):
-        return {'type': base.header.type.name, 'parameters': base.header.parameters, 'query_line': base.query_line}
+    def encode_decorators(self, base: BaseStatement):
+        if base.decorators != []:
+            return {'decorators': base.decorators}
+        else:
+            return {}
+
+    def encode_base_decorator(self, base: BaseStatement):
+        return {
+            'type': base.header.type.name,
+            'parameters': base.header.parameters,
+            'query_line': base.query_line,
+            **self.encode_decorators(base),
+        }
+
+    def encode_base_statement(self, base: BaseStatement):
+        return {
+            'type': base.header.type.name,
+            'parameters': base.header.parameters,
+            'query_line': base.query_line,
+            **self.encode_decorators(base),
+        }
 
     def encode_expected_lines(self, expected: ExpectedResult):
         if expected.lines != None:
@@ -109,12 +128,12 @@ class SQLLogicEncoder(json.JSONEncoder):
         if isinstance(obj, SkipIf):
             assert obj.header.type == TokenType.SQLLOGIC_SKIP_IF, "Object is not an instance of SkipIf"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         if isinstance(obj, OnlyIf):
             assert obj.header.type == TokenType.SQLLOGIC_ONLY_IF, "Object is not an instance of OnlyIf"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
 
         if isinstance(obj, ExpectedResult):
@@ -124,57 +143,57 @@ class SQLLogicEncoder(json.JSONEncoder):
         if isinstance(obj, Statement):
             assert obj.header.type == TokenType.SQLLOGIC_STATEMENT, "Object is not an instance of Statement"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
                 'lines': obj.lines,
                 'expected_result': obj.expected_result,
             }
         elif isinstance(obj, Query):
             assert obj.header.type == TokenType.SQLLOGIC_QUERY, "Object is not an instance of Query"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
                 'lines': obj.lines,
                 'expected_result': obj.expected_result,
             }
         elif isinstance(obj, Require):
             assert obj.header.type == TokenType.SQLLOGIC_REQUIRE, "Object is not an instance of Require"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, HashThreshold):
             assert obj.header.type == TokenType.SQLLOGIC_HASH_THRESHOLD, "Object is not an instance of HashThreshold"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Halt):
             assert obj.header.type == TokenType.SQLLOGIC_HALT, "Object is not an instance of Halt"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Mode):
             assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Mode"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Skip):
             assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Skip"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Unskip):
             assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Unskip"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Set):
             assert obj.header.type == TokenType.SQLLOGIC_SET, "Object is not an instance of Set"
-            return {**self.encode_base(obj), 'error_messages': self.error_messages}
+            return {**self.encode_base_statement(obj), 'error_messages': self.error_messages}
         elif isinstance(obj, Loop):
             type = obj.header.type
             assert (
                 type == TokenType.SQLLOGIC_LOOP or type == TokenType.SQLLOGIC_CONCURRENT_LOOP
             ), "Object is not an instance of Loop"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
                 'parallel': obj.parallel,
                 'name': obj.name,
                 'start': obj.start,
@@ -185,36 +204,36 @@ class SQLLogicEncoder(json.JSONEncoder):
             assert (
                 type == TokenType.SQLLOGIC_FOREACH or type == TokenType.SQLLOGIC_CONCURRENT_FOREACH
             ), "Object is not an instance of Foreach"
-            return {**self.encode_base(obj), 'parallel': obj.parallel, 'name': obj.name, 'values': obj.values}
+            return {**self.encode_base_statement(obj), 'parallel': obj.parallel, 'name': obj.name, 'values': obj.values}
         elif isinstance(obj, Endloop):
             assert obj.header.type == TokenType.SQLLOGIC_ENDLOOP, "Object is not an instance of Endloop"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, RequireEnv):
             assert obj.header.type == TokenType.SQLLOGIC_REQUIRE_ENV, "Object is not an instance of RequireEnv"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Load):
             assert obj.header.type == TokenType.SQLLOGIC_LOAD, "Object is not an instance of Load"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Restart):
             assert obj.header.type == TokenType.SQLLOGIC_RESTART, "Object is not an instance of Restart"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Reconnect):
             assert obj.header.type == TokenType.SQLLOGIC_RECONNECT, "Object is not an instance of Reconnect"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         elif isinstance(obj, Sleep):
             assert obj.header.type == TokenType.SQLLOGIC_SLEEP, "Object is not an instance of Sleep"
             return {
-                **self.encode_base(obj),
+                **self.encode_base_statement(obj),
             }
         else:
             raise Exception(f"Invalid TokenType ({obj.header.type.name})")
@@ -420,7 +439,8 @@ class SQLLogicParser:
         parameters = header.parameters
         if len(parameters) < 1:
             self.fail("set requires at least 1 parameter (e.g. set ignore_error_messages HTTP Error)")
-        if parameters[0] == "ignore_error_messages" or parameters[0] == "always_fail_error_messages":
+        accepted_options = ['ignore_error_messages', 'always_fail_error_messages']
+        if parameters[0] in accepted_options:
             error_messages = []
             # Parse the parameter list as a comma separated list of strings that can contain spaces
             # e.g. `set ignore_error_messages This is an error message, This_is_another, and   another`
@@ -431,7 +451,9 @@ class SQLLogicParser:
             statement.add_error_messages(error_messages)
             return statement
         else:
-            self.fail("unrecognized set parameter: %s" % parameters[0])
+            self.fail(
+                f"unrecognized set parameter: {parameters[0]}, expected {create_formatted_list(accepted_options)}"
+            )
 
     def statement_load(self, header: Token) -> Optional[BaseStatement]:
         statement = Load(header, self.current_line + 1)
@@ -512,6 +534,7 @@ class SQLLogicParser:
                 token = self.tokenize()
                 parse_method = self.DECORATORS.get(token.type)
 
+            # Then parse the statement
             parse_method = self.STATEMENTS.get(token.type)
             if parse_method:
                 statement = parse_method(token)
