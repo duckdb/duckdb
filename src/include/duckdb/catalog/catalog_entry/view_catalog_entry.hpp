@@ -38,7 +38,7 @@ public:
 	vector<LogicalType> types;
 	//! The returned names of the view
 	vector<string> names;
-	//! The comments on the columns of the view
+	//! The comments on the columns of the view: can be empty if there are no comments
 	vector<Value> column_comments;
 
 public:

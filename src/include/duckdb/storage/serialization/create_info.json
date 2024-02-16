@@ -191,7 +191,8 @@
       {
         "id": 205,
         "name": "column_comments",
-        "type": "vector<Value>"
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
       }
     ]
   },

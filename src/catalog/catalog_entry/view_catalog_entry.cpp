@@ -21,7 +21,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->sql = info.sql;
 	this->internal = info.internal;
 	this->comment = info.comment;
-	this->column_comments = !info.column_comments.empty() ? info.column_comments : vector<Value>(info.types.size());
+	this->column_comments = info.column_comments;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
@@ -56,6 +56,12 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 			const auto &col_name = names[i];
 			if (col_name == comment_on_column_info.column_name) {
 				auto &copied_view_entry = copied_view->Cast<ViewCatalogEntry>();
+
+				// If vector is empty, we need to initialize it on setting here
+				if (copied_view_entry.column_comments.empty()) {
+					copied_view_entry.column_comments = vector<Value>(copied_view_entry.types.size());
+				}
+
 				copied_view_entry.column_comments[i] = comment_on_column_info.comment_value;
 				return copied_view;
 			}
