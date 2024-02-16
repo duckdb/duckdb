@@ -18,7 +18,7 @@ SELECT * FROM '__TEST_DIR__/test.tsv'
 2	Hannes
 
 query II
-SELECT * FROM read_csv('__TEST_DIR__/test.tsv', sep='\t', columns={'id': 'INTEGER', 'name': 'VARCHAR'}, header=1)
+SELECT * FROM read_csv('__TEST_DIR__/test.tsv', sep='\t', columns={'id': 'INTEGER', 'name': 'VARCHAR'})
 ----
 1	Mark
 2	Hannes

@@ -144,7 +144,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv
 
 //! Test case with specific parameters that allow us to run the no_quote.tsv we were skipping
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/no_quote.csv", "[parallel-csv][.]") {
-	string add_parameters = ",  header=1, quote=''";
+	string add_parameters = ", quote=''";
 	string file = "test/sql/copy/csv/data/no_quote.csv";
 	REQUIRE(RunFull(file, nullptr, add_parameters));
 }
