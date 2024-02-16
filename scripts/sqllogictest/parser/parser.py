@@ -27,6 +27,7 @@ from ..statement import (
     Skip,
     Unskip,
 )
+from ..statement.sleep import get_sleep_unit, SleepUnit
 
 from ..decorator import SkipIf, OnlyIf
 
@@ -47,36 +48,15 @@ def create_formatted_list(items) -> str:
     return res
 
 
+def is_space(char: str):
+    return char == ' ' or char == '\t' or char == '\n' or char == '\v' or char == '\f' or char == '\r'
+
+
 class SortStyle(Enum):
     NO_SORT = (auto(),)
     ROW_SORT = (auto(),)
     VALUE_SORT = (auto(),)
     UNKNOWN = auto()
-
-
-class SleepUnit(Enum):
-    SECOND = auto()
-    MILLISECOND = auto()
-    MICROSECOND = auto()
-    NANOSECOND = auto()
-
-
-def get_sleep_unit(unit):
-    seconds = ["second", "seconds", "sec"]
-    miliseconds = ["millisecond", "milliseconds", "milli"]
-    microseconds = ["microsecond", "microseconds", "micro"]
-    nanoseconds = ["nanosecond", "nanoseconds", "nano"]
-    if unit in seconds:
-        return SleepUnit.SECOND
-    elif unit in miliseconds:
-        return SleepUnit.MILLISECOND
-    elif unit in microseconds:
-        return SleepUnit.MICROSECOND
-    elif unit in nanoseconds:
-        return SleepUnit.NANOSECOND
-    else:
-        options = ['second', 'millisecond', 'microsecond', 'nanosecond']
-        raise RuntimeError(f"Unrecognized sleep mode - expected {create_formatted_list(options)}")
 
 
 class SQLLogicTest:
@@ -181,7 +161,7 @@ class SQLLogicEncoder(json.JSONEncoder):
             }
         elif isinstance(obj, Set):
             assert obj.header.type == TokenType.SQLLOGIC_SET, "Object is not an instance of Set"
-            return {**self.encode_base_statement(obj), 'error_messages': self.error_messages}
+            return {**self.encode_base_statement(obj), 'error_messages': obj.error_messages}
         elif isinstance(obj, Loop):
             type = obj.header.type
             assert (
@@ -273,9 +253,12 @@ class SQLLogicParser:
         }
 
     def peek(self):
+        return self.peek_no_strip().strip()
+
+    def peek_no_strip(self):
         if self.current_line >= len(self.lines):
             raise Exception("File already fully consumed")
-        return self.lines[self.current_line].strip()
+        return self.lines[self.current_line]
 
     def consume(self):
         if self.current_line >= len(self.lines):
@@ -283,7 +266,9 @@ class SQLLogicParser:
         self.current_line += 1
 
     def fail(self, message):
-        raise Exception(message)
+        file_path = self.current_test.path
+        error_message = f"{file_path}:{self.current_line + 1}: {message}"
+        raise Exception(error_message)
 
     def get_expected_result(self, statement_type: str) -> ExpectedResult:
         type_map = {
@@ -303,8 +288,8 @@ class SQLLogicParser:
 
         self.consume()
         result = []
-        while self.current_line < len(self.lines) and self.peek():
-            result.append(self.peek())
+        while self.current_line < len(self.lines) and self.peek_no_strip().strip('\n'):
+            result.append(self.peek_no_strip().strip('\n'))
             self.consume()
         return result
 
@@ -339,7 +324,7 @@ class SQLLogicParser:
                     print(statement)
                     self.fail('Failed to parse statement: statement error needs to have an expected error message')
             case _:
-                raise Exception(f"Unexpected ExpectedResult Type: {expected_result.type.name}")
+                self.fail(f"Unexpected ExpectedResult Type: {expected_result.type.name}")
 
         statement.expected_result = expected_result
         if len(header.parameters) >= 2:
@@ -373,9 +358,8 @@ class SQLLogicParser:
         # extract the expected result
         expected_result = self.get_expected_result('ok')
         expected_lines: Optional[List[str]] = self.extract_expected_lines()
-        if expected_lines == None:
-            self.fail("'query' did not provide an expected result")
-        expected_result.add_lines(expected_lines)
+        if expected_lines != None:
+            expected_result.add_lines(expected_lines)
         statement.expected_result = expected_result
 
         def get_sort_style(parameters: List[str]) -> SortStyle:
@@ -496,6 +480,9 @@ class SQLLogicParser:
             self.fail("sleep requires two parameter (e.g. sleep 1 second)")
         sleep_duration = int(header.parameters[0])
         sleep_unit = get_sleep_unit(header.parameters[1])
+        if sleep_unit == SleepUnit.UNKNOWN:
+            options = ['second', 'millisecond', 'microsecond', 'nanosecond']
+            raise self.fail(f"Unrecognized sleep mode - expected {create_formatted_list(options)}")
         return Sleep(header, self.current_line + 1, sleep_duration, sleep_unit)
 
     # Decorators
@@ -523,7 +510,7 @@ class SQLLogicParser:
             while parse_method != None:
                 decorator = parse_method(token)
                 if not decorator:
-                    raise Exception(f"Parser did not produce a decorator for {token.type.name}")
+                    self.fail(f"Parser did not produce a decorator for {token.type.name}")
                 decorators.append(decorator)
                 self.next_line()
                 token = self.tokenize()
@@ -534,9 +521,9 @@ class SQLLogicParser:
             if parse_method:
                 statement = parse_method(token)
             else:
-                raise Exception(f"Unexpected token type: {token.type.name}")
+                self.fail(f"Unexpected token type: {token.type.name}")
             if not statement:
-                raise Exception(f"Parser did not produce a statement for {token.type.name}")
+                self.fail(f"Parser did not produce a statement for {token.type.name}")
             statement.add_decorators(decorators)
             self.current_test.add_statement(statement)
         return self.current_test
@@ -550,9 +537,11 @@ class SQLLogicParser:
                 return True
         except IOError:
             return False
+        except UnicodeDecodeError:
+            return False
 
     def empty_or_comment(self, line):
-        return not line.strip() or line.startswith("#")
+        return not line.strip('\n') or line.startswith("#")
 
     def next_line_empty_or_comment(self):
         if self.current_line + 1 >= len(self.lines):
@@ -577,17 +566,15 @@ class SQLLogicParser:
     def extract_statement(self):
         statement = []
 
-        while self.current_line < len(self.lines) and not self.empty_or_comment(self.peek()):
-            line = self.peek()
-            if line == "----":
+        res = self.peek_no_strip().strip('\n')
+        print(f"'{res}'")
+        while self.current_line < len(self.lines) and not self.empty_or_comment(self.peek_no_strip()):
+            line = self.peek_no_strip()
+            if line.strip('\n') == "----":
                 break
             statement.append(line)
             self.consume()
         return statement
-
-    def fail_recursive(self, msg, values):
-        error_message = f"{self.file_name}:{self.current_line + 1}: {msg.format(*values)}"
-        raise RuntimeError(error_message)
 
     def tokenize(self):
         result = Token()
@@ -595,9 +582,9 @@ class SQLLogicParser:
             result.type = TokenType.SQLLOGIC_INVALID
             return result
 
-        line = self.peek()
+        line = self.peek_no_strip()
         argument_list = line.split()
-        argument_list = [x for x in line.strip().split() if x != '']
+        argument_list = [x for x in line.strip('\n').split() if not is_space(x)]
 
         if not argument_list:
             self.fail("Empty line!?")
@@ -664,7 +651,7 @@ class SQLLogicParser:
         if token in token_map:
             return token_map[token]
         else:
-            self.fail("Unrecognized parameter %s", token)
+            self.fail(f"Unrecognized parameter {token}")
             return TokenType.SQLLOGIC_INVALID
 
 
