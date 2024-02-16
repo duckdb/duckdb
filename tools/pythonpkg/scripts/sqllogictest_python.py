@@ -2,7 +2,7 @@ import sys
 import os
 import glob
 import json
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import duckdb
 
 script_path = os.path.dirname(os.path.abspath(__file__))
@@ -34,12 +34,14 @@ from sqllogictest import (
 
 from enum import Enum, auto
 
+TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
+
 
 class ExecuteResult:
     class Type(Enum):
-        SUCCES = (auto(),)
-        ERROR = (auto(),)
-        SKIPPED = auto()
+        SUCCES = 0
+        ERROR = 1
+        SKIPPED = 2
 
     def __init__(self, type: "ExecuteResult.Type"):
         self.type = type
@@ -49,8 +51,17 @@ class SQLLogicTestExecutor:
     def reset(self):
         self.skipped = False
         self.error: Optional[str] = None
-        self.conn: Optional[duckdb.DuckDBPyConnection] = None
-        self.cursors = {}
+
+        self.dbpath = ''
+        self.loaded_databases: Dict[str, duckdb.DuckDBPyConnection] = {}
+        self.db: Optional[duckdb.DuckDBPyConnection] = None
+        self.config: Dict[str, Any] = {}
+
+        self.con: Optional[duckdb.DuckDBPyConnection] = None
+        self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
+
+        self.environment_variables: Dict[str, str] = {}
+        self.test: Optional[SQLLogicTest] = None
 
     def __init__(self):
         self.reset()
@@ -58,6 +69,8 @@ class SQLLogicTestExecutor:
             Statement: self.execute_statement,
             RequireEnv: self.execute_require_env,
             Query: self.execute_query,
+            Load: self.execute_load,
+            Restart: None,  # <-- restart is hard, have to get transaction status
         }
 
     def fail(self, message):
@@ -70,24 +83,110 @@ class SQLLogicTestExecutor:
         return unsupported_statements
 
     def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
-        if not self.conn:
-            self.conn = duckdb.connect(':memory:__named__')
         if not name:
-            return self.conn
+            return self.con
+
         if name not in self.cursors:
             self.cursors[name] = self.conn.cursor()
         return self.cursors[name]
+
+    def replace_keywords(self, input: str):
+        # Replace environment variables in the SQL
+        for name, value in self.environment_variables.items():
+            input = input.replace(f"${{{name}}}", value)
+
+        input = input.replace("__TEST_DIR__", TEST_DIRECTORY_PATH)
+        input = input.replace("__WORKING_DIRECTORY__", os.getcwd())
+        input = input.replace("__BUILD_DIRECTORY__", duckdb.__build_dir__)
+        return input
+
+    def in_loop(self) -> bool:
+        return False
+
+    def test_delete_file(self, path):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
+
+    def delete_database(self, path):
+        if False:
+            return
+        self.test_delete_file(path)
+        self.test_delete_file(path + ".wal")
+
+    def reconnect(self):
+        self.con = self.db.cursor()
+        if self.test.is_sqlite_test():
+            self.con.execute("SET integer_division=true")
+        # Check for alternative verify
+        # if DUCKDB_ALTERNATIVE_VERIFY:
+        #    con.query("SET pivot_filter_threshold=0")
+        # if enable_verification:
+        #    con.enable_query_verification()
+        # Set the local extension repo for autoinstalling extensions
+        env_var = os.getenv("LOCAL_EXTENSION_REPO")
+        if env_var:
+            self.con.execute("set autoload_known_extensions=True")
+            self.con.execute(f"SET autoinstall_extension_repository='{env_var}'")
+
+    def load_database(self, dbpath):
+        self.dbpath = dbpath
+
+        # Restart the database with the specified db path
+        self.db = ''
+        self.con = None
+        self.cursors = {}
+
+        # Now re-open the current database
+        read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
+        self.db = duckdb.connect(dbpath, read_only, self.config)
+        self.loaded_databases[dbpath] = self.db
+        self.reconnect()
+
+        # Load any previously loaded extensions again
+        # for extension in extensions:
+        #    self.load_extension(db, extension)
+
+    def execute_load(self, load: Load):
+        if self.in_loop():
+            self.fail("load cannot be called in a loop")
+
+        readonly = load.readonly
+
+        if load.header.parameters:
+            dbpath = load.header.parameters[0]
+            dbpath = self.replace_keywords(dbpath)
+            if not readonly:
+                # delete the target database file, if it exists
+                self.delete_database(dbpath)
+        else:
+            dbpath = ""
+
+        # set up the config file
+        if readonly:
+            self.config['temp_directory'] = False
+            self.config['access_mode'] = 'read_only'
+        else:
+            self.config['temp_directory'] = True
+            self.config['access_mode'] = 'automatic'
+
+        # now create the database file
+        self.load_database(dbpath)
 
     def execute_query(self, query: Query):
         assert isinstance(query, Query)
         conn = self.get_connection(query.connection_name)
         sql_query = '\n'.join(query.lines)
+        print(sql_query)
 
         expected_result = query.expected_result
         assert expected_result.type == ExpectedResult.Type.SUCCES
         try:
             conn.execute(sql_query)
             result = conn.fetchall()
+            print(result)
             if expected_result.lines == None:
                 return
             actual = []
@@ -109,12 +208,15 @@ class SQLLogicTestExecutor:
     def execute_statement(self, statement: Statement):
         assert isinstance(statement, Statement)
         conn = self.get_connection(statement.connection_name)
-        query = '\n'.join(statement.lines)
+        sql_query = '\n'.join(statement.lines)
+        print(sql_query)
 
         expected_result = statement.expected_result
         try:
-            conn.execute(query)
+            conn.execute(sql_query)
             result = conn.fetchall()
+            if len(result) > 0:
+                print(result[0])
             if expected_result.type == ExpectedResult.Type.ERROR:
                 self.fail(f"Query unexpectedly succeeded")
             assert expected_result.lines == None
@@ -134,6 +236,7 @@ class SQLLogicTestExecutor:
 
     def execute_test(self, test: SQLLogicTest) -> ExecuteResult:
         self.reset()
+        self.test = test
         unsupported = self.get_unsupported_statements(test)
         if unsupported != []:
             error = 'Test skipped because the following statement types are not supported: '
@@ -141,10 +244,12 @@ class SQLLogicTestExecutor:
             error += str(list([x.__name__ for x in types]))
             raise Exception(error)
 
+        self.load_database(self.dbpath)
         for statement in test.statements:
             method = self.STATEMENTS.get(statement.__class__)
             if not method:
                 raise Exception(f"Not supported: {statement.__class__.__name__}")
+            print(statement.header.type.name)
             method(statement)
             if self.skipped:
                 return ExecuteResult(ExecuteResult.Type.SKIPPED)
@@ -173,6 +278,7 @@ def main():
         test = sql_parser.parse(file_path)
 
         result = executor.execute_test(test)
+        print(result.type.name)
         if result.type == ExecuteResult.Type.SKIPPED:
             continue
         exit()
