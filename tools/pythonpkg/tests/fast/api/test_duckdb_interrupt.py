@@ -13,7 +13,7 @@ faulthandler.enable()
 def large_test_data_gen():
     print("generating test data")
     n = 1_000_000
-    columns = 100
+    columns = 1000
     df = pd.DataFrame({f'col{i}': 1000 * np.random.sample(n) for i in range(columns)})
     print("test data generation complete")
     return df
@@ -37,12 +37,26 @@ class TestQueryInterrupt(object):
             SET memory_limit = '200GB';
             -- configure the system to use x threads
             SET threads TO 16;
-            -- enable printing of a progress bar during long-running queries
-            SET enable_progress_bar = true;
             -- temp dir
             SET temp_directory='.tmp';
+            -- enable printing of a progress bar during long-running queries
+            SET enable_progress_bar = true;
             """
         )
+
+        stmt = duckdb.sql(
+            """
+            -- show a list of all available settings
+            SELECT * FROM duckdb_settings() order by name;
+            """
+        )
+
+        """
+        print("DB settings:")
+        vals = stmt.fetchall()
+        for val in vals:
+            print(val)
+        """
         
 
     def assert_interrupts(self, query_name, query, test_data):
@@ -55,12 +69,9 @@ class TestQueryInterrupt(object):
         qry = query()
         df = test_data
         stmt = duckdb.sql(qry)
-        try:
-            result = stmt.fetchall()
-        except RuntimeError as err:
-            # Success!
-            assert err.args[0] == 'Query interrupted'
-            print("Successful interrupt with error")
+        result = stmt.fetchall()
+        # print(result)
+
 
     
     def test_query_interrupt(self):

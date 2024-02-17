@@ -47,6 +47,8 @@
 
 #include <thread>         // std::this_thread::sleep_for
 #include <chrono>         // std::chrono::seconds
+#include <sstream>
+#include <fstream>
 
 namespace duckdb {
 
@@ -429,17 +431,41 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
                                                           bool dry_run) {
+    static int n_calls = 0;
+    n_calls++;
+
+#if 0
+    std::ofstream outfile;
+    outfile.open("/tmp/duckdb.log", std::ios_base::app); // append instead of overwrite
+    outfile << "n_calls: " << n_calls << std::endl;
+    outfile << active_query->query << std::endl;
+    outfile << "---------------------" << std::endl;
+#endif
+
+
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
 	bool invalidate_transaction = true;
 	try {
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
+
+		// if(active_query->query.find("SELECT") != std::string::npos) {
+		if(false && n_calls > 10000) {
+			// Simulate KeyboardInterrupt exception from python
+			// This gets translated by pybind11 to py::error_already_set
+			// which inherits from std::exception.
+			std::stringstream ss;
+			ss << "KeyboardInterrupt: n_calls: " << n_calls << "\n" << active_query->query;
+			throw std::runtime_error(ss.str());
+
+			// throw std::runtime_error("KeyboardInterrupt: <EMPTY MESSAGE>");
+		}
+
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
 			active_query->progress_bar->Update(is_finished);
-			query_progress = active_query->progress_bar->GetDetailedQueryProgress();
 			std::this_thread::sleep_for (std::chrono::seconds(3));
-			throw int(0); // Throw a non standard exception to simulate a python exception
+			throw std::runtime_error("KeyboardInterrupt: <EMPTY MESSAGE>");
 		}
 		return query_result;
 	} catch (std::exception &ex) {
