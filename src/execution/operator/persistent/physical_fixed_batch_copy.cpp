@@ -98,6 +98,22 @@ public:
 		SetMemorySize(context, MinValue<idx_t>(request_cap, memory_state->GetRemainingSize() * 2));
 	}
 
+	bool OutOfMemory(ClientContext &context, idx_t batch_index) {
+		bool out_of_memory = false;
+		if (unflushed_rows * approximate_row_size >= available_memory) {
+			lock_guard<mutex> l(blocked_task_lock);
+			if (batch_index > min_batch_index) {
+				// exceeded available memory and we are not the minimum batch index- try to increase it
+				IncreaseMemory(context);
+				if (unflushed_rows * approximate_row_size >= available_memory) {
+					// STILL out of memory
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	void AddTask(unique_ptr<BatchCopyTask> task) {
 		lock_guard<mutex> l(task_lock);
 		task_queue.push(std::move(task));
@@ -204,11 +220,11 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	if (state.current_task == FixedBatchCopyState::PROCESSING_TASKS) {
 		ExecuteTasks(context.client, gstate);
 		FlushBatchData(context.client, gstate, gstate.min_batch_index.load());
-		if (batch_index > gstate.min_batch_index) {
+		if (batch_index > gstate.min_batch_index && gstate.OutOfMemory(context.client, batch_index)) {
 			lock_guard<mutex> l(gstate.blocked_task_lock);
 			if (batch_index > gstate.min_batch_index) {
-				// no tasks to process and we are not the minimum batch index - block the task for now
-				//                Printer::PrintF("Block task at batch index %llu", batch_index);
+				// no tasks to process, we are not the minimum batch index and we have no memory available to buffer
+				// block the task for now
 				gstate.BlockTask(input.interrupt_state);
 				return SinkResultType::BLOCKED;
 			}
@@ -217,33 +233,21 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	}
 	if (!state.collection) {
 		state.InitializeCollection(context.client, *this);
-		state.batch_index = state.partition_info.batch_index.GetIndex();
+		state.batch_index = batch_index;
 	}
-	auto current_unflushed_rows = (gstate.unflushed_rows += chunk.size());
-	if (state.partition_info.batch_index.GetIndex() > gstate.min_batch_index) {
+	if (batch_index > gstate.min_batch_index) {
 		gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 
 		// we are not processing the current min batch index
 		// check if we have exceeded the maximum number of unflushed rows
-		bool out_of_memory = false;
-		if (current_unflushed_rows * gstate.approximate_row_size >= gstate.available_memory) {
-			lock_guard<mutex> l(gstate.blocked_task_lock);
-			if (batch_index > gstate.min_batch_index) {
-				// exceeded available memory and we are not the minimum batch index- try to increase it
-				gstate.IncreaseMemory(context.client);
-				if (current_unflushed_rows * gstate.approximate_row_size >= gstate.available_memory) {
-					// STILL out of memory
-					out_of_memory = true;
-				}
-			}
-		}
-		if (out_of_memory) {
+		if (gstate.OutOfMemory(context.client, batch_index)) {
 			// out-of-memory - stop sinking chunks and instead assist in processing tasks for the minimum batch index
 			state.current_task = FixedBatchCopyState::PROCESSING_TASKS;
 			return Sink(context, chunk, input);
 		}
 	}
 	state.rows_copied += chunk.size();
+	gstate.unflushed_rows += chunk.size();
 	state.collection->Append(state.append_state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
