@@ -147,16 +147,18 @@ public:
 		blocked_tasks.push_back(state);
 	}
 
-	void UnblockTasks() {
+	bool UnblockTasks() {
 		lock_guard<mutex> l(blocked_task_lock);
-		UnblockTasksInternal();
+		return UnblockTasksInternal();
 	}
 
-	void UnblockTasksInternal() {
+	bool UnblockTasksInternal() {
+		auto any_unblocked = !blocked_tasks.empty();
 		for (auto &entry : blocked_tasks) {
 			entry.Callback();
 		}
 		blocked_tasks.clear();
+		return any_unblocked;
 	}
 
 	void UpdateMinBatchIndex(idx_t current_min_batch_index) {
@@ -166,7 +168,6 @@ public:
 		lock_guard<mutex> l(blocked_task_lock);
 		idx_t new_batch_index = MaxValue<idx_t>(min_batch_index, current_min_batch_index);
 		if (new_batch_index != min_batch_index) {
-			//            Printer::PrintF("Update min batch index to %llu - unblock tasks", min_batch_index.load());
 			// new batch index! unblock all tasks
 			min_batch_index = new_batch_index;
 			UnblockTasksInternal();
@@ -249,16 +250,11 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	state.rows_copied += chunk.size();
 	state.collection->Append(state.append_state, chunk);
 	auto new_memory_usage = state.collection->SizeInBytes();
-	if (new_memory_usage < state.local_memory_usage) {
-		// memory usage decreased (how?)
-		throw InternalException("Decreasing local memory usage (from %llu to %llu)", state.local_memory_usage,
-		                        new_memory_usage);
-		//        gstate.unflushed_memory_usage -= state.local_memory_usage - new_memory_usage;
-	} else if (new_memory_usage > state.local_memory_usage) {
+	if (new_memory_usage > state.local_memory_usage) {
 		// memory usage increased - add to global state
-		//        Printer::PrintF("Increasing local memory usage  (from %llu to %llu)", state.local_memory_usage,
-		//        new_memory_usage);
 		gstate.unflushed_memory_usage += new_memory_usage - state.local_memory_usage;
+	} else if (new_memory_usage < state.local_memory_usage) {
+		throw InternalException("PhysicalFixedBatchCopy - memory usage decreased somehow?");
 	}
 	state.local_memory_usage = new_memory_usage;
 	return SinkResultType::NEED_MORE_INPUT;
@@ -597,11 +593,15 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		// attempt to repartition to our desired batch size
 		RepartitionBatches(context.client, gstate_p, min_batch_index);
 		// unblock tasks so they can help process batches (if any are blocked)
-		gstate.UnblockTasks();
-		//! Execute a single repartition task
-		ExecuteTask(context.client, gstate);
-		//! Flush batch data to disk (if any is ready)
-		FlushBatchData(context.client, gstate, gstate.min_batch_index.load());
+		auto any_unblocked = gstate.UnblockTasks();
+		// if any threads were unblocked they can pick up execution of the tasks
+		// otherwise we will execute a task and flush here
+		if (any_unblocked) {
+			//! Execute a single repartition task
+			ExecuteTask(context.client, gstate);
+			//! Flush batch data to disk (if any is ready)
+			FlushBatchData(context.client, gstate, gstate.min_batch_index.load());
+		}
 	}
 	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
