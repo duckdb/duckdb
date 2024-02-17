@@ -2201,54 +2201,124 @@ public class TestDuckDBJDBC {
         conn.close();
     }
 
+    private static boolean conversionToTimestampNSOverflows(LocalDateTime ldt) {
+        Instant instant = ldt.atZone(ZoneOffset.UTC).toInstant();
+        try {
+            long epochNanos = Math.multiplyExact(instant.getEpochSecond(), 1_000_000_000);
+            Math.addExact(epochNanos, instant.getNano());
+            return false;
+        } catch (ArithmeticException e) {
+            return true;
+        }
+    }
+
+    // Assertion helper for test_appender_date_and_time
+    private static void assertNextRowOfTimestampsEquals(ResultSet rs, LocalDateTime expected, boolean skip_ns_timestamp)
+        throws Exception {
+        assertTrue(rs.next());
+        {
+            LocalDateTime a = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
+            assertEquals(a, expected);
+            LocalDateTime b = (LocalDateTime) rs.getObject(2, LocalDateTime.class);
+            assertEquals(b, expected);
+            // c_ms, d_ns, and e_s are timestamps with different precisions
+            // TODO(felipecrv): allow extracting LocalDateTime from different timestamp resolutions
+            // LocalDateTime c_ms = (LocalDateTime) rs.getObject(3, LocalDateTime.class);
+            // assertEquals(c_ms, expected.truncatedTo(ChronoUnit.MILLIS));
+            // if (!skip_ns_timestamp) {
+            //     LocalDateTime d_ns = (LocalDateTime) rs.getObject(4, LocalDateTime.class);
+            //     assertEquals(d_ns, expected);
+            // }
+            // LocalDateTime e_s = (LocalDateTime) rs.getObject(5, LocalDateTime.class);
+            // assertEquals(e_s, expected.truncatedTo(ChronoUnit.SECONDS));
+        }
+        {
+            DuckDBTimestamp a = (DuckDBTimestamp) rs.getObject(1, DuckDBTimestamp.class);
+            assertEquals(a.toLocalDateTime(), expected);
+            DuckDBTimestamp b = (DuckDBTimestamp) rs.getObject(2, DuckDBTimestamp.class);
+            assertEquals(b.toLocalDateTime(), expected);
+            // c_ms, d_ns, and e_s are timestamps with different precisions
+            DuckDBTimestamp c_ms = (DuckDBTimestamp) rs.getObject(3, DuckDBTimestamp.class);
+            assertEquals(c_ms.toLocalDateTime(), expected.truncatedTo(ChronoUnit.MILLIS));
+            if (!skip_ns_timestamp) {
+                DuckDBTimestamp d_ns = (DuckDBTimestamp) rs.getObject(4, DuckDBTimestamp.class);
+                assertEquals(d_ns.toLocalDateTime(), expected);
+            }
+            DuckDBTimestamp e_s = (DuckDBTimestamp) rs.getObject(5, DuckDBTimestamp.class);
+            assertEquals(e_s.toLocalDateTime(), expected.truncatedTo(ChronoUnit.SECONDS));
+        }
+    }
+
     public static void test_appender_date_and_time() throws Exception {
         DuckDBConnection conn = DriverManager.getConnection(JDBC_URL).unwrap(DuckDBConnection.class);
         Statement stmt = conn.createStatement();
 
-        stmt.execute("CREATE TABLE date_and_time (id INT4, a TIMESTAMP)");
+        stmt.execute("CREATE TABLE date_and_time ("
+                     + "id INT4, a TIMESTAMP, b TIMESTAMP, c_ms TIMESTAMP_MS, d_ns TIMESTAMP_NS, e_s TIMESTAMP_S)");
         DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "date_and_time");
 
         LocalDateTime ldt1 = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
         LocalDateTime ldt2 = LocalDateTime.of(-23434, 3, 5, 23, 2);
         LocalDateTime ldt3 = LocalDateTime.of(1970, 1, 1, 0, 0);
         LocalDateTime ldt4 = LocalDateTime.of(11111, 12, 31, 23, 59, 59, 999999000);
+        DuckDBTimestamp dts1 = new DuckDBTimestamp(ldt1);
+        DuckDBTimestamp dts2 = new DuckDBTimestamp(ldt2);
+        DuckDBTimestamp dts3 = new DuckDBTimestamp(ldt3);
+        DuckDBTimestamp dts4 = new DuckDBTimestamp(ldt4);
 
         appender.beginRow();
         appender.append(1);
+        appender.appendLocalDateTime(ldt1);
+        appender.appendDuckDBTimestamp(dts1);
+        appender.appendLocalDateTime(ldt1);
+        assertFalse(conversionToTimestampNSOverflows(ldt1));
+        appender.appendLocalDateTime(ldt1);
         appender.appendLocalDateTime(ldt1);
         appender.endRow();
         appender.beginRow();
         appender.append(2);
         appender.appendLocalDateTime(ldt2);
+        appender.appendDuckDBTimestamp(dts2);
+        appender.appendLocalDateTime(ldt2);
+        // Appending ldt2 with nanosecond precision throws...
+        assertThrows(() -> appender.appendLocalDateTime(ldt2), SQLException.class);
+        // ...because of int64 overflow.
+        assertTrue(conversionToTimestampNSOverflows(ldt2));
+        // Skip by appending the epoch.
+        appender.appendDuckDBTimestamp(new DuckDBTimestamp(0));
+        appender.appendLocalDateTime(ldt2);
         appender.endRow();
         appender.beginRow();
         appender.append(3);
+        appender.appendLocalDateTime(ldt3);
+        appender.appendDuckDBTimestamp(dts3);
+        appender.appendLocalDateTime(ldt3);
+        assertFalse(conversionToTimestampNSOverflows(ldt3));
+        appender.appendLocalDateTime(ldt3);
         appender.appendLocalDateTime(ldt3);
         appender.endRow();
         appender.beginRow();
         appender.append(4);
         appender.appendLocalDateTime(ldt4);
+        appender.appendDuckDBTimestamp(dts4);
+        appender.appendLocalDateTime(ldt4);
+        // Appending ldt4 with nanosecond precision throws...
+        assertThrows(() -> appender.appendLocalDateTime(ldt4), SQLException.class);
+        // ...because of int64 overflow.
+        assertTrue(conversionToTimestampNSOverflows(ldt4));
+        // Skip by appending the epoch.
+        appender.appendDuckDBTimestamp(new DuckDBTimestamp(0));
+        appender.appendLocalDateTime(ldt4);
         appender.endRow();
         appender.close();
 
-        ResultSet rs = stmt.executeQuery("SELECT a FROM date_and_time ORDER BY id");
+        ResultSet rs = stmt.executeQuery("SELECT a, b, c_ms, d_ns, e_s FROM date_and_time ORDER BY id");
         assertFalse(rs.isClosed());
-        assertTrue(rs.next());
 
-        LocalDateTime res1 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res1, ldt1);
-        assertTrue(rs.next());
-
-        LocalDateTime res2 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res2, ldt2);
-        assertTrue(rs.next());
-
-        LocalDateTime res3 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res3, ldt3);
-        assertTrue(rs.next());
-
-        LocalDateTime res4 = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-        assertEquals(res4, ldt4);
+        assertNextRowOfTimestampsEquals(rs, ldt1, false);
+        assertNextRowOfTimestampsEquals(rs, ldt2, true);
+        assertNextRowOfTimestampsEquals(rs, ldt3, false);
+        assertNextRowOfTimestampsEquals(rs, ldt4, true);
 
         rs.close();
         stmt.close();

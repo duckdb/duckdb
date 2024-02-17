@@ -52,6 +52,15 @@ public class DuckDBAppender implements AutoCloseable {
     }
 
     // New naming schema for object params to keep compatibility with calling "append(null)"
+
+    public void appendDuckDBTimestamp(DuckDBTimestamp value) throws SQLException {
+        if (value == null) {
+            DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
+        } else {
+            DuckDBNative.duckdb_jdbc_appender_append_timestamp(appender_ref, value.getMicrosEpoch());
+        }
+    }
+
     public void appendLocalDateTime(LocalDateTime value) throws SQLException {
         if (value == null) {
             DuckDBNative.duckdb_jdbc_appender_append_null(appender_ref);
