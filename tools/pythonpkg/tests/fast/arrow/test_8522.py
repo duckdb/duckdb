@@ -20,6 +20,7 @@ class Test8522(object):
             arrays=[pa.array([dt.datetime(2022, 1, 1)])],
             schema=pa.schema([pa.field("time", pa.timestamp("ms", tz="UTC"))]),
         )
+        duckdb_cursor.sql("SET TIMEZONE='UTC'")
 
         expected = duckdb_cursor.sql("FROM t_us").filter("time>='2022-01-01'").fetchall()
         assert len(expected) == 1

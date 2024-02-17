@@ -540,3 +540,12 @@ class TestReadCSV(object):
         with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
             rel = con.read_csv(files)
             res = rel.fetchall()
+
+    def test_read_csv_auto_type_candidates(self):
+        con = duckdb.connect()
+        file = StringIO('a,b,c\n1,1.1,bla')
+        rel = con.read_csv(file, header=True, auto_type_candidates=['VARCHAR'])
+        res = rel.fetchall()
+        assert res == [('1', '1.1', 'bla')]
+        assert rel.columns == ['a', 'b', 'c']
+        assert rel.types == ['VARCHAR', 'VARCHAR', 'VARCHAR']

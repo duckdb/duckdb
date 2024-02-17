@@ -217,7 +217,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
 	             py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
 	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	             py::arg("null_padding") = py::none(), py::arg("names") = py::none());
+	             py::arg("null_padding") = py::none(), py::arg("names") = py::none(),
+	             py::arg("auto_type_candidates") = py::none());
 
 	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	      py::arg("df") = py::none())
@@ -725,7 +726,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
     const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
     const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
     const py::object &all_varchar, const py::object &normalize_names, const py::object &filename,
-    const py::object &null_padding, const py::object &names_p) {
+    const py::object &null_padding, const py::object &names_p, const py::object &auto_type_candidates) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -801,6 +802,22 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		bind_parameters["delim"] = Value(py::str(sep));
 	} else if (has_delimiter) {
 		bind_parameters["delim"] = Value(py::str(delimiter));
+	}
+
+	if (!py::none().is(auto_type_candidates)) {
+		if (!py::isinstance<py::list>(auto_type_candidates)) {
+			throw InvalidInputException("read_csv only accepts 'auto_type_candidates' as a list of types");
+		}
+		vector<Value> candidates;
+		py::list candidates_list = auto_type_candidates;
+		for (auto &elem : candidates_list) {
+			shared_ptr<DuckDBPyType> sql_type;
+			if (!py::try_cast(elem, sql_type)) {
+				throw py::value_error("The types provided to 'auto_type_candidates' have to be DuckDBPyType");
+			}
+			candidates.push_back(sql_type->ToString());
+		}
+		bind_parameters["auto_type_candidates"] = Value::LIST(LogicalType::VARCHAR, std::move(candidates));
 	}
 
 	if (!py::none().is(names_p)) {
