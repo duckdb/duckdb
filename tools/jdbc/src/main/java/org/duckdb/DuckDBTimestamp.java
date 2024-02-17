@@ -99,6 +99,10 @@ public class DuckDBTimestamp {
         return DuckDBTimestamp.RefLocalDateTime.until(localDateTime, ChronoUnit.MICROS);
     }
 
+    public Instant toInstant() {
+        return Instant.ofEpochSecond(micros2seconds(this.timeMicros), nanosPartMicros(this.timeMicros));
+    }
+
     public Timestamp toSqlTimestamp() {
         return Timestamp.valueOf(this.toLocalDateTime());
     }
