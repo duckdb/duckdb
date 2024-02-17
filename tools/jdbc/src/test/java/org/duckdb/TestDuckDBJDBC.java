@@ -2218,9 +2218,9 @@ public class TestDuckDBJDBC {
         assertTrue(rs.next());
         {
             LocalDateTime a = (LocalDateTime) rs.getObject(1, LocalDateTime.class);
-            assertEquals(a, expected);
+            assertEquals(a, expected.truncatedTo(ChronoUnit.MICROS));
             LocalDateTime b = (LocalDateTime) rs.getObject(2, LocalDateTime.class);
-            assertEquals(b, expected);
+            assertEquals(b, expected.truncatedTo(ChronoUnit.MICROS));
             // c_ms, d_ns, and e_s are timestamps with different precisions
             // TODO(felipecrv): allow extracting LocalDateTime from different timestamp resolutions
             // LocalDateTime c_ms = (LocalDateTime) rs.getObject(3, LocalDateTime.class);
@@ -2234,15 +2234,16 @@ public class TestDuckDBJDBC {
         }
         {
             DuckDBTimestamp a = (DuckDBTimestamp) rs.getObject(1, DuckDBTimestamp.class);
-            assertEquals(a.toLocalDateTime(), expected);
+            assertEquals(a.toLocalDateTime(), expected.truncatedTo(ChronoUnit.MICROS));
             DuckDBTimestamp b = (DuckDBTimestamp) rs.getObject(2, DuckDBTimestamp.class);
-            assertEquals(b.toLocalDateTime(), expected);
+            assertEquals(b.toLocalDateTime(), expected.truncatedTo(ChronoUnit.MICROS));
             // c_ms, d_ns, and e_s are timestamps with different precisions
             DuckDBTimestamp c_ms = (DuckDBTimestamp) rs.getObject(3, DuckDBTimestamp.class);
             assertEquals(c_ms.toLocalDateTime(), expected.truncatedTo(ChronoUnit.MILLIS));
             if (!skip_ns_timestamp) {
                 DuckDBTimestamp d_ns = (DuckDBTimestamp) rs.getObject(4, DuckDBTimestamp.class);
-                assertEquals(d_ns.toLocalDateTime(), expected);
+                // All timestamps inserted via the JDBC driver are truncated to microseconds
+                assertEquals(d_ns.toLocalDateTime(), expected.truncatedTo(ChronoUnit.MICROS));
             }
             DuckDBTimestamp e_s = (DuckDBTimestamp) rs.getObject(5, DuckDBTimestamp.class);
             assertEquals(e_s.toLocalDateTime(), expected.truncatedTo(ChronoUnit.SECONDS));
@@ -2257,10 +2258,10 @@ public class TestDuckDBJDBC {
                      + "id INT4, a TIMESTAMP, b TIMESTAMP, c_ms TIMESTAMP_MS, d_ns TIMESTAMP_NS, e_s TIMESTAMP_S)");
         DuckDBAppender appender = conn.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "date_and_time");
 
-        LocalDateTime ldt1 = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        LocalDateTime ldt1 = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS).plusNanos(1);
         LocalDateTime ldt2 = LocalDateTime.of(-23434, 3, 5, 23, 2);
         LocalDateTime ldt3 = LocalDateTime.of(1970, 1, 1, 0, 0);
-        LocalDateTime ldt4 = LocalDateTime.of(11111, 12, 31, 23, 59, 59, 999999000);
+        LocalDateTime ldt4 = LocalDateTime.of(11111, 12, 31, 23, 59, 59, 999999001);
         DuckDBTimestamp dts1 = new DuckDBTimestamp(ldt1);
         DuckDBTimestamp dts2 = new DuckDBTimestamp(ldt2);
         DuckDBTimestamp dts3 = new DuckDBTimestamp(ldt3);
