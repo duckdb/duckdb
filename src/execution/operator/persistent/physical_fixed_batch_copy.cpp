@@ -36,7 +36,7 @@ public:
 // States
 //===--------------------------------------------------------------------===//
 struct FixedPreparedBatchData {
-	idx_t row_count;
+	idx_t memory_usage;
 	unique_ptr<PreparedBatchData> prepared_data;
 };
 
@@ -44,8 +44,8 @@ class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
 	explicit FixedBatchCopyGlobalState(unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), global_state(std::move(global_state)), batch_size(0), scheduled_batch_index(0),
-	      flushed_batch_index(0), any_flushing(false), any_finished(false), unflushed_rows(0), min_batch_index(0),
-	      waiting_threads(0) {
+	      flushed_batch_index(0), any_flushing(false), any_finished(false), unflushed_memory_usage(0),
+	      min_batch_index(0) {
 	}
 
 	mutex lock;
@@ -70,15 +70,11 @@ public:
 	atomic<bool> any_finished;
 	//! Temporary memory state
 	unique_ptr<TemporaryMemoryState> memory_state;
-	//! Total amount of unflushed rows
-	atomic<idx_t> unflushed_rows;
-	//! The approximate row size (for approximating memory usage)
-	idx_t approximate_row_size = 128;
+	//! Total memory usage of unflushed rows
+	atomic<idx_t> unflushed_memory_usage;
 	//! Minimum batch size
 	atomic<idx_t> min_batch_index;
-	//! Number of threads waiting
-	atomic<idx_t> waiting_threads;
-	//! ...
+	//! The available memory for unflushed rows
 	atomic<idx_t> available_memory;
 	//! Blocked task lock
 	mutex blocked_task_lock;
@@ -93,20 +89,21 @@ public:
 	void IncreaseMemory(ClientContext &context) {
 		// request at most 1/4th of all available memory
 		idx_t total_max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
-		idx_t request_cap = total_max_memory / 4;
+		idx_t request_cap = total_max_memory / 5;
 
 		SetMemorySize(context, MinValue<idx_t>(request_cap, memory_state->GetRemainingSize() * 2));
 	}
 
 	bool OutOfMemory(ClientContext &context, idx_t batch_index) {
-		bool out_of_memory = false;
-		if (unflushed_rows * approximate_row_size >= available_memory) {
+		if (unflushed_memory_usage >= available_memory) {
 			lock_guard<mutex> l(blocked_task_lock);
 			if (batch_index > min_batch_index) {
 				// exceeded available memory and we are not the minimum batch index- try to increase it
 				IncreaseMemory(context);
-				if (unflushed_rows * approximate_row_size >= available_memory) {
+				if (unflushed_memory_usage >= available_memory) {
 					// STILL out of memory
+					//                    Printer::PrintF("Out of memory (%llu unflushed, available %llu)",
+					//                    unflushed_memory_usage.load(), available_memory.load());
 					return true;
 				}
 			}
@@ -134,12 +131,12 @@ public:
 		return task_queue.size();
 	}
 
-	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t row_count) {
+	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {
 		// move the batch data to the set of prepared batch data
 		lock_guard<mutex> l(lock);
 		auto prepared_data = make_uniq<FixedPreparedBatchData>();
 		prepared_data->prepared_data = std::move(new_batch);
-		prepared_data->row_count = row_count;
+		prepared_data->memory_usage = memory_usage;
 		auto entry = batch_data.insert(make_pair(batch_index, std::move(prepared_data)));
 		if (!entry.second) {
 			throw InternalException("Duplicate batch index %llu encountered in PhysicalFixedBatchCopy", batch_index);
@@ -187,7 +184,7 @@ enum class FixedBatchCopyState { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
 class FixedBatchCopyLocalState : public LocalSinkState {
 public:
 	explicit FixedBatchCopyLocalState(unique_ptr<LocalFunctionData> local_state_p)
-	    : local_state(std::move(local_state_p)), rows_copied(0) {
+	    : local_state(std::move(local_state_p)), rows_copied(0), local_memory_usage(0) {
 	}
 
 	//! Local copy state
@@ -198,6 +195,8 @@ public:
 	ColumnDataAppendState append_state;
 	//! How many rows have been copied in total
 	idx_t rows_copied;
+	//! Memory usage of the thread-local collection
+	idx_t local_memory_usage;
 	//! The current batch index
 	optional_idx batch_index;
 	//! Current task
@@ -206,6 +205,7 @@ public:
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
 		collection = make_uniq<ColumnDataCollection>(context, op.children[0]->types, ColumnDataAllocatorType::HYBRID);
 		collection->InitializeAppend(append_state);
+		local_memory_usage = 0;
 	}
 };
 
@@ -247,8 +247,20 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 		state.batch_index = batch_index;
 	}
 	state.rows_copied += chunk.size();
-	gstate.unflushed_rows += chunk.size();
 	state.collection->Append(state.append_state, chunk);
+	auto new_memory_usage = state.collection->SizeInBytes();
+	if (new_memory_usage < state.local_memory_usage) {
+		// memory usage decreased (how?)
+		throw InternalException("Decreasing local memory usage (from %llu to %llu)", state.local_memory_usage,
+		                        new_memory_usage);
+		//        gstate.unflushed_memory_usage -= state.local_memory_usage - new_memory_usage;
+	} else if (new_memory_usage > state.local_memory_usage) {
+		// memory usage increased - add to global state
+		//        Printer::PrintF("Increasing local memory usage  (from %llu to %llu)", state.local_memory_usage,
+		//        new_memory_usage);
+		gstate.unflushed_memory_usage += new_memory_usage - state.local_memory_usage;
+	}
+	state.local_memory_usage = new_memory_usage;
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -386,10 +398,10 @@ public:
 
 	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
-		auto row_count = collection->Count();
+		auto memory_usage = collection->SizeInBytes();
 		auto batch_data =
 		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(collection));
-		gstate.AddBatchData(batch_index, std::move(batch_data), row_count);
+		gstate.AddBatchData(batch_index, std::move(batch_data), memory_usage);
 		if (batch_index == gstate.flushed_batch_index) {
 			gstate.AddTask(make_uniq<RepartitionedFlushTask>());
 		}
@@ -544,8 +556,7 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 		}
 		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
 		batch_data->prepared_data.reset();
-		gstate.unflushed_rows -= batch_data->row_count;
-		//        Printer::PrintF("Flush batch data %llu\n", gstate.flushed_batch_index.load());
+		gstate.unflushed_memory_usage -= batch_data->memory_usage;
 		gstate.flushed_batch_index++;
 	}
 }

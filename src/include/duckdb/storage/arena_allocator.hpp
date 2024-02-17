@@ -61,6 +61,8 @@ private:
 	ArenaChunk *tail;
 	//! An allocator wrapper using this arena allocator
 	Allocator arena_allocator;
+	//! The total allocated size
+	idx_t allocated_size = 0;
 };
 
 } // namespace duckdb

@@ -50,11 +50,7 @@ public:
 		return blocks.size();
 	}
 	idx_t SizeInBytes() const {
-		idx_t total_size = 0;
-		for (const auto &block : blocks) {
-			total_size += block.size;
-		}
-		return total_size;
+		return allocated_size;
 	}
 
 public:
@@ -99,6 +95,8 @@ private:
 	bool shared = false;
 	//! Lock used in case this ColumnDataAllocator is shared across threads
 	mutex lock;
+	//! Total allocated size
+	idx_t allocated_size = 0;
 };
 
 } // namespace duckdb
