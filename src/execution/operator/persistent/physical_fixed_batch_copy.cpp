@@ -6,7 +6,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
-
+#include "duckdb/storage/temporary_memory_manager.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -68,16 +68,39 @@ public:
 	atomic<bool> any_flushing;
 	//! Whether or not any threads are finished
 	atomic<bool> any_finished;
+	//! Temporary memory state
+	unique_ptr<TemporaryMemoryState> memory_state;
 	//! Total amount of unflushed rows
 	atomic<idx_t> unflushed_rows;
 	//! The approximate row size (for approximating memory usage)
-	idx_t approximate_row_size;
+	idx_t approximate_row_size = 512;
 	//! Minimum batch size
 	atomic<idx_t> min_batch_index;
 	//! Number of threads waiting
 	atomic<idx_t> waiting_threads;
+	//! ...
+	atomic<idx_t> available_memory;
 	//! Blocked task lock
 	mutex blocked_task_lock;
+
+    map<idx_t, InterruptState> blocked_tasks;
+
+    void BlockTask(idx_t batch_index, InterruptState &state) {
+        blocked_tasks.insert(make_pair(batch_index, state));
+    }
+
+	void SetMemorySize(ClientContext &context, idx_t size) {
+		memory_state->SetRemainingSize(context, size);
+		available_memory = memory_state->GetReservation();
+	}
+
+	void IncreaseMemory(ClientContext &context) {
+        // request at most 1/4th of all available memory
+        idx_t total_max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
+        idx_t request_cap = total_max_memory / 4;
+
+		SetMemorySize(context, MinValue<idx_t>(request_cap, memory_state->GetRemainingSize() * 2));
+	}
 
 	void AddTask(unique_ptr<BatchCopyTask> task) {
 		lock_guard<mutex> l(task_lock);
@@ -116,7 +139,17 @@ public:
 			return;
 		}
 		lock_guard<mutex> l(blocked_task_lock);
-		min_batch_index = MaxValue<idx_t>(min_batch_index, current_min_batch_index);
+        idx_t new_batch_index = MaxValue<idx_t>(min_batch_index, current_min_batch_index);
+        if (new_batch_index != min_batch_index) {
+//            Printer::PrintF("Update min batch index to %llu - unblock task", min_batch_index.load());
+            // new batch index! unblock all tasks
+            min_batch_index = new_batch_index;
+            auto entry = blocked_tasks.find(new_batch_index);
+            if (entry != blocked_tasks.end()) {
+                entry->second.Callback();
+                blocked_tasks.erase(entry);
+            }
+        }
 	}
 
 private:
@@ -160,28 +193,24 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 		state.batch_index = state.partition_info.batch_index.GetIndex();
 	}
 	auto current_unflushed_rows = (gstate.unflushed_rows += chunk.size());
-	if (state.partition_info.batch_index.GetIndex() != state.partition_info.min_batch_index.GetIndex()) {
+	if (state.partition_info.batch_index.GetIndex() > gstate.min_batch_index) {
 		gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 
 		// we are not processing the current min batch index
 		// check if we have exceeded the maximum number of unflushed rows
-		constexpr static idx_t MAX_UNFLUSHED_ROWS = 100000;
-		if (current_unflushed_rows >= MAX_UNFLUSHED_ROWS) {
-			gstate.waiting_threads++;
-			// unflushed rows is bigger than we would like
-			// execute tasks until it is back to a low amount
-			while (true) {
-				ExecuteTask(context.client, input.global_state);
-				if (state.partition_info.batch_index.GetIndex() == gstate.min_batch_index) {
-					// we are now the min batch index
-					break;
-				}
-				if (gstate.unflushed_rows < MAX_UNFLUSHED_ROWS) {
-					break;
-				}
-				FlushBatchData(context.client, gstate, gstate.min_batch_index);
-			}
-			gstate.waiting_threads--;
+		if (current_unflushed_rows * gstate.approximate_row_size >= gstate.available_memory) {
+            lock_guard<mutex> l(gstate.blocked_task_lock);
+            if (state.partition_info.batch_index.GetIndex() > gstate.min_batch_index) {
+                // exceeded available memory and we are not the minimum batch index- try to increase it
+                gstate.IncreaseMemory(context.client);
+                if (current_unflushed_rows * gstate.approximate_row_size >= gstate.available_memory) {
+                    // STILL out of memory
+                    // block current thread
+//                    Printer::PrintF("Block task with batch id %llu (min batch index %llu, total unflushed rows %llu)", state.partition_info.batch_index.GetIndex(), gstate.min_batch_index.load(), current_unflushed_rows);
+                    gstate.BlockTask(state.partition_info.batch_index.GetIndex(), input.interrupt_state);
+                    return SinkResultType::BLOCKED;
+                }
+            }
 		}
 	}
 	state.rows_copied += chunk.size();
@@ -482,6 +511,7 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
 		batch_data->prepared_data.reset();
 		gstate.unflushed_rows -= batch_data->row_count;
+//        Printer::PrintF("Flush batch data %llu\n", gstate.flushed_batch_index.load());
 		gstate.flushed_batch_index++;
 	}
 }
@@ -513,7 +543,6 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
-	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
@@ -522,13 +551,14 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		AddRawBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
 		// attempt to repartition to our desired batch size
 		RepartitionBatches(context.client, gstate_p, min_batch_index);
-		if (gstate.waiting_threads == 0) {
+//		if (gstate.waiting_threads == 0) {
 			// execute a single batch task and flush
 			// but ONLY if no other threads are waiting to do so
-			ExecuteTask(context.client, gstate_p);
-			FlushBatchData(context.client, gstate_p, min_batch_index);
-		}
+            ExecuteTasks(context.client, gstate_p);
+			FlushBatchData(context.client, gstate_p, gstate.min_batch_index.load());
+//		}
 	}
+    gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 
 	state.InitializeCollection(context.client, *this);
@@ -542,7 +572,11 @@ unique_ptr<LocalSinkState> PhysicalFixedBatchCopy::GetLocalSinkState(ExecutionCo
 unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientContext &context) const {
 	auto result =
 	    make_uniq<FixedBatchCopyGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	result->memory_state = TemporaryMemoryManager::Get(context).Register(context);
 	result->batch_size = function.desired_batch_size(context, *bind_data);
+
+	// heuristic: start at 64MB
+	result->SetMemorySize(context, 64*1024*1024);
 	return std::move(result);
 }
 
