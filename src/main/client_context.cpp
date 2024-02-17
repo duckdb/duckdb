@@ -449,11 +449,11 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 	try {
 		auto query_result = active_query->executor->ExecuteTask(dry_run);
 
-		// if(active_query->query.find("SELECT") != std::string::npos) {
 		if(false && n_calls > 10000) {
 			// Simulate KeyboardInterrupt exception from python
 			// This gets translated by pybind11 to py::error_already_set
 			// which inherits from std::exception.
+			// Here we use a counter to simulate a throw when there is no progress bar
 			std::stringstream ss;
 			ss << "KeyboardInterrupt: n_calls: " << n_calls << "\n" << active_query->query;
 			throw std::runtime_error(ss.str());
