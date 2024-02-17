@@ -231,10 +231,6 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 		}
 		state.current_task = FixedBatchCopyState::SINKING_DATA;
 	}
-	if (!state.collection) {
-		state.InitializeCollection(context.client, *this);
-		state.batch_index = batch_index;
-	}
 	if (batch_index > gstate.min_batch_index) {
 		gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 
@@ -245,6 +241,10 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 			state.current_task = FixedBatchCopyState::PROCESSING_TASKS;
 			return Sink(context, chunk, input);
 		}
+	}
+	if (!state.collection) {
+		state.InitializeCollection(context.client, *this);
+		state.batch_index = batch_index;
 	}
 	state.rows_copied += chunk.size();
 	gstate.unflushed_rows += chunk.size();
