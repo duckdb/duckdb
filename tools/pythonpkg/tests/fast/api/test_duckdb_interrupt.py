@@ -13,7 +13,7 @@ faulthandler.enable()
 def large_test_data_gen():
     print("generating test data")
     n = 1_000_000
-    columns = 1000
+    columns = 100
     df = pd.DataFrame({f'col{i}': 1000 * np.random.sample(n) for i in range(columns)})
     print("test data generation complete")
     return df

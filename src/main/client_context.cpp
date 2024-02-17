@@ -464,7 +464,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsFinishedOrBlocked(query_result);
 			active_query->progress_bar->Update(is_finished);
-			std::this_thread::sleep_for (std::chrono::seconds(3));
+			std::this_thread::sleep_for (std::chrono::seconds(4));
 			throw std::runtime_error("KeyboardInterrupt: <EMPTY MESSAGE>");
 		}
 		return query_result;
