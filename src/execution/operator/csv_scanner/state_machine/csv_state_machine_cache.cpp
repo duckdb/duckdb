@@ -3,8 +3,6 @@
 
 namespace duckdb {
 
-const string CSVStateMachineCache::STATE_KEY = "CSV_STATE_MACHINE_CACHE";
-
 void InitializeTransitionArray(StateMachine &transition_array, const CSVState cur_state, const CSVState state) {
 	for (uint32_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
 		transition_array[i][static_cast<uint8_t>(cur_state)] = state;
@@ -195,7 +193,7 @@ const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &stat
 CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
 
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return *cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::STATE_KEY);
+	return *cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::ObjectType());
 }
 
 } // namespace duckdb
