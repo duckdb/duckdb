@@ -17,10 +17,10 @@ x-show-spaces = false
 [*.{java}]
 end_of_line = lf
 insert_final_newline = true
-indent_style = tab
+indent_style = space
 tab_width = 4
 indent_size = tab
-trim_trailing_whitespace = false
+trim_trailing_whitespace = true
 charset = utf-8
 max_line_length = 120
 x-soft-wrap-text = true
