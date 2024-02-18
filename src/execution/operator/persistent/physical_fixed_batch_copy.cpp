@@ -118,6 +118,10 @@ public:
 	}
 
 	bool OutOfMemory(idx_t batch_index) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+		// alternative verify - always report that we are out of memory to test this code path
+		return true;
+#else
 		if (unflushed_memory_usage >= available_memory) {
 			lock_guard<mutex> l(blocked_task_lock);
 			if (batch_index > min_batch_index) {
@@ -130,6 +134,7 @@ public:
 			}
 		}
 		return false;
+#endif
 	}
 
 	void AddTask(unique_ptr<BatchCopyTask> task) {
