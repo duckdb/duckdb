@@ -17,6 +17,13 @@ class TestHTTPFS(object):
             else:
                 pytest.fail(str(e))
 
+    def test_s3fs(self, require):
+        connection = require('httpfs')
+
+        rel = connection.read_csv(f"s3://noaa-gsod-pds/2023/01001099999.csv", header=True)
+        res = rel.fetchall()
+        print(res)
+
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_httpfs(self, require, pandas):
         connection = require('httpfs')

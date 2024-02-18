@@ -191,10 +191,7 @@ def require():
         build = normpath(join(dirname(__file__), "../../../build/"))
         extension = "extension/*/*.duckdb_extension"
 
-        extension_search_patterns = [
-            join(build, "release", extension),
-            join(build, "debug", extension),
-        ]
+        extension_search_patterns = [join(build, duckdb.__build_type__, extension)]
 
         # DUCKDB_PYTHON_TEST_EXTENSION_PATH can be used to add a path for the extension test to search for extensions
         if 'DUCKDB_PYTHON_TEST_EXTENSION_PATH' in os.environ:
