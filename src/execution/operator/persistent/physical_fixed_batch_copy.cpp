@@ -42,10 +42,8 @@ struct FixedPreparedBatchData {
 
 class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
-	// heuristic - we need at least 64MB of cache space per thread we launch
-	static constexpr const idx_t MINIMUM_MEMORY_PER_THREAD = 64 * 1024 * 1024;
-	// we start out requesting 64MB of memory for caches
-	static constexpr const idx_t INITIAL_MEMORY_REQUEST = MINIMUM_MEMORY_PER_THREAD;
+	// heuristic - we need at least 4MB of cache space per column per thread we launch
+	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4 * 1024 * 1024;
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state)
@@ -77,6 +75,8 @@ public:
 	atomic<bool> any_finished;
 	//! Temporary memory state
 	unique_ptr<TemporaryMemoryState> memory_state;
+	//! Minimum memory per thread
+	idx_t minimum_memory_per_thread;
 	//! Total memory usage of unflushed rows
 	atomic<idx_t> unflushed_memory_usage;
 	//! Minimum batch size
@@ -198,10 +198,10 @@ public:
 	}
 
 	idx_t MaxThreads(idx_t source_max_threads) override {
-		// try to request 64MB per thread
-		SetMemorySize(source_max_threads * MINIMUM_MEMORY_PER_THREAD);
+		// try to request 4MB per column per thread
+		SetMemorySize(source_max_threads * minimum_memory_per_thread);
 		// cap the concurrent threads working on this task based on the amount of available memory
-		return MinValue<idx_t>(source_max_threads, available_memory / MINIMUM_MEMORY_PER_THREAD + 1);
+		return MinValue<idx_t>(source_max_threads, available_memory / minimum_memory_per_thread + 1);
 	}
 
 private:
@@ -511,7 +511,8 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			} else {
 				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
-				current_collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), children[0]->types);
+				current_collection =
+				    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
 			}
 			if (current_collection) {
 				current_collection->InitializeAppend(append_state);
@@ -531,7 +532,8 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			}
 			// the collection is full - move it to the result and create a new one
 			gstate.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
-			current_collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), children[0]->types);
+			current_collection =
+			    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
 			current_collection->InitializeAppend(append_state);
 		}
 	}
@@ -649,8 +651,10 @@ unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientCon
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
 	result->memory_state = TemporaryMemoryManager::Get(context).Register(context);
 	result->batch_size = function.desired_batch_size(context, *bind_data);
-
-	result->SetMemorySize(FixedBatchCopyGlobalState::INITIAL_MEMORY_REQUEST);
+	// request memory based on the minimum amount of memory per column
+	result->minimum_memory_per_thread =
+	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
+	result->SetMemorySize(result->minimum_memory_per_thread);
 	return std::move(result);
 }
 
