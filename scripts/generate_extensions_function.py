@@ -21,7 +21,7 @@ parser.add_argument(
     '--extension_dir',
     action='store',
     help="The root directory to look for the '<extension_name>/<extension>.duckdb_extension' files, relative to the location of this script",
-    default='/tmp/',  # Locally, try: '../build/release/extension/'
+    default='/tmp/',  # Locally, try: '../build/release/extension'
 )
 
 args = parser.parse_args()
@@ -72,7 +72,7 @@ def catalog_type_from_string(catalog_type: str) -> CatalogType:
 
 class Function(NamedTuple):
     name: str
-    type: str
+    type: CatalogType
 
 
 class ExtensionFunction(NamedTuple):
@@ -83,8 +83,8 @@ class ExtensionFunction(NamedTuple):
     def create_map(input: List[Tuple[str, str, str]]) -> Dict[Function, "ExtensionFunction"]:
         output: Dict[str, "ExtensionFunction"] = {}
         for x in input:
-            key = Function(x[0], x[2])
-            output[key] = ExtensionFunction(x[1], key.name, catalog_type_from_type(key.type))
+            key = Function(x[0], catalog_type_from_type(x[2]))
+            output[key] = ExtensionFunction(x[1], key.name, key.type)
         return output
 
 
@@ -167,7 +167,7 @@ def get_functions(load="") -> Set[Function]:
     functions = set()
     for x in results:
         function_name, function_type = [y.lower() for y in x.split(',')]
-        functions.add(Function(function_name, function_type))
+        functions.add(Function(function_name, catalog_type_from_string(function_type)))
     return functions
 
 
@@ -250,9 +250,7 @@ Please double check if '{args.extension_dir}' is the right location to look for 
         added_functions: Set[Function] = set(function_list) - self.base_functions
         functions_to_add: Dict[Function, ExtensionFunction] = {}
         for function in added_functions:
-            functions_to_add[function] = ExtensionFunction(
-                extension_name, function.name, catalog_type_from_string(function.type)
-            )
+            functions_to_add[function] = ExtensionFunction(extension_name, function.name, function.type)
 
         self.function_map.update(functions_to_add)
 
@@ -289,7 +287,7 @@ This is likely caused by building DuckDB with extensions linked in
         for func in sorted_function:
             function: ExtensionFunction = self.function_map[func]
             result += "\t{"
-            result += f'"{function.name}", "{function.extension}", "{function.type.value}"'
+            result += f'"{function.name}", "{function.extension}", {function.type.value}'
             result += "},\n"
         result += "}; // END_OF_EXTENSION_FUNCTIONS\n"
         return result
@@ -325,7 +323,7 @@ def parse_extension_entries(file_path):
         return elements
 
     file = open(file_path, 'r')
-    pattern = re.compile("{(\".*\"(?:, )?)}[,}\n]")
+    pattern = re.compile("{(.*(?:, )?)}[,}\n]")
     file_blob = file.read()
 
     # Get the extension functions
@@ -372,7 +370,7 @@ def get_extension_path_map() -> Dict[str, str]:
     extension_paths: Dict[str, str] = {}
     # extension_dir = pathlib.Path('../build/release/extension')
     extension_dir = args.extension_dir
-    for location in glob.iglob(extension_dir + '**/*.duckdb_extension', recursive=True):
+    for location in glob.iglob(extension_dir + '/**/*.duckdb_extension', recursive=True):
         name, _ = os.path.splitext(os.path.basename(location))
         print(f"Located extension: {name} in path: '{location}'")
         extension_paths[name] = location
