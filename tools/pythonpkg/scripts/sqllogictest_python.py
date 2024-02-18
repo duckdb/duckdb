@@ -32,6 +32,8 @@ from sqllogictest import (
     ExpectedResult,
 )
 
+from sqllogictest.result import SQLLogicRunner, QueryResult
+
 from enum import Enum, auto
 
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
@@ -47,24 +49,9 @@ class ExecuteResult:
         self.type = type
 
 
-class SQLLogicTestExecutor:
-    def reset(self):
-        self.skipped = False
-        self.error: Optional[str] = None
-
-        self.dbpath = ''
-        self.loaded_databases: Dict[str, duckdb.DuckDBPyConnection] = {}
-        self.db: Optional[duckdb.DuckDBPyConnection] = None
-        self.config: Dict[str, Any] = {}
-
-        self.con: Optional[duckdb.DuckDBPyConnection] = None
-        self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
-
-        self.environment_variables: Dict[str, str] = {}
-        self.test: Optional[SQLLogicTest] = None
-
+class SQLLogicTestExecutor(SQLLogicRunner):
     def __init__(self):
-        self.reset()
+        super().__init__()
         self.STATEMENTS = {
             Statement: self.execute_statement,
             RequireEnv: self.execute_require_env,
@@ -195,13 +182,19 @@ class SQLLogicTestExecutor:
                 actual.append(converted_row)
             actual = str(actual)
 
+            query_result = QueryResult(result)
+
             expected = []
             for line in expected_result.lines:
                 tuples = tuple(line.split('\t'))
                 expected.append(tuples)
             expected = str(expected)
             if expected != actual:
-                self.fail(f"Query result mismatch!")
+                error = f"""Query result mismatch!
+Expected: {expected}
+Actual: {actual}
+"""
+                self.fail(error)
         except duckdb.Error as e:
             self.fail(f"Query unexpectedly failed: {str(e)}")
 

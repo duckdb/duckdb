@@ -26,6 +26,7 @@ from ..statement import (
     Sleep,
     Skip,
     Unskip,
+    SortStyle,
 )
 from ..statement.sleep import get_sleep_unit, SleepUnit
 
@@ -50,13 +51,6 @@ def create_formatted_list(items) -> str:
 
 def is_space(char: str):
     return char == ' ' or char == '\t' or char == '\n' or char == '\v' or char == '\f' or char == '\r'
-
-
-class SortStyle(Enum):
-    NO_SORT = (auto(),)
-    ROW_SORT = (auto(),)
-    VALUE_SORT = (auto(),)
-    UNKNOWN = auto()
 
 
 class SQLLogicTest:
@@ -334,33 +328,33 @@ class SQLLogicParser:
     def statement_query(self, header: Token) -> BaseStatement:
         if len(header.parameters) < 1:
             self.fail("query requires at least one parameter (query III)")
-        statement = Query(header, self.current_line + 1)
+        query = Query(header, self.current_line + 1)
 
         # parse the expected column count
-        statement.expected_column_count = 0
+        query.expected_column_count = 0
         column_text = header.parameters[0]
         accepted_chars = ['T', 'I', 'R']
         if not all(x in accepted_chars for x in column_text):
             self.fail(f"Found unknown character in {column_text}, expected {create_formatted_list(accepted_chars)}")
         expected_column_count = len(column_text)
 
-        statement.expected_column_count = expected_column_count
-        if statement.expected_column_count == 0:
+        query.expected_column_count = expected_column_count
+        if query.expected_column_count == 0:
             self.fail("Query requires at least a single column in the result")
 
-        statement.file_name = self.current_test.path
-        statement.query_line = self.current_line + 1
+        query.file_name = self.current_test.path
+        query.query_line = self.current_line + 1
         # extract the SQL statement
         self.next_line()
         statement_text = self.extract_statement()
-        statement.add_lines(statement_text)
+        query.add_lines(statement_text)
 
         # extract the expected result
         expected_result = self.get_expected_result('ok')
         expected_lines: Optional[List[str]] = self.extract_expected_lines()
         if expected_lines != None:
             expected_result.add_lines(expected_lines)
-        statement.expected_result = expected_result
+        query.expected_result = expected_result
 
         def get_sort_style(parameters: List[str]) -> SortStyle:
             sort_style = SortStyle.NO_SORT
@@ -383,13 +377,13 @@ class SQLLogicParser:
         sort_style = get_sort_style(header.parameters)
         if sort_style == SortStyle.UNKNOWN:
             sort_style = SortStyle.NO_SORT
-            statement.set_connection(header.parameters[1])
-        statement.sort_style = sort_style
+            query.set_connection(header.parameters[1])
+        query.set_sortstyle(sort_style)
 
         # check the label of the query
         if len(header.parameters) > 2:
-            statement.set_label(header.parameters[2])
-        return statement
+            query.set_label(header.parameters[2])
+        return query
 
     def statement_hash_threshold(self, header: Token) -> Optional[BaseStatement]:
         if len(header.parameters) != 1:
