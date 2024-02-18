@@ -7,6 +7,8 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/parallel/interrupt.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include <algorithm>
 
 namespace duckdb {
