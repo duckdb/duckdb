@@ -12,11 +12,13 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.TextStyle;
@@ -566,6 +568,18 @@ class DuckDBVector {
         }
         if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
             return DuckDBTimestamp.toLocalDateTime(getbuf(idx, 8).getLong());
+        }
+        if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
+            long epochMillis = getbuf(idx, 8).getLong();
+            return Instant.EPOCH.plusMillis(epochMillis).atZone(ZoneOffset.UTC).toLocalDateTime();
+        }
+        if (isType(DuckDBColumnType.TIMESTAMP_NS)) {
+            long epochNanos = getbuf(idx, 8).getLong();
+            return Instant.EPOCH.plusNanos(epochNanos).atZone(ZoneOffset.UTC).toLocalDateTime();
+        }
+        if (isType(DuckDBColumnType.TIMESTAMP_S)) {
+            long epochSeconds = getbuf(idx, 8).getLong();
+            return Instant.ofEpochSecond(epochSeconds).atZone(ZoneOffset.UTC).toLocalDateTime();
         }
         Object o = getObject(idx);
         return LocalDateTime.parse(o.toString());

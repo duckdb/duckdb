@@ -2222,15 +2222,14 @@ public class TestDuckDBJDBC {
             LocalDateTime b = (LocalDateTime) rs.getObject(2, LocalDateTime.class);
             assertEquals(b, expected.truncatedTo(ChronoUnit.MICROS));
             // c_ms, d_ns, and e_s are timestamps with different precisions
-            // TODO(felipecrv): allow extracting LocalDateTime from different timestamp resolutions
-            // LocalDateTime c_ms = (LocalDateTime) rs.getObject(3, LocalDateTime.class);
-            // assertEquals(c_ms, expected.truncatedTo(ChronoUnit.MILLIS));
-            // if (!skip_ns_timestamp) {
-            //     LocalDateTime d_ns = (LocalDateTime) rs.getObject(4, LocalDateTime.class);
-            //     assertEquals(d_ns, expected);
-            // }
-            // LocalDateTime e_s = (LocalDateTime) rs.getObject(5, LocalDateTime.class);
-            // assertEquals(e_s, expected.truncatedTo(ChronoUnit.SECONDS));
+            LocalDateTime c_ms = (LocalDateTime) rs.getObject(3, LocalDateTime.class);
+            assertEquals(c_ms, expected.truncatedTo(ChronoUnit.MILLIS));
+            if (!skip_ns_timestamp) {
+                LocalDateTime d_ns = (LocalDateTime) rs.getObject(4, LocalDateTime.class);
+                assertEquals(d_ns, expected);
+            }
+            LocalDateTime e_s = (LocalDateTime) rs.getObject(5, LocalDateTime.class);
+            assertEquals(e_s, expected.truncatedTo(ChronoUnit.SECONDS));
         }
         {
             DuckDBTimestamp a = (DuckDBTimestamp) rs.getObject(1, DuckDBTimestamp.class);

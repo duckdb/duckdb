@@ -1260,9 +1260,14 @@ public class DuckDBResultSet implements ResultSet {
                 throw new SQLException("Can't convert value to DuckDBTimestamp " + type.toString());
             }
         } else if (type == LocalDateTime.class) {
-            if (isTimestamp(sqlType)) {
+            switch (sqlType) {
+            case TIMESTAMP:
+            case TIMESTAMP_MS:
+            case TIMESTAMP_NS:
+            case TIMESTAMP_S:
+            case TIMESTAMP_WITH_TIME_ZONE:
                 return type.cast(getLocalDateTime(columnIndex));
-            } else {
+            default:
                 throw new SQLException("Can't convert value to LocalDateTime " + type.toString());
             }
         } else if (type == BigInteger.class) {
