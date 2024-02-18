@@ -183,20 +183,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             actual = str(actual)
 
             query_result = QueryResult(result)
-
-            expected = []
-            for line in expected_result.lines:
-                tuples = tuple(line.split('\t'))
-                expected.append(tuples)
-            expected = str(expected)
-            if expected != actual:
-                error = f"""Query result mismatch!
-Expected: {expected}
-Actual: {actual}
-"""
-                self.fail(error)
-        except duckdb.Error as e:
-            self.fail(f"Query unexpectedly failed: {str(e)}")
+        except Exception as e:
+            query_result = QueryResult([], e)
+        compare_result = self.check_query_result(query, query_result)
 
     def execute_statement(self, statement: Statement):
         assert isinstance(statement, Statement)
@@ -230,6 +219,7 @@ Actual: {actual}
     def execute_test(self, test: SQLLogicTest) -> ExecuteResult:
         self.reset()
         self.test = test
+        self.original_sqlite_test = self.test.is_sqlite_test()
         unsupported = self.get_unsupported_statements(test)
         if unsupported != []:
             error = 'Test skipped because the following statement types are not supported: '

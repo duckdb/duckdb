@@ -1,14 +1,15 @@
 import logging
 import termcolor
+from typing import Union
 from duckdb import tokenize, token_type
+from .statement import Query, Statement
 
 
 class SQLLogicTestLogger:
-    def __init__(self, context, command):
-        self.log_lock = command.runner.log_lock
-        self.file_name = command.file_name
+    def __init__(self, command: Union[Query, Statement], file_name: str):
+        self.file_name = file_name
         self.query_line = command.query_line
-        self.sql_query = context.sql_query
+        self.sql_query = '\n'.join(command.lines)
 
     def log(self, message):
         logging.error(message)
@@ -26,14 +27,13 @@ class SQLLogicTestLogger:
                 c += 1
                 if c >= columns:
                     print()
-                    c = 0
 
     def print_line_sep(self):
         line_sep = "=" * 80
-        print(termcolor.color('grey') + line_sep + termcolor.reset())
+        print(termcolor.colored(line_sep, 'grey'))
 
     def print_header(self, header):
-        print(termcolor.bold(header) + termcolor.reset())
+        print(termcolor.colored(header, 'white', attrs=['bold']))
 
     def print_file_header(self):
         self.print_header(f"File {self.file_name}:{self.query_line})")
@@ -45,24 +45,24 @@ class SQLLogicTestLogger:
         print(query)
 
     def print_sql_formatted(self):
-        print(termcolor.bold("SQL Query") + termcolor.reset())
+        print(termcolor.colored("SQL Query", attrs=['bold']))
         tokens = tokenize(self.sql_query)
         for i, token in enumerate(tokens):
             next_token_start = tokens[i + 1].start if i + 1 < len(tokens) else len(self.sql_query)
             token_text = self.sql_query[token.start : next_token_start]
             # Apply highlighting based on token type
             if token.type in [token_type.identifier, token_type.numeric_const, token_type.string_const]:
-                print(termcolor.color('yellow') + token_text + termcolor.reset(), end="")
+                print(termcolor.colored(token_text, 'yellow'), end="")
             elif token.type == token_type.keyword:
-                print(termcolor.color('green') + termcolor.bold(token_text) + termcolor.reset(), end="")
+                print(termcolor.colored(token_text, 'green', attrs=['bold']), end="")
             else:
                 print(token_text, end="")
         print()
 
     def print_error_header(self, description):
         self.print_line_sep()
-        print(termcolor.color('red') + termcolor.bold(description) + termcolor.reset(), end=" ")
-        print(termcolor.bold("(" + self.file_name + ":" + str(self.query_line) + ")!") + termcolor.reset())
+        print(termcolor.colored(description, 'red', attrs=['bold']), end=" ")
+        print(termcolor.colored(f"({self.file_name}:{self.query_line})!", attrs=['bold']))
 
     def print_result_error(self, result_values, values, expected_column_count, row_wise):
         self.print_header("Expected result:")
@@ -79,7 +79,7 @@ class SQLLogicTestLogger:
         self.print_line_sep()
         self.print_sql()
         self.print_line_sep()
-        result.print()
+        print(result)  # FIXME
 
     def output_result(self, result, result_values_string):
         for column_name in result.names:
@@ -104,7 +104,7 @@ class SQLLogicTestLogger:
     def column_count_mismatch(self, result, result_values_string, expected_column_count, row_wise):
         self.print_error_header("Wrong column count in query!")
         print(
-            f"Expected {termcolor.bold(expected_column_count)} columns, but got {termcolor.bold(result.column_count)} columns"
+            f"Expected {termcolor.colored(expected_column_count, 'white', attrs=['bold'])} columns, but got {termcolor.colored(result.column_count, 'white', attrs=['bold'])} columns"
         )
         self.print_line_sep()
         self.print_sql()
@@ -118,7 +118,9 @@ class SQLLogicTestLogger:
 
     def wrong_row_count(self, expected_rows, result, comparison_values, expected_column_count, row_wise):
         self.print_error_header("Wrong row count in query!")
-        print(f"Expected {termcolor.bold(expected_rows)} rows, but got {termcolor.bold(result.row_count)} rows")
+        print(
+            f"Expected {termcolor.colored(expected_rows, 'white', attrs=['bold'])} rows, but got {termcolor.colored(result.row_count, 'white', attrs=['bold'])} rows"
+        )
         self.print_line_sep()
         self.print_sql()
         self.print_line_sep()
@@ -128,13 +130,13 @@ class SQLLogicTestLogger:
         self.print_line_sep()
         self.print_error_header("Wrong column count in query!")
         print(
-            f"Expected {termcolor.bold(original_expected_columns)} columns, but got {termcolor.bold(expected_column_count)} columns"
+            f"Expected {termcolor.colored(original_expected_columns, 'white', attrs=['bold'])} columns, but got {termcolor.colored(expected_column_count, 'white', attrs=['bold'])} columns"
         )
         self.print_line_sep()
         self.print_sql()
-        print(f"The expected result {termcolor.bold('matched')} the query result.")
+        print(f"The expected result {termcolor.colored('matched', 'white', attrs=['bold'])} the query result.")
         print(
-            f"Suggested fix: modify header to \"{termcolor.color('green')}query {'I' * result.column_count}{termcolor.reset()}\""
+            f"Suggested fix: modify header to \"{termcolor.colored('query', 'green')} {'I' * result.column_count}{termcolor.colored('', 'white')}\""
         )
         self.print_line_sep()
 
@@ -142,7 +144,7 @@ class SQLLogicTestLogger:
         self.print_line_sep()
         self.print_error_header(f"Error in test! Column count mismatch after splitting on tab on row {row_number}!")
         print(
-            f"Expected {termcolor.bold(expected_column_count)} columns, but got {termcolor.bold(split_count)} columns"
+            f"Expected {termcolor.colored(expected_column_count, 'white', attrs=['bold'])} columns, but got {termcolor.colored(split_count, 'white', attrs=['bold'])} columns"
         )
         print("Does the result contain tab values? In that case, place every value on a single row.")
         self.print_line_sep()
