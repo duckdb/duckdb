@@ -42,12 +42,19 @@ struct FixedPreparedBatchData {
 
 class FixedBatchCopyGlobalState : public GlobalSinkState {
 public:
-	explicit FixedBatchCopyGlobalState(unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), global_state(std::move(global_state)), batch_size(0), scheduled_batch_index(0),
-	      flushed_batch_index(0), any_flushing(false), any_finished(false), unflushed_memory_usage(0),
-	      min_batch_index(0) {
+	// heuristic - we need at least 64MB of cache space per thread we launch
+	static constexpr const idx_t MINIMUM_MEMORY_PER_THREAD = 64 * 1024 * 1024;
+	// we start out requesting 64MB of memory for caches
+	static constexpr const idx_t INITIAL_MEMORY_REQUEST = MINIMUM_MEMORY_PER_THREAD;
+
+public:
+	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state)
+	    : context(context_p), rows_copied(0), global_state(std::move(global_state)), batch_size(0),
+	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	      unflushed_memory_usage(0), min_batch_index(0) {
 	}
 
+	ClientContext &context;
 	mutex lock;
 	mutex flush_lock;
 	//! The total number of rows copied to the file
@@ -78,32 +85,36 @@ public:
 	atomic<idx_t> available_memory;
 	//! Blocked task lock
 	mutex blocked_task_lock;
-
+	//! The set of blocked tasks
 	vector<InterruptState> blocked_tasks;
 
-	void SetMemorySize(ClientContext &context, idx_t size) {
-		memory_state->SetRemainingSize(context, size);
-		available_memory = memory_state->GetReservation();
-	}
-
-	void IncreaseMemory(ClientContext &context) {
+	void SetMemorySize(idx_t size) {
 		// request at most 1/4th of all available memory
 		idx_t total_max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
-		idx_t request_cap = total_max_memory / 5;
+		idx_t request_cap = total_max_memory / 4;
 
-		SetMemorySize(context, MinValue<idx_t>(request_cap, memory_state->GetRemainingSize() * 2));
+		size = MinValue<idx_t>(size, request_cap);
+		if (size <= available_memory) {
+			return;
+		}
+
+		memory_state->SetRemainingSize(context, size);
+		auto next_reservation = memory_state->GetReservation();
+		available_memory = next_reservation;
 	}
 
-	bool OutOfMemory(ClientContext &context, idx_t batch_index) {
+	void IncreaseMemory() {
+		SetMemorySize(memory_state->GetRemainingSize() * 2);
+	}
+
+	bool OutOfMemory(idx_t batch_index) {
 		if (unflushed_memory_usage >= available_memory) {
 			lock_guard<mutex> l(blocked_task_lock);
 			if (batch_index > min_batch_index) {
 				// exceeded available memory and we are not the minimum batch index- try to increase it
-				IncreaseMemory(context);
+				IncreaseMemory();
 				if (unflushed_memory_usage >= available_memory) {
 					// STILL out of memory
-					//                    Printer::PrintF("Out of memory (%llu unflushed, available %llu)",
-					//                    unflushed_memory_usage.load(), available_memory.load());
 					return true;
 				}
 			}
@@ -153,12 +164,14 @@ public:
 	}
 
 	bool UnblockTasksInternal() {
-		auto any_unblocked = !blocked_tasks.empty();
+		if (blocked_tasks.empty()) {
+			return false;
+		}
 		for (auto &entry : blocked_tasks) {
 			entry.Callback();
 		}
 		blocked_tasks.clear();
-		return any_unblocked;
+		return true;
 	}
 
 	void UpdateMinBatchIndex(idx_t current_min_batch_index) {
@@ -172,6 +185,13 @@ public:
 			min_batch_index = new_batch_index;
 			UnblockTasksInternal();
 		}
+	}
+
+	idx_t MaxThreads(idx_t source_max_threads) override {
+		// try to request 64MB per thread
+		SetMemorySize(source_max_threads * MINIMUM_MEMORY_PER_THREAD);
+		// cap the concurrent threads working on this task based on the amount of available memory
+		return MinValue<idx_t>(source_max_threads, available_memory / MINIMUM_MEMORY_PER_THREAD + 1);
 	}
 
 private:
@@ -221,7 +241,7 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	if (state.current_task == FixedBatchCopyState::PROCESSING_TASKS) {
 		ExecuteTasks(context.client, gstate);
 		FlushBatchData(context.client, gstate, gstate.min_batch_index.load());
-		if (batch_index > gstate.min_batch_index && gstate.OutOfMemory(context.client, batch_index)) {
+		if (batch_index > gstate.min_batch_index && gstate.OutOfMemory(batch_index)) {
 			lock_guard<mutex> l(gstate.blocked_task_lock);
 			if (batch_index > gstate.min_batch_index) {
 				// no tasks to process, we are not the minimum batch index and we have no memory available to buffer
@@ -237,7 +257,7 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 
 		// we are not processing the current min batch index
 		// check if we have exceeded the maximum number of unflushed rows
-		if (gstate.OutOfMemory(context.client, batch_index)) {
+		if (gstate.OutOfMemory(batch_index)) {
 			// out-of-memory - stop sinking chunks and instead assist in processing tasks for the minimum batch index
 			state.current_task = FixedBatchCopyState::PROCESSING_TASKS;
 			return Sink(context, chunk, input);
@@ -615,13 +635,12 @@ unique_ptr<LocalSinkState> PhysicalFixedBatchCopy::GetLocalSinkState(ExecutionCo
 }
 
 unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientContext &context) const {
-	auto result =
-	    make_uniq<FixedBatchCopyGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	auto result = make_uniq<FixedBatchCopyGlobalState>(
+	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
 	result->memory_state = TemporaryMemoryManager::Get(context).Register(context);
 	result->batch_size = function.desired_batch_size(context, *bind_data);
 
-	// heuristic: start at 64MB
-	result->SetMemorySize(context, 64 * 1024 * 1024);
+	result->SetMemorySize(FixedBatchCopyGlobalState::INITIAL_MEMORY_REQUEST);
 	return std::move(result);
 }
 
