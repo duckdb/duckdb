@@ -51,7 +51,7 @@ public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state)
 	    : context(context_p), rows_copied(0), global_state(std::move(global_state)), batch_size(0),
 	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
-	      unflushed_memory_usage(0), min_batch_index(0) {
+	      unflushed_memory_usage(0), min_batch_index(0), can_increase_memory(true) {
 	}
 
 	ClientContext &context;
@@ -87,6 +87,8 @@ public:
 	mutex blocked_task_lock;
 	//! The set of blocked tasks
 	vector<InterruptState> blocked_tasks;
+	//! Whether or not we can request additional memory
+	bool can_increase_memory;
 
 	void SetMemorySize(idx_t size) {
 		// request at most 1/4th of all available memory
@@ -100,11 +102,19 @@ public:
 
 		memory_state->SetRemainingSize(context, size);
 		auto next_reservation = memory_state->GetReservation();
+		if (available_memory >= next_reservation) {
+			// we tried to ask for more memory but were declined
+			// stop asking for more memory
+			can_increase_memory = false;
+		}
 		available_memory = next_reservation;
 	}
 
 	void IncreaseMemory() {
-		SetMemorySize(memory_state->GetRemainingSize() * 2);
+		if (!can_increase_memory) {
+			return;
+		}
+		SetMemorySize(available_memory * 2);
 	}
 
 	bool OutOfMemory(idx_t batch_index) {
@@ -616,7 +626,7 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		auto any_unblocked = gstate.UnblockTasks();
 		// if any threads were unblocked they can pick up execution of the tasks
 		// otherwise we will execute a task and flush here
-		if (any_unblocked) {
+		if (!any_unblocked) {
 			//! Execute a single repartition task
 			ExecuteTask(context.client, gstate);
 			//! Flush batch data to disk (if any is ready)
