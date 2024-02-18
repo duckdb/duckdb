@@ -23,5 +23,7 @@ SET memory_limit='2GB';
 
 # ensure the parquet files hold the same content in the same order
 query III
-SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/random_uuids.parquet' EXCEPT SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/random_uuids_copy.parquet';
+SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/random_uuids.parquet'
+EXCEPT
+SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/random_uuids_copy.parquet';
 ----
