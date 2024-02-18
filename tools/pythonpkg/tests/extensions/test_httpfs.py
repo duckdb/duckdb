@@ -4,18 +4,18 @@ from pytest import raises, mark
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
-# We only run this test if this env var is set
-pytestmark = mark.skipif(
-    not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False), reason='httpfs extension not available'
-)
-
 
 class TestHTTPFS(object):
     def test_read_json_httpfs(self, require):
         connection = require('httpfs')
-        # FIXME: add test back
-        # res = connection.read_json('https://jsonplaceholder.typicode.com/todos')
-        # assert len(res.types) == 4
+        try:
+            res = connection.read_json('https://jsonplaceholder.typicode.com/todos')
+            assert len(res.types) == 4
+        except duckdb.Error as e:
+            if '403' in e:
+                pytest.skip(reason="Test is flaky, sometimes returns 403")
+            else:
+                pytest.fail(str(e))
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_httpfs(self, require, pandas):
@@ -54,3 +54,9 @@ class TestHTTPFS(object):
         assert value.reason == 'Not Found'
         assert value.body == ''
         assert 'Content-Length' in value.headers
+
+    def test_s3_fs(self, require):
+        con = require('httpfs')
+        df = con.read_csv(f"s3://noaa-gsod-pds/2023/01001099999.csv", header=True)
+        res = len(df)
+        assert res == 364
