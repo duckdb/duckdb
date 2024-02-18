@@ -2226,7 +2226,8 @@ public class TestDuckDBJDBC {
             assertEquals(c_ms, expected.truncatedTo(ChronoUnit.MILLIS));
             if (!skip_ns_timestamp) {
                 LocalDateTime d_ns = (LocalDateTime) rs.getObject(4, LocalDateTime.class);
-                assertEquals(d_ns, expected);
+                // All timestamps inserted via the JDBC driver are truncated to microseconds
+                assertEquals(d_ns, expected.truncatedTo(ChronoUnit.MICROS));
             }
             LocalDateTime e_s = (LocalDateTime) rs.getObject(5, LocalDateTime.class);
             assertEquals(e_s, expected.truncatedTo(ChronoUnit.SECONDS));
