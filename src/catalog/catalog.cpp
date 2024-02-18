@@ -469,28 +469,6 @@ void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
 
-static CatalogType ConvertFunctionType(const string &function_type) {
-	if (function_type == "scalar") {
-		return CatalogType::SCALAR_FUNCTION_ENTRY;
-	}
-	if (function_type == "table") {
-		return CatalogType::TABLE_FUNCTION_ENTRY;
-	}
-	if (function_type == "aggregate") {
-		return CatalogType::AGGREGATE_FUNCTION_ENTRY;
-	}
-	if (function_type == "macro") {
-		return CatalogType::MACRO_ENTRY;
-	}
-	if (function_type == "table_macro") {
-		return CatalogType::TABLE_MACRO_ENTRY;
-	}
-	if (function_type == "pragma") {
-		return CatalogType::PRAGMA_FUNCTION_ENTRY;
-	}
-	throw InternalException("Unrecognized function type: '%s'", function_type);
-}
-
 static bool IsAutoloadableFunction(CatalogType type) {
 	return (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 	        type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY);
@@ -530,7 +508,7 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 				return false;
 			}
 			for (auto &function : lookup_result) {
-				auto function_type = ConvertFunctionType(function.second);
+				auto function_type = function.second;
 				// FIXME: what if there are two functions with the same name, from different extensions?
 				if (CompareCatalogTypes(type, function_type)) {
 					extension_name = function.first;
@@ -601,7 +579,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 			vector<string> other_types;
 			string extension_for_error;
 			for (auto &function : lookup_result) {
-				auto function_type = ConvertFunctionType(function.second);
+				auto function_type = function.second;
 				if (CompareCatalogTypes(type, function_type)) {
 					extension_name = function.first;
 					break;

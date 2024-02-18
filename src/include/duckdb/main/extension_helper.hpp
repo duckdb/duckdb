@@ -89,11 +89,11 @@ public:
 
 	//! Lookup a name + type in an ExtensionFunctionEntry list
 	template <size_t N>
-	static vector<pair<string, string>> FindExtensionInFunctionEntries(const string &name,
-	                                                                   const ExtensionFunctionEntry (&entries)[N]) {
+	static vector<pair<string, CatalogType>>
+	FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
 		auto lcase = StringUtil::Lower(name);
 
-		vector<pair<string, string>> result;
+		vector<pair<string, CatalogType>> result;
 		for (idx_t i = 0; i < N; i++) {
 			auto &element = entries[i];
 			if (element.name == lcase) {
