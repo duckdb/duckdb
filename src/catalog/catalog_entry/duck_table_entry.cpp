@@ -22,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 
 namespace duckdb {
 
@@ -160,6 +161,13 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
+
+	// Column comments have a special alter type
+	if (info.type == AlterType::SET_COLUMN_COMMENT) {
+		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
+		return SetColumnComment(context, comment_on_column_info);
+	}
+
 	if (info.type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
@@ -207,10 +215,6 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	case AlterTableType::DROP_NOT_NULL: {
 		auto &drop_not_null_info = table_info.Cast<DropNotNullInfo>();
 		return DropNotNull(context, drop_not_null_info);
-	}
-	case AlterTableType::SET_COLUMN_COMMENT: {
-		auto &column_comment_info = table_info.Cast<SetColumnCommentInfo>();
-		return SetColumnComment(context, column_comment_info);
 	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
@@ -673,7 +677,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetColumnComment(ClientContext &context
 	for (auto &col : columns.Logical()) {
 		auto copy = col.Copy();
 		if (default_idx == col.Logical()) {
-			copy.SetComment(info.comment);
+			copy.SetComment(info.comment_value);
 		}
 		create_info->columns.AddColumn(std::move(copy));
 	}
