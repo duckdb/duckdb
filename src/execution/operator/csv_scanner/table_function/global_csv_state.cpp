@@ -69,6 +69,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 			current_file = make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
 			                                        bind_data, column_ids, file_schema);
 		}
+		current_file->error_handler->Insert(current_boundary.GetBoundaryIdx());
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
 		                                  current_file->error_handler, current_file, current_boundary);
@@ -84,6 +85,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	}
 	// We first create the scanner for the current boundary
 	auto &current_file = *file_scans.back();
+	current_file.error_handler->Insert(current_boundary.GetBoundaryIdx());
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, file_scans.back(), current_boundary);

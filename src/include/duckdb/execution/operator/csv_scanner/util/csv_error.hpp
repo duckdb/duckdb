@@ -80,6 +80,9 @@ public:
 	void Error(CSVError &csv_error);
 	//! Inserts a finished error info
 	void Insert(idx_t boundary_idx, idx_t rows);
+	//! Inserts a boundary index that's being processed
+	void Insert(idx_t boundary_idx);
+	void Remove(idx_t boundary_idx);
 	vector<pair<LinesPerBoundary, CSVError>> errors;
 	//! Return the 1-indexed line number
 	idx_t GetLine(LinesPerBoundary &error_info);
@@ -93,12 +96,13 @@ private:
 	bool PrintLineNumber(CSVError &error);
 	//! CSV Error Handler Mutex
 	mutex main_mutex;
-	//! Map of <file,batch> -> lines
+	//! Map of <boundary indexes> -> lines read
 	unordered_map<idx_t, LinesPerBoundary> lines_per_batch_map;
 	idx_t max_line_length = 0;
 	bool ignore_errors = false;
-
 	bool got_borked = false;
+	//! Boundary Indexes that are currently in process
+	unordered_set<idx_t> in_process;
 };
 
 } // namespace duckdb

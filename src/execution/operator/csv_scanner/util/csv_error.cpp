@@ -48,11 +48,22 @@ void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, b
 
 void CSVErrorHandler::Insert(idx_t boundary_idx, idx_t rows) {
 	lock_guard<mutex> parallel_lock(main_mutex);
+	in_process.erase(boundary_idx);
 	if (lines_per_batch_map.find(boundary_idx) == lines_per_batch_map.end()) {
 		lines_per_batch_map[boundary_idx] = {boundary_idx, rows};
 	} else {
 		lines_per_batch_map[boundary_idx].lines_in_batch += rows;
 	}
+}
+
+void CSVErrorHandler::Insert(idx_t boundary_idx) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	in_process.insert(boundary_idx);
+}
+
+void CSVErrorHandler::Remove(idx_t boundary_idx) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	in_process.erase(boundary_idx);
 }
 
 void CSVErrorHandler::NewMaxLineSize(idx_t scan_line_size) {
@@ -171,9 +182,14 @@ idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
 				break;
 			}
 			lock_guard<mutex> parallel_lock(main_mutex);
+
 			if (lines_per_batch_map.find(boundary_idx) != lines_per_batch_map.end()) {
 				batch_done = true;
 				current_line += lines_per_batch_map[boundary_idx].lines_in_batch;
+			}
+			if (in_process.find(boundary_idx) == in_process.end()) {
+				// This boundary index is not being processed and also has not finished, we skip it.
+				batch_done = true;
 			}
 			if (got_borked) {
 				return current_line;
