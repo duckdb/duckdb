@@ -61,6 +61,8 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	// The nested types need to conform as well
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(GetJSONType(const_struct_names, ListType::GetChildType(type)));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(GetJSONType(const_struct_names, ArrayType::GetChildType(type)));
 	// Struct and MAP are treated as JSON values
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
