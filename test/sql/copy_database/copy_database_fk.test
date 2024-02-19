@@ -4,8 +4,6 @@
 
 require noforcestorage
 
-# FIXME - this is not working right now - we need to correctly take dependencies into account for COPY FROM DATABASE
-
 statement ok
 CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
 

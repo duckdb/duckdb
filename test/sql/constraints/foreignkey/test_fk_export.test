@@ -2,8 +2,6 @@
 # description: Test export database with foreign key constraint
 # group: [foreignkey]
 
-# FIXME: due to a bug in foreign key dependencies this test has been disabled for now
-
 statement ok
 CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
 
