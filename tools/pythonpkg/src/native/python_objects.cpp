@@ -510,6 +510,16 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		}
 		return std::move(list);
 	}
+	case LogicalTypeId::ARRAY: {
+		auto &array_values = ArrayValue::GetChildren(val);
+		auto array_size = ArrayType::GetSize(type);
+		auto &child_type = ArrayType::GetChildType(type);
+		py::tuple arr(array_size);
+		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+			arr[elem_idx] = FromValue(array_values[elem_idx], child_type, client_properties);
+		}
+		return std::move(arr);
+	}
 	case LogicalTypeId::MAP: {
 		auto &list_values = ListValue::GetChildren(val);
 
