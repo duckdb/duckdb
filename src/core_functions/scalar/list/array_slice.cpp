@@ -351,7 +351,6 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		    list_or_str_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			list_or_str_vector.Flatten(count);
 		}
-		ListVector::ReferenceEntry(result, list_or_str_vector);
 		ExecuteSlice<list_entry_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
 		                                    begin_is_empty, end_is_empty);
 		break;
