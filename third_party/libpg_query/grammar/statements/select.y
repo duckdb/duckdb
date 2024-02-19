@@ -3315,6 +3315,12 @@ row:		qualified_row							{ $$ = $1;}
 			| '(' expr_list ',' a_expr ')'			{ $$ = lappend($2, $4); }
 		;
 
+pgq_a_expr:
+    a_expr              { $$ = $1; }
+    | pgq_unreserved_keyword { $$ = pstrdup($1); }
+    ;
+
+
 dict_arg:
 	ColIdOrString ':' a_expr						{
 		PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
@@ -3328,7 +3334,7 @@ dict_arg:
 dict_arguments:
 	dict_arg						{ $$ = list_make1($1); }
 	| dict_arguments ',' dict_arg	{ $$ = lappend($1, $3); }
-
+    ;
 
 dict_arguments_opt_comma:
 			dict_arguments								{ $$ = $1; }
@@ -3336,7 +3342,7 @@ dict_arguments_opt_comma:
 		;
 
 map_arg:
-			a_expr ':' a_expr
+			pgq_a_expr ':' pgq_a_expr
 			{
 				$$ = list_make2($1, $3);
 			}
