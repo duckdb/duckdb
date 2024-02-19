@@ -2,9 +2,6 @@
 # description: Test export of macro's
 # group: [export]
 
-# FIXME: see duckdb-internal/146
-require skip_reload
-
 statement ok
 BEGIN TRANSACTION
 
