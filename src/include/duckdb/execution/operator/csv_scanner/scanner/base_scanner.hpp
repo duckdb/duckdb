@@ -89,6 +89,8 @@ public:
 	//! States
 	CSVStates states;
 
+	bool ever_quoted = false;
+
 protected:
 	//! Boundaries of this scanner
 	CSVIterator iterator;
@@ -176,6 +178,7 @@ protected:
 				if (states.states[0] == CSVState::UNQUOTED) {
 					T::SetEscaped(result);
 				}
+				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (state_machine->transition_array
