@@ -29,7 +29,7 @@ static void ShiftRight(unsigned char *ar, int size, int shift) {
 	while (shift--) {
 		for (int i = size - 1; i >= 0; --i) {
 			int next = (ar[i] & 1) ? 0x80 : 0;
-			ar[i] = carry | (ar[i] >> 1);
+			ar[i] = UnsafeNumericCast<unsigned char>(carry | (ar[i] >> 1));
 			carry = next;
 		}
 	}

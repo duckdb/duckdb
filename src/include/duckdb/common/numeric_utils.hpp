@@ -60,17 +60,22 @@ struct IsIntegral<uhugeint_t> {
 };
 
 template <class OUT, class IN>
-OUT CheckedCast(IN val) {
-	// TODO deal with signedness
-//#ifdef DEBUG
-//	if (val > NumericLimits<OUT>::Maximum() || val < NumericLimits<OUT>::Minimum()) {
-//		// TODO more details in error message
-//		throw InternalException("Information loss on integer cast");
-//	}
-//#endif
+OUT UnsafeNumericCast(IN val) {
 	return static_cast<OUT>(val);
 }
 
-// TOOD cast & unsafecast
+template <class OUT, class IN>
+OUT NumericCast(IN val) {
+	// TODO deal with signedness
+	//#ifdef DEBUG
+	//	if (val > NumericLimits<OUT>::Maximum() || val < NumericLimits<OUT>::Minimum()) {
+	//		// TODO more details in error message
+	//		throw InternalException("Information loss on integer cast");
+	//	}
+	//#endif
+	return UnsafeNumericCast<OUT, IN>(val);
+}
+
+// TOOD cast & UnsafeNumericCast
 
 } // namespace duckdb

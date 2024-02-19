@@ -1,3 +1,4 @@
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -42,7 +43,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 			}
 			continue;
 		}
-		result_data[i] = key;
+		result_data[i] = UnsafeNumericCast<RES_TYPE>(key);
 	}
 	return all_converted;
 }

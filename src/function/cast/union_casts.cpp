@@ -1,7 +1,8 @@
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
-#include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <algorithm> // for std::sort
 
@@ -257,7 +258,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 			// map the tag
 			auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];
 			auto mapped_tag = cast_data.tag_map[source_tag];
-			ConstantVector::GetData<union_tag_t>(result_tag_vector)[0] = mapped_tag;
+			ConstantVector::GetData<union_tag_t>(result_tag_vector)[0] = UnsafeNumericCast<union_tag_t>(mapped_tag);
 		}
 	} else {
 		// Otherwise, use the unified vector format to access the source vector.
@@ -279,7 +280,8 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 				// map the tag
 				auto source_tag = (UnifiedVectorFormat::GetData<union_tag_t>(source_tag_format))[source_row_idx];
 				auto target_tag = cast_data.tag_map[source_tag];
-				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] = target_tag;
+				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] =
+				    UnsafeNumericCast<union_tag_t>(target_tag);
 			} else {
 
 				// Issue: The members of the result is not always flatvectors

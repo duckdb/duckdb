@@ -39,7 +39,7 @@ static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 		ReverseMemCpy(result_ptr + remainder, data_ptr_cast(input.GetPointer()), input.GetSize());
 		memset(result_ptr, '\0', remainder);
 	}
-	result_ptr[0] = input.GetSize();
+	result_ptr[0] = UnsafeNumericCast<char>(input.GetSize());
 	return result;
 }
 
@@ -52,11 +52,11 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 template <class RESULT_TYPE>
 static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		return input.GetSize() + *const_data_ptr_cast(input.GetPrefix());
+		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPrefix()));
 	} else if (input.GetSize() == 0) {
 		return 0;
 	} else {
-		return input.GetSize() + *const_data_ptr_cast(input.GetPointer());
+		return UnsafeNumericCast<RESULT_TYPE>(input.GetSize() + *const_data_ptr_cast(input.GetPointer()));
 	}
 }
 

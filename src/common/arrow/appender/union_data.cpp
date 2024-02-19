@@ -1,3 +1,4 @@
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/appender/union_data.hpp"
 
@@ -42,7 +43,7 @@ void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t f
 			child_vectors[child_idx].SetValue(input_idx, child_idx == tag ? resolved_value : Value(nullptr));
 		}
 
-		types_buffer.data()[input_idx] = tag;
+		types_buffer.data()[input_idx] = NumericCast<data_t>(tag);
 	}
 
 	for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {

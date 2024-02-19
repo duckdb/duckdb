@@ -927,7 +927,7 @@ bool TryCast::Operation(string_t input, bool &result, bool strict) {
 
 	switch (input_size) {
 	case 1: {
-		char c = std::tolower(*input_data);
+		char c = UnsafeNumericCast<char>(std::tolower(*input_data));
 		if (c == 't' || (!strict && c == '1')) {
 			result = true;
 			return true;
@@ -938,10 +938,10 @@ bool TryCast::Operation(string_t input, bool &result, bool strict) {
 		return false;
 	}
 	case 4: {
-		char t = std::tolower(input_data[0]);
-		char r = std::tolower(input_data[1]);
-		char u = std::tolower(input_data[2]);
-		char e = std::tolower(input_data[3]);
+		char t = UnsafeNumericCast<char>(std::tolower(input_data[0]));
+		char r = UnsafeNumericCast<char>(std::tolower(input_data[1]));
+		char u = UnsafeNumericCast<char>(std::tolower(input_data[2]));
+		char e = UnsafeNumericCast<char>(std::tolower(input_data[3]));
 		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
 			result = true;
 			return true;
@@ -949,11 +949,11 @@ bool TryCast::Operation(string_t input, bool &result, bool strict) {
 		return false;
 	}
 	case 5: {
-		char f = std::tolower(input_data[0]);
-		char a = std::tolower(input_data[1]);
-		char l = std::tolower(input_data[2]);
-		char s = std::tolower(input_data[3]);
-		char e = std::tolower(input_data[4]);
+		char f = UnsafeNumericCast<char>(std::tolower(input_data[0]));
+		char a = UnsafeNumericCast<char>(std::tolower(input_data[1]));
+		char l = UnsafeNumericCast<char>(std::tolower(input_data[2]));
+		char s = UnsafeNumericCast<char>(std::tolower(input_data[3]));
+		char e = UnsafeNumericCast<char>(std::tolower(input_data[4]));
 		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
 			result = false;
 			return true;
@@ -1697,7 +1697,7 @@ struct HugeIntegerCastOperation {
 				remainder *= -1;
 			}
 			state.decimal = remainder;
-			state.decimal_total_digits = -e;
+			state.decimal_total_digits = UnsafeNumericCast<uint16_t>(-e);
 			state.decimal_intermediate = 0;
 			state.decimal_intermediate_digits = 0;
 			return Finalize<T, NEGATIVE>(state);
@@ -1881,7 +1881,7 @@ struct DecimalCastOperation {
 			// Everything beyond that amount needs to be truncated
 			if (decimal_excess > exponent) {
 				// We've allowed too many decimals
-				state.excessive_decimals = decimal_excess - exponent;
+				state.excessive_decimals = UnsafeNumericCast<uint8_t>(decimal_excess - exponent);
 				exponent = 0;
 			} else {
 				exponent -= decimal_excess;
@@ -2081,7 +2081,7 @@ string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_
 template <class T, class OP = NumericHelper>
 bool TryCastBoolToDecimal(bool input, T &result, string *error_message, uint8_t width, uint8_t scale) {
 	if (width > scale) {
-		result = input ? OP::POWERS_OF_TEN[scale] : 0;
+		result = UnsafeNumericCast<T>(input ? OP::POWERS_OF_TEN[scale] : 0);
 		return true;
 	} else {
 		return TryCast::Operation<bool, T>(input, result);
@@ -2148,13 +2148,13 @@ struct UnsignedToDecimalOperator {
 template <class SRC, class DST, class OP = SignedToDecimalOperator>
 bool StandardNumericToDecimalCast(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
 	// check for overflow
-	DST max_width = NumericHelper::POWERS_OF_TEN[width - scale];
+	DST max_width = UnsafeNumericCast<DST>(NumericHelper::POWERS_OF_TEN[width - scale]);
 	if (OP::template Operation<SRC, DST>(input, max_width)) {
 		string error = StringUtil::Format("Could not cast value %d to DECIMAL(%d,%d)", input, width, scale);
 		HandleCastError::AssignError(error, error_message);
 		return false;
 	}
-	result = DST(input) * NumericHelper::POWERS_OF_TEN[scale];
+	result = UnsafeNumericCast<DST>(DST(input) * NumericHelper::POWERS_OF_TEN[scale]);
 	return true;
 }
 

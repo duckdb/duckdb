@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
@@ -42,8 +43,8 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		return make_uniq<ArrowType>(LogicalType::DOUBLE);
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
 		std::string parameters = format.substr(format.find(':'));
-		uint8_t width = std::stoi(parameters.substr(1, parameters.find(',')));
-		uint8_t scale = std::stoi(parameters.substr(parameters.find(',') + 1));
+		uint8_t width = NumericCast<uint8_t>(std::stoi(parameters.substr(1, parameters.find(','))));
+		uint8_t scale = NumericCast<uint8_t>(std::stoi(parameters.substr(parameters.find(',') + 1)));
 		if (width > 38) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}

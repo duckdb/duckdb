@@ -1,3 +1,4 @@
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
@@ -603,7 +604,7 @@ struct SortedAggregateFunction {
 			if (unsorted_count < order_bind.threshold) {
 				auto state = sdata[finalized];
 				prefixed.Reset();
-				prefixed.data[0].Reference(Value::USMALLINT(finalized));
+				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
 				state->Finalize(order_bind, prefixed, *local_sort);
 				unsorted_count += state_unprocessed[finalized];
 

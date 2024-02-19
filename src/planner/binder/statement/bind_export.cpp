@@ -35,7 +35,7 @@ string SanitizeExportIdentifier(const string &str) {
 
 		if (c >= 'A' && c <= 'Z') {
 			// To lowercase
-			result[i] = CheckedCast<int, char>(tolower(c));
+			result[i] = NumericCast<char>(tolower(c));
 		} else {
 			// Substitute to underscore
 			result[i] = '_';

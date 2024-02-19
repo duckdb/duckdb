@@ -367,7 +367,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	}
 	case StrTimeSpecifier::MONTH_DECIMAL: {
-		target = Write2(target, data[1]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[1]));
 		break;
 	}
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY: {
@@ -375,7 +375,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	}
 	case StrTimeSpecifier::HOUR_24_DECIMAL: {
-		target = Write2(target, data[3]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[3]));
 		break;
 	}
 	case StrTimeSpecifier::HOUR_12_DECIMAL: {
@@ -383,15 +383,15 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		if (hour == 0) {
 			hour = 12;
 		}
-		target = Write2(target, hour);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(hour));
 		break;
 	}
 	case StrTimeSpecifier::MINUTE_DECIMAL: {
-		target = Write2(target, data[4]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[4]));
 		break;
 	}
 	case StrTimeSpecifier::SECOND_DECIMAL: {
-		target = Write2(target, data[5]);
+		target = Write2(target, UnsafeNumericCast<uint8_t>(data[5]));
 		break;
 	}
 	default:

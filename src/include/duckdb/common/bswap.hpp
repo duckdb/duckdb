@@ -34,11 +34,12 @@ static inline T BSwap(const T &x) {
 	} else if (sizeof(T) == 2) {
 		return BSWAP16(x);
 	} else if (sizeof(T) == 4) {
-		// this check is superfluous as the branch is not taken for small return types but the compiler does not realize that
-		return CheckedCast<uint32_t, T>(BSWAP32(x));
+		// this check is superfluous as the branch is not taken for small return types but the compiler does not realize
+		// that
+		return UnsafeNumericCast<T>(BSWAP32(x));
 	} else {
 		// see above
-		return CheckedCast<uint64_t, T>(BSWAP64(x));
+		return UnsafeNumericCast<T>(BSWAP64(x));
 	}
 }
 

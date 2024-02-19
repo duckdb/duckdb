@@ -21,6 +21,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/adbc/driver_manager.h"
 #include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
@@ -513,7 +514,7 @@ std::string AdbcDriverManagerDefaultEntrypoint(const std::string &driver) {
 		// if pos == npos this is the entire filename
 		std::string token = filename.substr(prev, pos - prev);
 		// capitalize first letter
-		token[0] = std::toupper(static_cast<unsigned char>(token[0]));
+		token[0] = duckdb::NumericCast<char>(std::toupper(static_cast<unsigned char>(token[0])));
 
 		entrypoint += token;
 

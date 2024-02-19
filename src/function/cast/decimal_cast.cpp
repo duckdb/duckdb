@@ -81,7 +81,7 @@ bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count, string
 	auto result_width = DecimalType::GetWidth(result.GetType());
 	D_ASSERT(result_scale >= source_scale);
 	idx_t scale_difference = result_scale - source_scale;
-	DEST multiply_factor = POWERS_DEST::POWERS_OF_TEN[scale_difference];
+	DEST multiply_factor = UnsafeNumericCast<DEST>(POWERS_DEST::POWERS_OF_TEN[scale_difference]);
 	idx_t target_width = result_width - scale_difference;
 	if (source_width < target_width) {
 		DecimalScaleInput<SOURCE, DEST> input(result, multiply_factor);
@@ -90,7 +90,7 @@ bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count, string
 		return true;
 	} else {
 		// type might not fit: check limit
-		auto limit = POWERS_SOURCE::POWERS_OF_TEN[target_width];
+		auto limit = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[target_width]);
 		DecimalScaleInput<SOURCE, DEST> input(result, limit, multiply_factor, error_message, source_width,
 		                                      source_scale);
 		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleUpCheckOperator>(source, result, count, &input,
@@ -131,7 +131,7 @@ bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, stri
 	D_ASSERT(result_scale < source_scale);
 	idx_t scale_difference = source_scale - result_scale;
 	idx_t target_width = result_width + scale_difference;
-	SOURCE divide_factor = POWERS_SOURCE::POWERS_OF_TEN[scale_difference];
+	auto divide_factor = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[scale_difference]);
 	if (source_width < target_width) {
 		DecimalScaleInput<SOURCE> input(result, divide_factor);
 		// type will always fit: no need to check limit
@@ -139,7 +139,7 @@ bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count, stri
 		return true;
 	} else {
 		// type might not fit: check limit
-		auto limit = POWERS_SOURCE::POWERS_OF_TEN[target_width];
+		auto limit = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[target_width]);
 		DecimalScaleInput<SOURCE> input(result, limit, divide_factor, error_message, source_width, source_scale);
 		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownCheckOperator>(source, result, count, &input,
 		                                                                           error_message);

@@ -33,7 +33,7 @@ public:
 	template <class SIGNED, class UNSIGNED>
 	static int SignedLength(SIGNED value) {
 		int sign = -(value < 0);
-		UNSIGNED unsigned_value = (value ^ sign) - sign;
+		UNSIGNED unsigned_value = UnsafeNumericCast<UNSIGNED>((value ^ sign) - sign);
 		return UnsignedLength(unsigned_value) - sign;
 	}
 
@@ -44,16 +44,16 @@ public:
 			// Integer division is slow so do it for a group of two digits instead
 			// of for every digit. The idea comes from the talk by Alexandrescu
 			// "Three Optimization Tips for C++".
-			auto index = static_cast<unsigned>((value % 100) * 2);
+			auto index = NumericCast<unsigned>((value % 100) * 2);
 			value /= 100;
 			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
 			*--ptr = duckdb_fmt::internal::data::digits[index];
 		}
 		if (value < 10) {
-			*--ptr = static_cast<char>('0' + value);
+			*--ptr = NumericCast<char>('0' + value);
 			return ptr;
 		}
-		auto index = static_cast<unsigned>(value * 2);
+		auto index = NumericCast<unsigned>(value * 2);
 		*--ptr = duckdb_fmt::internal::data::digits[index + 1];
 		*--ptr = duckdb_fmt::internal::data::digits[index];
 		return ptr;
@@ -400,9 +400,9 @@ struct DateToStringCast {
 			ptr[0] = '-';
 			if (date[i] < 10) {
 				ptr[1] = '0';
-				ptr[2] = '0' + CheckedCast<int32_t, char>(date[i]);
+				ptr[2] = '0' + UnsafeNumericCast<char>(date[i]);
 			} else {
-				auto index = static_cast<idx_t>(date[i] * 2);
+				auto index = UnsafeNumericCast<idx_t>(date[i] * 2);
 				ptr[1] = duckdb_fmt::internal::data::digits[index];
 				ptr[2] = duckdb_fmt::internal::data::digits[index + 1];
 			}
@@ -457,9 +457,9 @@ struct TimeToStringCast {
 		D_ASSERT(value >= 0 && value <= 99);
 		if (value < 10) {
 			ptr[0] = '0';
-			ptr[1] = '0' + CheckedCast<int32_t, char>(value);
+			ptr[1] = '0' + UnsafeNumericCast<char>(value);
 		} else {
-			auto index = static_cast<unsigned>(value * 2);
+			auto index = UnsafeNumericCast<unsigned>(value * 2);
 			ptr[0] = duckdb_fmt::internal::data::digits[index];
 			ptr[1] = duckdb_fmt::internal::data::digits[index + 1];
 		}
