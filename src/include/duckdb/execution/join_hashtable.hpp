@@ -346,6 +346,7 @@ public:
 	                                        ProbeSpill &probe_spill, ProbeSpillLocalAppendState &spill_state,
 	                                        DataChunk &spill_chunk);
 
+
 private:
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;

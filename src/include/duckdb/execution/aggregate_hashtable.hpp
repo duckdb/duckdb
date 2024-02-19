@@ -58,17 +58,6 @@ public:
 		value &= reinterpret_cast<uint64_t>(pointer) | SALT_MASK;
 	}
 
-	inline void ReplacePointer(const data_ptr_t &pointer) {
-
-		// Replace only if the cell is occupied
-		D_ASSERT(IsOccupied());
-
-		// Pointer shouldn't use upper bits
-		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
-
-		value = (value & SALT_MASK) | reinterpret_cast<uint64_t>(pointer);
-	}
-
 	static inline hash_t ExtractSalt(const hash_t &hash) {
 		// Leaves upper bits intact, sets lower bits to all 1's
 		return hash | POINTER_MASK;
@@ -83,6 +72,26 @@ public:
 		D_ASSERT((salt & POINTER_MASK) == POINTER_MASK);
 		// No need to mask, just put the whole thing there
 		value = salt;
+	}
+
+	template <bool PARALLEL>
+	inline bool SetPointerAndSalt(const data_ptr_t &pointer, const hash_t &salt) {
+		// Assertions to ensure preconditions
+		D_ASSERT((salt & POINTER_MASK) == POINTER_MASK);
+		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
+
+		if (PARALLEL) {
+			auto desired = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
+			auto *atomic_value = reinterpret_cast<std::atomic<hash_t> *>(&value);
+			hash_t expected = atomic_value->load(std::memory_order_relaxed); // Load the current value
+			// Attempt to update while expected matches the current value
+			return atomic_value->compare_exchange_weak(expected, desired, std::memory_order_release,
+			                                           std::memory_order_relaxed);
+
+		} else {
+			value = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
+			return true; // Always true in non-parallel mode
+		}
 	}
 
 private:

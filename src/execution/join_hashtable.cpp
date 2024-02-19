@@ -362,20 +362,47 @@ static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], atomic<data_p
 	}
 }
 
+
+template <bool PARALLEL>
+static inline void InsertRowToEntry(aggr_ht_entry_t &entry, data_ptr_t row_ptr_to_insert, const hash_t hash, const idx_t pointer_offset) {
+
+
+	bool successful_insertion;
+	if (PARALLEL) {
+		data_ptr_t current_row_pointer;
+		do {
+			current_row_pointer = entry.GetPointerOrNull();
+			Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
+			successful_insertion = entry.SetPointerAndSalt<PARALLEL>(row_ptr_to_insert, aggr_ht_entry_t::ExtractSalt(hash));
+		} while (!successful_insertion);
+
+	}else{
+		data_ptr_t current_row_pointer = entry.GetPointerOrNull();
+		Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
+		successful_insertion = entry.SetPointerAndSalt<PARALLEL>(row_ptr_to_insert, aggr_ht_entry_t::ExtractSalt(hash));
+
+		// if not parallel, we should never fail to set the pointer and salt because of race conditions,
+		// as there are none
+		D_ASSERT(successful_insertion);
+	}
+
+	// at the end, the successful insertion should be true
+	D_ASSERT(successful_insertion);
+
+
+}
+
 void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, bool parallel) {
 
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
 
-	// todo: Enable parallel insertion
-	D_ASSERT(parallel == false);
+	auto row_ptrs_to_insert = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
-	auto row_ptr_to_insert = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	// Get the hashes and the indices for each value in the vector
-
 	hashes_v.Flatten(count);
 	auto hashes = FlatVector::GetData<hash_t>(hashes_v);
 
-	auto row_locations_start = reinterpret_cast<data_ptr_t>(row_ptr_to_insert);
+	auto row_locations_start = reinterpret_cast<data_ptr_t>(row_ptrs_to_insert);
 	Vector row_ptr_to_insert_v(LogicalType::POINTER, row_locations_start);
 	Vector ht_offsets_v(LogicalType::UBIGINT);
 	Vector hash_salts_v(LogicalType::UBIGINT);
@@ -440,11 +467,8 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkSt
 				} else { // entry is not occupied, so let's claim it and start a new list
 
 					// Still need to set nullptr at the end to mark the end of the list
-					data_ptr_t row_pointer_to_insert = row_ptr_to_insert[entry_index];
-					Store<data_ptr_t>(nullptr, row_pointer_to_insert + pointer_offset);
-					entry.SetSalt(aggr_ht_entry_t::ExtractSalt(hash));
-					entry.SetPointer(row_pointer_to_insert);
-
+					data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
+					InsertRowToEntry<true>(entry, row_ptr, hash, pointer_offset);
 					break;
 				}
 			}
@@ -490,11 +514,9 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkSt
 				const auto entry_index = entry_compare_sel_vector.get_index(i);
 
 				auto &entry = entries[ht_offsets[entry_index]];
-				data_ptr_t row_pointer_to_insert = row_ptr_to_insert[entry_index];
-				data_ptr_t current_row_pointer = entry.GetPointer();
-
-				Store<data_ptr_t>(current_row_pointer, row_pointer_to_insert + pointer_offset);
-				entry.ReplacePointer(row_pointer_to_insert);
+				data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
+				auto hash = hashes[entry_index];
+				InsertRowToEntry<true>(entry, row_ptr, hash, pointer_offset);
 			}
 		}
 
