@@ -41,27 +41,27 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 	} else if (format == "g") {
 		return make_uniq<ArrowType>(LogicalType::DOUBLE);
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
-		std::string parameters = format.substr(format.find(':'));
-		// Find the positions of the commas
-		size_t pos1 = parameters.find(',');           // Position of the first comma
-		size_t pos2 = parameters.find(',', pos1 + 1); // Position of the second comma
-
-		// Extract substrings using substr
-		// +1 and -1 to adjust positions to exclude ':' and ',' from the substrings
-		uint64_t width = std::stoull(parameters.substr(1, pos1 - 1)); // From ':' to the first comma
-		uint64_t scale;
-		if (pos2 != std::string::npos) {
-			// We have a bit-width defined
-			scale = std::stoull(parameters.substr(pos1 + 1, pos2 - pos1 - 1)); // Between the two commas
-			uint64_t bitwidth = std::stoull(parameters.substr(pos2 + 1));
-			if (bitwidth > 128) {
-				throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
-			}
-		} else {
-			// bit-width not defined
-			scale = std::stoull(parameters.substr(pos1 + 1));
+		auto extra_info = StringUtil::Split(format, ':');
+		if (extra_info.size() != 2) {
+			throw InvalidInputException(
+			    "Decimal format of Arrow object is incomplete, it is missing the scale and width. Current format: %s",
+			    format);
 		}
-		if (width > 38) {
+		auto parameters = StringUtil::Split(extra_info[1], ",");
+		// Parameters must always be 2 or 3 values (i.e., width, scale and an optional bit-width)
+		if (parameters.size() != 2 && parameters.size() != 3) {
+			throw InvalidInputException(
+			    "Decimal format of Arrow object is incomplete, it is missing the scale or width. Current format: %s",
+			    format);
+		}
+		uint64_t width = std::stoull(parameters[0]);
+		uint64_t scale = std::stoull(parameters[1]);
+		uint64_t bitwidth = 128;
+		if (parameters.size() == 3) {
+			// We have a bit-width defined
+			bitwidth = std::stoull(parameters[2]);
+		}
+		if (width > 38 || bitwidth > 128) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
 		return make_uniq<ArrowType>(LogicalType::DECIMAL(width, scale));
