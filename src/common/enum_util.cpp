@@ -3461,6 +3461,12 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value) {
 		return "NULL_KEY";
 	case MapInvalidReason::DUPLICATE_KEY:
 		return "DUPLICATE_KEY";
+	case MapInvalidReason::NULL_VALUE_LIST:
+		return "NULL_VALUE_LIST";
+	case MapInvalidReason::NOT_ALIGNED:
+		return "NOT_ALIGNED";
+	case MapInvalidReason::INVALID_PARAMS:
+		return "INVALID_PARAMS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3479,6 +3485,15 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DUPLICATE_KEY")) {
 		return MapInvalidReason::DUPLICATE_KEY;
+	}
+	if (StringUtil::Equals(value, "NULL_VALUE_LIST")) {
+		return MapInvalidReason::NULL_VALUE_LIST;
+	}
+	if (StringUtil::Equals(value, "NOT_ALIGNED")) {
+		return MapInvalidReason::NOT_ALIGNED;
+	}
+	if (StringUtil::Equals(value, "INVALID_PARAMS")) {
+		return MapInvalidReason::INVALID_PARAMS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
