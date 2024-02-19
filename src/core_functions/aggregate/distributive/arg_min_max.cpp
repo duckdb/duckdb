@@ -285,6 +285,8 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, int32_t>(by_type, type);
 	case PhysicalType::INT64:
 		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, int64_t>(by_type, type);
+	case PhysicalType::INT128:
+		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, hugeint_t>(by_type, type);
 	case PhysicalType::DOUBLE:
 		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, double>(by_type, type);
 	case PhysicalType::VARCHAR:
@@ -295,9 +297,9 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 }
 
 static const vector<LogicalType> ArgMaxByTypes() {
-	vector<LogicalType> types = {LogicalType::INTEGER,      LogicalType::BIGINT, LogicalType::DOUBLE,
-	                             LogicalType::VARCHAR,      LogicalType::DATE,   LogicalType::TIMESTAMP,
-	                             LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
+	vector<LogicalType> types = {LogicalType::INTEGER,   LogicalType::BIGINT,       LogicalType::HUGEINT,
+	                             LogicalType::DOUBLE,    LogicalType::VARCHAR,      LogicalType::DATE,
+	                             LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
 	return types;
 }
 
@@ -329,6 +331,8 @@ AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const Logic
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int32_t>(by_type, type);
 	case PhysicalType::INT64:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int64_t>(by_type, type);
+	case PhysicalType::INT128:
+		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, hugeint_t>(by_type, type);
 	case PhysicalType::DOUBLE:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, double>(by_type, type);
 	case PhysicalType::VARCHAR:
