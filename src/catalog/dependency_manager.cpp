@@ -592,7 +592,6 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 
 	// If the owner is already owned by something else, throw an error
 	const auto owner_info = GetLookupProperties(owner);
-	const auto mangled_owner_name = MangleName(owner_info);
 	ScanDependents(transaction, owner_info, [&](DependencyEntry &dep) {
 		if (dep.Dependent().flags.IsOwnedBy()) {
 			throw DependencyException("%s can not become the owner, it is already owned by %s", owner.name,
