@@ -7,11 +7,10 @@ require httpfs
 statement ok
 PRAGMA enable_verification
 
-# No spinlock, this just errors
-statement error
+# This may or may not work, depending if we encounter a value that breaks the quote on the thread set
+# But this will finish
+statement maybe
 from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/title.principals.tsv', quote='"') limit 10
-----
-Value with unterminated quote found.
 
 # This works, because we use \0 as a quote
 statement ok
