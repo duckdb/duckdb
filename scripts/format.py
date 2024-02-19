@@ -9,7 +9,7 @@ import inspect
 import subprocess
 import difflib
 import re
-import threading
+import concurrent.futures
 from python_helpers import open_utf8
 
 try:
@@ -401,15 +401,10 @@ def format_directory(directory):
             format_file(f, full_path, directory, '.' + f.split('.')[-1])
 
     # Create thread for each file
-    threads = []
-    for f in files:
-        thread = threading.Thread(target=process_file, args=(f,))
-        thread.start()
-        threads.append(thread)
-
-    # Wait for all threads to finish
-    for thread in threads:
-        thread.join()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        threads = [executor.submit(process_file, f) for f in files]
+        # Wait for all tasks to complete
+        concurrent.futures.wait(threads)
 
 
 if format_all:
