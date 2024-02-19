@@ -155,6 +155,14 @@ duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) 
 	return reinterpret_cast<duckdb_vector>(duckdb::StructVector::GetEntries(*v)[index].get());
 }
 
+duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetEntry(*v));
+}
+
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
 	if (!validity) {
 		return true;

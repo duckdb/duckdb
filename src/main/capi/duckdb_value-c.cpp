@@ -103,3 +103,30 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 	}
 	return WrapValue(list_value);
 }
+
+duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count) {
+	if (!type || !values) {
+		return nullptr;
+	}
+	if (value_count >= duckdb::ArrayType::MAX_ARRAY_SIZE) {
+		return nullptr;
+	}
+	auto &ltype = UnwrapType(type);
+	duckdb::vector<duckdb::Value> unwrapped_values;
+
+	for (idx_t i = 0; i < value_count; i++) {
+		auto value = values[i];
+		if (!value) {
+			return nullptr;
+		}
+		unwrapped_values.push_back(UnwrapValue(value));
+	}
+	duckdb::Value *array_value = new duckdb::Value;
+	try {
+		*array_value = duckdb::Value::ARRAY(ltype, unwrapped_values);
+	} catch (...) {
+		delete array_value;
+		return nullptr;
+	}
+	return WrapValue(array_value);
+}
