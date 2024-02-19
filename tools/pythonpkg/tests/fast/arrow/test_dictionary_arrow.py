@@ -171,6 +171,8 @@ class TestArrowDictionary(object):
                 type=pa.dictionary(pa.int16(), pa.string()),
             )
             tables.append(pa.table([array], names=["x"]))
+        # All of the tables with different dictionaries are getting merged into one dataset
+        # This is testing that our cache is being evicted correctly
         x = ds.dataset(tables)
         res = duckdb_cursor.sql("select * from x").fetchall()
         expected = [(x,) for x in expected]
