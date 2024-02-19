@@ -57,6 +57,8 @@ return_code = 0
 
 def parse_assertions(stdout):
     for line in stdout.splitlines():
+        if 'All tests were skipped' in line:
+            return "SKIPPED"
         if line == 'assertions: - none -':
             return "0 assertions"
 

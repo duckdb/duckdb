@@ -17,14 +17,14 @@ namespace duckdb {
 class CSVCast {
 	template <class OP, class T>
 	static bool TemplatedTryCastFloatingVector(const CSVReaderOptions &options, Vector &input_vector,
-	                                           Vector &result_vector, idx_t count, string &error_message,
+	                                           Vector &result_vector, idx_t count, CastParameters &parameters,
 	                                           idx_t &line_error) {
 		D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 		bool all_converted = true;
 		idx_t row = 0;
 		UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 			T result;
-			if (!OP::Operation(input, result, &error_message)) {
+			if (!OP::Operation(input, result, parameters)) {
 				line_error = row;
 				all_converted = false;
 			} else {
@@ -37,13 +37,13 @@ class CSVCast {
 
 	template <class OP, class T>
 	static bool TemplatedTryCastDecimalVector(const CSVReaderOptions &options, Vector &input_vector,
-	                                          Vector &result_vector, idx_t count, string &error_message, uint8_t width,
-	                                          uint8_t scale) {
+	                                          Vector &result_vector, idx_t count, CastParameters &parameters,
+	                                          uint8_t width, uint8_t scale) {
 		D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 			T result;
-			if (!OP::Operation(input, result, &error_message, width, scale)) {
+			if (!OP::Operation(input, result, parameters, width, scale)) {
 				all_converted = false;
 			}
 			return result;
@@ -68,13 +68,13 @@ class CSVCast {
 	template <class OP, class T>
 	static bool TemplatedTryCastDateVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options,
 	                                       Vector &input_vector, Vector &result_vector, idx_t count,
-	                                       string &error_message, idx_t &line_error) {
+	                                       CastParameters &parameters, idx_t &line_error) {
 		D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 		bool all_converted = true;
 		idx_t cur_line = 0;
 		UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 			T result;
-			if (!OP::Operation(options, input, result, error_message)) {
+			if (!OP::Operation(options, input, result, *parameters.error_message)) {
 				line_error = cur_line;
 				all_converted = false;
 			}
@@ -86,49 +86,49 @@ class CSVCast {
 
 public:
 	static bool TryCastDateVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
-	                              Vector &result_vector, idx_t count, string &error_message, idx_t &line_error) {
+	                              Vector &result_vector, idx_t count, CastParameters &parameters, idx_t &line_error) {
 		return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
-		                                                               error_message, line_error);
+		                                                               parameters, line_error);
 	}
 	static bool TryCastTimestampVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options,
 	                                   Vector &input_vector, Vector &result_vector, idx_t count,
-	                                   string &error_message) {
+	                                   CastParameters &parameters) {
 		idx_t line_error;
 		return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
-		                                                                         count, error_message, line_error);
+		                                                                         count, parameters, line_error);
 	}
 	static bool TryCastFloatingVectorCommaSeparated(const CSVReaderOptions &options, Vector &input_vector,
-	                                                Vector &result_vector, idx_t count, string &error_message,
+	                                                Vector &result_vector, idx_t count, CastParameters &parameters,
 	                                                const LogicalType &result_type, idx_t &line_error) {
 		switch (result_type.InternalType()) {
 		case PhysicalType::DOUBLE:
 			return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, double>(
-			    options, input_vector, result_vector, count, error_message, line_error);
+			    options, input_vector, result_vector, count, parameters, line_error);
 		case PhysicalType::FLOAT:
 			return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, float>(
-			    options, input_vector, result_vector, count, error_message, line_error);
+			    options, input_vector, result_vector, count, parameters, line_error);
 		default:
 			throw InternalException("Unimplemented physical type for floating");
 		}
 	}
 	static bool TryCastDecimalVectorCommaSeparated(const CSVReaderOptions &options, Vector &input_vector,
-	                                               Vector &result_vector, idx_t count, string &error_message,
+	                                               Vector &result_vector, idx_t count, CastParameters &parameters,
 	                                               const LogicalType &result_type) {
 		auto width = DecimalType::GetWidth(result_type);
 		auto scale = DecimalType::GetScale(result_type);
 		switch (result_type.InternalType()) {
 		case PhysicalType::INT16:
 			return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, int16_t>(
-			    options, input_vector, result_vector, count, error_message, width, scale);
+			    options, input_vector, result_vector, count, parameters, width, scale);
 		case PhysicalType::INT32:
 			return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, int32_t>(
-			    options, input_vector, result_vector, count, error_message, width, scale);
+			    options, input_vector, result_vector, count, parameters, width, scale);
 		case PhysicalType::INT64:
 			return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, int64_t>(
-			    options, input_vector, result_vector, count, error_message, width, scale);
+			    options, input_vector, result_vector, count, parameters, width, scale);
 		case PhysicalType::INT128:
 			return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, hugeint_t>(
-			    options, input_vector, result_vector, count, error_message, width, scale);
+			    options, input_vector, result_vector, count, parameters, width, scale);
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
 		}

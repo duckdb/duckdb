@@ -548,6 +548,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			result_vector.Reinterpret(parse_vector);
 		} else {
 			string error_message;
+			CastParameters parameters(false, &error_message);
 			bool success;
 			idx_t line_error = 0;
 			bool line_error_set = true;
@@ -556,23 +557,22 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			    type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
 				success = CSVCast::TryCastDateVector(state_machine->options.dialect_options.date_format, parse_vector,
-				                                     result_vector, parse_chunk.size(), error_message, line_error);
+				                                     result_vector, parse_chunk.size(), parameters, line_error);
 			} else if (!state_machine->options.dialect_options.date_format.at(LogicalTypeId::TIMESTAMP)
 			                .GetValue()
 			                .Empty() &&
 			           type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success =
-				    CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format, parse_vector,
-				                                    result_vector, parse_chunk.size(), error_message);
+				success = CSVCast::TryCastTimestampVector(state_machine->options.dialect_options.date_format,
+				                                          parse_vector, result_vector, parse_chunk.size(), parameters);
 			} else if (state_machine->options.decimal_separator != "." &&
 			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
 				success =
 				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
-				                                                 parse_chunk.size(), error_message, type, line_error);
+				                                                 parse_chunk.size(), parameters, type, line_error);
 			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
 				success = CSVCast::TryCastDecimalVectorCommaSeparated(
-				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), error_message, type);
+				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), parameters, type);
 			} else {
 				// target type is not varchar: perform a cast
 				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
