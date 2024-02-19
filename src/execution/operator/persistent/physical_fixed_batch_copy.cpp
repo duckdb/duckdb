@@ -286,7 +286,7 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	}
 	state.rows_copied += chunk.size();
 	state.collection->Append(state.append_state, chunk);
-	auto new_memory_usage = state.collection->SizeInBytes();
+	auto new_memory_usage = state.collection->AllocationSize();
 	if (new_memory_usage > state.local_memory_usage) {
 		// memory usage increased - add to global state
 		gstate.unflushed_memory_usage += new_memory_usage - state.local_memory_usage;
@@ -431,7 +431,7 @@ public:
 
 	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
-		auto memory_usage = collection->SizeInBytes();
+		auto memory_usage = collection->AllocationSize();
 		auto batch_data =
 		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(collection));
 		gstate.AddBatchData(batch_index, std::move(batch_data), memory_usage);

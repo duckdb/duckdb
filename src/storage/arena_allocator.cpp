@@ -156,6 +156,18 @@ bool ArenaAllocator::IsEmpty() const {
 }
 
 idx_t ArenaAllocator::SizeInBytes() const {
+	idx_t total_size = 0;
+	if (!IsEmpty()) {
+		auto current = head.get();
+		while (current != nullptr) {
+			total_size += current->current_position;
+			current = current->next.get();
+		}
+	}
+	return total_size;
+}
+
+idx_t ArenaAllocator::AllocationSize() const {
 	D_ASSERT(head || allocated_size == 0);
 	return allocated_size;
 }
