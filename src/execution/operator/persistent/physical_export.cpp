@@ -136,7 +136,6 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
 }
 
 static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector_t &to_add) {
-	all_entries.reserve(all_entries.size() + to_add.size());
 	for (auto &entry : to_add) {
 		all_entries.push_back(entry);
 	}
@@ -158,6 +157,15 @@ catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &contex
 	     });
 
 	catalog_entry_vector_t catalog_entries;
+	idx_t size = 0;
+	size += entries.schemas.size();
+	size += entries.custom_types.size();
+	size += entries.sequences.size();
+	size += entries.tables.size();
+	size += entries.views.size();
+	size += entries.indexes.size();
+	size += entries.macros.size();
+	catalog_entries.reserve(size);
 	AddEntries(catalog_entries, entries.schemas);
 	AddEntries(catalog_entries, entries.custom_types);
 	AddEntries(catalog_entries, entries.sequences);
