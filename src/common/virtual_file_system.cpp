@@ -20,9 +20,9 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 		}
 		// remove the query string for http paths
 		if (StringUtil::StartsWith(lower_path, "http://") || StringUtil::StartsWith(lower_path, "https://")) {
-			auto queryChar = lower_path.find("?");
-			if (queryChar != string::npos) {
-				lower_path = lower_path.substr(0, queryChar);
+			auto query_char = lower_path.find('?');
+			if (query_char != string::npos) {
+				lower_path = lower_path.substr(0, query_char);
 			}
 		}
 		if (StringUtil::EndsWith(lower_path, ".gz")) {
