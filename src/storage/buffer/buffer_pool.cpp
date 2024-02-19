@@ -45,7 +45,6 @@ BufferPool::~BufferPool() {
 }
 
 void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
-	constexpr int INSERT_INTERVAL = 1024;
 
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
@@ -114,6 +113,25 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 	return {true, std::move(r)};
 }
 
+idx_t BufferPool::PurgeIteration() {
+	// bulk dequeue
+	auto actually_dequeued = queue->q.try_dequeue_bulk(purge_nodes.begin(), BULK_PURGE_SIZE);
+
+	// retrieve all alive nodes that have been wrongly dequeued
+	idx_t alive_nodes = 0;
+	for (idx_t i = 0; i < actually_dequeued; i++) {
+		auto &node = purge_nodes[i];
+		auto handle = node.TryGetBlockHandle();
+		if (handle) {
+			purge_nodes[alive_nodes++] = std::move(node);
+		}
+	}
+
+	// bulk enqueue
+	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
+	return alive_nodes;
+}
+
 void BufferPool::PurgeQueue() {
 
 	// we trigger a purge every INSERT_INTERVAL insertions into the queue
@@ -136,29 +154,44 @@ void BufferPool::PurgeQueue() {
 		return;
 	}
 
-	// the purge queue is a concurrent structure, so we need to attempt purging the whole queue,
-	// as of the approx_q_size seen. We early-out, if we see too many alive nodes. If not, we
-	// purge as much as we reasonably can, as we assume that new dead nodes are created while purging.
-	idx_t max_purges = approx_q_size / BULK_PURGE_SIZE;
-	idx_t alive_nodes = 0;
-	while (max_purges && alive_nodes < BULK_PURGE_THRESHOLD) {
+	// we need to brute purge the entire queue to avoid memory leaks
+	if (approx_q_size > max_queue_size) {
 
-		// bulk dequeue
-		auto actually_dequeued = queue->q.try_dequeue_bulk(purge_nodes.begin(), BULK_PURGE_SIZE);
+		Printer::PrintF("approx size: %llu -- max size: %llu", approx_q_size, max_queue_size);
 
-		// retrieve all alive nodes that have been wrongly dequeued
-		alive_nodes = 0;
-		for (idx_t i = 0; i < actually_dequeued; i++) {
-			auto &node = purge_nodes[i];
-			auto handle = node.TryGetBlockHandle();
-			if (handle) {
-				purge_nodes[alive_nodes++] = std::move(node);
-			}
+		idx_t max_iterations = approx_q_size / BULK_PURGE_SIZE;
+		idx_t total_alive_nodes = 0;
+
+		for (idx_t i = 0; i < max_iterations; i++) {
+			auto alive_nodes = PurgeIteration();
+			total_alive_nodes += alive_nodes;
 		}
 
-		// bulk enqueue
-		queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
+		// increase the max_queue_size, if the workload requires a bigger queue
+		if (approx_q_size * ACTIVE_THRESHOLD < total_alive_nodes) {
+			Printer::PrintF("alive threshold: %llu -- total alive: %llu", idx_t(approx_q_size * ACTIVE_THRESHOLD),
+			                total_alive_nodes);
+			max_queue_size *= 2;
+			Printer::PrintF("NEW MAX QUEUE SIZE: %llu", max_queue_size);
+		}
+
+		// allows other threads to purge again
+		purge_active = false;
+		return;
+	}
+
+	// purge the queue until we encounter more than ACTIVE_THRESHOLD active nodes,
+	// if we never encounter enough alive nodes, then we purge half the queue
+	idx_t max_purges = approx_q_size / BULK_PURGE_SIZE / 2;
+	bool early_out = false;
+	while (max_purges && !early_out) {
+
+		auto alive_nodes = PurgeIteration();
 		max_purges--;
+
+		if (BULK_PURGE_SIZE * ACTIVE_THRESHOLD < alive_nodes) {
+			early_out = true;
+		}
 	}
 
 	// allows other threads to purge again

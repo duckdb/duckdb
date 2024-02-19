@@ -76,6 +76,7 @@ protected:
 
 	//! Garbage collect eviction queue
 	void PurgeQueue();
+	idx_t PurgeIteration();
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 protected:
@@ -93,11 +94,15 @@ protected:
 	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
 
 	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
-	constexpr static idx_t INSERT_INTERVAL = DEFAULT_STANDARD_VECTOR_SIZE;
+	constexpr static idx_t INSERT_INTERVAL = 1024;
+	//!
+	constexpr static float ACTIVE_THRESHOLD = 0.4;
+	//! Initial maximum queue size - this is an adaptive ceiling. If we purge the entire queue, and we
+	//! encounter more than 50% active nodes, we increase the ceiling.
+	idx_t max_queue_size = 8 * INSERT_INTERVAL;
+
 	//! Defines how many nodes we attempt to purge per bulk purge iteration
-	constexpr static idx_t BULK_PURGE_SIZE = INSERT_INTERVAL / 8;
-	//! Early-out threshold, if we saw more than BULK_PURGE_THRESHOLD alive nodes
-	constexpr static idx_t BULK_PURGE_THRESHOLD = BULK_PURGE_SIZE * 0.25;
+	constexpr static idx_t BULK_PURGE_SIZE = 256;
 
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
 	atomic<idx_t> evict_queue_insertions;
