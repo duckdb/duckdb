@@ -188,6 +188,8 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	}
 
 	string process_name, process_owner;
+// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
+#if defined PROC_PIDT_SHORTBSDINFO
 	// try to find out more about the process holding the lock
 	struct proc_bsdshortinfo proc;
 	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
@@ -199,6 +201,19 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 			process_owner = pw->pw_name;
 		}
 	}
+#else
+	// Fallback code for older versions
+	// try to find out more about the process holding the lock
+	struct proc_bsdinfo proc;
+	if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &proc, 128) == 128) {
+		process_name = proc.pbi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
+		// try to get actual name of conflicting process owner
+		auto pw = getpwuid(proc.pbi_uid);
+		if (pw) {
+			process_owner = pw->pw_name;
+		}
+	}
+#endif
 	// try to get a better process name (full path)
 	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
 	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
