@@ -35,6 +35,15 @@ void TransactionContext::BeginTransaction() {
 	for (auto const &s : context.registered_state) {
 		s.second->TransactionBegin(*current_transaction, context);
 	}
+
+	auto &config = DBConfig::GetConfig(context);
+	if (config.options.immediate_transaction_mode) {
+		// if immediate transaction mode is enabled then start all transactions immediately
+		auto databases = DatabaseManager::Get(context).GetDatabases(context);
+		for (auto db : databases) {
+			current_transaction->GetTransaction(db.get());
+		}
+	}
 }
 
 void TransactionContext::Commit() {

@@ -2,10 +2,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -27,14 +23,6 @@ SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChu
 			// prevent it from being closed after this query, hence
 			// preserving the transaction context for the next query
 			client.transaction.SetAutoCommit(false);
-			auto &config = DBConfig::GetConfig(context.client);
-			if (config.options.immediate_transaction_mode) {
-				// if immediate transaction mode is enabled then start all transactions immediately
-				auto databases = DatabaseManager::Get(client).GetDatabases(client);
-				for (auto db : databases) {
-					context.client.transaction.ActiveTransaction().GetTransaction(db.get());
-				}
-			}
 		} else {
 			throw TransactionException("cannot start a transaction within a transaction");
 		}

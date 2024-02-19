@@ -369,12 +369,15 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 	return result;
 }
 
-vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
+vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema,
+                                             bool scalar_function_lookup = false) {
 	vector<CatalogSearchEntry> entries;
+	auto default_system_catalog_first = false;
 	auto &search_path = *context.client_data->catalog_search_path;
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
 		// no catalog or schema provided - scan the entire search path
 		entries = search_path.Get();
+		default_system_catalog_first = scalar_function_lookup;
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
@@ -382,6 +385,8 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 		}
 		if (entries.empty()) {
 			entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+		} else {
+			default_system_catalog_first = scalar_function_lookup && (schema == DEFAULT_SCHEMA);
 		}
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
@@ -394,6 +399,23 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 	} else {
 		// specific catalog and schema provided
 		entries.emplace_back(catalog, schema);
+	}
+	if (default_system_catalog_first) {
+		// discourage overloading of standard SQL scalar functions by prioritizing the system catalog
+		vector<CatalogSearchEntry> reordered_entries;
+		reordered_entries.reserve(entries.size());
+		bool default_system_catalog_present = false;
+		reordered_entries.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA); // put it first
+		for (auto &entry : entries) {
+			if (entry.catalog == SYSTEM_CATALOG && entry.schema == DEFAULT_SCHEMA) {
+				default_system_catalog_present = true;
+			} else {
+				reordered_entries.emplace_back(entry);
+			}
+		}
+		if (default_system_catalog_present) {
+			return reordered_entries;
+		}
 	}
 	return entries;
 }
@@ -586,7 +608,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
-		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);
+		auto scalar_function_lookup = (type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA, scalar_function_lookup);
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
@@ -655,7 +678,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, vector<Catalo
 CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType type, const string &catalog,
                                            const string &schema, const string &name, OnEntryNotFound if_not_found,
                                            QueryErrorContext error_context) {
-	auto entries = GetCatalogEntries(context, catalog, schema);
+	auto scalar_function_lookup = (type == CatalogType::SCALAR_FUNCTION_ENTRY);
+	auto entries = GetCatalogEntries(context, catalog, schema, scalar_function_lookup);
 	vector<CatalogLookup> lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {

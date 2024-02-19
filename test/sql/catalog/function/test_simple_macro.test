@@ -122,8 +122,15 @@ SELECT add_macro(a,2) + add_macro(3,b) FROM integers, floats
 statement ok
 CREATE MACRO string_split(a,b) AS a + b
 
+# overloaded scalar functions without explicit qualification use system definition
+statement error
 query I
 SELECT string_split(1, 2)
+----
+
+# but qualified they work
+query I
+SELECT memory.string_split(1, 2)
 ----
 3
 
