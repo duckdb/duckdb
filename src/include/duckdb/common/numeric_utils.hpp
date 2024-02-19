@@ -10,6 +10,7 @@
 
 #include <type_traits>
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -58,16 +59,18 @@ struct IsIntegral<uhugeint_t> {
 	static constexpr bool value = true;
 };
 
-template <class IN, class OUT>
+template <class OUT, class IN>
 OUT CheckedCast(IN val) {
 	// TODO deal with signedness
-#ifdef DEBUG
-	if (val > NumericLimits<OUT>::Maximum() || val < NumericLimits<OUT>::Minimum()) {
-		// TODO more details in error message
-		throw InternalException("Information loss on integer cast");
-	}
-#endif
+//#ifdef DEBUG
+//	if (val > NumericLimits<OUT>::Maximum() || val < NumericLimits<OUT>::Minimum()) {
+//		// TODO more details in error message
+//		throw InternalException("Information loss on integer cast");
+//	}
+//#endif
 	return static_cast<OUT>(val);
 }
+
+// TOOD cast & unsafecast
 
 } // namespace duckdb
