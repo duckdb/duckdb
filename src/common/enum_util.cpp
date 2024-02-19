@@ -408,6 +408,8 @@ const char* EnumUtil::ToChars<AlterType>(AlterType value) {
 		return "ALTER_TABLE_FUNCTION";
 	case AlterType::SET_COMMENT:
 		return "SET_COMMENT";
+	case AlterType::SET_COLUMN_COMMENT:
+		return "SET_COLUMN_COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -438,6 +440,9 @@ AlterType EnumUtil::FromString<AlterType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SET_COMMENT")) {
 		return AlterType::SET_COMMENT;
+	}
+	if (StringUtil::Equals(value, "SET_COLUMN_COMMENT")) {
+		return AlterType::SET_COLUMN_COMMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4048,6 +4053,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "VACUUM_INFO";
 	case ParseInfoType::COMMENT_ON_INFO:
 		return "COMMENT_ON_INFO";
+	case ParseInfoType::COMMENT_ON_COLUMN_INFO:
+		return "COMMENT_ON_COLUMN_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4096,6 +4103,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COMMENT_ON_INFO")) {
 		return ParseInfoType::COMMENT_ON_INFO;
+	}
+	if (StringUtil::Equals(value, "COMMENT_ON_COLUMN_INFO")) {
+		return ParseInfoType::COMMENT_ON_COLUMN_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
