@@ -1,0 +1,32 @@
+FROM continuumio/anaconda3:2022.10
+
+RUN apt-get update && apt-get install -y git g++ cmake ninja-build
+
+RUN git clone https://github.com/corwinjoy/duckdb.git
+WORKDIR duckdb
+RUN git checkout reproduce_interrupt_crash
+
+
+RUN conda install numpy pandas
+
+# Make RUN commands use the new environment:
+RUN echo "conda activate" >> ~/.bashrc
+SHELL ["/bin/bash", "--login", "-c"]
+
+RUN export GEN=ninja make
+RUN export DUCKDEBUG=1
+RUN export BUILD_PYTHON=1
+RUN make debug
+
+# Invoke script with crash
+# pip install -e tools/pythonpkg
+# python tools/pythonpkg/tests/fast/api/test_duckdb_interrupt.py
+
+# Copy your Python script to the container.
+# COPY my_script.py /
+
+# Expose port 8888.
+# EXPOSE 8888
+
+# Start Jupyter Notebook.
+# CMD ["jupyter", "notebook"]
