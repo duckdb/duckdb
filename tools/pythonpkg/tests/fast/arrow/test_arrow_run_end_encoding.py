@@ -17,7 +17,6 @@ def create_list_view(offsets, values):
     offsets = offsets[:-1]
     return pa.ListViewArray.from_arrays(offsets, sizes, values=values)
 
-
 def create_list(offsets, values):
     return pa.ListArray.from_arrays(offsets, values=values)
 
