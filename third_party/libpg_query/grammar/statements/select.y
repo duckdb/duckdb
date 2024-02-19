@@ -3322,7 +3322,7 @@ pgq_a_expr:
 
 
 dict_arg:
-	ColIdOrString ':' a_expr						{
+	ColIdOrString ':' pgq_a_expr						{
 		PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
 		na->name = $1;
 		na->arg = (PGExpr *) $3;
