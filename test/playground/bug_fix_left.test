@@ -1,0 +1,40 @@
+# name: test/playground/bug_fix_left.test
+# group: [playground]
+
+statement ok
+CREATE TABLE departments (
+    dept_id INTEGER PRIMARY KEY,
+    dept_name VARCHAR(50)
+)
+
+statement ok
+CREATE TABLE employees (
+    emp_id INTEGER PRIMARY KEY,
+    emp_name VARCHAR(50),
+    dept_id INTEGER,
+    FOREIGN KEY (dept_id) REFERENCES departments(dept_id)
+)
+
+statement ok
+INSERT INTO departments (dept_id, dept_name) VALUES
+(1, 'Marketing'),
+(2, 'Engineering')
+
+statement ok
+INSERT INTO employees (emp_id, emp_name, dept_id) VALUES
+(1, 'Alice', 1),
+(2, 'Bob', 2),
+(3, 'Charlie', NULL),
+(4, 'Tom', 1)
+
+
+statement ok
+SELECT
+    e.emp_name AS EmployeeName,
+    d.dept_name AS DepartmentName
+FROM
+    employees e
+LEFT JOIN
+    departments d ON e.dept_id = d.dept_id
+ORDER BY
+    e.emp_id

@@ -57,7 +57,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	row_matcher_no_match_sel.Initialize(true, layout, predicates);
 
 	// todo: What happens if there is a predicate that is dependent on the probe side? Need to filter this out
-	row_matcher_build.Initialize(false, layout, predicates);
+	row_matcher_build.Initialize(true, layout, predicates);
 
 	const auto &offsets = layout.GetOffsets();
 	tuple_size = offsets[condition_types.size() + build_types.size()];
@@ -95,7 +95,8 @@ idx_t JoinHashTable::ApplyBitmask(hash_t hash) const {
 	return hash & bitmask;
 }
 
-void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, Vector &hashes_v, const SelectionVector &sel, idx_t count, Vector &pointers) {
+void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, Vector &hashes_v,
+                                   const SelectionVector &sel, idx_t count, Vector &pointers) {
 	UnifiedVectorFormat hashes_v_unified;
 	hashes_v.ToUnifiedFormat(count, hashes_v_unified);
 
@@ -116,14 +117,15 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 		auto hash = hash_data[hash_index];
 
 		auto ht_offset = ApplyBitmask(hash);
-		ht_offsets[i] = ht_offset;
-		hash_salts[i] = aggr_ht_entry_t::ExtractSalt(hash);
+		ht_offsets[row_index] = ht_offset;
+		hash_salts[row_index] = aggr_ht_entry_t::ExtractSalt(hash);
 	}
 
 	idx_t remaining_entries = count;
 
-	// we start out with all entries [0, 1, 2, ..., groups.size()]
-	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
+	// Create a pointer to the original selection vector, the selection vector will not be altered but the pointer will
+	// be updated to point to the no_match_sel vector if there are no matches found
+	const SelectionVector *sel_vector = &sel;
 
 	// This vector will select all rows we need to compare
 	SelectionVector entry_compare_sel_vector(STANDARD_VECTOR_SIZE);
@@ -140,23 +142,20 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 		// a new list
 		for (idx_t i = 0; i < remaining_entries; i++) {
 
-			const auto entry_index = sel_vector->get_index(i);
-			auto &ht_offset = ht_offsets[entry_index];
-
-			auto hash_index = hashes_v_unified.sel->get_index(entry_index);
-			auto hash = hash_data[hash_index];
+			const auto row_index = sel_vector->get_index(i);
+			auto &ht_offset = ht_offsets[row_index];
 
 			// This loop either stops if an empty entry is found or if the value to insert needs to be compared
 			// with a row for potential insertion
-			while (true){
+			while (true) {
 				aggr_ht_entry_t &entry = entries[ht_offset];
 
 				if (entry.IsOccupied()) {
 
-					auto salt = hash_salts[entry_index];
+					auto salt = hash_salts[row_index];
 					if (entry.GetSalt() == salt) {
 						// Same salt, compare group keys
-						entry_compare_sel_vector.set_index(need_compare_count, entry_index);
+						entry_compare_sel_vector.set_index(need_compare_count, row_index);
 						need_compare_count++;
 						break;
 					} else {
@@ -168,7 +167,7 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 						continue;
 					}
 				} else { // entry is not occupied, this means there is no match for the probing row
-					pointers_data[entry_index] = nullptr;
+					pointers_data[row_index] = nullptr;
 					break;
 				}
 			}
@@ -184,8 +183,9 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 			}
 
 			// Perform row comparisons
-			idx_t match_count = row_matcher_build.Match(keys, key_state.vector_data, entry_compare_sel_vector, need_compare_count, layout,
-			                                            row_ptr_insert_to_v, &no_match_sel, no_match_count);
+			idx_t match_count =
+			    row_matcher_build.Match(keys, key_state.vector_data, entry_compare_sel_vector, need_compare_count,
+			                            layout, row_ptr_insert_to_v, &no_match_sel, no_match_count);
 
 			// Set a pointer to the matching row
 			for (idx_t i = 0; i < match_count; i++) {
@@ -381,7 +381,6 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkSt
 	Vector hash_salts_v(LogicalType::UBIGINT);
 	Vector row_ptr_insert_to_v(LogicalType::POINTER);
 
-
 	// the offset for each row to insert
 	auto ht_offsets = FlatVector::GetData<idx_t>(ht_offsets_v);
 	auto hash_salts = FlatVector::GetData<idx_t>(hash_salts_v);
@@ -419,7 +418,7 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkSt
 
 			// This loop either stops if an empty entry is found or if the value to insert needs to be compared
 			// with a row for potential insertion
-			while (true){
+			while (true) {
 				aggr_ht_entry_t &entry = entries[ht_offset];
 
 				if (entry.IsOccupied()) {
@@ -455,7 +454,7 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkSt
 
 			// Get the data for the rows that need to be compared
 			DataChunk lhs_data;
-			data_collection->InitializeChunk(lhs_data);  // makes sure DataChunk has the right format
+			data_collection->InitializeChunk(lhs_data); // makes sure DataChunk has the right format
 
 			// makes sure DataChunk has the right size, we will use the same index space for the chunk as for the
 			// overall hashes_v so make sure they have the same size. The DataChunk will however only be sparsely filled
@@ -482,7 +481,8 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkSt
 			}
 
 			// Perform row comparisons
-			idx_t match_count = row_matcher_build.Match(lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count, layout,
+			idx_t match_count =
+			    row_matcher_build.Match(lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count, layout,
 			                            row_ptr_insert_to_v, &no_match_sel, no_match_count);
 
 			// Insert the rows that match
@@ -563,7 +563,6 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 
 		InsertHashes(hashes, count, chunkState, parallel);
 	} while (iterator.Next());
-
 }
 
 unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys, TupleDataChunkState &key_state,

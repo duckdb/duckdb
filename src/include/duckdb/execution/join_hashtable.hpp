@@ -57,7 +57,6 @@ private:
    The pointers are either NULL if the cell is free or point to the start of the linked list.
 */
 
-
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
@@ -223,8 +222,8 @@ private:
 	inline idx_t ApplyBitmask(hash_t hash) const;
 
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing
-	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, Vector &hashes_v, const SelectionVector &sel, idx_t count, Vector &pointers);
-
+	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, Vector &hashes_v, const SelectionVector &sel,
+	                    idx_t count, Vector &pointers);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
@@ -245,7 +244,7 @@ private:
 
 	//! The hash map of the HT, created after finalization
 	AllocatedData hash_map;
-	aggr_ht_entry_t *entries;  // todo: Maybe rename to ht_entry_t and put into separate file
+	aggr_ht_entry_t *entries; // todo: Maybe rename to ht_entry_t and put into separate file
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 
