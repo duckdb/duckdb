@@ -166,7 +166,7 @@ public:
 		return entry.types.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry.aliases[col];
+		return col < entry.aliases.size() ? entry.aliases[col] : entry.names[col];
 	}
 	const LogicalType &ColumnType(idx_t col) override {
 		return entry.types[col];

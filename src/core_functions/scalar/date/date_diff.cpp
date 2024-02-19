@@ -202,22 +202,30 @@ int64_t DateDiff::MicrosecondsOperator::Operation(timestamp_t startdate, timesta
 
 template <>
 int64_t DateDiff::MillisecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochMs(enddate) - Timestamp::GetEpochMs(startdate);
 }
 
 template <>
 int64_t DateDiff::SecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochSeconds(enddate) - Timestamp::GetEpochSeconds(startdate);
 }
 
 template <>
 int64_t DateDiff::MinutesOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochSeconds(enddate) / Interval::SECS_PER_MINUTE -
 	       Timestamp::GetEpochSeconds(startdate) / Interval::SECS_PER_MINUTE;
 }
 
 template <>
 int64_t DateDiff::HoursOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
+	D_ASSERT(Timestamp::IsFinite(startdate));
+	D_ASSERT(Timestamp::IsFinite(enddate));
 	return Timestamp::GetEpochSeconds(enddate) / Interval::SECS_PER_HOUR -
 	       Timestamp::GetEpochSeconds(startdate) / Interval::SECS_PER_HOUR;
 }

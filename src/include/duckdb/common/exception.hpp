@@ -222,11 +222,17 @@ public:
 class IOException : public Exception {
 public:
 	DUCKDB_API explicit IOException(const string &msg);
+	DUCKDB_API explicit IOException(const string &msg, const unordered_map<string, string> &extra_info);
 	explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
 	}
 
 	template <typename... Args>
 	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
+	}
+
+	template <typename... Args>
+	explicit IOException(const string &msg, const unordered_map<string, string> &extra_info, Args... params)
+	    : IOException(ConstructMessage(msg, params...), extra_info) {
 	}
 };
 
@@ -333,6 +339,8 @@ class TypeMismatchException : public Exception {
 public:
 	DUCKDB_API TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
+	DUCKDB_API TypeMismatchException(optional_idx error_location, const LogicalType &type_1, const LogicalType &type_2,
+	                                 const string &msg);
 	DUCKDB_API
 	TypeMismatchException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };

@@ -100,6 +100,11 @@ public:
 	//! Serialize this secret
 	virtual void Serialize(Serializer &serializer) const;
 
+	virtual unique_ptr<const BaseSecret> Clone() const {
+		D_ASSERT(typeid(BaseSecret) == typeid(*this));
+		return make_uniq<BaseSecret>(*this);
+	}
+
 	//! Getters
 	const vector<string> &GetScope() const {
 		return prefix_paths;
@@ -186,6 +191,10 @@ public:
 		}
 
 		return duckdb::unique_ptr_cast<TYPE, BaseSecret>(std::move(result));
+	}
+
+	unique_ptr<const BaseSecret> Clone() const override {
+		return make_uniq<KeyValueSecret>(*this);
 	}
 
 	//! the map of key -> values that make up the secret

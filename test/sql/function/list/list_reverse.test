@@ -155,7 +155,7 @@ WITH example AS (
 )
 SELECT
   ${f}(arr) AS reverse_arr
-FROM example;
+FROM example ORDER BY length(reverse_arr) DESC;
 ----
 [3, 2, 1]
 [5, 4]

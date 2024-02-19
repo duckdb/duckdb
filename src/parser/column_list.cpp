@@ -40,7 +40,7 @@ void ColumnList::AddToNameMap(ColumnDefinition &col) {
 		idx_t index = 1;
 		string base_name = col.Name();
 		while (name_map.find(col.Name()) != name_map.end()) {
-			col.SetName(base_name + ":" + to_string(index++));
+			col.SetName(base_name + "_" + to_string(index++));
 		}
 	} else {
 		if (name_map.find(col.Name()) != name_map.end()) {

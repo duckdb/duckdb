@@ -298,7 +298,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		new_block->offset = 0;
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
-		handle = buffer_manager.Allocate(alloc_size, false, &block);
+		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size, false, &block);
 		state.overflow_blocks.insert(make_pair(block->BlockId(), reference<StringBlock>(*new_block)));
 		new_block->block = std::move(block);
 		new_block->next = std::move(state.head);
@@ -342,7 +342,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, length);
 		// allocate a buffer to store the compressed string
 		// TODO: profile this to check if we need to reuse buffer
-		auto target_handle = buffer_manager.Allocate(alloc_size);
+		auto target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size);
 		auto target_ptr = target_handle.Ptr();
 
 		// now append the string to the single buffer

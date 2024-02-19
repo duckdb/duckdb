@@ -113,7 +113,8 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	}
 
 	// Deserialise into the selected locations
-	RowOperations::HeapGather(col, count, col_sel, col_no, data_locations.get(), mask_locations.get());
+	NestedValidity parent_validity(mask_locations.get(), col_no);
+	RowOperations::HeapGather(col, count, col_sel, data_locations.get(), &parent_validity);
 }
 
 void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,

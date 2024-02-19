@@ -212,6 +212,8 @@ public:
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
+	duckdb::pyarrow::Table ToArrowTableInternal(idx_t batch_size, bool to_polars);
+
 	PolarsDataFrame ToPolars(idx_t batch_size);
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
@@ -260,6 +262,8 @@ public:
 	string Explain(ExplainType type);
 
 	static bool IsRelation(const py::object &object);
+
+	bool CanBeRegisteredBy(Connection &con);
 
 	Relation &GetRel();
 
