@@ -54,7 +54,8 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL);
+			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL,
+			                                     QueryErrorContext(), true);
 			if (schema_obj) {
 				auto &attached = schema_obj->catalog.GetAttached();
 				throw BinderException(

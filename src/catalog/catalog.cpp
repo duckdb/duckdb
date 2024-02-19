@@ -333,7 +333,9 @@ SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const string &nam
 }
 
 optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const string &schema_name,
-                                                    OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+                                                    OnEntryNotFound if_not_found, QueryErrorContext error_context,
+                                                    bool system_lookup) {
+	std::ignore = system_lookup;
 	return GetSchema(GetCatalogTransaction(context), schema_name, if_not_found, error_context);
 }
 
@@ -739,12 +741,12 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 
 optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const string &catalog_name,
                                                     const string &schema_name, OnEntryNotFound if_not_found,
-                                                    QueryErrorContext error_context) {
+                                                    QueryErrorContext error_context, bool system_lookup) {
 	auto entries = GetCatalogEntries(context, catalog_name, schema_name);
 	for (idx_t i = 0; i < entries.size(); i++) {
 		auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
 		auto &catalog = Catalog::GetCatalog(context, entries[i].catalog);
-		auto result = catalog.GetSchema(context, schema_name, on_not_found, error_context);
+		auto result = catalog.GetSchema(context, schema_name, on_not_found, error_context, system_lookup);
 		if (result) {
 			return result;
 		}
