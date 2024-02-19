@@ -4,6 +4,17 @@ import time
 
 import argparse
 
+
+def valid_timeout(value):
+    try:
+        timeout_float = float(value)
+        if timeout_float <= 0:
+            raise argparse.ArgumentTypeError("Timeout value must be a positive float")
+        return timeout_float
+    except ValueError:
+        raise argparse.ArgumentTypeError("Timeout value must be a float")
+
+
 parser = argparse.ArgumentParser(description='Run tests one by one with optional flags.')
 parser.add_argument('unittest_program', help='Path to the unittest program')
 parser.add_argument('--no-exit', action='store_true', help='Do not exit after running tests')
@@ -11,6 +22,13 @@ parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
+parser.add_argument(
+    '--timeout',
+    action='store',
+    help='Add an optional timeout for each test (in seconds)',
+    default=None,
+    type=valid_timeout,
+)
 
 args, extra_args = parser.parse_known_args()
 
@@ -23,6 +41,7 @@ no_exit = args.no_exit
 profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
+timeout = args.timeout
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -75,7 +94,16 @@ for test_number, test_case in enumerate(test_cases):
     if not profile:
         print(f"[{test_number}/{test_count}]: {test_case}", end="")
     start = time.time()
-    res = subprocess.run([unittest_program, test_case], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        res = subprocess.run(
+            [unittest_program, test_case], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout
+        )
+    except subprocess.TimeoutExpired as e:
+        print(" (TIMED OUT)", flush=True)
+        if not no_exit:
+            break
+        continue
+
     stdout = res.stdout.decode('utf8')
     stderr = res.stderr.decode('utf8')
     end = time.time()
