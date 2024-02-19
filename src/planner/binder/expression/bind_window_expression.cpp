@@ -145,7 +145,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		//	If the frame is a RANGE frame and the type is a time,
 		//	then we have to convert the time to a timestamp to avoid wrapping.
-		if (!is_range) {
+		if (!is_range || error.HasError()) {
 			continue;
 		}
 		auto &order_expr = order.expression;

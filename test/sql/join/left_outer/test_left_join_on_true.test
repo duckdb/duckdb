@@ -51,7 +51,7 @@ ORDER BY 1, 2
 2	NULL
 4	NULL
 
-query II rowsort
+query II
 WITH t AS (
   SELECT 1 AS r, ARRAY[1, 2, 3] AS a
   UNION SELECT 2 AS r, ARRAY[4] AS a

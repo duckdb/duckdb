@@ -323,6 +323,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	Vector &list_or_str_vector = result;
 	// this ensures that we do not change the input chunk
 	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
+
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
 		auto &result_validity = FlatVector::Validity(result);
 		result_validity.SetInvalid(0);
