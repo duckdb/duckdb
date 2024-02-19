@@ -250,7 +250,12 @@ std::string GetTesterDirectory() {
 	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	std::string current_directory = fs->GetWorkingDirectory() + "test/sql/storage_version/storage_version.db";
 	if (!fs->DirectoryExists(current_directory)) {
-		return fs->GetWorkingDirectory() + "/../../../../test/sql/storage_version/storage_version.db";
+		auto s = fs->GetWorkingDirectory() + "/../../../../test/sql/storage_version/storage_version.db";
+		std::cout << s << std::endl;
+		if (!fs->DirectoryExists(s)) {
+			throw std::runtime_error("Could not find the test directory");
+		}
+		return s;
 	}
 	return current_directory;
 }
