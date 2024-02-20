@@ -34,6 +34,7 @@ DBConfig::DBConfig() {
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
+	secret_manager = make_uniq<SecretManager>();
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
@@ -328,8 +329,6 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
-	} else {
-		config.secret_manager = make_uniq<SecretManager>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();

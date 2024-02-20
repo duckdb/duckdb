@@ -14,11 +14,18 @@ static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
 	if (op.IsSource()) {
 		return op.SourceOrder();
 	}
+
+	idx_t child_idx = 0;
 	for (auto &child : op.children) {
+		// Do not take the materialization phase of physical CTEs into account
+		if (op.type == PhysicalOperatorType::CTE && child_idx == 0) {
+			continue;
+		}
 		auto child_preservation = OrderPreservationRecursive(*child);
 		if (child_preservation != OrderPreservationType::INSERTION_ORDER) {
 			return child_preservation;
 		}
+		child_idx++;
 	}
 	return OrderPreservationType::INSERTION_ORDER;
 }

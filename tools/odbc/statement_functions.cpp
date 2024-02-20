@@ -6,6 +6,7 @@
 #include "descriptor.hpp"
 #include "parameter_descriptor.hpp"
 
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -38,6 +39,7 @@ using duckdb::SQLStateType;
 using duckdb::Store;
 using duckdb::string;
 using duckdb::string_t;
+using duckdb::Timestamp;
 using duckdb::timestamp_t;
 using duckdb::vector;
 
@@ -190,7 +192,12 @@ template <class CAST_OP, typename TARGET_TYPE, class CAST_FUNC = std::function<t
 static bool CastTimestampValue(duckdb::OdbcHandleStmt *hstmt, const duckdb::Value &val, TARGET_TYPE &target,
                                CAST_FUNC cast_timestamp_fun) {
 	try {
-		timestamp_t timestamp = cast_timestamp_fun(val.GetValue<int64_t>());
+		auto input = val.GetValue<int64_t>();
+		auto timestamp = timestamp_t(input);
+		// FIXME: add test for casting infinity/-infinity timestamp values
+		if (Timestamp::IsFinite(timestamp)) {
+			timestamp = cast_timestamp_fun(input);
+		}
 		target = CAST_OP::template Operation<timestamp_t, TARGET_TYPE>(timestamp);
 		return true;
 	} catch (std::exception &ex) {
@@ -399,7 +406,8 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 		} else {
 			hugeint_t huge_int;
 			string error_message;
-			if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, &error_message,
+			CastParameters parameters(false, &error_message);
+			if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, parameters,
 			                                                              numeric->precision, numeric->scale)) {
 				return SQL_ERROR;
 			}
@@ -527,18 +535,38 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 	case SQL_C_TYPE_TIMESTAMP: {
 		timestamp_t timestamp;
 		switch (val.type().id()) {
-		case LogicalTypeId::TIMESTAMP_SEC:
-			timestamp = duckdb::Timestamp::FromEpochSeconds(val.GetValue<int64_t>());
+		case LogicalTypeId::TIMESTAMP_SEC: {
+			timestamp = timestamp_t(val.GetValue<int64_t>());
+			// FIXME: add test for casting infinity/-infinity timestamp values
+			if (!Timestamp::IsFinite(timestamp)) {
+				break;
+			}
+			timestamp = duckdb::Timestamp::FromEpochSeconds(timestamp.value);
 			break;
-		case LogicalTypeId::TIMESTAMP_MS:
-			timestamp = duckdb::Timestamp::FromEpochMs(val.GetValue<int64_t>());
+		}
+		case LogicalTypeId::TIMESTAMP_MS: {
+			timestamp = timestamp_t(val.GetValue<int64_t>());
+			// FIXME: add test for casting infinity/-infinity timestamp values
+			if (!Timestamp::IsFinite(timestamp)) {
+				break;
+			}
+			timestamp = duckdb::Timestamp::FromEpochMs(timestamp.value);
 			break;
-		case LogicalTypeId::TIMESTAMP:
-			timestamp = duckdb::Timestamp::FromEpochMicroSeconds(val.GetValue<int64_t>());
+		}
+		case LogicalTypeId::TIMESTAMP: {
+			timestamp = timestamp_t(val.GetValue<int64_t>());
+			timestamp = duckdb::Timestamp::FromEpochMicroSeconds(timestamp.value);
 			break;
-		case LogicalTypeId::TIMESTAMP_NS:
-			timestamp = duckdb::Timestamp::FromEpochNanoSeconds(val.GetValue<int64_t>());
+		}
+		case LogicalTypeId::TIMESTAMP_NS: {
+			timestamp = timestamp_t(val.GetValue<int64_t>());
+			// FIXME: add test for casting infinity/-infinity timestamp values
+			if (!Timestamp::IsFinite(timestamp)) {
+				break;
+			}
+			timestamp = duckdb::Timestamp::FromEpochNanoSeconds(timestamp.value);
 			break;
+		}
 		case LogicalTypeId::DATE: {
 			auto date_input = val.GetValue<date_t>();
 			if (!TryCast::Operation<date_t, timestamp_t>(date_input, timestamp)) {

@@ -8,7 +8,8 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -23,6 +24,7 @@ namespace duckdb {
 static string custom_test_directory;
 static int debug_initialize_value = -1;
 static bool single_threaded = false;
+static case_insensitive_set_t required_requires;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -87,6 +89,14 @@ void SetDebugInitialize(int value) {
 
 void SetSingleThreaded() {
 	single_threaded = true;
+}
+
+void AddRequire(string require) {
+	required_requires.insert(require);
+}
+
+bool IsRequired(string require) {
+	return required_requires.count(require);
 }
 
 string GetTestDirectory() {

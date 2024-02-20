@@ -1,0 +1,19 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [ingestion]
+
+name Q${table_name}
+group ingestion
+subgroup tpch
+
+require parquet
+
+require tpch
+
+load benchmark/ingestion/in_memory_db/tpch/native/load_native.sql
+
+run
+create table ${table_name}_ingested as select * from ${table_name}_${format};
+
+cleanup
+DROP TABLE ${table_name}_ingested;

@@ -118,6 +118,13 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 	return result;
 }
 
+unique_ptr<BoundTableRef> Binder::BindJoin(Binder &parent_binder, TableRef &ref) {
+	unnamed_subquery_index = parent_binder.unnamed_subquery_index;
+	auto result = Bind(ref);
+	parent_binder.unnamed_subquery_index = unnamed_subquery_index;
+	return result;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
@@ -126,10 +133,10 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	auto &right_binder = *result->right_binder;
 
 	result->type = ref.type;
-	result->left = left_binder.Bind(*ref.left);
+	result->left = left_binder.BindJoin(*this, *ref.left);
 	{
 		LateralBinder binder(left_binder, context);
-		result->right = right_binder.Bind(*ref.right);
+		result->right = right_binder.BindJoin(*this, *ref.right);
 		bool is_lateral = false;
 		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
 		// Ignore the correlated columns in the left binder, flattening handles those correlations

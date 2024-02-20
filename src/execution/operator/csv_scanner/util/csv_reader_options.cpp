@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/string_util.hpp"
