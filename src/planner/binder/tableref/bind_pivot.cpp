@@ -560,6 +560,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		expressions.reserve(unpivot.entries.size());
 		for (auto &entry : unpivot.entries) {
 			auto colref = make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString());
+			colref->query_location = ref.query_location;
 			expressions.push_back(std::move(colref));
 		}
 		unpivot_expressions.push_back(std::move(expressions));
@@ -580,7 +581,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		                      ref.unpivot_names.size(), unpivot_expressions.size());
 	}
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
-		auto list_expr = make_uniq<FunctionExpression>("list_value", std::move(unpivot_expressions[i]));
+		auto list_expr = make_uniq<FunctionExpression>("unpivot_list", std::move(unpivot_expressions[i]));
 		vector<unique_ptr<ParsedExpression>> unnest_val_children;
 		unnest_val_children.push_back(std::move(list_expr));
 		auto unnest_val_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_val_children));

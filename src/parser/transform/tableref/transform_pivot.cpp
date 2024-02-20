@@ -122,6 +122,7 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 	}
 	result->include_nulls = root.include_nulls;
 	result->alias = TransformAlias(root.alias, result->column_name_alias);
+	SetQueryLocation(*result, root.location);
 	return std::move(result);
 }
 

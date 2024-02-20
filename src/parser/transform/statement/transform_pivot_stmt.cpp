@@ -209,6 +209,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		pivot_ref->groups = TransformStringList(pivot->groups);
 	}
 	pivot_ref->pivots = std::move(columns);
+	SetQueryLocation(*pivot_ref, pivot->location);
 	select_node->from_table = std::move(pivot_ref);
 	// transform order by/limit modifiers
 	TransformModifiers(select, *select_node);
