@@ -10,6 +10,9 @@ statement ok
 CALL dbgen(sf=1)
 
 statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
 EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION_CONFIG {footer_key: 'key128'})
 
 load :memory:
