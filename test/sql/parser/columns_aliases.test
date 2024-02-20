@@ -1,9 +1,9 @@
-# name: test/sql/parser/columns_maintain_names.test
-# description: Test the columns expression
+# name: test/sql/parser/columns_aliases.test
+# description: Test COLUMNS(*) aliases
 # group: [parser]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE integers AS SELECT 42 i, 84 j UNION ALL SELECT 13, 14
