@@ -142,8 +142,8 @@ public:
 		const auto buffer_idx = BlockIndex();
 		auto const temp = Load<uint32_t>(buffer + buffer_idx);
 
-		const uint8_t result =
-		    (temp & LeadingZeroBufferConstants::MASKS[counter & 7]) >> LeadingZeroBufferConstants::SHIFTS[counter & 7];
+		const uint8_t result = UnsafeNumericCast<uint8_t>((temp & LeadingZeroBufferConstants::MASKS[counter & 7]) >>
+		                                                  LeadingZeroBufferConstants::SHIFTS[counter & 7]);
 		counter++;
 		return result;
 	}

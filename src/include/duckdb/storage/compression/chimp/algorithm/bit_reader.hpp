@@ -116,30 +116,30 @@ public:
 	inline T ReadBytes(const uint8_t &remainder) {
 		T result = 0;
 		if (BYTES > 0) {
-			result = result << 8 | InnerReadByte(0);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(0));
 		}
 		if (BYTES > 1) {
-			result = result << 8 | InnerReadByte(1);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(1));
 		}
 		if (BYTES > 2) {
-			result = result << 8 | InnerReadByte(2);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(2));
 		}
 		if (BYTES > 3) {
-			result = result << 8 | InnerReadByte(3);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(3));
 		}
 		if (BYTES > 4) {
-			result = result << 8 | InnerReadByte(4);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(4));
 		}
 		if (BYTES > 5) {
-			result = result << 8 | InnerReadByte(5);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(5));
 		}
 		if (BYTES > 6) {
-			result = result << 8 | InnerReadByte(6);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(6));
 		}
 		if (BYTES > 7) {
-			result = result << 8 | InnerReadByte(7);
+			result = UnsafeNumericCast<T>(result << 8 | InnerReadByte(7));
 		}
-		result = result << remainder | InnerRead(remainder, BYTES);
+		result = UnsafeNumericCast<T>(result << remainder | InnerRead(remainder, BYTES));
 		index += (BYTES << 3) + remainder;
 		return result;
 	}

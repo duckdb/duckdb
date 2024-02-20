@@ -76,6 +76,4 @@ OUT NumericCast(IN val) {
 	return UnsafeNumericCast<OUT, IN>(val);
 }
 
-// TOOD cast & UnsafeNumericCast
-
 } // namespace duckdb

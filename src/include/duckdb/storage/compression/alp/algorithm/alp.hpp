@@ -306,7 +306,7 @@ struct AlpCompression {
 			state.encoded_integers[i] = encoded_value;
 			//! We detect exceptions using a predicated comparison
 			auto is_exception = (decoded_value != actual_value);
-			state.exceptions_positions[exceptions_idx] = i;
+			state.exceptions_positions[exceptions_idx] = UnsafeNumericCast<uint16_t>(i);
 			exceptions_idx += is_exception;
 		}
 
