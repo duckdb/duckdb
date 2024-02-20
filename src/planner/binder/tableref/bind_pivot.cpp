@@ -477,26 +477,16 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 		UnpivotEntry unpivot_entry;
 		unpivot_entry.alias = entry.alias;
 		for (auto &val : entry.values) {
-			unpivot_entry.expressions.push_back(make_uniq<ColumnRefExpression>(val.ToString()));
+			auto column_name = val.ToString();
+			if (column_name.empty()) {
+				throw BinderException("UNPIVOT - empty column name not supported");
+			}
+			unpivot_entry.expressions.push_back(make_uniq<ColumnRefExpression>(column_name));
 		}
 		unpivot_entries.push_back(std::move(unpivot_entry));
 		return;
 	}
 	D_ASSERT(entry.values.empty());
-	if (entry.expr->type == ExpressionType::FUNCTION) {
-		auto &function = entry.expr->Cast<FunctionExpression>();
-		if (function.function_name == "row") {
-			// ROW function at top-level
-			// special case for multi-level pivot
-			UnpivotEntry unpivot_entry;
-			if (!function.alias.empty()) {
-				unpivot_entry.alias = function.alias;
-			}
-			unpivot_entry.expressions = std::move(function.children);
-			unpivot_entries.push_back(std::move(unpivot_entry));
-			return;
-		}
-	}
 	// expand star expressions (if any)
 	vector<unique_ptr<ParsedExpression>> star_columns;
 	child_binder.ExpandStarExpression(std::move(entry.expr), star_columns);
@@ -517,6 +507,9 @@ void Binder::ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &re
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		result.push_back(colref.GetColumnName());
 		return;
+	}
+	if (expr.type == ExpressionType::SUBQUERY) {
+		throw BinderException(expr, "UNPIVOT list cannot contain subqueries");
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { ExtractUnpivotColumnName(child, result); });
@@ -550,13 +543,13 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 
 				throw BinderException(
 				    *unpivot_expr,
-				    "Unpivot clause must contain exactly one column - expression \"%s\" does not contain any",
+				    "UNPIVOT clause must contain exactly one column - expression \"%s\" does not contain any",
 				    unpivot_expr->ToString());
 			}
 			if (result.size() > 1) {
 				throw BinderException(
 				    *unpivot_expr,
-				    "Unpivot clause must contain exactly one column - expression \"%s\" contains multiple (%s)",
+				    "UNPIVOT clause must contain exactly one column - expression \"%s\" contains multiple (%s)",
 				    unpivot_expr->ToString(), StringUtil::Join(result, ", "));
 			}
 			handled_columns.insert(result[0]);
