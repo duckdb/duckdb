@@ -2500,7 +2500,7 @@ bool TryCastDecimalToNumeric(SRC input, DST &result, string *error_message, uint
 	const auto fNegate = int64_t(input < 0);
 	const auto rounding = ((power ^ -fNegate) + fNegate) / 2;
 	const auto scaled_value = (input + rounding) / power;
-	if (!TryCast::Operation<SRC, DST>(scaled_value, result)) {
+	if (!TryCast::Operation<SRC, DST>(UnsafeNumericCast<SRC>(scaled_value), result)) {
 		string error = StringUtil::Format("Failed to cast decimal value %d to type %s", scaled_value, GetTypeId<DST>());
 		HandleCastError::AssignError(error, error_message);
 		return false;
