@@ -203,10 +203,12 @@ private:
 	unordered_set<string> table_names;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
+	//! Unnamed subquery index
+	idx_t unnamed_subquery_index = 1;
 
 private:
 	//! Get the root binder (binder with no parent)
-	Binder *GetRootBinder();
+	Binder &GetRootBinder();
 	//! Determine the depth of the binder
 	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
@@ -271,6 +273,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
+	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
