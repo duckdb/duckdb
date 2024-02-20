@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/options/csv_option.hpp
+// duckdb/execution/operator/csv_scanner/csv_option.hpp
 //
 //
 //===----------------------------------------------------------------------===//

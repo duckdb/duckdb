@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/options/state_machine_options.hpp
+// duckdb/execution/operator/csv_scanner/state_machine_options.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 
 namespace duckdb {
 //! Struct that holds the configuration of a CSV State Machine
