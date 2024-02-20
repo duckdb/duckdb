@@ -1,7 +1,7 @@
 #include "duckdb/execution/index/art/leaf.hpp"
-
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -25,7 +25,7 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 
 		auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 
-		leaf.count = MinValue((idx_t)Node::LEAF_SIZE, count);
+		leaf.count = UnsafeNumericCast<uint8_t>(MinValue((idx_t)Node::LEAF_SIZE, count));
 
 		for (idx_t i = 0; i < leaf.count; i++) {
 			leaf.row_ids[i] = row_ids[copy_count + i];

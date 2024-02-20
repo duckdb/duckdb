@@ -1,7 +1,7 @@
 #include "duckdb/execution/index/art/node48.hpp"
-
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -50,7 +50,7 @@ Node48 &Node48::GrowNode16(ART &art, Node &node48, Node &node16) {
 	}
 
 	for (idx_t i = 0; i < n16.count; i++) {
-		n48.child_index[n16.key[i]] = i;
+		n48.child_index[n16.key[i]] = UnsafeNumericCast<uint8_t>(i);
 		n48.children[i] = n16.children[i];
 	}
 
@@ -120,7 +120,7 @@ void Node48::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 			}
 		}
 		n48.children[child_pos] = child;
-		n48.child_index[byte] = child_pos;
+		n48.child_index[byte] = UnsafeNumericCast<uint8_t>(child_pos);
 		n48.count++;
 
 	} else {
@@ -167,7 +167,7 @@ optional_ptr<Node> Node48::GetChildMutable(const uint8_t byte) {
 optional_ptr<const Node> Node48::GetNextChild(uint8_t &byte) const {
 	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
-			byte = i;
+			byte = UnsafeNumericCast<uint8_t>(i);
 			D_ASSERT(children[child_index[i]].HasMetadata());
 			return &children[child_index[i]];
 		}
@@ -178,7 +178,7 @@ optional_ptr<const Node> Node48::GetNextChild(uint8_t &byte) const {
 optional_ptr<Node> Node48::GetNextChildMutable(uint8_t &byte) {
 	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
-			byte = i;
+			byte = UnsafeNumericCast<uint8_t>(i);
 			D_ASSERT(children[child_index[i]].HasMetadata());
 			return &children[child_index[i]];
 		}

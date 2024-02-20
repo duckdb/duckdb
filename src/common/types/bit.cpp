@@ -1,4 +1,5 @@
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/bit.hpp"
@@ -129,7 +130,7 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 		}
 	}
 	if (padded_byte != 0) {
-		*(output++) = (8 - padded_byte); // the first byte contains the number of padded zeroes
+		*(output++) = UnsafeNumericCast<char>((8 - padded_byte)); // the first byte contains the number of padded zeroes
 	}
 	*(output++) = byte;
 
@@ -293,7 +294,7 @@ void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
 
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
-	char shift_byte = 1 << (7 - (n % 8));
+	char shift_byte = UnsafeNumericCast<char>(1 << (7 - (n % 8)));
 	if (new_value == 0) {
 		shift_byte = ~shift_byte;
 		buf[idx] &= shift_byte;

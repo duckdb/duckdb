@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -66,7 +67,7 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVecto
 	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		result_data[idx] = value + increment * idx;
+		result_data[idx] = UnsafeNumericCast<T>(value + increment * idx);
 	}
 }
 

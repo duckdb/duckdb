@@ -4,6 +4,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -165,7 +166,7 @@ string Hugeint::ToString(hugeint_t input) {
 			break;
 		}
 		input = Hugeint::DivModPositive(input, 10, remainder);
-		result = string(1, '0' + remainder) + result; // NOLINT
+		result = string(1, UnsafeNumericCast<char>('0' + remainder)) + result; // NOLINT
 	}
 	if (result.empty()) {
 		// value is zero

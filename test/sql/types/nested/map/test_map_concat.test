@@ -1,8 +1,7 @@
 # name: test/sql/types/nested/map/test_map_concat.test
 # group: [map]
 
-#statement ok
-#pragma enable_verification;
+# NOTE: PRAGMA enable_verification significantly increases the duration of this test
 
 # Basic use, 2 maps, same type, no nulls
 query I

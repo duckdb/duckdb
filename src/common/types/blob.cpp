@@ -2,6 +2,7 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
@@ -69,7 +70,7 @@ string Blob::ToString(string_t blob) {
 	return string(buffer.get(), str_len);
 }
 
-bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
+bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, CastParameters &parameters) {
 	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
 	str_len = 0;
@@ -78,14 +79,14 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 			if (i + 3 >= len) {
 				string error = "Invalid hex escape code encountered in string -> blob conversion: "
 				               "unterminated escape code at end of blob";
-				HandleCastError::AssignError(error, error_message);
+				HandleCastError::AssignError(error, parameters);
 				return false;
 			}
 			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 || Blob::HEX_MAP[data[i + 3]] < 0) {
 				string error =
 				    StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion: %s",
 				                       string(const_char_ptr_cast(data) + i, 4));
-				HandleCastError::AssignError(error, error_message);
+				HandleCastError::AssignError(error, parameters);
 				return false;
 			}
 			str_len++;
@@ -95,7 +96,7 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 		} else {
 			string error = "Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
 			               "must be escaped with hex codes (e.g. \\xAA)";
-			HandleCastError::AssignError(error, error_message);
+			HandleCastError::AssignError(error, parameters);
 			return false;
 		}
 	}
@@ -103,10 +104,15 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 }
 
 idx_t Blob::GetBlobSize(string_t str) {
-	string error_message;
+	CastParameters parameters;
+	return GetBlobSize(str, parameters);
+}
+
+idx_t Blob::GetBlobSize(string_t str, CastParameters &parameters) {
 	idx_t str_len;
-	if (!Blob::TryGetBlobSize(str, str_len, &error_message)) {
-		throw ConversionException(error_message);
+	auto result = Blob::TryGetBlobSize(str, str_len, parameters);
+	if (!result) {
+		throw InternalException("Blob::TryGetBlobSize failed but no exception was thrown!?");
 	}
 	return str_len;
 }
@@ -122,7 +128,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 			D_ASSERT(i + 3 < len);
 			D_ASSERT(byte_a >= 0 && byte_b >= 0);
 			D_ASSERT(data[i + 1] == 'x');
-			output[blob_idx++] = (byte_a << 4) + byte_b;
+			output[blob_idx++] = UnsafeNumericCast<data_t>((byte_a << 4) + byte_b);
 			i += 3;
 		} else if (data[i] <= 127) {
 			output[blob_idx++] = data_t(data[i]);
@@ -135,7 +141,12 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 }
 
 string Blob::ToBlob(string_t str) {
-	auto blob_len = GetBlobSize(str);
+	CastParameters parameters;
+	return Blob::ToBlob(str, parameters);
+}
+
+string Blob::ToBlob(string_t str, CastParameters &parameters) {
+	auto blob_len = GetBlobSize(str, parameters);
 	auto buffer = make_unsafe_uniq_array<char>(blob_len);
 	Blob::ToBlob(str, data_ptr_cast(buffer.get()));
 	return string(buffer.get(), blob_len);

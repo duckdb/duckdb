@@ -1,5 +1,5 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
-
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
@@ -205,7 +205,7 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 			validity_mask.SetInvalid(i);
 		} else {
 			// otherwise we add the value (minus 1) to the min value
-			data[i] = min_data + group_index - 1;
+			data[i] = UnsafeNumericCast<T>(min_data + group_index - 1);
 		}
 	}
 }

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.h"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -71,8 +72,8 @@ public:
 	}
 
 	inline uint8_t InnerReadByte(const uint8_t &offset) {
-		uint8_t result = input[ByteIndex() + offset] << BitIndex() |
-		                 ((input[ByteIndex() + offset + 1] & REMAINDER_MASKS[8 + BitIndex()]) >> (8 - BitIndex()));
+		uint8_t result = UnsafeNumericCast<uint8_t>(input[ByteIndex() + offset] << BitIndex() |
+		                 ((input[ByteIndex() + offset + 1] & REMAINDER_MASKS[8 + BitIndex()]) >> (8 - BitIndex())));
 		return result;
 	}
 

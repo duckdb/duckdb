@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -64,7 +65,7 @@ string Uhugeint::ToString(uhugeint_t input) {
 			break;
 		}
 		input = Uhugeint::DivMod(input, 10, remainder);
-		result = string(1, '0' + remainder.lower) + result; // NOLINT
+		result = string(1, UnsafeNumericCast<char>('0' + remainder.lower)) + result; // NOLINT
 	}
 	if (result.empty()) {
 		// value is zero

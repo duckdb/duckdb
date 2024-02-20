@@ -1,6 +1,6 @@
 #include "duckdb/execution/index/art/node256.hpp"
-
 #include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -109,7 +109,7 @@ optional_ptr<Node> Node256::GetChildMutable(const uint8_t byte) {
 optional_ptr<const Node> Node256::GetNextChild(uint8_t &byte) const {
 	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 		if (children[i].HasMetadata()) {
-			byte = i;
+			byte = UnsafeNumericCast<uint8_t>(i);
 			return &children[i];
 		}
 	}
@@ -119,7 +119,7 @@ optional_ptr<const Node> Node256::GetNextChild(uint8_t &byte) const {
 optional_ptr<Node> Node256::GetNextChildMutable(uint8_t &byte) {
 	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 		if (children[i].HasMetadata()) {
-			byte = i;
+			byte = UnsafeNumericCast<uint8_t>(i);
 			return &children[i];
 		}
 	}
