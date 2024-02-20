@@ -1,6 +1,6 @@
-#include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "catch.hpp"
 
 using namespace duckdb;
 using namespace std;
