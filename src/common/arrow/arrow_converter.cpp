@@ -129,10 +129,14 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "U";
+		if (options.produce_arrow_string_view) {
+			child.format = "vu";
 		} else {
-			child.format = "u";
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "U";
+			} else {
+				child.format = "u";
+			}
 		}
 		break;
 	case LogicalTypeId::DATE:
