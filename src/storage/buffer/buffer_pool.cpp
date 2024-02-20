@@ -36,7 +36,8 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
-      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), purge_active(false) {
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), purge_active(false),
+		pinned_buffers(0) {
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		memory_usage_per_tag[i] = 0;
 	}
@@ -113,29 +114,92 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 	return {true, std::move(r)};
 }
 
-idx_t BufferPool::PurgeIteration() {
-	// bulk dequeue
-	auto actually_dequeued = queue->q.try_dequeue_bulk(purge_nodes.begin(), BULK_PURGE_SIZE);
-
-	// retrieve all alive nodes that have been wrongly dequeued
-	idx_t alive_nodes = 0;
-	for (idx_t i = 0; i < actually_dequeued; i++) {
-		auto &node = purge_nodes[i];
-		auto handle = node.TryGetBlockHandle();
-		if (handle) {
-			purge_nodes[alive_nodes++] = std::move(node);
-		}
-	}
-
-	// bulk enqueue
-	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
-	return alive_nodes;
-}
+//idx_t BufferPool::PurgeIteration() {
+//	// bulk dequeue
+//	auto actually_dequeued = queue->q.try_dequeue_bulk(purge_nodes.begin(), BULK_PURGE_SIZE);
+//
+//	// retrieve all alive nodes that have been wrongly dequeued
+//	idx_t alive_nodes = 0;
+//	for (idx_t i = 0; i < actually_dequeued; i++) {
+//		auto &node = purge_nodes[i];
+//		auto handle = node.TryGetBlockHandle();
+//		if (handle) {
+//			purge_nodes[alive_nodes++] = std::move(node);
+//		}
+//	}
+//
+//	// bulk enqueue
+//	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
+//	return alive_nodes;
+//}
+//
+//void BufferPool::PurgeQueue() {
+//
+//	// we trigger a purge every INSERT_INTERVAL insertions into the queue
+//	// we assume that there are alive nodes in the queue, so we never want to purge the whole queue
+//
+//	// only one thread purges the queue, all other threads early-out
+//	bool actual_purge_active;
+//	do {
+//		actual_purge_active = purge_active;
+//		if (actual_purge_active) {
+//			return;
+//		}
+//	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
+//
+//	auto approx_q_size = queue->q.size_approx();
+//
+//	// defensive check, nothing to purge
+//	if (approx_q_size < BULK_PURGE_SIZE) {
+//		purge_active = false;
+//		return;
+//	}
+//
+//	// we need to brute purge the entire queue to avoid memory leaks
+//	if (approx_q_size > max_queue_size) {
+//
+//		Printer::PrintF("approx size: %llu -- max size: %llu", approx_q_size, max_queue_size);
+//
+//		idx_t max_iterations = approx_q_size / BULK_PURGE_SIZE;
+//		idx_t total_alive_nodes = 0;
+//
+//		for (idx_t i = 0; i < max_iterations; i++) {
+//			auto alive_nodes = PurgeIteration();
+//			total_alive_nodes += alive_nodes;
+//		}
+//
+//		// increase the max_queue_size, if the workload requires a bigger queue
+//		if (approx_q_size * ACTIVE_THRESHOLD < total_alive_nodes) {
+//			Printer::PrintF("alive threshold: %llu -- total alive: %llu", idx_t(approx_q_size * ACTIVE_THRESHOLD),
+//			                total_alive_nodes);
+//			max_queue_size *= 2;
+//			Printer::PrintF("NEW MAX QUEUE SIZE: %llu", max_queue_size);
+//		}
+//
+//		// allows other threads to purge again
+//		purge_active = false;
+//		return;
+//	}
+//
+//	// purge the queue until we encounter more than ACTIVE_THRESHOLD active nodes,
+//	// if we never encounter enough alive nodes, then we purge half the queue
+//	idx_t max_purges = approx_q_size / BULK_PURGE_SIZE / 2;
+//	bool early_out = false;
+//	while (max_purges && !early_out) {
+//
+//		auto alive_nodes = PurgeIteration();
+//		max_purges--;
+//
+//		if (BULK_PURGE_SIZE * ACTIVE_THRESHOLD < alive_nodes) {
+//			early_out = true;
+//		}
+//	}
+//
+//	// allows other threads to purge again
+//	purge_active = false;
+//}
 
 void BufferPool::PurgeQueue() {
-
-	// we trigger a purge every INSERT_INTERVAL insertions into the queue
-	// we assume that there are alive nodes in the queue, so we never want to purge the whole queue
 
 	// only one thread purges the queue, all other threads early-out
 	bool actual_purge_active;
@@ -146,53 +210,54 @@ void BufferPool::PurgeQueue() {
 		}
 	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
 
+	// retrieve the active blocks
+	auto pinned = pinned_buffers.load();
+	auto unpinned = evict_queue_insertions.load();
+	idx_t active_blocks = 0;
+	if (pinned > unpinned) {
+		active_blocks = pinned - unpinned;
+	}
+
+	// defensive check
 	auto approx_q_size = queue->q.size_approx();
-
-	// defensive check, nothing to purge
-	if (approx_q_size < BULK_PURGE_SIZE) {
+	if (approx_q_size < active_blocks) {
+		// nothing to do
 		purge_active = false;
 		return;
 	}
 
-	// we need to brute purge the entire queue to avoid memory leaks
-	if (approx_q_size > max_queue_size) {
-
-		Printer::PrintF("approx size: %llu -- max size: %llu", approx_q_size, max_queue_size);
-
-		idx_t max_iterations = approx_q_size / BULK_PURGE_SIZE;
-		idx_t total_alive_nodes = 0;
-
-		for (idx_t i = 0; i < max_iterations; i++) {
-			auto alive_nodes = PurgeIteration();
-			total_alive_nodes += alive_nodes;
-		}
-
-		// increase the max_queue_size, if the workload requires a bigger queue
-		if (approx_q_size * ACTIVE_THRESHOLD < total_alive_nodes) {
-			Printer::PrintF("alive threshold: %llu -- total alive: %llu", idx_t(approx_q_size * ACTIVE_THRESHOLD),
-			                total_alive_nodes);
-			max_queue_size *= 2;
-			Printer::PrintF("NEW MAX QUEUE SIZE: %llu", max_queue_size);
-		}
-
-		// allows other threads to purge again
+	auto approx_dead_nodes = approx_q_size - active_blocks;
+	if (approx_dead_nodes < active_blocks * 2) {
+		// nothing to do
 		purge_active = false;
 		return;
 	}
 
-	// purge the queue until we encounter more than ACTIVE_THRESHOLD active nodes,
-	// if we never encounter enough alive nodes, then we purge half the queue
-	idx_t max_purges = approx_q_size / BULK_PURGE_SIZE / 2;
-	bool early_out = false;
-	while (max_purges && !early_out) {
+	auto approx_dead_nodes_to_purge = approx_dead_nodes / 2;
+	vector<BufferEvictionNode> nodes;
+	nodes.resize(approx_dead_nodes_to_purge);
 
-		auto alive_nodes = PurgeIteration();
-		max_purges--;
+	// bulk purge
+	auto actually_dequeued = queue->q.try_dequeue_bulk(nodes.begin(), approx_dead_nodes_to_purge);
 
-		if (BULK_PURGE_SIZE * ACTIVE_THRESHOLD < alive_nodes) {
-			early_out = true;
+	// retrieve all alive nodes that have been wrongly dequeued
+	idx_t alive_nodes = 0;
+	for (idx_t i = 0; i < actually_dequeued; i++) {
+		auto &node = nodes[i];
+		auto handle = node.TryGetBlockHandle();
+		if (handle) {
+			nodes[alive_nodes++] = std::move(node);
 		}
 	}
+
+	// bulk enqueue
+	queue->q.enqueue_bulk(nodes.begin(), alive_nodes);
+
+	Printer::PrintF("approx q size: %llu", approx_q_size);
+	Printer::PrintF("approx dead nodes: %llu", approx_dead_nodes);
+	Printer::PrintF("actually_dequeued: %llu", actually_dequeued);
+	Printer::PrintF("alive_nodes: %llu", alive_nodes);
+
 
 	// allows other threads to purge again
 	purge_active = false;
