@@ -35,7 +35,12 @@ public:
 	using Predicates = vector<ExpressionType>;
 
 	//! Initializes the RowMatcher, filling match_functions using layout and equality_predicates
-	void Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates);
+	void Initialize(bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates);
+
+	//! Initializes the RowMatcher, filling match_functions using layout and equality_predicates but only for the given
+	//! column_ids
+	void Initialize(bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates,
+	                vector<column_t> &column_ids);
 	//! Given a DataChunk on the LHS, on which we've called TupleDataCollection::ToUnifiedFormat,
 	//! we match it with rows on the RHS, according to the given layout and locations.
 	//! Initially, 'sel' has 'count' entries which point to what needs to be compared.
@@ -43,10 +48,6 @@ public:
 	idx_t Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel, idx_t count,
 	            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, SelectionVector *no_match_sel,
 	            idx_t &no_match_count);
-
-	idx_t Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel, idx_t count,
-	            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, SelectionVector *no_match_sel,
-	            idx_t &no_match_count, const vector<column_t> &column_ids);
 
 private:
 	//! Gets the templated match function for a given column
@@ -62,6 +63,8 @@ private:
 
 private:
 	vector<MatchFunction> match_functions;
+
+	unique_ptr<vector<column_t>> column_ids;
 };
 
 } // namespace duckdb

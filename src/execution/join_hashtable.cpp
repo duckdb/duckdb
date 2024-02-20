@@ -64,8 +64,9 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 		row_matcher_probe = unique_ptr<RowMatcher>(new RowMatcher());
 		row_matcher_probe_no_match_sel = unique_ptr<RowMatcher>(new RowMatcher());
 
-		row_matcher_probe->Initialize(false, layout, non_equality_predicates);
-		row_matcher_probe_no_match_sel->Initialize(true, layout, non_equality_predicates);
+		row_matcher_probe->Initialize(false, layout, non_equality_predicates, non_equality_predicate_columns);
+		row_matcher_probe_no_match_sel->Initialize(true, layout, non_equality_predicates,
+		                                           non_equality_predicate_columns);
 	}
 
 	// todo: What happens if there is a predicate that is dependent on the probe side? Need to filter this out
@@ -123,6 +124,7 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 	auto pointers_data = FlatVector::GetData<data_ptr_t>(pointers);
 	auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(row_ptr_insert_to_v);
 
+	// todo: Get hash, ht_offset and hash_salt vector based (make use of const vector)
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = sel.get_index(i);
 		auto hash_index = hashes_v_unified.sel->get_index(row_index);
@@ -353,27 +355,6 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 		}
 	}
 	return added_count;
-}
-
-template <bool PARALLEL>
-static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], atomic<data_ptr_t> *pointers_into_ht[],
-                                    const idx_t count, const data_ptr_t key_locations[], const idx_t pointer_offset) {
-	for (idx_t i = 0; i < count; i++) {
-		if (PARALLEL) {
-			data_ptr_t *head;
-			do {
-				head = (data_ptr_t *)pointers_into_ht[i];
-				Store<data_ptr_t>(*head, key_locations[i] + pointer_offset);
-			} while (!std::atomic_compare_exchange_weak(pointers_into_ht[i], head, key_locations[i]));
-		} else {
-
-			// set prev in current key to the value (NOTE: this will be nullptr if there is none)
-			Store<data_ptr_t>(*pointers_into_ht[i], key_locations[i] + pointer_offset);
-
-			// set what is at the pointer to the current key
-			*pointers_into_ht[i] = key_locations[i];
-		}
-	}
 }
 
 template <bool PARALLEL>
@@ -703,7 +684,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 		// non-equality columns
 
 		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, ht.layout, pointers, no_match_sel,
-		                      no_match_count, ht.non_equality_predicate_columns);
+		                      no_match_count);
 	} else { // Otherwise, just return the count as we assume that the HT chains are already filtered
 		return this->count;
 	}

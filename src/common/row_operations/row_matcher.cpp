@@ -197,32 +197,43 @@ void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layo
 	}
 }
 
-idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
-                        idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                        SelectionVector *no_match_sel, idx_t &no_match_count) {
-	D_ASSERT(!match_functions.empty());
-	for (idx_t col_idx = 0; col_idx < match_functions.size(); col_idx++) {
-		const auto &match_function = match_functions[col_idx];
-		count =
-		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
-		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
+void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates,
+                            vector<column_t> &column_ids_p) {
+
+	// The column_ids must have the same size as the predicates vector
+	D_ASSERT(column_ids_p.size() == predicates.size());
+
+	// The largest column_id must be smaller than the number of columns in the layout
+	D_ASSERT(*max_element(column_ids_p.begin(), column_ids_p.end()) < layout.ColumnCount());
+
+	column_ids = make_uniq<vector<column_t>>(column_ids_p);
+
+	match_functions.reserve(predicates.size());
+	for (idx_t idx = 0; idx < predicates.size(); idx++) {
+		column_t col_idx = (*column_ids)[idx];
+		match_functions.push_back(GetMatchFunction(no_match_sel, layout.GetTypes()[col_idx], predicates[idx]));
 	}
-	return count;
 }
 
 idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
                         idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                        SelectionVector *no_match_sel, idx_t &no_match_count, const vector<column_t> &column_ids) {
+                        SelectionVector *no_match_sel, idx_t &no_match_count) {
 	D_ASSERT(!match_functions.empty());
-	// The column_ids must have the same size as the match_functions vector
-	D_ASSERT(column_ids.size() == match_functions.size());
 
-	// The largest column_id must be smaller than the number of columns in the lhs
-	D_ASSERT(*max_element(column_ids.begin(), column_ids.end()) < lhs.ColumnCount());
+	if (column_ids) {
+		// The column_ids must have the same size as the match_functions vector
+		D_ASSERT(column_ids->size() == match_functions.size());
 
-	for (idx_t match_function_idx = 0; match_function_idx < match_functions.size(); match_function_idx++) {
-		const auto col_idx = column_ids[match_function_idx];
-		const auto &match_function = match_functions[match_function_idx];
+		// The largest column_id must be smaller than the number of columns in the lhs
+		D_ASSERT(*max_element(column_ids->begin(), column_ids->end()) < lhs.ColumnCount());
+	}
+
+	for (idx_t fun_idx = 0; fun_idx < match_functions.size(); fun_idx++) {
+		// if we only care about specific columns, we need to use the column_ids to get the correct column index
+		// otherwise, we just use the fun_idx
+		const auto col_idx = column_ids ? (*column_ids)[fun_idx] : fun_idx;
+
+		const auto &match_function = match_functions[fun_idx];
 		count =
 		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
 		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
