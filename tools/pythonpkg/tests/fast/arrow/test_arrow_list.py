@@ -1,5 +1,6 @@
 import duckdb
 import numpy as np
+import pytest
 
 try:
     import pyarrow as pa
@@ -99,6 +100,7 @@ class TestArrowListType(object):
 
         check_equal(duckdb_conn)
 
+    @pytest.mark.skipif(not hasattr(pa, 'ListViewArray'), reason='The pyarrow version does not support ListViewArrays')
     def test_list_view(self, duckdb_cursor):
         CHILD_SIZE = 100000
         input = [i for i in range(CHILD_SIZE)]
