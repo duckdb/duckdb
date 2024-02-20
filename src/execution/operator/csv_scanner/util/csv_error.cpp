@@ -18,9 +18,9 @@ void CSVErrorHandler::Error(CSVError &csv_error) {
 	Error(mock, csv_error, true);
 }
 void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, bool force_error) {
-	if (ignore_errors && !force_error) {
+	if (ignore_errors || !CanGetLine(error_info.boundary_idx)) {
 		lock_guard<mutex> parallel_lock(main_mutex);
-		// We store this error
+		// We store this error, we can't throw it now, or we are ignoring it
 		errors.push_back({error_info, csv_error});
 		return;
 	}
@@ -29,10 +29,7 @@ void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, b
 	if (PrintLineNumber(csv_error)) {
 		error << "CSV Error on Line: " << GetLine(error_info) << std::endl;
 	}
-	{
-		lock_guard<mutex> parallel_lock(main_mutex);
-		got_borked = true;
-	}
+	{ lock_guard<mutex> parallel_lock(main_mutex); }
 	error << csv_error.error_message;
 	switch (csv_error.type) {
 	case CSVErrorType::CAST_ERROR:
@@ -48,7 +45,6 @@ void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, b
 
 void CSVErrorHandler::Insert(idx_t boundary_idx, idx_t rows) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	in_process.erase(boundary_idx);
 	if (lines_per_batch_map.find(boundary_idx) == lines_per_batch_map.end()) {
 		lines_per_batch_map[boundary_idx] = {boundary_idx, rows};
 	} else {
@@ -56,27 +52,19 @@ void CSVErrorHandler::Insert(idx_t boundary_idx, idx_t rows) {
 	}
 }
 
-void CSVErrorHandler::Insert(idx_t boundary_idx) {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	in_process.insert(boundary_idx);
-}
-
-void CSVErrorHandler::Remove(idx_t boundary_idx) {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	in_process.erase(boundary_idx);
-}
-
 void CSVErrorHandler::NewMaxLineSize(idx_t scan_line_size) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	max_line_length = std::max(scan_line_size, max_line_length);
 }
 
-CSVError::CSVError(string error_message_p, CSVErrorType type_p)
-    : error_message(std::move(error_message_p)), type(type_p) {
+CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary error_info_p)
+    : error_message(std::move(error_message_p)), type(type_p), error_info(error_info_p) {
 }
 
-CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p)
-    : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), row(std::move(row_p)) {
+CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, vector<Value> row_p,
+                   LinesPerBoundary error_info_p)
+    : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), row(std::move(row_p)),
+      error_info(error_info_p) {
 }
 
 CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names) {
@@ -88,7 +76,7 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 		}
 	}
 	if (sql_types_per_column.empty()) {
-		return CSVError("", CSVErrorType::COLUMN_NAME_TYPE_MISMATCH);
+		return CSVError("", CSVErrorType::COLUMN_NAME_TYPE_MISMATCH, {});
 	}
 	string exception = "COLUMN_TYPES error: Columns with names: ";
 	for (auto &col : sql_types_per_column) {
@@ -172,29 +160,21 @@ bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
 	}
 }
 
-idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
-	idx_t current_line = 1 + error_info.lines_in_batch; // We start from one, since the lines are 1-indexed
-	for (idx_t boundary_idx = 0; boundary_idx < error_info.boundary_idx; boundary_idx++) {
-		bool batch_done = false;
-		while (!batch_done) {
-			if (boundary_idx == 0) {
-				// if it's the first boundary, we just return
-				break;
-			}
-			lock_guard<mutex> parallel_lock(main_mutex);
-
-			if (lines_per_batch_map.find(boundary_idx) != lines_per_batch_map.end()) {
-				batch_done = true;
-				current_line += lines_per_batch_map[boundary_idx].lines_in_batch;
-			}
-			if (in_process.find(boundary_idx) == in_process.end()) {
-				// This boundary index is not being processed and also has not finished, we skip it.
-				batch_done = true;
-			}
-			if (got_borked) {
-				return current_line;
-			}
+bool CSVErrorHandler::CanGetLine(idx_t boundary_index) {
+	for (idx_t i = 0; i < boundary_index; i++) {
+		if (lines_per_batch_map.find(i) == lines_per_batch_map.end()) {
+			return false;
 		}
+	}
+	return true;
+}
+
+idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	// We start from one, since the lines are 1-indexed
+	idx_t current_line = 1 + error_info.lines_in_batch;
+	for (idx_t boundary_idx = 0; boundary_idx < error_info.boundary_idx; boundary_idx++) {
+		current_line += lines_per_batch_map[boundary_idx].lines_in_batch;
 	}
 	return current_line;
 }

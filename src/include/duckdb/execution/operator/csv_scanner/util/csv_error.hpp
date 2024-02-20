@@ -42,8 +42,8 @@ enum CSVErrorType : uint8_t {
 
 class CSVError {
 public:
-	CSVError(string error_message, CSVErrorType type, idx_t column_idx, vector<Value> row);
-	CSVError(string error_message, CSVErrorType type);
+	CSVError(string error_message, CSVErrorType type, idx_t column_idx, vector<Value> row, LinesPerBoundary error_info);
+	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
@@ -69,6 +69,8 @@ public:
 	idx_t column_idx;
 	//! Values from the row where error happened
 	vector<Value> row;
+	//! Line information regarding this error
+	LinesPerBoundary error_info;
 };
 
 class CSVErrorHandler {
@@ -80,13 +82,14 @@ public:
 	void Error(CSVError &csv_error);
 	//! Inserts a finished error info
 	void Insert(idx_t boundary_idx, idx_t rows);
-	//! Inserts a boundary index that's being processed
-	void Insert(idx_t boundary_idx);
-	void Remove(idx_t boundary_idx);
+	//	void ThrowError
 	vector<pair<LinesPerBoundary, CSVError>> errors;
+	pair<LinesPerBoundary, CSVError> cached_error;
+	bool CanGetLine(idx_t boundary_index);
 	//! Return the 1-indexed line number
 	idx_t GetLine(LinesPerBoundary &error_info);
 	void NewMaxLineSize(idx_t scan_line_size);
+
 	idx_t GetMaxLineLength() {
 		return max_line_length;
 	}
@@ -100,9 +103,6 @@ private:
 	unordered_map<idx_t, LinesPerBoundary> lines_per_batch_map;
 	idx_t max_line_length = 0;
 	bool ignore_errors = false;
-	bool got_borked = false;
-	//! Boundary Indexes that are currently in process
-	unordered_set<idx_t> in_process;
 };
 
 } // namespace duckdb
