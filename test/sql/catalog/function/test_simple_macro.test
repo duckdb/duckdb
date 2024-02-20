@@ -118,9 +118,12 @@ SELECT add_macro(a,2) + add_macro(3,b) FROM integers, floats
 ----
 6.5
 
+statement ok
+CREATE SCHEMA my;
+
 # can create function with same name as a ScalarFunction
 statement ok
-CREATE MACRO string_split(a,b) AS a + b
+CREATE MACRO my.string_split(a,b) AS a + b
 
 # overloaded scalar functions without explicit qualification use system definition
 statement error
@@ -130,7 +133,7 @@ SELECT string_split(1, 2)
 
 # but qualified they work
 query I
-SELECT memory.string_split(1, 2)
+SELECT my.string_split(1, 2)
 ----
 3
 
