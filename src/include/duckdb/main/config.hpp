@@ -164,6 +164,8 @@ struct DBConfigOptions {
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Whether LISTs should produce Arrow ListViews
 	bool arrow_use_list_view = false;
+	//! Whether when producing arrow objects we produce string_views or regular strings
+	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;

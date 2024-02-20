@@ -458,6 +458,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
+		ProcessError(error, active_query->query);
 		result.SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));
@@ -1182,7 +1183,8 @@ ClientProperties ClientContext::GetClientProperties() const {
 	} else {
 		timezone = tz_config->second.GetValue<string>();
 	}
-	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view};
+	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views};
 }
 
 bool ClientContext::ExecutionIsFinished() {

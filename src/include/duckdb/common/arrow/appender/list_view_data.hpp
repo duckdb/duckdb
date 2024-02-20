@@ -9,8 +9,8 @@ struct ArrowListViewData {
 public:
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		auto &child_type = ListType::GetChildType(type);
-		result.main_buffer.reserve(capacity * sizeof(BUFTYPE));
-		result.aux_buffer.reserve(capacity * sizeof(BUFTYPE));
+		result.GetMainBuffer().reserve(capacity * sizeof(BUFTYPE));
+		result.GetAuxBuffer().reserve(capacity * sizeof(BUFTYPE));
 
 		auto child_buffer = ArrowAppender::InitializeChild(child_type, capacity, result.options);
 		result.child_data.push_back(std::move(child_buffer));
@@ -36,8 +36,8 @@ public:
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 3;
-		result->buffers[1] = append_data.main_buffer.data();
-		result->buffers[2] = append_data.aux_buffer.data();
+		result->buffers[1] = append_data.GetMainBuffer().data();
+		result->buffers[2] = append_data.GetAuxBuffer().data();
 
 		auto &child_type = ListType::GetChildType(type);
 		ArrowAppender::AddChildren(append_data, 1);
@@ -48,14 +48,14 @@ public:
 
 public:
 	static void AppendListMetadata(ArrowAppendData &append_data, UnifiedVectorFormat &format, idx_t from, idx_t to,
-	                          vector<sel_t> &child_sel) {
+	                               vector<sel_t> &child_sel) {
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		idx_t size = to - from;
-		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(BUFTYPE) * size);
-		append_data.aux_buffer.resize(append_data.aux_buffer.size() + sizeof(BUFTYPE) * size);
+		append_data.GetMainBuffer().resize(append_data.GetMainBuffer().size() + sizeof(BUFTYPE) * size);
+		append_data.GetAuxBuffer().resize(append_data.GetAuxBuffer().size() + sizeof(BUFTYPE) * size);
 		auto data = UnifiedVectorFormat::GetData<list_entry_t>(format);
-		auto offset_data = append_data.main_buffer.GetData<BUFTYPE>();
-		auto size_data = append_data.aux_buffer.GetData<BUFTYPE>();
+		auto offset_data = append_data.GetMainBuffer().GetData<BUFTYPE>();
+		auto size_data = append_data.GetAuxBuffer().GetData<BUFTYPE>();
 
 		BUFTYPE last_offset = append_data.row_count ? offset_data[append_data.row_count - 1] : 0;
 		for (idx_t i = 0; i < size; i++) {

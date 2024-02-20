@@ -1097,6 +1097,20 @@ Value ArrowOutputListView::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(arrow_output_list_view);
 }
 
+// ProduceArrowStringView
+//===--------------------------------------------------------------------===//
+void ProduceArrowStringView::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.produce_arrow_string_views = input.GetValue<bool>();
+}
+
+void ProduceArrowStringView::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.produce_arrow_string_views = DBConfig().options.produce_arrow_string_views;
+}
+
+Value ProduceArrowStringView::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(DBConfig::GetConfig(context).options.produce_arrow_string_views);
+}
+
 //===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//
