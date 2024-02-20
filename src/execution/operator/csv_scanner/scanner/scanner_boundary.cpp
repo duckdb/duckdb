@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/scanner/scanner_boundary.hpp"
+#include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 
 namespace duckdb {
 

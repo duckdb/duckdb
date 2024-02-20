@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include <sstream>
 
