@@ -48,19 +48,27 @@ public:
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
-	                          idx_t column_idx, vector<Value> &row);
+	                          idx_t column_idx, vector<Value> &row, LinesPerBoundary error_info);
 	//! Produces error for when the line size exceeds the maximum line size option
-	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size);
+	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info);
 	//! Produces error for when the sniffer couldn't find viable options
 	static CSVError SniffingError(string &file_path);
 	//! Produces error messages for unterminated quoted values
 	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
-	                                        idx_t vector_line_start, idx_t current_column);
+	                                        idx_t vector_line_start, idx_t current_column, LinesPerBoundary error_info);
 	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
-	static CSVError NullPaddingFail(const CSVReaderOptions &options);
+	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
-	                                           idx_t vector_line_start, idx_t actual_columns);
+	                                           idx_t vector_line_start, idx_t actual_columns,
+	                                           LinesPerBoundary error_info);
+	idx_t GetBoundaryIndex() {
+		return error_info.boundary_idx;
+	}
+
+	bool operator<(const CSVError &other) const {
+		return error_info.boundary_idx < other.error_info.boundary_idx;
+	}
 	//! Actual error message
 	string error_message;
 	//! Error Type
@@ -77,17 +85,14 @@ class CSVErrorHandler {
 public:
 	CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(LinesPerBoundary &error_info, CSVError &csv_error, bool force_error = false);
-	//! Throws the error
-	void Error(CSVError &csv_error);
+	void Error(CSVError csv_error);
 	//! Inserts a finished error info
 	void Insert(idx_t boundary_idx, idx_t rows);
 	//	void ThrowError
-	vector<pair<LinesPerBoundary, CSVError>> errors;
-	pair<LinesPerBoundary, CSVError> cached_error;
+	set<CSVError> errors;
 	bool CanGetLine(idx_t boundary_index);
 	//! Return the 1-indexed line number
-	idx_t GetLine(LinesPerBoundary &error_info);
+	idx_t GetLine(const LinesPerBoundary &error_info);
 	void NewMaxLineSize(idx_t scan_line_size);
 
 	idx_t GetMaxLineLength() {

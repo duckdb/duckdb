@@ -55,7 +55,8 @@ public:
 	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
 
 	~StringValueResult() {
-		error_handler.Remove(iterator.GetBoundaryIdx());
+		// We have to insert the lines read by this scanner
+		// We have to check if we got to error
 	}
 
 	//! Information on the vector

@@ -69,7 +69,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 			current_file = make_shared<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
 			                                        bind_data, column_ids, file_schema);
 		}
-		current_file->error_handler->Insert(current_boundary.GetBoundaryIdx());
 		auto csv_scanner =
 		    make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager, current_file->state_machine,
 		                                  current_file->error_handler, current_file, current_boundary);
@@ -85,7 +84,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next() {
 	}
 	// We first create the scanner for the current boundary
 	auto &current_file = *file_scans.back();
-	current_file.error_handler->Insert(current_boundary.GetBoundaryIdx());
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, file_scans.back(), current_boundary);
@@ -153,8 +151,8 @@ void CSVGlobalState::FillRejectsTable() {
 		for (auto &file : file_scans) {
 			auto file_name = file->file_path;
 			auto &errors = file->error_handler->errors;
-			for (auto &error_info : errors) {
-				if (error_info.second.type != CSVErrorType::CAST_ERROR) {
+			for (auto &error : errors) {
+				if (error.type != CSVErrorType::CAST_ERROR) {
 					// For now we only will use it for casting errors
 					continue;
 				}
@@ -164,9 +162,8 @@ void CSVGlobalState::FillRejectsTable() {
 						break;
 					}
 					rejects->count++;
-					auto error = &error_info.second;
-					auto row_line = file->error_handler->GetLine(error_info.first);
-					auto col_idx = error->column_idx;
+					auto row_line = file->error_handler->GetLine(error.error_info);
+					auto col_idx = error.column_idx;
 					auto col_name = bind_data.return_names[col_idx];
 					// Add the row to the rejects table
 					appender.BeginRow();
@@ -174,14 +171,14 @@ void CSVGlobalState::FillRejectsTable() {
 					appender.Append(row_line);
 					appender.Append(col_idx);
 					appender.Append(string_t("\"" + col_name + "\""));
-					appender.Append(error->row[col_idx]);
+					appender.Append(error.row[col_idx]);
 
 					if (!options.rejects_recovery_columns.empty()) {
 						child_list_t<Value> recovery_key;
 						for (auto &key_idx : options.rejects_recovery_column_ids) {
 							// Figure out if the recovery key is valid.
 							// If not, error out for real.
-							auto &value = error->row[key_idx];
+							auto &value = error.row[key_idx];
 							if (value.IsNull()) {
 								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
 								                            "Could not parse recovery column", row_line, col_name,
@@ -192,7 +189,7 @@ void CSVGlobalState::FillRejectsTable() {
 						appender.Append(Value::STRUCT(recovery_key));
 					}
 					auto row_error_msg =
-					    StringUtil::Format("Could not convert string '%s' to '%s'", error->row[col_idx].ToString(),
+					    StringUtil::Format("Could not convert string '%s' to '%s'", error.row[col_idx].ToString(),
 					                       file->types[col_idx].ToString());
 					appender.Append(string_t(row_error_msg));
 					appender.EndRow();

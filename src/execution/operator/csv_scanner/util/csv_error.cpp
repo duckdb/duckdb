@@ -13,21 +13,17 @@ LinesPerBoundary::LinesPerBoundary(idx_t boundary_idx_p, idx_t lines_in_batch_p)
 CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {
 }
 
-void CSVErrorHandler::Error(CSVError &csv_error) {
-	LinesPerBoundary mock;
-	Error(mock, csv_error, true);
-}
-void CSVErrorHandler::Error(LinesPerBoundary &error_info, CSVError &csv_error, bool force_error) {
-	if (ignore_errors || !CanGetLine(error_info.boundary_idx)) {
+void CSVErrorHandler::Error(CSVError csv_error) {
+	if (ignore_errors || !CanGetLine(csv_error.GetBoundaryIndex())) {
 		lock_guard<mutex> parallel_lock(main_mutex);
 		// We store this error, we can't throw it now, or we are ignoring it
-		errors.push_back({error_info, csv_error});
+		errors.insert(csv_error);
 		return;
 	}
 
 	std::ostringstream error;
 	if (PrintLineNumber(csv_error)) {
-		error << "CSV Error on Line: " << GetLine(error_info) << std::endl;
+		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << std::endl;
 	}
 	{ lock_guard<mutex> parallel_lock(main_mutex); }
 	error << csv_error.error_message;
@@ -84,11 +80,11 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 	}
 	exception.pop_back();
 	exception += " do not exist in the CSV File";
-	return CSVError(exception, CSVErrorType::COLUMN_NAME_TYPE_MISMATCH);
+	return CSVError(exception, CSVErrorType::COLUMN_NAME_TYPE_MISMATCH, {});
 }
 
 CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error, idx_t column_idx,
-                             vector<Value> &row) {
+                             vector<Value> &row, LinesPerBoundary error_info) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\"." << std::endl;
@@ -97,15 +93,15 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row);
+	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, row, error_info);
 }
 
-CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size) {
+CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info) {
 	std::ostringstream error;
 	error << "Maximum line size of " << options.maximum_line_size << " bytes exceeded. ";
 	error << "Actual Size:" << actual_size << " bytes." << std::endl;
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE);
+	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE, error_info);
 }
 
 CSVError CSVError::SniffingError(string &file_path) {
@@ -113,38 +109,39 @@ CSVError CSVError::SniffingError(string &file_path) {
 	// Which column
 	error << "Error when sniffing file \"" << file_path << "\"." << std::endl;
 	error << "CSV options could not be auto-detected. Consider setting parser options manually." << std::endl;
-	return CSVError(error.str(), CSVErrorType::SNIFFING);
+	return CSVError(error.str(), CSVErrorType::SNIFFING, {});
 }
 
-CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options) {
+CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info) {
 	std::ostringstream error;
 	error << " The parallel scanner does not support null_padding in conjunction with quoted new lines. Please "
 	         "disable the parallel csv reader with parallel=false"
 	      << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE);
+	return CSVError(error.str(), CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE, error_info);
 }
 
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
-                                           idx_t vector_line_start, idx_t current_column) {
+                                           idx_t vector_line_start, idx_t current_column, LinesPerBoundary error_info) {
 	std::ostringstream error;
 	error << "Value with unterminated quote found." << std::endl;
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES);
+	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, error_info);
 }
 
 CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
-                                              idx_t vector_line_start, idx_t actual_columns) {
+                                              idx_t vector_line_start, idx_t actual_columns,
+                                              LinesPerBoundary error_info) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
 	      << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT);
+	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, error_info);
 }
 
 bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
@@ -169,7 +166,7 @@ bool CSVErrorHandler::CanGetLine(idx_t boundary_index) {
 	return true;
 }
 
-idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
+idx_t CSVErrorHandler::GetLine(const LinesPerBoundary &error_info) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	// We start from one, since the lines are 1-indexed
 	idx_t current_line = 1 + error_info.lines_in_batch;
