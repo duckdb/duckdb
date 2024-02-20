@@ -98,3 +98,51 @@ class TestArrowListType(object):
         )
 
         check_equal(duckdb_conn)
+
+    def test_list_view(self, duckdb_cursor):
+        CHILD_SIZE = 100000
+        input = [i for i in range(CHILD_SIZE)]
+        offsets = []
+        sizes = []
+        lists = []
+        count = 0
+        for i in range(CHILD_SIZE):
+            if count >= CHILD_SIZE:
+                break
+            tmp = i % 4
+            if tmp == 0:
+                size = 3
+            elif tmp == 1:
+                size = 1
+            elif tmp == 2:
+                size = 10
+            elif tmp == 3:
+                size = 5
+            size = min(size, CHILD_SIZE - count)
+            sizes.append(size)
+            offsets.append(count)
+            lists.append(input[count : count + size])
+            count += size
+        offsets.append(CHILD_SIZE)
+
+        # Create a regular ListArray
+        list_arr = pa.ListArray.from_arrays(offsets=offsets, values=input)
+        list_tbl = pa.Table.from_arrays([list_arr], ['x'])
+
+        lists = list(reversed(lists))
+        # Create a ListViewArray
+        offsets = []
+        input = []
+        remaining = CHILD_SIZE
+        for i, size in enumerate(sizes):
+            remaining -= size
+            offsets.append(remaining)
+            input.extend(lists[i])
+        assert remaining == 0
+        list_view_arr = pa.ListViewArray.from_arrays(offsets=offsets, sizes=sizes, values=input)
+        list_view_tbl = pa.Table.from_arrays([list_view_arr], ['x'])
+
+        assert list_view_arr.to_pylist() == list_arr.to_pylist()
+        original = duckdb_cursor.query("select * from list_tbl").fetchall()
+        view = duckdb_cursor.query("select * from list_view_tbl").fetchall()
+        assert original == view

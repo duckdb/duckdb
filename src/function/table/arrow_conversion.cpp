@@ -161,14 +161,20 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
 	auto sizes = ArrowBufferData<BUFFER_TYPE>(array, 2) + effective_offset;
 
-	start_offset = offsets[0];
+	auto lowest_offset = offsets[0];
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
-		le.offset = cur_offset;
+		le.offset = offsets[i];
 		le.length = sizes[i];
 		cur_offset += le.length;
+		lowest_offset = MinValue(lowest_offset, offsets[i]);
 	}
+	for (idx_t i = 0; i < size; i++) {
+		auto &le = list_data[i];
+		le.offset -= lowest_offset;
+	}
+	start_offset = lowest_offset;
 	list_size = cur_offset;
 	return result;
 }
