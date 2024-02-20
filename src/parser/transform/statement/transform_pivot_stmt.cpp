@@ -168,7 +168,8 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	}
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
-	auto columns = TransformPivotList(*pivot->columns);
+	bool is_pivot = !pivot->unpivots;
+	auto columns = TransformPivotList(*pivot->columns, is_pivot);
 	auto pivot_idx = PivotEntryCount();
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];

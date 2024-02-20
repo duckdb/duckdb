@@ -396,7 +396,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		}
 		value_set_t pivots;
 		for (auto &entry : pivot.entries) {
-			D_ASSERT(!entry.star_expr);
+			D_ASSERT(!entry.expr);
 			Value val;
 			if (entry.values.size() == 1) {
 				val = entry.values[0];
@@ -464,13 +464,70 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	return pivot_node;
 }
 
+struct UnpivotEntry {
+	string alias;
+	vector<string> column_names;
+	vector<unique_ptr<ParsedExpression>> expressions;
+};
+
+void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
+                                   vector<UnpivotEntry> &unpivot_entries) {
+	if (!entry.expr) {
+		// pivot entry without an expression - generate one
+		UnpivotEntry unpivot_entry;
+		unpivot_entry.alias = entry.alias;
+		for (auto &val : entry.values) {
+			unpivot_entry.expressions.push_back(make_uniq<ColumnRefExpression>(val.ToString()));
+		}
+		unpivot_entries.push_back(std::move(unpivot_entry));
+		return;
+	}
+	D_ASSERT(entry.values.empty());
+	if (entry.expr->type == ExpressionType::FUNCTION) {
+		auto &function = entry.expr->Cast<FunctionExpression>();
+		if (function.function_name == "row") {
+			// ROW function at top-level
+			// special case for multi-level pivot
+			UnpivotEntry unpivot_entry;
+			if (!function.alias.empty()) {
+				unpivot_entry.alias = function.alias;
+			}
+			unpivot_entry.expressions = std::move(function.children);
+			unpivot_entries.push_back(std::move(unpivot_entry));
+			return;
+		}
+	}
+	// expand star expressions (if any)
+	vector<unique_ptr<ParsedExpression>> star_columns;
+	child_binder.ExpandStarExpression(std::move(entry.expr), star_columns);
+
+	for (auto &expr : star_columns) {
+		// create one pivot entry per result column
+		UnpivotEntry unpivot_entry;
+		if (!expr->alias.empty()) {
+			unpivot_entry.alias = std::move(expr->alias);
+		}
+		unpivot_entry.expressions.push_back(std::move(expr));
+		unpivot_entries.push_back(std::move(unpivot_entry));
+	}
+}
+
+void Binder::ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = expr.Cast<ColumnRefExpression>();
+		result.push_back(colref.GetColumnName());
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { ExtractUnpivotColumnName(child, result); });
+}
+
 unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
                                            vector<unique_ptr<ParsedExpression>> all_columns,
                                            unique_ptr<ParsedExpression> &where_clause) {
 	D_ASSERT(ref.groups.empty());
 	D_ASSERT(ref.pivots.size() == 1);
 
-	unique_ptr<ParsedExpression> expr;
 	auto select_node = make_uniq<SelectNode>();
 	select_node->from_table = std::move(ref.source);
 
@@ -478,34 +535,32 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	auto &unpivot = ref.pivots[0];
 
 	// handle star expressions in any entries
-	vector<PivotColumnEntry> new_entries;
+	vector<UnpivotEntry> unpivot_entries;
 	for (auto &entry : unpivot.entries) {
-		if (entry.star_expr) {
-			D_ASSERT(entry.values.empty());
-			vector<unique_ptr<ParsedExpression>> star_columns;
-			child_binder.ExpandStarExpression(std::move(entry.star_expr), star_columns);
-
-			for (auto &col : star_columns) {
-				if (col->type != ExpressionType::COLUMN_REF) {
-					throw InternalException("Unexpected child of unpivot star - not a ColumnRef");
-				}
-				auto &columnref = col->Cast<ColumnRefExpression>();
-				PivotColumnEntry new_entry;
-				new_entry.values.emplace_back(columnref.GetColumnName());
-				new_entry.alias = columnref.GetColumnName();
-				new_entries.push_back(std::move(new_entry));
-			}
-		} else {
-			new_entries.push_back(std::move(entry));
-		}
+		ExtractUnpivotEntries(child_binder, entry, unpivot_entries);
 	}
-	unpivot.entries = std::move(new_entries);
 
 	case_insensitive_set_t handled_columns;
 	case_insensitive_map_t<string> name_map;
-	for (auto &entry : unpivot.entries) {
-		for (auto &value : entry.values) {
-			handled_columns.insert(value.ToString());
+	for (auto &entry : unpivot_entries) {
+		for (auto &unpivot_expr : entry.expressions) {
+			vector<string> result;
+			ExtractUnpivotColumnName(*unpivot_expr, result);
+			if (result.empty()) {
+
+				throw BinderException(
+				    *unpivot_expr,
+				    "Unpivot clause must contain exactly one column - expression \"%s\" does not contain any",
+				    unpivot_expr->ToString());
+			}
+			if (result.size() > 1) {
+				throw BinderException(
+				    *unpivot_expr,
+				    "Unpivot clause must contain exactly one column - expression \"%s\" contains multiple (%s)",
+				    unpivot_expr->ToString(), StringUtil::Join(result, ", "));
+			}
+			handled_columns.insert(result[0]);
+			entry.column_names.push_back(std::move(result[0]));
 		}
 	}
 
@@ -531,10 +586,11 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		}
 	}
 	vector<Value> unpivot_names;
-	for (auto &entry : unpivot.entries) {
+	for (auto &entry : unpivot_entries) {
 		string generated_name;
-		for (auto &val : entry.values) {
-			auto name_entry = name_map.find(val.ToString());
+		D_ASSERT(entry.expressions.size() == entry.column_names.size());
+		for (idx_t c = 0; c < entry.expressions.size(); c++) {
+			auto name_entry = name_map.find(entry.column_names[c]);
 			if (name_entry == name_map.end()) {
 				throw InternalException("Unpivot - could not find column name in name map");
 			}
@@ -546,22 +602,20 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		unpivot_names.emplace_back(!entry.alias.empty() ? entry.alias : generated_name);
 	}
 	vector<vector<unique_ptr<ParsedExpression>>> unpivot_expressions;
-	for (idx_t v_idx = 1; v_idx < unpivot.entries.size(); v_idx++) {
-		if (unpivot.entries[v_idx].values.size() != unpivot.entries[0].values.size()) {
+	for (idx_t v_idx = 1; v_idx < unpivot_entries.size(); v_idx++) {
+		if (unpivot_entries[v_idx].expressions.size() != unpivot_entries[0].expressions.size()) {
 			throw BinderException(
 			    ref,
 			    "UNPIVOT value count mismatch - entry has %llu values, but expected all entries to have %llu values",
-			    unpivot.entries[v_idx].values.size(), unpivot.entries[0].values.size());
+			    unpivot_entries[v_idx].expressions.size(), unpivot_entries[0].expressions.size());
 		}
 	}
 
-	for (idx_t v_idx = 0; v_idx < unpivot.entries[0].values.size(); v_idx++) {
+	for (idx_t v_idx = 0; v_idx < unpivot_entries[0].expressions.size(); v_idx++) {
 		vector<unique_ptr<ParsedExpression>> expressions;
-		expressions.reserve(unpivot.entries.size());
-		for (auto &entry : unpivot.entries) {
-			auto colref = make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString());
-			colref->query_location = ref.query_location;
-			expressions.push_back(std::move(colref));
+		expressions.reserve(unpivot_entries.size());
+		for (auto &entry : unpivot_entries) {
+			expressions.push_back(std::move(entry.expressions[v_idx]));
 		}
 		unpivot_expressions.push_back(std::move(expressions));
 	}

@@ -34,7 +34,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 	result.Verify(args.size());
 }
 
-template<bool IS_UNPIVOT = false>
+template <bool IS_UNPIVOT = false>
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
@@ -55,11 +55,15 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 					}
 					list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 				}
-				auto error = StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
-										   child_type.ToString(), arg_type.ToString());
-				throw BinderException(arguments[i]->query_location, QueryErrorContext::Format(list_arguments, error, int(error_index), false));
+				auto error =
+				    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
+				                       child_type.ToString(), arg_type.ToString());
+				throw BinderException(arguments[i]->query_location,
+				                      QueryErrorContext::Format(list_arguments, error, int(error_index), false));
 			} else {
-				throw BinderException(arguments[i]->query_location, "Cannot create a list of types %s and %s - an explicit cast is required", child_type.ToString(), arg_type.ToString());
+				throw BinderException(arguments[i]->query_location,
+				                      "Cannot create a list of types %s and %s - an explicit cast is required",
+				                      child_type.ToString(), arg_type.ToString());
 			}
 		}
 	}
