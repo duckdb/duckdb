@@ -63,7 +63,6 @@ public:
 	//! It first caches it, then returns it.
 	const StateMachine &Get(const CSVStateMachineOptions &state_machine_options);
 
-	static const string STATE_KEY;
 	static string ObjectType() {
 		return "CSV_STATE_MACHINE_CACHE";
 	}
