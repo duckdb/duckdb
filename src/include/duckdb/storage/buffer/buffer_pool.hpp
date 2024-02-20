@@ -113,6 +113,8 @@ protected:
 //	array<BufferEvictionNode, BULK_PURGE_SIZE> purge_nodes;
 	//! Total number of buffers that have ever been pinned.
 	atomic<idx_t> pinned_buffers;
+
+	idx_t total_purged;
 };
 
 } // namespace duckdb

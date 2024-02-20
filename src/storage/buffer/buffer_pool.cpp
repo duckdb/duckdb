@@ -37,7 +37,7 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), purge_active(false),
-		pinned_buffers(0) {
+		pinned_buffers(0), total_purged(0) {
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		memory_usage_per_tag[i] = 0;
 	}
@@ -211,29 +211,33 @@ void BufferPool::PurgeQueue() {
 	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
 
 	// retrieve the active blocks
-	auto pinned = pinned_buffers.load();
-	auto unpinned = evict_queue_insertions.load();
-	idx_t active_blocks = 0;
-	if (pinned > unpinned) {
-		active_blocks = pinned - unpinned;
-	}
+//	auto unpinned = evict_queue_insertions.load();
+//	idx_t active_blocks = 0;
+//	if (pinned > unpinned) {
+//		active_blocks = pinned - unpinned;
+//	}
 
 	// defensive check
 	auto approx_q_size = queue->q.size_approx();
-	if (approx_q_size < active_blocks) {
-		// nothing to do
+//	if (approx_q_size < active_blocks) {
+//		// nothing to do
+//		purge_active = false;
+//		return;
+//	}
+
+	if (approx_q_size < 2 * INSERT_INTERVAL) {
 		purge_active = false;
 		return;
 	}
 
-	auto approx_dead_nodes = approx_q_size - active_blocks;
-	if (approx_dead_nodes < active_blocks * 2) {
-		// nothing to do
-		purge_active = false;
-		return;
-	}
+//	auto approx_dead_nodes = approx_q_size - active_blocks;
+//	if (approx_dead_nodes < active_blocks * 2) {
+//		// nothing to do
+//		purge_active = false;
+//		return;
+//	}
 
-	auto approx_dead_nodes_to_purge = approx_dead_nodes / 2;
+	auto approx_dead_nodes_to_purge = approx_q_size / 2;
 	vector<BufferEvictionNode> nodes;
 	nodes.resize(approx_dead_nodes_to_purge);
 
@@ -254,10 +258,8 @@ void BufferPool::PurgeQueue() {
 	queue->q.enqueue_bulk(nodes.begin(), alive_nodes);
 
 	Printer::PrintF("approx q size: %llu", approx_q_size);
-	Printer::PrintF("approx dead nodes: %llu", approx_dead_nodes);
 	Printer::PrintF("actually_dequeued: %llu", actually_dequeued);
 	Printer::PrintF("alive_nodes: %llu", alive_nodes);
-
 
 	// allows other threads to purge again
 	purge_active = false;
