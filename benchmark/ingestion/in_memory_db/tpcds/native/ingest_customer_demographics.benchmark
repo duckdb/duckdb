@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/in_memory_db/tpcds/native/ingest_customer_demographics.benchmark
+# description: benchmark ingestion of customer_demographics
+# group: [native]
+
+template benchmark/ingestion/in_memory_db/tpcds/native/tpcds_ingest_native.benchmark.in
+table_name=customer_demographics
+format=native

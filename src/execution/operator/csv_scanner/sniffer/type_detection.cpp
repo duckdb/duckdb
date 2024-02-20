@@ -1,5 +1,5 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/string.hpp"
 
@@ -9,7 +9,8 @@ struct TryCastFloatingOperator {
 	static bool Operation(string_t input) {
 		T result;
 		string error_message;
-		return OP::Operation(input, result, &error_message);
+		CastParameters parameters(false, &error_message);
+		return OP::Operation(input, result, parameters);
 	}
 };
 

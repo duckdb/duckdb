@@ -77,7 +77,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 			auto &col_mask = FlatVector::Validity(vector);
 			col_mask.Initialize(build_size);
 		}
-		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build);
+		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
 	}
 
 	return true;

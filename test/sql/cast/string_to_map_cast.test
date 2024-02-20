@@ -36,7 +36,7 @@ SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
 statement error
 SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)
 ----
-Invalid Input Error: Map keys have to be unique
+Map keys must be unique
 
 
 #               Nested Maps

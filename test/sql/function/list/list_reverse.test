@@ -147,7 +147,7 @@ tattarrattat
 statement ok
 DROP TABLE palindromes;
 
-query I rowsort
+query I
 WITH example AS (
   SELECT [1, 2, 3] AS arr UNION ALL
   SELECT [4, 5] AS arr UNION ALL
@@ -155,7 +155,7 @@ WITH example AS (
 )
 SELECT
   ${f}(arr) AS reverse_arr
-FROM example;
+FROM example ORDER BY length(reverse_arr) DESC;
 ----
 [3, 2, 1]
 [5, 4]
@@ -286,6 +286,21 @@ where g = lg
   and li > i
 ----
 0
+
+# bug found in PR10587
+query I
+WITH example AS (
+  SELECT [1, 2, 3] AS arr UNION ALL
+  SELECT [4, 5] AS arr UNION ALL
+  SELECT [] AS arr
+)
+SELECT
+  ${f}(arr) AS reverse_arr
+FROM example ORDER BY length(reverse_arr) DESC;
+----
+[3, 2, 1]
+[5, 4]
+[]
 
 endloop
 
