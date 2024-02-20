@@ -56,4 +56,3 @@
 %type <str> LabelOptional
 %type <list> EdgeTablesClauseOptional
 %type <range> GraphTableNameOptional
-%type <node> pgq_a_expr
