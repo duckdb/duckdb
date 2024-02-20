@@ -22,7 +22,7 @@ public:
 		idx_t size = to - from;
 		vector<sel_t> child_indices;
 		AppendValidity(append_data, format, from, to);
-		AppendOffsets(append_data, format, from, to, child_indices);
+		AppendListMetadata(append_data, format, from, to, child_indices);
 
 		// append the child vector of the list
 		SelectionVector child_sel(child_indices.data());
@@ -47,7 +47,7 @@ public:
 	}
 
 public:
-	static void AppendOffsets(ArrowAppendData &append_data, UnifiedVectorFormat &format, idx_t from, idx_t to,
+	static void AppendListMetadata(ArrowAppendData &append_data, UnifiedVectorFormat &format, idx_t from, idx_t to,
 	                          vector<sel_t> &child_sel) {
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		idx_t size = to - from;

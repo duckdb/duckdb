@@ -157,25 +157,29 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 	auto &start_offset = result.start_offset;
 	auto &list_size = result.list_size;
 
-	idx_t cur_offset = 0;
+	list_size = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
 	auto sizes = ArrowBufferData<BUFFER_TYPE>(array, 2) + effective_offset;
 
+	// In ListArrays the offsets have to be sequential
+	// ListViewArrays do not have this same constraint
+	// for that reason we need to keep track of the lowest offset, so we can skip all the data that comes before it
+	// when we scan the child data
 	auto lowest_offset = offsets[0];
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
 		le.offset = offsets[i];
 		le.length = sizes[i];
-		cur_offset += le.length;
+		list_size += le.length;
 		lowest_offset = MinValue(lowest_offset, offsets[i]);
 	}
+	start_offset = lowest_offset;
+	// We start scanning the child data at the 'start_offset' so we need to fix up the created list entries
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
-		le.offset -= lowest_offset;
+		le.offset -= start_offset;
 	}
-	start_offset = lowest_offset;
-	list_size = cur_offset;
 	return result;
 }
 
@@ -187,7 +191,7 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 	auto &start_offset = result.start_offset;
 	auto &list_size = result.list_size;
 
-	idx_t cur_offset = 0;
+	list_size = 0;
 	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
 		auto fixed_size = arrow_type.FixedSize();
 		//! Have to check validity mask before setting this up
@@ -196,11 +200,10 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 		auto list_data = FlatVector::GetData<list_entry_t>(vector);
 		for (idx_t i = 0; i < size; i++) {
 			auto &le = list_data[i];
-			le.offset = cur_offset;
+			le.offset = list_size;
 			le.length = fixed_size;
-			cur_offset += fixed_size;
+			list_size += fixed_size;
 		}
-		list_size = cur_offset;
 		return result;
 	}
 	if (arrow_type.IsView()) {
