@@ -3,6 +3,7 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -333,12 +334,12 @@ static string DrawPadded(const string &str, idx_t width) {
 
 static string RenderTitleCase(string str) {
 	str = StringUtil::Lower(str);
-	str[0] = toupper(str[0]);
+	str[0] = NumericCast<char>(toupper(str[0]));
 	for (idx_t i = 0; i < str.size(); i++) {
 		if (str[i] == '_') {
 			str[i] = ' ';
 			if (i + 1 < str.size()) {
-				str[i + 1] = toupper(str[i + 1]);
+				str[i + 1] = NumericCast<char>(toupper(str[i + 1]));
 			}
 		}
 	}

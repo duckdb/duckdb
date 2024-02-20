@@ -261,7 +261,7 @@ public:
 					EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
 					bool is_null = !vdata.validity.RowIsValid(idx);
 					//! We resolve null values with a predicated comparison
-					vector_null_positions[nulls_idx] = vector_idx + i;
+					vector_null_positions[nulls_idx] = UnsafeNumericCast<uint16_t>(vector_idx + i);
 					nulls_idx += is_null;
 					input_vector[vector_idx + i] = value;
 				}

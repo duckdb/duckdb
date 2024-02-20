@@ -13,6 +13,7 @@
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #endif
 
 namespace duckdb {
@@ -91,7 +92,8 @@ public:
 public:
 #ifdef DEBUG
 	uint8_t ExtractValue(uint32_t value, uint8_t index) {
-		return (value & LeadingZeroBufferConstants::MASKS[index]) >> LeadingZeroBufferConstants::SHIFTS[index];
+		return NumericCast<uint8_t>((value & LeadingZeroBufferConstants::MASKS[index]) >>
+		                            LeadingZeroBufferConstants::SHIFTS[index]);
 	}
 #endif
 

@@ -1,6 +1,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -178,7 +179,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
 				                            data[idx].GetString());
 			}
-			values[data[idx]] = i;
+			values[data[idx]] = UnsafeNumericCast<T>(i);
 		}
 	}
 

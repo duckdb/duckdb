@@ -19,7 +19,7 @@ duckdb_date_struct duckdb_from_date(duckdb_date date) {
 	duckdb_date_struct result;
 	result.year = year;
 	result.month = duckdb::UnsafeNumericCast<int8_t>(month);
-	result.day =duckdb::UnsafeNumericCast<int8_t>(day);
+	result.day = duckdb::UnsafeNumericCast<int8_t>(day);
 	return result;
 }
 

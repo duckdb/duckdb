@@ -191,7 +191,7 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAlloc
 	if (!linked_list.last_segment) {
 		// empty linked list, create the first (and last) segment
 		auto capacity = ListSegment::INITIAL_CAPACITY;
-		segment = functions.create_segment(functions, allocator, UnsafeNumericCast<uint16_t>( capacity));
+		segment = functions.create_segment(functions, allocator, UnsafeNumericCast<uint16_t>(capacity));
 		linked_list.first_segment = segment;
 		linked_list.last_segment = segment;
 

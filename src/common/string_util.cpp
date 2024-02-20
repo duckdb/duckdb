@@ -44,13 +44,13 @@ void StringUtil::LTrim(string &str) {
 
 // Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
 void StringUtil::RTrim(string &str) {
-	str.erase(find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
+	str.erase(find_if(str.rbegin(), str.rend(), [](char ch) { return ch > 0 && !CharacterIsSpace(ch); }).base(),
 	          str.end());
 }
 
 void StringUtil::RTrim(string &str, const string &chars_to_trim) {
 	str.erase(find_if(str.rbegin(), str.rend(),
-	                  [&chars_to_trim](int ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
+	                  [&chars_to_trim](char ch) { return ch > 0 && chars_to_trim.find(ch) == string::npos; })
 	              .base(),
 	          str.end());
 }

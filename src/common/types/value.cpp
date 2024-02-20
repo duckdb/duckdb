@@ -839,7 +839,7 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	Value result(original_type);
 	switch (original_type.InternalType()) {
 	case PhysicalType::UINT8:
-		result.value_.utinyint = NumericCast<uint8_t >(value);
+		result.value_.utinyint = NumericCast<uint8_t>(value);
 		break;
 	case PhysicalType::UINT16:
 		result.value_.usmallint = NumericCast<uint16_t>(value);

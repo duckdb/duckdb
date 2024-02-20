@@ -8,6 +8,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -824,13 +825,14 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		// using the max of these of the two types gives us the new decimal size
 		auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
 		auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-		auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
+		auto extra_width =
+		    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
 		auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
 		auto width = extra_width + scale;
 		if (width > DecimalType::MaxWidth()) {
 			// if the resulting decimal does not fit, we truncate the scale
 			width = DecimalType::MaxWidth();
-			scale = width - extra_width;
+			scale = NumericCast<uint8_t>(width - extra_width);
 		}
 		result = LogicalType::DECIMAL(width, scale);
 		return true;

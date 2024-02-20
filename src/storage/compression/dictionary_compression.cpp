@@ -1,4 +1,5 @@
 #include "duckdb/common/bitpacking.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
@@ -627,7 +628,7 @@ uint16_t DictionaryCompressionStorage::GetStringLength(uint32_t *index_buffer_pt
 	if (index == 0) {
 		return 0;
 	} else {
-		return index_buffer_ptr[index] - index_buffer_ptr[index - 1];
+		return UnsafeNumericCast<uint16_t>(index_buffer_ptr[index] - index_buffer_ptr[index - 1]);
 	}
 }
 
