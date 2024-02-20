@@ -59,20 +59,48 @@ struct IsIntegral<uhugeint_t> {
 	static constexpr bool value = true;
 };
 
+// TODO write a bunch of test cases on this!
+// TODO bunch of other combos signed/unsigned
+
 template <class OUT, class IN>
 OUT UnsafeNumericCast(IN val) {
+#ifdef DEBUG
+	if (std::is_unsigned<OUT>() && val < 0) {
+		throw InternalException("Information loss on integer cast: Negative value to unsigned");
+	}
+	auto unsigned_val = static_cast<typename MakeUnsigned<IN>::type>(val);
+	auto unsigned_max = static_cast<typename MakeUnsigned<OUT>::type>(NumericLimits<OUT>::Maximum());
+	if (std::is_unsigned<OUT>() && unsigned_val > unsigned_max) {
+		throw InternalException("Information loss on integer cast: Value too large for target type");
+	}
+	auto signed_val = static_cast<typename MakeSigned<IN>::type>(val);
+	auto signed_min = static_cast<typename MakeSigned<OUT>::type>(NumericLimits<OUT>::Minimum());
+	if (std::is_signed<OUT>() && signed_val < signed_min) {
+		throw InternalException("Information loss on integer cast: Value too small for target type");
+	}
+
+#endif
+	return static_cast<OUT>(val);
+}
+
+template <class OUT>
+OUT UnsafeNumericCast(double val) {
+#ifdef DEBUG
+
+#endif
+	return static_cast<OUT>(val);
+}
+
+template <class OUT>
+OUT UnsafeNumericCast(float val) {
+#ifdef DEBUG
+
+#endif
 	return static_cast<OUT>(val);
 }
 
 template <class OUT, class IN>
 OUT NumericCast(IN val) {
-	// TODO deal with signedness
-	//#ifdef DEBUG
-	//	if (val > NumericLimits<OUT>::Maximum() || val < NumericLimits<OUT>::Minimum()) {
-	//		// TODO more details in error message
-	//		throw InternalException("Information loss on integer cast");
-	//	}
-	//#endif
 	return UnsafeNumericCast<OUT, IN>(val);
 }
 
