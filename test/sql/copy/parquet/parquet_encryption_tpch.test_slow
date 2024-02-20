@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_encryption.test_slow
+# name: test/sql/copy/parquet/parquet_encryption_tpch.test_slow
 # description: Test Parquet encryption for TPC-H
 # group: [parquet]
 
