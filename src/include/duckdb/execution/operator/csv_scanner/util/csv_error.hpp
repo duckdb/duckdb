@@ -108,6 +108,9 @@ public:
 	idx_t GetMaxLineLength() {
 		return max_line_length;
 	}
+	void DontPrintErrorLine() {
+		print_line = false;
+	}
 
 private:
 	//! If we should print the line of an error
@@ -118,6 +121,7 @@ private:
 	unordered_map<idx_t, LinesPerBoundary> lines_per_batch_map;
 	idx_t max_line_length = 0;
 	bool ignore_errors = false;
+	bool print_line = true;
 };
 
 } // namespace duckdb

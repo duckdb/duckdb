@@ -89,6 +89,11 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 StringValueResult::~StringValueResult() {
 	// We have to insert the lines read by this scanner
 	error_handler.Insert(iterator.GetBoundaryIdx(), lines_read);
+	if (!iterator.done) {
+		// Some operators, like Limit, might cause a future error to incorrectly report the wrong error line
+		// Better to print nothing to print something wrong
+		error_handler.DontPrintErrorLine();
+	}
 	// We have to check if we got to error
 	error_handler.ErrorIfNeeded();
 }

@@ -33,7 +33,7 @@ void CSVErrorHandler::ThrowError(CSVError csv_error) {
 }
 
 void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
-	if ((ignore_errors && !force_error) || !CanGetLine(csv_error.GetBoundaryIndex())) {
+	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
 		lock_guard<mutex> parallel_lock(main_mutex);
 		// We store this error, we can't throw it now, or we are ignoring it
 		errors[csv_error.error_info].push_back(std::move(csv_error));
@@ -161,6 +161,9 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 }
 
 bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
+	if (!print_line) {
+		return false;
+	}
 	switch (error.type) {
 	case CSVErrorType::CAST_ERROR:
 	case CSVErrorType::UNTERMINATED_QUOTES:
