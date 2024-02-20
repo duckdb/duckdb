@@ -1,4 +1,4 @@
-# name: test/sql/pivot/unpivot_funky_names.test
+# name: test/sql/pivot/unpivot_unnamed_subquery.test
 # description: Test top-level pivot syntax
 # group: [pivot]
 
