@@ -11,6 +11,7 @@ PRAGMA enable_verification
 # But this will finish
 statement maybe
 from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/title.principals.tsv', quote='"') limit 10
+----
 
 # This works, because we use \0 as a quote
 statement ok
