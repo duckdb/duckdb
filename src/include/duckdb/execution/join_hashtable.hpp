@@ -169,17 +169,23 @@ public:
 	vector<LogicalType> build_types;
 	//! Positions of the columns that need to output
 	const vector<idx_t> &output_columns;
-	//! The comparison predicates
-	vector<ExpressionType> predicates;
+	//! The comparison predicates that only contain equality predicates
+	vector<ExpressionType> equality_predicates;
+	//! The comparison predicates that contain non-equality predicates
+	vector<ExpressionType> non_equality_predicates;
+	//! The column indices of the non-equality predicates to be used to compare the rows
+	vector<column_t> non_equality_predicate_columns;
 	//! Data column layout
 	TupleDataLayout layout;
-	//! Efficiently matches rows
-	RowMatcher row_matcher;
-	//! Matches the same rows as the row_matcher, but also returns a vector for no matches
-	RowMatcher row_matcher_no_match_sel;
-	//! Matches the rows during the build phase of the hash join to prevent
+	//! Matches the equal condition rows during the build phase of the hash join to prevent
 	//! duplicates in a list because of hash-collisions
 	RowMatcher row_matcher_build;
+	//! Efficiently matches the non-equi rows during the probing phase, only there if non_equality_predicates is not
+	//! empty
+	unique_ptr<RowMatcher> row_matcher_probe;
+	//! Matches the same rows as the row_matcher, but also returns a vector for no matches
+	unique_ptr<RowMatcher> row_matcher_probe_no_match_sel;
+
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
@@ -346,7 +352,6 @@ public:
 	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, TupleDataChunkState &key_state, DataChunk &payload,
 	                                        ProbeSpill &probe_spill, ProbeSpillLocalAppendState &spill_state,
 	                                        DataChunk &spill_chunk);
-
 
 private:
 	//! The current number of radix bits used to partition

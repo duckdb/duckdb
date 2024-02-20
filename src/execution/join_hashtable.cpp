@@ -20,7 +20,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
       output_columns(output_columns_p), entry_size(0), tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p),
       finalized(false), has_null(false), radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
 
-	for (auto &condition : conditions) {
+	for (idx_t i = 0; i < conditions.size(); ++i) {
+		auto &condition = conditions[i];
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
@@ -30,9 +31,14 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 			// and that all other conditions are at the back
 			D_ASSERT(equality_types.size() == condition_types.size());
 			equality_types.push_back(type);
+			equality_predicates.push_back(condition.comparison);
+
+		} else {
+			// all non-equality conditions are at the back
+			non_equality_predicates.push_back(condition.comparison);
+			non_equality_predicate_columns.push_back(i);
 		}
 
-		predicates.push_back(condition.comparison);
 		null_values_are_equal.push_back(condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
 		                                condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 
@@ -52,12 +58,18 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	layout_types.emplace_back(LogicalType::HASH);
 	layout.Initialize(layout_types, false);
 
-	// Initialize the row matcher
-	row_matcher.Initialize(false, layout, predicates);
-	row_matcher_no_match_sel.Initialize(true, layout, predicates);
+	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality
+	if (!non_equality_predicates.empty()) {
+
+		row_matcher_probe = unique_ptr<RowMatcher>(new RowMatcher());
+		row_matcher_probe_no_match_sel = unique_ptr<RowMatcher>(new RowMatcher());
+
+		row_matcher_probe->Initialize(false, layout, non_equality_predicates);
+		row_matcher_probe_no_match_sel->Initialize(true, layout, non_equality_predicates);
+	}
 
 	// todo: What happens if there is a predicate that is dependent on the probe side? Need to filter this out
-	row_matcher_build.Initialize(true, layout, predicates);
+	row_matcher_build.Initialize(true, layout, equality_predicates);
 
 	const auto &offsets = layout.GetOffsets();
 	tuple_size = offsets[condition_types.size() + build_types.size()];
@@ -364,10 +376,9 @@ static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], atomic<data_p
 	}
 }
 
-
 template <bool PARALLEL>
-static inline void InsertRowToEntry(aggr_ht_entry_t &entry, data_ptr_t row_ptr_to_insert, const hash_t hash, const idx_t pointer_offset) {
-
+static inline void InsertRowToEntry(aggr_ht_entry_t &entry, data_ptr_t row_ptr_to_insert, const hash_t hash,
+                                    const idx_t pointer_offset) {
 
 	bool successful_insertion;
 	if (PARALLEL) {
@@ -375,10 +386,11 @@ static inline void InsertRowToEntry(aggr_ht_entry_t &entry, data_ptr_t row_ptr_t
 		do {
 			current_row_pointer = entry.GetPointerOrNull();
 			Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
-			successful_insertion = entry.SetPointerAndSalt<PARALLEL>(row_ptr_to_insert, aggr_ht_entry_t::ExtractSalt(hash));
+			successful_insertion =
+			    entry.SetPointerAndSalt<PARALLEL>(row_ptr_to_insert, aggr_ht_entry_t::ExtractSalt(hash));
 		} while (!successful_insertion);
 
-	}else{
+	} else {
 		data_ptr_t current_row_pointer = entry.GetPointerOrNull();
 		Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
 		successful_insertion = entry.SetPointerAndSalt<PARALLEL>(row_ptr_to_insert, aggr_ht_entry_t::ExtractSalt(hash));
@@ -390,8 +402,6 @@ static inline void InsertRowToEntry(aggr_ht_entry_t &entry, data_ptr_t row_ptr_t
 
 	// at the end, the successful insertion should be true
 	D_ASSERT(successful_insertion);
-
-
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, bool parallel) {
@@ -685,14 +695,23 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 	}
 	idx_t no_match_count = 0;
 
-	auto &matcher = no_match_sel ? ht.row_matcher_no_match_sel : ht.row_matcher;
-	return matcher.Match(keys, key_state.vector_data, match_sel, this->count, ht.layout, pointers, no_match_sel,
-	                     no_match_count);
+	auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
+	// If there is a matcher for the probing side because of non-equality predicates, use it
+	if (matcher) {
+
+		// we need to only use the vectors with the indices of the columns that are used in the probe phase, namely the
+		// non-equality columns
+
+		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, ht.layout, pointers, no_match_sel,
+		                      no_match_count, ht.non_equality_predicate_columns);
+	} else { // Otherwise, just return the count as we assume that the HT chains are already filtered
+		return this->count;
+	}
 }
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
 	while (true) {
-		// resolve the predicates for this set of keys
+		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, result_vector, nullptr);
 
 		// after doing all the comparisons set the found_match vector
@@ -804,7 +823,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// this results in a boolean array indicating whether or not the tuple has a match
 	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
 	while (this->count > 0) {
-		// resolve the predicates for the current set of pointers
+		// resolve the equality_predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
 		idx_t no_match_count = this->count - match_count;
 
@@ -1015,7 +1034,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
 	while (this->count > 0) {
-		// resolve the predicates for the current set of pointers
+		// resolve the equality_predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
 		idx_t no_match_count = this->count - match_count;
 

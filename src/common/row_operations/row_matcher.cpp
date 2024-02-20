@@ -210,6 +210,26 @@ idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs
 	return count;
 }
 
+idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
+                        idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
+                        SelectionVector *no_match_sel, idx_t &no_match_count, const vector<column_t> &column_ids) {
+	D_ASSERT(!match_functions.empty());
+	// The column_ids must have the same size as the match_functions vector
+	D_ASSERT(column_ids.size() == match_functions.size());
+
+	// The largest column_id must be smaller than the number of columns in the lhs
+	D_ASSERT(*max_element(column_ids.begin(), column_ids.end()) < lhs.ColumnCount());
+
+	for (idx_t match_function_idx = 0; match_function_idx < match_functions.size(); match_function_idx++) {
+		const auto col_idx = column_ids[match_function_idx];
+		const auto &match_function = match_functions[match_function_idx];
+		count =
+		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
+		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
+	}
+	return count;
+}
+
 MatchFunction RowMatcher::GetMatchFunction(const bool no_match_sel, const LogicalType &type,
                                            const ExpressionType predicate) {
 	return no_match_sel ? GetMatchFunction<true>(type, predicate) : GetMatchFunction<false>(type, predicate);
