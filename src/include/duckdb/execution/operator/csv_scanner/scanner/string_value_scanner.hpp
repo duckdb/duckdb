@@ -54,10 +54,7 @@ public:
 	                  CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
 	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
 
-	~StringValueResult() {
-		// We have to insert the lines read by this scanner
-		// We have to check if we got to error
-	}
+	~StringValueResult();
 
 	//! Information on the vector
 	unsafe_vector<void *> vector_ptr;

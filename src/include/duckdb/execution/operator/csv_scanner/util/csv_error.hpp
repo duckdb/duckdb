@@ -27,6 +27,13 @@ public:
 
 	idx_t boundary_idx = 0;
 	idx_t lines_in_batch = 0;
+
+	bool operator<(const LinesPerBoundary &other) const {
+		if (boundary_idx < other.boundary_idx) {
+			return true;
+		}
+		return lines_in_batch < other.lines_in_batch;
+	}
 };
 
 enum CSVErrorType : uint8_t {
@@ -42,6 +49,7 @@ enum CSVErrorType : uint8_t {
 
 class CSVError {
 public:
+	CSVError() {};
 	CSVError(string error_message, CSVErrorType type, idx_t column_idx, vector<Value> row, LinesPerBoundary error_info);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
@@ -66,9 +74,6 @@ public:
 		return error_info.boundary_idx;
 	}
 
-	bool operator<(const CSVError &other) const {
-		return error_info.boundary_idx < other.error_info.boundary_idx;
-	}
 	//! Actual error message
 	string error_message;
 	//! Error Type
@@ -85,15 +90,20 @@ class CSVErrorHandler {
 public:
 	CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(CSVError csv_error);
+	void Error(CSVError csv_error, bool force_error = false);
+	//! If we have a cached error, and we can now error, we error.
+	void ErrorIfNeeded();
 	//! Inserts a finished error info
 	void Insert(idx_t boundary_idx, idx_t rows);
-	//	void ThrowError
-	set<CSVError> errors;
+	//! Method that actually throws the error
+	void ThrowError(CSVError csv_error);
+	//! If we processed all boundaries before the one that error-ed
 	bool CanGetLine(idx_t boundary_index);
 	//! Return the 1-indexed line number
 	idx_t GetLine(const LinesPerBoundary &error_info);
 	void NewMaxLineSize(idx_t scan_line_size);
+	//! Set of errors
+	map<LinesPerBoundary, vector<CSVError>> errors;
 
 	idx_t GetMaxLineLength() {
 		return max_line_length;

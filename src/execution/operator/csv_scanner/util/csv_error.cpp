@@ -13,14 +13,7 @@ LinesPerBoundary::LinesPerBoundary(idx_t boundary_idx_p, idx_t lines_in_batch_p)
 CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_errors_p) {
 }
 
-void CSVErrorHandler::Error(CSVError csv_error) {
-	if (ignore_errors || !CanGetLine(csv_error.GetBoundaryIndex())) {
-		lock_guard<mutex> parallel_lock(main_mutex);
-		// We store this error, we can't throw it now, or we are ignoring it
-		errors.insert(csv_error);
-		return;
-	}
-
+void CSVErrorHandler::ThrowError(CSVError csv_error) {
 	std::ostringstream error;
 	if (PrintLineNumber(csv_error)) {
 		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << std::endl;
@@ -36,6 +29,29 @@ void CSVErrorHandler::Error(CSVError csv_error) {
 		throw ParameterNotAllowedException(error.str());
 	default:
 		throw InvalidInputException(error.str());
+	}
+}
+
+void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
+	if ((ignore_errors && !force_error) || !CanGetLine(csv_error.GetBoundaryIndex())) {
+		lock_guard<mutex> parallel_lock(main_mutex);
+		// We store this error, we can't throw it now, or we are ignoring it
+		errors[csv_error.error_info].push_back(std::move(csv_error));
+		return;
+	}
+	// Otherwise we can throw directly
+	ThrowError(csv_error);
+}
+
+void CSVErrorHandler::ErrorIfNeeded() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (ignore_errors || errors.empty()) {
+		// Nothing to error
+		return;
+	}
+	auto first_error = errors.begin()->second[0];
+	if (CanGetLine(first_error.error_info.boundary_idx)) {
+		ThrowError(first_error);
 	}
 }
 

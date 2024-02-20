@@ -86,6 +86,13 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	}
 }
 
+StringValueResult::~StringValueResult() {
+	// We have to insert the lines read by this scanner
+	error_handler.Insert(iterator.GetBoundaryIdx(), lines_read);
+	// We have to check if we got to error
+	error_handler.ErrorIfNeeded();
+}
+
 inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const idx_t size) {
 	for (idx_t i = 0; i < size; i++) {
 		if (null_str_ptr[i] != value_ptr[i]) {
