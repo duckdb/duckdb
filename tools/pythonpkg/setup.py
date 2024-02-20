@@ -196,7 +196,7 @@ define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTEN
 
 linker_args = toolchain_args
 if platform.system() == 'Windows':
-    linker_args.extend(['rstrtmgr.lib'])
+    linker_args.extend(['rstrtmgr.lib', 'bcrypt.lib'])
 
 extra_files = []
 header_files = []
