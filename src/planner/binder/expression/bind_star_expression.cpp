@@ -180,6 +180,28 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 	for (idx_t i = 0; i < star_list.size(); i++) {
 		auto new_expr = expr->Copy();
 		ReplaceStarExpression(new_expr, star_list[i]);
+		if (star->columns) {
+			optional_ptr<ParsedExpression> expr = star_list[i].get();
+			while (expr) {
+				if (expr->type == ExpressionType::COLUMN_REF) {
+					break;
+				}
+				if (expr->type == ExpressionType::OPERATOR_COALESCE) {
+					expr = expr->Cast<OperatorExpression>().children[0].get();
+				} else {
+					// unknown expression
+					expr = nullptr;
+				}
+			}
+			if (expr) {
+				auto &colref = expr->Cast<ColumnRefExpression>();
+				if (new_expr->alias.empty()) {
+					new_expr->alias = colref.GetColumnName();
+				} else {
+					new_expr->alias = StringUtil::Replace(new_expr->alias, "{column}", colref.GetColumnName());
+				}
+			}
+		}
 		new_select_list.push_back(std::move(new_expr));
 	}
 }
