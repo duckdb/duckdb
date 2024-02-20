@@ -177,9 +177,9 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 
 			// Get the pointers to the rows that need to be compared
 			for (idx_t need_compare_idx = 0; need_compare_idx < need_compare_count; need_compare_idx++) {
-				const auto entry_index = entry_compare_sel_vector.get_index(need_compare_idx);
-				const auto &entry = entries[ht_offsets[entry_index]];
-				row_ptr_insert_to[entry_index] = entry.GetPointer();
+				const auto row_index = entry_compare_sel_vector.get_index(need_compare_idx);
+				const auto &entry = entries[ht_offsets[row_index]];
+				row_ptr_insert_to[row_index] = entry.GetPointer();
 			}
 
 			// Perform row comparisons
@@ -187,18 +187,20 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 			    row_matcher_build.Match(keys, key_state.vector_data, entry_compare_sel_vector, need_compare_count,
 			                            layout, row_ptr_insert_to_v, &no_match_sel, no_match_count);
 
+			D_ASSERT(match_count + no_match_count == need_compare_count);
+
 			// Set a pointer to the matching row
 			for (idx_t i = 0; i < match_count; i++) {
-				const auto entry_index = entry_compare_sel_vector.get_index(i);
-				auto &entry = entries[ht_offsets[entry_index]];
-				pointers_data[entry_index] = entry.GetPointer();
+				const auto row_index = entry_compare_sel_vector.get_index(i);
+				auto &entry = entries[ht_offsets[row_index]];
+				pointers_data[row_index] = entry.GetPointer();
 			}
 		}
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
-			const auto entry_index = no_match_sel.get_index(i);
-			auto &ht_offset = ht_offsets[entry_index];
+			const auto row_index = no_match_sel.get_index(i);
+			auto &ht_offset = ht_offsets[row_index];
 
 			ht_offset++;
 			if (ht_offset >= capacity) {
@@ -509,6 +511,7 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkSt
 			    row_matcher_build.Match(lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count, layout,
 			                            row_ptr_insert_to_v, &no_match_sel, no_match_count);
 
+			D_ASSERT(match_count + no_match_count == need_compare_count);
 			// Insert the rows that match
 			for (idx_t i = 0; i < match_count; i++) {
 				const auto entry_index = entry_compare_sel_vector.get_index(i);

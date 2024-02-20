@@ -175,6 +175,7 @@ public:
 	TupleDataLayout layout;
 	//! Efficiently matches rows
 	RowMatcher row_matcher;
+	//! Matches the same rows as the row_matcher, but also returns a vector for no matches
 	RowMatcher row_matcher_no_match_sel;
 	//! Matches the rows during the build phase of the hash join to prevent
 	//! duplicates in a list because of hash-collisions
