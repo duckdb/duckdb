@@ -70,9 +70,9 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 			}
 #endif
 		}
-		arguments.Verify();
 	}
 	arguments.SetCardinality(count);
+	arguments.Verify();
 
 	state->profiler.BeginSample();
 	D_ASSERT(expr.function.function);
