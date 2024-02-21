@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -176,10 +177,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 			}
 		}
-		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
+		if (op.children.size() > 1) {
+			throw InternalException("bruv, lets slow down");
 		}
+//		for (auto &child : op.children) {
+//			RemoveUnusedColumns remove(binder, context, true);
+//			remove.VisitOperator(*child);
+//		}
+		VisitOperatorExpressions(op);
+		VisitOperatorChildren(op);
 		return;
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
@@ -292,6 +298,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
+		auto &distinct = op.Cast<LogicalDistinct>();
+		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
+			// distinct type references columns that need to be distinct on, so no
+			// need to implicity reference everything.
+			break;
+		}
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
 		// FIXME: DISTINCT with expression list does not implicitly reference everything
