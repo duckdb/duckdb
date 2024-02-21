@@ -4,6 +4,11 @@ from pytest import raises, mark
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
+# We only run this test if this env var is set
+pytestmark = mark.skipif(
+    not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False), reason='httpfs extension not available'
+)
+
 
 class TestHTTPFS(object):
     def test_read_json_httpfs(self, require):

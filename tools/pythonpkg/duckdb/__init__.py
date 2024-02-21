@@ -71,7 +71,6 @@ from .duckdb import (
     __interactive__,
     __jupyter__,
     __version__,
-	__build_type__,
     apilevel,
     comment,
     default_connection,
