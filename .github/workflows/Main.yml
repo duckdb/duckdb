@@ -228,7 +228,7 @@ jobs:
     name: ODBC
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
-    needs: linux-debug
+#    needs: linux-debug
     env:
       BUILD_ODBC: 1
       GEN: ninja
