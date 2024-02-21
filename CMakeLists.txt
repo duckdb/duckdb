@@ -94,12 +94,6 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
-#Solves compile issue for debug builds
-#https://learn.microsoft.com/en-us/cpp/error-messages/compiler-errors-1/fatal-error-c1128?view=msvc-170
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" AND MSVC)
-  add_compile_options(/bigobj)
-endif()
-
 option("Enable address sanitizer." TRUE)
 
 set(M32_FLAG "")
