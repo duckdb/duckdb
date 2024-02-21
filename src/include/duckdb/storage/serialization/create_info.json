@@ -187,6 +187,12 @@
         "id": 204,
         "name": "names",
         "type": "vector<string>"
+      },
+      {
+        "id": 205,
+        "name": "column_comments",
+        "type": "vector<Value>",
+        "default": "vector<Value>()"
       }
     ]
   },

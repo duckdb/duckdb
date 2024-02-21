@@ -125,7 +125,7 @@ statement error
 SELECT empid, dept, month, sales_jan_feb, sales_mar_apr FROM monthly_sales
     UNPIVOT((sales_jan_feb, sales_mar_apr) FOR month IN ((jan, feb), mar));
 ----
-inconsistent amount of
+UNPIVOT value count mismatch
 
 # unrecognized entry in unpivot
 statement error
@@ -166,14 +166,17 @@ SELECT * FROM monthly_sales
     UNPIVOT(sales FOR month IN ())
     ORDER BY empid;
 ----
+syntax error
 
 statement error
 SELECT * FROM monthly_sales
     UNPIVOT(sales FOR month IN (''))
     ORDER BY empid;
 ----
+empty column name
 
 statement error
 SELECT * FROM monthly_sales
     UNPIVOT(SUM(sales) FOR month IN (empid, dept, jan, feb, mar, april))
 ----
+syntax error

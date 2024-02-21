@@ -505,18 +505,19 @@ def write_header(data: ExtensionData):
                                                                     {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
 
     static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    //    "azure",
-        "autocomplete",
-        "excel",
-        "fts",
-        "httpfs",
-        // "inet", 
-        // "icu",
-        "json",
-        "parquet",
-        "sqlsmith",
-        "tpcds",
-        "tpch"
+    "aws",
+    "azure",
+    "autocomplete",
+    "excel",
+    "fts",
+    "httpfs",
+    // "inet", 
+    // "icu",
+    "json",
+    "parquet",
+    "sqlsmith",
+    "tpcds",
+    "tpch"
     }; // END_OF_AUTOLOADABLE_EXTENSIONS
 
     } // namespace duckdb"""

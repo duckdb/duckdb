@@ -255,6 +255,11 @@ idx_t ColumnDataCollectionSegment::SizeInBytes() const {
 	return allocator->SizeInBytes() + heap->SizeInBytes();
 }
 
+idx_t ColumnDataCollectionSegment::AllocationSize() const {
+	D_ASSERT(!allocator->IsShared());
+	return allocator->AllocationSize() + heap->AllocationSize();
+}
+
 void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result) {
 	vector<column_t> column_ids;
 	column_ids.reserve(types.size());
