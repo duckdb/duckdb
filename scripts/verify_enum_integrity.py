@@ -28,7 +28,7 @@ def visit_enum(cursor):
 
 def parse_enum(file_path, clang_path: Optional[str] = None):
     if clang_path:
-        clang.cindex.Config.set_library_path(clang_path)
+        clang.cindex.Config.set_library_file(clang_path)
 
     # Create index
     index = clang.cindex.Index.create()
@@ -38,7 +38,11 @@ def parse_enum(file_path, clang_path: Optional[str] = None):
 
     # Traverse the AST
     for cursor in tu.cursor.walk_preorder():
-        if cursor.kind == clang.cindex.CursorKind.ENUM_DECL:
+        try:
+            is_enum = cursor.kind == clang.cindex.CursorKind.ENUM_DECL
+        except:
+            is_enum = False
+        if is_enum:
             visit_enum(cursor)
 
 

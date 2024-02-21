@@ -82,12 +82,12 @@ jobs:
     - name: Install python dependencies
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: python -m pip install clang
+      run: python -m pip install clang-5
 
     - name: Verify C enum integrity
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: python scripts/verify_enum_integrity.py src/include/duckdb.h --library_path $(brew --prefix llvm@15)/lib
+      run: python scripts/verify_enum_integrity.py src/include/duckdb.h --library_path $(brew --prefix llvm@15)/lib/libclang.dylib
 
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
