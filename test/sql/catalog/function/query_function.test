@@ -94,6 +94,33 @@ SELECT * FROM query('WITH a(i) as (SELECT 1) SELECT a1.i as i1, a2.i as i2 FROM 
 ----
 1	1
 
+# dynamic table macro example
+statement ok
+create table t as select 42;
+
+statement ok
+create table t2 as select 'duckdb';
+
+statement ok
+create table t3 as select '';
+
+statement ok
+create table t4 as select '1?ch@racter$';
+
+statement ok
+CREATE MACRO union_all(table_list, by_name:='FALSE') AS TABLE (
+    FROM query('FROM ' || list_reduce(table_list, (x, y) ->  x || ' UNION ALL ' || CASE WHEN by_name THEN 'BY NAME ' ELSE '' END || 'FROM ' || y))
+);
+
+query I
+from union_all(['t', 't2', 't3', t4, '(select ''I am a subquery'')'], by_name:='FALSE');
+----
+42
+duckdb
+(empty)
+1?ch@racter$
+I am a subquery
+
 # test incorrect usage
 statement error
 SELECT * FROM query(NULL);
