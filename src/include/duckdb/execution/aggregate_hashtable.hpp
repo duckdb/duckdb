@@ -34,6 +34,10 @@ public:
 	explicit aggr_ht_entry_t(hash_t value_p) : value(value_p) {
 	}
 
+	// Add a default constructor for 32 bit linux test case
+	aggr_ht_entry_t() : value(0) {
+	}
+
 	inline bool IsOccupied() const {
 		return value != 0;
 	}

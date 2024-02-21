@@ -363,7 +363,7 @@ static inline void InsertRowToEntry(atomic<aggr_ht_entry_t> &entry, data_ptr_t r
 
 	if (PARALLEL) {
 		aggr_ht_entry_t current_entry = entry.load();
-		aggr_ht_entry_t new_entry(0);
+		aggr_ht_entry_t new_entry;
 		do {
 			data_ptr_t current_row_pointer = current_entry.GetPointerOrNull();
 			Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
