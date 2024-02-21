@@ -204,7 +204,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				if (new_expr->alias.empty()) {
 					new_expr->alias = colref.GetColumnName();
 				} else {
-					new_expr->alias = StringUtil::Replace(new_expr->alias, "{column}", colref.GetColumnName());
+					new_expr->alias = StringUtil::Replace(new_expr->alias, "[column]", colref.GetColumnName());
 				}
 			}
 		}
