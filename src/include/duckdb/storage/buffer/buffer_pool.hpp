@@ -74,9 +74,9 @@ protected:
 	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
 
-	//! Garbage collect eviction queue
+	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue();
-	idx_t PurgeIteration();
+	//! Add a buffer handle to the eviction queue.
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 protected:
@@ -94,27 +94,14 @@ protected:
 	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
 
 	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
-	constexpr static idx_t INSERT_INTERVAL = 1024;
-//	//!
-//	constexpr static float ACTIVE_THRESHOLD = 0.4;
-//	//! Initial maximum queue size - this is an adaptive ceiling. If we purge the entire queue, and we
-//	//! encounter more than 50% active nodes, we increase the ceiling.
-//	idx_t max_queue_size = 8 * INSERT_INTERVAL;
-//
-//	//! Defines how many nodes we attempt to purge per bulk purge iteration
-//	constexpr static idx_t BULK_PURGE_SIZE = 256;
+	constexpr static idx_t INSERT_INTERVAL = 4096;
 
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
-	//! This is also the total number of unpinned buffers.
 	atomic<idx_t> evict_queue_insertions;
 	//! Whether a queue purge is currently active
 	atomic<bool> purge_active;
-//	//! The maximum number of nodes that we purge per bulk purge iteration
-//	array<BufferEvictionNode, BULK_PURGE_SIZE> purge_nodes;
-	//! Total number of buffers that have ever been pinned.
-	atomic<idx_t> pinned_buffers;
-
-	idx_t total_purged;
+	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
+	vector<BufferEvictionNode> purge_nodes;
 };
 
 } // namespace duckdb
