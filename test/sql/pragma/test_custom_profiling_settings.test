@@ -1,0 +1,32 @@
+# name: test/sql/pragma/test_custom_profiling_settings.test
+# description: Test PRAGMA custom_profiling_settings
+# group: [pragma]
+
+# enable profiling cannot be called
+statement ok
+PRAGMA custom_profiling_settings='/Users/maia/CLionProjects/duckdb/test/sql/pragma/test.json'
+
+query I
+SELECT current_setting('custom_profiling_settings');
+----
+/Users/maia/CLionProjects/duckdb/test/sql/pragma/test.json
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '/Users/maia/CLionProjects/duckdb/output.json';
+
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();;
+
+statement error
+PRAGMA custom_profiling_settings='hello_I_am_a_file_that_does_not_exist.json'
+----
+Could not locate the file containing the custom profiler settings
+
+statement error
+PRAGMA custom_profiling_settings='/Users/maia/CLionProjects/duckdb/test/sql/pragma/pragma_database_size_readonly.test'
+----
+The custom profiler settings file must be a JSON file
+

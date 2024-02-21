@@ -553,6 +553,34 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Custom Profiling Settings
+//===--------------------------------------------------------------------===//
+
+void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto input_str = input.ToString();
+	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
+	if (!fs->FileExists(input_str)) {
+		throw IOException("Could not locate the file containing the custom profiler settings: \"%s\"", input_str);
+	}
+	if (StringUtil::GetFileExtension(input_str) != "json") {
+		throw IOException("The custom profiler settings file must be a JSON file: \"%s\"", input_str);
+	}
+	auto file = fs->OpenFile(input_str, FileFlags::FILE_FLAGS_READ);
+	config.profiler_custom_settings_file = input_str;
+}
+
+void CustomProfilingSettings::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.profiler_custom_settings_file = "";
+}
+
+Value CustomProfilingSettings::GetSetting(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.profiler_custom_settings_file);
+}
+
+//===--------------------------------------------------------------------===//
 // Custom Extension Repository
 //===--------------------------------------------------------------------===//
 void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &config) {

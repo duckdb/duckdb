@@ -35,6 +35,9 @@ struct ClientConfig {
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
+	//! The file that contains custom settings for the profiler
+	//! (empty = use the default settings)
+	string profiler_custom_settings_file;
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything

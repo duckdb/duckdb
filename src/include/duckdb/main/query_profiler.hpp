@@ -208,6 +208,18 @@ private:
 	bool is_explain_analyze;
 
 public:
+	//! Specific profiler settings
+	struct customSettings {
+		bool cpu_time = false;
+		bool operator_cardinality = false;
+		bool operator_timing = false;
+	};
+
+private:
+	//! The custom settings for the profiler
+	customSettings *settings = nullptr;
+
+public:
 	const TreeMap &GetTreeMap() const {
 		return tree_map;
 	}
@@ -228,6 +240,7 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	void ReadAndSetCustomProfilerSettings(const string &settings_path);
 };
 
 } // namespace duckdb
