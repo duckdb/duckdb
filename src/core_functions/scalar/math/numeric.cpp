@@ -10,14 +10,13 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cmath>
 #include <cstdint>
-#include <duckdb/common/hugeint.hpp>
-#include <duckdb/common/vector_operations/unary_executor.hpp>
 #include <errno.h>
 #include <limits>
 #include <type_traits>
