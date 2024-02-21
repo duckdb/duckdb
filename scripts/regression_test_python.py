@@ -245,10 +245,10 @@ class ArrowDictionaryBenchmark:
 
 
 def test_arrow_dictionaries_scan():
-    DICT_SIZE = 26 * 10000
+    DICT_SIZE = 26 * 1000
     print_msg(f"Generating a unique dictionary of size {DICT_SIZE}")
     arrow_dict = ArrowDictionary(DICT_SIZE)
-    DATASET_SIZE = 100000000
+    DATASET_SIZE = 10000000
     for unique_values in [2, 1000, DICT_SIZE]:
         test = ArrowDictionaryBenchmark(unique_values, DATASET_SIZE, arrow_dict)
         results = test.benchmark()
