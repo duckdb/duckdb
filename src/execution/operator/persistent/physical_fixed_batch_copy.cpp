@@ -47,9 +47,11 @@ public:
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4 * 1024 * 1024;
 
 public:
-	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state, idx_t minimum_memory_per_thread)
-	    : batch_helper(context_p, minimum_memory_per_thread), rows_copied(0), global_state(std::move(global_state)), batch_size(0),
-	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false), minimum_memory_per_thread(minimum_memory_per_thread) {
+	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state,
+	                                   idx_t minimum_memory_per_thread)
+	    : batch_helper(context_p, minimum_memory_per_thread), rows_copied(0), global_state(std::move(global_state)),
+	      batch_size(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
 	BatchSinkHelper batch_helper;
@@ -196,10 +198,10 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	if (new_memory_usage > state.local_memory_usage) {
 		// memory usage increased - add to global state
 		batch_helper.IncreaseUnflushedMemory(new_memory_usage - state.local_memory_usage);
+		state.local_memory_usage = new_memory_usage;
 	} else if (new_memory_usage < state.local_memory_usage) {
 		throw InternalException("PhysicalFixedBatchCopy - memory usage decreased somehow?");
 	}
-	state.local_memory_usage = new_memory_usage;
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -565,7 +567,7 @@ unique_ptr<LocalSinkState> PhysicalFixedBatchCopy::GetLocalSinkState(ExecutionCo
 unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientContext &context) const {
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
-			FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
+	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
 	auto result = make_uniq<FixedBatchCopyGlobalState>(
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
 	result->batch_size = function.desired_batch_size(context, *bind_data);

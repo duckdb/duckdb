@@ -112,10 +112,11 @@ public:
 	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 3;
 
 public:
-	explicit BatchInsertGlobalState(DuckTableEntry &table)
-	    : table(table), insert_count(0), optimistically_written(false) {
+	explicit BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t initial_memory)
+	    : batch_helper(context, initial_memory), table(table), insert_count(0), optimistically_written(false) {
 	}
 
+	BatchSinkHelper batch_helper;
 	mutex lock;
 	DuckTableEntry &table;
 	idx_t insert_count;
@@ -181,10 +182,13 @@ public:
 	                                                OptimisticDataWriter &writer) {
 		D_ASSERT(!merge_collections.empty());
 		CollectionMerger merger(context);
+		idx_t written_data = 0;
 		for (auto &collection : merge_collections) {
+			written_data += collection->GetAllocationSize();
 			merger.AddCollection(std::move(collection));
 		}
 		optimistically_written = true;
+		batch_helper.ReduceUnflushedMemory(written_data);
 		return merger.Flush(writer);
 	}
 
@@ -256,7 +260,7 @@ class BatchInsertLocalState : public LocalSinkState {
 public:
 	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                      const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(context, bound_defaults), written_to_disk(false) {
+	    : default_executor(context, bound_defaults), written_to_disk(false), local_memory_usage(0) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
@@ -267,6 +271,8 @@ public:
 	unique_ptr<RowGroupCollection> current_collection;
 	optional_ptr<OptimisticDataWriter> writer;
 	bool written_to_disk;
+	//! Memory usage of the thread-local collection
+	idx_t local_memory_usage;
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table.GetStorage().info;
@@ -275,6 +281,7 @@ public:
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 		written_to_disk = false;
+		local_memory_usage = 0;
 	}
 };
 
@@ -291,7 +298,10 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		D_ASSERT(insert_table->IsDuckTable());
 		table = insert_table.get_mutable();
 	}
-	auto result = make_uniq<BatchInsertGlobalState>(table->Cast<DuckTableEntry>());
+	// heuristic - we start off by allocating 4MB of cache space per column
+	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4 * 1024 * 1024;
+	auto initial_memory = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
+	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), initial_memory);
 	return std::move(result);
 }
 
@@ -302,6 +312,7 @@ unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionConte
 SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
+	auto &batch_helper = gstate.batch_helper;
 
 	auto &table = gstate.table;
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
@@ -316,18 +327,40 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		                     std::move(lstate.current_collection), lstate.writer, &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
 	}
+	batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 	lstate.current_index = batch_index;
+
+	// unblock any blocked tasks
+	batch_helper.UnblockTasks();
+
 	return SinkNextBatchType::READY;
 }
 
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
+	auto &batch_helper = gstate.batch_helper;
 
 	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
+	if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
+		batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
+
+		// we are not processing the current min batch index
+		// check if we have exceeded the maximum number of unflushed rows
+		if (batch_helper.OutOfMemory(batch_index)) {
+			// out-of-memory
+			lock_guard<mutex> l(batch_helper.GetBlockedTaskLock());
+			if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
+				//  we are not the minimum batch index and we have no memory available to buffer - block the task for
+				//  now
+				batch_helper.BlockTask(input.interrupt_state);
+				return SinkResultType::BLOCKED;
+			}
+		}
+	}
 	if (!lstate.current_collection) {
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
@@ -342,6 +375,14 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	table.GetStorage().VerifyAppendConstraints(table, context.client, lstate.insert_chunk);
 
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
+	auto new_memory_usage = lstate.current_collection->GetAllocationSize();
+	if (new_memory_usage > lstate.local_memory_usage) {
+		// memory usage increased - add to global state
+		batch_helper.IncreaseUnflushedMemory(new_memory_usage - lstate.local_memory_usage);
+		lstate.local_memory_usage = new_memory_usage;
+	} else if (new_memory_usage < lstate.local_memory_usage) {
+		throw InternalException("PhysicalBatchInsert - memory usage decreased somehow?");
+	}
 	if (new_row_group) {
 		// we have already written to disk - flush the next row group as well
 		lstate.writer->WriteNewRowGroup(*lstate.current_collection);
@@ -353,6 +394,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
+	auto &batch_helper = gstate.batch_helper;
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
@@ -371,6 +413,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 		lock_guard<mutex> l(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
+	batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
 	return SinkCombineResultType::FINISHED;
 }

@@ -54,7 +54,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
     : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
-      row_start(row_start_p) {
+      row_start(row_start_p), allocation_size(0) {
 	row_groups = make_shared<RowGroupSegmentTree>(*this);
 }
 
@@ -345,7 +345,9 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
+			auto previous_allocation_size = current_row_group->GetAllocationSize();
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
+			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
 			// merge the stats
 			auto stats_lock = stats.GetLock();
 			for (idx_t i = 0; i < types.size(); i++) {

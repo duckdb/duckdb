@@ -17,8 +17,8 @@ namespace duckdb {
 
 class BatchSinkHelper {
 public:
-	BatchSinkHelper(ClientContext &context, idx_t initial_memory_request) :
-			context(context), unflushed_memory_usage(0), min_batch_index(0), can_increase_memory(true) {
+	BatchSinkHelper(ClientContext &context, idx_t initial_memory_request)
+	    : context(context), unflushed_memory_usage(0), min_batch_index(0), can_increase_memory(true) {
 		memory_state = TemporaryMemoryManager::Get(context).Register(context);
 		SetMemorySize(initial_memory_request);
 	}
