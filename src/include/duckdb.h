@@ -1684,6 +1684,15 @@ Creates an empty DataChunk with the specified set of types.
 DUCKDB_API duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *types, idx_t column_count);
 
 /*!
+Creates a new DataChunk that copy a given DataChunk
+
+ *
+ * chunk: The chunk to create a copy from
+ * @return A new data chunk with a copied data from the given data chunk
+ */
+DUCKDB_API duckdb_data_chunk duckdb_create_data_chunk_copy(duckdb_data_chunk *chunk);
+
+/*!
 Destroys the data chunk and de-allocates all memory allocated for that chunk.
 
 * chunk: The data chunk to destroy.
@@ -2453,6 +2462,12 @@ query fails, otherwise the error stored within the result will not be freed corr
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
+
+DUCKDB_API duckdb_state duckdb_result_to_arrow(duckdb_result result, duckdb_arrow_array *out_array);
+
+DUCKDB_API duckdb_state duckdb_data_chunks_to_arrow_array(duckdb_connection  connection, duckdb_data_chunk *chunks, idx_t number_of_chunks, duckdb_arrow_array *out_array);
+
+duckdb_state duckdb_data_chunk_column_to_arrow_array(duckdb_connection  connection, duckdb_data_chunk *chunks, idx_t number_of_chunks, idx_t column_index, duckdb_arrow_array *out_array);
 
 /*!
 Fetch the internal arrow schema from the arrow result.

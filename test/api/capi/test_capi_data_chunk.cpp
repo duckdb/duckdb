@@ -91,6 +91,45 @@ TEST_CASE("Test Logical Types C API", "[capi]") {
 	duckdb_destroy_logical_type(nullptr);
 }
 
+TEST_CASE("Test DataChunk C API reference", "[capi]") {
+	duckdb_logical_type types[2];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_SMALLINT);
+
+	auto data_chunk = duckdb_create_data_chunk(types, 2);
+	REQUIRE(data_chunk);
+	duckdb_data_chunk_set_size(data_chunk, 1);
+
+	// append standard primitive values
+	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
+	*col1_ptr = 42;
+	auto col2_ptr = (int16_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 1));
+	*col2_ptr = 84;
+
+	auto other_chunk = duckdb_create_data_chunk_copy(&data_chunk);
+	REQUIRE(other_chunk);
+
+	auto other_col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(other_chunk, 0));
+	auto other_col2_ptr = (int16_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(other_chunk, 1));
+	*other_col1_ptr = 88;
+
+	REQUIRE(*other_col1_ptr == 88);
+	REQUIRE(*other_col2_ptr == 84);
+	REQUIRE(*col1_ptr == 42);
+
+	duckdb_data_chunk_set_size(other_chunk, 2);
+
+	*(other_col1_ptr + 8) = 77;
+	*(other_col2_ptr + 2) = 12;
+
+	REQUIRE(*(other_col1_ptr + 8) == 77);
+	REQUIRE(*(other_col2_ptr + 2) == 12);
+	REQUIRE(duckdb_data_chunk_get_size(data_chunk) == 1);
+
+	duckdb_destroy_data_chunk(&data_chunk);
+	duckdb_destroy_data_chunk(&other_chunk);
+}
+
 TEST_CASE("Test DataChunk C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;

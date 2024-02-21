@@ -19,6 +19,21 @@ duckdb_data_chunk duckdb_create_data_chunk(duckdb_logical_type *ctypes, idx_t co
 	return reinterpret_cast<duckdb_data_chunk>(result);
 }
 
+duckdb_data_chunk duckdb_create_data_chunk_copy(duckdb_data_chunk *chunk) {
+	if (!chunk) {
+		return nullptr;
+	}
+
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(*chunk);
+
+	auto new_chunk = new duckdb::DataChunk();
+	new_chunk->Initialize(duckdb::Allocator::DefaultAllocator(), dchunk->GetTypes());
+
+	dchunk->Copy(*new_chunk);
+
+	return reinterpret_cast<duckdb_data_chunk>(new_chunk);
+}
+
 void duckdb_destroy_data_chunk(duckdb_data_chunk *chunk) {
 	if (chunk && *chunk) {
 		auto dchunk = reinterpret_cast<duckdb::DataChunk *>(*chunk);
