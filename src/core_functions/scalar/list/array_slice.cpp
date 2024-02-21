@@ -210,6 +210,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 
 	if (sel_valid) {
 		result_child_vector->Slice(sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -286,6 +287,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }

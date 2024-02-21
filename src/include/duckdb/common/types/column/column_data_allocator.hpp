@@ -56,6 +56,9 @@ public:
 		}
 		return total_size;
 	}
+	idx_t AllocationSize() const {
+		return allocated_size;
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
@@ -99,6 +102,8 @@ private:
 	bool shared = false;
 	//! Lock used in case this ColumnDataAllocator is shared across threads
 	mutex lock;
+	//! Total allocated size
+	idx_t allocated_size = 0;
 };
 
 } // namespace duckdb
