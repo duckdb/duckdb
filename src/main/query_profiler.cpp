@@ -141,6 +141,9 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		string query_info = ToString();
 		auto save_location = GetSaveLocation();
+		if (!ClientConfig::GetConfig(context).profiler_custom_settings_file.empty()) {
+			ReadAndSetCustomProfilerSettings(ClientConfig::GetConfig(context).profiler_custom_settings_file);
+		}
 		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
 			// disable output
 		} else if (save_location.empty()) {
@@ -152,6 +155,7 @@ void QueryProfiler::EndQuery() {
 	}
 	this->is_explain_analyze = false;
 }
+
 string QueryProfiler::ToString() const {
 	const auto format = GetPrintFormat();
 	switch (format) {
@@ -518,34 +522,49 @@ static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id
 	}
 }
 
-static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
-	ss << string(depth * 3, ' ') << " {\n";
-	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
-	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
-	ss << string(depth * 3, ' ') << "   \"timings\": [";
-	int32_t function_counter = 1;
-	int32_t expression_counter = 1;
-	ss << "\n ";
-	for (auto &expr_executor : node.info.executors_info) {
-		// For each Expression tree
-		if (!expr_executor) {
-			continue;
-		}
-		for (auto &expr_timer : expr_executor->roots) {
-			double time = expr_timer->sample_tuples_count == 0
-			                  ? 0
-			                  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
-			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name, time,
-			         expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
-			// Extract all functions inside the tree
-			ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
+double GetTotalCPUTime(QueryProfiler::TreeNode &node) {
+	if (!node.children.empty()) {
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			return GetTotalCPUTime(*node.children[i]) + node.info.time;
 		}
 	}
-	ss.seekp(-2, ss.cur);
-	ss << "\n";
-	ss << string(depth * 3, ' ') << "   ],\n";
+	return node.info.time;
+}
+
+static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, QueryProfiler::customSettings *settings, int depth = 1) {
+	ss << string(depth * 3, ' ') << " {\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
+	if (!settings || settings->operator_timing) {
+		ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
+	}
+	if (!settings || settings->operator_cardinality) {
+		ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
+	}
+	if (!settings) {
+		ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
+		ss << string(depth * 3, ' ') << "   \"timings\": [";
+		int32_t function_counter = 1;
+		int32_t expression_counter = 1;
+		ss << "\n ";
+		for (auto &expr_executor : node.info.executors_info) {
+			// For each Expression tree
+			if (!expr_executor) {
+				continue;
+			}
+			for (auto &expr_timer : expr_executor->roots) {
+				double time = expr_timer->sample_tuples_count == 0
+								  ? 0
+								  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
+				PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name, time,
+						 expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
+				// Extract all functions inside the tree
+				ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
+			}
+		}
+		ss.seekp(-2, ss.cur);
+		ss << "\n";
+		ss << string(depth * 3, ' ') << "   ],\n";
+	}
 	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
 		ss << string(depth * 3, ' ') << "   ]\n";
@@ -554,7 +573,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 			if (i > 0) {
 				ss << ",\n";
 			}
-			ToJSONRecursive(*node.children[i], ss, depth + 1);
+			ToJSONRecursive(*node.children[i], ss, settings, depth + 1);
 		}
 		ss << string(depth * 3, ' ') << "   ]\n";
 	}
@@ -574,29 +593,39 @@ string QueryProfiler::ToJSON() const {
 	std::stringstream ss;
 	ss << "{\n";
 	ss << "   \"name\":  \"Query\", \n";
+	// FIXME: this is the same as timing; should we remove it?
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
-	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
-	ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
-	// JSON cannot have literal control characters in string literals
-	string extra_info = JSONSanitize(query);
-	ss << "   \"extra-info\": \"" + extra_info + "\", \n";
-	// print the phase timings
-	ss << "   \"timings\": [\n";
-	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
-	for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
-		if (i > 0) {
-			ss << ",\n";
-		}
-		ss << "   {\n";
-		ss << "   \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
-		ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
-		ss << "   }";
+	if (settings && settings->cpu_time) {
+		ss << "   \"cpu_time\": " + to_string(GetTotalCPUTime(*root)) + ",\n";
 	}
-	ss << "\n";
-	ss << "   ],\n";
+	if (!settings || settings->operator_timing) {
+		ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
+	}
+	if (!settings || settings->operator_cardinality) {
+		ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
+	}
+	// JSON cannot have literal control characters in string literals
+	if (!settings) {
+		string extra_info = JSONSanitize(query);
+		ss << "   \"extra-info\": \"" + extra_info + "\", \n";
+		// print the phase timings
+		ss << "   \"timings\": [\n";
+		const auto &ordered_phase_timings = GetOrderedPhaseTimings();
+		for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
+			if (i > 0) {
+				ss << ",\n";
+			}
+			ss << "   {\n";
+			ss << "   \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
+			ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
+			ss << "   }";
+		}
+		ss << "\n";
+		ss << "   ],\n";
+	}
 	// recursively print the physical operator tree
 	ss << "   \"children\": [\n";
-	ToJSONRecursive(*root, ss);
+	ToJSONRecursive(*root, ss, settings);
 	ss << "   ]\n";
 	ss << "}";
 	return ss.str();
@@ -642,6 +671,48 @@ void QueryProfiler::Render(const QueryProfiler::TreeNode &node, std::ostream &ss
 
 void QueryProfiler::Print() {
 	Printer::Print(QueryTreeToString());
+}
+
+void FindCustomProfilerSetting(unordered_map<string, string> &json, const string &setting_name, bool &setting) {
+	auto setting_it = json.find(setting_name);
+	if (setting_it != json.end()) {
+		if (setting_it->second != "true" && setting_it->second != "false") {
+			throw IOException("Invalid value for %s in custom profiler settings: \"%s\", expected either 'true' or 'false'",
+			    setting_name, setting_it->second);
+		} else if (setting_it->second == "true") {
+			setting = true;
+		}
+	}
+}
+
+void QueryProfiler::ReadAndSetCustomProfilerSettings(const string &settings_path) {
+	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
+	auto file = fs->OpenFile(settings_path, FileFlags::FILE_FLAGS_READ);
+
+	// read file into string
+	string file_content;
+	auto line = file->ReadLine();
+	while(!line.empty()) {
+		if (StringUtil::Equals(&line.back(), "\n")) {
+			line.substr(0, line.size() - 1);
+		}
+		StringUtil::Replace(line, "\\", "");
+		file_content += line;
+		line = file->ReadLine();
+	}
+	file->Close();
+
+	// parse the file content
+	auto json = StringUtil::ParseJSONMap(file_content);
+	if (json.empty()) {
+		throw IOException("Could not parse the custom profiler settings file: \"%s\"", settings_path);
+	}
+
+	// set the custom settings
+	settings = new QueryProfiler::customSettings();
+	FindCustomProfilerSetting(json, "cpu_time", settings->cpu_time);
+	FindCustomProfilerSetting(json, "operator_cardinality", settings->operator_cardinality);
+	FindCustomProfilerSetting(json, "operator_timing", settings->operator_timing);
 }
 
 vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {
