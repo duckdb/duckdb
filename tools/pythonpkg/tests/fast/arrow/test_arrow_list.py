@@ -2,30 +2,25 @@ import duckdb
 import numpy as np
 import pytest
 
-try:
-    import pyarrow as pa
-
-    can_run = True
-except:
-    can_run = False
+pa = pytest.importorskip("pyarrow")
 
 
-def check_equal(duckdb_conn):
-    true_result = duckdb_conn.execute("SELECT * from test").fetchall()
-    arrow_result = duckdb_conn.execute("SELECT * from testarrow").fetchall()
+def check_equal(duckdb_cursor):
+    true_result = duckdb_cursor.execute("SELECT * from test").fetchall()
+    arrow_result = duckdb_cursor.execute("SELECT * from testarrow").fetchall()
     assert arrow_result == true_result
 
 
-def create_and_register_arrow_table(column_list, duckdb_conn):
+def create_and_register_arrow_table(column_list, duckdb_cursor):
     pydict = {name: data for (name, _, data) in column_list}
     arrow_schema = pa.schema([(name, dtype) for (name, dtype, _) in column_list])
     res = pa.Table.from_pydict(pydict, schema=arrow_schema)
 
-    duck_from_arrow = duckdb_conn.from_arrow(res)
+    duck_from_arrow = duckdb_cursor.from_arrow(res)
     duck_from_arrow.create("testarrow")
 
 
-def create_and_register_comparison_result(column_list, duckdb_conn):
+def create_and_register_comparison_result(column_list, duckdb_cursor):
     columns = ",".join([f'{name} {dtype}' for (name, dtype, _) in column_list])
     column_amount = len(column_list)
     assert column_amount
@@ -42,15 +37,11 @@ def create_and_register_comparison_result(column_list, duckdb_conn):
         INSERT INTO test VALUES {row_format};
     """
 
-    duckdb_conn.execute(query, inserted_values)
+    duckdb_cursor.execute(query, inserted_values)
 
 
 class TestArrowListType(object):
-    def test_regular_list(self):
-        if not can_run:
-            return
-        duckdb_conn = duckdb.connect()
-
+    def test_regular_list(self, duckdb_cursor):
         n = 5  # Amount of lists
         generated_size = 3  # Size of each list
         list_size = -1  # Argument passed to `pa._list()`
@@ -62,22 +53,18 @@ class TestArrowListType(object):
             [
                 ('a', list_type, data),
             ],
-            duckdb_conn,
+            duckdb_cursor,
         )
         create_and_register_comparison_result(
             [
                 ('a', 'FLOAT[]', data),
             ],
-            duckdb_conn,
+            duckdb_cursor,
         )
 
-        check_equal(duckdb_conn)
+        check_equal(duckdb_cursor)
 
-    def test_fixedsize_list(self):
-        if not can_run:
-            return
-        duckdb_conn = duckdb.connect()
-
+    def test_fixedsize_list(self, duckdb_cursor):
         n = 5  # Amount of lists
         generated_size = 3  # Size of each list
         list_size = 3  # Argument passed to `pa._list()`
@@ -89,16 +76,16 @@ class TestArrowListType(object):
             [
                 ('a', list_type, data),
             ],
-            duckdb_conn,
+            duckdb_cursor,
         )
         create_and_register_comparison_result(
             [
                 ('a', 'FLOAT[]', data),
             ],
-            duckdb_conn,
+            duckdb_cursor,
         )
 
-        check_equal(duckdb_conn)
+        check_equal(duckdb_cursor)
 
     @pytest.mark.skipif(not hasattr(pa, 'ListViewArray'), reason='The pyarrow version does not support ListViewArrays')
     def test_list_view(self, duckdb_cursor):
