@@ -43,9 +43,9 @@ string PivotColumn::ToString() const {
 			if (e > 0) {
 				result += ", ";
 			}
-			if (entry.star_expr) {
+			if (entry.expr) {
 				D_ASSERT(entry.values.empty());
-				result += entry.star_expr->ToString();
+				result += entry.expr->ToString();
 			} else if (entry.values.size() == 1) {
 				result += entry.values[0].ToSQLString();
 			} else {
@@ -124,7 +124,7 @@ PivotColumn PivotColumn::Copy() const {
 PivotColumnEntry PivotColumnEntry::Copy() const {
 	PivotColumnEntry result;
 	result.values = values;
-	result.star_expr = star_expr ? star_expr->Copy() : nullptr;
+	result.expr = expr ? expr->Copy() : nullptr;
 	result.alias = alias;
 	return result;
 }

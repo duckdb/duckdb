@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include <sstream>
 
@@ -170,6 +170,7 @@ idx_t CSVErrorHandler::GetLine(LinesPerBoundary &error_info) {
 				// if it's the first boundary, we just return
 				break;
 			}
+			lock_guard<mutex> parallel_lock(main_mutex);
 			if (lines_per_batch_map.find(boundary_idx) != lines_per_batch_map.end()) {
 				batch_done = true;
 				current_line += lines_per_batch_map[boundary_idx].lines_in_batch;

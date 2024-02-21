@@ -379,10 +379,10 @@ static inline void InsertRowToEntry(atomic<aggr_ht_entry_t> &entry, data_ptr_t r
 	}
 }
 template <bool PARALLEL>
-static inline void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locations, Vector &hashes_v,
-                                    idx_t count, const idx_t pointer_offset, const idx_t capacity,
-                                    unique_ptr<TupleDataCollection> &data_collection, RowMatcher &row_matcher_build,
-                                    const TupleDataLayout &layout, const idx_t bitmask) {
+static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locations, Vector &hashes_v, idx_t count,
+                             const idx_t pointer_offset, const idx_t capacity,
+                             unique_ptr<TupleDataCollection> &data_collection, RowMatcher &row_matcher_build,
+                             const TupleDataLayout &layout, const idx_t bitmask) {
 
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
 
@@ -482,7 +482,7 @@ static inline void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector ro
 			// We can't use the standard flat vector as this one has no internal selection vector and the Match
 			// Function Also marks the found rows in the selection vector, so we need to make sure there is one
 			data_collection->Gather(row_ptr_to_insert_v, entry_compare_sel_vector, need_compare_count, lhs_data,
-			                        entry_compare_sel_vector);
+			                        entry_compare_sel_vector, chunk_state.cached_cast_vectors);
 
 			TupleDataCollection::ToUnifiedFormat(chunk_state, lhs_data);
 
@@ -533,6 +533,7 @@ static inline void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector ro
 void JoinHashTable::InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, bool parallel) {
 	auto atomic_entries = reinterpret_cast<atomic<aggr_ht_entry_t> *>(this->entries);
 	auto row_locations = chunk_state.row_locations;
+
 	if (parallel) {
 		InsertHashesLoop<true>(atomic_entries, row_locations, hashes_v, count, pointer_offset, capacity,
 		                       data_collection, row_matcher_build, layout, bitmask);
@@ -755,7 +756,7 @@ void ScanStructure::AdvancePointers() {
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
                                  const SelectionVector &sel_vector, const idx_t count, const idx_t col_no) {
-	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector);
+	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector, nullptr);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
@@ -1123,7 +1124,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		auto &vector = result.data[left_column_count + i];
 		const auto output_col_idx = output_columns[i];
 		D_ASSERT(vector.GetType() == layout.GetTypes()[output_col_idx]);
-		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector);
+		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector, nullptr);
 	}
 }
 

@@ -395,8 +395,11 @@ struct DatePart {
 		static void Inverse(DataChunk &input, ExpressionState &state, Vector &result) {
 			D_ASSERT(input.ColumnCount() == 1);
 
-			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(),
-			                                             [&](int64_t input) { return Timestamp::FromEpochMs(input); });
+			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(), [&](int64_t input) {
+				// milisecond amounts provided to epoch_ms should never be considered infinite
+				// instead such values will just throw when converted to microseconds
+				return Timestamp::FromEpochMsPossiblyInfinite(input);
+			});
 		}
 	};
 
@@ -999,11 +1002,13 @@ int64_t DatePart::YearWeekOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::EpochNanosecondsOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	return Timestamp::GetEpochNanoSeconds(input);
 }
 
 template <>
 int64_t DatePart::EpochNanosecondsOperator::Operation(date_t input) {
+	D_ASSERT(Date::IsFinite(input));
 	return Date::EpochNanoseconds(input);
 }
 
@@ -1030,6 +1035,12 @@ int64_t DatePart::EpochMicrosecondsOperator::Operation(date_t input) {
 template <>
 int64_t DatePart::EpochMicrosecondsOperator::Operation(interval_t input) {
 	return Interval::GetMicro(input);
+}
+
+template <>
+int64_t DatePart::EpochMillisOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	return Timestamp::GetEpochMs(input);
 }
 
 template <>
@@ -1064,6 +1075,7 @@ int64_t DatePart::EpochMillisOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::MicrosecondsOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	auto time = Timestamp::GetTime(input);
 	// remove everything but the second & microsecond part
 	return time.micros % Interval::MICROS_PER_MINUTE;
@@ -1088,6 +1100,7 @@ int64_t DatePart::MicrosecondsOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::MillisecondsOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_MSEC;
 }
 
@@ -1108,6 +1121,7 @@ int64_t DatePart::MillisecondsOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::SecondsOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_SEC;
 }
 
@@ -1128,6 +1142,7 @@ int64_t DatePart::SecondsOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::MinutesOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	auto time = Timestamp::GetTime(input);
 	// remove the hour part, and truncate to minutes
 	return (time.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
@@ -1152,6 +1167,7 @@ int64_t DatePart::MinutesOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::HoursOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	return Timestamp::GetTime(input).micros / Interval::MICROS_PER_HOUR;
 }
 
@@ -1172,6 +1188,7 @@ int64_t DatePart::HoursOperator::Operation(dtime_tz_t input) {
 
 template <>
 double DatePart::EpochOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	return Timestamp::GetEpochMicroSeconds(input) / double(Interval::MICROS_PER_SEC);
 }
 
@@ -1218,6 +1235,7 @@ unique_ptr<BaseStatistics> DatePart::EpochOperator::PropagateStatistics<dtime_t>
 
 template <>
 int64_t DatePart::EraOperator::Operation(timestamp_t input) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	return EraOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
@@ -1407,6 +1425,7 @@ void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &
 template <>
 void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &double_values, const timestamp_t &input,
                                          const idx_t idx, const part_mask_t mask) {
+	D_ASSERT(Timestamp::IsFinite(input));
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);

@@ -569,6 +569,10 @@ bool LogicalType::IsValid() const {
 	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
 }
 
+bool LogicalType::Contains(LogicalTypeId type_id) const {
+	return Contains([&](const LogicalType &type) { return type.id() == type_id; });
+}
+
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
@@ -1472,6 +1476,37 @@ bool ArrayType::IsAnySize(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().size == 0;
+}
+
+LogicalType ArrayType::ConvertToList(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::ARRAY: {
+		return LogicalType::LIST(ConvertToList(ArrayType::GetChildType(type)));
+	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ConvertToList(ListType::GetChildType(type)));
+	case LogicalTypeId::STRUCT: {
+		auto children = StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			child.second = ConvertToList(child.second);
+		}
+		return LogicalType::STRUCT(children);
+	}
+	case LogicalTypeId::MAP: {
+		auto key_type = ConvertToList(MapType::KeyType(type));
+		auto value_type = ConvertToList(MapType::ValueType(type));
+		return LogicalType::MAP(key_type, value_type);
+	}
+	case LogicalTypeId::UNION: {
+		auto children = UnionType::CopyMemberTypes(type);
+		for (auto &child : children) {
+			child.second = ConvertToList(child.second);
+		}
+		return LogicalType::UNION(children);
+	}
+	default:
+		return type;
+	}
 }
 
 LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {

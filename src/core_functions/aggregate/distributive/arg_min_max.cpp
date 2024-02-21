@@ -324,16 +324,22 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 template <class OP, class ARG_TYPE>
 AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const LogicalType &type) {
 	switch (by_type.InternalType()) {
+	case PhysicalType::INT8:
+		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int8_t>(by_type, type);
+	case PhysicalType::INT16:
+		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int16_t>(by_type, type);
 	case PhysicalType::INT32:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int32_t>(by_type, type);
 	case PhysicalType::INT64:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int64_t>(by_type, type);
+	case PhysicalType::FLOAT:
+		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, float>(by_type, type);
 	case PhysicalType::DOUBLE:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, double>(by_type, type);
 	case PhysicalType::VARCHAR:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, string_t>(by_type, type);
 	default:
-		throw InternalException("Unimplemented arg_min/arg_max aggregate");
+		throw InternalException("Unimplemented arg_min/arg_max by aggregate");
 	}
 }
 
