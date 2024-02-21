@@ -20,6 +20,12 @@ SELECT min_i, min_j, max_i, max_j FROM (SELECT MIN(COLUMNS(*)) AS "min_{column}"
 ----
 13	14	42	84
 
+# aliasing for top-level COLUMNS(*)
+query II
+SELECT rename_a, rename_b FROM (SELECT COLUMNS(*) AS "rename_{column}" FROM (SELECT 42 a, 84 b))
+----
+42	84
+
 # generated columns
 statement ok
 CREATE TABLE tbl (
