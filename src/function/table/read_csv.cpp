@@ -230,7 +230,6 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
-	table_function.named_parameters["rejects_recovery_columns"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
