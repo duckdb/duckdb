@@ -6,9 +6,8 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
-#include "duckdb/storage/temporary_memory_manager.hpp"
-#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/execution/operator/persistent/batch_sink_helper.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -48,13 +47,12 @@ public:
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4 * 1024 * 1024;
 
 public:
-	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state)
-	    : context(context_p), rows_copied(0), global_state(std::move(global_state)), batch_size(0),
-	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
-	      unflushed_memory_usage(0), min_batch_index(0), can_increase_memory(true) {
+	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state, idx_t minimum_memory_per_thread)
+	    : batch_helper(context_p, minimum_memory_per_thread), rows_copied(0), global_state(std::move(global_state)), batch_size(0),
+	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false), minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
-	ClientContext &context;
+	BatchSinkHelper batch_helper;
 	mutex lock;
 	mutex flush_lock;
 	//! The total number of rows copied to the file
@@ -75,69 +73,8 @@ public:
 	atomic<bool> any_flushing;
 	//! Whether or not any threads are finished
 	atomic<bool> any_finished;
-	//! Temporary memory state
-	unique_ptr<TemporaryMemoryState> memory_state;
 	//! Minimum memory per thread
 	idx_t minimum_memory_per_thread;
-	//! Total memory usage of unflushed rows
-	atomic<idx_t> unflushed_memory_usage;
-	//! Minimum batch size
-	atomic<idx_t> min_batch_index;
-	//! The available memory for unflushed rows
-	atomic<idx_t> available_memory;
-	//! Blocked task lock
-	mutex blocked_task_lock;
-	//! The set of blocked tasks
-	vector<InterruptState> blocked_tasks;
-	//! Whether or not we can request additional memory
-	bool can_increase_memory;
-
-	void SetMemorySize(idx_t size) {
-		// request at most 1/4th of all available memory
-		idx_t total_max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
-		idx_t request_cap = total_max_memory / 4;
-
-		size = MinValue<idx_t>(size, request_cap);
-		if (size <= available_memory) {
-			return;
-		}
-
-		memory_state->SetRemainingSize(context, size);
-		auto next_reservation = memory_state->GetReservation();
-		if (available_memory >= next_reservation) {
-			// we tried to ask for more memory but were declined
-			// stop asking for more memory
-			can_increase_memory = false;
-		}
-		available_memory = next_reservation;
-	}
-
-	void IncreaseMemory() {
-		if (!can_increase_memory) {
-			return;
-		}
-		SetMemorySize(available_memory * 2);
-	}
-
-	bool OutOfMemory(idx_t batch_index) {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-		// alternative verify - always report that we are out of memory to test this code path
-		return true;
-#else
-		if (unflushed_memory_usage >= available_memory) {
-			lock_guard<mutex> l(blocked_task_lock);
-			if (batch_index > min_batch_index) {
-				// exceeded available memory and we are not the minimum batch index- try to increase it
-				IncreaseMemory();
-				if (unflushed_memory_usage >= available_memory) {
-					// STILL out of memory
-					return true;
-				}
-			}
-		}
-		return false;
-#endif
-	}
 
 	void AddTask(unique_ptr<BatchCopyTask> task) {
 		lock_guard<mutex> l(task_lock);
@@ -171,44 +108,11 @@ public:
 		}
 	}
 
-	void BlockTask(InterruptState &state) {
-		blocked_tasks.push_back(state);
-	}
-
-	bool UnblockTasks() {
-		lock_guard<mutex> l(blocked_task_lock);
-		return UnblockTasksInternal();
-	}
-
-	bool UnblockTasksInternal() {
-		if (blocked_tasks.empty()) {
-			return false;
-		}
-		for (auto &entry : blocked_tasks) {
-			entry.Callback();
-		}
-		blocked_tasks.clear();
-		return true;
-	}
-
-	void UpdateMinBatchIndex(idx_t current_min_batch_index) {
-		if (min_batch_index >= current_min_batch_index) {
-			return;
-		}
-		lock_guard<mutex> l(blocked_task_lock);
-		idx_t new_batch_index = MaxValue<idx_t>(min_batch_index, current_min_batch_index);
-		if (new_batch_index != min_batch_index) {
-			// new batch index! unblock all tasks
-			min_batch_index = new_batch_index;
-			UnblockTasksInternal();
-		}
-	}
-
 	idx_t MaxThreads(idx_t source_max_threads) override {
 		// try to request 4MB per column per thread
-		SetMemorySize(source_max_threads * minimum_memory_per_thread);
+		batch_helper.SetMemorySize(source_max_threads * minimum_memory_per_thread);
 		// cap the concurrent threads working on this task based on the amount of available memory
-		return MinValue<idx_t>(source_max_threads, available_memory / minimum_memory_per_thread + 1);
+		return MinValue<idx_t>(source_max_threads, batch_helper.AvailableMemory() / minimum_memory_per_thread + 1);
 	}
 
 private:
@@ -254,27 +158,29 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
                                             OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	auto &batch_helper = gstate.batch_helper;
 	auto batch_index = state.partition_info.batch_index.GetIndex();
 	if (state.current_task == FixedBatchCopyState::PROCESSING_TASKS) {
 		ExecuteTasks(context.client, gstate);
-		FlushBatchData(context.client, gstate, gstate.min_batch_index.load());
-		if (batch_index > gstate.min_batch_index && gstate.OutOfMemory(batch_index)) {
-			lock_guard<mutex> l(gstate.blocked_task_lock);
-			if (batch_index > gstate.min_batch_index) {
+		FlushBatchData(context.client, gstate, batch_helper.GetMinimumBatchIndex());
+
+		if (!batch_helper.IsMinimumBatchIndex(batch_index) && batch_helper.OutOfMemory(batch_index)) {
+			lock_guard<mutex> l(batch_helper.GetBlockedTaskLock());
+			if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
 				// no tasks to process, we are not the minimum batch index and we have no memory available to buffer
 				// block the task for now
-				gstate.BlockTask(input.interrupt_state);
+				batch_helper.BlockTask(input.interrupt_state);
 				return SinkResultType::BLOCKED;
 			}
 		}
 		state.current_task = FixedBatchCopyState::SINKING_DATA;
 	}
-	if (batch_index > gstate.min_batch_index) {
-		gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
+	if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
+		batch_helper.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 
 		// we are not processing the current min batch index
 		// check if we have exceeded the maximum number of unflushed rows
-		if (gstate.OutOfMemory(batch_index)) {
+		if (batch_helper.OutOfMemory(batch_index)) {
 			// out-of-memory - stop sinking chunks and instead assist in processing tasks for the minimum batch index
 			state.current_task = FixedBatchCopyState::PROCESSING_TASKS;
 			return Sink(context, chunk, input);
@@ -289,7 +195,7 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	auto new_memory_usage = state.collection->AllocationSize();
 	if (new_memory_usage > state.local_memory_usage) {
 		// memory usage increased - add to global state
-		gstate.unflushed_memory_usage += new_memory_usage - state.local_memory_usage;
+		batch_helper.IncreaseUnflushedMemory(new_memory_usage - state.local_memory_usage);
 	} else if (new_memory_usage < state.local_memory_usage) {
 		throw InternalException("PhysicalFixedBatchCopy - memory usage decreased somehow?");
 	}
@@ -301,13 +207,14 @@ SinkCombineResultType PhysicalFixedBatchCopy::Combine(ExecutionContext &context,
                                                       OperatorSinkCombineInput &input) const {
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	auto &batch_helper = gstate.batch_helper;
 	gstate.rows_copied += state.rows_copied;
 	if (!gstate.any_finished) {
 		// signal that this thread is finished processing batches and that we should move on to Finalize
 		lock_guard<mutex> l(gstate.lock);
 		gstate.any_finished = true;
 	}
-	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
+	batch_helper.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	ExecuteTasks(context.client, gstate);
 
 	return SinkCombineResultType::FINISHED;
@@ -558,6 +465,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 
 void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+	auto &batch_helper = gstate.batch_helper;
 
 	// flush batch data to disk (if there are any to flush)
 	// grab the flush lock - we can only call flush_batch with this lock
@@ -591,7 +499,7 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 		}
 		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
 		batch_data->prepared_data.reset();
-		gstate.unflushed_memory_usage -= batch_data->memory_usage;
+		batch_helper.ReduceUnflushedMemory(batch_data->memory_usage);
 		gstate.flushed_batch_index++;
 	}
 }
@@ -623,6 +531,7 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	auto &batch_helper = gstate.batch_helper;
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
@@ -632,17 +541,17 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		// attempt to repartition to our desired batch size
 		RepartitionBatches(context.client, gstate_p, min_batch_index);
 		// unblock tasks so they can help process batches (if any are blocked)
-		auto any_unblocked = gstate.UnblockTasks();
+		auto any_unblocked = batch_helper.UnblockTasks();
 		// if any threads were unblocked they can pick up execution of the tasks
 		// otherwise we will execute a task and flush here
 		if (!any_unblocked) {
 			//! Execute a single repartition task
 			ExecuteTask(context.client, gstate);
 			//! Flush batch data to disk (if any is ready)
-			FlushBatchData(context.client, gstate, gstate.min_batch_index.load());
+			FlushBatchData(context.client, gstate, batch_helper.GetMinimumBatchIndex());
 		}
 	}
-	gstate.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
+	batch_helper.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 
 	state.InitializeCollection(context.client, *this);
@@ -654,14 +563,12 @@ unique_ptr<LocalSinkState> PhysicalFixedBatchCopy::GetLocalSinkState(ExecutionCo
 }
 
 unique_ptr<GlobalSinkState> PhysicalFixedBatchCopy::GetGlobalSinkState(ClientContext &context) const {
-	auto result = make_uniq<FixedBatchCopyGlobalState>(
-	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
-	result->memory_state = TemporaryMemoryManager::Get(context).Register(context);
-	result->batch_size = function.desired_batch_size(context, *bind_data);
 	// request memory based on the minimum amount of memory per column
-	result->minimum_memory_per_thread =
-	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
-	result->SetMemorySize(result->minimum_memory_per_thread);
+	auto minimum_memory_per_thread =
+			FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
+	auto result = make_uniq<FixedBatchCopyGlobalState>(
+	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
+	result->batch_size = function.desired_batch_size(context, *bind_data);
 	return std::move(result);
 }
 
