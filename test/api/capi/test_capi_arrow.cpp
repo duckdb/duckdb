@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Convert DuckDBResult to Arrow Array in C API", "[rToArrow]") {
+TEST_CASE("Convert DuckDBResult to Arrow Array in C API", "[capi][arrow]") {
 	duckdb_database db;
 	duckdb_connection con;
 	duckdb_result result;
@@ -28,7 +28,7 @@ TEST_CASE("Convert DuckDBResult to Arrow Array in C API", "[rToArrow]") {
 	duckdb_close(&db);
 }
 
-TEST_CASE("Convert DuckDB Chunks to Arrow Array in C API", "[cToArrow]") {
+TEST_CASE("Convert DuckDB Chunks to Arrow Array in C API", "[capi][arrow]") {
 	duckdb_database db;
 	duckdb_connection con;
 	duckdb_result result;
@@ -41,7 +41,7 @@ TEST_CASE("Convert DuckDB Chunks to Arrow Array in C API", "[cToArrow]") {
 	REQUIRE(duckdb_query(con, "Insert INTO test VALUES (1), (2);", NULL) != DuckDBError);
 	REQUIRE((duckdb_query(con, "SELECT * FROM test;", &result) != DuckDBError));
 
-	auto count = duckdb_result_chunk_count(result);
+	auto count = (int) duckdb_result_chunk_count(result);
 	auto chunks = new duckdb_data_chunk[count];
 
 	for (auto i = 0; i < count; i++) {
@@ -61,7 +61,7 @@ TEST_CASE("Convert DuckDB Chunks to Arrow Array in C API", "[cToArrow]") {
 	}
 }
 
-TEST_CASE("Convert DuckDB Chunk column to Arrow Array in C API", "[ccToArrow]") {
+TEST_CASE("Convert DuckDB Chunk column to Arrow Array in C API", "[capi][arrow]") {
 	duckdb_database db;
 	duckdb_connection con;
 	duckdb_result result;
@@ -75,7 +75,7 @@ TEST_CASE("Convert DuckDB Chunk column to Arrow Array in C API", "[ccToArrow]") 
 	REQUIRE(duckdb_query(con, "Insert INTO test VALUES (1, 'a'), (2, 'b');", NULL) != DuckDBError);
 	REQUIRE((duckdb_query(con, "SELECT * FROM test;", &result) != DuckDBError));
 
-	auto count = duckdb_result_chunk_count(result);
+	auto count = (int) duckdb_result_chunk_count(result);
 	auto chunks = new duckdb_data_chunk[count];
 
 	for (auto i = 0; i < count; i++) {
