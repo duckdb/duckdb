@@ -186,15 +186,15 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 
 static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &array, idx_t size,
                                                    const ArrowType &arrow_type, idx_t effective_offset) {
-	auto size_type = arrow_type.GetSizeType();
-
 	ArrowListOffsetData result;
 	auto &start_offset = result.start_offset;
 	auto &list_size = result.list_size;
 
 	list_size = 0;
+	auto &list_info = arrow_type.GetTypeInfo<ArrowListInfo>();
+	auto size_type = list_info.GetSizeType();
 	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
-		auto fixed_size = arrow_type.FixedSize();
+		auto fixed_size = list_info.FixedSize();
 		//! Have to check validity mask before setting this up
 		effective_offset *= fixed_size;
 		start_offset = effective_offset;
@@ -207,7 +207,7 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 		}
 		return result;
 	}
-	if (arrow_type.IsView()) {
+	if (list_info.IsView()) {
 		if (size_type == ArrowVariableSizeType::NORMAL) {
 			return ConvertArrowListViewOffsetsTemplated<uint32_t>(vector, array, size, effective_offset);
 		} else {
@@ -230,6 +230,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
                               int64_t parent_offset) {
 	auto &scan_state = array_state.state;
 
+	auto &list_info = arrow_type.GetTypeInfo<ArrowListInfo>();
 	SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);
 
 	auto effective_offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
@@ -254,7 +255,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 	}
 	auto &child_state = array_state.GetChild(0);
 	auto &child_array = *array.children[0];
-	auto &child_type = arrow_type[0];
+	auto &child_type = list_info.GetChild();
 
 	if (list_size == 0 && start_offset == 0) {
 		D_ASSERT(!child_array.dictionary);
@@ -281,10 +282,11 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 
 static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
                               const ArrowType &arrow_type, int64_t nested_offset, int64_t parent_offset) {
-	auto size_type = arrow_type.GetSizeType();
 	SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);
+	auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
+	auto size_type = string_info.GetSizeType();
 	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
-		auto fixed_size = arrow_type.FixedSize();
+		auto fixed_size = string_info.FixedSize();
 		//! Have to check validity mask before setting this up
 		idx_t offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset) * fixed_size;
 		auto cdata = ArrowBufferData<char>(array, 1);
@@ -645,8 +647,9 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 	auto &run_ends_array = *array.children[0];
 	auto &values_array = *array.children[1];
 
-	auto &run_ends_type = arrow_type[0];
-	auto &values_type = arrow_type[1];
+	auto &struct_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
+	auto &run_ends_type = struct_info.GetChild(0);
+	auto &values_type = struct_info.GetChild(1);
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
 	auto &scan_state = array_state.state;
@@ -768,8 +771,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::DATE: {
-
-		auto precision = arrow_type.GetDateTimeType();
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
+		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::DAYS: {
 			DirectConversion(vector, array, scan_state, nested_offset, parent_offset);
@@ -791,7 +794,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::TIME: {
-		auto precision = arrow_type.GetDateTimeType();
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
+		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
 			TimeConversion<int32_t>(vector, array, scan_state, nested_offset, parent_offset, size, 1000000);
@@ -820,7 +824,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
-		auto precision = arrow_type.GetDateTimeType();
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
+		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
 			TimestampTZConversion(vector, array, scan_state, nested_offset, parent_offset, size, 1000000);
@@ -849,7 +854,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::INTERVAL: {
-		auto precision = arrow_type.GetDateTimeType();
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
+		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
 			IntervalConversionUs(vector, array, scan_state, nested_offset, parent_offset, size, 1000000);
@@ -954,12 +960,14 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	}
 	case LogicalTypeId::STRUCT: {
 		//! Fill the children
+		auto &struct_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		auto &child_entries = StructVector::GetEntries(vector);
 		auto &struct_validity_mask = FlatVector::Validity(vector);
+		D_ASSERT(array.n_children == (int64_t)struct_info.ChildCount());
 		for (int64_t child_idx = 0; child_idx < array.n_children; child_idx++) {
 			auto &child_entry = *child_entries[child_idx];
 			auto &child_array = *array.children[child_idx];
-			auto &child_type = arrow_type[child_idx];
+			auto &child_type = struct_info.GetChild(child_idx);
 			auto &child_state = array_state.GetChild(child_idx);
 
 			SetValidityMask(child_entry, child_array, scan_state, size, array.offset, nested_offset);
@@ -998,13 +1006,13 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		auto members = UnionType::CopyMemberTypes(vector.GetType());
 
 		auto &validity_mask = FlatVector::Validity(vector);
-
+		auto &union_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		duckdb::vector<Vector> children;
 		for (int64_t child_idx = 0; child_idx < array.n_children; child_idx++) {
 			Vector child(members[child_idx].second, size);
 			auto &child_array = *array.children[child_idx];
 			auto &child_state = array_state.GetChild(child_idx);
-			auto &child_type = arrow_type[child_idx];
+			auto &child_type = union_info.GetChild(child_idx);
 
 			SetValidityMask(child, child_array, scan_state, size, parent_offset, nested_offset);
 			auto array_physical_type = GetArrowArrayPhysicalType(child_type);

@@ -78,7 +78,9 @@
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
+#include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/config.hpp"
@@ -537,12 +539,45 @@ ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value) {
+	switch(value) {
+	case ArrowTypeInfoType::LIST:
+		return "LIST";
+	case ArrowTypeInfoType::STRUCT:
+		return "STRUCT";
+	case ArrowTypeInfoType::DATE_TIME:
+		return "DATE_TIME";
+	case ArrowTypeInfoType::STRING:
+		return "STRING";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value) {
+	if (StringUtil::Equals(value, "LIST")) {
+		return ArrowTypeInfoType::LIST;
+	}
+	if (StringUtil::Equals(value, "STRUCT")) {
+		return ArrowTypeInfoType::STRUCT;
+	}
+	if (StringUtil::Equals(value, "DATE_TIME")) {
+		return ArrowTypeInfoType::DATE_TIME;
+	}
+	if (StringUtil::Equals(value, "STRING")) {
+		return ArrowTypeInfoType::STRING;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value) {
 	switch(value) {
-	case ArrowVariableSizeType::FIXED_SIZE:
-		return "FIXED_SIZE";
 	case ArrowVariableSizeType::NORMAL:
 		return "NORMAL";
+	case ArrowVariableSizeType::FIXED_SIZE:
+		return "FIXED_SIZE";
 	case ArrowVariableSizeType::SUPER_SIZE:
 		return "SUPER_SIZE";
 	case ArrowVariableSizeType::VIEW:
@@ -554,11 +589,11 @@ const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value) {
-	if (StringUtil::Equals(value, "FIXED_SIZE")) {
-		return ArrowVariableSizeType::FIXED_SIZE;
-	}
 	if (StringUtil::Equals(value, "NORMAL")) {
 		return ArrowVariableSizeType::NORMAL;
+	}
+	if (StringUtil::Equals(value, "FIXED_SIZE")) {
+		return ArrowVariableSizeType::FIXED_SIZE;
 	}
 	if (StringUtil::Equals(value, "SUPER_SIZE")) {
 		return ArrowVariableSizeType::SUPER_SIZE;

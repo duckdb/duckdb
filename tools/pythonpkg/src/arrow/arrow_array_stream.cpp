@@ -240,8 +240,9 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("s")));
 	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
+		auto &datetime_info = type.GetTypeInfo<ArrowDateTimeInfo>();
 		auto base_value = constant.GetValue<int64_t>();
-		auto arrow_datetime_type = type.GetDateTimeType();
+		auto arrow_datetime_type = datetime_info.GetDateTimeType();
 		auto time_unit_string = ConvertTimestampUnit(arrow_datetime_type);
 		auto converted_value = ConvertTimestampTZValue(base_value, arrow_datetime_type);
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
