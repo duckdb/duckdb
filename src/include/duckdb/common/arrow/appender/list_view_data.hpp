@@ -57,7 +57,8 @@ public:
 		auto offset_data = append_data.GetMainBuffer().GetData<BUFTYPE>();
 		auto size_data = append_data.GetAuxBuffer().GetData<BUFTYPE>();
 
-		BUFTYPE last_offset = append_data.row_count ? offset_data[append_data.row_count - 1] : 0;
+		BUFTYPE last_offset =
+		    append_data.row_count ? offset_data[append_data.row_count - 1] + size_data[append_data.row_count - 1] : 0;
 		for (idx_t i = 0; i < size; i++) {
 			auto source_idx = format.sel->get_index(i + from);
 			auto offset_idx = append_data.row_count + i;
