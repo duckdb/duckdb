@@ -46,6 +46,9 @@ public:
 
 	// Will only return if cell is occupied
 	inline data_ptr_t GetPointer() const {
+		if (!IsOccupied()) {
+			return nullptr;
+		}
 		D_ASSERT(IsOccupied());
 		return reinterpret_cast<data_ptr_t>(value & POINTER_MASK);
 	}
@@ -74,24 +77,9 @@ public:
 		value = salt;
 	}
 
-	template <bool PARALLEL>
-	inline bool SetPointerAndSalt(const data_ptr_t &pointer, const hash_t &salt) {
-		// Assertions to ensure preconditions
-		D_ASSERT((salt & POINTER_MASK) == POINTER_MASK);
-		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
-
-		if (PARALLEL) {
-			auto desired = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
-			auto *atomic_value = reinterpret_cast<std::atomic<hash_t> *>(&value);
-			hash_t expected = atomic_value->load(std::memory_order_relaxed); // Load the current value
-			// Attempt to update while expected matches the current value
-			return atomic_value->compare_exchange_weak(expected, desired, std::memory_order_release,
-			                                           std::memory_order_relaxed);
-
-		} else {
-			value = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
-			return true; // Always true in non-parallel mode
-		}
+	static inline aggr_ht_entry_t GetDesiredEntry(const data_ptr_t &pointer, const hash_t &salt) {
+		auto desired = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
+		return aggr_ht_entry_t(desired);
 	}
 
 private:
