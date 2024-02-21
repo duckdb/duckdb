@@ -61,6 +61,7 @@ TEST_CASE("Test extract statements in C API", "[capi]") {
 	status = duckdb_prepare_extracted_statement(tester.connection, stmts, 2, &prepared);
 	REQUIRE(status == DuckDBError);
 	duckdb_destroy_extracted(&stmts);
+	duckdb_destroy_prepare(&prepared);
 }
 
 TEST_CASE("Test invalid PRAGMA in C API", "[capi]") {
