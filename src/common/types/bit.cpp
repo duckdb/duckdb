@@ -290,11 +290,11 @@ void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 }
 
 void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
-	char *buf = bit_string.GetDataWriteable();
+	auto buf = bit_string.GetDataWriteable();
 
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
-	char shift_byte = UnsafeNumericCast<char>(1 << (7 - (n % 8)));
+	auto shift_byte = UnsafeNumericCast<uint8_t>(1 << (7 - (n % 8)));
 	if (new_value == 0) {
 		shift_byte = ~shift_byte;
 		buf[idx] &= shift_byte;

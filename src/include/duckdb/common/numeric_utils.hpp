@@ -9,6 +9,7 @@
 #pragma once
 
 #include <type_traits>
+
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 
@@ -59,28 +60,63 @@ struct IsIntegral<uhugeint_t> {
 	static constexpr bool value = true;
 };
 
-// TODO write a bunch of test cases on this!
-// TODO bunch of other combos signed/unsigned
+template <class OUT, class IN>
+static void ThrowNumericCastError(IN in, OUT min, OUT max) {
+	throw InternalException("Information loss on integer cast: value %d outside of target range [%d, %d]", in, min,
+	                        max);
+}
 
 template <class OUT, class IN>
-OUT UnsafeNumericCast(IN val) {
+OUT NumericCast(IN in) {
+	// some dance around signed-unsigned integer comparison below
+	auto min = NumericLimits<OUT>::Minimum();
+	auto max = NumericLimits<OUT>::Maximum();
+	auto unsigned_in = static_cast<typename MakeUnsigned<IN>::type>(in);
+	auto unsigned_min = static_cast<typename MakeUnsigned<OUT>::type>(min);
+	auto unsigned_max = static_cast<typename MakeUnsigned<OUT>::type>(max);
+	auto signed_in = static_cast<typename MakeSigned<IN>::type>(in);
+	auto signed_min = static_cast<typename MakeSigned<OUT>::type>(min);
+	auto signed_max = static_cast<typename MakeSigned<OUT>::type>(max);
+
+	if (std::is_unsigned<IN>() && std::is_unsigned<OUT>() &&
+	    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
+		ThrowNumericCastError(in, min, max);
+	}
+
+	if (std::is_signed<IN>() && std::is_signed<OUT>() && (signed_in < signed_min || signed_in > signed_max)) {
+		ThrowNumericCastError(in, min, max);
+	}
+
+	if (std::is_signed<IN>() != std::is_signed<OUT>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
+		ThrowNumericCastError(in, min, max);
+	}
+
+	return static_cast<OUT>(in);
+}
+
+template <class OUT>
+OUT NumericCast(double val) {
 #ifdef DEBUG
-	if (std::is_unsigned<OUT>() && val < 0) {
-		throw InternalException("Information loss on integer cast: Negative value to unsigned");
-	}
-	auto unsigned_val = static_cast<typename MakeUnsigned<IN>::type>(val);
-	auto unsigned_max = static_cast<typename MakeUnsigned<OUT>::type>(NumericLimits<OUT>::Maximum());
-	if (std::is_unsigned<OUT>() && unsigned_val > unsigned_max) {
-		throw InternalException("Information loss on integer cast: Value too large for target type");
-	}
-	auto signed_val = static_cast<typename MakeSigned<IN>::type>(val);
-	auto signed_min = static_cast<typename MakeSigned<OUT>::type>(NumericLimits<OUT>::Minimum());
-	if (std::is_signed<OUT>() && signed_val < signed_min) {
-		throw InternalException("Information loss on integer cast: Value too small for target type");
-	}
 
 #endif
 	return static_cast<OUT>(val);
+}
+
+template <class OUT>
+OUT NumericCast(float val) {
+#ifdef DEBUG
+
+#endif
+	return static_cast<OUT>(val);
+}
+
+template <class OUT, class IN>
+OUT UnsafeNumericCast(IN in) {
+#ifdef DEBUG
+	return NumericCast<OUT, IN>(in);
+
+#endif
+	return static_cast<OUT>(in);
 }
 
 template <class OUT>
@@ -97,11 +133,6 @@ OUT UnsafeNumericCast(float val) {
 
 #endif
 	return static_cast<OUT>(val);
-}
-
-template <class OUT, class IN>
-OUT NumericCast(IN val) {
-	return UnsafeNumericCast<OUT, IN>(val);
 }
 
 } // namespace duckdb
