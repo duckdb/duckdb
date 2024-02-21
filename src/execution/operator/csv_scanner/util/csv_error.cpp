@@ -18,7 +18,6 @@ void CSVErrorHandler::ThrowError(CSVError csv_error) {
 	if (PrintLineNumber(csv_error)) {
 		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << std::endl;
 	}
-	{ lock_guard<mutex> parallel_lock(main_mutex); }
 	error << csv_error.error_message;
 	switch (csv_error.type) {
 	case CSVErrorType::CAST_ERROR:
@@ -44,12 +43,16 @@ void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
 }
 
 void CSVErrorHandler::ErrorIfNeeded() {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (ignore_errors || errors.empty()) {
-		// Nothing to error
-		return;
+	CSVError first_error;
+	{
+		lock_guard<mutex> parallel_lock(main_mutex);
+		if (ignore_errors || errors.empty()) {
+			// Nothing to error
+			return;
+		}
+		first_error = errors.begin()->second[0];
 	}
-	auto first_error = errors.begin()->second[0];
+
 	if (CanGetLine(first_error.error_info.boundary_idx)) {
 		ThrowError(first_error);
 	}

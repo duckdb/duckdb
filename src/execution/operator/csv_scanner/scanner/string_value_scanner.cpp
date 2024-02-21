@@ -95,8 +95,6 @@ StringValueResult::~StringValueResult() {
 		// Better to print nothing to print something wrong
 		error_handler.DontPrintErrorLine();
 	}
-	// We have to check if we got to error
-	error_handler.ErrorIfNeeded();
 }
 
 inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const idx_t size) {
@@ -530,6 +528,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &process_result = ParseChunk();
 	// First Get Parsed Chunk
 	auto &parse_chunk = process_result.ToChunk();
+	// We have to check if we got to error
+	error_handler->ErrorIfNeeded();
 
 	if (parse_chunk.size() == 0) {
 		return;
