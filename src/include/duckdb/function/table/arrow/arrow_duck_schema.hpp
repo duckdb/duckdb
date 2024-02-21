@@ -25,22 +25,17 @@ public:
 
 	LogicalType GetDuckType(bool use_dictionary = false) const;
 
-	ArrowVariableSizeType GetSizeType() const;
-
 	void SetDictionary(unique_ptr<ArrowType> dictionary);
-
 	bool HasDictionary() const;
+	const ArrowType &GetDictionary() const;
 
+	bool RunEndEncoded() const;
 	void SetRunEndEncoded();
 
 	template <class T>
 	const T &GetTypeInfo() const {
 		return type_info->Cast<T>();
 	}
-
-	const ArrowType &GetDictionary() const;
-
-	bool RunEndEncoded() const;
 
 private:
 	LogicalType type;

@@ -19,12 +19,13 @@ static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSiz
 	auto child_type = ArrowTableFunction::GetArrowLogicalType(child);
 
 	unique_ptr<ArrowTypeInfo> type_info;
+	auto type = LogicalType::LIST(child_type->GetDuckType());
 	if (view) {
 		type_info = ArrowListInfo::ListView(std::move(child_type), size_type);
 	} else {
 		type_info = ArrowListInfo::List(std::move(child_type), size_type);
 	}
-	return make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), std::move(type_info));
+	return make_uniq<ArrowType>(type, std::move(type_info));
 }
 
 static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
@@ -119,9 +120,9 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
 
 		idx_t fixed_size = std::stoi(parameters);
+		auto list_type = LogicalType::LIST(child_type->GetDuckType());
 		auto type_info = ArrowListInfo::ListFixedSize(std::move(child_type), fixed_size);
-		auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), std::move(type_info));
-		return list_type;
+		return make_uniq<ArrowType>(list_type, std::move(type_info));
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ArrowType>> children;
@@ -180,6 +181,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		key_value.emplace_back(std::make_pair("key", key_type->GetDuckType()));
 		key_value.emplace_back(std::make_pair("value", value_type->GetDuckType()));
 
+		auto map_type = LogicalType::MAP(key_type->GetDuckType(), value_type->GetDuckType());
 		vector<unique_ptr<ArrowType>> children;
 		children.reserve(2);
 		children.push_back(std::move(key_type));
@@ -187,11 +189,10 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		auto inner_struct = make_uniq<ArrowType>(LogicalType::STRUCT(std::move(key_value)),
 		                                         make_uniq<ArrowStructInfo>(std::move(children)));
 		auto map_type_info = ArrowListInfo::List(std::move(inner_struct), ArrowVariableSizeType::NORMAL);
-		auto map_type = make_uniq<ArrowType>(LogicalType::MAP(key_type->GetDuckType(), value_type->GetDuckType()),
-		                                     std::move(map_type_info));
-		return map_type;
+		return make_uniq<ArrowType>(map_type, std::move(map_type_info));
 	} else if (format == "z") {
-		return make_uniq<ArrowType>(LogicalType::BLOB);
+		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format == "Z") {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));

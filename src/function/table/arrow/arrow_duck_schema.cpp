@@ -91,11 +91,4 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	}
 }
 
-ArrowVariableSizeType ArrowType::GetSizeType() const {
-	if (!type_info) {
-		return ArrowVariableSizeType::NORMAL;
-	}
-	return type_info->GetSizeType();
-}
-
 } // namespace duckdb

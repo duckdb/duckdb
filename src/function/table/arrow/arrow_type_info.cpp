@@ -33,10 +33,6 @@ const ArrowType &ArrowStructInfo::GetChild(idx_t index) const {
 	return *children[index];
 }
 
-ArrowVariableSizeType ArrowStructInfo::GetSizeType() const {
-	return ArrowVariableSizeType::NORMAL;
-}
-
 const vector<unique_ptr<ArrowType>> &ArrowStructInfo::GetChildren() const {
 	return children;
 }
@@ -54,10 +50,6 @@ ArrowDateTimeInfo::~ArrowDateTimeInfo() {
 
 ArrowDateTimeType ArrowDateTimeInfo::GetDateTimeType() const {
 	return size_type;
-}
-
-ArrowVariableSizeType ArrowDateTimeInfo::GetSizeType() const {
-	return ArrowVariableSizeType::NORMAL;
 }
 
 //===--------------------------------------------------------------------===//

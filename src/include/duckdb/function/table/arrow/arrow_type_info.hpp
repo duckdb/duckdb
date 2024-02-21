@@ -47,9 +47,6 @@ public:
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
-
-public:
-	virtual ArrowVariableSizeType GetSizeType() const = 0;
 };
 
 struct ArrowStructInfo : public ArrowTypeInfo {
@@ -64,7 +61,6 @@ public:
 	idx_t ChildCount() const;
 	const ArrowType &GetChild(idx_t index) const;
 	const vector<unique_ptr<ArrowType>> &GetChildren() const;
-	ArrowVariableSizeType GetSizeType() const override;
 
 private:
 	vector<unique_ptr<ArrowType>> children;
@@ -79,7 +75,6 @@ public:
 	~ArrowDateTimeInfo() override;
 
 public:
-	ArrowVariableSizeType GetSizeType() const override;
 	ArrowDateTimeType GetDateTimeType() const;
 
 private:
@@ -96,7 +91,7 @@ public:
 	~ArrowStringInfo() override;
 
 public:
-	ArrowVariableSizeType GetSizeType() const override;
+	ArrowVariableSizeType GetSizeType() const;
 	idx_t FixedSize() const;
 
 private:
@@ -115,7 +110,7 @@ public:
 	~ArrowListInfo() override;
 
 public:
-	ArrowVariableSizeType GetSizeType() const override;
+	ArrowVariableSizeType GetSizeType() const;
 	bool IsView() const;
 	idx_t FixedSize() const;
 	ArrowType &GetChild() const;

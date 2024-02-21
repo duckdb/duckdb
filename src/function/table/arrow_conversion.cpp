@@ -690,9 +690,6 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
-	if (parent_offset != 0) {
-		(void)array_state;
-	}
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
 
@@ -745,7 +742,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		auto size_type = arrow_type.GetSizeType();
+		auto &string_info = arrow_type.GetTypeInfo<ArrowStringInfo>();
+		auto size_type = string_info.GetSizeType();
 		switch (size_type) {
 		case ArrowVariableSizeType::SUPER_SIZE: {
 			auto cdata = ArrowBufferData<char>(array, 2);
