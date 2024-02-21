@@ -45,10 +45,6 @@ struct CSVReaderOptions {
 	string rejects_table_name;
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
-	//! Columns to use as recovery key for rejected rows when reading with ignore_errors = true
-	vector<string> rejects_recovery_columns;
-	//! Index of the recovery columns
-	vector<idx_t> rejects_recovery_column_ids;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
 	//! Specifies the string that represents a null value

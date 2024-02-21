@@ -168,20 +168,6 @@ void CSVFileScan::InitializeFileNamesTypes() {
 		projection_ids.emplace_back(result_idx, i);
 	}
 
-	if (!projected_columns.empty()) {
-		// We might have to add recovery rejects column ids
-		for (idx_t i = 0; i < options.rejects_recovery_column_ids.size(); i++) {
-			idx_t col_id = options.rejects_recovery_column_ids[i];
-			if (projected_columns.find(col_id) == projected_columns.end()) {
-				// We have to insert this column in our projection
-				projected_columns.insert(col_id);
-				file_types.emplace_back(LogicalType::VARCHAR);
-				projected_columns.insert(col_id);
-				projection_ids.emplace_back(col_id, col_id);
-			}
-		}
-	}
-
 	if (reader_data.column_ids.empty()) {
 		file_types = types;
 	}

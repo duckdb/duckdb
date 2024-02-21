@@ -29,15 +29,6 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	info->columns.AddColumn(ColumnDefinition("column", LogicalType::BIGINT));
 	info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
 	info->columns.AddColumn(ColumnDefinition("parsed_value", LogicalType::VARCHAR));
-
-	if (!data.options.rejects_recovery_columns.empty()) {
-		child_list_t<LogicalType> recovery_key_components;
-		for (auto &col_name : data.options.rejects_recovery_columns) {
-			recovery_key_components.emplace_back(col_name, LogicalType::VARCHAR);
-		}
-		info->columns.AddColumn(ColumnDefinition("recovery_columns", LogicalType::STRUCT(recovery_key_components)));
-	}
-
 	info->columns.AddColumn(ColumnDefinition("error", LogicalType::VARCHAR));
 
 	catalog.CreateTable(context, std::move(info));

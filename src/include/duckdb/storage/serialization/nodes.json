@@ -584,50 +584,42 @@
         "type": "idx_t"
       },
       {"id": 119,
-        "name": "rejects_recovery_columns",
-        "type": "vector<string>"
-      },
-      {"id": 120,
-        "name": "rejects_recovery_column_ids",
-        "type": "vector<idx_t>"
-      },
-      {"id": 121,
         "name": "dialect_options.state_machine_options.delimiter",
         "type": "CSVOption<char>"
       },
-      {"id": 122,
+      {"id": 120,
         "name": "dialect_options.state_machine_options.quote",
         "type": "CSVOption<char>"
       },
-      {"id": 123,
+      {"id": 121,
         "name": "dialect_options.state_machine_options.escape",
         "type": "CSVOption<char>"
       },
-      {"id": 124,
+      {"id": 122,
         "name": "dialect_options.header",
         "type": "CSVOption<bool>"
       },
-      {"id": 125,
+      {"id": 123,
         "name": "dialect_options.num_cols",
         "type": "idx_t"
       },
-      {"id": 126,
+      {"id": 124,
         "name": "dialect_options.state_machine_options.new_line",
         "type": "CSVOption<NewLineIdentifier>"
       },
-      {"id": 127,
+      {"id": 125,
         "name": "dialect_options.skip_rows",
         "type": "CSVOption<idx_t>"
       },
-      {"id": 128,
+      {"id": 126,
         "name": "dialect_options.date_format",
         "type": "map<LogicalTypeId, CSVOption<StrpTimeFormat>>"
       },
-      {"id": 129,
+      {"id": 127,
         "name": "sniffer_user_mismatch_error",
         "type": "string"
       },
-      {"id": 130,
+      {"id": 128,
         "name": "parallel",
         "type": "bool"
       }

@@ -213,13 +213,6 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 			throw BinderException("REJECTS_TABLE option cannot be empty");
 		}
 		rejects_table_name = table_name;
-	} else if (loption == "rejects_recovery_columns") {
-		// Get the list of columns to use as a recovery key
-		auto &children = ListValue::GetChildren(value);
-		for (auto &child : children) {
-			auto col_name = child.GetValue<string>();
-			rejects_recovery_columns.push_back(col_name);
-		}
 	} else if (loption == "rejects_limit") {
 		int64_t limit = ParseInteger(value, loption);
 		if (limit < 0) {

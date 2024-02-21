@@ -41,22 +41,6 @@ ReadCSVData::ReadCSVData() {
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
-	if (!options.rejects_recovery_columns.empty()) {
-		for (auto &recovery_col : options.rejects_recovery_columns) {
-			bool found = false;
-			for (idx_t col_idx = 0; col_idx < return_names.size(); col_idx++) {
-				if (StringUtil::CIEquals(return_names[col_idx], recovery_col)) {
-					options.rejects_recovery_column_ids.push_back(col_idx);
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				throw BinderException("Unsupported parameter for REJECTS_RECOVERY_COLUMNS: column \"%s\" not found",
-				                      recovery_col);
-			}
-		}
-	}
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -82,11 +66,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		if (options.rejects_table_name.empty()) {
 			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 		}
-	}
-
-	if (!options.rejects_recovery_columns.empty() && options.rejects_table_name.empty()) {
-		throw BinderException(
-		    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
 	}
 
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
@@ -143,7 +122,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->return_types = return_types;
 	result->return_names = names;
 
-	result->FinalizeRead(context);
+	result->Finalize();
 	return std::move(result);
 }
 

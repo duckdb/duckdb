@@ -174,21 +174,6 @@ void CSVGlobalState::FillRejectsTable() {
 						appender.Append(string_t("\"" + col_name + "\""));
 						appender.Append(error.row[col_idx]);
 
-						if (!options.rejects_recovery_columns.empty()) {
-							child_list_t<Value> recovery_key;
-							for (auto &key_idx : options.rejects_recovery_column_ids) {
-								// Figure out if the recovery key is valid.
-								// If not, error out for real.
-								auto &value = error.row[key_idx];
-								if (value.IsNull()) {
-									throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
-									                            "Could not parse recovery column", row_line, col_name,
-									                            options.ToString());
-								}
-								recovery_key.emplace_back(bind_data.return_names[key_idx], value);
-							}
-							appender.Append(Value::STRUCT(recovery_key));
-						}
 						auto row_error_msg =
 						    StringUtil::Format("Could not convert string '%s' to '%s'", error.row[col_idx].ToString(),
 						                       file->types[col_idx].ToString());
