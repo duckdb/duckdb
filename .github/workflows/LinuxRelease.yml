@@ -7,7 +7,6 @@ on:
       - '**'
       - '!main'
       - '!feature'
-      - '!ampere_main'
     tags:
       - '**'
     paths-ignore:
