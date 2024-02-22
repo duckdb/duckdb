@@ -101,6 +101,9 @@ public:
 		if (blocked_tasks.empty()) {
 			return false;
 		}
+#if 0
+		Printer::PrintF("Unblock %llu tasks", blocked_tasks.size());
+#endif
 		for (auto &entry : blocked_tasks) {
 			entry.Callback();
 		}
@@ -133,11 +136,18 @@ public:
 		return blocked_task_lock;
 	}
 
+	idx_t GetUnflushedMemory() {
+		return unflushed_memory_usage;
+	}
+
 	void IncreaseUnflushedMemory(idx_t memory_increase) {
 		unflushed_memory_usage += memory_increase;
 	}
 
 	void ReduceUnflushedMemory(idx_t memory_reduction) {
+		if (unflushed_memory_usage < memory_reduction) {
+			throw InternalException("Underflow in unflushed_memory_usage");
+		}
 		unflushed_memory_usage -= memory_reduction;
 	}
 

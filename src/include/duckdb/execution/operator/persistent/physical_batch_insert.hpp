@@ -69,6 +69,10 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+private:
+	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const;
+	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const;
 };
 
 } // namespace duckdb

@@ -26,6 +26,14 @@ PhysicalFixedBatchCopy::PhysicalFixedBatchCopy(vector<LogicalType> types, CopyFu
 //===--------------------------------------------------------------------===//
 // States
 //===--------------------------------------------------------------------===//
+class BatchCopyTask {
+public:
+	virtual ~BatchCopyTask() {
+	}
+
+	virtual void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) = 0;
+};
+
 struct FixedPreparedBatchData {
 	idx_t memory_usage;
 	unique_ptr<PreparedBatchData> prepared_data;
@@ -45,7 +53,7 @@ public:
 	}
 
 	BatchSinkHelper batch_helper;
-	BatchTaskHelper task_helper;
+	BatchTaskHelper<BatchCopyTask> task_helper;
 	mutex lock;
 	mutex flush_lock;
 	//! The total number of rows copied to the file
@@ -290,8 +298,8 @@ public:
 	RepartitionedFlushTask() {
 	}
 
-	void Execute(const PhysicalOperator &op, ClientContext &context, GlobalSinkState &gstate_p) override {
-		op.Cast<PhysicalFixedBatchCopy>().FlushBatchData(context, gstate_p, 0);
+	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
+		op.FlushBatchData(context, gstate_p, 0);
 	}
 };
 
@@ -304,9 +312,8 @@ public:
 	idx_t batch_index;
 	unique_ptr<ColumnDataCollection> collection;
 
-	void Execute(const PhysicalOperator &op_p, ClientContext &context, GlobalSinkState &gstate_p) override {
+	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
-		auto &op = op_p.Cast<PhysicalFixedBatchCopy>();
 		auto memory_usage = collection->AllocationSize();
 		auto batch_data =
 		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(collection));

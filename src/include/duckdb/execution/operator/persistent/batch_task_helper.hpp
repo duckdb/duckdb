@@ -16,22 +16,15 @@
 
 namespace duckdb {
 
-class BatchCopyTask {
-public:
-	virtual ~BatchCopyTask() {
-	}
-
-	virtual void Execute(const PhysicalOperator &op, ClientContext &context, GlobalSinkState &gstate_p) = 0;
-};
-
+template<class TASK>
 class BatchTaskHelper {
 public:
-	void AddTask(unique_ptr<BatchCopyTask> task) {
+	void AddTask(unique_ptr<TASK> task) {
 		lock_guard<mutex> l(task_lock);
 		task_queue.push(std::move(task));
 	}
 
-	unique_ptr<BatchCopyTask> GetTask() {
+	unique_ptr<TASK> GetTask() {
 		lock_guard<mutex> l(task_lock);
 		if (task_queue.empty()) {
 			return nullptr;
@@ -49,7 +42,7 @@ public:
 private:
 	mutex task_lock;
 	//! The task queue for the batch copy to file
-	queue<unique_ptr<BatchCopyTask>> task_queue;
+	queue<unique_ptr<TASK>> task_queue;
 };
 
 } // namespace duckdb
