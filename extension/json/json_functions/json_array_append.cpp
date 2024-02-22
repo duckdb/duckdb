@@ -14,7 +14,9 @@ static void ArrayAppendFunction(DataChunk &args, ExpressionState &state, Vector 
 		JSONExecutors::BinaryMutExecute<string_t>(
 		    args, state, result,
 		    [](yyjson_mut_val *arr, yyjson_mut_doc *doc, string_t element, yyjson_alc *alc, Vector &result) {
-			D_ASSERT(yyjson_mut_is_arr(arr));
+			if (!yyjson_mut_is_arr(arr)) {
+				throw InvalidInputException("JSON input not an JSON Array");
+			}
 
             auto edoc = JSONCommon::ReadDocument(element, JSONCommon::READ_FLAG, alc);
             auto mut_edoc = yyjson_doc_mut_copy(edoc, alc);
@@ -28,7 +30,9 @@ static void ArrayAppendFunction(DataChunk &args, ExpressionState &state, Vector 
 		JSONExecutors::BinaryMutExecute<bool>(
 		    args, state, result,
 		    [&](yyjson_mut_val *arr, yyjson_mut_doc *doc, bool element, yyjson_alc *alc, Vector &result) {
-			    D_ASSERT(yyjson_mut_is_arr(arr));
+			    if (!yyjson_mut_is_arr(arr)) {
+				    throw InvalidInputException("JSON input not a JSON Array");
+			    }
 
 			    yyjson_mut_arr_add_bool(doc, arr, element);
 			    return arr;
@@ -40,21 +44,25 @@ static void ArrayAppendFunction(DataChunk &args, ExpressionState &state, Vector 
         JSONExecutors::BinaryMutExecute<int64_t>(
             args, state, result,
             [&](yyjson_mut_val *arr, yyjson_mut_doc *doc, int64_t el, yyjson_alc *alc, Vector &result) {
-                D_ASSERT(yyjson_mut_is_arr(arr));
+			  if (!yyjson_mut_is_arr(arr)) {
+				  throw InvalidInputException("JSON input not a JSON Array");
+			  }
 
-                int64_t element = static_cast<int64_t>(el);
+              int64_t element = static_cast<int64_t>(el);
 
-                yyjson_mut_arr_add_int(doc, arr, element);
-                return arr;
+              yyjson_mut_arr_add_int(doc, arr, element);
+              return arr;
             });
     // Floating value
     } else if (right_type == LogicalType::FLOAT || right_type == LogicalType::DOUBLE) {
         JSONExecutors::BinaryMutExecute<double>(
 		    args, state, result,
 		    [&](yyjson_mut_val *arr, yyjson_mut_doc *doc, double el, yyjson_alc *alc, Vector &result) {
-			    D_ASSERT(yyjson_mut_is_arr(arr));
+			    if (!yyjson_mut_is_arr(arr)) {
+				    throw InvalidInputException("JSON input not a JSON Array");
+			    }
 
-			    double element = static_cast<double>(el);
+			    double element = el;
 
 			    yyjson_mut_arr_add_real(doc, arr, element);
 			    return arr;
@@ -76,12 +84,10 @@ ScalarFunctionSet JSONFunctions::GetArrayAppendFunction() {
     GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BOOLEAN);
 
 	// Allows for Integer types
-	// TINYINT, SMALLINT, INTEGER, UTINYINT, USMALLINT are captured by BIGINT
+	// TINYINT, SMALLINT, INTEGER, UTINYINT, USMALLINT, UINTEGER are captured by BIGINT
 	// relies on consistant casting strategy upfront
     GetArrayAppendFunctionInternal(set, LogicalType::VARCHAR, LogicalType::BIGINT);
     GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::BIGINT);
-    GetArrayAppendFunctionInternal(set, LogicalType::VARCHAR, LogicalType::UINTEGER);
-    GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::UINTEGER);
     GetArrayAppendFunctionInternal(set, LogicalType::VARCHAR, LogicalType::UBIGINT);
     GetArrayAppendFunctionInternal(set, JSONCommon::JSONType(), LogicalType::UBIGINT);
 

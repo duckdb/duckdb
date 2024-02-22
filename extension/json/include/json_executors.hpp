@@ -140,8 +140,9 @@ public:
                 auto mut_ldoc = yyjson_doc_mut_copy(ldoc, alc);
 
                 auto new_val = fun(mut_ldoc->root, mut_ldoc, right, alc, result);
+                ldoc = yyjson_mut_val_imut_copy(new_val, alc);
 
-                return JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc);
+                return JSONCommon::WriteVal<yyjson_val>(ldoc->root, alc);
 		});
 	}
 
