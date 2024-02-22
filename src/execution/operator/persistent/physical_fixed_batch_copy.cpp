@@ -8,6 +8,7 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_sink_helper.hpp"
+#include "duckdb/execution/operator/persistent/batch_task_helper.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -21,17 +22,6 @@ PhysicalFixedBatchCopy::PhysicalFixedBatchCopy(vector<LogicalType> types, CopyFu
 		                        "prepare_batch/flush_batch/desired_batch_size defined");
 	}
 }
-
-//===--------------------------------------------------------------------===//
-// Sink
-//===--------------------------------------------------------------------===//
-class BatchCopyTask {
-public:
-	virtual ~BatchCopyTask() {
-	}
-
-	virtual void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) = 0;
-};
 
 //===--------------------------------------------------------------------===//
 // States
@@ -55,6 +45,7 @@ public:
 	}
 
 	BatchSinkHelper batch_helper;
+	BatchTaskHelper task_helper;
 	mutex lock;
 	mutex flush_lock;
 	//! The total number of rows copied to the file
@@ -78,26 +69,6 @@ public:
 	//! Minimum memory per thread
 	idx_t minimum_memory_per_thread;
 
-	void AddTask(unique_ptr<BatchCopyTask> task) {
-		lock_guard<mutex> l(task_lock);
-		task_queue.push(std::move(task));
-	}
-
-	unique_ptr<BatchCopyTask> GetTask() {
-		lock_guard<mutex> l(task_lock);
-		if (task_queue.empty()) {
-			return nullptr;
-		}
-		auto entry = std::move(task_queue.front());
-		task_queue.pop();
-		return entry;
-	}
-
-	idx_t TaskCount() {
-		lock_guard<mutex> l(task_lock);
-		return task_queue.size();
-	}
-
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {
 		// move the batch data to the set of prepared batch data
 		lock_guard<mutex> l(lock);
@@ -116,11 +87,6 @@ public:
 		// cap the concurrent threads working on this task based on the amount of available memory
 		return MinValue<idx_t>(source_max_threads, batch_helper.AvailableMemory() / minimum_memory_per_thread + 1);
 	}
-
-private:
-	mutex task_lock;
-	//! The task queue for the batch copy to file
-	queue<unique_ptr<BatchCopyTask>> task_queue;
 };
 
 enum class FixedBatchCopyState { SINKING_DATA = 1, PROCESSING_TASKS = 2 };
@@ -279,7 +245,7 @@ public:
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalFixedBatchCopy::FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
-	if (gstate.TaskCount() != 0) {
+	if (gstate.task_helper.TaskCount() != 0) {
 		throw InternalException("Unexecuted tasks are remaining in PhysicalFixedBatchCopy::FinalFlush!?");
 	}
 	idx_t min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
@@ -304,7 +270,7 @@ SinkFinalizeType PhysicalFixedBatchCopy::Finalize(Pipeline &pipeline, Event &eve
 	// repartition any remaining batches
 	RepartitionBatches(context, input.global_state, min_batch_index, true);
 	// check if we have multiple tasks to execute
-	if (gstate.TaskCount() <= 1) {
+	if (gstate.task_helper.TaskCount() <= 1) {
 		// we don't - just execute the remaining task and finish flushing to disk
 		ExecuteTasks(context, input.global_state);
 		FinalFlush(context, input.global_state);
@@ -324,8 +290,8 @@ public:
 	RepartitionedFlushTask() {
 	}
 
-	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
-		op.FlushBatchData(context, gstate_p, 0);
+	void Execute(const PhysicalOperator &op, ClientContext &context, GlobalSinkState &gstate_p) override {
+		op.Cast<PhysicalFixedBatchCopy>().FlushBatchData(context, gstate_p, 0);
 	}
 };
 
@@ -338,14 +304,15 @@ public:
 	idx_t batch_index;
 	unique_ptr<ColumnDataCollection> collection;
 
-	void Execute(const PhysicalFixedBatchCopy &op, ClientContext &context, GlobalSinkState &gstate_p) override {
+	void Execute(const PhysicalOperator &op_p, ClientContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+		auto &op = op_p.Cast<PhysicalFixedBatchCopy>();
 		auto memory_usage = collection->AllocationSize();
 		auto batch_data =
 		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(collection));
 		gstate.AddBatchData(batch_index, std::move(batch_data), memory_usage);
 		if (batch_index == gstate.flushed_batch_index) {
-			gstate.AddTask(make_uniq<RepartitionedFlushTask>());
+			gstate.task_helper.AddTask(make_uniq<RepartitionedFlushTask>());
 		}
 	}
 };
@@ -372,6 +339,7 @@ static bool CorrectSizeForBatch(idx_t collection_size, idx_t desired_size) {
 void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
                                                 bool final) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+	auto &task_helper = gstate.task_helper;
 
 	// repartition batches until the min index is reached
 	lock_guard<mutex> l(gstate.lock);
@@ -418,7 +386,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			if (CorrectSizeForBatch(collection->Count(), gstate.batch_size)) {
 				// the collection is ~approximately equal to the batch size (off by at most one vector)
 				// use it directly
-				gstate.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(collection)));
+				task_helper.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(collection)));
 				collection.reset();
 			} else if (collection->Count() < gstate.batch_size) {
 				// the collection is smaller than the batch size - use it as a starting point
@@ -447,7 +415,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 				continue;
 			}
 			// the collection is full - move it to the result and create a new one
-			gstate.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
+			task_helper.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
 			current_collection =
 			    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
 			current_collection->InitializeAppend(append_state);
@@ -458,7 +426,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 		// AND this is not the final collection
 		// re-add it to the set of raw (to-be-merged) batches
 		if (final || CorrectSizeForBatch(current_collection->Count(), gstate.batch_size)) {
-			gstate.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
+			task_helper.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
 		} else {
 			gstate.raw_batches[max_batch_index] = std::move(current_collection);
 		}
@@ -511,7 +479,7 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 //===--------------------------------------------------------------------===//
 bool PhysicalFixedBatchCopy::ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
-	auto task = gstate.GetTask();
+	auto task = gstate.task_helper.GetTask();
 	if (!task) {
 		return false;
 	}
