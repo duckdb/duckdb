@@ -12,8 +12,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -22,6 +22,10 @@ class PreparedStatementData;
 
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
+
+struct TreeNodeSettings {
+	unordered_map<string, Value> metrics;
+};
 
 struct ClientConfig {
 	//! The home directory used by the system (if any)
@@ -37,7 +41,7 @@ struct ClientConfig {
 	string profiler_save_location;
 	//! The file that contains custom settings for the profiler
 	//! (empty = use the default settings)
-	string profiler_custom_settings_file;
+	TreeNodeSettings *profiler_settings = nullptr;
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
