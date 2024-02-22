@@ -322,6 +322,24 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 	}
 }
 
+//! Reconstructs the current line to be used in error messages
+string StringValueResult::ReconstructCurrentLine(){
+	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
+		                                   buffer_size};
+	idx_t current_line_size = current_line_start - previous_line_start;
+	string result;
+	result.resize(current_line_size);
+	if (iterator.pos.buffer_idx == previous_line_start.buffer_idx){
+		idx_t result_idx = 0;
+		for (idx_t  i = previous_line_start.buffer_pos; i < iterator.pos.buffer_pos; i ++){
+			result[result_idx++] = buffer_ptr[i];
+		}
+	} else{
+		throw InternalException("Oh no");
+	}
+	return result;
+}
+
 bool StringValueResult::AddRowInternal() {
 	if (ignore_current_row) {
 		// An error occurred on this row, we are ignoring it and resetting our control flag
@@ -330,17 +348,6 @@ bool StringValueResult::AddRowInternal() {
 	}
 	if (!cast_errors.empty()) {
 		// A wild casting error appears
-		// Recreate row for rejects-table
-		vector<Value> row;
-		if (!state_machine.options.rejects_table_name.empty()) {
-			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-				if (cast_errors.find(col) != cast_errors.end()) {
-					row.push_back(cast_errors[col]);
-				} else {
-					row.push_back(parse_chunk.data[col].GetValue(number_of_rows));
-				}
-			}
-		}
 		for (auto &cast_error : cast_errors) {
 			std::ostringstream error;
 			// Casting Error Message
@@ -348,9 +355,9 @@ bool StringValueResult::AddRowInternal() {
 			      << LogicalTypeIdToString(parse_types[cast_error.first]) << "\'";
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
-
+			auto borked_line = ReconstructCurrentLine();
 			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
-			                                     cast_error.first, row, lines_per_batch);
+			                                     cast_error.first, borked_line, lines_per_batch);
 			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -615,8 +622,10 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				}
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
+//				auto borked_line = result.ReconstructCurrentLine();
+				string empty;
 				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-				                                     error_message, col_idx, row, lines_per_batch);
+				                                     error_message, col_idx, empty, lines_per_batch);
 				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
@@ -632,8 +641,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
+					string empty;
 					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx, row, lines_per_batch);
+					                                     error_message, col_idx, empty, lines_per_batch);
 
 					error_handler->Error(csv_error);
 				}

@@ -117,6 +117,8 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
+	//! Reconstructs the current line to be used in error messages
+	string ReconstructCurrentLine();
 
 	void HandleOverLimitRows();
 
