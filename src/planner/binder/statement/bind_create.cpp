@@ -56,6 +56,9 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 			// check if there is a schema
 			auto &search_path = *context.client_data->catalog_search_path;
 			auto catalog_names = search_path.GetCatalogsForSchema(schema);
+			if (catalog_names.empty()) {
+				catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+			}
 			for (auto &catalog_name : catalog_names) {
 				throw BinderException(
 				    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",

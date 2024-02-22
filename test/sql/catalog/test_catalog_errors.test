@@ -3,6 +3,23 @@
 # group: [catalog]
 
 statement ok
+create schema s1;
+
+statement ok
+create table s1.tbl(i int);
+
+statement ok
+attach ':memory:' as s1;
+
+statement ok
+create table s1.main.tbl(i int);
+
+statement error
+from s1.tbl;
+----
+Ambiguous
+
+statement ok
 CREATE TABLE integers(i INTEGER);
 
 statement ok
@@ -69,3 +86,4 @@ DROP TABLE integers;
 statement error
 DROP INDEX i_index
 ----
+
