@@ -408,7 +408,6 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
 
-
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
 	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
 
@@ -481,8 +480,8 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 			// sequentially
 			// We can't use the standard flat vector as this one has no internal selection vector and the Match
 			// Function Also marks the found rows in the selection vector, so we need to make sure there is one
-			data_collection->Gather(row_locations, entry_compare_sel_vector, need_compare_count,
-			                        state.lhs_data, entry_compare_sel_vector, state.chunk_state.cached_cast_vectors);
+			data_collection->Gather(row_locations, entry_compare_sel_vector, need_compare_count, state.lhs_data,
+			                        entry_compare_sel_vector, state.chunk_state.cached_cast_vectors);
 
 			TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.lhs_data);
 
