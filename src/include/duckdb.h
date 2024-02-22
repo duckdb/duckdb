@@ -2016,7 +2016,7 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
 
 * vector: The vector to alter
 * index: The row position in the vector to assign the string to
