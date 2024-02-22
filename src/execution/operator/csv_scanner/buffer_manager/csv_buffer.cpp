@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {

@@ -4,6 +4,7 @@
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -396,7 +397,8 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, b
 	LogicalType item_type = LogicalType::SQLNULL;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < rows; i += increment) {
-		auto obj = FindFirstNonNull(row, i, increment);
+		auto range = MinValue(increment, rows - i);
+		auto obj = FindFirstNonNull(row, i, range);
 		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
 
