@@ -24,13 +24,28 @@ Transaction &Transaction::Get(ClientContext &context, AttachedDatabase &db) {
 	return meta_transaction.GetTransaction(db);
 }
 
+#ifdef DEBUG
+static void VerifyAllTransactionsUnique(AttachedDatabase &db, vector<reference<AttachedDatabase>> &all_transactions) {
+	for (auto &tx : all_transactions) {
+		if (RefersToSameObject(db, tx.get())) {
+			throw InternalException("Database is already present in all_transactions");
+		}
+	}
+}
+#endif
+
 Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
+	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		auto &new_transaction = db.GetTransactionManager().StartTransaction(context);
 		new_transaction.active_query = active_query;
+#ifdef DEBUG
+		VerifyAllTransactionsUnique(db, all_transactions);
+#endif
 		all_transactions.push_back(db);
 		transactions.insert(make_pair(reference<AttachedDatabase>(db), reference<Transaction>(new_transaction)));
+
 		return new_transaction;
 	} else {
 		D_ASSERT(entry->second.get().active_query == active_query);
@@ -39,6 +54,7 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 }
 
 void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
+	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		throw InternalException("MetaTransaction::RemoveTransaction called but meta transaction did not have a "
@@ -59,7 +75,11 @@ Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 }
 
 ErrorData MetaTransaction::Commit() {
+	lock_guard<mutex> guard(lock);
 	ErrorData error;
+#ifdef DEBUG
+	reference_set_t<AttachedDatabase> committed_tx;
+#endif
 	// commit transactions in reverse order
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto &db = all_transactions[i - 1].get();
@@ -67,6 +87,12 @@ ErrorData MetaTransaction::Commit() {
 		if (entry == transactions.end()) {
 			throw InternalException("Could not find transaction corresponding to database in MetaTransaction");
 		}
+#ifdef DEBUG
+		auto already_committed = committed_tx.insert(db).second == false;
+		if (already_committed) {
+			throw InternalException("All databases inside all_transactions should be unique, invariant broken!");
+		}
+#endif
 		auto &transaction_manager = db.GetTransactionManager();
 		auto &transaction = entry->second.get();
 		if (!error.HasError()) {
@@ -81,6 +107,7 @@ ErrorData MetaTransaction::Commit() {
 }
 
 void MetaTransaction::Rollback() {
+	lock_guard<mutex> guard(lock);
 	// rollback transactions in reverse order
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto &db = all_transactions[i - 1].get();
