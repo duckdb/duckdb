@@ -54,13 +54,12 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL,
-			                                     QueryErrorContext(), true);
-			if (schema_obj) {
-				auto &attached = schema_obj->catalog.GetAttached();
+			auto &search_path = *context.client_data->catalog_search_path;
+			auto catalog_names = search_path.GetCatalogsForSchema(schema);
+			for(auto &catalog_name : catalog_names) {
 				throw BinderException(
 				    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-				    schema, attached.GetName(), schema);
+				    schema, catalog_name, schema);
 			}
 			catalog = schema;
 			schema = string();

@@ -188,10 +188,9 @@ public:
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const string &name,
 	                                         QueryErrorContext error_context = QueryErrorContext());
-	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &name,
-	                                                              OnEntryNotFound if_not_found,
-	                                                              QueryErrorContext error_context = QueryErrorContext(),
-	                                                              bool system_lookup = false);
+	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &name,
+	                                                      OnEntryNotFound if_not_found,
+	                                                      QueryErrorContext error_context = QueryErrorContext());
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &name,
 	                                         QueryErrorContext error_context = QueryErrorContext());
 	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry>
@@ -203,8 +202,7 @@ public:
 	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &catalog_name,
 	                                                             const string &schema_name,
 	                                                             OnEntryNotFound if_not_found,
-	                                                             QueryErrorContext error_context = QueryErrorContext(),
-	                                                             bool system_lookup = false);
+	                                                             QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
