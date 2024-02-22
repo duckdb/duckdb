@@ -117,6 +117,25 @@ public:
 	};
 
 public:
+	struct ProbeState {
+
+		ProbeState();
+
+		Vector hash_salts_v;
+		Vector ht_offsets_v;
+		Vector row_ptr_insert_to_v;
+
+		SelectionVector entry_compare_sel_vector;
+		SelectionVector no_match_sel;
+	};
+
+	struct InsertState : ProbeState {
+		explicit InsertState(unique_ptr<TupleDataCollection> &data_collection);
+
+		DataChunk lhs_data;
+		TupleDataChunkState chunk_state;
+	};
+
 	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
 	~JoinHashTable();
@@ -134,7 +153,7 @@ public:
 	//! ever called.
 	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
 	//! Probe the HT with the given input chunk, resulting in the given result
-	unique_ptr<ScanStructure> Probe(DataChunk &keys, TupleDataChunkState &key_state,
+	unique_ptr<ScanStructure> Probe(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	                                Vector *precomputed_hashes = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result);
@@ -229,12 +248,13 @@ private:
 	inline idx_t ApplyBitmask(hash_t hash) const;
 
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing
-	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, Vector &hashes_v, const SelectionVector &sel,
-	                    idx_t count, Vector &pointers);
+	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state, Vector &hashes_v,
+	                    const SelectionVector &sel, idx_t count, Vector &pointers);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
-	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, bool parallel);
+	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
+	                  bool parallel);
 
 	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
@@ -349,9 +369,9 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, TupleDataChunkState &key_state, DataChunk &payload,
-	                                        ProbeSpill &probe_spill, ProbeSpillLocalAppendState &spill_state,
-	                                        DataChunk &spill_chunk);
+	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
+	                                        DataChunk &payload, ProbeSpill &probe_spill,
+	                                        ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
 	//! The current number of radix bits used to partition
