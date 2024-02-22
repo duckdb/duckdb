@@ -71,7 +71,15 @@ test_count = len(test_cases)
 if args.list:
     for test_number, test_case in enumerate(test_cases):
         print(print(f"[{test_number}/{test_count}]: {test_case}"))
-return_code = 0
+
+all_passed = True
+
+
+def fail():
+    global all_passed
+    all_passed = False
+    if not no_exit:
+        exit(1)
 
 
 def parse_assertions(stdout):
@@ -100,8 +108,7 @@ for test_number, test_case in enumerate(test_cases):
         )
     except subprocess.TimeoutExpired as e:
         print(" (TIMED OUT)", flush=True)
-        if not no_exit:
-            break
+        fail()
         continue
 
     stdout = res.stdout.decode('utf8')
@@ -117,32 +124,33 @@ for test_number, test_case in enumerate(test_cases):
     print(additional_data, flush=True)
     if profile:
         print(f'{test_case}	{end - start}')
-    if res.returncode is not None and res.returncode != 0:
-        print("FAILURE IN RUNNING TEST")
-        print(
-            """--------------------
+    if res.returncode is None or res.returncode == 0:
+        continue
+
+    print("FAILURE IN RUNNING TEST")
+    print(
+        """--------------------
 RETURNCODE
 --------------------
 """
-        )
-        print(res.returncode)
-        print(
-            """--------------------
+    )
+    print(res.returncode)
+    print(
+        """--------------------
 STDOUT
 --------------------
 """
-        )
-        print(stdout)
-        print(
-            """--------------------
+    )
+    print(stdout)
+    print(
+        """--------------------
 STDERR
 --------------------
 """
-        )
-        print(stderr)
-        return_code = 1
-        if not no_exit:
-            break
+    )
+    print(stderr)
+    fail()
 
-
-exit(return_code)
+if all_passed:
+    exit(0)
+exit(1)
