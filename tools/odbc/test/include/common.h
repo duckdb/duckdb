@@ -19,7 +19,7 @@ struct MetadataData {
 	SQLSMALLINT col_type;
 };
 
-void ODBC_CHECK(SQLRETURN ret, std::string func);
+void ODBC_CHECK(SQLRETURN ret, const std::string &func);
 
 /**
  * @brief
@@ -55,7 +55,7 @@ void ACCESS_DIAGNOSTIC(std::string &state, std::string &message, SQLHANDLE handl
  * @param col_num The number of the column in the result set
  * @param expected_content The expected content of the column
  */
-void DATA_CHECK(HSTMT &hstmt, SQLSMALLINT col_num, const std::string expected_content);
+void DATA_CHECK(HSTMT &hstmt, SQLSMALLINT col_num, const std::string &expected_content);
 
 /**
  * @brief
