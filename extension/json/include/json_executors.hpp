@@ -191,7 +191,7 @@ public:
 			    doc = yyjson_mut_val_imut_copy(new_val, alc);
 
 			    // immutable document back to string
-			    return result = JSONCommon::WriteVal<yyjson_val>(doc->root, alc);
+			    return JSONCommon::WriteVal<yyjson_val>(doc->root, alc);
 		    });
 	}
 
