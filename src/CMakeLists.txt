@@ -31,7 +31,7 @@ if(MSVC OR MINGW)
   set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr)
 endif()
 
-if(WIN32)
+if(MSVC)
   add_definitions(/bigobj)
 endif()
 
