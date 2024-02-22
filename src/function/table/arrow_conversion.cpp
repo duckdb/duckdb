@@ -183,7 +183,7 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 		// We start scanning the child data at the 'start_offset' so we need to fix up the created list entries
 		for (idx_t i = 0; i < size; i++) {
 			auto &le = list_data[i];
-			le.offset -= start_offset;
+			le.offset = le.offset <= start_offset ? 0 : le.offset - start_offset;
 		}
 	}
 	return result;
