@@ -30,17 +30,28 @@ public:
 	}
 
 	//! Single-argument JSON functions that (partially) exposes yyjson functionality
-	static void UnaryMutExecute(DataChunk &args, ExpressionState &state, Vector &result,
-	                            std::function<yyjson_mut_val*(yyjson_mut_val *, yyjson_mut_doc *, yyjson_alc *, Vector &)> fun) {
+	static void
+	UnaryMutExecute(DataChunk &args, ExpressionState &state, Vector &result,
+	                std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_mut_doc *, yyjson_alc *, Vector &)> fun) {
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYAlc();
 
 		auto &inputs = args.data[0];
 		UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+			// String to immutable yyjson document
 			auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+
+			// immutable document to mutable document
 			auto mut_doc = yyjson_doc_mut_copy(doc, alc);
+
+			// compute mutable result
 			auto new_val = fun(mut_doc->root, mut_doc, alc, result);
-			return JSONCommon::WriteVal<yyjson_mut_val>(new_val, alc); // Write String back
+
+			// Convert mutable value back to immutable document
+			doc = yyjson_mut_val_imut_copy(new_val, alc);
+
+			// Convert immutable yyjson document back into string
+			return JSONCommon::WriteVal<yyjson_val>(doc->root, alc);
 		});
 	}
 
@@ -153,6 +164,36 @@ public:
 		    });
 	}
 
+	//! Three-argument JSON manipulation function
+	template <class T1, class T2>
+	static void TernaryMutExecute(
+	    DataChunk &args, ExpressionState &state, Vector &result,
+	    std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_mut_doc *, T1, T2, yyjson_alc *, Vector &)> fun) {
+		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+		auto alc = lstate.json_allocator.GetYYAlc();
+
+		auto &inputs_json = args.data[0];
+		auto &inputs_first = args.data[1];
+		auto &inputs_second = args.data[2];
+
+		TernaryExecutor::Execute<string_t, T1, T2, string_t>(
+		    inputs_json, inputs_first, inputs_second, result, args.size(), [&](string_t json, T1 first, T2 second) {
+			    // String to yyjson immutable document
+			    auto doc = JSONCommon::ReadDocument(json, JSONCommon::READ_FLAG, alc);
+
+			    // immutable document to mutable document
+			    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
+
+			    // Compute mutable value
+			    auto new_val = fun(mut_doc->root, mut_doc, first, second, alc, result);
+
+			    // mutable value back to immutable document
+			    doc = yyjson_mut_val_imut_copy(new_val, alc);
+
+			    // immutable document back to string
+			    return result = JSONCommon::WriteVal<yyjson_val>(doc->root, alc);
+		    });
+	}
 
 	//! JSON read function with list of path queries, i.e. json_type('[1, 2, 3]', ['$[0]', '$[1]'])
 	template <class T, bool NULL_IF_NULL = true>
