@@ -146,9 +146,10 @@ public:
 
 	void ReduceUnflushedMemory(idx_t memory_reduction) {
 		if (unflushed_memory_usage < memory_reduction) {
-			throw InternalException("Underflow in unflushed_memory_usage");
+			unflushed_memory_usage = 0;
+		} else {
+			unflushed_memory_usage -= memory_reduction;
 		}
-		unflushed_memory_usage -= memory_reduction;
 	}
 
 	bool IsMinimumBatchIndex(idx_t batch_index) {
