@@ -14,10 +14,10 @@
 namespace duckdb {
 
 struct PivotColumnEntry {
-	//! The set of values to match on
+	//! The set of values to match on (PIVOT only)
 	vector<Value> values;
-	//! The star expression (UNPIVOT only)
-	unique_ptr<ParsedExpression> star_expr;
+	//! The expression (UNPIVOT only)
+	unique_ptr<ParsedExpression> expr;
 	//! The alias of the pivot column entry
 	string alias;
 
