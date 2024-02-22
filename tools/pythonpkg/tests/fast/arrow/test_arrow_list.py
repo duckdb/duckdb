@@ -40,6 +40,57 @@ def create_and_register_comparison_result(column_list, duckdb_cursor):
     duckdb_cursor.execute(query, inserted_values)
 
 
+class ListGenerationResult:
+    def __init__(self, list, list_view):
+        self.list = list
+        self.list_view = list_view
+
+
+def generate_list(child_size) -> ListGenerationResult:
+    input = [i for i in range(child_size)]
+    offsets = []
+    sizes = []
+    lists = []
+    mask = []
+    count = 0
+    SIZE_MAP = [3, 1, 10, 0, 5, None]
+    for i in range(child_size):
+        if count >= child_size:
+            break
+        size = SIZE_MAP[i % len(SIZE_MAP)]
+        if size == None:
+            mask.append(True)
+            size = 0
+        else:
+            mask.append(False)
+        size = min(size, child_size - count)
+        sizes.append(size)
+        offsets.append(count)
+        lists.append(input[count : count + size])
+        count += size
+    offsets.append(count)
+
+    # Create a regular ListArray
+    list_arr = pa.ListArray.from_arrays(offsets=offsets, values=input, mask=pa.array(mask, type=pa.bool_()))
+
+    if not hasattr(pa, 'ListViewArray'):
+        return ListGenerationResult(list_arr, None)
+
+    lists = list(reversed(lists))
+    # Create a ListViewArray
+    offsets = []
+    input = []
+    remaining = count
+    for i, size in enumerate(sizes):
+        remaining -= size
+        offsets.append(remaining)
+        input.extend(lists[i])
+    list_view_arr = pa.ListViewArray.from_arrays(
+        offsets=offsets, sizes=sizes, values=input, mask=pa.array(mask, type=pa.bool_())
+    )
+    return ListGenerationResult(list_arr, list_view_arr)
+
+
 class TestArrowListType(object):
     def test_regular_list(self, duckdb_cursor):
         n = 5  # Amount of lists
@@ -88,50 +139,14 @@ class TestArrowListType(object):
         check_equal(duckdb_cursor)
 
     @pytest.mark.skipif(not hasattr(pa, 'ListViewArray'), reason='The pyarrow version does not support ListViewArrays')
-    def test_list_view(self, duckdb_cursor):
-        CHILD_SIZE = 100000
-        input = [i for i in range(CHILD_SIZE)]
-        offsets = []
-        sizes = []
-        lists = []
-        count = 0
-        for i in range(CHILD_SIZE):
-            if count >= CHILD_SIZE:
-                break
-            tmp = i % 4
-            if tmp == 0:
-                size = 3
-            elif tmp == 1:
-                size = 1
-            elif tmp == 2:
-                size = 10
-            elif tmp == 3:
-                size = 5
-            size = min(size, CHILD_SIZE - count)
-            sizes.append(size)
-            offsets.append(count)
-            lists.append(input[count : count + size])
-            count += size
-        offsets.append(CHILD_SIZE)
+    @pytest.mark.parametrize('child_size', [100000])
+    def test_list_view(self, duckdb_cursor, child_size):
+        res = generate_list(child_size)
 
-        # Create a regular ListArray
-        list_arr = pa.ListArray.from_arrays(offsets=offsets, values=input)
-        list_tbl = pa.Table.from_arrays([list_arr], ['x'])
+        list_tbl = pa.Table.from_arrays([res.list], ['x'])
+        list_view_tbl = pa.Table.from_arrays([res.list_view], ['x'])
 
-        lists = list(reversed(lists))
-        # Create a ListViewArray
-        offsets = []
-        input = []
-        remaining = CHILD_SIZE
-        for i, size in enumerate(sizes):
-            remaining -= size
-            offsets.append(remaining)
-            input.extend(lists[i])
-        assert remaining == 0
-        list_view_arr = pa.ListViewArray.from_arrays(offsets=offsets, sizes=sizes, values=input)
-        list_view_tbl = pa.Table.from_arrays([list_view_arr], ['x'])
-
-        assert list_view_arr.to_pylist() == list_arr.to_pylist()
+        assert res.list_view.to_pylist() == res.list.to_pylist()
         original = duckdb_cursor.query("select * from list_tbl").fetchall()
         view = duckdb_cursor.query("select * from list_view_tbl").fetchall()
         assert original == view

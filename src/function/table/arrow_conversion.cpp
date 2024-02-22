@@ -166,20 +166,25 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 	// ListViewArrays do not have this same constraint
 	// for that reason we need to keep track of the lowest offset, so we can skip all the data that comes before it
 	// when we scan the child data
-	auto lowest_offset = offsets[0];
+
+	auto lowest_offset = size ? offsets[0] : 0;
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
 		le.offset = offsets[i];
 		le.length = sizes[i];
 		list_size += le.length;
-		lowest_offset = MinValue(lowest_offset, offsets[i]);
+		if (sizes[i] != 0) {
+			lowest_offset = MinValue(lowest_offset, offsets[i]);
+		}
 	}
 	start_offset = lowest_offset;
-	// We start scanning the child data at the 'start_offset' so we need to fix up the created list entries
-	for (idx_t i = 0; i < size; i++) {
-		auto &le = list_data[i];
-		le.offset -= start_offset;
+	if (start_offset) {
+		// We start scanning the child data at the 'start_offset' so we need to fix up the created list entries
+		for (idx_t i = 0; i < size; i++) {
+			auto &le = list_data[i];
+			le.offset -= start_offset;
+		}
 	}
 	return result;
 }
