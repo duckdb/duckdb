@@ -37,7 +37,7 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0),
-      destroyed_block_handles(0), purge_active(false) {
+      destroyed_block_handles(0), purge_active(false), previous_alive_nodes(0) {
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		memory_usage_per_tag[i] = 0;
 	}
@@ -133,11 +133,10 @@ void BufferPool::PurgeQueue() {
 	idx_t queue_insertions = atomic_fetch_sub(&evict_queue_insertions, INSERT_INTERVAL);
 
 	// retrieve the number of destroyed block handles since the previous purge
-	idx_t last_destroyed_count = destroyed_block_handles;
-	idx_t destroyed_count = atomic_fetch_sub(&destroyed_block_handles, last_destroyed_count);
+	idx_t destroyed_count = atomic_fetch_sub(&destroyed_block_handles, destroyed_block_handles);
 
 	// calculate the purge size
-	auto purge_size = queue_insertions + destroyed_count;
+	auto purge_size = queue_insertions * 2 + destroyed_count + previous_alive_nodes;
 
 	// Defensive check
 	idx_t approx_q_size = queue->q.size_approx();
@@ -170,6 +169,7 @@ void BufferPool::PurgeQueue() {
 
 	// bulk enqueue
 	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
+	previous_alive_nodes = alive_nodes;
 
 	Printer::PrintF("approx q size: %llu", approx_q_size);
 	Printer::PrintF("queue insertions: %llu", queue_insertions);

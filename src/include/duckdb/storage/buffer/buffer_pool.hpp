@@ -103,6 +103,7 @@ protected:
 	atomic<bool> purge_active;
 	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
 	vector<BufferEvictionNode> purge_nodes;
+	idx_t previous_alive_nodes;
 };
 
 } // namespace duckdb
