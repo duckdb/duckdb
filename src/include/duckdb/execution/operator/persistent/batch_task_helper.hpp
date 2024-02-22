@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-template<class TASK>
+template <class TASK>
 class BatchTaskHelper {
 public:
 	void AddTask(unique_ptr<TASK> task) {

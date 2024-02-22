@@ -422,7 +422,8 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 				continue;
 			}
 			// the collection is full - move it to the result and create a new one
-			task_helper.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
+			task_helper.AddTask(
+			    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
 			current_collection =
 			    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
 			current_collection->InitializeAppend(append_state);
@@ -433,7 +434,8 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 		// AND this is not the final collection
 		// re-add it to the set of raw (to-be-merged) batches
 		if (final || CorrectSizeForBatch(current_collection->Count(), gstate.batch_size)) {
-			task_helper.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
+			task_helper.AddTask(
+			    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
 		} else {
 			gstate.raw_batches[max_batch_index] = std::move(current_collection);
 		}

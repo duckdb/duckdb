@@ -98,8 +98,8 @@ public:
 enum class RowGroupBatchType : uint8_t { FLUSHED, NOT_FLUSHED };
 struct RowGroupBatchEntry {
 	RowGroupBatchEntry(idx_t batch_idx, unique_ptr<RowGroupCollection> collection_p, RowGroupBatchType type)
-	    : batch_idx(batch_idx), total_rows(collection_p->GetTotalRows()), unflushed_memory(0), collection(std::move(collection_p)),
-	      type(type) {
+	    : batch_idx(batch_idx), total_rows(collection_p->GetTotalRows()), unflushed_memory(0),
+	      collection(std::move(collection_p)), type(type) {
 		if (type == RowGroupBatchType::NOT_FLUSHED) {
 			unflushed_memory = collection->GetAllocationSize();
 		}
@@ -120,13 +120,11 @@ public:
 	virtual ~BatchInsertTask() {
 	}
 
-	virtual void Execute(const PhysicalBatchInsert &op, ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) = 0;
+	virtual void Execute(const PhysicalBatchInsert &op, ClientContext &context, GlobalSinkState &gstate_p,
+	                     LocalSinkState &lstate_p) = 0;
 };
 
 class BatchInsertGlobalState : public GlobalSinkState {
-public:
-	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 3;
-
 public:
 	explicit BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t initial_memory)
 	    : batch_helper(context, initial_memory), table(table), insert_count(0), optimistically_written(false) {
@@ -141,6 +139,7 @@ public:
 	idx_t next_start = 0;
 	atomic<bool> optimistically_written;
 
+	static bool ReadyToMerge(idx_t count);
 	void ScheduleMergeTasks(idx_t min_batch_index);
 	unique_ptr<RowGroupCollection> MergeCollections(ClientContext &context,
 	                                                vector<RowGroupBatchEntry> merge_collections,
@@ -153,8 +152,8 @@ public:
 class BatchInsertLocalState : public LocalSinkState {
 public:
 	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
-						  const vector<unique_ptr<Expression>> &bound_defaults)
-			: default_executor(context, bound_defaults) {
+	                      const vector<unique_ptr<Expression>> &bound_defaults)
+	    : default_executor(context, bound_defaults) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
@@ -179,14 +178,15 @@ public:
 //===--------------------------------------------------------------------===//
 class MergeCollectionTask : public BatchInsertTask {
 public:
-	MergeCollectionTask(vector<RowGroupBatchEntry> merge_collections_p, idx_t merged_batch_index) :
-		merge_collections(std::move(merge_collections_p)), merged_batch_index(merged_batch_index) {
+	MergeCollectionTask(vector<RowGroupBatchEntry> merge_collections_p, idx_t merged_batch_index)
+	    : merge_collections(std::move(merge_collections_p)), merged_batch_index(merged_batch_index) {
 	}
 
 	vector<RowGroupBatchEntry> merge_collections;
 	idx_t merged_batch_index;
 
-	void Execute(const PhysicalBatchInsert &op, ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) override {
+	void Execute(const PhysicalBatchInsert &op, ClientContext &context, GlobalSinkState &gstate_p,
+	             LocalSinkState &lstate_p) override {
 		auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
 		auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 		// merge together the collections
@@ -194,88 +194,130 @@ public:
 		auto final_collection = gstate.MergeCollections(context, std::move(merge_collections), *lstate.writer);
 		// add the merged-together collection to the set of batch indexes
 		lock_guard<mutex> l(gstate.lock);
-		RowGroupBatchEntry new_entry(merged_batch_index, std::move(final_collection),
-									 RowGroupBatchType::FLUSHED);
-		auto it = std::lower_bound(gstate.collections.begin(), gstate.collections.end(), new_entry,
-								   [&](const RowGroupBatchEntry &a, const RowGroupBatchEntry &b) {
-									   return a.batch_idx < b.batch_idx;
-								   });
+		RowGroupBatchEntry new_entry(merged_batch_index, std::move(final_collection), RowGroupBatchType::FLUSHED);
+		auto it = std::lower_bound(
+		    gstate.collections.begin(), gstate.collections.end(), new_entry,
+		    [&](const RowGroupBatchEntry &a, const RowGroupBatchEntry &b) { return a.batch_idx < b.batch_idx; });
 		if (it->batch_idx != merged_batch_index) {
 			throw InternalException("Merged batch index was no longer present in collection");
 		}
 		it->collection = std::move(new_entry.collection);
-
 	}
 };
 
+struct BatchMergeTask {
+	BatchMergeTask(idx_t start_index) : start_index(start_index), end_index(0), total_count(0) {
+	}
+
+	idx_t start_index;
+	idx_t end_index;
+	idx_t total_count;
+};
+
+bool BatchInsertGlobalState::ReadyToMerge(idx_t count) {
+	// we try to merge so the count fits nicely into row groups
+	if (count >= Storage::ROW_GROUP_SIZE / 10 * 9 && count <= Storage::ROW_GROUP_SIZE) {
+		// 90%-100% of row group size
+		return true;
+	}
+	if (count >= Storage::ROW_GROUP_SIZE / 10 * 18 && count <= Storage::ROW_GROUP_SIZE * 2) {
+		// 180%-200% of row group size
+		return true;
+	}
+	if (count >= Storage::ROW_GROUP_SIZE / 10 * 27 && count <= Storage::ROW_GROUP_SIZE * 3) {
+		// 270%-300% of row group size
+		return true;
+	}
+	if (count >= Storage::ROW_GROUP_SIZE / 10 * 36) {
+		// >360% of row group size
+		return true;
+	}
+	return false;
+}
 
 void BatchInsertGlobalState::ScheduleMergeTasks(idx_t min_batch_index) {
-	bool merge = false;
-	idx_t start_index = next_start;
 	idx_t current_idx;
-	idx_t total_count = 0;
-	idx_t last_batch_index = min_batch_index;
-	for (current_idx = start_index; current_idx < collections.size(); current_idx++) {
+
+	vector<BatchMergeTask> to_be_scheduled_tasks;
+
+	BatchMergeTask current_task(next_start);
+	for (current_idx = current_task.start_index; current_idx < collections.size(); current_idx++) {
 		auto &entry = collections[current_idx];
 		if (entry.batch_idx > min_batch_index) {
 			// this entry is AFTER the min_batch_index
-			// if the entry is IMMEDIATELY following the previous batch index we can still consider it
-			if (entry.batch_idx > last_batch_index + 1) {
-				// not immediately following the last batch index entry
-				// finished
-				break;
+			// finished
+			if (ReadyToMerge(current_task.total_count)) {
+				current_task.end_index = current_idx;
+				to_be_scheduled_tasks.push_back(current_task);
 			}
+			break;
 		}
-		last_batch_index = entry.batch_idx;
 		if (entry.type == RowGroupBatchType::FLUSHED) {
 			// already flushed: cannot flush anything here
-			if (total_count > 0) {
-				merge = true;
-				break;
+			if (current_task.total_count > 0) {
+				current_task.end_index = current_idx;
+				to_be_scheduled_tasks.push_back(current_task);
 			}
-			start_index = current_idx + 1;
-			if (start_index > next_start) {
+			current_task.start_index = current_idx + 1;
+			if (current_task.start_index > next_start) {
 				// avoid checking this segment again in the future
-				next_start = start_index;
+				next_start = current_task.start_index;
 			}
-			total_count = 0;
+			current_task.total_count = 0;
 			continue;
 		}
 		// not flushed - add to set of indexes to flush
-		total_count += entry.total_rows;
+		current_task.total_count += entry.total_rows;
+		if (ReadyToMerge(current_task.total_count)) {
+			// force-flush after crossing the flush threshold to avoid creating a very large task
+			current_task.end_index = current_idx + 1;
+			to_be_scheduled_tasks.push_back(current_task);
+			current_task.start_index = current_idx + 1;
+			current_task.total_count = 0;
+		}
 	}
 
-	if (!merge) {
+	if (to_be_scheduled_tasks.empty()) {
 		return;
 	}
-	D_ASSERT(total_count > 0);
-	D_ASSERT(current_idx > start_index);
-	idx_t merged_batch_index = collections[start_index].batch_idx;
-	vector<RowGroupBatchEntry> merge_collections;
+	for (auto &scheduled_task : to_be_scheduled_tasks) {
+		D_ASSERT(scheduled_task.total_count > 0);
+		D_ASSERT(current_idx > scheduled_task.start_index);
+		idx_t merged_batch_index = collections[scheduled_task.start_index].batch_idx;
+		vector<RowGroupBatchEntry> merge_collections;
 #ifdef BATCH_PRINT
-	Printer::PrintF("Schedule merge from %llu to %llu (total rows %llu)", start_index, current_idx, total_count);
+		Printer::PrintF("Schedule merge from batch %llu to batch %llu (total rows %llu)",
+		                collections[scheduled_task.start_index].batch_idx,
+		                collections[scheduled_task.end_index - 1].batch_idx, scheduled_task.total_count);
 #endif
-	for (idx_t idx = start_index; idx < current_idx; idx++) {
-		auto &entry = collections[idx];
-		if (!entry.collection || entry.type == RowGroupBatchType::FLUSHED) {
-			throw InternalException("Adding a row group collection that should not be flushed");
+		for (idx_t idx = scheduled_task.start_index; idx < scheduled_task.end_index; idx++) {
+			auto &entry = collections[idx];
+			if (!entry.collection || entry.type == RowGroupBatchType::FLUSHED) {
+				throw InternalException("Adding a row group collection that should not be flushed");
+			}
+			RowGroupBatchEntry added_entry(collections[scheduled_task.start_index].batch_idx,
+			                               std::move(entry.collection), RowGroupBatchType::FLUSHED);
+			added_entry.unflushed_memory = entry.unflushed_memory;
+			merge_collections.push_back(std::move(added_entry));
+			entry.total_rows = scheduled_task.total_count;
+			entry.type = RowGroupBatchType::FLUSHED;
 		}
-		RowGroupBatchEntry added_entry(collections[start_index].batch_idx, std::move(entry.collection), RowGroupBatchType::FLUSHED);
-		added_entry.unflushed_memory = entry.unflushed_memory;
-		merge_collections.push_back(std::move(added_entry));
-		entry.total_rows = total_count;
-		entry.type = RowGroupBatchType::FLUSHED;
+		task_helper.AddTask(make_uniq<MergeCollectionTask>(std::move(merge_collections), merged_batch_index));
 	}
-	if (start_index + 1 < current_idx) {
-		// erase all entries except the first one
-		collections.erase(collections.begin() + start_index + 1, collections.begin() + current_idx);
+	// erase in reverse order
+	for (idx_t i = to_be_scheduled_tasks.size(); i > 0; i--) {
+		auto &scheduled_task = to_be_scheduled_tasks[i - 1];
+		if (scheduled_task.start_index + 1 < scheduled_task.end_index) {
+			// erase all entries except the first one
+			collections.erase(collections.begin() + scheduled_task.start_index + 1,
+			                  collections.begin() + scheduled_task.end_index);
+		}
 	}
-	task_helper.AddTask(make_uniq<MergeCollectionTask>(std::move(merge_collections), merged_batch_index));
 }
 
 unique_ptr<RowGroupCollection> BatchInsertGlobalState::MergeCollections(ClientContext &context,
-												vector<RowGroupBatchEntry> merge_collections,
-												OptimisticDataWriter &writer) {
+                                                                        vector<RowGroupBatchEntry> merge_collections,
+                                                                        OptimisticDataWriter &writer) {
 	D_ASSERT(!merge_collections.empty());
 	CollectionMerger merger(context);
 	idx_t written_data = 0;
@@ -292,16 +334,14 @@ unique_ptr<RowGroupCollection> BatchInsertGlobalState::MergeCollections(ClientCo
 }
 
 void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
-				   unique_ptr<RowGroupCollection> current_collection,
-				   optional_ptr<OptimisticDataWriter> writer) {
+                                           unique_ptr<RowGroupCollection> current_collection,
+                                           optional_ptr<OptimisticDataWriter> writer) {
 	if (batch_index < min_batch_index) {
-		throw InternalException(
-				"Batch index of the added collection (%llu) is smaller than the min batch index (%llu)", batch_index,
-				min_batch_index);
+		throw InternalException("Batch index of the added collection (%llu) is smaller than the min batch index (%llu)",
+		                        batch_index, min_batch_index);
 	}
 	auto new_count = current_collection->GetTotalRows();
-	auto batch_type =
-			new_count < Storage::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
+	auto batch_type = new_count < Storage::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 	if (batch_type == RowGroupBatchType::FLUSHED && writer) {
 		writer->WriteLastRowGroup(*current_collection);
 	}
@@ -311,7 +351,7 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_i
 	Printer::PrintF("Calling AddCollection with batch index %llu (min batch index %llu)", batch_index, min_batch_index);
 	Printer::PrintF("Unflushed memory %s", StringUtil::BytesToHumanReadableString(batch_helper.GetUnflushedMemory()));
 	string existing_collections;
-	for(auto &entry : collections) {
+	for (auto &entry : collections) {
 		if (entry.type == RowGroupBatchType::FLUSHED) {
 			continue;
 		}
@@ -341,14 +381,13 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_i
 #endif
 
 	auto it = std::lower_bound(
-			collections.begin(), collections.end(), new_entry,
-			[&](const RowGroupBatchEntry &a, const RowGroupBatchEntry &b) { return a.batch_idx < b.batch_idx; });
+	    collections.begin(), collections.end(), new_entry,
+	    [&](const RowGroupBatchEntry &a, const RowGroupBatchEntry &b) { return a.batch_idx < b.batch_idx; });
 	if (it != collections.end() && it->batch_idx == new_entry.batch_idx) {
-		throw InternalException(
-				"PhysicalBatchInsert::AddCollection error: batch index %d is present in multiple "
-				"collections. This occurs when "
-				"batch indexes are not uniquely distributed over threads",
-				batch_index);
+		throw InternalException("PhysicalBatchInsert::AddCollection error: batch index %d is present in multiple "
+		                        "collections. This occurs when "
+		                        "batch indexes are not uniquely distributed over threads",
+		                        batch_index);
 	}
 	collections.insert(it, std::move(new_entry));
 	if (writer) {
@@ -386,7 +425,8 @@ unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionConte
 //===--------------------------------------------------------------------===//
 // Tasks
 //===--------------------------------------------------------------------===//
-bool PhysicalBatchInsert::ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
+bool PhysicalBatchInsert::ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p,
+                                      LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
 	auto task = gstate.task_helper.GetTask();
 	if (!task) {
@@ -396,7 +436,8 @@ bool PhysicalBatchInsert::ExecuteTask(ClientContext &context, GlobalSinkState &g
 	return true;
 }
 
-void PhysicalBatchInsert::ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
+void PhysicalBatchInsert::ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p,
+                                       LocalSinkState &lstate_p) const {
 	while (ExecuteTask(context, gstate_p, lstate_p)) {
 	}
 }
@@ -414,7 +455,6 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		if (lstate.current_index == batch_index) {
 			throw InternalException("NextBatch called with the same batch index?");
 		}
-		auto &table = gstate.table;
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
@@ -442,36 +482,36 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &batch_helper = gstate.batch_helper;
-	auto &task_helper = gstate.task_helper;
 
 	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
-	if (!lstate.current_collection) {
-		// check if we should process this batch
-		if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
-			batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
+	// check if we should process this batch
+	if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
+		batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
-			// we are not processing the current min batch index
-			// check if we have exceeded the maximum number of unflushed rows
-			if (batch_helper.OutOfMemory(batch_index)) {
-				// out-of-memory
-				// execute tasks while we wait (if any are available)
-				ExecuteTasks(context.client, gstate, lstate);
+		// we are not processing the current min batch index
+		// check if we have exceeded the maximum number of unflushed rows
+		if (batch_helper.OutOfMemory(batch_index)) {
+			// out-of-memory
+			// execute tasks while we wait (if any are available)
+			ExecuteTasks(context.client, gstate, lstate);
 
-				lock_guard<mutex> l(batch_helper.GetBlockedTaskLock());
-				if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
-					//  we are not the minimum batch index and we have no memory available to buffer - block the task for
-					//  now
-					batch_helper.BlockTask(input.interrupt_state);
+			lock_guard<mutex> l(batch_helper.GetBlockedTaskLock());
+			if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
+				//  we are not the minimum batch index and we have no memory available to buffer - block the task for
+				//  now
+				batch_helper.BlockTask(input.interrupt_state);
 #ifdef BATCH_PRINT
-					Printer::PrintF("Block batch index %llu (unflushed memory usage %llu, min batch %llu)", batch_index, batch_helper.GetUnflushedMemory(), batch_helper.GetMinimumBatchIndex());
+				Printer::PrintF("Block batch index %llu (unflushed memory usage %llu, min batch %llu)", batch_index,
+				                batch_helper.GetUnflushedMemory(), batch_helper.GetMinimumBatchIndex());
 #endif
-					return SinkResultType::BLOCKED;
-				}
+				return SinkResultType::BLOCKED;
 			}
 		}
+	}
+	if (!lstate.current_collection) {
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
