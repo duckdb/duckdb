@@ -556,6 +556,39 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 // Custom Profiling Settings
 //===--------------------------------------------------------------------===//
 
+TreeNodeSettings *FillTreeNodeSettings(unordered_map<string, string> &json) {
+	const vector<string> valid_settings = {"cpu_time", "operator_cardinality", "operator_timing"};
+	auto *settings = new TreeNodeSettings();
+
+	for(auto &setting : valid_settings) {
+		auto setting_it = json.find(setting);
+		if (setting_it != json.end()) {
+			if (setting_it->second != "true" && setting_it->second != "false") {
+				throw IOException("Invalid value for %s in custom profiler settings: \"%s\", expected either 'true' or 'false'",
+				                  setting, setting_it->second);
+			} else if (setting_it->second == "true") {
+				settings->metrics.insert({setting, Value()});
+			}
+		}
+
+		// remove the setting from the json
+		json.erase(setting);
+	}
+
+	if (!json.empty()) {
+		string invalid_settings;
+		for (auto &entry : json) {
+			if (!invalid_settings.empty()) {
+				invalid_settings += ", " ;
+			}
+			invalid_settings += entry.first;
+		}
+		throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings);
+	}
+
+	return settings;
+}
+
 void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto input_str = input.ToString();
@@ -567,17 +600,46 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 		throw IOException("The custom profiler settings file must be a JSON file: \"%s\"", input_str);
 	}
 	auto file = fs->OpenFile(input_str, FileFlags::FILE_FLAGS_READ);
-	config.profiler_custom_settings_file = input_str;
+
+	// read file into string
+	string file_content;
+	auto line = file->ReadLine();
+	while(!line.empty()) {
+		if (StringUtil::Equals(&line.back(), "\n")) {
+			line.substr(0, line.size() - 1);
+		}
+		StringUtil::Replace(line, "\\", "");
+		file_content += line;
+		line = file->ReadLine();
+	}
+	file->Close();
+
+	// parse the file content
+	auto json = StringUtil::ParseJSONMap(file_content);
+	if (json.empty()) {
+		throw IOException("Could not parse the custom profiler settings file: \"%s\"", input_str);
+	}
+
+	config.profiler_settings = FillTreeNodeSettings(json);
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_custom_settings_file = "";
+	config.profiler_settings = nullptr;
 }
 
 Value CustomProfilingSettings::GetSetting(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.profiler_custom_settings_file);
+
+	string profiling_settings_str;
+	for (auto &entry : config.profiler_settings->metrics) {
+		if (!profiling_settings_str.empty()) {
+			profiling_settings_str += ", ";
+		}
+		profiling_settings_str += entry.first;
+	}
+
+	return Value(profiling_settings_str);
 }
 
 //===--------------------------------------------------------------------===//

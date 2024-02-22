@@ -21,6 +21,7 @@
 #include <stack>
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -122,12 +123,15 @@ private:
 	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
 };
 
+struct TreeNodeSettings;
+
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
 	DUCKDB_API QueryProfiler(ClientContext &context);
 
 public:
+
 	struct TreeNode {
 		PhysicalOperatorType type;
 		string name;
@@ -135,6 +139,7 @@ public:
 		OperatorInformation info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
+		TreeNodeSettings settings;
 	};
 
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
@@ -206,18 +211,6 @@ private:
 	TreeMap tree_map;
 	//! Whether or not we are running as part of a explain_analyze query
 	bool is_explain_analyze;
-
-public:
-	//! Specific profiler settings
-	struct customSettings {
-		bool cpu_time = false;
-		bool operator_cardinality = false;
-		bool operator_timing = false;
-	};
-
-private:
-	//! The custom settings for the profiler
-	customSettings *settings = nullptr;
 
 public:
 	const TreeMap &GetTreeMap() const {
