@@ -191,6 +191,10 @@ public:
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &name,
 	                                                      OnEntryNotFound if_not_found,
 	                                                      QueryErrorContext error_context = QueryErrorContext());
+	//! Overloadable method for giving warnings on ambiguous naming id.tab due to a database and schema with name id
+	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &name) {
+		return !!GetSchema(context, name, OnEntryNotFound::RETURN_NULL);
+	}
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &name,
 	                                         QueryErrorContext error_context = QueryErrorContext());
 	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry>
