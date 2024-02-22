@@ -44,7 +44,7 @@ CREATE SCHEMA temp
 statement error
 CREATE TABLE temp.integersy(i INTEGER)
 ----
-Ambiguous
+TEMPORARY
 
 statement ok
 CREATE TABLE memory.temp.integersy(i INTEGER)
