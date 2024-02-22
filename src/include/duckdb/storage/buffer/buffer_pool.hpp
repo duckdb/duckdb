@@ -30,7 +30,6 @@ struct BufferEvictionNode {
 	idx_t timestamp;
 
 	bool CanUnload(BlockHandle &handle_p);
-
 	shared_ptr<BlockHandle> TryGetBlockHandle();
 };
 
@@ -76,8 +75,9 @@ protected:
 
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue();
-	//! Add a buffer handle to the eviction queue.
-	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
+	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
+	//! ready to be purged, and false otherwise.
+	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 protected:
 	//! The lock for changing the memory limit
@@ -98,6 +98,7 @@ protected:
 
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
 	atomic<idx_t> evict_queue_insertions;
+	atomic<idx_t> destroyed_block_handles;
 	//! Whether a queue purge is currently active
 	atomic<bool> purge_active;
 	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.

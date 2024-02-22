@@ -36,7 +36,8 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
-      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), purge_active(false) {
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0),
+      destroyed_block_handles(0), purge_active(false) {
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		memory_usage_per_tag[i] = 0;
 	}
@@ -44,17 +45,21 @@ BufferPool::BufferPool(idx_t maximum_memory)
 BufferPool::~BufferPool() {
 }
 
-void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+
+	// The block handle is locked during this operation (Unpin),
+	// or the block handle is still a local variable (ConvertToPersistent)
 
 	D_ASSERT(handle->readers == 0);
-	handle->eviction_timestamp++;
+	auto ts = ++handle->eviction_timestamp;
 
-	// After INSERT_INTERVAL insertions, try running through the queue and purge.
-	if (++evict_queue_insertions % INSERT_INTERVAL == 0) {
-		PurgeQueue();
+	BufferEvictionNode evict_node(weak_ptr<BlockHandle>(handle), ts);
+	queue->q.enqueue(evict_node);
+
+	if (++evict_queue_insertions >= INSERT_INTERVAL) {
+		return true;
 	}
-
-	queue->q.enqueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
+	return false;
 }
 
 void BufferPool::IncreaseUsedMemory(MemoryTag tag, idx_t size) {
@@ -124,14 +129,23 @@ void BufferPool::PurgeQueue() {
 		}
 	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
 
-	// Defensive check, only start purging if the queue size gets too large.
+	// retrieve the number of insertions since the previous purge
+	idx_t queue_insertions = atomic_fetch_sub(&evict_queue_insertions, INSERT_INTERVAL);
+
+	// retrieve the number of destroyed block handles since the previous purge
+	idx_t last_destroyed_count = destroyed_block_handles;
+	idx_t destroyed_count = atomic_fetch_sub(&destroyed_block_handles, last_destroyed_count);
+
+	// calculate the purge size
+	auto purge_size = queue_insertions + destroyed_count;
+
+	// Defensive check
 	idx_t approx_q_size = queue->q.size_approx();
-	if (approx_q_size < 2 * INSERT_INTERVAL) {
+	if (approx_q_size < purge_size) {
 		purge_active = false;
 		return;
 	}
 
-	idx_t purge_size = approx_q_size / 2;
 	idx_t previous_purge_size = purge_nodes.size();
 
 	// If this purge is significantly smaller or bigger than the previous purge, then
@@ -158,6 +172,9 @@ void BufferPool::PurgeQueue() {
 	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 
 	Printer::PrintF("approx q size: %llu", approx_q_size);
+	Printer::PrintF("queue insertions: %llu", queue_insertions);
+	Printer::PrintF("destroyed count: %llu", destroyed_count);
+	Printer::PrintF("purge size: %llu", purge_size);
 	Printer::PrintF("actually_dequeued: %llu", actually_dequeued);
 	Printer::PrintF("alive_nodes: %llu", alive_nodes);
 

@@ -223,15 +223,23 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 }
 
 void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
-	lock_guard<mutex> lock(handle->lock);
-	if (!handle->buffer || handle->buffer->type == FileBufferType::TINY_BUFFER) {
-		return;
+	bool purge = false;
+	{
+		lock_guard<mutex> lock(handle->lock);
+		if (!handle->buffer || handle->buffer->type == FileBufferType::TINY_BUFFER) {
+			return;
+		}
+		D_ASSERT(handle->readers > 0);
+		handle->readers--;
+		if (handle->readers == 0) {
+			VerifyZeroReaders(handle);
+			purge = buffer_pool.AddToEvictionQueue(handle);
+		}
 	}
-	D_ASSERT(handle->readers > 0);
-	handle->readers--;
-	if (handle->readers == 0) {
-		VerifyZeroReaders(handle);
-		buffer_pool.AddToEvictionQueue(handle);
+
+	// We do not have to keep the handle locked while purging.
+	if (purge) {
+		PurgeQueue();
 	}
 }
 

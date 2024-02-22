@@ -41,7 +41,10 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	} else {
 		D_ASSERT(memory_charge.size == 0);
 	}
+
 	block_manager.UnregisterBlock(block_id, can_destroy);
+	auto &buffer_manager = block_manager.buffer_manager;
+	buffer_manager.GetBufferPool().destroyed_block_handles++;
 }
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
