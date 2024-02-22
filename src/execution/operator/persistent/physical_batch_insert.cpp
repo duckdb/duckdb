@@ -269,7 +269,7 @@ void BatchInsertGlobalState::ScheduleMergeTasks(idx_t min_batch_index) {
 		// not flushed - add to set of indexes to flush
 		current_task.total_count += entry.total_rows;
 		if (ReadyToMerge(current_task.total_count)) {
-			// force-flush after crossing the flush threshold to avoid creating a very large task
+			// create a task to merge these collections
 			current_task.end_index = current_idx + 1;
 			to_be_scheduled_tasks.push_back(current_task);
 			current_task.start_index = current_idx + 1;
@@ -375,7 +375,9 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_i
 #endif
 	// add the collection to the batch index
 	RowGroupBatchEntry new_entry(batch_index, std::move(current_collection), batch_type);
-	batch_helper.IncreaseUnflushedMemory(new_entry.unflushed_memory);
+	if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
+		batch_helper.IncreaseUnflushedMemory(new_entry.unflushed_memory);
+	}
 #ifdef BATCH_PRINT
 	Printer::PrintF("Increase unflushed memory by %llu", new_entry.unflushed_memory);
 #endif
