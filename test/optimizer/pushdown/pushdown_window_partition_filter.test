@@ -2,7 +2,6 @@
 # description: Test pushdown of filters through window operators that are partitioned by.
 # group: [pushdown]
 
-
 statement ok
 create table t1 as from VALUES ('A', 1), ('B', 3), ('C', 12), ('A', 5), ('B', 8), ('C', 9), ('A', 10), ('B', 20), ('C', 3) t(a, b);
 
