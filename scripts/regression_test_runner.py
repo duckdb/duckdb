@@ -10,14 +10,13 @@ import shutil
 
 print = functools.partial(print, flush=True)
 
-non_numeric_results = ['INCORRECT', 'KILLED', 'TIMEOUT']
-
-
 # Geometric mean of an array of numbers
 def geomean(xs):
-    for non_numeric_result in non_numeric_results:
-        if non_numeric_result in xs:
-            return non_numeric_result
+    if len(xs) == 0:
+        return 'EMPTY'
+    for entry in xs:
+        if isinstance(entry, str):
+            return entry
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
 
@@ -69,11 +68,17 @@ def run_benchmark(runner, benchmark):
     benchmark_args = [runner, benchmark]
     if threads is not None:
         benchmark_args += ["--threads=%d" % (threads,)]
-    proc = subprocess.Popen(benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out = proc.stdout.read().decode('utf8')
-    err = proc.stderr.read().decode('utf8')
-    proc.wait()
-    if proc.returncode != 0:
+    timeout_seconds = 600
+    try:
+        proc = subprocess.run(benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds)
+        out = proc.stdout.decode('utf8')
+        err = proc.stderr.decode('utf8')
+        returncode = proc.returncode
+    except subprocess.TimeoutExpired:
+        print("Failed to run benchmark " + benchmark)
+        print(f"Aborted due to exceeding the limit of {timeout_seconds} seconds")
+        return 'Failed to run benchmark ' + benchmark
+    if returncode != 0:
         print("Failed to run benchmark " + benchmark)
         print(
             '''====================================================
@@ -197,7 +202,7 @@ time_b = geomean(complete_timings[new_runner])
 
 
 print("")
-if time_a in non_numeric_results or time_b in non_numeric_results:
+if isinstance(time_a, str) or isinstance(time_b, str):
     print(f"Old: {time_a}")
     print(f"New: {time_b}")
 elif time_a > time_b * 1.01:
