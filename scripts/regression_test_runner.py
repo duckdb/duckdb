@@ -6,6 +6,7 @@ import csv
 import statistics
 import math
 import functools
+import shutil
 print = functools.partial(print, flush=True)
 
 
@@ -205,4 +206,6 @@ else:
     print(f"Old timing geometric mean: {time_a}")
     print(f"New timing geometric mean: {time_b}")
 
+# nuke cached benchmark data between runs
+shutil.rmtree('duckdb_benchmark_data')
 exit(exit_code)
