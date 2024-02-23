@@ -5,6 +5,8 @@ from io import StringIO
 import csv
 import statistics
 import math
+import functools
+print = functools.partial(print, flush=True)
 
 
 # Geometric mean of an array of numbers
