@@ -290,7 +290,7 @@ void CSVSniffer::DetectTypes() {
 	}
 	if (!best_candidate) {
 		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error);
+		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());
