@@ -6,7 +6,7 @@
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "re2/re2.h"
+#include "duckdb/function/scalar/regexp.hpp"
 
 namespace duckdb {
 
@@ -85,6 +85,43 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
 }
 
+static string ReplaceColumnsAlias(const string &alias, const string &column_name, optional_ptr<duckdb_re2::RE2> regex) {
+	string result;
+	result.reserve(alias.size());
+	for (idx_t c = 0; c < alias.size(); c++) {
+		if (alias[c] == '\\') {
+			c++;
+			if (c >= alias.size()) {
+				throw BinderException("Unterminated backslash in COLUMNS(*) \"%s\" alias. Backslashes must either be "
+				                      "escaped or followed by a number",
+				                      alias);
+			}
+			if (alias[c] == '\\') {
+				result += "\\";
+				continue;
+			}
+			if (alias[c] < '0' || alias[c] > '9') {
+				throw BinderException("Invalid backslash code in COLUMNS(*) \"%s\" alias. Backslashes must either be "
+				                      "escaped or followed by a number",
+				                      alias);
+			}
+			if (alias[c] == '0') {
+				result += column_name;
+			} else if (!regex) {
+				throw BinderException(
+				    "Only the backslash escape code \\0 can be used when no regex is supplied to COLUMNS(*)");
+			} else {
+				string extracted;
+				RE2::Extract(column_name, *regex, "\\" + alias.substr(c, 1), &extracted);
+				result += extracted;
+			}
+		} else {
+			result += alias[c];
+		}
+	}
+	return result;
+}
+
 void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	StarExpression *star = nullptr;
@@ -99,6 +136,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 	// we have star expressions! expand the list of star expressions
 	bind_context.GenerateAllColumnExpressions(*star, star_list);
 
+	unique_ptr<duckdb_re2::RE2> regex;
 	if (star->expr) {
 		// COLUMNS with an expression
 		// two options:
@@ -122,15 +160,15 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				throw BinderException("COLUMNS does not support NULL as regex argument");
 			}
 			auto &regex_str = StringValue::Get(val);
-			duckdb_re2::RE2 regex(regex_str);
-			if (!regex.error().empty()) {
-				auto err = StringUtil::Format("Failed to compile regex \"%s\": %s", regex_str, regex.error());
+			regex = make_uniq<duckdb_re2::RE2>(regex_str);
+			if (!regex->error().empty()) {
+				auto err = StringUtil::Format("Failed to compile regex \"%s\": %s", regex_str, regex->error());
 				throw BinderException(*star, err);
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
 				auto &colref = star_list[i]->Cast<ColumnRefExpression>();
-				if (!RE2::PartialMatch(colref.GetColumnName(), regex)) {
+				if (!RE2::PartialMatch(colref.GetColumnName(), *regex)) {
 					continue;
 				}
 				new_list.push_back(std::move(star_list[i]));
@@ -200,7 +238,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 				if (new_expr->alias.empty()) {
 					new_expr->alias = colref.GetColumnName();
 				} else {
-					new_expr->alias = StringUtil::Replace(new_expr->alias, "{column}", colref.GetColumnName());
+					new_expr->alias = ReplaceColumnsAlias(new_expr->alias, colref.GetColumnName(), regex.get());
 				}
 			}
 		}
