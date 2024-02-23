@@ -276,7 +276,14 @@ jobs:
 
     - name: Test Standard ODBC tests
       shell: bash
-      run: build/debug/tools/odbc/test/test_odbc
+      run:  build/debug/tools/odbc/test/test_odbc
+
+    - name: Test Connection ODBC tests
+      shell: bash
+      run: |
+        chmod +x tools/odbc/scripts/create_ini_file.sh
+        tools/odbc/scripts/create_ini_file.sh
+        build/debug/tools/odbc/test/test_connection_odbc
 
     - name: Test nanodbc
       shell: bash

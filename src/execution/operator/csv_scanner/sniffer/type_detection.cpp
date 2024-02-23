@@ -186,6 +186,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
+	idx_t min_errors = NumericLimits<idx_t>::Maximum();
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate_cc : candidates) {
@@ -271,7 +272,9 @@ void CSVSniffer::DetectTypes() {
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
-		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
+		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7) &&
+		    (!options.ignore_errors || candidate->error_handler->errors.size() < min_errors)) {
+			min_errors = candidate->error_handler->errors.size();
 			best_header_row.clear();
 			// we have a new best_options candidate
 			best_candidate = std::move(candidate);
@@ -289,7 +292,7 @@ void CSVSniffer::DetectTypes() {
 	}
 	if (!best_candidate) {
 		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error);
+		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
 	D_ASSERT(best_candidate && !best_format_candidates.empty());
