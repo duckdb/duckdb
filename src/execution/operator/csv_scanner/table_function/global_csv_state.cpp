@@ -168,10 +168,15 @@ void CSVGlobalState::FillRejectsTable() {
 						auto col_name = bind_data.return_names[col_idx];
 						// Add the row to the rejects table
 						appender.BeginRow();
+						// 1. File Name
 						appender.Append(string_t(file_name));
+						// 2. Row Line
 						appender.Append(row_line);
+						// 3. Column Index
 						appender.Append(col_idx);
+						// 4. Column Name
 						appender.Append(string_t("\"" + col_name + "\""));
+						// 5 Parsed Value
 						appender.Append(error.row[col_idx]);
 
 						auto row_error_msg =
