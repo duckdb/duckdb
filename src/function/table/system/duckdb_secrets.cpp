@@ -15,6 +15,7 @@ struct DuckDBSecretsData : public GlobalTableFunctionState {
 	DuckDBSecretsData() : offset(0) {
 	}
 	idx_t offset;
+	duckdb::vector<duckdb::SecretEntry> secrets;
 };
 
 struct DuckDBSecretsBindData : public FunctionData {
@@ -84,8 +85,11 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &secret_manager = SecretManager::Get(context);
 
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-	auto secrets = secret_manager.AllSecrets(transaction);
 
+	if (data.secrets.empty()) {
+		data.secrets = secret_manager.AllSecrets(transaction);
+	}
+	auto &secrets = data.secrets;
 	if (data.offset >= secrets.size()) {
 		// finished returning values
 		return;
