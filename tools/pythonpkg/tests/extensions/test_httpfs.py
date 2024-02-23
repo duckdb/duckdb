@@ -3,6 +3,7 @@ import os
 from pytest import raises, mark
 import pytest
 from conftest import NumpyPandas, ArrowPandas
+import datetime
 
 # We only run this test if this env var is set
 pytestmark = mark.skipif(
@@ -25,9 +26,9 @@ class TestHTTPFS(object):
     def test_s3fs(self, require):
         connection = require('httpfs')
 
-        rel = connection.read_csv(f"s3://noaa-gsod-pds/2023/01001099999.csv", header=True)
-        res = rel.fetchall()
-        print(res)
+        rel = connection.read_csv(f"s3://duckdb-blobs/data/Star_Trek-Season_1.csv", header=True)
+        res = rel.fetchone()
+        assert res == (1, 0, datetime.date(1965, 2, 28), 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 6, 0, 0, 0, 0)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_httpfs(self, require, pandas):
@@ -66,9 +67,3 @@ class TestHTTPFS(object):
         assert value.reason == 'Not Found'
         assert value.body == ''
         assert 'Content-Length' in value.headers
-
-    def test_s3_fs(self, require):
-        con = require('httpfs')
-        df = con.read_csv(f"s3://noaa-gsod-pds/2023/01001099999.csv", header=True)
-        res = len(df)
-        assert res == 364
