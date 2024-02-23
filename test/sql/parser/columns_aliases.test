@@ -82,7 +82,11 @@ SELECT price, amount_sold, total_profit FROM (SELECT COLUMNS(*)::VARCHAR FROM tb
 5	4	20
 
 query III
+<<<<<<< HEAD
 SELECT varchar_price, varchar_amount_sold, varchar_total_profit FROM (SELECT COLUMNS(*)::VARCHAR AS "varchar_\0" FROM tbl)
+=======
+SELECT varchar_price, varchar_amount_sold, varchar_total_profit FROM (SELECT COLUMNS(*)::VARCHAR AS "varchar_[column]" FROM tbl)
+>>>>>>> 3cadc6cee1b9754b5469183873efc9344b0fb2ed
 ----
 5	4	20
 

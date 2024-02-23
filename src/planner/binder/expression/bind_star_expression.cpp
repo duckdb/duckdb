@@ -78,7 +78,11 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	D_ASSERT(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
 		D_ASSERT(replacement);
+		auto alias = expr->alias;
 		expr = replacement->Copy();
+		if (!alias.empty()) {
+			expr->alias = std::move(alias);
+		}
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
