@@ -7,9 +7,11 @@ import statistics
 import math
 import functools
 import shutil
+
 print = functools.partial(print, flush=True)
 
 non_numeric_results = ['INCORRECT', 'KILLED', 'TIMEOUT']
+
 
 # Geometric mean of an array of numbers
 def geomean(xs):

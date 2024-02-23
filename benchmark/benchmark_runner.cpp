@@ -58,7 +58,8 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 atomic<bool> is_active;
 atomic<bool> timeout;
 
-void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState *state, bool hotrun, int timeout_duration) {
+void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState *state, bool hotrun,
+                  int timeout_duration) {
 	if (timeout_duration < 0) {
 		return;
 	}

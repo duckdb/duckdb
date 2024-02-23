@@ -426,8 +426,8 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 			                  strerror(errno));
 		}
 		if (bytes_written == 0) {
-			throw IOException("Could not write to file \"%s\" - attempted to write 0 bytes: %s", {{"errno", std::to_string(errno)}}, handle.path,
-							  strerror(errno));
+			throw IOException("Could not write to file \"%s\" - attempted to write 0 bytes: %s",
+			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
 		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
