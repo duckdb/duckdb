@@ -75,6 +75,8 @@ protected:
 
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue();
+	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
+	void PurgeIteration(const idx_t purge_size);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
@@ -95,15 +97,22 @@ protected:
 
 	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
 	constexpr static idx_t INSERT_INTERVAL = 4096;
+	//! We multiply the base purge size by this value.
+	constexpr static idx_t PURGE_SIZE_MULTIPLIER = 2;
+	//! We multiply the purge size by this value to determine early-outs.
+	constexpr static idx_t EARLY_OUT_MULTIPLIER = 4;
+	//! We multiply the approximate alive nodes by this value to test whether our total dead nodes
+	//! exceed their allowed ratio.
+	constexpr static idx_t ALIVE_NODE_MULTIPLIER = INSERT_INTERVAL;
 
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
 	atomic<idx_t> evict_queue_insertions;
-	atomic<idx_t> destroyed_block_handles;
+	atomic<idx_t> total_dead_nodes;
+	idx_t purged_dead_nodes;
 	//! Whether a queue purge is currently active
 	atomic<bool> purge_active;
 	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
 	vector<BufferEvictionNode> purge_nodes;
-	idx_t previous_alive_nodes;
 };
 
 } // namespace duckdb

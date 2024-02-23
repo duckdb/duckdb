@@ -31,6 +31,11 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	// being destroyed, so any unswizzled pointers are just binary junk now.
 	unswizzled = nullptr;
+	if (buffer && buffer->type != FileBufferType::TINY_BUFFER) {
+		// we kill the latest version in the eviction queue
+		auto &buffer_manager = block_manager.buffer_manager;
+		buffer_manager.GetBufferPool().total_dead_nodes++;
+	}
 
 	// no references remain to this block: erase
 	if (buffer && state == BlockState::BLOCK_LOADED) {
@@ -43,8 +48,6 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	}
 
 	block_manager.UnregisterBlock(block_id, can_destroy);
-	auto &buffer_manager = block_manager.buffer_manager;
-	buffer_manager.GetBufferPool().destroyed_block_handles++;
 }
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
