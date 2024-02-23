@@ -13,17 +13,32 @@ using Filter = FilterPushdown::Filter;
 FilterPushdown::FilterPushdown(Optimizer &optimizer) : optimizer(optimizer), combiner(optimizer.context) {
 }
 
-static bool FilterIsOnPartition(column_binding_set_t parition_bindings, Expression &filter_expression) {
-	return true;
+static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Expression &filter_expression) {
+	bool filter_is_on_partition = false;
+	ExpressionIterator::EnumerateChildren(filter_expression, [&](unique_ptr<Expression> &child) {
+		switch (child->type) {
+		case ExpressionType::BOUND_COLUMN_REF: {
+			auto &col_ref = child->Cast<BoundColumnRefExpression>();
+			if (partition_bindings.find(col_ref.binding) != partition_bindings.end()) {
+				filter_is_on_partition = true;
+				return;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	});
+	return filter_is_on_partition;
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = op->Cast<LogicalWindow>();
 	// go into expressions, then look into the partitions.
-	// if the filter applies ONLY to the partition (and is not some arithmetic expression) then you can push the filter into
-	// the children.
-	for (auto &expr: window.expressions) {
+	// if the filter applies ONLY to the partition (and is not some arithmetic expression) then you can push the filter
+	// into the children.
+	for (auto &expr : window.expressions) {
 		if (expr->expression_class != ExpressionClass::BOUND_WINDOW) {
 			continue;
 		}
@@ -43,6 +58,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		}
 		vector<unique_ptr<Filter>> leftover_filters;
 		for (auto &filter : filters) {
+			// check if a filter is on the partition
+			// create new filter pushdown with the filter,
+			// push into children
 			if (FilterIsOnPartition(parition_bindings, *filter->filter)) {
 				auto pushdown = FilterPushdown(optimizer);
 				pushdown.filters.push_back(std::move(filter));
@@ -50,14 +68,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 				continue;
 			}
 			leftover_filters.push_back(std::move(filter));
-			// check if a filter is on the partition
-			// create new filter pushdown with the filter,
-			// push into children
 		}
 		filters = std::move(leftover_filters);
 	}
 	return FinishPushdown(std::move(op));
-//	return std::move(op);
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
