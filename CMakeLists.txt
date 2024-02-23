@@ -1118,9 +1118,9 @@ if(BUILD_PYTHON)
 	)
 
   if(PYTHON_EDITABLE_BUILD)
-    set(PIP_COMMAND ${PIP_COMMAND} pip install --editable .)
+    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install --editable .)
   else()
-    set(PIP_COMMAND ${PIP_COMMAND} pip install .)
+    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install .)
   endif()
 
   if(USER_SPACE)
