@@ -274,7 +274,7 @@ struct UUIDConvert {
 };
 
 struct ListConvert {
-	static py::list ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+	static py::array ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
 		auto &client_properties = append_data.client_properties;
 		auto &list_data = append_data.idata;
 
@@ -687,7 +687,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BitConvert>(append_data);
 		break;
 	case LogicalTypeId::LIST:
-		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(append_data);
+		may_have_null = ConvertNested<py::array, duckdb_py_convert::ListConvert>(append_data);
 		break;
 	case LogicalTypeId::MAP:
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(append_data);
