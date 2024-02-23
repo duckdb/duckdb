@@ -1,84 +1,140 @@
 import pytest
 import duckdb
+pd = pytest.importorskip("pandas")
 import pandas as pd
 import numpy as np
+from conftest import replace_with_ndarray, recursive_equality
 
+def compare_results(query, expected):
+    expected = pd.DataFrame.from_dict(expected)
 
-def compare_results(query, list_values=[], list_values_2=[]):
     con = duckdb.connect()
-    df_duck = con.query(query).df()
-    duck_values = df_duck['a']
-    for duck_value in duck_values:
-        is_in_list_value = False
-        for value in list_values:
-            if duck_value == value:
-                is_in_list_value = True
-        for value in list_values_2:
-            if duck_value == value:
-                is_in_list_value = True
-        assert is_in_list_value
-
+    unsorted_res = con.query(query).df()
+    df_duck = con.query("select * from unsorted_res order by all").df()
+    print(df_duck)
+    print(expected)
+    pd.testing.assert_frame_equal(df_duck, expected)
 
 class TestFetchNested(object):
-    @pytest.mark.skip(reason="sporadically breaks in CI")
-    def test_fetch_df_list(self):
-        con = duckdb.connect()
-        # Integers
-        compare_results("SELECT a from (select list_value(3,5,10) as a) as t", [[3, 5, 10]])
-        compare_results("SELECT a from (select list_value(3,5,NULL) as a) as t", [[3, 5, None]])
-        compare_results("SELECT a from (select list_value(NULL,NULL,NULL) as a) as t", [[None, None, None]])
-        compare_results("SELECT a from (select list_value() as a) as t", [[]])
+    @pytest.mark.parametrize('query, expected', [
+        ("SELECT list_value(3,5,10) as a", {
+            'a': [
+                [3, 5, 10]
+            ]
+        }),
+        ("SELECT list_value(3,5,NULL) as a", {
+            'a': [
+                np.ma.array(
+                    [3, 5, 0],
+                mask=[0, 0, 1],
+            )
+            ]
+        }),
+        ("SELECT list_value(NULL,NULL,NULL) as a", {
+            'a': [
+                np.ma.array(
+                    [0, 0, 0],
+                mask=[1, 1, 1],
+            )
+            ]
+        }),
+        ("SELECT list_value() as a", {
+            'a': [
+                np.array([])
+            ]
+        }),
+        ("SELECT list_value('test','test_one','test_two') as a", {
+            'a': [
+                np.array([
+                    'test', 'test_one', 'test_two'
+                ])
+            ]
+        }),
+        ("SELECT a from (SELECT LIST(i) as a FROM range(10000) tbl(i)) as t", {
+            'a': [
+                list(range(0, 10000))
+            ]
+        }),
+        ("SELECT LIST(i) as a FROM range(5) tbl(i) group by i%2 order by all", {
+            'a': [
+                [0, 2, 4],
+                [1, 3]
+            ]
+        }),
+        ("SELECT list_value(1) as a FROM range(5) tbl(i)", {
+            'a': [
+                [1],
+                [1],
+                [1],
+                [1],
+                [1]
+            ]
+        }),
+        ("""
+            SELECT * from values
+                ([[1, 3], [0,2,4]])
+            t(a)
+        """, {
+            'a': [
+                [
+                    [1, 3],
+                    [0, 2, 4]
+                ]
+            ]
+        }),
+        ("""
+            SELECT * from values
+                ([[[[[0, 2, 4], [1, 3]]]]])
+            t(a)
+        """, {
+            'a': [
+                [[[[[0, 2, 4], [1, 3]]]]]
+            ]
+        }),
+        ("""
+            select * from values
+                ([
+                    [NULL],
+                    [NULL],
+                    [2, 6],
+                    [3]
+                ])
+            t(a)
+        """, {
+            'a': [
+                [
+                    np.ma.array([0], mask=[1], dtype=np.int32()),
+                    np.ma.array([0], mask=[1], dtype=np.int32()),
+                    [2, 6],
+                    [3]
+                ]
+            ]
+        }),
+        ("""
+            SELECT
+                list(st) AS a
+            FROM
+            (
+                SELECT
+                    i,
+                    CASE WHEN i%5
+                        THEN NULL
+                        ELSE i::VARCHAR
+                    END AS st
+                FROM range(10) tbl(i)
+            ) AS t
+            GROUP BY i%2
+            ORDER BY all
+        """, {
+            'a': [
+                ['0', None, None, None, None],
+                [None, None, '5', None, None]
+            ]
+        }),
+    ])
+    def test_fetch_df_list(self, duckdb_cursor, query, expected):
+        compare_results(query, expected)
 
-        # Strings
-        compare_results(
-            "SELECT a from (select list_value('test','test_one','test_two') as a) as t",
-            [['test', 'test_one', 'test_two']],
-        )
-        compare_results(
-            "SELECT a from (select list_value('test','test_one',NULL) as a) as t", [['test', 'test_one', None]]
-        )
-
-        # Big Lists
-        compare_results("SELECT a from (SELECT LIST(i) as a FROM range(10000) tbl(i)) as t", [list(range(0, 10000))])
-
-        # #Multiple Lists
-        compare_results(
-            "SELECT a from (SELECT LIST(i) as a FROM range(5) tbl(i) group by i%2 order by all) as t",
-            [[0, 2, 4], [1, 3]],
-        )
-
-        # Unique Constants
-        compare_results(
-            "SELECT a from (SELECT list_value(1) as a FROM range(5) tbl(i)) as t", [[1], [1], [1], [1], [1]]
-        )
-
-        # Nested Lists
-        compare_results(
-            "SELECT LIST(le) as a FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2 order by all) as t order by all",
-            [[[0, 2, 4], [1, 3]]],
-            [[[1, 3], [0, 2, 4]]],
-        )
-
-        # LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
-        compare_results(
-            "SELECT list (lllle)  as a from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2 order by all) as t order by all) as t1 order by all) as t2 order by all) as t3 order by all",
-            [[[[[[0, 2, 4], [1, 3]]]]]],
-            [[[[[[1, 3], [0, 2, 4]]]]]],
-        )
-
-        compare_results(
-            '''SELECT grp,lst,a FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as a
-                         from (SELECT a_1%4 as grp, list(a_1) as lst FROM range(7) tbl(a_1) group by grp order by all) as lst_tbl) as T;''',
-            [[None], [None], [2, 6], [3]],
-        )
-
-        # Tests for converting multiple lists to/from Pandas with NULL values and/or strings
-        compare_results(
-            "SELECT list(st) as a from (select i, case when i%5 then NULL else i::VARCHAR end as st from range(10) tbl(i)) as t group by i%2 order by all",
-            [['0', None, None, None, None], [None, None, '5', None, None]],
-        )
-
-    @pytest.mark.skip(reason="sporadically breaks in CI")
     def test_struct_df(self):
         compare_results("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t", [{'a': 42, 'b': 43}])
 
@@ -118,7 +174,6 @@ class TestFetchNested(object):
             ],
         )
 
-    @pytest.mark.skip(reason="sporadically breaks in CI")
     def test_map_df(self):
         compare_results(
             "SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t",
@@ -179,7 +234,6 @@ class TestFetchNested(object):
             ],
         )
 
-    @pytest.mark.skip(reason="sporadically breaks in CI")
     def test_nested_mix(self):
         con = duckdb.connect()
         # List of structs W/ Struct that is NULL entirely

@@ -469,19 +469,20 @@ static bool ConvertNested(NumpyAppendData &append_data) {
 
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
+		bool requires_mask = false;
 		for (idx_t i = 0; i < count; i++) {
 			idx_t index = i + source_offset;
 			idx_t src_idx = idata.sel->get_index(index);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
-				out_ptr[offset] = py::none();
+				requires_mask = true;
 				target_mask[offset] = true;
 			} else {
 				out_ptr[offset] = CONVERT::ConvertValue(input, index, append_data);
 				target_mask[offset] = false;
 			}
 		}
-		return true;
+		return requires_mask;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			// NOTE: we do not apply the selection vector here,

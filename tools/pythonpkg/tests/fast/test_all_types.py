@@ -7,27 +7,7 @@ from decimal import Decimal
 from uuid import UUID
 import pytz
 import pytest
-
-
-# we need to write our own equality function that considers nan==nan for testing purposes
-def recursive_equality(o1, o2):
-    if o1 == o2:
-        return True
-    if type(o1) != type(o2):
-        return False
-    if type(o1) == float and math.isnan(o1) and math.isnan(o2):
-        return True
-    if o1 is np.ma.masked and o2 is np.ma.masked:
-        return True
-    try:
-        if len(o1) != len(o2):
-            return False
-        for i in range(len(o1)):
-            if not recursive_equality(o1[i], o2[i]):
-                return False
-        return True
-    except:
-        return False
+from conftest import recursive_equality
 
 
 # Regenerate the 'all_types' list using:
@@ -90,18 +70,6 @@ all_types = [
     "map",
     "union",
 ]
-
-
-def replace_with_ndarray(obj):
-    if hasattr(obj, '__getitem__'):
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                obj[key] = replace_with_ndarray(value)
-        elif isinstance(obj, list):
-            for i, item in enumerate(obj):
-                obj[i] = replace_with_ndarray(item)
-        return np.array(obj)
-    return obj
 
 
 class TestAllTypes(object):
