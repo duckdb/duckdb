@@ -85,6 +85,17 @@ void UUID::ToString(hugeint_t input, char *buf) {
 	byte_to_hex(input.lower & 0xFF, buf, pos);
 }
 
+hugeint_t UUID::FromUHugeint(uhugeint_t input) {
+	hugeint_t result;
+	result.lower = input.lower;
+	if (input.upper > uint64_t(NumericLimits<int64_t>::Maximum())) {
+		result.upper = int64_t(input.upper - uint64_t(NumericLimits<int64_t>::Maximum()) - 1);
+	} else {
+		result.upper = int64_t(input.upper) - NumericLimits<int64_t>::Maximum() - 1;
+	}
+	return result;
+}
+
 hugeint_t UUID::GenerateRandomUUID(RandomEngine &engine) {
 	uint8_t bytes[16];
 	for (int i = 0; i < 16; i += 4) {

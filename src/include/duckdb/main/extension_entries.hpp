@@ -207,6 +207,16 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {{"->>", "json"},
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_storage_connection_string", "azure"},
+    {"azure_read_transfer_chunk_size", "azure"},
+    {"azure_endpoint", "azure"},
+    {"azure_credential_chain", "azure"},
+    {"azure_read_buffer_size", "azure"},
+    {"azure_account_name", "azure"},
+    {"azure_read_transfer_concurrency", "azure"},
+    {"azure_proxy_user_name", "azure"},
+    {"azure_http_proxy", "azure"},
+    {"azure_proxy_password", "azure"},
+    {"azure_http_stats", "azure"},
     {"binary_as_string", "parquet"},
     {"calendar", "icu"},
     {"force_download", "httpfs"},
@@ -306,8 +316,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    //    "azure",
-    "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
+    "azure", "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
     // "inet",
     // "icu",
     "json", "parquet", "postgres_scanner",

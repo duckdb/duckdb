@@ -59,10 +59,9 @@ public:
 	static std::string GetQueryDuckdbColumns(const std::string &catalog_filter, const std::string &schema_filter,
 	                                         const std::string &table_filter, const std::string &column_filter);
 
-	static void SetValueFromConnStr(const string &conn_str, const char *key, string &value);
-	static void SetValueFromConnStr(SQLCHAR *conn_c_str, const char *key, string &value);
-
 	static SQLUINTEGER SQLPointerToSQLUInteger(SQLPOINTER value);
+	static std::string ConvertSQLCHARToString(SQLCHAR *str);
+	static LPCSTR ConvertStringToLPCSTR(const std::string &str);
 };
 } // namespace duckdb
 #endif

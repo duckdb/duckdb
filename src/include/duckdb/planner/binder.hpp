@@ -49,6 +49,8 @@ struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
+struct PivotColumnEntry;
+struct UnpivotEntry;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
 
@@ -209,10 +211,12 @@ private:
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
 	CatalogEntryRetriever entry_retriever;
+	//! Unnamed subquery index
+	idx_t unnamed_subquery_index = 1;
 
 private:
 	//! Get the root binder (binder with no parent)
-	Binder *GetRootBinder();
+	Binder &GetRootBinder();
 	//! Determine the depth of the binder
 	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
@@ -277,6 +281,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
+	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
@@ -291,6 +296,8 @@ private:
 	                                   vector<unique_ptr<ParsedExpression>> all_columns,
 	                                   unique_ptr<ParsedExpression> &where_clause);
 	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
+	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
+	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,

@@ -260,7 +260,7 @@ struct ICUStrptime : public ICUDateFunc {
 			    bool has_offset = false;
 			    if (!Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz)) {
 				    auto msg = Timestamp::ConversionError(string(str, len));
-				    HandleCastError::AssignError(msg, parameters.error_message);
+				    HandleCastError::AssignError(msg, parameters);
 				    mask.SetInvalid(idx);
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided

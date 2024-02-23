@@ -1,4 +1,4 @@
-#include "../common.h"
+#include "common.h"
 
 using namespace odbc_test;
 
@@ -41,14 +41,17 @@ static void PreparedWithTest(HSTMT &hstmt) {
 	EXECUTE_AND_CHECK("SQLFreeStmt(CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
 }
 
-static void TestCTEandSetFetchEnv(const char *extra_params) {
+/**
+ * Runs two WITH queries and checks the results
+ */
+TEST_CASE("Test CTE", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
 	HSTMT hstmt = SQL_NULL_HSTMT;
 
 	// Connect to the database using SQLDriverConnect
-	DRIVER_CONNECT_TO_DATABASE(env, dbc, extra_params);
+	CONNECT_TO_DATABASE(env, dbc);
 
 	// Allocate a statement handle
 	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
@@ -61,16 +64,4 @@ static void TestCTEandSetFetchEnv(const char *extra_params) {
 	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
 
 	DISCONNECT_FROM_DATABASE(env, dbc);
-}
-
-/**
- * Runs two WITH queries both with declare fetch on and off, which should not affect the result
- * because the queries are not using cursors.
- */
-TEST_CASE("Test CTE", "[odbc]") {
-	// First test with UseDeclareFetch=0
-	TestCTEandSetFetchEnv("UseDeclareFetch=0");
-
-	// Then test with UseDeclareFetch=1
-	TestCTEandSetFetchEnv("UseDeclareFetch=1;Fetch=1");
 }
