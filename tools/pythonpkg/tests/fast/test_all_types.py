@@ -92,6 +92,18 @@ all_types = [
 ]
 
 
+def replace_with_ndarray(obj):
+    if hasattr(obj, '__getitem__'):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                obj[key] = replace_with_ndarray(value)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                obj[i] = replace_with_ndarray(item)
+        return np.array(obj)
+    return obj
+
+
 class TestAllTypes(object):
     @pytest.mark.parametrize('cur_type', all_types)
     def test_fetchall(self, cur_type):
@@ -441,6 +453,7 @@ class TestAllTypes(object):
             ),
             'union': np.ma.array(['Frank', 5, None], mask=[0, 0, 1], dtype=object),
         }
+        correct_answer_map = replace_with_ndarray(correct_answer_map)
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():

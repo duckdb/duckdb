@@ -8,4 +8,6 @@ class TestPandasUpdateList(object):
         duckdb_cursor.execute('create table t (l int[])')
         duckdb_cursor.execute('insert into t values ([1, 2]), ([3,4])')
         duckdb_cursor.execute('update t set l = [5, 6]')
-        assert duckdb_cursor.execute('select * from t').fetchdf()['l'].tolist() == [[5, 6], [5, 6]]
+        expected = pd.DataFrame({'l': [[5, 6], [5, 6]]})
+        res = duckdb_cursor.execute('select * from t').fetchdf()
+        pd.testing.assert_frame_equal(expected, res)

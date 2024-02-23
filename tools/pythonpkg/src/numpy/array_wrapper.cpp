@@ -274,7 +274,7 @@ struct UUIDConvert {
 };
 
 struct ListConvert {
-	static py::array ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
 		auto &client_properties = append_data.client_properties;
 		auto &list_data = append_data.idata;
 
@@ -396,8 +396,8 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		bool mask_is_set = false;
-		for (idx_t i = source_offset; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				if (append_data.pandas) {
@@ -413,8 +413,8 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 		}
 		return mask_is_set;
 	} else {
-		for (idx_t i = source_offset; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
 			target_mask[offset] = false;
@@ -434,8 +434,8 @@ static bool ConvertColumnCategoricalTemplate(NumpyAppendData &append_data) {
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
-		for (idx_t i = source_offset; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				out_ptr[offset] = static_cast<NUMPY_T>(-1);
@@ -445,8 +445,8 @@ static bool ConvertColumnCategoricalTemplate(NumpyAppendData &append_data) {
 			}
 		}
 	} else {
-		for (idx_t i = source_offset; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			out_ptr[offset] =
 			    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
@@ -469,21 +469,26 @@ static bool ConvertNested(NumpyAppendData &append_data) {
 
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
-		for (idx_t i = source_offset; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t index = i + source_offset;
+			idx_t src_idx = idata.sel->get_index(index);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				out_ptr[offset] = py::none();
 				target_mask[offset] = true;
 			} else {
-				out_ptr[offset] = CONVERT::ConvertValue(input, i, append_data);
+				out_ptr[offset] = CONVERT::ConvertValue(input, index, append_data);
 				target_mask[offset] = false;
 			}
 		}
 		return true;
 	} else {
-		for (idx_t i = source_offset; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
+			// NOTE: we do not apply the selection vector here,
+			// because we use GetValue inside ConvertValue, which *also* applies the selection vector
+			idx_t index = i + source_offset;
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = CONVERT::ConvertValue(input, i, append_data);
+			out_ptr[offset] = CONVERT::ConvertValue(input, index, append_data);
 			target_mask[offset] = false;
 		}
 		return false;
@@ -522,8 +527,8 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<double *>(target_data);
 	if (!idata.validity.AllValid()) {
-		for (idx_t i = source_offset; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
@@ -535,8 +540,8 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 		}
 		return true;
 	} else {
-		for (idx_t i = source_offset; i < count; i++) {
-			idx_t src_idx = idata.sel->get_index(i);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			out_ptr[offset] =
 			    duckdb_py_convert::IntegralConvert::ConvertValue<DUCKDB_T, double>(src_ptr[src_idx]) / division;
@@ -687,16 +692,16 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BitConvert>(append_data);
 		break;
 	case LogicalTypeId::LIST:
-		may_have_null = ConvertNested<py::array, duckdb_py_convert::ListConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::ListConvert>(append_data);
 		break;
 	case LogicalTypeId::MAP:
-		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::MapConvert>(append_data);
 		break;
 	case LogicalTypeId::UNION:
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(append_data);
 		break;
 	case LogicalTypeId::STRUCT:
-		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::StructConvert>(append_data);
 		break;
 	case LogicalTypeId::UUID:
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(append_data);
