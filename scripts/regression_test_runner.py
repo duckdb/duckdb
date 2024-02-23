@@ -10,6 +10,7 @@ import shutil
 
 print = functools.partial(print, flush=True)
 
+
 # Geometric mean of an array of numbers
 def geomean(xs):
     if len(xs) == 0:
