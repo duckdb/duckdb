@@ -35,3 +35,18 @@ query I
 SELECT 'BaB' ILIKE '_A_'
 ----
 true
+
+query I
+SELECT '🦆🦆' ILIKE '_'
+----
+false
+
+query I
+SELECT '🦆🦆' ILIKE '__'
+----
+true
+
+query I
+SELECT '🦆🦆' ILIKE '___'
+----
+false
