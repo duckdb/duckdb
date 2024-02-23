@@ -9,11 +9,13 @@ import functools
 import shutil
 print = functools.partial(print, flush=True)
 
+non_numeric_results = ['INCORRECT', 'KILLED', 'TIMEOUT']
 
 # Geometric mean of an array of numbers
 def geomean(xs):
-    if 'INCORRECT' in xs:
-        return 'INCORRECT'
+    for non_numeric_result in non_numeric_results:
+        if non_numeric_result in xs:
+            return non_numeric_result
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
 
@@ -193,7 +195,7 @@ time_b = geomean(complete_timings[new_runner])
 
 
 print("")
-if time_a == 'INCORRECT' or time_b == 'INCORRECT':
+if time_a in non_numeric_results or time_b in non_numeric_results:
     print(f"Old: {time_a}")
     print(f"New: {time_b}")
 elif time_a > time_b * 1.01:
