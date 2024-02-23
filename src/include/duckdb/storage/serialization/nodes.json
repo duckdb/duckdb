@@ -216,7 +216,8 @@
       {
         "id": 101,
         "name": "star_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "property": "expr"
       },
       {
         "id": 102,
@@ -485,7 +486,7 @@
   {
     "class": "CSVOption<T>",
     "includes": [
-      "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
+      "duckdb/execution/operator/csv_scanner/csv_option.hpp"
     ],
     "members": [
       {
@@ -504,7 +505,7 @@
   {
     "class": "CSVReaderOptions",
     "includes": [
-      "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+      "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
     ],
     "members": [
       {"id": 100,
