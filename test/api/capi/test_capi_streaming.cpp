@@ -124,7 +124,17 @@ TEST_CASE("Test streaming arrow results in C API", "[capi][arrow]") {
 
 	// Check handle null out_array
 	duckdb_result_arrow_array(result->InternalResult(), chunk->GetChunk(), nullptr);
+	// Check handle null out_schema
+	duckdb_result_arrow_schema(result->InternalResult(), nullptr);
 
+	// Query schema
+	ArrowSchema *arrow_schema = new ArrowSchema();
+	duckdb_result_arrow_schema(result->InternalResult(), (duckdb_arrow_schema *)&arrow_schema);
+	REQUIRE(string(arrow_schema->name) == "duckdb_query_result");
+	arrow_schema->release(arrow_schema);
+	delete arrow_schema;
+
+	// Query content
 	int nb_row = 0;
 	while (chunk) {
 		ArrowArray *arrow_array = new ArrowArray();
