@@ -9,6 +9,8 @@ import math
 
 # Geometric mean of an array of numbers
 def geomean(xs):
+    if 'INCORRECT' in xs:
+        return 'INCORRECT'
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
 
@@ -186,8 +188,12 @@ for res in other_results:
 time_a = geomean(complete_timings[old_runner])
 time_b = geomean(complete_timings[new_runner])
 
+
 print("")
-if time_a > time_b * 1.01:
+if time_a == 'INCORRECT' or time_b == 'INCORRECT':
+    print(f"Old: {time_a}")
+    print(f"New: {time_b}")
+elif time_a > time_b * 1.01:
     print(f"Old timing geometric mean: {time_a}")
     print(f"New timing geometric mean: {time_b}, roughly {int((time_a - time_b) * 100.0 / time_a)}% faster")
 elif time_b > time_a * 1.01:
