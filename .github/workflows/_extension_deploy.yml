@@ -56,7 +56,7 @@ jobs:
     outputs:
       deploy_matrix: ${{ steps.parse-matrices.outputs.deploy_matrix }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: 'true'
@@ -82,7 +82,7 @@ jobs:
       matrix: ${{fromJson(needs.generate_matrix.outputs.deploy_matrix)}}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: 'true'
