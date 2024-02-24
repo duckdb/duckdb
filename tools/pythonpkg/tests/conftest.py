@@ -34,52 +34,6 @@ def import_pandas():
         pytest.skip("Couldn't import pandas")
 
 
-def replace_with_ndarray(obj):
-    np = pytest.importorskip("numpy")
-    if hasattr(obj, '__getitem__'):
-        if isinstance(obj, dict):
-            for key, value in obj.items():
-                obj[key] = replace_with_ndarray(value)
-        elif isinstance(obj, list):
-            for i, item in enumerate(obj):
-                obj[i] = replace_with_ndarray(item)
-        return np.array(obj)
-    return obj
-
-
-# we need to write our own equality function that considers nan==nan for testing purposes
-def recursive_equality(o1, o2):
-    import math
-
-    np = pytest.importorskip("numpy")
-    try:
-        is_list = hasattr(o1, '__len__') and hasattr(o1, '__len__')
-        if is_list:
-            len(o1)
-            len(o2)
-    except:
-        is_list = False
-    if is_list:
-        print(o1.__class__)
-        print(o2.__class__)
-        if len(o1) != len(o2):
-            return False
-        for i in range(len(o1)):
-            if not recursive_equality(o1[i], o2[i]):
-                return False
-        return True
-    else:
-        if o1 == o2:
-            return True
-    if type(o1) != type(o2):
-        return False
-    if type(o1) == float and math.isnan(o1) and math.isnan(o2):
-        return True
-    if o1 is np.ma.masked and o2 is np.ma.masked:
-        return True
-    return False
-
-
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
 # https://stackoverflow.com/a/47700320
 def pytest_addoption(parser):
