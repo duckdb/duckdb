@@ -1,9 +1,9 @@
 #define CATCH_CONFIG_MAIN
-#include "common.h"
+#include "include/common.h"
 
 namespace odbc_test {
 
-void ODBC_CHECK(SQLRETURN ret, std::string msg) {
+void ODBC_CHECK(SQLRETURN ret, const std::string &msg) {
 	switch (ret) {
 	case SQL_SUCCESS:
 		REQUIRE(1);
@@ -32,18 +32,18 @@ void ACCESS_DIAGNOSTIC(std::string &state, std::string &message, SQLHANDLE handl
 	SQLINTEGER native_error;
 	SQLCHAR message_text[256];
 	SQLSMALLINT text_length;
-	SQLSMALLINT recnum = 0;
+	SQLSMALLINT rec_num = 0;
 	SQLRETURN ret = SQL_SUCCESS;
 
 	while (SQL_SUCCEEDED(ret)) {
-		recnum++;
-		// SQLGetDiagRec returns the current values of multiple fields of a diagnostic record that contains error,
+		rec_num++;
+		// SQLGetDiagRec returns the current values of multiple fields in a diagnostic record that contains error,
 		// warning, and status information.
-		ret = SQLGetDiagRec(handle_type, handle, recnum, sqlstate, &native_error, message_text, sizeof(message_text),
+		ret = SQLGetDiagRec(handle_type, handle, rec_num, sqlstate, &native_error, message_text, sizeof(message_text),
 		                    &text_length);
-		// The function overwrites the previous contents of state and message so only the last diagnostic record is
+		// The function overwrites the previous contents of state and message, so only the last diagnostic record is
 		// available. Because this function usually is called on one diagnostic record, or used to confirm that two
-		// calls to SQLGetDiagRec does not change the state of the statement, this is not a problem.
+		// calls to SQLGetDiagRec doesn't change the state of the statement, this is not a problem.
 		if (SQL_SUCCEEDED(ret)) {
 			state = ConvertToString(sqlstate);
 			message = ConvertToString(message_text);
@@ -55,7 +55,7 @@ void ACCESS_DIAGNOSTIC(std::string &state, std::string &message, SQLHANDLE handl
 	}
 }
 
-void DATA_CHECK(HSTMT &hstmt, SQLSMALLINT col_num, const std::string expected_content) {
+void DATA_CHECK(HSTMT &hstmt, SQLSMALLINT col_num, const std::string &expected_content) {
 	SQLCHAR content[256];
 	SQLLEN content_len;
 
@@ -86,7 +86,7 @@ void METADATA_CHECK(HSTMT &hstmt, SQLUSMALLINT col_num, const std::string &expec
 	ODBC_CHECK(ret, "SQLDescribeCol");
 
 	if (!expected_col_name.empty()) {
-		REQUIRE(expected_col_name.compare(ConvertToString(col_name)) == 0);
+		REQUIRE(expected_col_name == ConvertToString(col_name));
 	}
 	if (expected_col_name_len) {
 		REQUIRE(col_name_len == expected_col_name_len);
@@ -111,17 +111,17 @@ void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const std::strin
 	SQLCHAR str[1024];
 	SQLSMALLINT strl;
 	auto tmp = getenv("COMMON_CONNECTION_STRING_FOR_REGRESSION_TEST");
-	std::string envvar = tmp ? tmp : "";
+	std::string env_var = tmp ? tmp : "";
 
-	if (!envvar.empty()) {
+	if (!env_var.empty()) {
 		if (!extra_params.empty()) {
-			dsn = "DSN=" + default_dsn + ";" + extra_params + ";" + envvar + ";" + extra_params;
+			dsn = extra_params + ";" + env_var + ";" + extra_params;
 		} else {
-			dsn = "DSN=" + default_dsn + ";" + envvar;
+			dsn = "DSN=" + default_dsn + ";" + env_var;
 		}
 	} else {
 		if (!extra_params.empty()) {
-			dsn = "DSN=" + default_dsn + ";" + extra_params;
+			dsn = extra_params;
 		} else {
 			dsn = "DSN=" + default_dsn;
 		}
@@ -185,7 +185,7 @@ void InitializeDatabase(HSTMT &hstmt) {
 
 	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS bytea_table;");
 	EXEC_SQL(hstmt, "CREATE TABLE bytea_table (id integer, t blob);");
-	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (1, '\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x10'::blob);");
+	EXEC_SQL(hstmt, R"(INSERT INTO bytea_table VALUES (1, '\x01\x02\x03\x04\x05\x06\x07\x10'::blob);)");
 	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (2, 'bar');");
 	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (3, 'foobar');");
 	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (4, 'foo');");
@@ -222,7 +222,7 @@ SQLCHAR *ConvertToSQLCHAR(const std::string &str) {
 }
 
 std::string ConvertToString(SQLCHAR *str) {
-	return std::string(reinterpret_cast<char *>(str));
+	return {reinterpret_cast<char *>(str)};
 }
 
 const char *ConvertToCString(SQLCHAR *str) {
@@ -244,6 +244,19 @@ std::string ConvertHexToString(SQLCHAR val[16], int precision) {
 		ss << std::setw(2) << static_cast<unsigned int>(val[i]);
 	}
 	return ss.str().substr(0, precision);
+}
+
+std::string GetTesterDirectory() {
+	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
+	std::string current_directory = fs->GetWorkingDirectory() + "/test/sql/storage_version/storage_version.db";
+	if (!fs->FileExists(current_directory)) {
+		auto s = fs->GetWorkingDirectory() + "/../../../../test/sql/storage_version/storage_version.db";
+		if (!fs->FileExists(s)) {
+			throw std::runtime_error("Could not find storage_version.db file.");
+		}
+		return s;
+	}
+	return current_directory;
 }
 
 } // namespace odbc_test
