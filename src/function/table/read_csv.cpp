@@ -6,9 +6,9 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/union_by_name.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/global_csv_state.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_error.hpp"
+#include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -20,10 +20,10 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/base_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
 
-#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 
 #include <limits>
 
@@ -211,8 +211,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
-			csv_local_state.csv_reader->csv_file_scan->error_handler->Insert(
-			    csv_local_state.csv_reader->GetBoundaryIndex(), csv_local_state.csv_reader->GetLinesRead());
 			csv_local_state.csv_reader = csv_global_state.Next();
 			if (!csv_local_state.csv_reader) {
 				csv_global_state.DecrementThread();

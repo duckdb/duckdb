@@ -29,7 +29,7 @@ select m[NULL] from (select MAP(LIST_VALUE({a:3}, {a:4}, {a:5}, {a:6},{a:7}),LIS
 statement error
 select m[2] from (select MAP(LIST_VALUE([2,2], [2], [3,3], [4,4,4],[2]),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
 ----
-Invalid Input Error: Map keys have to be unique
+Map keys must be unique
 
 # Check autocast
 query I
@@ -47,7 +47,7 @@ select m[[10,11]] from (select MAP(lst,lst) as m from (SELECT LIST([i,i+1]) as l
 statement error
 select m[[1]] from (select MAP(LIST_VALUE([1], [1], [1], [4]),LIST_VALUE(10, 9, 8, 7)) as m) as T
 ----
-Invalid Input Error: Map keys have to be unique
+Map keys must be unique
 
 query I
 select m[['Tenacious D', 'test']] from (select MAP(LIST_VALUE(['Jon Lajoie'], ['test', NULL], ['Tenacious D', 'test'], ['test', 'Tenacious D']),LIST_VALUE(5,10,9,11)) as m) as T

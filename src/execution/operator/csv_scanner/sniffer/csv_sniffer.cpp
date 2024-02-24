@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 
 namespace duckdb {
 
@@ -94,10 +94,12 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	// 5. Type Replacement
 	ReplaceTypes();
 	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors) {
-		for (auto &error : best_candidate->error_handler->errors) {
-			if (error.second.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
-				// If it's a maximul line size error, we can do it now.
-				error_handler->Error(error.second);
+		for (auto &error_vector : best_candidate->error_handler->errors) {
+			for (auto &error : error_vector.second) {
+				if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
+					// If it's a maximum line size error, we can do it now.
+					error_handler->Error(error);
+				}
 			}
 		}
 		auto error = CSVError::SniffingError(options.file_path);

@@ -122,3 +122,33 @@ class TestDateTimeTimeStamp(object):
         )
         df_out = duckdb_cursor.sql("""select * from df_in""").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
+
+    @pytest.mark.skipif(
+        Version(pd.__version__) < Version('2.0.2'), reason="pandas < 2.0.2 does not properly convert timezones"
+    )
+    @pytest.mark.parametrize('unit', ['ms', 'ns', 's'])
+    def test_timestamp_timezone_coverage(self, unit, duckdb_cursor):
+        pd = pytest.importorskip("pandas")
+        ts_df = pd.DataFrame(
+            {'ts': pd.Series(data=[pd.Timestamp(datetime.datetime(1990, 12, 21))], dtype=f'datetime64[{unit}]')}
+        )
+        usecond_df = pd.DataFrame(
+            {'ts': pd.Series(data=[pd.Timestamp(datetime.datetime(1990, 12, 21))], dtype='datetime64[us]')}
+        )
+
+        query = """
+            select
+                cast(ts as timestamptz) as tstz
+            from {}
+        """
+
+        duckdb_cursor.sql("set TimeZone = 'UTC'")
+        utc_usecond = duckdb_cursor.sql(query.format('usecond_df')).df()
+        utc_other = duckdb_cursor.sql(query.format('ts_df')).df()
+
+        duckdb_cursor.sql("set TimeZone = 'America/Los_Angeles'")
+        us_usecond = duckdb_cursor.sql(query.format('usecond_df')).df()
+        us_other = duckdb_cursor.sql(query.format('ts_df')).df()
+
+        pd.testing.assert_frame_equal(utc_usecond, utc_other)
+        pd.testing.assert_frame_equal(us_usecond, us_other)
