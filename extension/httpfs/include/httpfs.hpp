@@ -37,7 +37,6 @@ struct HTTPParams {
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
-	inline static const string DEFAULT_CA_CERT_FILE = "";
 
 	uint64_t timeout;
 	uint64_t retries;

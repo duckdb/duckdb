@@ -37,7 +37,7 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
-	std::string ca_cert_file = DEFAULT_CA_CERT_FILE;
+	std::string ca_cert_file = "";
 
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
