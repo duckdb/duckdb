@@ -303,6 +303,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 }
 
 void ListColumnData::CommitDropColumn() {
+	ColumnData::CommitDropColumn();
 	validity.CommitDropColumn();
 	child_column->CommitDropColumn();
 }

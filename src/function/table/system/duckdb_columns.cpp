@@ -178,7 +178,11 @@ public:
 		return true;
 	}
 	const Value ColumnComment(idx_t col) override {
-		return Value();
+		if (entry.column_comments.empty()) {
+			return Value();
+		}
+		D_ASSERT(entry.column_comments.size() == entry.types.size());
+		return entry.column_comments[col];
 	}
 
 private:

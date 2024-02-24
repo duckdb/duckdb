@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 
 namespace duckdb {
 void CSVSniffer::ReplaceTypes() {
@@ -23,8 +23,7 @@ void CSVSniffer::ReplaceTypes() {
 		if (!sniffing_state_machine.options.file_options.union_by_name &&
 		    found < sniffing_state_machine.options.sql_types_per_column.size()) {
 			auto error_msg = CSVError::ColumnTypesError(options.sql_types_per_column, names);
-			auto error_line = LinesPerBoundary(0, 0);
-			error_handler->Error(error_line, error_msg);
+			error_handler->Error(error_msg);
 		}
 		return;
 	}
