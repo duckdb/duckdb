@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 
 namespace duckdb {
 

@@ -29,7 +29,7 @@ AggregateObject::AggregateObject(BoundWindowExpression &window)
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
 	vector<AggregateObject> aggregates;
-	aggregates.reserve(aggregates.size());
+	aggregates.reserve(bindings.size());
 	for (auto &binding : bindings) {
 		aggregates.emplace_back(binding);
 	}

@@ -82,7 +82,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 				(void)column_name;
 				break;
 			default:
-				throw InternalException("Don't know how to drop this type!");
+				throw InternalException("Don't know how to alter this type!");
 			}
 
 			auto &alter_info = parse_info->Cast<AlterInfo>();
@@ -116,7 +116,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 				log->WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
 				break;
 			default:
-				throw InternalException("Don't know how to drop this type!");
+				throw InternalException("Don't know how to create this type!");
 			}
 		}
 		break;
