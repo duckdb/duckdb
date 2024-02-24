@@ -214,7 +214,8 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-			"numpy.core",
+            "numpy.core",
+            "numpy.ma",
             "numpy.ndarray",
             "numpy.datetime64",
             "numpy.generic",
@@ -251,6 +252,20 @@
         "type": "attribute",
         "full_path": "numpy.core.multiarray",
         "name": "multiarray",
+        "children": []
+    },
+    "numpy.ma": {
+        "type": "attribute",
+        "full_path": "numpy.ma",
+        "name": "ma",
+        "children": [
+            "numpy.ma.masked"
+        ]
+    },
+    "numpy.ma.masked": {
+        "type": "attribute",
+        "full_path": "numpy.ma.masked",
+        "name": "masked",
         "children": []
     },
     "numpy.ndarray": {

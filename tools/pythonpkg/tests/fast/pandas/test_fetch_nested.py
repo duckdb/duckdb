@@ -1,21 +1,23 @@
 import pytest
 import duckdb
-pd = pytest.importorskip("pandas")
-import pandas as pd
-import numpy as np
-from conftest import replace_with_ndarray, recursive_equality
 
-def compare_results(query, expected):
+pd = pytest.importorskip("pandas")
+import numpy as np
+
+
+def compare_results(con, query, expected):
     expected = pd.DataFrame.from_dict(expected)
 
-    con = duckdb.connect()
     unsorted_res = con.query(query).df()
+    print(unsorted_res, unsorted_res['a'][0].__class__)
     df_duck = con.query("select * from unsorted_res order by all").df()
-    print(df_duck)
-    print(expected)
+    print(df_duck, df_duck['a'][0].__class__)
+    print(expected, expected['a'][0].__class__)
     pd.testing.assert_frame_equal(df_duck, expected)
 
+
 class TestFetchNested(object):
+    # fmt: off
     @pytest.mark.parametrize('query, expected', [
         ("SELECT list_value(3,5,10) as a", {
             'a': [
@@ -132,19 +134,24 @@ class TestFetchNested(object):
             ]
         }),
     ])
+    # fmt: on
     def test_fetch_df_list(self, duckdb_cursor, query, expected):
-        compare_results(query, expected)
+        compare_results(duckdb_cursor, query, expected)
 
-    def test_struct_df(self):
-        compare_results("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t", [{'a': 42, 'b': 43}])
-
-        compare_results("SELECT a from (SELECT STRUCT_PACK(a := NULL, b := 43) as a) as t", [{'a': None, 'b': 43}])
-
-        compare_results("SELECT a from (SELECT STRUCT_PACK(a := NULL) as a) as t", [{'a': None}])
-
-        compare_results(
-            "SELECT a from (SELECT STRUCT_PACK(a := i, b := i) as a FROM range(10) tbl(i)) as t",
-            [
+    # fmt: off
+    @pytest.mark.parametrize('query, expected', [
+        ("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t", {
+            'a': [
+                {'a': 42, 'b': 43}
+            ]
+        }),
+        ("SELECT a from (SELECT STRUCT_PACK(a := NULL) as a) as t", {
+            'a': [
+                {'a': None}
+            ]
+        }),
+        ("SELECT a from (SELECT STRUCT_PACK(a := i, b := i) as a FROM range(10) tbl(i)) as t", {
+            'a': [
                 {'a': 0, 'b': 0},
                 {'a': 1, 'b': 1},
                 {'a': 2, 'b': 2},
@@ -155,12 +162,10 @@ class TestFetchNested(object):
                 {'a': 7, 'b': 7},
                 {'a': 8, 'b': 8},
                 {'a': 9, 'b': 9},
-            ],
-        )
-
-        compare_results(
-            "SELECT a from (SELECT STRUCT_PACK(a := LIST_VALUE(1,2,3), b := i) as a FROM range(10) tbl(i)) as t",
-            [
+            ]
+        }),
+        ("SELECT a from (SELECT STRUCT_PACK(a := LIST_VALUE(1,2,3), b := i) as a FROM range(10) tbl(i)) as t", {
+            'a': [
                 {'a': [1, 2, 3], 'b': 0},
                 {'a': [1, 2, 3], 'b': 1},
                 {'a': [1, 2, 3], 'b': 2},
@@ -171,123 +176,217 @@ class TestFetchNested(object):
                 {'a': [1, 2, 3], 'b': 7},
                 {'a': [1, 2, 3], 'b': 8},
                 {'a': [1, 2, 3], 'b': 9},
-            ],
-        )
+            ]
+        }),
+    ])
+    # fmt: on
+    def test_struct_df(self, duckdb_cursor, query, expected):
+        compare_results(duckdb_cursor, query, expected)
 
-    def test_map_df(self):
-        compare_results(
-            "SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t",
-            [{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}],
-        )
-
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys have to be unique"):
-            compare_results(
-                "SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t",
-                [{'key': [1, 2, 3, 4, 2, None], 'value': [10, 9, 8, 7, 11, 42]}],
-            )
-
-        compare_results("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t", [{'key': [], 'value': []}])
-
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys have to be unique"):
-            compare_results(
-                "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t",
-                [{'key': ['Jon Lajoie', 'Backstreet Boys', 'Tenacious D', 'Jon Lajoie'], 'value': [10, 9, 10, 11]}],
-            )
-
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
-            compare_results(
-                "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t",
-                [{'key': ['Jon Lajoie', None, 'Tenacious D', None, None], 'value': [10, 9, 10, 11, 13]}],
-            )
-
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
-            compare_results(
-                "SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t",
-                [{'key': [None, None, None, None, None], 'value': [10, 9, 10, 11, 13]}],
-            )
-
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
-            compare_results(
-                "SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t",
-                [{'key': [None, None, None, None, None], 'value': [None, None, None, None, None]}],
-            )
-
-        compare_results(
-            "SELECT m as a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)",
-            [
+    # fmt: off
+    @pytest.mark.parametrize('query, expected, expected_error', [
+        ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
+            'a': [
+                {
+                    'key': [1, 2, 3, 4],
+                    'value': [10, 9, 8, 7]
+                }
+            ]
+        }, ""),
+        ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
+            'a': [
+                {
+                    'key': [1, 2, 3, 4],
+                    'value': [10, 9, 8, 7]
+                }
+            ]
+        }, ""),
+        ("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t", {
+            'a': [
+                {
+                    'key': [],
+                    'value': []
+                }
+            ]
+        }, ""),
+        ("SELECT m as a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)", {
+            'a': [
                 {'key': [1], 'value': [2]},
                 {'key': [1], 'value': [2]},
                 {'key': [1], 'value': [2]},
                 {'key': [1], 'value': [2]},
                 {'key': [1], 'value': [2]},
-            ],
-        )
-
-        compare_results(
-            "SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T",
-            [
+            ]
+        }, ""),
+        ("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T", {
+            'a': [
                 {'key': [0, 5], 'value': [0, 5]},
                 {'key': [1, 6], 'value': [1, 6]},
                 {'key': [2, 7], 'value': [2, 7]},
                 {'key': [3, 8], 'value': [3, 8]},
                 {'key': [4, 9], 'value': [4, 9]},
-            ],
-        )
+            ]
+        }, ""),
+        ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t", {
+            'a': [
+                {
+                    'key': [1, 2, 3, 4, 2, None],
+                    'value': [10, 9, 8, 7, 11, 42]
+                }
+            ]
+        }, "Map keys must be unique"),
+        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", {
+            'a': [
+                {
+                    'key': ['Jon Lajoie', 'Backstreet Boys', 'Tenacious D', 'Jon Lajoie'],
+                    'value': [10, 9, 10, 11]
+                }
+            ]
+        }, "Map keys must be unique"),
+        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", {
+            'a': [
+                {
+                    'key': ['Jon Lajoie', None, 'Tenacious D', None, None],
+                    'value': [10, 9, 10, 11, 13]
+                }
+            ]
+        }, "Map keys can not be NULL"),
+        ("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", {
+            'a': [
+                {
+                    'key': [None, None, None, None, None],
+                    'value': [10, 9, 10, 11, 13]
+                }
+            ]
+        }, "Map keys can not be NULL"),
+        ("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", {
+            'a': [
+                {
+                    'key': [None, None, None, None, None],
+                    'value': [None, None, None, None, None]
+                }
+            ]
+        }, "Map keys can not be NULL"),
+    ])
+    # fmt: on
+    def test_map_df(self, duckdb_cursor, query, expected, expected_error):
+        if not expected_error:
+            compare_results(duckdb_cursor, query, expected)
+        else:
+            with pytest.raises(duckdb.InvalidInputException, match=expected_error):
+                compare_results(duckdb_cursor, query, expected)
 
-    def test_nested_mix(self):
-        con = duckdb.connect()
-        # List of structs W/ Struct that is NULL entirely
-        compare_results(
-            "SELECT [{'i':1,'j':2},NULL,{'i':2,'j':NULL}] as a", [[{'i': 1, 'j': 2}, None, {'i': 2, 'j': None}]]
-        )
-
-        # Lists of structs with lists
-        compare_results("SELECT [{'i':1,'j':[2,3]},NULL] as a", [[{'i': 1, 'j': [2, 3]}, None]])
-
-        # Maps embedded in a struct
-        compare_results(
-            "SELECT {'i':mp,'j':mp2} as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",
-            [{'i': {'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}, 'j': {'key': [1, 2, 3, 5], 'value': [10, 9, 8, 7]}}],
-        )
-
-        # List of maps
-        compare_results(
-            "SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",
-            [[{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}, {'key': [1, 2, 3, 5], 'value': [10, 9, 8, 7]}]],
-        )
-
-        # Map with list as key and/or value
-        compare_results(
-            "SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4])) as a",
-            [{'key': [[1, 2], [3, 4], [5, 4]], 'value': [[1, 2], [3, 4], [5, 4]]}],
-        )
-
-        # Map with struct as key and/or value
-        compare_results(
-            "SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a",
-            [{'key': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}], 'value': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}]}],
-        )
-
-        # Null checks on lists with structs
-        compare_results(
-            "SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}] as a",
-            [[{'i': 1, 'j': [2, 3]}, None, {'i': 1, 'j': [2, 3]}]],
-        )
-
-        # Struct that is NULL entirely
-        df_duck = con.query("SELECT col0 as a FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL))").df()
-        duck_values = df_duck['a']
-        assert duck_values[0] == {'i': 1, 'j': 2}
-        assert np.isnan(duck_values[1])
-        assert duck_values[2] == {'i': 1, 'j': 2}
-        assert np.isnan(duck_values[3])
-
-        # MAP that is NULL entirely
-        df_duck = con.query(
-            "SELECT col0 as a FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL))"
-        ).df()
-        duck_values = df_duck['a']
-        assert duck_values[0] == {'key': [1, 2], 'value': [3, 4]}
-        assert np.isnan(duck_values[1])
-        assert duck_values[2] == {'key': [1, 2], 'value': [3, 4]}
-        assert np.isnan(duck_values[3])
+    # fmt: off
+    @pytest.mark.parametrize('query, expected', [
+        ("""
+            SELECT [
+                {'i':1,'j':2},
+                NULL,
+                {'i':2,'j':NULL}
+            ] as a
+        """, {
+            'a': [
+                np.ma.array([
+                    {'i': 1, 'j': 2},
+                    None,
+                    {'i': 2, 'j': None}
+                ], mask=[0, 1, 0])
+            ]
+        }),
+        ("""
+            SELECT [{'i':1,'j':2},NULL,{'i':2,'j':NULL}] as a
+        """, {
+            'a': [
+                np.ma.array([
+                    {'i': 1, 'j': 2},
+                    None,
+                    {'i': 2, 'j': None}
+                ], mask=[0, 1, 0])
+            ]
+        }),
+        ("""
+            SELECT [{'i':1,'j':[2,3]},NULL] as a
+        """, {
+            'a': [
+                np.ma.array([
+                    {'i': 1, 'j': [2, 3]},
+                    None,
+                ], mask=[0, 1])
+            ]
+        }),
+        ("""
+            SELECT {'i':mp,'j':mp2} as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
+        """, {
+            'a': [
+                {
+                    'i': {'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]},
+                    'j': {'key': [1, 2, 3, 5], 'value': [10, 9, 8, 7]}
+                }
+            ]
+        }),
+        ("""
+            SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
+        """, {
+            'a': [
+                [{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}, {'key': [1, 2, 3, 5], 'value': [10, 9, 8, 7]}]
+            ]
+        }),
+        ("""
+            SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4])) as a
+        """, {
+            'a': [
+                {'key': [[1, 2], [3, 4], [5, 4]], 'value': [[1, 2], [3, 4], [5, 4]]}
+            ]
+        }),
+        ("""
+            SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a
+        """, {
+            'a': [
+                {'key': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}], 'value': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}]}
+            ]
+        }),
+        ("""
+            SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}] as a
+        """, {
+            'a': [
+                np.ma.array([
+                    {'i': 1, 'j': [2, 3]},
+                    None,
+                    {'i': 1, 'j': [2, 3]}
+                ], mask=[0, 1, 0])
+            ]
+        }),
+        ("""
+            SELECT * FROM (VALUES
+            ({'i':1,'j':2}),
+            ({'i':1,'j':2}),
+            (NULL),
+            (NULL)
+        ) t(a)
+        """, {
+            'a': [
+                {'i': 1, 'j': 2},
+                {'i': 1, 'j': 2},
+                np.nan,
+                np.nan
+            ]
+        }),
+        ("""
+            SELECT a FROM (VALUES
+                (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),
+                (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),
+                (NULL),
+                (NULL)
+            ) t(a)
+        """, {
+            'a': [
+                {'key': [1, 2], 'value': [3, 4]},
+                {'key': [1, 2], 'value': [3, 4]},
+                np.nan,
+                np.nan
+            ]
+        }),
+    ])
+    # fmt: on
+    def test_nested_mix(self, duckdb_cursor, query, expected):
+        compare_results(duckdb_cursor, query, expected)

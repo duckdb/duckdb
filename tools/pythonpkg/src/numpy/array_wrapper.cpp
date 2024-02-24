@@ -475,6 +475,7 @@ static bool ConvertNested(NumpyAppendData &append_data) {
 			idx_t src_idx = idata.sel->get_index(index);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				out_ptr[offset] = py::none();
 				requires_mask = true;
 				target_mask[offset] = true;
 			} else {
