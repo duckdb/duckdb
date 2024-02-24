@@ -99,7 +99,7 @@ jobs:
         zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-windows
         path: |

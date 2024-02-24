@@ -72,7 +72,7 @@ jobs:
                 emmake ninja -j8 -Cbuild/wasm_threads
 
             - name: Upload artifact
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                   name: duckdb_extensions_${{ env.DUCKDB_PLATFORM }}
                   path: build/to_be_deployed/${{ inputs.duckdb_ref }}/${{ env.DUCKDB_PLATFORM }}

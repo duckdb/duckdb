@@ -79,7 +79,7 @@ jobs:
         run: >
           python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: java-linux-amd64
           path: |
@@ -123,7 +123,7 @@ jobs:
           python3.8 scripts/asset-upload-gha.py
           duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: java-linux-aarch64
           path: |
@@ -165,7 +165,7 @@ jobs:
         run: >
           python scripts/asset-upload-gha.py
           duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: java-windows-amd64
           path: |
@@ -211,7 +211,7 @@ jobs:
         run: >
           python scripts/asset-upload-gha.py
           duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: java-osx-universal
           path: |
@@ -280,7 +280,7 @@ jobs:
           fi
           ls -lahR jdbc-artifacts
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: java-jars
           path: |
