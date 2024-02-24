@@ -1,5 +1,6 @@
 import pytest
 import duckdb
+import sys
 
 pd = pytest.importorskip("pandas")
 import numpy as np
@@ -16,9 +17,9 @@ def compare_results(con, query, expected):
     pd.testing.assert_frame_equal(df_duck, expected)
 
 
-class TestFetchNested(object):
+def list_test_cases():
     # fmt: off
-    @pytest.mark.parametrize('query, expected', [
+    test_cases = [
         ("SELECT list_value(3,5,10) as a", {
             'a': [
                 [3, 5, 10]
@@ -73,6 +74,34 @@ class TestFetchNested(object):
             ]
         }),
         ("""
+            SELECT
+                list(st) AS a
+            FROM
+            (
+                SELECT
+                    i,
+                    CASE WHEN i%5
+                        THEN NULL
+                        ELSE i::VARCHAR
+                    END AS st
+                FROM range(10) tbl(i)
+            ) AS t
+            GROUP BY i%2
+            ORDER BY all
+        """, {
+            'a': [
+                ['0', None, None, None, None],
+                [None, None, '5', None, None]
+            ]
+        }),
+    ]
+
+    if (sys.version_info < (3, 9)):
+        return test_cases
+
+    # These tests are problematic on highest NumPy version supported by 3.7
+    test_cases.extend([
+        ("""
             SELECT * from values
                 ([[1, 3], [0,2,4]])
             t(a)
@@ -104,37 +133,21 @@ class TestFetchNested(object):
             t(a)
         """, {
             'a': [
-                [
+                np.array([
                     np.ma.array([0], mask=[1], dtype=np.int32()),
                     np.ma.array([0], mask=[1], dtype=np.int32()),
-                    [2, 6],
-                    [3]
-                ]
-            ]
-        }),
-        ("""
-            SELECT
-                list(st) AS a
-            FROM
-            (
-                SELECT
-                    i,
-                    CASE WHEN i%5
-                        THEN NULL
-                        ELSE i::VARCHAR
-                    END AS st
-                FROM range(10) tbl(i)
-            ) AS t
-            GROUP BY i%2
-            ORDER BY all
-        """, {
-            'a': [
-                ['0', None, None, None, None],
-                [None, None, '5', None, None]
+                    np.array([2, 6]),
+                    np.array([3]),
+                ], dtype='object')
             ]
         }),
     ])
     # fmt: on
+    return test_cases
+
+
+class TestFetchNested(object):
+    @pytest.mark.parametrize('query, expected', list_test_cases())
     def test_fetch_df_list(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)
 
