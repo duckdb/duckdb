@@ -583,6 +583,22 @@ public class TestDuckDBJDBC {
         }
     }
 
+    public static void test_native_duckdb_array() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT generate_series(1)::BIGINT[2] as \"array\"");
+             ResultSet rs = stmt.executeQuery()) {
+            ResultSetMetaData meta = rs.getMetaData();
+            assertEquals(meta.getColumnCount(), 1);
+            assertEquals(meta.getColumnName(1), "array");
+            assertEquals(meta.getColumnTypeName(1), "BIGINT[2]");
+            assertEquals(meta.getColumnType(1), Types.ARRAY);
+            assertEquals(meta.getColumnClassName(1), DuckDBArray.class.getName());
+
+            assertTrue(rs.next());
+            assertEquals(toJavaObject(rs.getObject(1)), asList(0, 1));
+        }
+    }
+
     public static void test_result() throws Exception {
         Connection conn = DriverManager.getConnection(JDBC_URL);
         Statement stmt = conn.createStatement();
