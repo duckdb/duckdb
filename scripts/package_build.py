@@ -261,11 +261,23 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     if not found_dev:
         lines = ['#ifndef DUCKDB_VERSION', '#define DUCKDB_VERSION "{}"'.format(dev_version), '#endif'] + lines
     if not found_major:
-        lines = ['#ifndef DUCKDB_MAJOR_VERSION', '#define DUCKDB_MAJOR_VERSION {}'.format(int(dev_v_parts[0])), '#endif'] + lines
+        lines = [
+            '#ifndef DUCKDB_MAJOR_VERSION',
+            '#define DUCKDB_MAJOR_VERSION {}'.format(int(dev_v_parts[0])),
+            '#endif'
+        ] + lines
     if not found_minor:
-        lines = ['#ifndef DUCKDB_MINOR_VERSION', '#define DUCKDB_MINOR_VERSION {}'.format(int(dev_v_parts[1])), '#endif'] + lines
+        lines = [
+            '#ifndef DUCKDB_MINOR_VERSION',
+            '#define DUCKDB_MINOR_VERSION {}'.format(int(dev_v_parts[1])),
+            '#endif'
+        ] + lines
     if not found_patch:
-        lines = ['#ifndef DUCKDB_PATCH_VERSION', '#define DUCKDB_PATCH_VERSION "{}"'.format(dev_v_parts[2]), '#endif'] + lines
+        lines = [
+            '#ifndef DUCKDB_PATCH_VERSION',
+            '#define DUCKDB_PATCH_VERSION "{}"'.format(dev_v_parts[2]),
+            '#endif'
+        ] + lines
     text = '\n'.join(lines)
     with open_utf8(fpath, 'w+') as f:
         f.write(text)
