@@ -300,11 +300,11 @@ def generate_duckdb_hpp(header_file):
         hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
 
         dev_version = git_dev_version()
-        dev_v_parts = [int(c) for c in dev_version.lstrip('v').split('.')]
+        dev_v_parts = dev_version.lstrip('v').split('.')
         hfile.write("#define DUCKDB_VERSION \"%s\"\n" % dev_version)
-        hfile.write("#define DUCKDB_MAJOR_VERSION %d\n" % dev_v_parts[0])
-        hfile.write("#define DUCKDB_MINOR_VERSION %d\n" % dev_v_parts[1])
-        hfile.write("#define DUCKDB_PATCH_VERSION %d\n" % dev_v_parts[2])
+        hfile.write("#define DUCKDB_MAJOR_VERSION %d\n" % int(dev_v_parts[0]))
+        hfile.write("#define DUCKDB_MINOR_VERSION %d\n" % int(dev_v_parts[1]))
+        hfile.write("#define DUCKDB_PATCH_VERSION \"%s\"\n" % dev_v_parts[2])
 
         for fpath in main_header_files:
             hfile.write(write_file(fpath))

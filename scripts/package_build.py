@@ -227,7 +227,7 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     os.chdir(os.path.join(scripts_dir, '..'))
     githash = git_commit_hash()
     dev_version = git_dev_version()
-    dev_v_parts = [int(c) for c in dev_version.lstrip('v').split('.')]
+    dev_v_parts = dev_version.lstrip('v').split('.')
     os.chdir(curdir)
     # open the file and read the current contents
     fpath = os.path.join(target_dir, 'src', 'function', 'table', 'version', 'pragma_version.cpp')
@@ -261,11 +261,11 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     if not found_dev:
         lines = ['#ifndef DUCKDB_VERSION', '#define DUCKDB_VERSION "{}"'.format(dev_version), '#endif'] + lines
     if not found_major:
-        lines = ['#ifndef DUCKDB_MAJOR_VERSION', '#define DUCKDB_MAJOR_VERSION {}'.format(dev_v_parts[0]), '#endif'] + lines
+        lines = ['#ifndef DUCKDB_MAJOR_VERSION', '#define DUCKDB_MAJOR_VERSION {}'.format(int(dev_v_parts[0])), '#endif'] + lines
     if not found_minor:
-        lines = ['#ifndef DUCKDB_MINOR_VERSION', '#define DUCKDB_MINOR_VERSION {}'.format(dev_v_parts[1]), '#endif'] + lines
+        lines = ['#ifndef DUCKDB_MINOR_VERSION', '#define DUCKDB_MINOR_VERSION {}'.format(int(dev_v_parts[1])), '#endif'] + lines
     if not found_patch:
-        lines = ['#ifndef DUCKDB_PATCH_VERSION', '#define DUCKDB_PATCH_VERSION {}'.format(dev_v_parts[2]), '#endif'] + lines
+        lines = ['#ifndef DUCKDB_PATCH_VERSION', '#define DUCKDB_PATCH_VERSION "{}"'.format(dev_v_parts[2]), '#endif'] + lines
     text = '\n'.join(lines)
     with open_utf8(fpath, 'w+') as f:
         f.write(text)
