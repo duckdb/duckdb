@@ -28,9 +28,6 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGIn
 	if (stmt.withClause) {
 		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
 		             materialized_ctes);
-		if (!materialized_ctes.empty()) {
-			throw NotImplementedException("Materialized CTEs are not implemented for insert.");
-		}
 	}
 
 	// first check if there are any columns specified
@@ -47,6 +44,8 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGIn
 	}
 	if (stmt.selectStmt) {
 		result->select_statement = TransformSelect(stmt.selectStmt, false);
+		result->select_statement->node =
+		    TransformMaterializedCTE(std::move(result->select_statement->node), materialized_ctes);
 	} else {
 		result->default_values = true;
 	}

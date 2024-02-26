@@ -13,10 +13,9 @@ create table a(i integer);
 statement ok
 insert into a values (42);
 
-statement error
+statement ok
 WITH t(x) AS MATERIALIZED (VALUES (42))
 INSERT INTO a (SELECT * FROM t);
-----
 
 statement error
 WITH t(x) AS MATERIALIZED (VALUES (42))
