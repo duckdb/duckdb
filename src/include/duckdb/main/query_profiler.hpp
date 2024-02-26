@@ -143,7 +143,6 @@ public:
 	struct TreeNode {
 		PhysicalOperatorType type;
 		string name;
-		string extra_info;
 		OperatorInformation info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;

@@ -498,7 +498,11 @@ string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
 }
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
-	auto result = TreeRenderer::CreateRenderNode(op.name, op.extra_info);
+	string extra_info;
+	if (op.settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
+		extra_info = op.settings.get_setting(TreeNodeSettingsType::EXTRA_INFO).ToString();
+	}
+	auto result = TreeRenderer::CreateRenderNode(op.name, extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
 	result->extra_text += "\n" + to_string(op.info.elements);
 	string timing = StringUtil::Format("%.2f", op.info.time);

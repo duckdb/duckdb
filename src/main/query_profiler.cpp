@@ -574,7 +574,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 		ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
 	}
 	if (settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
+		ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(settings.get_setting(TreeNodeSettingsType::EXTRA_INFO).ToString()) + "\",\n";
 		ss << string(depth * 3, ' ') << "   \"timings\": [";
 		int32_t function_counter = 1;
 		int32_t expression_counter = 1;
@@ -684,10 +684,12 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOper
 	auto node = make_uniq<QueryProfiler::TreeNode>();
 	node->type = root.type;
 	node->name = root.GetName();
-	node->extra_info = root.ParamsToString();
 	node->depth = depth;
 	ClientConfig &config = ClientConfig::GetConfig(context);
 	node->settings = config.profiler_settings;
+	if (node->settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
+		node->settings.set_setting(TreeNodeSettingsType::EXTRA_INFO, Value(root.ParamsToString()));
+	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
 	auto children = root.GetChildren();
 	for (auto &child : children) {

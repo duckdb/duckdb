@@ -48,9 +48,11 @@ public:
 	TreeNodeSettings(TreeNodeSettings &) = default;
 	TreeNodeSettings& operator=(TreeNodeSettings &) = default;
 
-	void set_setting(TreeNodeSettingsType setting, const Value &value) {metrics[setting] = value;}
+	void set_setting(const TreeNodeSettingsType &setting, const Value &value) {metrics[setting] = value;}
 
-	Value get_setting(TreeNodeSettingsType setting) { return metrics[setting];}
+	Value get_setting(const TreeNodeSettingsType &setting) { return metrics[setting];}
+	Value get_setting(const TreeNodeSettingsType &setting) const { return metrics.at(setting);}
+
 
 	void set_metrics(unordered_map<TreeNodeSettingsType, Value> &n_metrics) {this->metrics = n_metrics;}
 	unordered_map<TreeNodeSettingsType, Value> &get_metrics() {return metrics;}
