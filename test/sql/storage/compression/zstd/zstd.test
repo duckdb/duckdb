@@ -12,5 +12,16 @@ statement ok
 CREATE TABLE test (a VARCHAR);
 
 statement ok
-INSERT INTO test VALUES ('11'), ('11'), ('12'), (NULL)
+INSERT INTO test VALUES ('11'), ('11'), ('12'), (NULL);
+
+statement ok
+checkpoint;
+
+query I
+SELECT * FROM test;
+----
+11
+11
+12
+NULL
 
