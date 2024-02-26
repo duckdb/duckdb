@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
-
+#include "duckdb/execution/operator/persistent/batch_sink_helper.hpp"
+#include "duckdb/execution/operator/persistent/batch_task_helper.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
