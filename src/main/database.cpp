@@ -125,7 +125,8 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 }
 
 unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-                                                                      const string &type, AccessMode access_mode) {
+                                                                      const string &type, AccessMode access_mode,
+                                                                      const idx_t block_alloc_size) {
 	unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extension
@@ -138,16 +139,18 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
 			// use storage extension to create the initial database
 			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-			                                                context, info.name, info, access_mode);
-		} else {
-			attached_database =
-			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+			                                                context, info.name, info, access_mode, block_alloc_size);
+			return attached_database;
 		}
-	} else {
-		// check if this is an in-memory database or not
-		attached_database =
-		    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+
+		attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path,
+		                                                access_mode, block_alloc_size);
+		return attached_database;
 	}
+
+	// check if this is an in-memory database or not
+	attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path,
+	                                                access_mode, block_alloc_size);
 	return attached_database;
 }
 
@@ -160,8 +163,9 @@ void DatabaseInstance::CreateMainDatabase() {
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		initial_database =
-		    db_manager->AttachDatabase(*con.context, info, config.options.database_type, config.options.access_mode);
+		// TODO: this should come from the database config options?
+		initial_database = db_manager->AttachDatabase(*con.context, info, config.options.database_type,
+		                                              config.options.access_mode, DEFAULT_BLOCK_ALLOC_SIZE);
 		con.Commit();
 	}
 

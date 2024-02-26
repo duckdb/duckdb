@@ -43,7 +43,7 @@ public:
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database
 	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, const AttachInfo &info, const string &db_type,
-	                                              AccessMode access_mode);
+	                                              AccessMode access_mode, const idx_t block_alloc_size);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	//! Returns a reference to the system catalog

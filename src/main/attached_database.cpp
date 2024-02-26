@@ -18,9 +18,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
       db(db), type(type) {
 
+	// this database does not have storage - we default to the default block allocation size
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
-		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), false);
+		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), false, DEFAULT_BLOCK_ALLOC_SIZE);
 	}
 
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -29,22 +30,24 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
-                                   AccessMode access_mode)
+                                   AccessMode access_mode, const idx_t block_alloc_size)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
+
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	catalog = make_uniq<DuckCatalog>(*this);
-	// do this after catalog to guarnatee we allow extension to instantionate DuckCatalog causing creation
-	// of the storage
-	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
+	// create the storage after the catalog to guarantee extensions to instantiate the DuckCatalog
+	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY,
+	                                              block_alloc_size);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
                                    ClientContext &context, string name_p, const AttachInfo &info,
-                                   AccessMode access_mode)
+                                   AccessMode access_mode, const idx_t block_alloc_size)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
+
 	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
 	catalog =
@@ -54,8 +57,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	}
 	if (catalog->IsDuckCatalog()) {
 		// DuckCatalog, instantiate storage
-		storage = make_uniq<SingleFileStorageManager>(*this, info.path, access_mode == AccessMode::READ_ONLY);
+		storage = make_uniq<SingleFileStorageManager>(*this, info.path, access_mode == AccessMode::READ_ONLY,
+		                                              block_alloc_size);
 	}
+
 	transaction_manager =
 	    storage_extension.create_transaction_manager(storage_extension.storage_info.get(), *this, *catalog);
 	if (!transaction_manager) {

@@ -22,10 +22,11 @@ class DatabaseInstance;
 class MetadataManager;
 
 //! BlockManager is an abstract representation to manage blocks on DuckDB. When writing or reading blocks, the
-//! BlockManager creates and accesses blocks. The concrete types implements how blocks are stored.
+//! BlockManager creates and accesses blocks. The concrete types implement block storage.
 class BlockManager {
 public:
-	explicit BlockManager(BufferManager &buffer_manager);
+	BlockManager() = delete;
+	BlockManager(BufferManager &buffer_manager, const idx_t block_alloc_size);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
@@ -76,6 +77,9 @@ public:
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);
 
 	MetadataManager &GetMetadataManager();
+	idx_t GetBlockAllocSize() const {
+		return block_alloc_size;
+	}
 
 private:
 	//! The lock for the set of blocks
@@ -84,5 +88,8 @@ private:
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 	//! The metadata manager
 	unique_ptr<MetadataManager> metadata_manager;
+
+	//! TODO
+	const idx_t block_alloc_size;
 };
 } // namespace duckdb

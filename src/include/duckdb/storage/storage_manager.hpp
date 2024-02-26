@@ -38,7 +38,8 @@ public:
 //! database on disk
 class StorageManager {
 public:
-	StorageManager(AttachedDatabase &db, string path, bool read_only);
+	StorageManager() = delete;
+	StorageManager(AttachedDatabase &db, string path, bool read_only, const idx_t block_alloc_size);
 	virtual ~StorageManager();
 
 public:
@@ -88,6 +89,9 @@ protected:
 	//! return nullptr when loading a database
 	bool load_complete = false;
 
+	//! TODO
+	const idx_t block_alloc_size;
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -104,7 +108,8 @@ public:
 //! Stores database in a single file.
 class SingleFileStorageManager : public StorageManager {
 public:
-	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
+	SingleFileStorageManager() = delete;
+	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only, const idx_t block_alloc_size);
 
 	//! The BlockManager to read/store meta information and data in blocks
 	unique_ptr<BlockManager> block_manager;

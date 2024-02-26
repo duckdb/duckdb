@@ -14,7 +14,7 @@ namespace duckdb {
 // Helper
 //===--------------------------------------------------------------------===//
 
-void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, string &db_type,
+void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, string &db_type, idx_t &block_alloc_size,
                   string &unrecognized_option) {
 
 	for (auto &entry : info->options) {
@@ -45,6 +45,10 @@ void ParseOptions(const unique_ptr<AttachInfo> &info, AccessMode &access_mode, s
 			continue;
 		}
 
+		if (entry.first == "block_size") {
+			block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+		}
+
 		// we allow unrecognized options
 		if (unrecognized_option.empty()) {
 			unrecognized_option = entry.first;
@@ -61,8 +65,9 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
 	string db_type;
+	idx_t block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	string unrecognized_option;
-	ParseOptions(info, access_mode, db_type, unrecognized_option);
+	ParseOptions(info, access_mode, db_type, block_alloc_size, unrecognized_option);
 
 	// get the name and path of the database
 	auto &name = info->name;
@@ -98,7 +103,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 
 	// get the database type and attach the database
 	db_manager.GetDatabaseType(context.client, db_type, *info, config, unrecognized_option);
-	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode);
+	auto attached_db = db_manager.AttachDatabase(context.client, *info, db_type, access_mode, block_alloc_size);
 	attached_db->Initialize();
 	return SourceResultType::FINISHED;
 }

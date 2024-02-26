@@ -37,10 +37,11 @@ public:
 	//! Create the built-in system attached database (without storage)
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
 	//! Create an attached database instance with the specified name and storage
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode);
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode,
+	                 const idx_t block_alloc_size);
 	//! Create an attached database instance with the specified storage extension
 	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context, string name,
-	                 const AttachInfo &info, AccessMode access_mode);
+	                 const AttachInfo &info, AccessMode access_mode, const idx_t block_alloc_size);
 	~AttachedDatabase() override;
 
 	void Initialize();

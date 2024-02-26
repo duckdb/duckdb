@@ -1,0 +1,4 @@
+# name: test/sql/attach/test_attach_custom_block_size.test
+# group: [attach]
+
+# TODO

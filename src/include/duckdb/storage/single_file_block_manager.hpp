@@ -34,7 +34,8 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions options);
+	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions options,
+	                       const idx_t block_alloc_size);
 
 	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
 	void CreateNewDatabase();

@@ -16,14 +16,19 @@
 
 namespace duckdb {
 
-StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
-    : db(db), path(std::move(path_p)), read_only(read_only) {
+StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only, const idx_t block_alloc_size)
+    : db(db), path(std::move(path_p)), read_only(read_only), block_alloc_size(block_alloc_size) {
+
+	D_ASSERT(IsPowerOfTwo(block_alloc_size));
+	D_ASSERT(block_alloc_size >= MIN_BLOCK_ALLOC_SIZE);
+
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
-	} else {
-		auto &fs = FileSystem::Get(db);
-		this->path = fs.ExpandPath(path);
+		return;
 	}
+
+	auto &fs = FileSystem::Get(db);
+	this->path = fs.ExpandPath(path);
 }
 
 StorageManager::~StorageManager() {
@@ -113,14 +118,15 @@ public:
 	}
 };
 
-SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
-    : StorageManager(db, std::move(path), read_only) {
+SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only,
+                                                   const idx_t block_alloc_size)
+    : StorageManager(db, std::move(path), read_only, block_alloc_size) {
 }
 
 void SingleFileStorageManager::LoadDatabase() {
 
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
@@ -153,14 +159,14 @@ void SingleFileStorageManager::LoadDatabase() {
 		}
 
 		// initialize the block manager while creating a new db file
-		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
+		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options, block_alloc_size);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 
 	} else {
 		// initialize the block manager while loading the current db file
-		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
+		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options, block_alloc_size);
 		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);

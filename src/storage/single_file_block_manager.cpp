@@ -143,8 +143,9 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 	return T::Read(source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options)
-    : BlockManager(BufferManager::GetBufferManager(db)), db(db), path(std::move(path_p)),
+SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options,
+                                               const idx_t block_alloc_size)
+    : BlockManager(BufferManager::GetBufferManager(db), block_alloc_size), db(db), path(std::move(path_p)),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
                     Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
@@ -193,25 +194,28 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// initialize meta_block and free_list to INVALID_BLOCK because the database file does not contain any actual
 	// content yet
 	DatabaseHeader h1;
+
 	// header 1
 	h1.iteration = 0;
 	h1.meta_block = INVALID_BLOCK;
 	h1.free_list = INVALID_BLOCK;
 	h1.block_count = 0;
-	h1.block_size = Storage::BLOCK_ALLOC_SIZE;
+	h1.block_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
+
 	// header 2
 	DatabaseHeader h2;
 	h2.iteration = 0;
 	h2.meta_block = INVALID_BLOCK;
 	h2.free_list = INVALID_BLOCK;
 	h2.block_count = 0;
-	h2.block_size = Storage::BLOCK_ALLOC_SIZE;
+	h2.block_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
 	// we start with h2 as active_header, this way our initial write will be in h1
@@ -238,9 +242,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	DatabaseHeader h1;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
 	h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
+
 	DatabaseHeader h2;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
+
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
 		// h1 is active header
@@ -282,6 +288,12 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = header.block_count;
+
+	if (GetBlockAllocSize() != header.block_size) {
+		throw InvalidInputException("cannot initialize the same database with a different block size: provided block "
+		                            "size: %llu, file block size: %llu",
+		                            GetBlockAllocSize(), header.block_size);
+	}
 }
 
 void SingleFileBlockManager::LoadFreeList() {
@@ -315,7 +327,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	lock_guard<mutex> lock(block_lock);
 	block_id_t block;
 	if (!free_list.empty()) {
-		// free list is non empty
+		// free list is not empty
 		// take an entry from the free list
 		block = *free_list.begin();
 		// erase the entry from the free list again
