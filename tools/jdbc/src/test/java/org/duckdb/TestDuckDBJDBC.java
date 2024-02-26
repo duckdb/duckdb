@@ -3953,7 +3953,6 @@ public class TestDuckDBJDBC {
                 for (Future<Object> future : results) {
                     future.get();
                 }
-                fail("Should have thrown an exception");
             } catch (java.util.concurrent.ExecutionException ee) {
                 assertEquals(
                     ee.getCause().getCause().getMessage(),

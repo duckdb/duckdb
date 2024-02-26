@@ -70,9 +70,9 @@
 #include "duckdb/core_functions/aggregate/quantile_enum.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/quote_rules.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -408,6 +408,8 @@ const char* EnumUtil::ToChars<AlterType>(AlterType value) {
 		return "ALTER_TABLE_FUNCTION";
 	case AlterType::SET_COMMENT:
 		return "SET_COMMENT";
+	case AlterType::SET_COLUMN_COMMENT:
+		return "SET_COLUMN_COMMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -438,6 +440,9 @@ AlterType EnumUtil::FromString<AlterType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "SET_COMMENT")) {
 		return AlterType::SET_COMMENT;
+	}
+	if (StringUtil::Equals(value, "SET_COLUMN_COMMENT")) {
+		return AlterType::SET_COLUMN_COMMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3461,6 +3466,12 @@ const char* EnumUtil::ToChars<MapInvalidReason>(MapInvalidReason value) {
 		return "NULL_KEY";
 	case MapInvalidReason::DUPLICATE_KEY:
 		return "DUPLICATE_KEY";
+	case MapInvalidReason::NULL_VALUE_LIST:
+		return "NULL_VALUE_LIST";
+	case MapInvalidReason::NOT_ALIGNED:
+		return "NOT_ALIGNED";
+	case MapInvalidReason::INVALID_PARAMS:
+		return "INVALID_PARAMS";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3479,6 +3490,15 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DUPLICATE_KEY")) {
 		return MapInvalidReason::DUPLICATE_KEY;
+	}
+	if (StringUtil::Equals(value, "NULL_VALUE_LIST")) {
+		return MapInvalidReason::NULL_VALUE_LIST;
+	}
+	if (StringUtil::Equals(value, "NOT_ALIGNED")) {
+		return MapInvalidReason::NOT_ALIGNED;
+	}
+	if (StringUtil::Equals(value, "INVALID_PARAMS")) {
+		return MapInvalidReason::INVALID_PARAMS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4033,6 +4053,8 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 		return "VACUUM_INFO";
 	case ParseInfoType::COMMENT_ON_INFO:
 		return "COMMENT_ON_INFO";
+	case ParseInfoType::COMMENT_ON_COLUMN_INFO:
+		return "COMMENT_ON_COLUMN_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4081,6 +4103,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COMMENT_ON_INFO")) {
 		return ParseInfoType::COMMENT_ON_INFO;
+	}
+	if (StringUtil::Equals(value, "COMMENT_ON_COLUMN_INFO")) {
+		return ParseInfoType::COMMENT_ON_COLUMN_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

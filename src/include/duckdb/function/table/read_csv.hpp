@@ -9,15 +9,15 @@
 #pragma once
 
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 
 namespace duckdb {
 class BaseScanner;

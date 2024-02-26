@@ -8,12 +8,23 @@
 namespace duckdb {
 
 struct StandardCharacterReader {
+	static void NextCharacter(const char *sdata, idx_t slen, idx_t &sidx) {
+		sidx++;
+		while (sidx < slen && !LengthFun::IsCharacter(sdata[sidx])) {
+			sidx++;
+		}
+	}
+
 	static char Operation(const char *data, idx_t pos) {
 		return data[pos];
 	}
 };
 
 struct ASCIILCaseReader {
+	static void NextCharacter(const char *sdata, idx_t slen, idx_t &sidx) {
+		sidx++;
+	}
+
 	static char Operation(const char *data, idx_t pos) {
 		return (char)LowerFun::ascii_to_lower_map[(uint8_t)data[pos]];
 	}
@@ -36,7 +47,7 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 			}
 			sidx++;
 		} else if (pchar == UNDERSCORE) {
-			sidx++;
+			READER::NextCharacter(sdata, slen, sidx);
 		} else if (pchar == PERCENTAGE) {
 			pidx++;
 			while (pidx < plen && pdata[pidx] == PERCENTAGE) {
