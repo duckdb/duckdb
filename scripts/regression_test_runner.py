@@ -216,4 +216,7 @@ else:
     print(f"Old timing geometric mean: {time_a}")
     print(f"New timing geometric mean: {time_b}")
 
+# nuke cached benchmark data between runs
+if os.path.isdir("duckdb_benchmark_data"):
+    shutil.rmtree('duckdb_benchmark_data')
 exit(exit_code)
