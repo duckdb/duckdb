@@ -286,6 +286,8 @@ enum class TimestampCastResult : uint8_t;
 
 enum class TransactionType : uint8_t;
 
+enum class TreeNodeSettingsType : uint8_t;
+
 enum class TupleDataPinProperties : uint8_t;
 
 enum class UndoFlags : uint32_t;
@@ -691,6 +693,9 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
+
+template<>
+const char* EnumUtil::ToChars<TreeNodeSettingsType>(TreeNodeSettingsType value);
 
 template<>
 const char* EnumUtil::ToChars<TupleDataPinProperties>(TupleDataPinProperties value);
@@ -1109,6 +1114,9 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
+
+template<>
+TreeNodeSettingsType EnumUtil::FromString<TreeNodeSettingsType>(const char *value);
 
 template<>
 TupleDataPinProperties EnumUtil::FromString<TupleDataPinProperties>(const char *value);
