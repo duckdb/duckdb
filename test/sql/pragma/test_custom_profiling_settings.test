@@ -4,12 +4,12 @@
 
 # enable profiling cannot be called
 statement ok
-PRAGMA custom_profiling_settings='/Users/maia/CLionProjects/duckdb/test/sql/pragma/test.json'
+PRAGMA custom_profiling_settings='__TEST_DIR__/test.json'
 
-#query I
-#SELECT current_setting('custom_profiling_settings');
-#----
-#OPERATOR_CARDINALITY, OPERATOR_TIMING, CPU_TIME
+query I
+SELECT current_setting('custom_profiling_settings');
+----
+OPERATOR_CARDINALITY, OPERATOR_TIMING, CPU_TIME, EXTRA_INFO
 
 statement ok
 PRAGMA enable_profiling = 'json';
