@@ -115,12 +115,10 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 void QueryProfiler::Finalize(TreeNode &node) {
 	for (auto &child : node.children) {
 		Finalize(*child);
-		if (node.type == PhysicalOperatorType::UNION
-		    && node.settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
-			node.settings.set_setting(
-			    TreeNodeSettingsType::OPERATOR_CARDINALITY,
-			    child->settings.get_setting(TreeNodeSettingsType::OPERATOR_CARDINALITY)
-			);
+		if (node.type == PhysicalOperatorType::UNION &&
+		    node.settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+			node.settings.set_setting(TreeNodeSettingsType::OPERATOR_CARDINALITY,
+			                          child->settings.get_setting(TreeNodeSettingsType::OPERATOR_CARDINALITY));
 		}
 	}
 }
@@ -574,7 +572,9 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 		ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
 	}
 	if (settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(settings.get_setting(TreeNodeSettingsType::EXTRA_INFO).ToString()) + "\",\n";
+		ss << string(depth * 3, ' ')
+		   << "   \"extra_info\": \"" +
+		          JSONSanitize(settings.get_setting(TreeNodeSettingsType::EXTRA_INFO).ToString()) + "\",\n";
 		ss << string(depth * 3, ' ') << "   \"timings\": [";
 		int32_t function_counter = 1;
 		int32_t expression_counter = 1;
@@ -586,10 +586,10 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 			}
 			for (auto &expr_timer : expr_executor->roots) {
 				double time = expr_timer->sample_tuples_count == 0
-								  ? 0
-								  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
+				                  ? 0
+				                  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
 				PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name, time,
-						 expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
+				         expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
 				// Extract all functions inside the tree
 				ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
 			}

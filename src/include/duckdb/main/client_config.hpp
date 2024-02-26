@@ -23,19 +23,13 @@ class PreparedStatementData;
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
 
-
-enum class TreeNodeSettingsType : uint8_t {
-	CPU_TIME,
-	EXTRA_INFO,
-	OPERATOR_CARDINALITY,
-	OPERATOR_TIMING
-};
+enum class TreeNodeSettingsType : uint8_t { CPU_TIME, EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING };
 
 const unordered_map<TreeNodeSettingsType, Value> default_metrics = {
-	{TreeNodeSettingsType::CPU_TIME, Value()},
-	{TreeNodeSettingsType::EXTRA_INFO, Value()},
-	{TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
-	{TreeNodeSettingsType::OPERATOR_TIMING, Value()},
+    {TreeNodeSettingsType::CPU_TIME, Value()},
+    {TreeNodeSettingsType::EXTRA_INFO, Value()},
+    {TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
+    {TreeNodeSettingsType::OPERATOR_TIMING, Value()},
 };
 
 class TreeNodeSettings {
@@ -46,23 +40,34 @@ private:
 public:
 	TreeNodeSettings() = default;
 	TreeNodeSettings(TreeNodeSettings &) = default;
-	TreeNodeSettings& operator=(TreeNodeSettings &) = default;
+	TreeNodeSettings &operator=(TreeNodeSettings &) = default;
 
-	void set_setting(const TreeNodeSettingsType &setting, const Value &value) {metrics[setting] = value;}
+	void set_setting(const TreeNodeSettingsType &setting, const Value &value) {
+		metrics[setting] = value;
+	}
 
-	Value get_setting(const TreeNodeSettingsType &setting) { return metrics[setting];}
-	Value get_setting(const TreeNodeSettingsType &setting) const { return metrics.at(setting);}
+	Value get_setting(const TreeNodeSettingsType &setting) {
+		return metrics[setting];
+	}
+	Value get_setting(const TreeNodeSettingsType &setting) const {
+		return metrics.at(setting);
+	}
 
-
-	void set_metrics(unordered_map<TreeNodeSettingsType, Value> &n_metrics) {this->metrics = n_metrics;}
-	unordered_map<TreeNodeSettingsType, Value> &get_metrics() {return metrics;}
+	void set_metrics(unordered_map<TreeNodeSettingsType, Value> &n_metrics) {
+		this->metrics = n_metrics;
+	}
+	unordered_map<TreeNodeSettingsType, Value> &get_metrics() {
+		return metrics;
+	}
 
 	void reset_metrics() {
 		metrics.clear();
 		metrics = default_metrics;
 	}
 
-	bool setting_enabled(const TreeNodeSettingsType setting) const {return metrics.find(setting) != metrics.end();}
+	bool setting_enabled(const TreeNodeSettingsType setting) const {
+		return metrics.find(setting) != metrics.end();
+	}
 };
 
 struct ClientConfig {

@@ -269,7 +269,8 @@ struct EnableProfilingSetting {
 
 struct CustomProfilingSettings {
 	static constexpr const char *Name = "custom_profiling_settings";
-	static constexpr const char *Description = "Set custom profiling statistics in a JSON file to be included in the output";
+	static constexpr const char *Description =
+	    "Set custom profiling statistics in a JSON file to be included in the output";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
