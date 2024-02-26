@@ -207,7 +207,7 @@ public:
 };
 
 struct BatchMergeTask {
-	BatchMergeTask(idx_t start_index) : start_index(start_index), end_index(0), total_count(0) {
+	explicit BatchMergeTask(idx_t start_index) : start_index(start_index), end_index(0), total_count(0) {
 	}
 
 	idx_t start_index;
