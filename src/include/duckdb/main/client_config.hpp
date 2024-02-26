@@ -26,18 +26,22 @@ typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context
 
 enum class TreeNodeSettingsType : uint8_t {
 	CPU_TIME,
+	EXTRA_INFO,
 	OPERATOR_CARDINALITY,
 	OPERATOR_TIMING
+};
+
+const unordered_map<TreeNodeSettingsType, Value> default_metrics = {
+	{TreeNodeSettingsType::CPU_TIME, Value()},
+	{TreeNodeSettingsType::EXTRA_INFO, Value()},
+	{TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
+	{TreeNodeSettingsType::OPERATOR_TIMING, Value()},
 };
 
 class TreeNodeSettings {
 private:
 	// map of metrics with their values; only enabled metrics are present in the map
-	unordered_map<TreeNodeSettingsType, Value> metrics = {
-	    {TreeNodeSettingsType::CPU_TIME, Value()},
-	    {TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
-	    {TreeNodeSettingsType::OPERATOR_TIMING, Value()},
-	};
+	unordered_map<TreeNodeSettingsType, Value> metrics = default_metrics;
 
 public:
 	TreeNodeSettings() = default;
@@ -53,11 +57,7 @@ public:
 
 	void reset_metrics() {
 		metrics.clear();
-		metrics = {
-		    {TreeNodeSettingsType::CPU_TIME, Value()},
-		    {TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
-		    {TreeNodeSettingsType::OPERATOR_TIMING, Value()},
-		};
+		metrics = default_metrics;
 	}
 
 	bool setting_enabled(const TreeNodeSettingsType setting) const {return metrics.find(setting) != metrics.end();}

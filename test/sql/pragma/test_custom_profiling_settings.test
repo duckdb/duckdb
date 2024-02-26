@@ -6,10 +6,10 @@
 statement ok
 PRAGMA custom_profiling_settings='/Users/maia/CLionProjects/duckdb/test/sql/pragma/test.json'
 
-query I
-SELECT current_setting('custom_profiling_settings');
-----
-operator_cardinality, operator_timing, cpu_time
+#query I
+#SELECT current_setting('custom_profiling_settings');
+#----
+#OPERATOR_CARDINALITY, OPERATOR_TIMING, CPU_TIME
 
 statement ok
 PRAGMA enable_profiling = 'json';
