@@ -25,6 +25,11 @@ static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Express
 			}
 			break;
 		}
+		case ExpressionType::CONJUNCTION_AND:
+		case ExpressionType::CONJUNCTION_OR: {
+			filter_is_on_partition = false;
+			return;
+		}
 		default:
 			break;
 		}
@@ -36,8 +41,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = op->Cast<LogicalWindow>();
 	// go into expressions, then look into the partitions.
-	// if the filter applies ONLY to the partition (and is not some arithmetic expression) then you can push the filter
+	// if the filter applies to a partition in each window expression then you can push the filter
 	// into the children.
+	auto pushdown = FilterPushdown(optimizer);
+	vector<int8_t> filters_to_pushdown;
+	filters_to_pushdown.reserve(filters.size());
+	for (idx_t i = 0; i < filters.size(); i++) {
+		filters_to_pushdown.push_back(0);
+	}
+	// 1. Check every window expression
 	for (auto &expr : window.expressions) {
 		if (expr->expression_class != ExpressionClass::BOUND_WINDOW) {
 			continue;
@@ -45,8 +57,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		auto &window_expr = expr->Cast<BoundWindowExpression>();
 		auto &partitions = window_expr.partitions;
 		column_binding_set_t parition_bindings;
+		// 2. Get the binding information of the partitions
 		for (auto &partition_expr : partitions) {
 			switch (partition_expr->type) {
+			// TODO: Add expressions for function expressions like FLOOR, CEIL etc.
 			case ExpressionType::BOUND_COLUMN_REF: {
 				auto &partition_col = partition_expr->Cast<BoundColumnRefExpression>();
 				parition_bindings.insert(partition_col.binding);
@@ -56,21 +70,36 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 				break;
 			}
 		}
-		vector<unique_ptr<Filter>> leftover_filters;
-		for (auto &filter : filters) {
-			// check if a filter is on the partition
-			// create new filter pushdown with the filter,
-			// push into children
-			if (FilterIsOnPartition(parition_bindings, *filter->filter)) {
-				auto pushdown = FilterPushdown(optimizer);
-				pushdown.filters.push_back(std::move(filter));
-				op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+
+		// 3. Check if a filter is on one of the partitions
+		//    in the event there are multiple window functions, a fiter can only be pushed down
+		//    if each window function is partitioned on the filtered value
+		//    if a filter is not on a partition fiters_to_parition[filter_index] = -1
+		//    which means the filter will no longer be pushed down, even if the filter is on a partition.
+		//    tpcds q47 caught this
+		for (idx_t i = 0; i < filters.size(); i++) {
+			auto &filter = filters.at(i);
+			if (FilterIsOnPartition(parition_bindings, *filter->filter) && filters_to_pushdown[i] >= 0) {
+				filters_to_pushdown[i] = 1;
 				continue;
 			}
-			leftover_filters.push_back(std::move(filter));
+			filters_to_pushdown[i] = -1;
 		}
-		filters = std::move(leftover_filters);
 	}
+	// push the new filters into the child.
+	vector<unique_ptr<Filter>> leftover_filters;
+	for (idx_t i = 0; i < filters.size(); i++) {
+		if (filters_to_pushdown[i] == 1) {
+			pushdown.filters.push_back(std::move(filters.at(i)));
+			continue;
+		}
+		leftover_filters.push_back(std::move(filters.at(i)));
+	}
+	if (!pushdown.filters.empty()) {
+		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+	}
+	filters = std::move(leftover_filters);
+
 	return FinishPushdown(std::move(op));
 }
 
