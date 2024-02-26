@@ -3315,6 +3315,7 @@ row:		qualified_row							{ $$ = $1;}
 			| '(' expr_list ',' a_expr ')'			{ $$ = lappend($2, $4); }
 		;
 
+
 dict_arg:
 	ColIdOrString ':' a_expr						{
 		PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
@@ -3328,7 +3329,7 @@ dict_arg:
 dict_arguments:
 	dict_arg						{ $$ = list_make1($1); }
 	| dict_arguments ',' dict_arg	{ $$ = lappend($1, $3); }
-
+    ;
 
 dict_arguments_opt_comma:
 			dict_arguments								{ $$ = $1; }
