@@ -2,7 +2,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -97,6 +97,9 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 	full_buffer_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters + ") ORDER BY ALL");
 	if (!full_buffer_res->HasError()) {
 		ground_truth = &full_buffer_res->Collection();
+	}
+	if (!ground_truth) {
+		return true;
 	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
 	idx_t min_buffer_size = conn.context->client_data->debug_max_line_length + 3;

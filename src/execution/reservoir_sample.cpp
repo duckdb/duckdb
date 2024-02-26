@@ -4,6 +4,13 @@
 
 namespace duckdb {
 
+void BlockingSample::Serialize(Serializer &serializer) const {
+}
+
+unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
+	return nullptr;
+}
+
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_count(sample_count), reservoir_initialized(false) {
 }

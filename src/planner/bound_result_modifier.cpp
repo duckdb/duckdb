@@ -1,4 +1,5 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
 
@@ -90,6 +91,29 @@ bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
 		return false;
 	}
 	return BoundOrderModifier::Equals(*left, *right);
+}
+
+bool BoundOrderModifier::Simplify(const vector<unique_ptr<Expression>> &groups) {
+	// for each ORDER BY - check if it is actually necessary
+	// expressions that are in the groups do not need to be ORDERED BY
+	// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
+	// similarly, we only need to ORDER BY each aggregate once
+	expression_set_t seen_expressions;
+	for (auto &target : groups) {
+		seen_expressions.insert(*target);
+	}
+	vector<BoundOrderByNode> new_order_nodes;
+	for (auto &order_node : orders) {
+		if (seen_expressions.find(*order_node.expression) != seen_expressions.end()) {
+			// we do not need to order by this node
+			continue;
+		}
+		seen_expressions.insert(*order_node.expression);
+		new_order_nodes.push_back(std::move(order_node));
+	}
+	orders.swap(new_order_nodes);
+
+	return orders.empty();
 }
 
 BoundLimitModifier::BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {

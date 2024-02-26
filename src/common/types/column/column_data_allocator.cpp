@@ -65,8 +65,9 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = block_size;
-	auto pin = alloc.buffer_manager->Allocate(block_size, false, &data.handle);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, block_size, false, &data.handle);
 	blocks.push_back(std::move(data));
+	allocated_size += block_size;
 	return pin;
 }
 
@@ -83,6 +84,7 @@ void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	data.capacity = allocation_amount;
 	data.handle = nullptr;
 	blocks.push_back(std::move(data));
+	allocated_size += allocation_amount;
 }
 
 void ColumnDataAllocator::AssignPointer(uint32_t &block_id, uint32_t &offset, data_ptr_t pointer) {

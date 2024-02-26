@@ -6,6 +6,7 @@ using duckdb::AppenderWrapper;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::ErrorData;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::string_t;
@@ -27,7 +28,8 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
 	try {
 		wrapper->appender = duckdb::make_uniq<Appender>(*conn, schema, table);
 	} catch (std::exception &ex) {
-		wrapper->error = ex.what();
+		ErrorData error(ex);
+		wrapper->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		wrapper->error = "Unknown create appender error";
@@ -61,7 +63,8 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	try {
 		function(*wrapper->appender);
 	} catch (std::exception &ex) {
-		wrapper->error = ex.what();
+		ErrorData error(ex);
+		wrapper->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) { // LCOV_EXCL_START
 		wrapper->error = "Unknown error";
@@ -98,7 +101,8 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	try {
 		appender_instance->appender->Append<T>(value);
 	} catch (std::exception &ex) {
-		appender_instance->error = ex.what();
+		ErrorData error(ex);
+		appender_instance->error = error.RawMessage();
 		return DuckDBError;
 	} catch (...) {
 		return DuckDBError;
@@ -206,6 +210,32 @@ duckdb_state duckdb_appender_flush(duckdb_appender appender) {
 
 duckdb_state duckdb_appender_close(duckdb_appender appender) {
 	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Close(); });
+}
+
+idx_t duckdb_appender_column_count(duckdb_appender appender) {
+	if (!appender) {
+		return 0;
+	}
+
+	auto wrapper = reinterpret_cast<AppenderWrapper *>(appender);
+	if (!wrapper->appender) {
+		return 0;
+	}
+
+	return wrapper->appender->GetTypes().size();
+}
+
+duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx) {
+	if (!appender || col_idx >= duckdb_appender_column_count(appender)) {
+		return nullptr;
+	}
+
+	auto wrapper = reinterpret_cast<AppenderWrapper *>(appender);
+	if (!wrapper->appender) {
+		return nullptr;
+	}
+
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(wrapper->appender->GetTypes()[col_idx]));
 }
 
 duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk) {

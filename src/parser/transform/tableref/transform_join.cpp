@@ -2,6 +2,9 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
@@ -54,8 +57,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr &r
 	default:
 		break;
 	}
-	result->query_location = root.location;
-
+	SetQueryLocation(*result, root.location);
 	if (root.usingClause && root.usingClause->length > 0) {
 		// usingClause is a list of strings
 		for (auto node = root.usingClause->head; node != nullptr; node = node->next) {
@@ -71,6 +73,19 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr &r
 		result->ref_type = JoinRefType::CROSS;
 	}
 	result->condition = TransformExpression(root.quals);
+	if (root.alias) {
+		// join with an alias - wrap it in a subquery
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<StarExpression>());
+		select_node->from_table = std::move(result);
+		auto select = make_uniq<SelectStatement>();
+		select->node = std::move(select_node);
+		auto subquery = make_uniq<SubqueryRef>(std::move(select));
+		SetQueryLocation(*subquery, root.location);
+		// apply the alias to that subquery
+		subquery->alias = TransformAlias(root.alias, subquery->column_name_alias);
+		return std::move(subquery);
+	}
 	return std::move(result);
 }
 

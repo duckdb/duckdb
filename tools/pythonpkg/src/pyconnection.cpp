@@ -379,8 +379,16 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const string &que
 	return shared_from_this();
 }
 
+static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult &pending_query) {
+	if (pending_query.AllowStreamResult()) {
+		return PendingQueryResult::IsFinishedOrBlocked;
+	}
+	return PendingQueryResult::IsFinished;
+}
+
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
+	auto is_finished = FinishedCondition(pending_query);
 	do {
 		execution_result = pending_query.ExecuteTask();
 		{
@@ -389,7 +397,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 				throw std::runtime_error("Query interrupted");
 			}
 		}
-	} while (!PendingQueryResult::IsFinished(execution_result));
+	} while (!is_finished(execution_result));
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
@@ -611,6 +619,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		RegisterArrowObject(arrow_object, name);
 	} else if (DuckDBPyRelation::IsRelation(python_object)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
+		if (!pyrel->CanBeRegisteredBy(*connection)) {
+			throw InvalidInputException(
+			    "The relation you are attempting to register was not made from this connection");
+		}
 		pyrel->CreateView(name, true);
 	} else {
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));

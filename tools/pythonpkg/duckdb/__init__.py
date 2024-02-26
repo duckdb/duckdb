@@ -273,11 +273,9 @@ _exported_symbols.extend([
 from .duckdb import (
     Error,
     DataError,
-    CastException,
     ConversionException,
     OutOfRangeException,
     TypeMismatchException,
-    ValueOutOfRangeException,
     FatalException,
     IntegrityError,
     ConstraintException,
@@ -302,17 +300,14 @@ from .duckdb import (
     ParserException,
     SyntaxException,
     SequenceException,
-    StandardException,
     Warning
 )
 _exported_symbols.extend([
     "Error",
     "DataError",
-    "CastException",
     "ConversionException",
     "OutOfRangeException",
     "TypeMismatchException",
-    "ValueOutOfRangeException",
     "FatalException",
     "IntegrityError",
     "ConstraintException",
@@ -337,7 +332,6 @@ _exported_symbols.extend([
     "ParserException",
     "SyntaxException",
     "SequenceException",
-    "StandardException",
     "Warning"
 ])
 

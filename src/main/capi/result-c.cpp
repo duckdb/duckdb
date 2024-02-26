@@ -54,6 +54,9 @@ struct CBlobConverter {
 struct CTimestampMsConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
+		if (!Timestamp::IsFinite(input)) {
+			return input;
+		}
 		return Timestamp::FromEpochMs(input.value);
 	}
 };
@@ -61,6 +64,9 @@ struct CTimestampMsConverter : public CBaseConverter {
 struct CTimestampNsConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
+		if (!Timestamp::IsFinite(input)) {
+			return input;
+		}
 		return Timestamp::FromEpochNanoSeconds(input.value);
 	}
 };
@@ -68,6 +74,9 @@ struct CTimestampNsConverter : public CBaseConverter {
 struct CTimestampSecConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
+		if (!Timestamp::IsFinite(input)) {
+			return input;
+		}
 		return Timestamp::FromEpochSeconds(input.value);
 	}
 };
@@ -483,7 +492,7 @@ bool *duckdb_nullmask_data(duckdb_result *result, idx_t col) {
 }
 
 const char *duckdb_result_error(duckdb_result *result) {
-	if (!result) {
+	if (!result || !result->internal_data) {
 		return nullptr;
 	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));

@@ -132,8 +132,7 @@ struct RLECompressState : public CompressionState {
 	static idx_t MaxRLECount() {
 		auto entry_size = sizeof(T) + sizeof(rle_count_t);
 		auto entry_count = (Storage::BLOCK_SIZE - RLEConstants::RLE_HEADER_SIZE) / entry_size;
-		auto max_vector_count = entry_count / STANDARD_VECTOR_SIZE;
-		return max_vector_count * STANDARD_VECTOR_SIZE;
+		return entry_count;
 	}
 
 	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p)
@@ -228,7 +227,7 @@ unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpoi
 
 template <class T, bool WRITE_STATISTICS>
 void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
+	auto &state = state_p.Cast<RLECompressState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 
@@ -237,7 +236,7 @@ void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 
 template <class T, bool WRITE_STATISTICS>
 void RLEFinalizeCompress(CompressionState &state_p) {
-	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
+	auto &state = state_p.Cast<RLECompressState<T, WRITE_STATISTICS>>();
 	state.Finalize();
 }
 

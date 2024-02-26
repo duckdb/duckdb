@@ -196,7 +196,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	map_struct1.push_back(make_pair("value", Value("🦆🦆🦆🦆🦆🦆")));
 	child_list_t<Value> map_struct2;
 	map_struct2.push_back(make_pair("key", Value("key2")));
-	map_struct2.push_back(make_pair("key", Value("goose")));
+	map_struct2.push_back(make_pair("value", Value("goose")));
 
 	vector<Value> map_values;
 	map_values.push_back(Value::STRUCT(map_struct1));

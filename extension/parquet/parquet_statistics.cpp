@@ -4,10 +4,12 @@
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
 #include "string_column_reader.hpp"
+#include "struct_column_reader.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #endif
 
 namespace duckdb {
@@ -206,11 +208,12 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	}
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ: {
+		timestamp_t timestamp_value;
 		if (schema_ele.type == Type::INT96) {
 			if (stats.size() != sizeof(Int96)) {
 				throw InternalException("Incorrect stats size for type TIMESTAMP");
 			}
-			return Value::TIMESTAMP(ImpalaTimestampToTimestamp(Load<Int96>(stats_data)));
+			timestamp_value = ImpalaTimestampToTimestamp(Load<Int96>(stats_data));
 		} else {
 			D_ASSERT(schema_ele.type == Type::INT64);
 			if (stats.size() != sizeof(int64_t)) {
@@ -220,20 +223,24 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
 				// logical type
 				if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
-					return Value::TIMESTAMPMS(timestamp_t(val));
+					timestamp_value = Timestamp::FromEpochMs(val);
 				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-					return Value::TIMESTAMPNS(timestamp_t(val));
+					timestamp_value = Timestamp::FromEpochNanoSeconds(val);
 				} else if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS) {
-					return Value::TIMESTAMP(timestamp_t(val));
+					timestamp_value = timestamp_t(val);
 				} else {
 					throw InternalException("Timestamp logicalType is set but unit is not defined");
 				}
-			}
-			if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
-				return Value::TIMESTAMPMS(timestamp_t(val));
+			} else if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
+				timestamp_value = Timestamp::FromEpochMs(val);
 			} else {
-				return Value::TIMESTAMP(timestamp_t(val));
+				timestamp_value = timestamp_t(val);
 			}
+		}
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+			return Value::TIMESTAMPTZ(timestamp_value);
+		} else {
+			return Value::TIMESTAMP(timestamp_value);
 		}
 	}
 	default:
@@ -241,15 +248,47 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	}
 }
 
-unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const SchemaElement &s_ele,
-                                                                             const LogicalType &type,
-                                                                             const ColumnChunk &column_chunk) {
+unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ColumnReader &reader,
+                                                                             const vector<ColumnChunk> &columns) {
+
+	// Not supported types
+	if (reader.Type().id() == LogicalTypeId::ARRAY || reader.Type().id() == LogicalTypeId::MAP ||
+	    reader.Type().id() == LogicalTypeId::LIST) {
+		return nullptr;
+	}
+
+	unique_ptr<BaseStatistics> row_group_stats;
+
+	// Structs are handled differently (they dont have stats)
+	if (reader.Type().id() == LogicalTypeId::STRUCT) {
+		auto struct_stats = StructStats::CreateUnknown(reader.Type());
+		auto &struct_reader = reader.Cast<StructColumnReader>();
+		// Recurse into child readers
+		for (idx_t i = 0; i < struct_reader.child_readers.size(); i++) {
+			auto &child_reader = *struct_reader.child_readers[i];
+			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_reader, columns);
+			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
+		}
+		row_group_stats = struct_stats.ToUnique();
+
+		// null count is generic
+		if (row_group_stats) {
+			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+		}
+		return row_group_stats;
+	}
+
+	// Otherwise, its a standard column with stats
+
+	auto &column_chunk = columns[reader.FileIdx()];
 	if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
 		// no stats present for row group
 		return nullptr;
 	}
 	auto &parquet_stats = column_chunk.meta_data.statistics;
-	unique_ptr<BaseStatistics> row_group_stats;
+
+	auto &type = reader.Type();
+	auto &s_ele = reader.Schema();
 
 	switch (type.id()) {
 	case LogicalTypeId::UTINYINT:
@@ -264,7 +303,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -302,13 +343,11 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	} // end of type switch
 
 	// null count is generic
-	if (!row_group_stats) {
-		// if stats are missing from any row group we know squat
-		return nullptr;
-	}
-	row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
-	if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
-		row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+	if (row_group_stats) {
+		row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
+		if (parquet_stats.__isset.null_count && parquet_stats.null_count == 0) {
+			row_group_stats->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		}
 	}
 	return row_group_stats;
 }

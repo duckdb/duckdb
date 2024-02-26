@@ -63,12 +63,20 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 	}
 }
 
-DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, string name_p, bool is_internal)
-    : SchemaCatalogEntry(catalog, std::move(name_p), is_internal),
-      tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)), indexes(catalog), table_functions(catalog),
-      copy_functions(catalog), pragma_functions(catalog),
+DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
+    : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
+      indexes(catalog), table_functions(catalog), copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, make_uniq<DefaultFunctionGenerator>(catalog, *this)), sequences(catalog), collations(catalog),
       types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
+}
+
+unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
+	auto info_copy = GetInfo();
+	auto &cast_info = info_copy->Cast<CreateSchemaInfo>();
+
+	auto result = make_uniq<DuckSchemaEntry>(catalog, cast_info);
+
+	return std::move(result);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
@@ -97,7 +105,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 	if (!set.CreateEntry(transaction, entry_name, std::move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
-			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
+			throw CatalogException::EntryAlreadyExists(entry_type, entry_name);
 		} else {
 			return nullptr;
 		}
@@ -239,6 +247,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransact
 
 void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
 	CatalogType type = info.GetCatalogType();
+
 	auto &set = GetCatalogSet(type);
 	auto transaction = GetCatalogTransaction(context);
 	if (info.type == AlterType::CHANGE_OWNERSHIP) {
@@ -248,7 +257,7 @@ void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
 	} else {
 		string name = info.name;
 		if (!set.AlterEntry(transaction, name, info)) {
-			throw CatalogException("Entry with name \"%s\" does not exist!", name);
+			throw CatalogException::MissingEntry(type, name, string());
 		}
 	}
 }

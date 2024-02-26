@@ -6,8 +6,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/limits.hpp"
-
 #include <cstring>
 #include <cctype>
 #include <algorithm>

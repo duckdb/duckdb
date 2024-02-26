@@ -17,7 +17,7 @@ void dbgen(DuckDB &db) {
 		string data_file_name = "third_party/imdb/data/"+table_name+".csv.gz";
 		auto file_system = FileSystem::CreateLocal();
 		if (!file_system->FileExists(data_file_name)) {
-			throw Exception("IMDB data file missing, try `make imdb` to download.");
+			throw InvalidInputException("IMDB data file missing, try `make imdb` to download.");
 		}
 		con.Query("COPY "+table_name+" FROM '"+data_file_name+"' DELIMITER ',' ESCAPE '\\';");
 	}

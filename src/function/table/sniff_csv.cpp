@@ -1,12 +1,12 @@
 #include "duckdb/function/built_in_functions.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_file_handle.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
@@ -112,7 +112,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
 	auto &fs = duckdb::FileSystem::GetFileSystem(context);
 
-	if (fs.HasGlob(data.path)) {
+	if (data.path.rfind("http://", 0) != 0 && data.path.rfind("https://", 0) != 0 && fs.HasGlob(data.path)) {
 		throw NotImplementedException("sniff_csv does not operate on globs yet");
 	}
 

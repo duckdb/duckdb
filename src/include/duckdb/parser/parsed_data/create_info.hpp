@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -42,6 +43,8 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+	//! User provided comment
+	Value comment;
 
 public:
 	void Serialize(Serializer &serializer) const override;

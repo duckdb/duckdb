@@ -1,5 +1,5 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/string.hpp"
 
@@ -9,7 +9,8 @@ struct TryCastFloatingOperator {
 	static bool Operation(string_t input) {
 		T result;
 		string error_message;
-		return OP::Operation(input, result, &error_message);
+		CastParameters parameters(false, &error_message);
+		return OP::Operation(input, result, parameters);
 	}
 };
 
@@ -184,6 +185,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
+	idx_t min_errors = NumericLimits<idx_t>::Maximum();
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate_cc : candidates) {
@@ -204,7 +206,7 @@ void CSVSniffer::DetectTypes() {
 		// Parse chunk and read csv with info candidate
 		auto &tuples = candidate->ParseChunk();
 		idx_t row_idx = 0;
-		if (tuples.NumberOfRows() > 1 &&
+		if (tuples.number_of_rows > 1 &&
 		    (!options.dialect_options.header.IsSetByUser() ||
 		     (options.dialect_options.header.IsSetByUser() && options.dialect_options.header.GetValue()))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
@@ -212,7 +214,7 @@ void CSVSniffer::DetectTypes() {
 		}
 		// First line where we start our type detection
 		const idx_t start_idx_detection = row_idx;
-		for (; row_idx < tuples.NumberOfRows(); row_idx++) {
+		for (; row_idx < tuples.number_of_rows; row_idx++) {
 			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
 				auto &col_type_candidates = info_sql_types_candidates[col_idx];
 				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
@@ -268,7 +270,9 @@ void CSVSniffer::DetectTypes() {
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
-		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
+		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7) &&
+		    (!options.ignore_errors || candidate->error_handler->errors.size() < min_errors)) {
+			min_errors = candidate->error_handler->errors.size();
 			best_header_row.clear();
 			// we have a new best_options candidate
 			best_candidate = std::move(candidate);
@@ -277,17 +281,19 @@ void CSVSniffer::DetectTypes() {
 			for (auto &format_candidate : format_candidates) {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
-			for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
-				best_header_row.emplace_back(tuples.GetValue(0, col_idx));
+			if (tuples.number_of_rows > 0) {
+				for (idx_t col_idx = 0; col_idx < tuples.number_of_columns; col_idx++) {
+					best_header_row.emplace_back(tuples.GetValue(0, col_idx));
+				}
 			}
 		}
 	}
 	if (!best_candidate) {
 		auto error = CSVError::SniffingError(options.file_path);
-		error_handler->Error(error);
+		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.
-	D_ASSERT(best_candidate && !best_format_candidates.empty() && !best_header_row.empty());
+	D_ASSERT(best_candidate && !best_format_candidates.empty());
 }
 
 } // namespace duckdb

@@ -157,6 +157,11 @@ static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableF
 	auto result = make_uniq<RangeDateTimeBindData>();
 	auto &inputs = input.inputs;
 	D_ASSERT(inputs.size() == 3);
+	for (idx_t i = 0; i < inputs.size(); ++i) {
+		if (inputs[i].IsNull()) {
+			throw BinderException("RANGE with NULL argument is not supported");
+		}
+	}
 	result->start = inputs[0].GetValue<timestamp_t>();
 	result->end = inputs[1].GetValue<timestamp_t>();
 	result->increment = inputs[2].GetValue<interval_t>();
@@ -221,9 +226,6 @@ static void RangeDateTimeFunction(ClientContext &context, TableFunctionInput &da
 	idx_t size = 0;
 	auto data = FlatVector::GetData<timestamp_t>(output.data[0]);
 	while (true) {
-		data[size++] = state.current_state;
-		state.current_state =
-		    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, bind_data.increment);
 		if (bind_data.Finished(state.current_state)) {
 			state.finished = true;
 			break;
@@ -231,6 +233,9 @@ static void RangeDateTimeFunction(ClientContext &context, TableFunctionInput &da
 		if (size >= STANDARD_VECTOR_SIZE) {
 			break;
 		}
+		data[size++] = state.current_state;
+		state.current_state =
+		    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, bind_data.increment);
 	}
 	output.SetCardinality(size);
 }
@@ -275,6 +280,8 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	UnnestTableFunction::RegisterFunction(*this);
 	RepeatRowTableFunction::RegisterFunction(*this);
 	CSVSnifferFunction::RegisterFunction(*this);
+	ReadBlobFunction::RegisterFunction(*this);
+	ReadTextFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb

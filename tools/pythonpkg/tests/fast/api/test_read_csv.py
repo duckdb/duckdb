@@ -423,7 +423,7 @@ class TestReadCSV(object):
         res = con.sql("select * from rel order by all").fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
 
-    def test_read_csv_combined(self):
+    def test_read_csv_combined(self, duckdb_cursor):
         CSV_FILE = TestFile('stress_test.csv')
         COLUMNS = {
             'result': 'VARCHAR',
@@ -443,7 +443,7 @@ class TestReadCSV(object):
         )
         res = rel.fetchall()
 
-        rel2 = duckdb.sql(rel.sql_query())
+        rel2 = duckdb_cursor.sql(rel.sql_query())
         res2 = rel2.fetchall()
 
         # Assert that the results are the same

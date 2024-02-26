@@ -121,13 +121,13 @@ SELECT part_col, value_col, value2_col FROM parquet_scan('s3://test-bucket/parti
 statement error
 COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
 ----
-IO Error: Directory
+Directory
 
 # a file already exist and, OVERWRITE_OR_IGNORE is set to false, throw error
 statement error
 COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col, OVERWRITE_OR_IGNORE FALSE);
 ----
-IO Error: Directory
+Directory
 
 # Trailing slash ist auch gut!
 statement ok

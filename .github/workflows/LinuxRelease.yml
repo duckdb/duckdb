@@ -83,7 +83,7 @@ jobs:
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       run: |
         make
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*"
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution --order lex --list
 
     - name: Tools Tests
       shell: bash
@@ -135,6 +135,7 @@ jobs:
      FORCE_WARN_UNUSED: 1
      BUILD_ODBC: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+     DUCKDB_PLATFORM: linux_arm64
 
    steps:
      - uses: actions/checkout@v3
@@ -239,6 +240,7 @@ jobs:
         with:
           vcpkg_target_triplet: arm64-linux
           deploy_as: linux_arm64
+          duckdb_arch: linux_arm64
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
@@ -338,7 +340,6 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     env:
-      BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1

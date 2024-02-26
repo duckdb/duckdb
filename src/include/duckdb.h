@@ -9,7 +9,7 @@
 
 #pragma once
 
-// duplicate of duckdb/main/winapi.hpp
+//! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_API
 #ifdef _WIN32
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
@@ -22,7 +22,7 @@
 #endif
 #endif
 
-// duplicate of duckdb/main/winapi.hpp
+//! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
@@ -35,10 +35,10 @@
 #endif
 #endif
 
-// API versions
-// if no explicit API version is defined, the latest API version is used
-// Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
-// These will not be supported long-term, and will be removed in future versions.
+//! API versions
+//! If no explicit API version is defined, the latest API version is used.
+//! Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
+//! These will not be supported long-term, and will be removed in future versions.
 #ifndef DUCKDB_API_0_3_1
 #define DUCKDB_API_0_3_1 1
 #endif
@@ -62,84 +62,149 @@ extern "C" {
 #endif
 
 //===--------------------------------------------------------------------===//
-// Type Information
+// Enums
 //===--------------------------------------------------------------------===//
-typedef uint64_t idx_t;
-
+// WARNING: the numbers of these enums should not be changed, as changing the numbers breaks ABI compatibility
+// Always add enums at the END of the enum
+//! An enum over DuckDB's internal types.
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
 	// bool
-	DUCKDB_TYPE_BOOLEAN,
+	DUCKDB_TYPE_BOOLEAN = 1,
 	// int8_t
-	DUCKDB_TYPE_TINYINT,
+	DUCKDB_TYPE_TINYINT = 2,
 	// int16_t
-	DUCKDB_TYPE_SMALLINT,
+	DUCKDB_TYPE_SMALLINT = 3,
 	// int32_t
-	DUCKDB_TYPE_INTEGER,
+	DUCKDB_TYPE_INTEGER = 4,
 	// int64_t
-	DUCKDB_TYPE_BIGINT,
+	DUCKDB_TYPE_BIGINT = 5,
 	// uint8_t
-	DUCKDB_TYPE_UTINYINT,
+	DUCKDB_TYPE_UTINYINT = 6,
 	// uint16_t
-	DUCKDB_TYPE_USMALLINT,
+	DUCKDB_TYPE_USMALLINT = 7,
 	// uint32_t
-	DUCKDB_TYPE_UINTEGER,
+	DUCKDB_TYPE_UINTEGER = 8,
 	// uint64_t
-	DUCKDB_TYPE_UBIGINT,
+	DUCKDB_TYPE_UBIGINT = 9,
 	// float
-	DUCKDB_TYPE_FLOAT,
+	DUCKDB_TYPE_FLOAT = 10,
 	// double
-	DUCKDB_TYPE_DOUBLE,
+	DUCKDB_TYPE_DOUBLE = 11,
 	// duckdb_timestamp, in microseconds
-	DUCKDB_TYPE_TIMESTAMP,
+	DUCKDB_TYPE_TIMESTAMP = 12,
 	// duckdb_date
-	DUCKDB_TYPE_DATE,
+	DUCKDB_TYPE_DATE = 13,
 	// duckdb_time
-	DUCKDB_TYPE_TIME,
+	DUCKDB_TYPE_TIME = 14,
 	// duckdb_interval
-	DUCKDB_TYPE_INTERVAL,
+	DUCKDB_TYPE_INTERVAL = 15,
 	// duckdb_hugeint
-	DUCKDB_TYPE_HUGEINT,
+	DUCKDB_TYPE_HUGEINT = 16,
 	// duckdb_uhugeint
-	DUCKDB_TYPE_UHUGEINT,
+	DUCKDB_TYPE_UHUGEINT = 32,
 	// const char*
-	DUCKDB_TYPE_VARCHAR,
+	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
-	DUCKDB_TYPE_BLOB,
+	DUCKDB_TYPE_BLOB = 18,
 	// decimal
-	DUCKDB_TYPE_DECIMAL,
+	DUCKDB_TYPE_DECIMAL = 19,
 	// duckdb_timestamp, in seconds
-	DUCKDB_TYPE_TIMESTAMP_S,
+	DUCKDB_TYPE_TIMESTAMP_S = 20,
 	// duckdb_timestamp, in milliseconds
-	DUCKDB_TYPE_TIMESTAMP_MS,
+	DUCKDB_TYPE_TIMESTAMP_MS = 21,
 	// duckdb_timestamp, in nanoseconds
-	DUCKDB_TYPE_TIMESTAMP_NS,
+	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
-	DUCKDB_TYPE_ENUM,
+	DUCKDB_TYPE_ENUM = 23,
 	// list type, only useful as logical type
-	DUCKDB_TYPE_LIST,
+	DUCKDB_TYPE_LIST = 24,
 	// struct type, only useful as logical type
-	DUCKDB_TYPE_STRUCT,
+	DUCKDB_TYPE_STRUCT = 25,
 	// map type, only useful as logical type
-	DUCKDB_TYPE_MAP,
+	DUCKDB_TYPE_MAP = 26,
 	// duckdb_hugeint
-	DUCKDB_TYPE_UUID,
+	DUCKDB_TYPE_UUID = 27,
 	// union type, only useful as logical type
-	DUCKDB_TYPE_UNION,
+	DUCKDB_TYPE_UNION = 28,
 	// duckdb_bit
-	DUCKDB_TYPE_BIT,
+	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
-	DUCKDB_TYPE_TIME_TZ,
+	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp
-	DUCKDB_TYPE_TIMESTAMP_TZ,
+	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 } duckdb_type;
+//! An enum over the returned state of different functions.
+typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
+//! An enum over the pending state of a pending query result.
+typedef enum {
+	DUCKDB_PENDING_RESULT_READY = 0,
+	DUCKDB_PENDING_RESULT_NOT_READY = 1,
+	DUCKDB_PENDING_ERROR = 2,
+	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
+} duckdb_pending_state;
+//! An enum over DuckDB's different result types.
+typedef enum {
+	DUCKDB_RESULT_TYPE_INVALID = 0,
+	DUCKDB_RESULT_TYPE_CHANGED_ROWS = 1,
+	DUCKDB_RESULT_TYPE_NOTHING = 2,
+	DUCKDB_RESULT_TYPE_QUERY_RESULT = 3,
+} duckdb_result_type;
+//! An enum over DuckDB's different statement types.
+typedef enum {
+	DUCKDB_STATEMENT_TYPE_INVALID = 0,
+	DUCKDB_STATEMENT_TYPE_SELECT = 1,
+	DUCKDB_STATEMENT_TYPE_INSERT = 2,
+	DUCKDB_STATEMENT_TYPE_UPDATE = 3,
+	DUCKDB_STATEMENT_TYPE_EXPLAIN = 4,
+	DUCKDB_STATEMENT_TYPE_DELETE = 5,
+	DUCKDB_STATEMENT_TYPE_PREPARE = 6,
+	DUCKDB_STATEMENT_TYPE_CREATE = 7,
+	DUCKDB_STATEMENT_TYPE_EXECUTE = 8,
+	DUCKDB_STATEMENT_TYPE_ALTER = 9,
+	DUCKDB_STATEMENT_TYPE_TRANSACTION = 10,
+	DUCKDB_STATEMENT_TYPE_COPY = 11,
+	DUCKDB_STATEMENT_TYPE_ANALYZE = 12,
+	DUCKDB_STATEMENT_TYPE_VARIABLE_SET = 13,
+	DUCKDB_STATEMENT_TYPE_CREATE_FUNC = 14,
+	DUCKDB_STATEMENT_TYPE_DROP = 15,
+	DUCKDB_STATEMENT_TYPE_EXPORT = 16,
+	DUCKDB_STATEMENT_TYPE_PRAGMA = 17,
+	DUCKDB_STATEMENT_TYPE_VACUUM = 18,
+	DUCKDB_STATEMENT_TYPE_CALL = 19,
+	DUCKDB_STATEMENT_TYPE_SET = 20,
+	DUCKDB_STATEMENT_TYPE_LOAD = 21,
+	DUCKDB_STATEMENT_TYPE_RELATION = 22,
+	DUCKDB_STATEMENT_TYPE_EXTENSION = 23,
+	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN = 24,
+	DUCKDB_STATEMENT_TYPE_ATTACH = 25,
+	DUCKDB_STATEMENT_TYPE_DETACH = 26,
+	DUCKDB_STATEMENT_TYPE_MULTI = 27,
+} duckdb_statement_type;
+
+//===--------------------------------------------------------------------===//
+// General type definitions
+//===--------------------------------------------------------------------===//
+
+//! DuckDB's index type.
+typedef uint64_t idx_t;
+
+//! The callback that will be called to destroy data, e.g.,
+//! bind data (if any), init data (if any), extra data for replacement scans (if any)
+typedef void (*duckdb_delete_callback_t)(void *data);
+
+//! Used for threading, contains a task state. Must be destroyed with `duckdb_destroy_state`.
+typedef void *duckdb_task_state;
+
+//===--------------------------------------------------------------------===//
+// Types (no explicit freeing)
+//===--------------------------------------------------------------------===//
 
 //! Days are stored as days since 1970-01-01
 //! Use the duckdb_from_date/duckdb_to_date function to extract individual information
 typedef struct {
 	int32_t days;
 } duckdb_date;
-
 typedef struct {
 	int32_t year;
 	int8_t month;
@@ -151,7 +216,6 @@ typedef struct {
 typedef struct {
 	int64_t micros;
 } duckdb_time;
-
 typedef struct {
 	int8_t hour;
 	int8_t min;
@@ -163,7 +227,6 @@ typedef struct {
 typedef struct {
 	uint64_t bits;
 } duckdb_time_tz;
-
 typedef struct {
 	duckdb_time time;
 	int32_t offset;
@@ -174,51 +237,46 @@ typedef struct {
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
-
 typedef struct {
 	duckdb_date_struct date;
 	duckdb_time_struct time;
 } duckdb_timestamp_struct;
-
 typedef struct {
 	int32_t months;
 	int32_t days;
 	int64_t micros;
 } duckdb_interval;
 
-//! Hugeints are composed in a (lower, upper) component
+//! Hugeints are composed of a (lower, upper) component
 //! The value of the hugeint is upper * 2^64 + lower
 //! For easy usage, the functions duckdb_hugeint_to_double/duckdb_double_to_hugeint are recommended
 typedef struct {
 	uint64_t lower;
 	int64_t upper;
 } duckdb_hugeint;
-
 typedef struct {
 	uint64_t lower;
 	uint64_t upper;
 } duckdb_uhugeint;
 
+//! Decimals are composed of a width and a scale, and are stored in a hugeint
 typedef struct {
 	uint8_t width;
 	uint8_t scale;
-
 	duckdb_hugeint value;
 } duckdb_decimal;
 
-typedef struct {
-	char *data;
-	idx_t size;
-} duckdb_string;
-
+//! A type holding information about the query execution progress
 typedef struct {
 	double percentage;
 	uint64_t rows_processed;
 	uint64_t total_rows_to_process;
 } duckdb_query_progress_type;
-/*
-    The internal data representation of a VARCHAR/BLOB column
-*/
+
+//! The internal representation of a VARCHAR (string_t). If the VARCHAR does not
+//! exceed 12 characters, then we inline it. Otherwise, we inline a prefix for faster
+//! string comparisons and store a pointer to the remaining characters. This is a non-
+//! owning structure, i.e., it does not have to be freed.
 typedef struct {
 	union {
 		struct {
@@ -233,16 +291,18 @@ typedef struct {
 	} value;
 } duckdb_string_t;
 
-typedef struct {
-	void *data;
-	idx_t size;
-} duckdb_blob;
-
+//! The internal representation of a list metadata entry contains the list's offset in
+//! the child vector, and its length. The parent vector holds these metadata entries,
+//! whereas the child vector holds the data
 typedef struct {
 	uint64_t offset;
 	uint64_t length;
 } duckdb_list_entry;
 
+//! A column consists of a pointer to its internal data. Don't operate on this type directly.
+//! Instead, use functions such as duckdb_column_data, duckdb_nullmask_data,
+//! duckdb_column_type, and duckdb_column_name, which take the result and the column index
+//! as their parameters
 typedef struct {
 #if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
 	void *data;
@@ -262,6 +322,32 @@ typedef struct {
 	void *internal_data;
 } duckdb_column;
 
+//! A vector to a specified column in a data chunk. Lives as long as the
+//! data chunk lives, i.e., must not be destroyed.
+typedef struct _duckdb_vector {
+	void *__vctr;
+} * duckdb_vector;
+
+//===--------------------------------------------------------------------===//
+// Types (explicit freeing/destroying)
+//===--------------------------------------------------------------------===//
+
+//! Strings are composed of a char pointer and a size. You must free string.data
+//! with `duckdb_free`.
+typedef struct {
+	char *data;
+	idx_t size;
+} duckdb_string;
+
+//! BLOBs are composed of a byte pointer and a size. You must free blob.data
+//! with `duckdb_free`.
+typedef struct {
+	void *data;
+	idx_t size;
+} duckdb_blob;
+
+//! A query result consists of a pointer to its internal data.
+//! Must be freed with 'duckdb_destroy_result'.
 typedef struct {
 #if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
 	idx_t column_count;
@@ -276,7 +362,7 @@ typedef struct {
 	idx_t __deprecated_row_count;
 	// deprecated, use duckdb_rows_changed
 	idx_t __deprecated_rows_changed;
-	// deprecated, use duckdb_column_ family of functions
+	// deprecated, use duckdb_column_*-family of functions
 	duckdb_column *__deprecated_columns;
 	// deprecated, use duckdb_result_error
 	char *__deprecated_error_message;
@@ -284,97 +370,125 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
+//! A database object. Should be closed with `duckdb_close`.
 typedef struct _duckdb_database {
 	void *__db;
 } * duckdb_database;
+
+//! A connection to a duckdb database. Must be closed with `duckdb_disconnect`.
 typedef struct _duckdb_connection {
 	void *__conn;
 } * duckdb_connection;
+
+//! A prepared statement is a parameterized query that allows you to bind parameters to it.
+//! Must be destroyed with `duckdb_destroy_prepare`.
 typedef struct _duckdb_prepared_statement {
 	void *__prep;
 } * duckdb_prepared_statement;
+
+//! Extracted statements. Must be destroyed with `duckdb_destroy_extracted`.
 typedef struct _duckdb_extracted_statements {
 	void *__extrac;
 } * duckdb_extracted_statements;
+
+//! The pending result represents an intermediate structure for a query that is not yet fully executed.
+//! Must be destroyed with `duckdb_destroy_pending`.
 typedef struct _duckdb_pending_result {
 	void *__pend;
 } * duckdb_pending_result;
+
+//! The appender enables fast data loading into DuckDB.
+//! Must be destroyed with `duckdb_appender_destroy`.
 typedef struct _duckdb_appender {
 	void *__appn;
 } * duckdb_appender;
-typedef struct _duckdb_arrow {
-	void *__arrw;
-} * duckdb_arrow;
-typedef struct _duckdb_arrow_stream {
-	void *__arrwstr;
-} * duckdb_arrow_stream;
+
+//! Can be used to provide start-up options for the DuckDB instance.
+//! Must be destroyed with `duckdb_destroy_config`.
 typedef struct _duckdb_config {
 	void *__cnfg;
 } * duckdb_config;
-typedef struct _duckdb_arrow_schema {
-	void *__arrs;
-} * duckdb_arrow_schema;
-typedef struct _duckdb_arrow_array {
-	void *__arra;
-} * duckdb_arrow_array;
+
+//! Holds an internal logical type.
+//! Must be destroyed with `duckdb_destroy_logical_type`.
 typedef struct _duckdb_logical_type {
 	void *__lglt;
 } * duckdb_logical_type;
+
+//! Contains a data chunk from a duckdb_result.
+//! Must be destroyed with `duckdb_destroy_data_chunk`.
 typedef struct _duckdb_data_chunk {
 	void *__dtck;
 } * duckdb_data_chunk;
-typedef struct _duckdb_vector {
-	void *__vctr;
-} * duckdb_vector;
+
+//! Holds a DuckDB value, which wraps a type.
+//! Must be destroyed with `duckdb_destroy_value`.
 typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
 
-typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
-typedef enum {
-	DUCKDB_PENDING_RESULT_READY = 0,
-	DUCKDB_PENDING_RESULT_NOT_READY = 1,
-	DUCKDB_PENDING_ERROR = 2,
-	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
-} duckdb_pending_state;
+//===--------------------------------------------------------------------===//
+// Table function types
+//===--------------------------------------------------------------------===//
 
-typedef enum {
-	DUCKDB_RESULT_TYPE_INVALID,
-	DUCKDB_RESULT_TYPE_CHANGED_ROWS,
-	DUCKDB_RESULT_TYPE_NOTHING,
-	DUCKDB_RESULT_TYPE_QUERY_RESULT,
-} duckdb_result_type;
+//! A table function. Must be destroyed with `duckdb_destroy_table_function`.
+typedef void *duckdb_table_function;
 
-typedef enum {
-	DUCKDB_STATEMENT_TYPE_INVALID,
-	DUCKDB_STATEMENT_TYPE_SELECT,
-	DUCKDB_STATEMENT_TYPE_INSERT,
-	DUCKDB_STATEMENT_TYPE_UPDATE,
-	DUCKDB_STATEMENT_TYPE_EXPLAIN,
-	DUCKDB_STATEMENT_TYPE_DELETE,
-	DUCKDB_STATEMENT_TYPE_PREPARE,
-	DUCKDB_STATEMENT_TYPE_CREATE,
-	DUCKDB_STATEMENT_TYPE_EXECUTE,
-	DUCKDB_STATEMENT_TYPE_ALTER,
-	DUCKDB_STATEMENT_TYPE_TRANSACTION,
-	DUCKDB_STATEMENT_TYPE_COPY,
-	DUCKDB_STATEMENT_TYPE_ANALYZE,
-	DUCKDB_STATEMENT_TYPE_VARIABLE_SET,
-	DUCKDB_STATEMENT_TYPE_CREATE_FUNC,
-	DUCKDB_STATEMENT_TYPE_DROP,
-	DUCKDB_STATEMENT_TYPE_EXPORT,
-	DUCKDB_STATEMENT_TYPE_PRAGMA,
-	DUCKDB_STATEMENT_TYPE_VACUUM,
-	DUCKDB_STATEMENT_TYPE_CALL,
-	DUCKDB_STATEMENT_TYPE_SET,
-	DUCKDB_STATEMENT_TYPE_LOAD,
-	DUCKDB_STATEMENT_TYPE_RELATION,
-	DUCKDB_STATEMENT_TYPE_EXTENSION,
-	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN,
-	DUCKDB_STATEMENT_TYPE_ATTACH,
-	DUCKDB_STATEMENT_TYPE_DETACH,
-	DUCKDB_STATEMENT_TYPE_MULTI,
-} duckdb_statement_type;
+//! The bind info of the function. When setting this info, it is necessary to pass a destroy-callback function.
+typedef void *duckdb_bind_info;
+
+//! Additional function init info. When setting this info, it is necessary to pass a destroy-callback function.
+typedef void *duckdb_init_info;
+
+//! Additional function info. When setting this info, it is necessary to pass a destroy-callback function.
+typedef void *duckdb_function_info;
+
+//! The bind function of the table function.
+typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
+
+//! The (possibly thread-local) init function of the table function.
+typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
+
+//! The main function of the table function.
+typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
+
+//===--------------------------------------------------------------------===//
+// Replacement scan types
+//===--------------------------------------------------------------------===//
+
+//! Additional replacement scan info. When setting this info, it is necessary to pass a destroy-callback function.
+typedef void *duckdb_replacement_scan_info;
+
+//! A replacement scan function that can be added to a database.
+typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info, const char *table_name, void *data);
+
+//===--------------------------------------------------------------------===//
+// Arrow-related types
+//===--------------------------------------------------------------------===//
+
+//! Holds an arrow query result. Must be destroyed with `duckdb_destroy_arrow`.
+typedef struct _duckdb_arrow {
+	void *__arrw;
+} * duckdb_arrow;
+
+//! Holds an arrow array stream. Must be destroyed with `duckdb_destroy_arrow_stream`.
+typedef struct _duckdb_arrow_stream {
+	void *__arrwstr;
+} * duckdb_arrow_stream;
+
+//! Holds an arrow schema. Remember to release the respective ArrowSchema object.
+typedef struct _duckdb_arrow_schema {
+	void *__arrs;
+} * duckdb_arrow_schema;
+
+//! Holds an arrow array. Remember to release the respective ArrowArray object.
+typedef struct _duckdb_arrow_array {
+	void *__arra;
+} * duckdb_arrow_array;
+
+//===--------------------------------------------------------------------===//
+// Functions
+//===--------------------------------------------------------------------===//
 
 //===--------------------------------------------------------------------===//
 // Open/Connect
@@ -383,7 +497,7 @@ typedef enum {
 /*!
 Creates a new database or opens an existing database file stored at the given path.
 If no path is given a new in-memory database is created instead.
-The instantiated database should be closed with 'duckdb_close'
+The instantiated database should be closed with 'duckdb_close'.
 
 * path: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
 * out_database: The result database object.
@@ -393,6 +507,7 @@ DUCKDB_API duckdb_state duckdb_open(const char *path, duckdb_database *out_datab
 
 /*!
 Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.
+The instantiated database should be closed with 'duckdb_close'.
 
 * path: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
 * out_database: The result database object.
@@ -406,9 +521,9 @@ DUCKDB_API duckdb_state duckdb_open_ext(const char *path, duckdb_database *out_d
 
 /*!
 Closes the specified database and de-allocates all memory allocated for that database.
-This should be called after you are done with any database allocated through `duckdb_open`.
+This should be called after you are done with any database allocated through `duckdb_open` or `duckdb_open_ext`.
 Note that failing to call `duckdb_close` (in case of e.g. a program crash) will not cause data corruption.
-Still it is recommended to always correctly close a database object after you are done with it.
+Still, it is recommended to always correctly close a database object after you are done with it.
 
 * database: The database object to shut down.
 */
@@ -417,7 +532,7 @@ DUCKDB_API void duckdb_close(duckdb_database *database);
 /*!
 Opens a connection to a database. Connections are required to query the database, and store transactional state
 associated with the connection.
-The instantiated connection should be closed using 'duckdb_disconnect'
+The instantiated connection should be closed using 'duckdb_disconnect'.
 
 * database: The database file to connect to.
 * out_connection: The result connection object.
@@ -428,7 +543,7 @@ DUCKDB_API duckdb_state duckdb_connect(duckdb_database database, duckdb_connecti
 /*!
 Interrupt running query
 
-* connection: The connection to interruot
+* connection: The connection to interrupt
 */
 DUCKDB_API void duckdb_interrupt(duckdb_connection connection);
 
@@ -457,9 +572,11 @@ DUCKDB_API const char *duckdb_library_version();
 //===--------------------------------------------------------------------===//
 // Configuration
 //===--------------------------------------------------------------------===//
+
 /*!
 Initializes an empty configuration object that can be used to provide start-up options for the DuckDB instance
 through `duckdb_open_ext`.
+The duckdb_config must be destroyed using 'duckdb_destroy_config'
 
 This will always succeed unless there is a malloc failure.
 
@@ -506,7 +623,7 @@ This can fail if either the name is invalid, or if the value provided for the op
 DUCKDB_API duckdb_state duckdb_set_config(duckdb_config config, const char *name, const char *option);
 
 /*!
-Destroys the specified configuration option and de-allocates all memory allocated for the object.
+Destroys the specified configuration object and de-allocates all memory allocated for the object.
 
 * config: The configuration object to destroy.
 */
@@ -515,6 +632,7 @@ DUCKDB_API void duckdb_destroy_config(duckdb_config *config);
 //===--------------------------------------------------------------------===//
 // Query Execution
 //===--------------------------------------------------------------------===//
+
 /*!
 Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.
 If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
@@ -538,7 +656,7 @@ Closes the result and de-allocates all memory allocated for that connection.
 DUCKDB_API void duckdb_destroy_result(duckdb_result *result);
 
 /*!
-Returns the column name of the specified column. The result should not need be freed; the column names will
+Returns the column name of the specified column. The result should not need to be freed; the column names will
 automatically be destroyed when the result is destroyed.
 
 Returns `NULL` if the column is out of range.
@@ -590,7 +708,7 @@ Returns the number of columns present in a the result object.
 DUCKDB_API idx_t duckdb_column_count(duckdb_result *result);
 
 /*!
-Returns the number of rows present in a the result object.
+Returns the number of rows present in the result object.
 
 * result: The result object.
 * returns: The number of rows present in the result object.
@@ -707,7 +825,10 @@ Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on er
  */
 DUCKDB_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 
+//===--------------------------------------------------------------------===//
 // Safe fetch functions
+//===--------------------------------------------------------------------===//
+
 // These functions will perform conversions if necessary.
 // On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
 // Note that these functions are slow since they perform bounds checking and conversion
@@ -810,10 +931,10 @@ converted. The result must be freed with `duckdb_free`.
 */
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
 
-/*!s
-* returns: The string value at the specified location.
-The result must be freed with `duckdb_free`.
-*/
+/*!
+ * returns: The string value at the specified location.
+ * The resulting field "string.data" must be freed with `duckdb_free.`
+ */
 DUCKDB_API duckdb_string duckdb_value_string(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
@@ -838,7 +959,7 @@ DUCKDB_API duckdb_string duckdb_value_string_internal(duckdb_result *result, idx
 
 /*!
 * returns: The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
-value cannot be converted. The resulting "blob.data" must be freed with `duckdb_free.`
+value cannot be converted. The resulting field "blob.data" must be freed with `duckdb_free.`
 */
 DUCKDB_API duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row);
 
@@ -850,6 +971,7 @@ DUCKDB_API bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row
 //===--------------------------------------------------------------------===//
 // Helpers
 //===--------------------------------------------------------------------===//
+
 /*!
 Allocate `size` bytes of memory using the duckdb internal malloc function. Any memory allocated in this manner
 should be freed using `duckdb_free`.
@@ -860,7 +982,8 @@ should be freed using `duckdb_free`.
 DUCKDB_API void *duckdb_malloc(size_t size);
 
 /*!
-Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_value_blob`.
+Free a value returned from `duckdb_malloc`, `duckdb_value_varchar`, `duckdb_value_blob`, or
+`duckdb_value_string`.
 
 * ptr: The memory region to de-allocate.
 */
@@ -884,6 +1007,7 @@ DUCKDB_API bool duckdb_string_is_inlined(duckdb_string_t string);
 //===--------------------------------------------------------------------===//
 // Date/Time/Timestamp Helpers
 //===--------------------------------------------------------------------===//
+
 /*!
 Decompose a `duckdb_date` object into year, month and date (stored as `duckdb_date_struct`).
 
@@ -971,6 +1095,7 @@ DUCKDB_API bool duckdb_is_finite_timestamp(duckdb_timestamp ts);
 //===--------------------------------------------------------------------===//
 // Hugeint Helpers
 //===--------------------------------------------------------------------===//
+
 /*!
 Converts a duckdb_hugeint object (as obtained from a `DUCKDB_TYPE_HUGEINT` column) into a double.
 
@@ -989,19 +1114,10 @@ If the conversion fails because the double value is too big the result will be 0
 */
 DUCKDB_API duckdb_hugeint duckdb_double_to_hugeint(double val);
 
-/*!
-Converts a double value to a duckdb_decimal object.
-
-If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
-
-* val: The double value.
-* returns: The converted `duckdb_decimal` element.
-*/
-DUCKDB_API duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale);
-
 //===--------------------------------------------------------------------===//
 // Unsigned Hugeint Helpers
 //===--------------------------------------------------------------------===//
+
 /*!
 Converts a duckdb_uhugeint object (as obtained from a `DUCKDB_TYPE_UHUGEINT` column) into a double.
 
@@ -1023,6 +1139,17 @@ DUCKDB_API duckdb_uhugeint duckdb_double_to_uhugeint(double val);
 //===--------------------------------------------------------------------===//
 // Decimal Helpers
 //===--------------------------------------------------------------------===//
+
+/*!
+Converts a double value to a duckdb_decimal object.
+
+If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
+
+* val: The double value.
+* returns: The converted `duckdb_decimal` element.
+*/
+DUCKDB_API duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale);
+
 /*!
 Converts a duckdb_decimal object (as obtained from a `DUCKDB_TYPE_DECIMAL` column) into a double.
 
@@ -1034,6 +1161,7 @@ DUCKDB_API double duckdb_decimal_to_double(duckdb_decimal val);
 //===--------------------------------------------------------------------===//
 // Prepared Statements
 //===--------------------------------------------------------------------===//
+
 // A prepared statement is a parameterized query that allows you to bind parameters to it.
 // * This is useful to easily supply parameters to functions and avoid SQL injection attacks.
 // * This is useful to speed up queries that you will execute several times with different parameters.
@@ -1120,6 +1248,10 @@ Returns the statement type of the statement to be executed
  * returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
  */
 DUCKDB_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
+
+//===--------------------------------------------------------------------===//
+// Bind Values to Prepared Statements
+//===--------------------------------------------------------------------===//
 
 /*!
 Binds a value to the prepared statement at the specified index.
@@ -1251,11 +1383,17 @@ Binds a NULL value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
+//===--------------------------------------------------------------------===//
+// Execute Prepared Statements
+//===--------------------------------------------------------------------===//
+
 /*!
 Executes the prepared statement with the given bound parameters, and returns a materialized query result.
 
 This method can be called multiple times for each prepared statement, and the parameters can be modified
 between calls to this function.
+
+Note that the result must be freed with `duckdb_destroy_result`.
 
 * prepared_statement: The prepared statement to execute.
 * out_result: The query result.
@@ -1271,6 +1409,8 @@ To determine if the resulting query was in fact streamed, use `duckdb_result_is_
 This method can be called multiple times for each prepared statement, and the parameters can be modified
 between calls to this function.
 
+Note that the result must be freed with `duckdb_destroy_result`.
+
 * prepared_statement: The prepared statement to execute.
 * out_result: The query result.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
@@ -1278,51 +1418,19 @@ between calls to this function.
 DUCKDB_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_result *out_result);
 
-/*!
-Executes the prepared statement with the given bound parameters, and returns an arrow query result.
-
-* prepared_statement: The prepared statement to execute.
-* out_result: The query result.
-* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-*/
-DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
-                                                      duckdb_arrow *out_result);
-
-/*!
-Scans the Arrow stream and creates a view with the given name.
-
-* connection: The connection on which to execute the scan.
-* table_name: Name of the temporary view to create.
-* arrow: Arrow stream wrapper.
-* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-*/
-DUCKDB_API duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name,
-                                          duckdb_arrow_stream arrow);
-
-/*!
-Scans the Arrow array and creates a view with the given name.
-
-* connection: The connection on which to execute the scan.
-* table_name: Name of the temporary view to create.
-* arrow_schema: Arrow schema wrapper.
-* arrow_array: Arrow array wrapper.
-* out_stream: Output array stream that wraps around the passed schema, for releasing/deleting once done.
-* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-*/
-DUCKDB_API duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, const char *table_name,
-                                                duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
-                                                duckdb_arrow_stream *out_stream);
-
 //===--------------------------------------------------------------------===//
 // Extract Statements
 //===--------------------------------------------------------------------===//
+
 // A query string can be extracted into multiple SQL statements. Each statement can be prepared and executed separately.
 
 /*!
 Extract all statements from a query.
 Note that after calling `duckdb_extract_statements`, the extracted statements should always be destroyed using
 `duckdb_destroy_extracted`, even if no statements were extracted.
+
 If the extract fails, `duckdb_extract_statements_error` can be called to obtain the reason why the extract failed.
+
 * connection: The connection object
 * query: The SQL query to extract
 * out_extracted_statements: The resulting extracted statements object
@@ -1335,7 +1443,9 @@ DUCKDB_API idx_t duckdb_extract_statements(duckdb_connection connection, const c
 Prepare an extracted statement.
 Note that after calling `duckdb_prepare_extracted_statement`, the prepared statement should always be destroyed using
 `duckdb_destroy_prepare`, even if the prepare fails.
+
 If the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.
+
 * connection: The connection object
 * extracted_statements: The extracted statements object
 * index: The index of the extracted statement to prepare
@@ -1349,6 +1459,7 @@ DUCKDB_API duckdb_state duckdb_prepare_extracted_statement(duckdb_connection con
 /*!
 Returns the error message contained within the extracted statements.
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_extracted` is called.
+
 * result: The extracted statements to fetch the error from.
 * returns: The error of the extracted statements.
 */
@@ -1363,6 +1474,7 @@ DUCKDB_API void duckdb_destroy_extracted(duckdb_extracted_statements *extracted_
 //===--------------------------------------------------------------------===//
 // Pending Result Interface
 //===--------------------------------------------------------------------===//
+
 /*!
 Executes the prepared statement with the given bound parameters, and returns a pending result.
 The pending result represents an intermediate structure for a query that is not yet fully executed.
@@ -1419,16 +1531,30 @@ If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
 
 The error message can be obtained by calling duckdb_pending_error on the pending_result.
 
-* pending_result: The pending result to execute a task within..
+* pending_result: The pending result to execute a task within.
 * returns: The state of the pending result after the execution.
 */
 DUCKDB_API duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result);
+
+/*!
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result.
+* returns: The state of the pending result.
+*/
+DUCKDB_API duckdb_pending_state duckdb_pending_execute_check_state(duckdb_pending_result pending_result);
 
 /*!
 Fully execute a pending query result, returning the final query result.
 
 If duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.
 Otherwise, all remaining tasks must be executed first.
+
+Note that the result must be freed with `duckdb_destroy_result`.
 
 * pending_result: The pending result to execute.
 * out_result: The result object.
@@ -1448,6 +1574,7 @@ DUCKDB_API bool duckdb_pending_execution_is_finished(duckdb_pending_state pendin
 //===--------------------------------------------------------------------===//
 // Value Interface
 //===--------------------------------------------------------------------===//
+
 /*!
 Destroys the value and de-allocates all memory allocated for that type.
 
@@ -1532,8 +1659,8 @@ This should not be used with `DUCKDB_TYPE_DECIMAL`.
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
 
 /*!
-Returns the alias of a duckdb_logical_type, if one is set, else `NULL`
-You must free the result.
+Returns the alias of a duckdb_logical_type, if one is set, else `NULL`.
+The result must be destroyed with `duckdb_free`.
 
 * type: The logical type to return the alias of
 * returns: The alias or `NULL`
@@ -1559,7 +1686,7 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 DUCKDB_API duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type);
 
 /*!
-Creates a UNION type from the passed types array
+Creates a UNION type from the passed types array.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
 * types: The array of types that the union should consist of.
@@ -1593,7 +1720,7 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 DUCKDB_API duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t member_count);
 
 /*!
-Creates a `duckdb_logical_type` of type decimal with the specified width and scale
+Creates a `duckdb_logical_type` of type decimal with the specified width and scale.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
 * width: The width of the decimal type
@@ -1603,7 +1730,7 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 DUCKDB_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale);
 
 /*!
-Retrieves the type class of a `duckdb_logical_type`.
+Retrieves the enum type class of a `duckdb_logical_type`.
 
 * type: The logical type object
 * returns: The type id
@@ -1643,7 +1770,7 @@ Retrieves the internal storage type of an enum type.
 DUCKDB_API duckdb_type duckdb_enum_internal_type(duckdb_logical_type type);
 
 /*!
-Retrieves the dictionary size of the enum type
+Retrieves the dictionary size of the enum type.
 
 * type: The logical type object
 * returns: The dictionary size of the enum type
@@ -1653,7 +1780,7 @@ DUCKDB_API uint32_t duckdb_enum_dictionary_size(duckdb_logical_type type);
 /*!
 Retrieves the dictionary value at the specified position from the enum.
 
-The result must be freed with `duckdb_free`
+The result must be freed with `duckdb_free`.
 
 * type: The logical type object
 * index: The index in the dictionary
@@ -1664,7 +1791,7 @@ DUCKDB_API char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t in
 /*!
 Retrieves the child type of the given list type.
 
-The result must be freed with `duckdb_destroy_logical_type`
+The result must be freed with `duckdb_destroy_logical_type`.
 
 * type: The logical type object
 * returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
@@ -1674,7 +1801,7 @@ DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type t
 /*!
 Retrieves the key type of the given map type.
 
-The result must be freed with `duckdb_destroy_logical_type`
+The result must be freed with `duckdb_destroy_logical_type`.
 
 * type: The logical type object
 * returns: The key type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
@@ -1684,7 +1811,7 @@ DUCKDB_API duckdb_logical_type duckdb_map_type_key_type(duckdb_logical_type type
 /*!
 Retrieves the value type of the given map type.
 
-The result must be freed with `duckdb_destroy_logical_type`
+The result must be freed with `duckdb_destroy_logical_type`.
 
 * type: The logical type object
 * returns: The value type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
@@ -1702,7 +1829,7 @@ DUCKDB_API idx_t duckdb_struct_type_child_count(duckdb_logical_type type);
 /*!
 Retrieves the name of the struct child.
 
-The result must be freed with `duckdb_free`
+The result must be freed with `duckdb_free`.
 
 * type: The logical type object
 * index: The child index
@@ -1713,7 +1840,7 @@ DUCKDB_API char *duckdb_struct_type_child_name(duckdb_logical_type type, idx_t i
 /*!
 Retrieves the child type of the given struct type at the specified index.
 
-The result must be freed with `duckdb_destroy_logical_type`
+The result must be freed with `duckdb_destroy_logical_type`.
 
 * type: The logical type object
 * index: The child index
@@ -1732,7 +1859,7 @@ DUCKDB_API idx_t duckdb_union_type_member_count(duckdb_logical_type type);
 /*!
 Retrieves the name of the union member.
 
-The result must be freed with `duckdb_free`
+The result must be freed with `duckdb_free`.
 
 * type: The logical type object
 * index: The child index
@@ -1743,7 +1870,7 @@ DUCKDB_API char *duckdb_union_type_member_name(duckdb_logical_type type, idx_t i
 /*!
 Retrieves the child type of the given union member at the specified index.
 
-The result must be freed with `duckdb_destroy_logical_type`
+The result must be freed with `duckdb_destroy_logical_type`.
 
 * type: The logical type object
 * index: The child index
@@ -1761,8 +1888,11 @@ DUCKDB_API void duckdb_destroy_logical_type(duckdb_logical_type *type);
 //===--------------------------------------------------------------------===//
 // Data Chunk Interface
 //===--------------------------------------------------------------------===//
+
 /*!
 Creates an empty DataChunk with the specified set of types.
+
+Note that the result must be destroyed with `duckdb_destroy_data_chunk`.
 
 * types: An array of types of the data chunk.
 * column_count: The number of columns.
@@ -1822,6 +1952,7 @@ DUCKDB_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size);
 //===--------------------------------------------------------------------===//
 // Vector Interface
 //===--------------------------------------------------------------------===//
+
 /*!
 Retrieves the column type of the specified vector.
 
@@ -1885,7 +2016,7 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
 
 * vector: The vector to alter
 * index: The row position in the vector to assign the string to
@@ -1906,7 +2037,7 @@ The resulting vector is valid as long as the parent vector is valid.
 DUCKDB_API duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector);
 
 /*!
-Returns the size of the child vector of the list
+Returns the size of the child vector of the list.
 
 * vector: The vector
 * returns: The size of the child list
@@ -1945,6 +2076,7 @@ DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, id
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//
+
 /*!
 Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.
 
@@ -1989,15 +2121,6 @@ DUCKDB_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
 //===--------------------------------------------------------------------===//
 // Table Functions
 //===--------------------------------------------------------------------===//
-typedef void *duckdb_table_function;
-typedef void *duckdb_bind_info;
-typedef void *duckdb_init_info;
-typedef void *duckdb_function_info;
-
-typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
-typedef void (*duckdb_table_function_init_t)(duckdb_init_info info);
-typedef void (*duckdb_table_function_t)(duckdb_function_info info, duckdb_data_chunk output);
-typedef void (*duckdb_delete_callback_t)(void *data);
 
 /*!
 Creates a new empty table function.
@@ -2052,7 +2175,7 @@ DUCKDB_API void duckdb_table_function_set_extra_info(duckdb_table_function table
                                                      duckdb_delete_callback_t destroy);
 
 /*!
-Sets the bind function of the table function
+Sets the bind function of the table function.
 
 * table_function: The table function
 * bind: The bind function
@@ -2060,7 +2183,7 @@ Sets the bind function of the table function
 DUCKDB_API void duckdb_table_function_set_bind(duckdb_table_function table_function, duckdb_table_function_bind_t bind);
 
 /*!
-Sets the init function of the table function
+Sets the init function of the table function.
 
 * table_function: The table function
 * init: The init function
@@ -2068,7 +2191,7 @@ Sets the init function of the table function
 DUCKDB_API void duckdb_table_function_set_init(duckdb_table_function table_function, duckdb_table_function_init_t init);
 
 /*!
-Sets the thread-local init function of the table function
+Sets the thread-local init function of the table function.
 
 * table_function: The table function
 * init: The init function
@@ -2077,7 +2200,7 @@ DUCKDB_API void duckdb_table_function_set_local_init(duckdb_table_function table
                                                      duckdb_table_function_init_t init);
 
 /*!
-Sets the main function of the table function
+Sets the main function of the table function.
 
 * table_function: The table function
 * function: The function
@@ -2113,8 +2236,9 @@ DUCKDB_API duckdb_state duckdb_register_table_function(duckdb_connection con, du
 //===--------------------------------------------------------------------===//
 // Table Function Bind
 //===--------------------------------------------------------------------===//
+
 /*!
-Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
 
 * info: The info object
 * returns: The extra info
@@ -2190,7 +2314,7 @@ DUCKDB_API void duckdb_bind_set_error(duckdb_bind_info info, const char *error);
 //===--------------------------------------------------------------------===//
 
 /*!
-Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
 
 * info: The info object
 * returns: The extra info
@@ -2259,12 +2383,13 @@ DUCKDB_API void duckdb_init_set_error(duckdb_init_info info, const char *error);
 //===--------------------------------------------------------------------===//
 
 /*!
-Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
 
 * info: The info object
 * returns: The extra info
 */
 DUCKDB_API void *duckdb_function_get_extra_info(duckdb_function_info info);
+
 /*!
 Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
 
@@ -2303,12 +2428,9 @@ DUCKDB_API void duckdb_function_set_error(duckdb_function_info info, const char 
 //===--------------------------------------------------------------------===//
 // Replacement Scans
 //===--------------------------------------------------------------------===//
-typedef void *duckdb_replacement_scan_info;
-
-typedef void (*duckdb_replacement_callback_t)(duckdb_replacement_scan_info info, const char *table_name, void *data);
 
 /*!
-Add a replacement scan definition to the specified database
+Add a replacement scan definition to the specified database.
 
 * db: The database object to add the replacement scan to
 * replacement: The replacement scan callback
@@ -2319,8 +2441,8 @@ DUCKDB_API void duckdb_add_replacement_scan(duckdb_database db, duckdb_replaceme
                                             void *extra_data, duckdb_delete_callback_t delete_callback);
 
 /*!
-Sets the replacement function name to use. If this function is called in the replacement callback,
- the replacement scan is performed. If it is not called, the replacement callback is not performed.
+Sets the replacement function name. If this function is called in the replacement callback,
+the replacement scan is performed. If it is not called, the replacement callback is not performed.
 
 * info: The info object
 * function_name: The function name to substitute.
@@ -2354,11 +2476,16 @@ DUCKDB_API void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info i
 // the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,
 // `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.
 
+// Instead of appending rows with `duckdb_appender_end_row`, it is also possible to fill and append
+// chunks-at-a-time.
+
 // Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns
 // `DuckDBError`.
 
 /*!
 Creates an appender object.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
 
 * connection: The connection context to create the appender in.
 * schema: The schema of the table to append to, or `nullptr` for the default schema.
@@ -2368,6 +2495,25 @@ Creates an appender object.
 */
 DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                                duckdb_appender *out_appender);
+
+/*!
+Returns the number of columns in the table that belongs to the appender.
+
+* appender The appender to get the column count from.
+* returns: The number of columns in the table.
+*/
+DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
+
+/*!
+Returns the type of the column at the specified index.
+
+Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* appender The appender to get the column type from.
+* col_idx The index of the column to get the type of.
+* returns: The duckdb_logical_type of the column.
+*/
+DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 
 /*!
 Returns the error message associated with the given appender.
@@ -2433,18 +2579,22 @@ DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value)
 Append an int8_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
+
 /*!
 Append an int16_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value);
+
 /*!
 Append an int32_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
+
 /*!
 Append an int64_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value);
+
 /*!
 Append a duckdb_hugeint value to the appender.
 */
@@ -2454,18 +2604,22 @@ DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_h
 Append a uint8_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
+
 /*!
 Append a uint16_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value);
+
 /*!
 Append a uint32_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
+
 /*!
 Append a uint64_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
+
 /*!
 Append a duckdb_uhugeint value to the appender.
 */
@@ -2475,6 +2629,7 @@ DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_
 Append a float value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
+
 /*!
 Append a double value to the appender.
 */
@@ -2484,14 +2639,17 @@ DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double va
 Append a duckdb_date value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value);
+
 /*!
 Append a duckdb_time value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
+
 /*!
 Append a duckdb_timestamp value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
+
 /*!
 Append a duckdb_interval value to the appender.
 */
@@ -2501,14 +2659,17 @@ DUCKDB_API duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_
 Append a varchar value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
+
 /*!
 Append a varchar value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length);
+
 /*!
 Append a blob value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
+
 /*!
 Append a NULL value to the appender (of any type).
 */
@@ -2530,6 +2691,7 @@ DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckd
 //===--------------------------------------------------------------------===//
 // Arrow Interface
 //===--------------------------------------------------------------------===//
+
 /*!
 Executes a SQL query within a connection and stores the full (materialized) result in an arrow structure.
 If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
@@ -2546,7 +2708,8 @@ query fails, otherwise the error stored within the result will not be freed corr
 DUCKDB_API duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
 
 /*!
-Fetch the internal arrow schema from the arrow result.
+Fetch the internal arrow schema from the arrow result. Remember to call release on the respective
+ArrowSchema object.
 
 * result: The result to fetch the schema from.
 * out_schema: The output schema.
@@ -2555,7 +2718,8 @@ Fetch the internal arrow schema from the arrow result.
 DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
 
 /*!
-Fetch the internal arrow schema from the prepared statement.
+Fetch the internal arrow schema from the prepared statement. Remember to call release on the respective
+ArrowSchema object.
 
 * result: The prepared statement to fetch the schema from.
 * out_schema: The output schema.
@@ -2564,7 +2728,8 @@ Fetch the internal arrow schema from the prepared statement.
 DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared,
                                                      duckdb_arrow_schema *out_schema);
 /*!
-Convert a data chunk into an arrow struct array.
+Convert a data chunk into an arrow struct array. Remember to call release on the respective
+ArrowArray object.
 
 * result: The result object the data chunk have been fetched from.
 * chunk: The data chunk to convert.
@@ -2573,7 +2738,8 @@ Convert a data chunk into an arrow struct array.
 DUCKDB_API void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, duckdb_arrow_array *out_array);
 
 /*!
-Fetch an internal arrow struct array from the arrow result.
+Fetch an internal arrow struct array from the arrow result. Remember to call release on the respective
+ArrowArray object.
 
 This function can be called multiple time to get next chunks, which will free the previous out_array.
 So consume the out_array before calling this function again.
@@ -2585,7 +2751,7 @@ So consume the out_array before calling this function again.
 DUCKDB_API duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *out_array);
 
 /*!
-Returns the number of columns present in a the arrow result object.
+Returns the number of columns present in the arrow result object.
 
 * result: The result object.
 * returns: The number of columns present in the result object.
@@ -2593,7 +2759,7 @@ Returns the number of columns present in a the arrow result object.
 DUCKDB_API idx_t duckdb_arrow_column_count(duckdb_arrow result);
 
 /*!
-Returns the number of rows present in a the arrow result object.
+Returns the number of rows present in the arrow result object.
 
 * result: The result object.
 * returns: The number of rows present in the result object.
@@ -2615,7 +2781,7 @@ Returns the error message contained within the result. The error is only set if 
 
 The error message should not be freed. It will be de-allocated when `duckdb_destroy_arrow` is called.
 
-* result: The result object to fetch the nullmask from.
+* result: The result object to fetch the error from.
 * returns: The error of the result.
 */
 DUCKDB_API const char *duckdb_query_arrow_error(duckdb_arrow result);
@@ -2627,10 +2793,53 @@ Closes the result and de-allocates all memory allocated for the arrow result.
 */
 DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
 
+/*!
+Releases the arrow array stream and de-allocates its memory.
+
+* stream: The arrow array stream to destroy.
+*/
+DUCKDB_API void duckdb_destroy_arrow_stream(duckdb_arrow_stream *stream_p);
+
+/*!
+Executes the prepared statement with the given bound parameters, and returns an arrow query result.
+Note that after running `duckdb_execute_prepared_arrow`, `duckdb_destroy_arrow` must be called on the result object.
+
+* prepared_statement: The prepared statement to execute.
+* out_result: The query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
+                                                      duckdb_arrow *out_result);
+
+/*!
+Scans the Arrow stream and creates a view with the given name.
+
+* connection: The connection on which to execute the scan.
+* table_name: Name of the temporary view to create.
+* arrow: Arrow stream wrapper.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name,
+                                          duckdb_arrow_stream arrow);
+
+/*!
+Scans the Arrow array and creates a view with the given name.
+Note that after running `duckdb_arrow_array_scan`, `duckdb_destroy_arrow_stream` must be called on the out stream.
+
+* connection: The connection on which to execute the scan.
+* table_name: Name of the temporary view to create.
+* arrow_schema: Arrow schema wrapper.
+* arrow_array: Arrow array wrapper.
+* out_stream: Output array stream that wraps around the passed schema, for releasing/deleting once done.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, const char *table_name,
+                                                duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
+                                                duckdb_arrow_stream *out_stream);
+
 //===--------------------------------------------------------------------===//
 // Threading Information
 //===--------------------------------------------------------------------===//
-typedef void *duckdb_task_state;
 
 /*!
 Execute DuckDB tasks on this thread.
@@ -2644,9 +2853,9 @@ DUCKDB_API void duckdb_execute_tasks(duckdb_database database, idx_t max_tasks);
 
 /*!
 Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until
- duckdb_finish_execution is called on the state.
+`duckdb_finish_execution` is called on the state.
 
-duckdb_destroy_state should be called on the result in order to free memory.
+`duckdb_destroy_state` must be called on the result.
 
 * database: The database object to create the task state for
 * returns: The task state that can be used with duckdb_execute_tasks_state.
@@ -2703,7 +2912,7 @@ on the task state.
 DUCKDB_API void duckdb_destroy_task_state(duckdb_task_state state);
 
 /*!
-Returns true if execution of the current query is finished.
+Returns true if the execution of the current query is finished.
 
 * con: The connection on which to check
 */

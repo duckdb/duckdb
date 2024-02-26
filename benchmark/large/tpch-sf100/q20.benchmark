@@ -1,0 +1,7 @@
+# name: benchmark/large/tpch-sf100/q20.benchmark
+# description: Run query 20 from the TPC-H benchmark ()
+# group: [tpch-sf100]
+
+template benchmark/large/tpch-sf100/tpch_sf100.benchmark.in
+QUERY_NUMBER=20
+QUERY_NUMBER_PADDED=20

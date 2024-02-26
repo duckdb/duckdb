@@ -23,6 +23,8 @@ static DefaultCompressionMethod internal_compression_methods[] = {
      DictionaryCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_CHIMP, ChimpCompressionFun::GetFunction, ChimpCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_PATAS, PatasCompressionFun::GetFunction, PatasCompressionFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_ALP, AlpCompressionFun::GetFunction, AlpCompressionFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_ALPRD, AlpRDCompressionFun::GetFunction, AlpRDCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_FSST, FSSTFun::GetFunction, FSSTFun::TypeIsSupported},
     {CompressionType::COMPRESSION_ZSTD, ZSTDFun::GetFunction, ZSTDFun::TypeIsSupported},
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
@@ -77,6 +79,8 @@ vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(Physica
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICTIONARY, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_CHIMP, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_PATAS, data_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALP, data_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALPRD, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ZSTD, data_type);
 	return result;
