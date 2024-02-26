@@ -171,7 +171,7 @@ CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
 		return TypeIsSupported(child_type);
 	}
 	if (id == LogicalTypeId::ARRAY) {
-		auto &child_type = ListType::GetChildType(type);
+		auto &child_type = ArrayType::GetChildType(type);
 		return TypeIsSupported(child_type);
 	}
 	if (id == LogicalTypeId::UNION) {
