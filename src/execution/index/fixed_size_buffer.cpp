@@ -139,7 +139,7 @@ void FixedSizeBuffer::Pin() {
 
 	Destroy();
 	buffer_handle = std::move(new_buffer_handle);
-	block_handle = new_block_handle;
+	block_handle = std::move(new_block_handle);
 	block_pointer = BlockPointer();
 }
 
