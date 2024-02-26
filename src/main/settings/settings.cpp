@@ -588,7 +588,7 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	// read file into string
 	string file_content;
 	auto line = file->ReadLine();
-	while(!line.empty()) {
+	while (!line.empty()) {
 		if (StringUtil::Equals(&line.back(), "\n")) {
 			line.substr(0, line.size() - 1);
 		}

@@ -139,7 +139,6 @@ public:
 	DUCKDB_API QueryProfiler(ClientContext &context);
 
 public:
-
 	struct TreeNode {
 		PhysicalOperatorType type;
 		string name;
