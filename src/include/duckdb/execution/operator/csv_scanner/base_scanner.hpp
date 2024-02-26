@@ -185,13 +185,13 @@ protected:
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
-				uint64_t value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
-
-				while (iterator.pos.buffer_pos < to_pos - 8 &&
-				       !ContainsZeroByte((value ^ state_machine->transition_array.quote) &
-				                         (value ^ state_machine->transition_array.escape))) {
+				while (iterator.pos.buffer_pos + 8 < to_pos) {
+					uint64_t value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
+					if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
+					                     (value ^ state_machine->transition_array.escape))) {
+						break;
+					}
 					iterator.pos.buffer_pos += 8;
-					value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
 				}
 				while (state_machine->transition_array
 				           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
@@ -205,12 +205,13 @@ protected:
 				break;
 			case CSVState::STANDARD: {
 				iterator.pos.buffer_pos++;
-				uint64_t value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
-				while (iterator.pos.buffer_pos < to_pos - 8 &&
-				       !ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
-				                         (value ^ state_machine->transition_array.new_line))) {
+				while (iterator.pos.buffer_pos + 8 < to_pos) {
+					uint64_t value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
+					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
+					                     (value ^ state_machine->transition_array.new_line))) {
+						break;
+					}
 					iterator.pos.buffer_pos += 8;
-					value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
 				}
 				while (state_machine->transition_array
 				           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
