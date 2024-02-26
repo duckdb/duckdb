@@ -11,7 +11,6 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
