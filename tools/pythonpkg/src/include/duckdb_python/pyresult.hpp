@@ -19,6 +19,7 @@ namespace duckdb {
 struct DuckDBPyResult {
 public:
 	explicit DuckDBPyResult(unique_ptr<QueryResult> result);
+	~DuckDBPyResult();
 
 public:
 	Optional<py::tuple> Fetchone();

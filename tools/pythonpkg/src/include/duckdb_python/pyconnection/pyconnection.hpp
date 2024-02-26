@@ -52,6 +52,7 @@ public:
 public:
 	explicit DuckDBPyConnection() {
 	}
+	~DuckDBPyConnection();
 
 public:
 	static void Initialize(py::handle &m);
