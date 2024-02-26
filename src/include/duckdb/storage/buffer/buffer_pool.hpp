@@ -99,18 +99,24 @@ protected:
 	constexpr static idx_t INSERT_INTERVAL = 4096;
 	//! We multiply the base purge size by this value.
 	constexpr static idx_t PURGE_SIZE_MULTIPLIER = 2;
-	//! We multiply the purge size by this value to determine early-outs.
+	//! We multiply the purge size by this value to determine early-outs. This is the minimum queue size.
+	//! We never purge below this point.
 	constexpr static idx_t EARLY_OUT_MULTIPLIER = 4;
 	//! We multiply the approximate alive nodes by this value to test whether our total dead nodes
-	//! exceed their allowed ratio.
-	constexpr static idx_t ALIVE_NODE_MULTIPLIER = INSERT_INTERVAL;
+	//! exceed their allowed ratio. Must be greater than 1.
+	constexpr static idx_t ALIVE_NODE_MULTIPLIER = 4;
 
 	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
 	atomic<idx_t> evict_queue_insertions;
+	//! Total dead nodes in the eviction queue. There are two scenarios in which a node dies: (1) we destroy its block
+	//! handle, or (2) we insert a newer version into the eviction queue.
 	atomic<idx_t> total_dead_nodes;
-	idx_t purged_dead_nodes;
-	//! Whether a queue purge is currently active
+	//! Whether a queue purge is currently active. Only lets a single thread enter the purge phase.
 	atomic<bool> purge_active;
+
+	//! Counts the total number of dead nodes that have been purged. This happens behind purge_active, so it
+	//! does not have to be an atomic value.
+	idx_t purged_dead_nodes;
 	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
 	vector<BufferEvictionNode> purge_nodes;
 };

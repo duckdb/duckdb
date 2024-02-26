@@ -147,7 +147,7 @@ void BufferPool::PurgeIteration(const idx_t purge_size) {
 	// bulk enqueue
 	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 
-	// increment the total purged nodes
+	// increment the total number of purged nodes
 	purged_dead_nodes += actually_dequeued - alive_nodes;
 }
 
@@ -163,15 +163,16 @@ void BufferPool::PurgeQueue() {
 	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
 
 	// retrieve the number of insertions since the previous purge
+	// this value is expected to be around INSERT_INTERVAL
 	idx_t queue_insertions = atomic_fetch_sub(&evict_queue_insertions, INSERT_INTERVAL);
-	// even in the naïve approach, we purge PURGE_SIZE_MULTIPLIER as much as we insert
+	// even in the naïve approach, we purge PURGE_SIZE_MULTIPLIER * queue_insertions nodes
 	idx_t purge_size = queue_insertions * PURGE_SIZE_MULTIPLIER;
 
 	// get an estimate of the queue size as-of now
 	idx_t approx_q_size = queue->q.size_approx();
 
 	// early-out, if the queue is not big enough to justify purging
-	// - we want to keep the LRU characteristic alive as good as possible
+	// - we want to keep the LRU characteristic alive
 	if (approx_q_size < purge_size * EARLY_OUT_MULTIPLIER) {
 		purge_active = false;
 		return;
@@ -181,48 +182,56 @@ void BufferPool::PurgeQueue() {
 	idx_t approx_dead_nodes = total_dead_nodes;
 	approx_dead_nodes = approx_dead_nodes < purged_dead_nodes ? 0 : approx_dead_nodes - purged_dead_nodes;
 
-	// concurrency: we don't allow more dead nodes than the approximate queue size we saw earlier
+	// defensive programming: we do not allow more dead nodes than the approximate queue size we saw earlier
 	approx_dead_nodes = approx_dead_nodes > approx_q_size ? approx_q_size : approx_dead_nodes;
 	idx_t approx_alive_nodes = approx_q_size - approx_dead_nodes;
 
 	// there are two types of purges:
-	// (1) for most scenarios, purging PURGE_SIZE_MULTIPLIER more nodes than we insert is enough
+	// (1) for most scenarios, purging PURGE_SIZE_MULTIPLIER more nodes than we insert is enough (purge_size). This
+	//	also counters oscillation for scenarios where most nodes are dead
 	// (2) however, if the pressure on the queue becomes too contested, we need to purge more
-	// aggressively, i.e., we actively seek a specific number of dead nodes to purge
+	//	aggressively, i.e., we actively seek a specific number of dead nodes to purge
 
-	// scenario (1): the ratio of alive vs. dead nodes is not growing faster than we can purge
-	if (approx_alive_nodes == 0 || approx_alive_nodes * ALIVE_NODE_MULTIPLIER > approx_dead_nodes) {
+	// scenario (1): the ratio of alive vs. dead nodes is not growing faster than we can purge. We'll early-out after
+	// 	the first iteration of this loop.
+	// scenario (2): the ratio of alive vs. dead nodes is growing faster than we can purge, we keep purging until we
+	// 	hit one of the following conditions:
+	// 		2.1. we're back at an approximate queue size which is less than purge_size * EARLY_OUT_MULTIPLIER
+	// 		2.2. we're back at a ratio of 1*alive_node:(ALIVE_NODE_MULTIPLIER - 1)*dead_nodes. We go below our initial
+	// ratio of 			1*alive_node:ALIVE_NODE_MULTIPLIER*dead_nodes to decrease oscillation. 		2.3. we've purged the entire
+	// queue: max_purges is zero. This is a worst-case scenario, which 			guarantees that we always exit the loop
 
-		Printer::PrintF("-- DEFAULT PURGE --");
-		Printer::PrintF("approx queue size: %llu", approx_q_size);
-		Printer::PrintF("approx dead nodes: %llu", approx_dead_nodes);
-
-		PurgeIteration(purge_size);
-		purge_active = false;
-		return;
-	}
-
-	// scenario (2): the ratio of alive vs. dead nodes is growing faster than we can purge
-
-	// we also set a maximum of purges, to ensure we exit this loop
 	idx_t max_purges = approx_q_size / purge_size;
+	while (max_purges != 0) {
 
-	while (max_purges != 0 && approx_alive_nodes * ALIVE_NODE_MULTIPLIER < approx_dead_nodes) {
-
-		Printer::PrintF("-- ITERATING PURGE --");
+		Printer::PrintF("-- PURGE --");
 		Printer::PrintF("approx queue size: %llu", approx_q_size);
 		Printer::PrintF("approx dead nodes: %llu", approx_dead_nodes);
 
 		PurgeIteration(purge_size);
 
-		// update relevant sizes
+		// update relevant sizes and potentially early-out
 		approx_q_size = queue->q.size_approx();
+
+		// early-out according to situation (1) or (2.1)
+		if (approx_q_size < purge_size * EARLY_OUT_MULTIPLIER) {
+			Printer::PrintF("RESTORED MINIMUM QUEUE SIZE");
+			purge_active = false;
+			return;
+		}
 
 		approx_dead_nodes = total_dead_nodes;
 		approx_dead_nodes = approx_dead_nodes < purged_dead_nodes ? 0 : approx_dead_nodes - purged_dead_nodes;
 
 		approx_dead_nodes = approx_dead_nodes > approx_q_size ? approx_q_size : approx_dead_nodes;
 		approx_alive_nodes = approx_q_size - approx_dead_nodes;
+
+		// early-out according to situation (2.2)
+		if (approx_alive_nodes * (ALIVE_NODE_MULTIPLIER - 1) > approx_dead_nodes) {
+			Printer::PrintF("RESTORED RATIO");
+			purge_active = false;
+			return;
+		}
 
 		max_purges--;
 		if (max_purges == 0) {
