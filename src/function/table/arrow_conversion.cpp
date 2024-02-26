@@ -255,7 +255,21 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, const ArrowScan
                               const ArrowType &arrow_type, int64_t nested_offset, int64_t parent_offset) {
 	auto size_type = arrow_type.GetSizeType();
 	SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);
-	if (size_type == ArrowVariableSizeType::NORMAL) {
+	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
+		auto fixed_size = arrow_type.FixedSize();
+		//! Have to check validity mask before setting this up
+		idx_t offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset) * fixed_size;
+		auto cdata = ArrowBufferData<char>(array, 1);
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			if (FlatVector::IsNull(vector, row_idx)) {
+				continue;
+			}
+			auto bptr = cdata + offset;
+			auto blob_len = fixed_size;
+			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+			offset += blob_len;
+		}
+	} else if (size_type == ArrowVariableSizeType::NORMAL) {
 		auto offsets =
 		    ArrowBufferData<uint32_t>(array, 1) + GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 		auto cdata = ArrowBufferData<char>(array, 2);

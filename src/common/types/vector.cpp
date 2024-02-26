@@ -911,7 +911,6 @@ void Vector::Flatten(idx_t count) {
 
 			auto child_vec = make_uniq<Vector>(original_child);
 			child_vec->Flatten(count * array_size);
-			// child.Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
