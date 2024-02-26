@@ -212,7 +212,8 @@ protected:
 					uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
-					                     (value ^ state_machine->transition_array.new_line))) {
+					                     (value ^ state_machine->transition_array.new_line) &
+					                     (value ^ state_machine->transition_array.carriage_return))) {
 						break;
 					}
 					iterator.pos.buffer_pos += 8;
