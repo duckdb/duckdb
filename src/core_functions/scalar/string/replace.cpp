@@ -59,7 +59,7 @@ static string_t ReplaceScalarFunction(const string_t &haystack, const string_t &
 		size_haystack -= size_needle;
 	}
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 static void ReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {

@@ -240,7 +240,7 @@ struct HugeintToStringCast {
 			// the remainder is small (i.e. less than 10000000000000000)
 			ptr = NumericHelper::FormatUnsigned<uint64_t>(remainder, ptr);
 
-			int format_length = startptr - ptr;
+			int format_length = UnsafeNumericCast<int>(startptr - ptr);
 			// pad with zero
 			for (int i = format_length; i < 17; i++) {
 				*--ptr = '0';
@@ -430,7 +430,7 @@ struct TimeToStringCast {
 			}
 			trailing_zeros++;
 		}
-		return trailing_zeros;
+		return UnsafeNumericCast<int32_t>(trailing_zeros);
 	}
 
 	static idx_t Length(int32_t time[], char micro_buffer[]) {
@@ -495,7 +495,7 @@ struct IntervalToStringCast {
 	}
 
 	static void FormatTwoDigits(int64_t value, char buffer[], idx_t &length) {
-		TimeToStringCast::FormatTwoDigits(buffer + length, value);
+		TimeToStringCast::FormatTwoDigits(buffer + length, UnsafeNumericCast<int32_t>(value));
 		length += 2;
 	}
 
@@ -567,7 +567,8 @@ struct IntervalToStringCast {
 			FormatTwoDigits(sec, buffer, length);
 			if (micros != 0) {
 				buffer[length++] = '.';
-				auto trailing_zeros = TimeToStringCast::FormatMicros(micros, buffer + length);
+				auto trailing_zeros =
+				    TimeToStringCast::FormatMicros(UnsafeNumericCast<uint32_t>(micros), buffer + length);
 				length += 6 - trailing_zeros;
 			}
 		} else if (length == 0) {

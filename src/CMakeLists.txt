@@ -8,7 +8,7 @@ add_extension_definitions()
 
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move -Wimplicit-int-conversion"
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move -Wimplicit-int-conversion  -Wshorten-64-to-32 -Wnarrowing"
   )
   if(CMAKE_COMPILER_IS_GNUCC)
     if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 6)

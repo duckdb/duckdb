@@ -520,7 +520,7 @@ struct SortedAggregateFunction {
 				order_state->sel.Initialize(sel_data.data() + order_state->offset);
 				start += order_state->nsel;
 			}
-			sel_data[order_state->offset++] = sidx;
+			sel_data[order_state->offset++] = UnsafeNumericCast<sel_t>(sidx);
 		}
 
 		// Append nonempty slices to the arguments

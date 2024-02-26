@@ -50,7 +50,7 @@ public:
 	}
 
 	static inline uint32_t EncodeFloat(float x) {
-		uint64_t buff;
+		uint32_t buff;
 
 		//! zero
 		if (x == 0) {

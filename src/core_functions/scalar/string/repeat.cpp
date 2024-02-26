@@ -18,7 +18,7 @@ static string_t RepeatScalarFunction(const string_t &str, const int64_t cnt, vec
 		result.insert(result.end(), input_str, input_str + size_str);
 	}
 
-	return string_t(result.data(), result.size());
+	return string_t(result.data(), UnsafeNumericCast<uint32_t>(result.size()));
 }
 
 static void RepeatFunction(DataChunk &args, ExpressionState &state, Vector &result) {

@@ -45,7 +45,7 @@ struct PositionFunctor {
 		return 0;
 	}
 	static inline int32_t UpdateResultEntries(idx_t child_idx) {
-		return child_idx + 1;
+		return UnsafeNumericCast<int32_t>(child_idx + 1);
 	}
 };
 

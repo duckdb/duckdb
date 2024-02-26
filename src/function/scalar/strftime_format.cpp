@@ -731,7 +731,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
 		if (i == entry_size) {
 			// full match
 			pos += entry_size;
-			return c;
+			return UnsafeNumericCast<int32_t>(c);
 		}
 	}
 	return -1;
@@ -862,7 +862,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// day of the month
-				result_data[2] = number;
+				result_data[2] = UnsafeNumericCast<int32_t>(number);
 				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
@@ -873,7 +873,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// month number
-				result_data[1] = number;
+				result_data[1] = UnsafeNumericCast<int32_t>(number);
 				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
@@ -916,7 +916,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					break;
 				}
 				// year as full number
-				result_data[0] = number;
+				result_data[0] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::YEAR_ISO:
 				switch (offset_specifier) {
@@ -965,7 +965,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// hour as full number
-				result_data[3] = number;
+				result_data[3] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::HOUR_12_PADDED:
 			case StrTimeSpecifier::HOUR_12_DECIMAL:
@@ -975,7 +975,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// 12-hour number: start off by just storing the number
-				result_data[3] = number;
+				result_data[3] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::MINUTE_PADDED:
 			case StrTimeSpecifier::MINUTE_DECIMAL:
@@ -985,7 +985,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// minutes
-				result_data[4] = number;
+				result_data[4] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::SECOND_PADDED:
 			case StrTimeSpecifier::SECOND_DECIMAL:
@@ -995,22 +995,23 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 					return false;
 				}
 				// seconds
-				result_data[5] = number;
+				result_data[5] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::NANOSECOND_PADDED:
 				D_ASSERT(number < Interval::NANOS_PER_SEC); // enforced by the length of the number
 				// microseconds (rounded)
-				result_data[6] = (number + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO;
+				result_data[6] =
+				    UnsafeNumericCast<int32_t>((number + Interval::NANOS_PER_MICRO / 2) / Interval::NANOS_PER_MICRO);
 				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
 				D_ASSERT(number < Interval::MICROS_PER_SEC); // enforced by the length of the number
 				// microseconds
-				result_data[6] = number;
+				result_data[6] = UnsafeNumericCast<int32_t>(number);
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
 				D_ASSERT(number < Interval::MSECS_PER_SEC); // enforced by the length of the number
 				// microseconds
-				result_data[6] = number * Interval::MICROS_PER_MSEC;
+				result_data[6] = UnsafeNumericCast<int32_t>(number * Interval::MICROS_PER_MSEC);
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
@@ -1272,7 +1273,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 		iso_week = (iso_week > 53) ? 1 : iso_week;
 		iso_weekday = (iso_weekday > 7) ? 1 : iso_weekday;
 		// Gregorian and ISO agree on the year of January 4
-		auto jan4 = Date::FromDate(iso_year, 1, 4);
+		auto jan4 = Date::FromDate(UnsafeNumericCast<int32_t>(iso_year), 1, 4);
 		// ISO Week 1 starts on the previous Monday
 		auto week1 = Date::GetMondayOfCurrentWeek(jan4);
 		// ISO Week N starts N-1 weeks later

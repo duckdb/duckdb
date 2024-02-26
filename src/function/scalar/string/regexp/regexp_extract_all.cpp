@@ -68,7 +68,8 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	bool throw_on_group_found = (idx_t)group > args.size;
 
 	idx_t startpos = 0;
-	for (idx_t iteration = 0; ExtractAll(input, pattern, &startpos, args.group_buffer, args.size); iteration++) {
+	for (idx_t iteration = 0;
+	     ExtractAll(input, pattern, &startpos, args.group_buffer, UnsafeNumericCast<int>(args.size)); iteration++) {
 		if (!iteration && throw_on_group_found) {
 			throw InvalidInputException("Pattern has %d groups. Cannot access group %d", args.size, group);
 		}

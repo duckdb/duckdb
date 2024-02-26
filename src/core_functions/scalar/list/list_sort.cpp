@@ -184,7 +184,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			auto source_idx = list_entry.offset + child_idx;
 			sel.set_index(offset_lists_indices, source_idx);
 			lists_indices_data[offset_lists_indices] = UnsafeNumericCast<uint16_t>(i);
-			payload_vector_data[offset_lists_indices] = source_idx;
+			payload_vector_data[offset_lists_indices] = NumericCast<uint32_t>(source_idx);
 			offset_lists_indices++;
 			incr_payload_count++;
 		}
