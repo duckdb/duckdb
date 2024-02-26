@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/planner/binder.hpp"
 
 //! This file contains the binder definitions for statements that do not need to be bound at all and only require a
@@ -17,8 +18,19 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-	auto entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
-	                               stmt.info->name, stmt.info->if_not_found);
+
+	optional_ptr<CatalogEntry> entry;
+
+	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
+		// for column comments we need to an extra step: they can alter a table or a view, we resolve that here.
+		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
+		entry = info.TryResolveCatalogEntry(context);
+	} else {
+		// All other AlterTypes
+		entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
+		                          stmt.info->name, stmt.info->if_not_found);
+	}
+
 	if (entry) {
 		D_ASSERT(!entry->deleted);
 		auto &catalog = entry->ParentCatalog();

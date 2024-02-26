@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/auto/test_sniffer_empty_start_value.test
+# description: Test reading a value with empty spaces at the beginning
+# group: [auto]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+from read_csv('data/csv/empty_space_start_value.csv')
+----
+1968	86	Greetings
+1970	17	Bloody Mama
+1970	73	Hi, Mom!
+1971	40	Born to Win

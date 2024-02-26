@@ -452,8 +452,9 @@ static char *Argv0;
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
 */
-static char mainPrompt[20];     /* First line prompt. default: "sqlite> "*/
-static char continuePrompt[20]; /* Continuation prompt. default: "   ...> " */
+static char mainPrompt[20];             /* First line prompt. default: "D "*/
+static char continuePrompt[20];         /* Continuation prompt. default: "   ...> " */
+static char continuePromptSelected[20]; /* Selected continuation prompt. default: "   ...> " */
 
 /*
 ** Render output like fprintf().  Except, if the output is going to the
@@ -10717,6 +10718,7 @@ struct ShellState {
   char rowSeparator[20]; /* Row separator character for MODE_Ascii */
   char colSepPrior[20];  /* Saved column separator */
   char rowSepPrior[20];  /* Saved row separator */
+  int *colTypes;         /* Types of each column */
   int *colWidth;         /* Requested width of each column in columnar modes */
   int *actualWidth;      /* Actual width of each column */
   int nWidth;            /* Number of slots in colWidth[] and actualWidth[] */
@@ -11577,6 +11579,28 @@ static void print_row_separator(
     for(i=1; i<nArg; i++){
       fputs(zSep, p->out);
       print_dashes(p->out, p->actualWidth[i]+2);
+    }
+    fputs(zSep, p->out);
+  }
+  fputs("\n", p->out);
+}
+
+static void print_markdown_separator(
+  ShellState *p,
+  int nArg,
+  const char *zSep
+){
+  int i;
+  if( nArg>0 ){
+    for(i=0; i<nArg; i++){
+      fputs(zSep, p->out);
+      if (p->colTypes && (p->colTypes[i] == SQLITE_INTEGER || p->colTypes[i] == SQLITE_FLOAT)) {
+        // right-align numerics in tables
+        print_dashes(p->out, p->actualWidth[i]+1);
+        fputs(":", p->out);
+      } else {
+        print_dashes(p->out, p->actualWidth[i]+2);
+      }
     }
     fputs(zSep, p->out);
   }
@@ -12704,6 +12728,10 @@ static void exec_prepared_stmt_columnar(
   for(i=0; i<nColumn; i++){
     azData[i] = strdup_handle_newline(p, sqlite3_column_name(pStmt,i));
   }
+  p->colTypes = realloc(p->colTypes, nColumn * sizeof(int));
+  for(i=0; i<nColumn; i++){
+    p->colTypes[i] = sqlite3_column_type(pStmt, i);
+  }
   do{
     if( (nRow+2)*nColumn >= nAlloc ){
       nAlloc *= 2;
@@ -12780,7 +12808,7 @@ static void exec_prepared_stmt_columnar(
         utf8_printf(p->out, "%*s%s%*s", (w-n)/2, "", azData[i], (w-n+1)/2, "");
         fputs(i==nColumn-1?" |\n":" | ", p->out);
       }
-      print_row_separator(p, nColumn, "|");
+      print_markdown_separator(p, nColumn, "|");
       break;
     }
     case MODE_Box: {
@@ -18290,7 +18318,10 @@ static int do_meta_command(char *zLine, ShellState *p){
     if( nArg >= 3) {
       strncpy(continuePrompt,azArg[2],(int)ArraySize(continuePrompt)-1);
     }
-  }else
+    if( nArg >= 4) {
+      strncpy(continuePromptSelected,azArg[3],(int)ArraySize(continuePromptSelected)-1);
+    }
+  } else
 
   if( c=='q' && strncmp(azArg[0], "quit", n)==0 ){
     rc = 2;
@@ -19969,7 +20000,11 @@ static void main_init(ShellState *data) {
   sqlite3_config(SQLITE_CONFIG_LOG, shellLog, data);
   sqlite3_config(SQLITE_CONFIG_MULTITHREAD);
   sqlite3_snprintf(sizeof(mainPrompt), mainPrompt, "D ");
-  sqlite3_snprintf(sizeof(continuePrompt), continuePrompt, "> ");
+  sqlite3_snprintf(sizeof(continuePrompt), continuePrompt, "· ");
+  sqlite3_snprintf(sizeof(continuePromptSelected), continuePromptSelected, "‣ ");
+#ifdef HAVE_LINENOISE
+  linenoiseSetPrompt(continuePrompt, continuePromptSelected);
+#endif
 }
 
 /*
@@ -20584,6 +20619,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
   for(i=0; i<argcToFree; i++) free(argvToFree[i]);
   free(argvToFree);
 #endif
+  free(data.colTypes);
   free(data.colWidth);
   /* Clear the global data structure so that valgrind will detect memory
   ** leaks */

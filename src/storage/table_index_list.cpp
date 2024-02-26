@@ -75,9 +75,11 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 		auto &create_info = unknown_index.GetCreateInfo();
 		auto &storage_info = unknown_index.GetStorageInfo();
 
-		auto index_instance = index_type->create_instance(create_info.index_name, create_info.constraint_type,
-		                                                  create_info.column_ids, unknown_index.unbound_expressions,
-		                                                  *table_info.table_io_manager, table_info.db, storage_info);
+		CreateIndexInput input(*table_info.table_io_manager, table_info.db, create_info.constraint_type,
+		                       create_info.index_name, create_info.column_ids, unknown_index.unbound_expressions,
+		                       storage_info, create_info.options);
+
+		auto index_instance = index_type->create_instance(input);
 
 		index = std::move(index_instance);
 	}

@@ -71,8 +71,6 @@ jobs:
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os linux --output linux_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os osx --output osx_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os windows --output windows_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
-          # In v0.9.2 wasm was not part of the avaliable triplets, backporting it here
-          grep wasm ./duckdb/.github/config/distribution_matrix.json || echo '{"wasm":{"include":[{"duckdb_arch":"wasm_mvp","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_eh","vcpkg_triplet":"wasm32-emscripten"},{"duckdb_arch":"wasm_threads","vcpkg_triplet":"wasm32-emscripten"}]}}' > ./duckdb/.github/config/distribution_matrix.json
           python3 ${{ inputs.matrix_parse_script }} --input ./duckdb/.github/config/distribution_matrix.json --select_os wasm --output wasm_matrix.json --exclude "${{ inputs.exclude_archs }}" --pretty
 
       - id: set-matrix-linux
@@ -170,6 +168,7 @@ jobs:
           GEN: ninja
           CC: ${{ matrix.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-gcc' || '' }}
           CXX: ${{ matrix.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-g++' || '' }}
+          DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
         run: |
           make release
 
@@ -214,7 +213,7 @@ jobs:
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.7'
 
@@ -230,6 +229,8 @@ jobs:
 
       - name: Build extension
         shell: bash
+        env:
+          DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
         run: |
           make release
 
@@ -273,7 +274,7 @@ jobs:
           fetch-depth: 0
           submodules: 'true'
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.7'
 
@@ -300,6 +301,8 @@ jobs:
           vcpkgGitCommitId: ${{ inputs.vcpkg_commit }}
 
       - name: Build extension
+        env:
+          DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
         run: |
           make release
 

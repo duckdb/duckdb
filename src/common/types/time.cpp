@@ -54,6 +54,10 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		}
 	}
 
+	if (pos >= len) {
+		return false;
+	}
+
 	// fetch the separator
 	sep = buf[pos++];
 	if (sep != ':') {

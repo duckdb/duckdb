@@ -101,6 +101,10 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
+	if (bound->return_type == LogicalType::SQLNULL) {
+		QueryErrorContext error_context(bound->query_location);
+		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
+	}
 	children.emplace_back(std::move(bound));
 
 	ErrorData error;
@@ -145,7 +149,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		//	If the frame is a RANGE frame and the type is a time,
 		//	then we have to convert the time to a timestamp to avoid wrapping.
-		if (!is_range) {
+		if (!is_range || error.HasError()) {
 			continue;
 		}
 		auto &order_expr = order.expression;

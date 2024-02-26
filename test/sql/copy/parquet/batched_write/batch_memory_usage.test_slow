@@ -1,0 +1,29 @@
+# name: test/sql/copy/parquet/batched_write/batch_memory_usage.test_slow
+# description: Batched Parquet write memory usage
+# group: [batched_write]
+
+require parquet
+
+statement ok
+SELECT setseed(0.72)
+
+statement ok
+COPY (SELECT uuid()::VARCHAR as varchar, uuid() AS uuid FROM range(10000000) t(i)) TO '__TEST_DIR__/random_uuids.parquet'
+
+# copy from one parquet file to another in a memory constrained environment
+statement ok
+SET memory_limit='650MB'
+
+statement ok
+COPY '__TEST_DIR__/random_uuids.parquet' TO '__TEST_DIR__/random_uuids_copy.parquet';
+
+# ensure the parquet files hold the same content
+statement ok
+SET memory_limit='2GB';
+
+# ensure the parquet files hold the same content in the same order
+query III
+SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/random_uuids.parquet'
+EXCEPT
+SELECT *, row_number() OVER () as rownum FROM '__TEST_DIR__/random_uuids_copy.parquet';
+----

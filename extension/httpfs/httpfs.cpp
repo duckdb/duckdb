@@ -644,8 +644,14 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 				                    full_download_result->http_url, to_string(full_download_result->code),
 				                    full_download_result->error);
 			}
-			// Mark the file as initialized, unlocking it and allowing parallel reads
-			cached_file_handle->SetInitialized();
+
+			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
+			cached_file_handle->SetInitialized(length);
+
+			// We shouldn't write these to cache
+			should_write_cache = false;
+		} else {
+			length = cached_file_handle->GetSize();
 		}
 	}
 

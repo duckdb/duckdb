@@ -64,13 +64,9 @@ public:
 
 public:
 	//! Create a index instance of this type
-	static unique_ptr<Index> Create(const string &name, const IndexConstraintType constraint_type,
-	                                const vector<column_t> &column_ids,
-	                                const vector<unique_ptr<Expression>> &unbound_expressions,
-	                                TableIOManager &table_io_manager, AttachedDatabase &db,
-	                                const IndexStorageInfo &storage_info) {
-		auto art = make_uniq<ART>(name, constraint_type, column_ids, table_io_manager, unbound_expressions, db, nullptr,
-		                          storage_info);
+	static unique_ptr<Index> Create(CreateIndexInput &input) {
+		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
+		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
 		return std::move(art);
 	}
 

@@ -1,16 +1,16 @@
 add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION=1)
 
-set(SHELL_SOURCES shell.c)
+include_directories(../sqlite3_api_wrapper/include)
 if(NOT WIN32)
+  add_subdirectory(linenoise)
   add_definitions(-DHAVE_LINENOISE=1)
-  set(SHELL_SOURCES ${SHELL_SOURCES} linenoise.cpp)
   include_directories(../../third_party/utf8proc/include)
+  include_directories(linenoise/include)
 endif()
+set(SHELL_SOURCES ${SHELL_SOURCES} shell.c)
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
 
-include_directories(include)
-include_directories(../sqlite3_api_wrapper/include)
 add_executable(shell ${SHELL_SOURCES})
 target_link_libraries(shell sqlite3_api_wrapper_static
                       ${DUCKDB_EXTRA_LINK_FLAGS})

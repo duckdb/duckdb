@@ -2,3 +2,4 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/table/summary.hpp"
+#include "duckdb/function/table/files.hpp"

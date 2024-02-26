@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_casting.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 
 namespace duckdb {
 
@@ -11,16 +11,18 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 	    sql_type == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
+		CastParameters parameters(false, &error_message);
 		idx_t line_error;
 		return CSVCast::TryCastDateVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
-		                                  dummy_result, size, error_message, line_error);
+		                                  dummy_result, size, parameters, line_error);
 	}
 	if (!sniffing_state_machine.dialect_options.date_format[LogicalTypeId::TIMESTAMP].GetValue().Empty() &&
 	    sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
+		CastParameters parameters(false, &error_message);
 		return CSVCast::TryCastTimestampVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
-		                                       dummy_result, size, error_message);
+		                                       dummy_result, size, parameters);
 	}
 	// target type is not varchar: perform a cast
 	string error_message;

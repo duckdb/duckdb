@@ -204,8 +204,8 @@ struct CustomExtensionRepository {
 	static constexpr const char *Name = "custom_extension_repository";
 	static constexpr const char *Description = "Overrides the custom endpoint for remote extension installation";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 
@@ -214,8 +214,8 @@ struct AutoloadExtensionRepository {
 	static constexpr const char *Description =
 	    "Overrides the custom endpoint for extension installation on autoloading";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 
@@ -493,15 +493,6 @@ struct ExportLargeBufferArrow {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
-};
-
-struct ProfilerHistorySize {
-	static constexpr const char *Name = "profiler_history_size";
-	static constexpr const char *Description = "Sets the profiler history size";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(ClientContext &context);
 };
 

@@ -49,6 +49,10 @@ struct PositionFunctor {
 	}
 };
 
+struct MapUtil {
+	static void ReinterpretMap(Vector &target, Vector &other, idx_t count);
+};
+
 struct VariableReturnBindData : public FunctionData {
 	LogicalType stype;
 
@@ -99,7 +103,6 @@ struct ListPositionFun {
 };
 
 struct ListResizeFun {
-	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -119,7 +122,9 @@ struct ListWhereFun {
 };
 
 struct StructExtractFun {
-	static ScalarFunction GetFunction();
+	static ScalarFunction KeyExtractFunction();
+	static ScalarFunction IndexExtractFunction();
+	static ScalarFunctionSet GetFunctions();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

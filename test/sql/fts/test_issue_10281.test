@@ -4,6 +4,8 @@
 
 require fts
 
+require noalternativeverify
+
 statement ok
 CREATE OR REPLACE TABLE data AS SELECT {'duck': 42} conversations, 42::bigint _id;
 

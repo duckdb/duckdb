@@ -81,7 +81,9 @@ struct ToWeeksOperator {
 	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
-		result.days = input * 7;
+		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::DAYS_PER_WEEK, result.days)) {
+			throw OutOfRangeException("Interval value %d weeks out of range", input);
+		}
 		result.micros = 0;
 		return result;
 	}

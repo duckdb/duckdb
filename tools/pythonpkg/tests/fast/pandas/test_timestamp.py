@@ -73,4 +73,4 @@ class TestPandasTimestamps(object):
         """
         )
         res = rel.df()
-        assert res['dateTime'][0] == res['dateTime_2'][0]
+        assert res['dateTime'][0] == res['dateTime_1'][0]
