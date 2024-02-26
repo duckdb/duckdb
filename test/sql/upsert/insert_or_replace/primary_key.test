@@ -1,0 +1,22 @@
+# name: test/sql/upsert/insert_or_replace/primary_key.test
+# group: [insert_or_replace]
+
+# Single primary key on multiple columns
+statement ok
+create table tbl(
+	a int,
+	b int,
+	c int,
+	primary key(a,b,c)
+);
+
+statement ok
+insert or replace into tbl values (1,2,3);
+
+statement ok
+insert or replace into tbl values (1,2,3);
+
+query III
+select * from tbl;
+----
+1	2	3

@@ -259,18 +259,21 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			if (!index.is_unique) {
 				continue;
 			}
-			// does this work with multi-column indexes?
 			auto &indexed_columns = index.column_set;
+			bool matches = false;
 			for (auto &column : table.GetColumns().Physical()) {
 				if (indexed_columns.count(column.Physical().index)) {
-					found_matching_indexes++;
+					matches = true;
+					break;
 				}
 			}
+			found_matching_indexes += matches;
 		}
+
 		if (!found_matching_indexes) {
 			throw BinderException(
 			    "There are no UNIQUE/PRIMARY KEY Indexes that refer to this table, ON CONFLICT is a no-op");
-		} else if (storage_info.index_info.size() != 1) {
+		} else if (found_matching_indexes != 1) {
 			if (insert.action_type != OnConflictAction::NOTHING) {
 				// When no conflict target is provided, and the action type is UPDATE,
 				// we only allow the operation when only a single Index exists
