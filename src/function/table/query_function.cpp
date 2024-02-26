@@ -20,9 +20,17 @@ static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFuncti
 }
 
 static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFunctionBindInput &input) {
+	D_ASSERT(input.named_parameters.size() == 0 || input.named_parameters.size() == 1);
+	string by_name {""}; // by_name defaults to false
+	if (input.named_parameters.size() == 1) {
+		auto it = input.named_parameters.find("by_name");
+		by_name = (it != input.named_parameters.end() && it->second.GetValue<bool>()) ? "BY NAME " : "";
+	}
+	// prepare the query
+	string union_all_clause = " UNION ALL " + by_name + "FROM ";
 	string query = "FROM " + input.inputs[0].ToString();
 	for (size_t i = 1; i < input.inputs.size(); ++i) {
-		query += " UNION ALL FROM " + input.inputs[i].ToString();
+		query += union_all_clause + input.inputs[i].ToString();
 	}
 
 	Parser parser(context.GetParserOptions());
@@ -40,10 +48,11 @@ void QueryTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	query.bind_replace = QueryBindReplace;
 	set.AddFunction(query);
 
-	TableFunction table("query_table", {LogicalType::VARCHAR}, nullptr, nullptr);
-	table.bind_replace = TableBindReplace;
-	table.varargs = LogicalType::VARCHAR;
-	set.AddFunction(table);
+	TableFunction query_table("query_table", {LogicalType::VARCHAR}, nullptr, nullptr);
+	query_table.named_parameters["by_name"] = LogicalType::BOOLEAN;
+	query_table.bind_replace = TableBindReplace;
+	query_table.varargs = LogicalType::VARCHAR;
+	set.AddFunction(query_table);
 }
 
 } // namespace duckdb

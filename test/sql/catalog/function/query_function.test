@@ -132,6 +132,7 @@ SELECT * FROM query('CREATE TABLE tbl (a INT)');
 ----
 Parser Error: Expected a single SELECT statement
 
+
 # test query_table()
 statement ok
 create table t as select 42;
@@ -184,21 +185,6 @@ duckdb
 1?ch@racter$
 I am a subquery
 
-# dynamic table macro example
-statement ok
-CREATE MACRO union_all(table_list, by_name:='FALSE') AS TABLE (
-    FROM query('FROM ' || list_reduce(table_list, (x, y) ->  x || ' UNION ALL ' || CASE WHEN by_name THEN 'BY NAME ' ELSE '' END || 'FROM ' || y))
-);
-
-query I
-from union_all(['t', 't2', 't3', t4, '(select ''I am a subquery'')'], by_name:='FALSE');
-----
-42
-duckdb
-(empty)
-1?ch@racter$
-I am a subquery
-
 statement error
 from query_table(['t', 't2', 't3', t4, '(select ''I am a subquery'')']);
 ----
@@ -218,3 +204,25 @@ statement error
 from query_table(NULL);
 ----
 Parser Error: syntax error at or near "NULL"
+
+# test by_name argument
+query III
+from query_table(tbl2, by_name=true);
+----
+1	2	3
+4	5	6
+7	8	9
+
+query IIIII
+from query_table('t', 't2', 't3', t4, '(select ''I am a subquery'')', by_name=true);
+----
+42	NULL	NULL	NULL	NULL
+NULL	duckdb	NULL	NULL	NULL
+NULL	NULL	(empty)	NULL	NULL
+NULL	NULL	NULL	1?ch@racter$	NULL
+NULL	NULL	NULL	NULL	I am a subquery
+
+statement error
+from query_table('t', not_valid=true);
+----
+Binder Error: Invalid named parameter "not_valid" for function query_table
