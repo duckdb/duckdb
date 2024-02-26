@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -186,13 +187,15 @@ protected:
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					uint64_t value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
+					uint64_t value =
+					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
 					                     (value ^ state_machine->transition_array.escape))) {
 						break;
 					}
 					iterator.pos.buffer_pos += 8;
 				}
+
 				while (state_machine->transition_array
 				           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
 				       iterator.pos.buffer_pos < to_pos - 1) {
@@ -206,7 +209,8 @@ protected:
 			case CSVState::STANDARD: {
 				iterator.pos.buffer_pos++;
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					uint64_t value = *reinterpret_cast<uint64_t *>(&buffer_handle_ptr[iterator.pos.buffer_pos]);
+					uint64_t value =
+					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
 					                     (value ^ state_machine->transition_array.new_line))) {
 						break;
