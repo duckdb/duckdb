@@ -377,10 +377,10 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_i
 	RowGroupBatchEntry new_entry(batch_index, std::move(current_collection), batch_type);
 	if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
 		batch_helper.IncreaseUnflushedMemory(new_entry.unflushed_memory);
-	}
 #ifdef BATCH_PRINT
-	Printer::PrintF("Increase unflushed memory by %llu", new_entry.unflushed_memory);
+		Printer::PrintF("Increase unflushed memory by %llu", new_entry.unflushed_memory);
 #endif
+	}
 
 	auto it = std::lower_bound(
 	    collections.begin(), collections.end(), new_entry,
@@ -548,17 +548,14 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	client_profiler.Flush(context.thread.profiler);
 
 	batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
-	if (!lstate.current_collection) {
-		return SinkCombineResultType::FINISHED;
-	}
 
-	if (lstate.current_collection->GetTotalRows() > 0) {
+	if (lstate.current_collection && lstate.current_collection->GetTotalRows() > 0) {
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 		                     std::move(lstate.current_collection));
 	}
-	{
+	if (lstate.writer) {
 		lock_guard<mutex> l(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
