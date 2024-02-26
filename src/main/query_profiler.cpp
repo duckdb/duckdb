@@ -115,8 +115,12 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 void QueryProfiler::Finalize(TreeNode &node) {
 	for (auto &child : node.children) {
 		Finalize(*child);
-		if (node.type == PhysicalOperatorType::UNION) {
-			node.info.elements += child->info.elements;
+		if (node.type == PhysicalOperatorType::UNION
+		    && node.settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+			node.settings.set_setting(
+			    TreeNodeSettingsType::OPERATOR_CARDINALITY,
+			    child->settings.get_setting(TreeNodeSettingsType::OPERATOR_CARDINALITY)
+			);
 		}
 	}
 }
@@ -229,6 +233,14 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p), active_operator(nullptr) {
 }
 
+void OperatorProfiler::EnableOperatorTiming() {
+	operator_timing_enabled = true;
+}
+
+void OperatorProfiler::EnableOperatorCardinality() {
+	operator_cardinality_enabled = true;
+}
+
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
 	if (!enabled) {
 		return;
@@ -241,7 +253,9 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	op.Start();
+	if (operator_timing_enabled) {
+		op.Start();
+	}
 }
 
 void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
@@ -254,9 +268,10 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	}
 
 	// finish timing for the current element
-	op.End();
-
-	AddTiming(*active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
+	if (operator_timing_enabled) {
+		op.End();
+		AddTiming(*active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
+	}
 	active_operator = nullptr;
 }
 
@@ -647,6 +662,8 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOper
 	node->name = root.GetName();
 	node->extra_info = root.ParamsToString();
 	node->depth = depth;
+	ClientConfig &config = ClientConfig::GetConfig(context);
+	node->settings = config.profiler_settings;
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
 	auto children = root.GetChildren();
 	for (auto &child : children) {

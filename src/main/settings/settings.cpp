@@ -556,37 +556,21 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 // Custom Profiling Settings
 //===--------------------------------------------------------------------===//
 
-TreeNodeSettings *FillTreeNodeSettings(unordered_map<string, string> &json) {
-	const vector<string> valid_settings = {"cpu_time", "operator_cardinality", "operator_timing"};
-	auto *settings = new TreeNodeSettings();
+static unordered_map<TreeNodeSettingsType, Value> FillTreeNodeSettings(unordered_map<string, string> &json) {
+	unordered_map<TreeNodeSettingsType, Value> metrics;
 
-	for(auto &setting : valid_settings) {
-		auto setting_it = json.find(setting);
-		if (setting_it != json.end()) {
-			if (setting_it->second != "true" && setting_it->second != "false") {
-				throw IOException("Invalid value for %s in custom profiler settings: \"%s\", expected either 'true' or 'false'",
-				                  setting, setting_it->second);
-			} else if (setting_it->second == "true") {
-				settings->metrics.insert({setting, Value()});
-			}
+	string invalid_settings;
+	for (auto &entry : json) {
+		auto setting = EnumUtil::FromString<TreeNodeSettingsType>(StringUtil::Upper(entry.first));
+		if (StringUtil::Lower(entry.second) == "true") {
+			metrics[setting] = Value();
 		}
-
-		// remove the setting from the json
-		json.erase(setting);
 	}
 
-	if (!json.empty()) {
-		string invalid_settings;
-		for (auto &entry : json) {
-			if (!invalid_settings.empty()) {
-				invalid_settings += ", " ;
-			}
-			invalid_settings += entry.first;
-		}
+	if (!invalid_settings.empty()) {
 		throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings);
 	}
-
-	return settings;
+	return metrics;
 }
 
 void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
@@ -620,23 +604,24 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 		throw IOException("Could not parse the custom profiler settings file: \"%s\"", input_str);
 	}
 
-	config.profiler_settings = FillTreeNodeSettings(json);
+	auto metrics = FillTreeNodeSettings(json);
+	config.profiler_settings.set_metrics(metrics);
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_settings = nullptr;
+	config.profiler_settings.reset_metrics();
 }
 
 Value CustomProfilingSettings::GetSetting(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	string profiling_settings_str;
-	for (auto &entry : config.profiler_settings->metrics) {
+	for (auto &entry : config.profiler_settings.get_metrics()) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
-		profiling_settings_str += entry.first;
+		profiling_settings_str += EnumUtil::ToString(entry.first);
 	}
 
 	return Value(profiling_settings_str);

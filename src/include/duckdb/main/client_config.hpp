@@ -23,8 +23,44 @@ class PreparedStatementData;
 typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
 
-struct TreeNodeSettings {
-	unordered_map<string, Value> metrics;
+
+enum class TreeNodeSettingsType : uint8_t {
+	CPU_TIME,
+	OPERATOR_CARDINALITY,
+	OPERATOR_TIMING
+};
+
+class TreeNodeSettings {
+private:
+	// map of metrics with their values; only enabled metrics are present in the map
+	unordered_map<TreeNodeSettingsType, Value> metrics = {
+	    {TreeNodeSettingsType::CPU_TIME, Value()},
+	    {TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
+	    {TreeNodeSettingsType::OPERATOR_TIMING, Value()},
+	};
+
+public:
+	TreeNodeSettings() = default;
+	TreeNodeSettings(TreeNodeSettings &) = default;
+	TreeNodeSettings& operator=(TreeNodeSettings &) = default;
+
+	void set_setting(TreeNodeSettingsType setting, const Value &value) {metrics[setting] = value;}
+
+	Value get_setting(TreeNodeSettingsType setting) { return metrics[setting];}
+
+	void set_metrics(unordered_map<TreeNodeSettingsType, Value> &n_metrics) {this->metrics = n_metrics;}
+	unordered_map<TreeNodeSettingsType, Value> &get_metrics() {return metrics;}
+
+	void reset_metrics() {
+		metrics.clear();
+		metrics = {
+		    {TreeNodeSettingsType::CPU_TIME, Value()},
+		    {TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
+		    {TreeNodeSettingsType::OPERATOR_TIMING, Value()},
+		};
+	}
+
+	bool setting_enabled(const TreeNodeSettingsType setting) const {return metrics.find(setting) != metrics.end();}
 };
 
 struct ClientConfig {
@@ -39,9 +75,9 @@ struct ClientConfig {
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
-	//! The file that contains custom settings for the profiler
+	//! The custom settings for the profiler
 	//! (empty = use the default settings)
-	TreeNodeSettings *profiler_settings = nullptr;
+	TreeNodeSettings profiler_settings;
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
