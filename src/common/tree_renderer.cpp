@@ -500,10 +500,9 @@ string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	auto result = TreeRenderer::CreateRenderNode(op.name, op.extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
-	// FIXME
-//	result->extra_text += "\n" + to_string(op.info.elements);
-//	string timing = StringUtil::Format("%.2f", op.info.time);
-//	result->extra_text += "\n(" + timing + "s)";
+	result->extra_text += "\n" + to_string(op.info.elements);
+	string timing = StringUtil::Format("%.2f", op.info.time);
+	result->extra_text += "\n(" + timing + "s)";
 	if (config.detailed) {
 		for (auto &info : op.info.executors_info) {
 			if (!info) {

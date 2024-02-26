@@ -85,7 +85,7 @@ struct ExpressionExecutorInfo {
 };
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+	explicit OperatorInformation() {
 	}
 
 	double time = 0;

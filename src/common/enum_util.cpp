@@ -6423,6 +6423,8 @@ const char *EnumUtil::ToChars<TreeNodeSettingsType>(TreeNodeSettingsType value) 
 		return "OPERATOR_TIMING";
 	case TreeNodeSettingsType::OPERATOR_CARDINALITY:
 		return "OPERATOR_CARDINALITY";
+	case TreeNodeSettingsType::EXTRA_INFO:
+		return "EXTRA_INFO";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6438,6 +6440,9 @@ TreeNodeSettingsType EnumUtil::FromString<TreeNodeSettingsType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
 		return TreeNodeSettingsType::OPERATOR_CARDINALITY;
+	}
+	if (StringUtil::Equals(value, "EXTRA_INFO")) {
+		return TreeNodeSettingsType::EXTRA_INFO;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

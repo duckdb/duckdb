@@ -267,10 +267,19 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	// finish timing for the current element
-	if (operator_timing_enabled) {
-		op.End();
-		AddTiming(*active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
+	if (operator_timing_enabled || operator_cardinality_enabled) {
+		double time = 0;
+		idx_t elements = 0;
+
+		// finish timing for the current element
+		if (operator_timing_enabled) {
+			op.End();
+			time = op.Elapsed();
+		}
+		if (operator_cardinality_enabled) {
+			elements = chunk ? chunk->size() : 0;
+		}
+		AddTiming(*active_operator, time, elements);
 	}
 	active_operator = nullptr;
 }
@@ -285,11 +294,21 @@ void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t 
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
-		timings[op] = OperatorInformation(time, elements);
+		timings[op] = OperatorInformation();
+		if (operator_timing_enabled) {
+			timings[op].time = time;
+		}
+		if (operator_cardinality_enabled) {
+			timings[op].elements = elements;
+		}
 	} else {
 		// add to existing entry
-		entry->second.time += time;
-		entry->second.elements += elements;
+		if (operator_timing_enabled) {
+			entry->second.time += time;
+		}
+		if (operator_cardinality_enabled) {
+			entry->second.elements += elements;
+		}
 	}
 }
 void OperatorProfiler::Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor,
@@ -544,15 +563,17 @@ double GetTotalCPUTime(QueryProfiler::TreeNode &node) {
 }
 
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
+	auto &settings = node.settings;
+
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
-//	if (!settings || settings->operator_timing) {
+	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
 		ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
-//	}
-//	if (!settings || settings->operator_cardinality) {
+	}
+	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
 		ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
-//	}
-//	if (!settings) {
+	}
+	if (settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
 		ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
 		ss << string(depth * 3, ' ') << "   \"timings\": [";
 		int32_t function_counter = 1;
@@ -576,7 +597,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 		ss.seekp(-2, ss.cur);
 		ss << "\n";
 		ss << string(depth * 3, ' ') << "   ],\n";
-//	}
+	}
 	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
 		ss << string(depth * 3, ' ') << "   ]\n";
@@ -593,6 +614,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 }
 
 string QueryProfiler::ToJSON() const {
+
 	if (!IsEnabled()) {
 		return "{ \"result\": \"disabled\" }\n";
 	}
@@ -602,22 +624,24 @@ string QueryProfiler::ToJSON() const {
 	if (!root) {
 		return "{ \"result\": \"error\" }\n";
 	}
+
+	auto &settings = root->settings;
+
 	std::stringstream ss;
 	ss << "{\n";
 	ss << "   \"name\":  \"Query\", \n";
-	// FIXME: this is the same as timing; should we remove it?
-	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
-//	if (settings && settings->cpu_time) {
+
+	if (settings.setting_enabled(TreeNodeSettingsType::CPU_TIME)) {
 		ss << "   \"cpu_time\": " + to_string(GetTotalCPUTime(*root)) + ",\n";
-//	}
-//	if (!settings || settings->operator_timing) {
+	}
+	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
 		ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
-//	}
-//	if (!settings || settings->operator_cardinality) {
+	}
+	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
 		ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
-//	}
+	}
 	// JSON cannot have literal control characters in string literals
-//	if (!settings) {
+	if (settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
 		string extra_info = JSONSanitize(query);
 		ss << "   \"extra-info\": \"" + extra_info + "\", \n";
 		// print the phase timings
@@ -634,7 +658,7 @@ string QueryProfiler::ToJSON() const {
 		}
 		ss << "\n";
 		ss << "   ],\n";
-//	}
+	}
 	// recursively print the physical operator tree
 	ss << "   \"children\": [\n";
 	ToJSONRecursive(*root, ss);
