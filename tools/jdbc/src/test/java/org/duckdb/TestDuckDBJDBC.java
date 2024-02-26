@@ -3585,7 +3585,11 @@ public class TestDuckDBJDBC {
 
     public static void test_getColumnClassName() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement();) {
-            try (ResultSet rs = s.executeQuery("select * from test_all_types()")) {
+            try (ResultSet rs = s.executeQuery(
+                     "select * exclude(fixed_int_array, fixed_varchar_array"
+                     +
+                     ", fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, "
+                     + "fixed_array_of_int_list, list_of_fixed_int_array) from test_all_types()")) {
                 ResultSetMetaData rsmd = rs.getMetaData();
                 rs.next();
                 for (int i = 1; i <= rsmd.getColumnCount(); i++) {
@@ -3773,7 +3777,10 @@ public class TestDuckDBJDBC {
     public static void test_all_types() throws Exception {
         Logger logger = Logger.getAnonymousLogger();
         String sql =
-            "select * EXCLUDE(time, time_tz)"
+            "select * EXCLUDE(time, time_tz, "
+            +
+            "fixed_int_array, fixed_varchar_array, fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array,"
+            + "struct_of_fixed_array, fixed_array_of_int_list, list_of_fixed_int_array)"
             + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
             +
             "\n    , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz"
