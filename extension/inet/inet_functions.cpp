@@ -8,7 +8,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 
-
 namespace duckdb {
 
 // While the address field is better represented as a uhugeint_t, the original
