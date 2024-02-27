@@ -56,3 +56,14 @@ class TestResolveObjectColumns(object):
         # Sample size is too low to detect the mismatch, exception is raised when trying to convert
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_10750(self, duckdb_cursor, pandas):
+        max_row_number = 2000
+        data = {'id': [i for i in range(max_row_number + 1)], 'content': [None for _ in range(max_row_number + 1)]}
+
+        pdf = pandas.DataFrame(data=data)
+        duckdb_cursor.register("content", pdf)
+        res = duckdb_cursor.query("select id from content").fetchall()
+        expected = [(i,) for i in range(2001)]
+        assert res == expected

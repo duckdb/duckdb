@@ -8,5 +8,8 @@ include_directories = [
 # source files
 source_files = [
     os.path.sep.join(x.split('/'))
-    for x in ['extension/httpfs/' + s for s in ['httpfs_extension.cpp', 'httpfs.cpp', 's3fs.cpp', 'crypto.cpp']]
+    for x in [
+        'extension/httpfs/' + s
+        for s in ['create_secret_functions.cpp', 'httpfs_extension.cpp', 'httpfs.cpp', 's3fs.cpp', 'crypto.cpp']
+    ]
 ]

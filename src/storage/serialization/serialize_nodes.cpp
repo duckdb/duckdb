@@ -25,8 +25,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -363,14 +363,14 @@ PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 
 void PivotColumnEntry::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", star_expr);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
 	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
 }
 
 PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
 	PivotColumnEntry result;
 	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.star_expr);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
 	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
 	return result;
 }

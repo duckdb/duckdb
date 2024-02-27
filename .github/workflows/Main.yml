@@ -214,7 +214,7 @@ jobs:
       run: git clone https://github.com/duckdb/duckdb-web
 
     - name: Set up Python 3.9
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
@@ -238,7 +238,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
@@ -276,7 +276,14 @@ jobs:
 
     - name: Test Standard ODBC tests
       shell: bash
-      run: build/debug/tools/odbc/test/test_odbc
+      run:  build/debug/tools/odbc/test/test_odbc
+
+    - name: Test Connection ODBC tests
+      shell: bash
+      run: |
+        chmod +x tools/odbc/scripts/create_ini_file.sh
+        tools/odbc/scripts/create_ini_file.sh
+        build/debug/tools/odbc/test/test_connection_odbc
 
     - name: Test nanodbc
       shell: bash

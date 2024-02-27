@@ -642,6 +642,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// This extension / setting was explicitly required
 					parser.Fail(StringUtil::Format("require %s: FAILED", param));
 				}
+				SKIP_TEST("require " + token.parameters[0]);
 				return;
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
@@ -657,6 +658,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto env_actual = std::getenv(env_var.c_str());
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
+				SKIP_TEST("require-env " + token.parameters[0]);
 				return;
 			}
 
@@ -665,6 +667,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto env_value = token.parameters[1];
 				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
 					// It's not, check the test
+					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
 			}

@@ -47,7 +47,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
@@ -135,6 +135,20 @@ jobs:
       run: |
         tools/odbc/bin/Release/test_odbc.exe
 
+    - name: Setup Register For Connection Tests
+      shell: bash
+      run: |
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v database //t REG_SZ //d "/d/a/duckdb/duckdb/test/sql/storage_version/storage_version.db"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v access_mode //t REG_SZ //d "READ_ONLY"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v allow_unsigned_extensions //t REG_SZ //d "true"
+        echo "----------------------------------------------------------------"
+        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB"
+
+    - name: Test Connection ODBC tests
+      shell: bash
+      run: |
+        tools/odbc/bin/Release/test_connection_odbc.exe
+
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
       shell: bash
@@ -157,7 +171,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
@@ -244,7 +258,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
          python-version: '3.12'
 

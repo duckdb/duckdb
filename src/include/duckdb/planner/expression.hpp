@@ -64,6 +64,7 @@ protected:
 		expression_class = other.expression_class;
 		alias = other.alias;
 		return_type = other.return_type;
+		query_location = other.query_location;
 	}
 };
 

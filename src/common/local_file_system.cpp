@@ -49,7 +49,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #include <libproc.h>                                        // NOLINT
 #endif                                                      // NOLINT
 #elif defined(_WIN32)
-#include <RestartManager.h>
+#include <restartmanager.h>
 #endif
 
 namespace duckdb {
@@ -188,6 +188,8 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 	}
 
 	string process_name, process_owner;
+// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
+#ifdef PROC_PIDT_SHORTBSDINFO
 	// try to find out more about the process holding the lock
 	struct proc_bsdshortinfo proc;
 	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
@@ -199,6 +201,9 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 			process_owner = pw->pw_name;
 		}
 	}
+#else
+	return string();
+#endif
 	// try to get a better process name (full path)
 	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
 	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
@@ -420,7 +425,10 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
 		}
-		D_ASSERT(bytes_written >= 0 && bytes_written);
+		if (bytes_written == 0) {
+			throw IOException("Could not write to file \"%s\" - attempted to write 0 bytes: %s",
+			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
+		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
 	}

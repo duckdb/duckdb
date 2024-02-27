@@ -188,6 +188,7 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
+	serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", column_comments, vector<Value>());
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
@@ -197,6 +198,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types", result->types);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
 	deserializer.ReadPropertyWithDefault<vector<string>>(204, "names", result->names);
+	deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments", result->column_comments, vector<Value>());
 	return std::move(result);
 }
 
