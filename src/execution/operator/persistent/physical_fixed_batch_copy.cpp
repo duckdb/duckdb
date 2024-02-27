@@ -7,8 +7,8 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/execution/operator/persistent/batch_sink_helper.hpp"
-#include "duckdb/execution/operator/persistent/batch_task_helper.hpp"
+#include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
+#include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -52,8 +52,8 @@ public:
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
-	BatchSinkHelper batch_helper;
-	BatchTaskHelper<BatchCopyTask> task_helper;
+	BatchMemoryManager batch_helper;
+	BatchTaskManager<BatchCopyTask> task_helper;
 	mutex lock;
 	mutex flush_lock;
 	//! The total number of rows copied to the file

@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
-#include "duckdb/execution/operator/persistent/batch_sink_helper.hpp"
-#include "duckdb/execution/operator/persistent/batch_task_helper.hpp"
+#include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
+#include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
@@ -131,8 +131,8 @@ public:
 	    : batch_helper(context, initial_memory), table(table), insert_count(0), optimistically_written(false) {
 	}
 
-	BatchSinkHelper batch_helper;
-	BatchTaskHelper<BatchInsertTask> task_helper;
+	BatchMemoryManager batch_helper;
+	BatchTaskManager<BatchInsertTask> task_helper;
 	mutex lock;
 	DuckTableEntry &table;
 	idx_t insert_count;

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/batch_task_helper.hpp
+// duckdb/execution/operator/persistent/batch_task_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,7 +17,7 @@
 namespace duckdb {
 
 template <class TASK>
-class BatchTaskHelper {
+class BatchTaskManager {
 public:
 	void AddTask(unique_ptr<TASK> task) {
 		lock_guard<mutex> l(task_lock);
