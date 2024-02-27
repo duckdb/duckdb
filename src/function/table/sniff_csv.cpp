@@ -142,7 +142,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	    NewLineIdentifierToString(sniffer_options.dialect_options.state_machine_options.new_line.GetValue());
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Skip Rows
-	output.SetValue(4, 0, Value::UINTEGER(sniffer_options.dialect_options.skip_rows.GetValue()));
+	output.SetValue(4, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
 	// 6. Has Header
 	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()).ToString();
 	output.SetValue(5, 0, has_header);

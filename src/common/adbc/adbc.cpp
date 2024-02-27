@@ -437,7 +437,7 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, const uint32
 	duckdb::string results = "";
 
 	for (size_t i = 0; i < length; i++) {
-		uint32_t code = info_codes ? info_codes[i] : i;
+		auto code = duckdb::NumericCast<uint32_t>(info_codes ? info_codes[i] : i);
 		auto info_code = ConvertToInfoCode(code);
 		switch (info_code) {
 		case AdbcInfoCode::VENDOR_NAME: {

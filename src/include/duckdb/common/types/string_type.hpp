@@ -59,6 +59,7 @@ public:
 			value.pointer.ptr = (char *)data; // NOLINT
 		}
 	}
+
 	string_t(const char *data)
 	    : string_t(data,
 	               UnsafeNumericCast<uint32_t>(strlen(data))) { // NOLINT: Allow implicit conversion from `const char*`

@@ -105,7 +105,7 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 	child_list_t<LogicalType> make_date_children {
 	    {"year", LogicalType::BIGINT}, {"month", LogicalType::BIGINT}, {"day", LogicalType::BIGINT}};
 	make_date.AddFunction(
-	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
+	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int32_t>));
 	return make_date;
 }
 

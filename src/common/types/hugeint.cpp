@@ -678,7 +678,7 @@ bool Hugeint::TryConvert(int8_t value, hugeint_t &result) {
 template <>
 bool Hugeint::TryConvert(const char *value, hugeint_t &result) {
 	auto len = strlen(value);
-	string_t string_val(value, len);
+	string_t string_val(value, UnsafeNumericCast<uint32_t>(len));
 	return TryCast::Operation<string_t, hugeint_t>(string_val, result, true);
 }
 

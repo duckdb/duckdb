@@ -272,13 +272,14 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			ConstantVector::SetNull(result, false);
 			auto idata = ConstantVector::GetData<string_t>(input);
 			auto str = CreateStringPiece(idata[0]);
-			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(), groups.size());
+			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
+			                                            UnsafeNumericCast<int>(groups.size()));
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
 				ConstantVector::SetNull(*child_entry, false);
 				auto &extracted = ws[col];
 				auto cdata = ConstantVector::GetData<string_t>(*child_entry);
-				cdata[0] = string_t(extracted.data(), match ? extracted.size() : 0);
+				cdata[0] = string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 			}
 		}
 	} else {
@@ -301,12 +302,13 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			const auto idx = iunified.sel->get_index(i);
 			if (ivalidity.RowIsValid(idx)) {
 				auto str = CreateStringPiece(idata[idx]);
-				auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(), groups.size());
+				auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(),
+				                                            UnsafeNumericCast<int>(groups.size()));
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					auto cdata = FlatVector::GetData<string_t>(*child_entry);
 					auto &extracted = ws[col];
-					cdata[i] = string_t(extracted.data(), match ? extracted.size() : 0);
+					cdata[i] = string_t(extracted.data(), UnsafeNumericCast<uint32_t>(match ? extracted.size() : 0));
 				}
 			} else {
 				FlatVector::SetNull(result, i, true);

@@ -266,7 +266,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			clamp_result = ClampSlice(sliced, begin, end);
 		}
 
-		auto length = 0;
+		idx_t length = 0;
 		if (end - begin > 0) {
 			length = CalculateSliceLength(begin, end, step, step_valid);
 		}

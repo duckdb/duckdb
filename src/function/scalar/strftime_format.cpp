@@ -1277,7 +1277,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 		// ISO Week 1 starts on the previous Monday
 		auto week1 = Date::GetMondayOfCurrentWeek(jan4);
 		// ISO Week N starts N-1 weeks later
-		auto iso_date = week1 + (iso_week - 1) * 7 + (iso_weekday - 1);
+		auto iso_date = week1 + UnsafeNumericCast<int32_t>((iso_week - 1) * 7 + (iso_weekday - 1));
 		Date::Convert(iso_date, result_data[0], result_data[1], result_data[2]);
 		break;
 	}
@@ -1293,14 +1293,14 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 		yeardate -= int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST);
 		// Is there a week 0?
 		yeardate -= 7 * int(yeardate >= jan1);
-		yeardate += weekno * 7 + weekday;
+		yeardate += UnsafeNumericCast<int32_t>(weekno * 7 + weekday);
 		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
 		break;
 	}
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
 		auto yeardate = Date::FromDate(result_data[0], 1, 1);
-		yeardate += yearday - 1;
+		yeardate += UnsafeNumericCast<int32_t>(yearday - 1);
 		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
 		break;
 	}

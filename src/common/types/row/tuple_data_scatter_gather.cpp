@@ -31,7 +31,8 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
 		memcpy(heap_location, source.GetData(), source.GetSize());
-		Store<string_t>(string_t(const_char_ptr_cast(heap_location), source.GetSize()), row_location + offset_in_row);
+		Store<string_t>(string_t(const_char_ptr_cast(heap_location), UnsafeNumericCast<uint32_t>(source.GetSize())),
+		                row_location + offset_in_row);
 		heap_location += source.GetSize();
 	}
 }
@@ -45,7 +46,7 @@ static inline void TupleDataWithinListValueStore(const T &source, const data_ptr
 template <>
 inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr_t &location,
                                           data_ptr_t &heap_location) {
-	Store<uint32_t>(source.GetSize(), location);
+	Store<uint32_t>(NumericCast<uint32_t>(source.GetSize()), location);
 	memcpy(heap_location, source.GetData(), source.GetSize());
 	heap_location += source.GetSize();
 }
@@ -483,7 +484,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		const auto heap_size_offset = layout.GetHeapSizeOffset();
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 		for (idx_t i = 0; i < append_count; i++) {
-			Store<uint32_t>(heap_sizes[i], row_locations[i] + heap_size_offset);
+			Store<uint32_t>(NumericCast<uint32_t>(heap_sizes[i]), row_locations[i] + heap_size_offset);
 		}
 	}
 

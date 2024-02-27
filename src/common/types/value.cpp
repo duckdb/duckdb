@@ -1213,7 +1213,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
 		D_ASSERT(value >= NumericLimits<int32_t>::Minimum() && value <= NumericLimits<int32_t>::Maximum());
-		return Value::DATE(date_t(value));
+		return Value::DATE(date_t(NumericCast<int32_t>(value)));
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP:

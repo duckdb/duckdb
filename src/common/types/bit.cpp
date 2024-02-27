@@ -151,7 +151,7 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 string Bit::ToBit(string_t str) {
 	auto bit_len = GetBitSize(str);
 	auto buffer = make_unsafe_uniq_array<char>(bit_len);
-	string_t output_str(buffer.get(), bit_len);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit_len));
 	Bit::ToBit(str, output_str);
 	return output_str.GetString();
 }
@@ -167,7 +167,7 @@ void Bit::BlobToBit(string_t blob, string_t &output_str) {
 
 string Bit::BlobToBit(string_t blob) {
 	auto buffer = make_unsafe_uniq_array<char>(blob.GetSize() + 1);
-	string_t output_str(buffer.get(), blob.GetSize() + 1);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(blob.GetSize() + 1));
 	Bit::BlobToBit(blob, output_str);
 	return output_str.GetString();
 }
@@ -193,7 +193,7 @@ string Bit::BitToBlob(string_t bit) {
 	D_ASSERT(bit.GetSize() > 1);
 
 	auto buffer = make_unsafe_uniq_array<char>(bit.GetSize() - 1);
-	string_t output_str(buffer.get(), bit.GetSize() - 1);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit.GetSize() - 1));
 	Bit::BitToBlob(bit, output_str);
 	return output_str.GetString();
 }

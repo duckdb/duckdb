@@ -221,7 +221,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// column_name, VARCHAR
 		output.SetValue(col++, index, Value(ColumnName(i)));
 		// column_index, INTEGER
-		output.SetValue(col++, index, Value::INTEGER(i + 1));
+		output.SetValue(col++, index, Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1)));
 		// comment, VARCHAR
 		output.SetValue(col++, index, ColumnComment(i));
 		// internal, BOOLEAN

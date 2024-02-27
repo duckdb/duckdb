@@ -433,7 +433,7 @@ uhugeint_t UhugeintConvertInteger(DST input) {
 template <>
 bool Uhugeint::TryConvert(const char *value, uhugeint_t &result) {
 	auto len = strlen(value);
-	string_t string_val(value, len);
+	string_t string_val(value, UnsafeNumericCast<uint32_t>(len));
 	return TryCast::Operation<string_t, uhugeint_t>(string_val, result, true);
 }
 

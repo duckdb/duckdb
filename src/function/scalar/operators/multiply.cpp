@@ -28,8 +28,10 @@ double MultiplyOperator::Operation(double left, double right) {
 
 template <>
 interval_t MultiplyOperator::Operation(interval_t left, int64_t right) {
-	left.months = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.months, right);
-	left.days = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.days, right);
+	left.months = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(
+	    left.months, UnsafeNumericCast<int32_t>(right));
+	left.days = MultiplyOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.days,
+	                                                                                UnsafeNumericCast<int32_t>(right));
 	left.micros = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(left.micros, right);
 	return left;
 }

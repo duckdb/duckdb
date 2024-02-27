@@ -38,7 +38,7 @@ buffer_ptr<SelectionData> SelectionVector::Slice(const SelectionVector &sel, idx
 	for (idx_t i = 0; i < count; i++) {
 		auto new_idx = sel.get_index(i);
 		auto idx = this->get_index(new_idx);
-		result_ptr[i] = idx;
+		result_ptr[i] = UnsafeNumericCast<sel_t>(idx);
 	}
 	return data;
 }

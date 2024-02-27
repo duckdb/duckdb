@@ -504,7 +504,7 @@ struct DatePart {
 			auto time = Time::NormalizeTimeTZ(timetz);
 			date_t date(0);
 			time = Interval::Add(time, interval, date);
-			auto offset = interval.micros / Interval::MICROS_PER_SEC;
+			auto offset = UnsafeNumericCast<int32_t>(interval.micros / Interval::MICROS_PER_SEC);
 			return TR(time, offset);
 		}
 
