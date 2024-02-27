@@ -31,17 +31,28 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
+class AttachOptions {
+public:
+	AttachOptions(AccessMode access_mode, const string &db_type);
+	AttachOptions(const unique_ptr<AttachInfo> &info, AccessMode access_mode_p);
+
+	AccessMode access_mode;
+	string db_type;
+	idx_t block_alloc_size;
+	string unrecognized_option;
+};
+
 //! The AttachedDatabase represents an attached database instance
 class AttachedDatabase : public CatalogEntry {
 public:
 	//! Create the built-in system attached database (without storage)
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
 	//! Create an attached database instance with the specified name and storage
-	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path, AccessMode access_mode,
-	                 const idx_t block_alloc_size);
+	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, string name, string file_path,
+	                 const AttachOptions &options);
 	//! Create an attached database instance with the specified storage extension
 	AttachedDatabase(DatabaseInstance &db, Catalog &catalog, StorageExtension &ext, ClientContext &context, string name,
-	                 const AttachInfo &info, AccessMode access_mode, const idx_t block_alloc_size);
+	                 const AttachInfo &info, const AttachOptions &options);
 	~AttachedDatabase() override;
 
 	void Initialize();

@@ -24,6 +24,7 @@ class Catalog;
 class CatalogSet;
 class ClientContext;
 class DatabaseInstance;
+class AttachOptions;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
 class DatabaseManager {
@@ -42,8 +43,8 @@ public:
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database
-	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, const AttachInfo &info, const string &db_type,
-	                                              AccessMode access_mode, const idx_t block_alloc_size);
+	optional_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, const AttachInfo &info,
+	                                              const AttachOptions &options);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	//! Returns a reference to the system catalog

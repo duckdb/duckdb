@@ -13,6 +13,60 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Attach Options
+//===--------------------------------------------------------------------===//
+
+AttachOptions::AttachOptions(const AccessMode access_mode, const string &db_type)
+    : access_mode(access_mode), db_type(db_type), block_alloc_size(DEFAULT_BLOCK_ALLOC_SIZE) {
+}
+
+AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, AccessMode access_mode_p)
+    : access_mode(access_mode_p), block_alloc_size(DEFAULT_BLOCK_ALLOC_SIZE) {
+
+	for (auto &entry : info->options) {
+
+		if (entry.first == "readonly" || entry.first == "read_only") {
+			auto read_only = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			if (read_only) {
+				access_mode = AccessMode::READ_ONLY;
+			} else {
+				access_mode = AccessMode::READ_WRITE;
+			}
+			continue;
+		}
+
+		if (entry.first == "readwrite" || entry.first == "read_write") {
+			auto read_write = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			if (!read_write) {
+				access_mode = AccessMode::READ_ONLY;
+			} else {
+				access_mode = AccessMode::READ_WRITE;
+			}
+			continue;
+		}
+
+		if (entry.first == "type") {
+			// extract the database type
+			db_type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
+			continue;
+		}
+
+		if (entry.first == "block_size") {
+			block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+		}
+
+		// we allow unrecognized options
+		if (unrecognized_option.empty()) {
+			unrecognized_option = entry.first;
+		}
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Attached Database
+//===--------------------------------------------------------------------===//
+
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type)
     : CatalogEntry(CatalogType::DATABASE_ENTRY,
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
@@ -30,35 +84,35 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, string name_p, string file_path_p,
-                                   AccessMode access_mode, const idx_t block_alloc_size)
+                                   const AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
-	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
-	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
+	type = options.access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
+	                                                    : AttachedDatabaseType::READ_WRITE_DATABASE;
 	catalog = make_uniq<DuckCatalog>(*this);
 	// create the storage after the catalog to guarantee extensions to instantiate the DuckCatalog
-	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY,
-	                                              block_alloc_size);
+	storage = make_uniq<SingleFileStorageManager>(
+	    *this, std::move(file_path_p), options.access_mode == AccessMode::READ_ONLY, options.block_alloc_size);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
 }
 
 AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, StorageExtension &storage_extension,
                                    ClientContext &context, string name_p, const AttachInfo &info,
-                                   AccessMode access_mode, const idx_t block_alloc_size)
+                                   const AttachOptions &options)
     : CatalogEntry(CatalogType::DATABASE_ENTRY, catalog_p, std::move(name_p)), db(db), parent_catalog(&catalog_p) {
 
-	type = access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
-	                                            : AttachedDatabaseType::READ_WRITE_DATABASE;
-	catalog =
-	    storage_extension.attach(storage_extension.storage_info.get(), context, *this, name, *info.Copy(), access_mode);
+	type = options.access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
+	                                                    : AttachedDatabaseType::READ_WRITE_DATABASE;
+	catalog = storage_extension.attach(storage_extension.storage_info.get(), context, *this, name, *info.Copy(),
+	                                   options.access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
 	if (catalog->IsDuckCatalog()) {
 		// DuckCatalog, instantiate storage
-		storage = make_uniq<SingleFileStorageManager>(*this, info.path, access_mode == AccessMode::READ_ONLY,
-		                                              block_alloc_size);
+		storage = make_uniq<SingleFileStorageManager>(*this, info.path, options.access_mode == AccessMode::READ_ONLY,
+		                                              options.block_alloc_size);
 	}
 
 	transaction_manager =
