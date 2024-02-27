@@ -412,7 +412,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				in_process_operators.push(current_idx);
 			} else if (result == OperatorResultType::FINISHED) {
 				D_ASSERT(current_chunk.size() == 0);
-				FinishProcessing(current_idx);
+				FinishProcessing(NumericCast<int32_t>(current_idx));
 				return OperatorResultType::FINISHED;
 			}
 			current_chunk.Verify();

@@ -249,7 +249,7 @@ public:
 		current_dictionary.Verify();
 
 		// We just push the string length to effectively delta encode the strings
-		index_buffer.push_back(compressed_string_len);
+		index_buffer.push_back(NumericCast<uint32_t>(compressed_string_len));
 
 		max_compressed_string_length = MaxValue(max_compressed_string_length, compressed_string_len);
 
@@ -348,7 +348,8 @@ public:
 			memset(base_ptr + symbol_table_offset, 0, fsst_serialized_symbol_table_size);
 		}
 
-		Store<uint32_t>(symbol_table_offset, data_ptr_cast(&header_ptr->fsst_symbol_table_offset));
+		Store<uint32_t>(NumericCast<uint32_t>(symbol_table_offset),
+		                data_ptr_cast(&header_ptr->fsst_symbol_table_offset));
 		Store<uint32_t>((uint32_t)current_width, data_ptr_cast(&header_ptr->bitpacking_width));
 
 		if (total_size >= FSSTStorage::COMPACTION_FLUSH_LIMIT) {

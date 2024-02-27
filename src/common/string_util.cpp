@@ -355,7 +355,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p, id
 			// d[i][j] = std::min({ d[i - 1][j] + 1,
 			//                      d[i][j - 1] + 1,
 			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
-			int equal = s1[i - 1] == s2[j - 1] ? 0 : not_equal_penalty;
+			auto equal = s1[i - 1] == s2[j - 1] ? 0 : not_equal_penalty;
 			idx_t adjacent_score1 = array.Score(i - 1, j) + 1;
 			idx_t adjacent_score2 = array.Score(i, j - 1) + 1;
 			idx_t adjacent_score3 = array.Score(i - 1, j - 1) + equal;
