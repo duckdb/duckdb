@@ -161,16 +161,16 @@ static void AppendSelectionVector(SelectionVector &sel, const idx_t &from, const
 	memcpy(sel_data, other_data, count * sizeof(sel_t));
 }
 
-void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
+void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state,
                                    Vector &hashes_v, const SelectionVector &sel, idx_t count, Vector &pointers) {
 
-	ApplyBitmaskAndGetSalt(hashes_v, count, bitmask, probe_state.ht_offsets_v, probe_state.hash_salts_v, sel);
+	ApplyBitmaskAndGetSalt(hashes_v, count, bitmask, state.ht_offsets_v, state.hash_salts_v, sel);
 
 	// After teh ApplyBitmaskAndGetSalt the hashes_v will contain the exact offsets into the HT
-	auto ht_offsets = FlatVector::GetData<idx_t>(probe_state.ht_offsets_v);
-	auto hash_salts = FlatVector::GetData<idx_t>(probe_state.hash_salts_v);
+	auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
+	auto hash_salts = FlatVector::GetData<idx_t>(state.hash_salts_v);
 	auto pointers_data = FlatVector::GetData<data_ptr_t>(pointers);
-	auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(probe_state.row_ptr_insert_to_v);
+	auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(state.row_ptr_insert_to_v);
 
 	idx_t salt_match_count = 0;
 	idx_t salt_no_match_count = 0;
@@ -185,16 +185,16 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 		auto &ht_offset = ht_offsets[row_index];
 		auto salt = hash_salts[row_index];
 
-		aggr_ht_entry_t &entry = entries[ht_offset];
+		state.entry_cache[row_index] = entries[ht_offset];
 
-		bool is_occupied = entry.IsOccupied();
-		bool salt_match = entry.GetSalt() == salt;
+		bool is_occupied = state.entry_cache[row_index].IsOccupied();
+		bool salt_match = state.entry_cache[row_index].GetSalt() == salt;
 
 		bool salt_match_case = is_occupied && salt_match;
 		bool salt_no_match_case = is_occupied && !salt_match;
 
-		probe_state.salt_match_sel.set_index(salt_match_count, row_index);
-		probe_state.salt_no_match_sel.set_index(salt_no_match_count, row_index);
+		state.salt_match_sel.set_index(salt_match_count, row_index);
+		state.salt_no_match_sel.set_index(salt_no_match_count, row_index);
 
 		salt_match_count += salt_match_case;
 		salt_no_match_count += salt_no_match_case;
@@ -204,43 +204,43 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 
 	while (remaining_count > 0) {
 
-		// Get the pointers to the rows that need to be compared
-		for (idx_t need_compare_idx = 0; need_compare_idx < salt_match_count; need_compare_idx++) {
-			const auto row_index = probe_state.salt_match_sel.get_index(need_compare_idx);
-			const auto &entry = entries[ht_offsets[row_index]];
-			row_ptr_insert_to[row_index] = entry.GetPointer();
-		}
+		if (salt_match_count > 0){
+			// Get the pointers to the rows that need to be compared
+			for (idx_t need_compare_idx = 0; need_compare_idx < salt_match_count; need_compare_idx++) {
+				const auto row_index = state.salt_match_sel.get_index(need_compare_idx);
+				const auto &entry = state.entry_cache[row_index];
+				row_ptr_insert_to[row_index] = entry.GetPointer();
+			}
 
-		// Perform row comparisons, after function call salt_match_sel will point to the keys that match
-		key_match_count =
-		    row_matcher_build.Match(keys, key_state.vector_data, probe_state.salt_match_sel, salt_match_count, layout,
-		                            probe_state.row_ptr_insert_to_v, &probe_state.key_no_match_sel, key_no_match_count);
+			// Perform row comparisons, after function call salt_match_sel will point to the keys that match
+			key_match_count =
+			    row_matcher_build.Match(keys, key_state.vector_data, state.salt_match_sel, salt_match_count, layout,
+			                            state.row_ptr_insert_to_v, &state.key_no_match_sel, key_no_match_count);
 
-		D_ASSERT(key_match_count + key_no_match_count == salt_match_count);
+			D_ASSERT(key_match_count + key_no_match_count == salt_match_count);
 
-		// Set a pointer to the matching row
-		for (idx_t i = 0; i < key_match_count; i++) {
-			const auto row_index = probe_state.salt_match_sel.get_index(i);
-			auto &entry = entries[ht_offsets[row_index]];
-			pointers_data[row_index] = entry.GetPointer();
+			// Set a pointer to the matching row
+			for (idx_t i = 0; i < key_match_count; i++) {
+				const auto row_index = state.salt_match_sel.get_index(i);
+				auto &entry = state.entry_cache[row_index];
+				pointers_data[row_index] = entry.GetPointer();
+			}
 		}
 
 		// update the overall selection vector to only point the entries that still need to be inserted
 		// as there was no match found for them yet or the salt did not match
-		// todo: after the second iteration the probe_state.key_no_match_sel will be bigger as the probe_state.salt_no_match_sel will be empty
-		SelectionVector &remaining_after_iteration_sel = probe_state.salt_no_match_sel;
-		AppendSelectionVector(remaining_after_iteration_sel, salt_match_count, probe_state.key_no_match_sel,
+		// todo: after the second iteration the state.key_no_match_sel will be bigger as the state.salt_no_match_sel will be empty
+		AppendSelectionVector(state.salt_no_match_sel, salt_no_match_count, state.key_no_match_sel,
 		                      key_no_match_count);
 		idx_t remaining_after_iteration = salt_no_match_count + key_no_match_count;
 
-		// reuse the salt_match_sel vector for selecting the entries that need to be processed in the next iteration,
-		// which are the ones that are occupied and the salt does match
-		SelectionVector &process_next_iteration_sel = probe_state.salt_match_sel;
+		// again find the entries where the salt matches by linear probing until either finding an empty entry or
+		// an entry where the salt does not match
 		salt_match_count = 0;
 
 		// linear probing for all entries that remain
 		for (idx_t i = 0; i < remaining_after_iteration; i++) {
-			const auto row_index = remaining_after_iteration_sel.get_index(i);
+			const auto row_index = state.salt_no_match_sel.get_index(i);
 			auto &ht_offset = ht_offsets[row_index];
 
 			bool occupied;
@@ -248,16 +248,18 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 
 			// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
 			do {
+
+				// Increment and update cache
 				IncrementAndWrap(ht_offset, bitmask);
+
+				state.entry_cache[row_index] = entries[ht_offset];
+				occupied = state.entry_cache[row_index].IsOccupied();
+				salt_match = state.entry_cache[row_index].GetSalt() == hash_salts[row_index];
+
 				// the entries we need to process in the next iteration are the ones that are occupied and the salt
 				// does not match, the ones that are empty need no further processing
-				auto &entry = entries[ht_offset];
-				occupied = entry.IsOccupied();
-				salt_match = entry.GetSalt() == hash_salts[row_index];
-
-				// condition for processing in next iteration: occupied and salt does match -> needs to be compared
 				bool occupied_and_salt_match = occupied && salt_match;
-				process_next_iteration_sel.set_index(salt_match_count, row_index);
+				state.salt_match_sel.set_index(salt_match_count, row_index);
 				salt_match_count += occupied_and_salt_match;
 
 				// condition for incrementing the ht_offset: occupied and salt does not match -> move to next entry

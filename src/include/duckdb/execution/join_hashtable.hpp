@@ -133,6 +133,8 @@ public:
 		// 3. Entry is full and salt does not match -> continue probing
 		SelectionVector salt_match_sel;
 		SelectionVector salt_no_match_sel;
+
+		aggr_ht_entry_t entry_cache[STANDARD_VECTOR_SIZE];
 	};
 
 	struct InsertState : ProbeState {
@@ -251,7 +253,7 @@ private:
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing
-	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state, Vector &hashes_v,
+	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
 	                    const SelectionVector &sel, idx_t count, Vector &pointers);
 
 private:
