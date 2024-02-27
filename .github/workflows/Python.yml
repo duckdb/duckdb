@@ -55,7 +55,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -173,7 +173,7 @@ jobs:
       uses: docker/setup-qemu-action@v2
       if: ${{ matrix.arch == 'aarch64' }}
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -246,7 +246,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -312,7 +312,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -369,7 +369,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
          python-version: '3.10'
 
