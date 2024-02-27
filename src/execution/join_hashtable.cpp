@@ -15,7 +15,8 @@ using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::ProbeState::ProbeState()
     : hash_salts_v(LogicalType::UBIGINT), ht_offsets_v(LogicalType::UBIGINT), row_ptr_insert_to_v(LogicalType::POINTER),
-      entry_compare_sel_vector(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE) {
+      key_no_match_sel(STANDARD_VECTOR_SIZE), salt_match_sel(STANDARD_VECTOR_SIZE), salt_no_match_sel(STANDARD_VECTOR_SIZE),
+      entry_empty_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::InsertState::InsertState(unique_ptr<TupleDataCollection> &data_collection) {
@@ -112,10 +113,6 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	sink_collection->Combine(*other.sink_collection);
 }
 
-idx_t JoinHashTable::ApplyBitmask(hash_t hash) const {
-	return hash & bitmask;
-}
-
 static void ApplyBitmaskAndGetSalt(Vector &hashes_v, const idx_t &count, const idx_t &bitmask, Vector &ht_offsets_v,
                                    Vector &hash_salts_v, const SelectionVector &sel) {
 
@@ -151,6 +148,18 @@ static void ApplyBitmaskAndGetSalt(Vector &hashes_v, const idx_t &count, const i
 	}
 }
 
+// uses an AND operation to apply the bitmask instead of an in condition
+static void IncrementAndWrap(idx_t &value, uint64_t bitmask) {
+	value++;
+	value &= bitmask;
+}
+
+static void AppendSelectionVector(SelectionVector &sel, const idx_t &from, const SelectionVector &other, const idx_t &count) {
+	sel_t *sel_data = &sel[from];
+	sel_t *other_data = &other[0];
+	memcpy(sel_data, other_data, count * sizeof(sel_t));
+}
+
 void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
                                    Vector &hashes_v, const SelectionVector &sel, idx_t count, Vector &pointers) {
 
@@ -162,91 +171,85 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 	auto pointers_data = FlatVector::GetData<data_ptr_t>(pointers);
 	auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(probe_state.row_ptr_insert_to_v);
 
-	idx_t remaining_entries = count;
+	idx_t remaining_count = count;
 
 	// Create a pointer to the original selection vector, the selection vector will not be altered but the pointer will
-	// be updated to point to the no_match_sel vector if there are no matches found
-	const SelectionVector *sel_vector = &sel;
+	// be updated to point to the key_no_match_sel vector if there are no matches found
+	const SelectionVector *remaining_sel = &sel;
 
-	while (remaining_entries > 0) {
+	idx_t salt_match_count;
+	idx_t salt_no_match_count;
+	idx_t key_match_count;
+	idx_t key_no_match_count;
 
-		idx_t need_compare_count = 0;
-		idx_t no_match_count = 0;
+	while (remaining_count > 0) {
+
+		salt_match_count = 0;
+		salt_no_match_count = 0;
+		key_no_match_count = 0;
 
 		// iterate over each entry to find out whether it belongs to an existing list or will start
 		// a new list
-		for (idx_t i = 0; i < remaining_entries; i++) {
+		for (idx_t i = 0; i < remaining_count; i++) {
 
-			const auto row_index = sel_vector->get_index(i);
+			const auto row_index = remaining_sel->get_index(i);
 			auto &ht_offset = ht_offsets[row_index];
+			auto salt = hash_salts[row_index];
 
-			// This loop either stops if an empty entry is found or if the value to insert needs to be compared
-			// with a row for potential insertion
-			while (true) {
-				aggr_ht_entry_t &entry = entries[ht_offset];
+			aggr_ht_entry_t &entry = entries[ht_offset];
 
-				if (entry.IsOccupied()) {
+			bool is_occupied = entry.IsOccupied();
+			bool salt_match = entry.GetSalt() == salt;
 
-					auto salt = hash_salts[row_index];
-					if (entry.GetSalt() == salt) {
-						// Same salt, compare group keys
-						probe_state.entry_compare_sel_vector.set_index(need_compare_count, row_index);
-						need_compare_count++;
-						break;
-					} else {
-						// Different salts, move to next entry (linear probing)
-						ht_offset++;
-						if (ht_offset >= capacity) {
-							ht_offset = 0;
-						}
-						continue;
-					}
-				} else { // entry is not occupied, this means there is no match for the probing row
-					pointers_data[row_index] = nullptr;
-					break;
-				}
-			}
+			bool salt_match_case = is_occupied && salt_match;
+			bool salt_no_match_case = is_occupied && !salt_match;
+
+			probe_state.salt_match_sel.set_index(salt_match_count, row_index);
+			probe_state.salt_no_match_sel.set_index(salt_no_match_count, row_index);
+
+			salt_match_count += salt_match_case;
+			salt_no_match_count += salt_no_match_case;
 		}
 
-		if (need_compare_count != 0) {
+		// we need to compare the keys for all HT entries where the salt matches
+		if (salt_match_count != 0) {
 
 			// Get the pointers to the rows that need to be compared
-			for (idx_t need_compare_idx = 0; need_compare_idx < need_compare_count; need_compare_idx++) {
-				const auto row_index = probe_state.entry_compare_sel_vector.get_index(need_compare_idx);
+			for (idx_t need_compare_idx = 0; need_compare_idx < salt_match_count; need_compare_idx++) {
+				const auto row_index = probe_state.salt_match_sel.get_index(need_compare_idx);
 				const auto &entry = entries[ht_offsets[row_index]];
 				row_ptr_insert_to[row_index] = entry.GetPointer();
 			}
 
-			// Perform row comparisons
-			idx_t match_count = row_matcher_build.Match(
-			    keys, key_state.vector_data, probe_state.entry_compare_sel_vector, need_compare_count, layout,
-			    probe_state.row_ptr_insert_to_v, &probe_state.no_match_sel, no_match_count);
+			// Perform row comparisons, after function call salt_match_sel will point to the keys that match
+			key_match_count = row_matcher_build.Match(
+			    keys, key_state.vector_data, probe_state.salt_match_sel, salt_match_count, layout,
+			    probe_state.row_ptr_insert_to_v, &probe_state.key_no_match_sel, key_no_match_count);
 
-			D_ASSERT(match_count + no_match_count == need_compare_count);
+			D_ASSERT(key_match_count + key_no_match_count == salt_match_count);
 
 			// Set a pointer to the matching row
-			for (idx_t i = 0; i < match_count; i++) {
-				const auto row_index = probe_state.entry_compare_sel_vector.get_index(i);
+			for (idx_t i = 0; i < key_match_count; i++) {
+				const auto row_index = probe_state.salt_match_sel.get_index(i);
 				auto &entry = entries[ht_offsets[row_index]];
 				pointers_data[row_index] = entry.GetPointer();
 			}
 		}
 
-		// Linear probing: each of the entries that do not match move to the next entry in the HT
-		for (idx_t i = 0; i < no_match_count; i++) {
-			const auto row_index = probe_state.no_match_sel.get_index(i);
-			auto &ht_offset = ht_offsets[row_index];
-
-			ht_offset++;
-			if (ht_offset >= capacity) {
-				ht_offset = 0;
-			}
-		}
-
 		// update the overall selection vector to only point the entries that still need to be inserted
-		// as there was no match found for them yet
-		sel_vector = &probe_state.no_match_sel;
-		remaining_entries = no_match_count;
+		// as there was no match found for them yet or the salt did not match
+
+		AppendSelectionVector(probe_state.salt_no_match_sel, salt_match_count, probe_state.key_no_match_sel,
+		                      key_no_match_count);
+		remaining_sel = &probe_state.salt_no_match_sel;
+		remaining_count = salt_no_match_count + key_no_match_count;
+
+		// increment the ht_offset for all entries that remain
+		for (idx_t i = 0; i < remaining_count; i++) {
+			const auto row_index = remaining_sel->get_index(i);
+			auto &ht_offset = ht_offsets[row_index];
+			IncrementAndWrap(ht_offset, bitmask);
+		}
 	}
 }
 

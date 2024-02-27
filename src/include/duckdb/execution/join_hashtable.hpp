@@ -125,8 +125,15 @@ public:
 		Vector ht_offsets_v;
 		Vector row_ptr_insert_to_v;
 
-		SelectionVector entry_compare_sel_vector;
-		SelectionVector no_match_sel;
+		SelectionVector key_no_match_sel;
+
+		// Selection vectors for the find entries loop. There are three options:
+		// 1. Entry is empty -> return null
+		// 2. Entry is full and salt matches -> compare the keys
+		// 3. Entry is full and salt does not match -> continue probing
+		SelectionVector salt_match_sel;
+		SelectionVector salt_no_match_sel;
+		SelectionVector entry_empty_sel;
 	};
 
 	struct InsertState : ProbeState {
@@ -243,9 +250,6 @@ private:
 	unique_ptr<ScanStructure> InitializeScanStructure(DataChunk &keys, TupleDataChunkState &key_state,
 	                                                  const SelectionVector *&current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
-
-	//! Apply a bitmask to the hashes
-	inline idx_t ApplyBitmask(hash_t hash) const;
 
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state, Vector &hashes_v,
