@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -114,6 +115,10 @@ protected:
 	//! Initializes the scanner
 	virtual void Initialize();
 
+	inline bool ContainsZeroByte(uint64_t v) {
+		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
+	}
+
 	//! Process one chunk
 	template <class T>
 	void Process(T &result) {
@@ -174,31 +179,52 @@ protected:
 				T::AddValue(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				break;
-			case CSVState::QUOTED:
+			case CSVState::QUOTED: {
 				if (states.states[0] == CSVState::UNQUOTED) {
 					T::SetEscaped(result);
 				}
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
+				while (iterator.pos.buffer_pos + 8 < to_pos) {
+					uint64_t value =
+					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
+					if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
+					                     (value ^ state_machine->transition_array.escape))) {
+						break;
+					}
+					iterator.pos.buffer_pos += 8;
+				}
+
 				while (state_machine->transition_array
 				           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
 				       iterator.pos.buffer_pos < to_pos - 1) {
 					iterator.pos.buffer_pos++;
 				}
-				break;
+			} break;
 			case CSVState::ESCAPE:
 				T::SetEscaped(result);
 				iterator.pos.buffer_pos++;
 				break;
-			case CSVState::STANDARD:
+			case CSVState::STANDARD: {
 				iterator.pos.buffer_pos++;
+				while (iterator.pos.buffer_pos + 8 < to_pos) {
+					uint64_t value =
+					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
+					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
+					                     (value ^ state_machine->transition_array.new_line) &
+					                     (value ^ state_machine->transition_array.carriage_return))) {
+						break;
+					}
+					iterator.pos.buffer_pos += 8;
+				}
 				while (state_machine->transition_array
 				           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[iterator.pos.buffer_pos])] &&
 				       iterator.pos.buffer_pos < to_pos - 1) {
 					iterator.pos.buffer_pos++;
 				}
 				break;
+			}
 			case CSVState::QUOTED_NEW_LINE:
 				T::QuotedNewLine(result);
 				iterator.pos.buffer_pos++;
