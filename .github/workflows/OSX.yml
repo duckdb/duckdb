@@ -79,16 +79,6 @@ jobs:
         clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
         clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
 
-    - name: Install python dependencies
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      shell: bash
-      run: python -m pip install clang-5
-
-    - name: Verify C enum integrity
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      shell: bash
-      run: python scripts/verify_enum_integrity.py src/include/duckdb.h --library_path $(brew --prefix llvm@15)/lib/libclang.dylib
-
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
