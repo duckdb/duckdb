@@ -1132,7 +1132,7 @@ int Linenoise::Edit() {
 		Linenoise::Log("%d\n", (int)c);
 		switch (c) {
 		case CTRL_J:
-		case ENTER: /* enter */
+		case ENTER: { /* enter */
 			if (Terminal::IsMultiline() && len > 0) {
 				// check if this forms a complete SQL statement or not
 				buf[len] = '\0';
@@ -1165,7 +1165,17 @@ int Linenoise::Edit() {
 				RefreshLine();
 				hintsCallback = hc;
 			}
-			return (int)len;
+			// rewrite \r\n to \n
+			idx_t new_len = 0;
+			for (idx_t i = 0; i < len; i++) {
+				if (buf[i] == '\r' && buf[i + 1] == '\n') {
+					continue;
+				}
+				buf[new_len++] = buf[i];
+			}
+			buf[new_len] = '\0';
+			return (int)new_len;
+		}
 		case CTRL_O:
 		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {

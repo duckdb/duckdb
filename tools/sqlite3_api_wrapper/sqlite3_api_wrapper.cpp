@@ -898,20 +898,16 @@ SQLITE_API sqlite3_int64 sqlite3_last_insert_rowid(sqlite3 *db) {
 	return SQLITE_ERROR;
 }
 
-enum class SQLParseState {
-	SEMICOLON,
-	WHITESPACE,
-	NORMAL
-};
+enum class SQLParseState { SEMICOLON, WHITESPACE, NORMAL };
 
 const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart, idx_t delimiterLength) {
-	for(; *zSql; zSql++) {
+	for (; *zSql; zSql++) {
 		if (*zSql == '$') {
 			// found a dollar
 			// move forward and find the next dollar
 			zSql++;
 			auto start = zSql;
-			while(*zSql && *zSql != '$') {
+			while (*zSql && *zSql != '$') {
 				zSql++;
 			}
 			if (!zSql[0]) {
@@ -935,9 +931,9 @@ const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart,
 int sqlite3_complete(const char *zSql) {
 	auto state = SQLParseState::NORMAL;
 
-	for(; *zSql; zSql++) {
+	for (; *zSql; zSql++) {
 		SQLParseState next_state;
-		switch(*zSql) {
+		switch (*zSql) {
 		case ';':
 			next_state = SQLParseState::SEMICOLON;
 			break;
@@ -1009,7 +1005,7 @@ int sqlite3_complete(const char *zSql) {
 			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
-//		case '`': /* Grave-accent quoted symbols used by MySQL */
+			//		case '`': /* Grave-accent quoted symbols used by MySQL */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {
 			int c = *zSql;

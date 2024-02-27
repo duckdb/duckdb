@@ -489,7 +489,7 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 				state = ScanState::DOLLAR_QUOTED_STRING;
 				quote_pos = i;
 				// scan until the next $
-				for(i++; i < len; i++) {
+				for (i++; i < len; i++) {
 					if (buf[i] == '$') {
 						break;
 					}
@@ -557,7 +557,7 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 			// skip to the next dollar symbol
 			idx_t start = i + 1;
 			idx_t end = start;
-			while(end < len && buf[end] != '$') {
+			while (end < len && buf[end] != '$') {
 				end++;
 			}
 			if (end >= len) {
@@ -582,7 +582,8 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 			break;
 		}
 	}
-	if (state == ScanState::IN_DOUBLE_QUOTE || state == ScanState::IN_SINGLE_QUOTE || state == ScanState::DOLLAR_QUOTED_STRING) {
+	if (state == ScanState::IN_DOUBLE_QUOTE || state == ScanState::IN_SINGLE_QUOTE ||
+	    state == ScanState::DOLLAR_QUOTED_STRING) {
 		// quote is never closed
 		errors.push_back(quote_pos);
 	}
