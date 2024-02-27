@@ -108,6 +108,9 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T>
 idx_t AlpRDFinalAnalyze(AnalyzeState &state) {
 	auto &analyze_state = (AlpRDAnalyzeState<T> &)state;
+	if (analyze_state.total_values_count == 0) {
+		return DConstants::INVALID_INDEX;
+	}
 	double factor_of_sampling = 1 / ((double)analyze_state.rowgroup_sample.size() / analyze_state.total_values_count);
 
 	// Finding which is the best dictionary for the sample
