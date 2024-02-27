@@ -61,9 +61,9 @@ struct IsIntegral<uhugeint_t> {
 };
 
 template <class OUT, class IN>
-static void ThrowNumericCastError(IN in, OUT min, OUT max) {
-	throw InternalException("Information loss on integer cast: value %d outside of target range [%d, %d]", in, min,
-	                        max);
+static void ThrowNumericCastError(IN in, OUT minval, OUT maxval) {
+	throw InternalException("Information loss on integer cast: value %d outside of target range [%d, %d]", in, minval,
+	                        maxval);
 }
 
 template <class OUT, class IN>
