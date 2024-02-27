@@ -55,7 +55,7 @@ jobs:
             destination: 'iOS Simulator,name=iPhone 14'
           - isRelease: false
             destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (2nd generation)'
-    runs-on: macos-14
+    runs-on: macos-12
     steps:
 
       - name: Checkout
