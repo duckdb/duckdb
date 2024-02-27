@@ -94,7 +94,7 @@ jobs:
                 name: duckdb_extensions_${{ matrix.duckdb_arch }}
                 path: build/to_be_deployed/${{ inputs.duckdb_ref }}/${{ matrix.duckdb_arch }}
 
-            - uses: actions/setup-python@v4
+            - uses: actions/setup-python@v5
               with:
                 python-version: '3.12'
 

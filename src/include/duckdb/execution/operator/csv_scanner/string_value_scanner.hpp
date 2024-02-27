@@ -54,6 +54,8 @@ public:
 	                  idx_t buffer_position, CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
 	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read);
 
+	~StringValueResult();
+
 	//! Information on the vector
 	unsafe_vector<void *> vector_ptr;
 	unsafe_vector<ValidityMask *> validity_mask;

@@ -9,5 +9,5 @@ query II
 unpivot (select cast(columns(*) as varchar) from (select 42 as col1, 'woot' as col2))
     on columns(*);
 ----
-CAST(unnamed_subquery.col1 AS VARCHAR)	42
-CAST(unnamed_subquery.col2 AS VARCHAR)	woot
+col1	42
+col2	woot

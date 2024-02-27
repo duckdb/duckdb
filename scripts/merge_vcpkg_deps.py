@@ -26,13 +26,14 @@ for file in sys.argv[1:]:
     f = open(file)
     data = json.load(f)
 
-    for dep in data['dependencies']:
-        if type(dep) is str:
-            dependencies_str.append(dep)
-        elif type(dep) is dict:
-            dependencies_dict.append(dep)
-        else:
-            raise Exception(f"Unknown entry type found in dependencies: '{dep}'")
+    if 'dependencies' in data:
+        for dep in data['dependencies']:
+            if type(dep) is str:
+                dependencies_str.append(dep)
+            elif type(dep) is dict:
+                dependencies_dict.append(dep)
+            else:
+                raise Exception(f"Unknown entry type found in dependencies: '{dep}'")
 
     if 'vcpkg-configuration' in data:
         if 'overlay-ports' in data['vcpkg-configuration']:

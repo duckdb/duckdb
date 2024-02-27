@@ -85,6 +85,10 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		names = bind_data.column_info[file_idx].names;
 		types = bind_data.column_info[file_idx].types;
 		options.dialect_options.num_cols = names.size();
+		if (options.auto_detect) {
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			sniffer.SniffCSV();
+		}
 		state_machine = make_shared<CSVStateMachine>(
 		    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 
