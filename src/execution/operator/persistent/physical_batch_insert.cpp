@@ -128,11 +128,11 @@ public:
 class BatchInsertGlobalState : public GlobalSinkState {
 public:
 	explicit BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t initial_memory)
-	    : batch_helper(context, initial_memory), table(table), insert_count(0), optimistically_written(false) {
+	    : memory_manager(context, initial_memory), table(table), insert_count(0), optimistically_written(false) {
 	}
 
-	BatchMemoryManager batch_helper;
-	BatchTaskManager<BatchInsertTask> task_helper;
+	BatchMemoryManager memory_manager;
+	BatchTaskManager<BatchInsertTask> task_manager;
 	mutex lock;
 	DuckTableEntry &table;
 	idx_t insert_count;
@@ -303,7 +303,7 @@ void BatchInsertGlobalState::ScheduleMergeTasks(idx_t min_batch_index) {
 			entry.total_rows = scheduled_task.total_count;
 			entry.type = RowGroupBatchType::FLUSHED;
 		}
-		task_helper.AddTask(make_uniq<MergeCollectionTask>(std::move(merge_collections), merged_batch_index));
+		task_manager.AddTask(make_uniq<MergeCollectionTask>(std::move(merge_collections), merged_batch_index));
 	}
 	// erase in reverse order
 	for (idx_t i = to_be_scheduled_tasks.size(); i > 0; i--) {
@@ -330,7 +330,7 @@ unique_ptr<RowGroupCollection> BatchInsertGlobalState::MergeCollections(ClientCo
 #ifdef BATCH_PRINT
 	Printer::PrintF("Reduce unflushed memory by %llu", written_data);
 #endif
-	batch_helper.ReduceUnflushedMemory(written_data);
+	memory_manager.ReduceUnflushedMemory(written_data);
 	return merger.Flush(writer);
 }
 
@@ -377,7 +377,7 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_i
 	// add the collection to the batch index
 	RowGroupBatchEntry new_entry(batch_index, std::move(current_collection), batch_type);
 	if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
-		batch_helper.IncreaseUnflushedMemory(new_entry.unflushed_memory);
+		memory_manager.IncreaseUnflushedMemory(new_entry.unflushed_memory);
 #ifdef BATCH_PRINT
 		Printer::PrintF("Increase unflushed memory by %llu", new_entry.unflushed_memory);
 #endif
@@ -431,7 +431,7 @@ unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionConte
 bool PhysicalBatchInsert::ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p,
                                       LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
-	auto task = gstate.task_helper.GetTask();
+	auto task = gstate.task_manager.GetTask();
 	if (!task) {
 		return false;
 	}
@@ -451,7 +451,7 @@ void PhysicalBatchInsert::ExecuteTasks(ClientContext &context, GlobalSinkState &
 SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
-	auto &batch_helper = gstate.batch_helper;
+	auto &batch_helper = gstate.memory_manager;
 
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	if (lstate.current_collection) {
@@ -484,7 +484,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
-	auto &batch_helper = gstate.batch_helper;
+	auto &batch_helper = gstate.memory_manager;
 
 	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
@@ -543,7 +543,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
-	auto &batch_helper = gstate.batch_helper;
+	auto &batch_helper = gstate.memory_manager;
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
