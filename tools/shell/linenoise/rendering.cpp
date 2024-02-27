@@ -391,7 +391,7 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 	tokens = std::move(new_tokens);
 }
 
-enum class ScanState { STANDARD, IN_SINGLE_QUOTE, IN_DOUBLE_QUOTE, IN_COMMENT };
+enum class ScanState { STANDARD, IN_SINGLE_QUOTE, IN_DOUBLE_QUOTE, IN_COMMENT, DOLLAR_QUOTED_STRING };
 
 void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
 	static constexpr const idx_t MAX_ERROR_LENGTH = 2000;
@@ -411,6 +411,7 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 	vector<idx_t> cursor_brackets;
 	vector<idx_t> comment_start;
 	vector<idx_t> comment_end;
+	string dollar_quote_marker;
 	idx_t quote_pos = 0;
 	for (idx_t i = 0; i < len; i++) {
 		auto c = buf[i];
@@ -475,6 +476,30 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 					brackets.pop_back();
 				}
 				break;
+			case '$': // dollar symbol
+				if (i + 1 >= len) {
+					// we need more than just a dollar
+					break;
+				}
+				if (buf[i + 1] >= '0' && buf[i + 1] <= '9') {
+					// $[numeric] is a parameter, not a dollar quoted string
+					break;
+				}
+				// dollar quoted string
+				state = ScanState::DOLLAR_QUOTED_STRING;
+				quote_pos = i;
+				// scan until the next $
+				for(i++; i < len; i++) {
+					if (buf[i] == '$') {
+						break;
+					}
+				}
+				if (i < len) {
+					// found a complete marker - store it
+					idx_t marker_start = quote_pos + 1;
+					dollar_quote_marker = string(buf + marker_start, i - marker_start);
+				}
+				break;
 			default:
 				break;
 			}
@@ -520,11 +545,44 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 				}
 			}
 			break;
+		case ScanState::DOLLAR_QUOTED_STRING: {
+			// dollar-quoted string - all that will get us out is a $[marker]$
+			if (c != '$') {
+				break;
+			}
+			if (i + 1 >= len) {
+				// no room for the final dollar
+				break;
+			}
+			// skip to the next dollar symbol
+			idx_t start = i + 1;
+			idx_t end = start;
+			while(end < len && buf[end] != '$') {
+				end++;
+			}
+			if (end >= len) {
+				// no final dollar found - continue as normal
+				break;
+			}
+			if (end - start != dollar_quote_marker.size()) {
+				// length mismatch - cannot match
+				break;
+			}
+			if (memcmp(buf + start, dollar_quote_marker.c_str(), dollar_quote_marker.size()) != 0) {
+				// marker mismatch
+				break;
+			}
+			// marker found! revert to standard state
+			dollar_quote_marker = string();
+			state = ScanState::STANDARD;
+			i = end;
+			break;
+		}
 		default:
 			break;
 		}
 	}
-	if (state == ScanState::IN_DOUBLE_QUOTE || state == ScanState::IN_SINGLE_QUOTE) {
+	if (state == ScanState::IN_DOUBLE_QUOTE || state == ScanState::IN_SINGLE_QUOTE || state == ScanState::DOLLAR_QUOTED_STRING) {
 		// quote is never closed
 		errors.push_back(quote_pos);
 	}
