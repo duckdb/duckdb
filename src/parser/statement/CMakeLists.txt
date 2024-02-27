@@ -24,7 +24,8 @@ add_library_unity(
   set_statement.cpp
   transaction_statement.cpp
   update_statement.cpp
-  vacuum_statement.cpp)
+  vacuum_statement.cpp
+  materialized_cte_statement.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_statement>
     PARENT_SCOPE)

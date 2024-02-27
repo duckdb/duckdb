@@ -17,15 +17,13 @@ unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery:
 	return result;
 }
 
-unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt) {
+unique_ptr<SQLStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt) {
 	auto result = make_uniq<UpdateStatement>();
 	vector<unique_ptr<CTENode>> materialized_ctes;
+	CommonTableExpressionMap cte_map;
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
-		             materialized_ctes);
-		if (!materialized_ctes.empty()) {
-			throw NotImplementedException("Materialized CTEs are not implemented for update.");
-		}
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), cte_map, materialized_ctes);
+		result->cte_map = cte_map.Copy();
 	}
 
 	result->table = TransformRangeVar(*stmt.relation);
@@ -40,7 +38,10 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUp
 		TransformExpressionList(*stmt.returningList, result->returning_list);
 	}
 
-	return result;
+	// Handle materialized CTEs
+	auto cte_result = Transformer::TransformMaterializedCTEStatement(std::move(result), materialized_ctes, cte_map);
+
+	return cte_result;
 }
 
 } // namespace duckdb

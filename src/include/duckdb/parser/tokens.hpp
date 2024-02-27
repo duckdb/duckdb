@@ -42,6 +42,7 @@ class LoadStatement;
 class LogicalPlanStatement;
 class MultiStatement;
 class CopyDatabaseStatement;
+class MaterializedCTEStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
