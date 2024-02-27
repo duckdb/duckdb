@@ -124,7 +124,7 @@ parse_mask:
   canonical and should be preferred in textual output. More examples can be
   found in test cases, such as test/sql/inet/test_ipv6_inet_type.test.
 */
-static void parseQuibble(uhugeint_t &address, const char *buf, idx_t len) {
+static void ParseQuibble(uhugeint_t &address, const char *buf, idx_t len) {
 	uint16_t result = 0;
 	for (idx_t c = 0; c < len; ++c) {
 		result = (result << HEX_BITSIZE) + StringUtil::GetHexValue(buf[c]);
@@ -188,9 +188,9 @@ static bool TryParseIPv6(string_t input, IPAddress &result, CastParameters &para
 
 		if (len > 0) {
 			if (first_quibble_count == -1) {
-				parseQuibble(first_address, &data[start], len);
+				ParseQuibble(first_address, &data[start], len);
 			} else {
-				parseQuibble(second_address, &data[start], len);
+				ParseQuibble(second_address, &data[start], len);
 			}
 			++parsed_quibble_count;
 		}
