@@ -326,8 +326,8 @@ static string DrawPadded(const string &str, idx_t width) {
 		return str.substr(0, width);
 	} else {
 		width -= str.size();
-		int half_spaces = width / 2;
-		int extra_left_space = width % 2 != 0 ? 1 : 0;
+		auto half_spaces = width / 2;
+		auto extra_left_space = width % 2 != 0 ? 1 : 0;
 		return string(half_spaces + extra_left_space, ' ') + str + string(half_spaces, ' ');
 	}
 }
@@ -507,8 +507,8 @@ static void PrintRow(std::ostream &ss, const string &annotation, int id, const s
 static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id, int depth) {
 	if (info.hasfunction) {
 		double time = info.sample_tuples_count == 0 ? 0 : int(info.function_time) / double(info.sample_tuples_count);
-		PrintRow(ss, "Function", fun_id++, info.function_name, time, info.sample_tuples_count, info.tuples_count, "",
-		         depth);
+		PrintRow(ss, "Function", fun_id++, info.function_name, time, NumericCast<int>(info.sample_tuples_count),
+		         NumericCast<int>(info.tuples_count), "", NumericCast<int>(depth));
 	}
 	if (info.children.empty()) {
 		return;
@@ -539,7 +539,8 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 			                  ? 0
 			                  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
 			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name, time,
-			         expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
+			         NumericCast<int>(expr_timer->sample_tuples_count), NumericCast<int>(expr_timer->tuples_count),
+			         expr_timer->extra_info, depth + 1);
 			// Extract all functions inside the tree
 			ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
 		}

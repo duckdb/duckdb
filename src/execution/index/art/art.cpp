@@ -391,7 +391,8 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 
 	// increment the depth until we reach a leaf or find a mismatching byte
 	auto prefix_start = key_section.depth;
-	while (start_key.len != key_section.depth && start_key.ByteMatches(end_key, key_section.depth)) {
+	while (start_key.len != key_section.depth &&
+	       start_key.ByteMatches(end_key, UnsafeNumericCast<uint32_t>(key_section.depth))) {
 		key_section.depth++;
 	}
 
@@ -407,7 +408,8 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 		}
 
 		reference<Node> ref_node(node);
-		Prefix::New(art, ref_node, start_key, prefix_start, start_key.len - prefix_start);
+		Prefix::New(art, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
+		            UnsafeNumericCast<uint32_t>(start_key.len - prefix_start));
 		if (single_row_id) {
 			Leaf::New(ref_node, row_ids[key_section.start]);
 		} else {
@@ -425,7 +427,8 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 	// set the prefix
 	reference<Node> ref_node(node);
 	auto prefix_length = key_section.depth - prefix_start;
-	Prefix::New(art, ref_node, start_key, prefix_start, prefix_length);
+	Prefix::New(art, ref_node, start_key, UnsafeNumericCast<uint32_t>(prefix_start),
+	            UnsafeNumericCast<uint32_t>(prefix_length));
 
 	// set the node
 	auto node_type = Node::GetARTNodeTypeByCount(child_sections.size());
@@ -566,7 +569,8 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	if (!node.HasMetadata()) {
 		D_ASSERT(depth <= key.len);
 		reference<Node> ref_node(node);
-		Prefix::New(*this, ref_node, key, depth, key.len - depth);
+		Prefix::New(*this, ref_node, key, UnsafeNumericCast<uint32_t>(depth),
+		            UnsafeNumericCast<uint32_t>(key.len - depth));
 		Leaf::New(ref_node, row_id);
 		return true;
 	}
@@ -593,7 +597,8 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 		Node leaf_node;
 		reference<Node> ref_node(leaf_node);
 		if (depth + 1 < key.len) {
-			Prefix::New(*this, ref_node, key, depth + 1, key.len - depth - 1);
+			Prefix::New(*this, ref_node, key, UnsafeNumericCast<uint32_t>(depth + 1),
+			            UnsafeNumericCast<uint32_t>(key.len - depth - 1));
 		}
 		Leaf::New(ref_node, row_id);
 		Node::InsertChild(*this, node, key[depth], leaf_node);
@@ -623,7 +628,8 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	Node leaf_node;
 	reference<Node> ref_node(leaf_node);
 	if (depth + 1 < key.len) {
-		Prefix::New(*this, ref_node, key, depth + 1, key.len - depth - 1);
+		Prefix::New(*this, ref_node, key, UnsafeNumericCast<uint32_t>(depth + 1),
+		            UnsafeNumericCast<uint32_t>(key.len - depth - 1));
 	}
 	Leaf::New(ref_node, row_id);
 	Node4::InsertChild(*this, next_node, key[depth], leaf_node);

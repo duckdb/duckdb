@@ -15,7 +15,7 @@ int64_t BaseSecret::MatchScore(const string &path) const {
 			continue;
 		}
 		if (StringUtil::StartsWith(path, prefix)) {
-			longest_match = MaxValue<int>(prefix.length(), longest_match);
+			longest_match = MaxValue<int64_t>(prefix.length(), longest_match);
 		}
 	}
 	return longest_match;

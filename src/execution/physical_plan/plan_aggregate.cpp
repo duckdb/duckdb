@@ -20,7 +20,7 @@ static uint32_t RequiredBitsForValue(uint32_t n) {
 		n >>= 1;
 		required_bits++;
 	}
-	return required_bits;
+	return UnsafeNumericCast<uint32_t>(required_bits);
 }
 
 template <class T>
@@ -130,7 +130,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 
 		range += 2;
 		// figure out how many bits we need
-		idx_t required_bits = RequiredBitsForValue(range);
+		idx_t required_bits = RequiredBitsForValue(UnsafeNumericCast<uint32_t>(range));
 		bits_per_group.push_back(required_bits);
 		perfect_hash_bits += required_bits;
 		// check if we have exceeded the bits for the hash

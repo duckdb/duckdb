@@ -254,7 +254,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		if (group_is_set[scan_position]) {
 			// this group is set: add it to the set of groups to extract
 			data_pointers[entry_count] = data + tuple_size * scan_position;
-			group_values[entry_count] = scan_position;
+			group_values[entry_count] = NumericCast<uint32_t>(scan_position);
 			entry_count++;
 			if (entry_count == STANDARD_VECTOR_SIZE) {
 				scan_position++;

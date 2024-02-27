@@ -96,17 +96,11 @@ OUT NumericCast(IN in) {
 
 template <class OUT>
 OUT NumericCast(double val) {
-#ifdef DEBUG
-
-#endif
 	return static_cast<OUT>(val);
 }
 
 template <class OUT>
 OUT NumericCast(float val) {
-#ifdef DEBUG
-
-#endif
 	return static_cast<OUT>(val);
 }
 
@@ -114,25 +108,18 @@ template <class OUT, class IN>
 OUT UnsafeNumericCast(IN in) {
 #ifdef DEBUG
 	return NumericCast<OUT, IN>(in);
-
 #endif
 	return static_cast<OUT>(in);
 }
 
 template <class OUT>
 OUT UnsafeNumericCast(double val) {
-#ifdef DEBUG
-
-#endif
-	return static_cast<OUT>(val);
+	return NumericCast<OUT>(val);
 }
 
 template <class OUT>
 OUT UnsafeNumericCast(float val) {
-#ifdef DEBUG
-
-#endif
-	return static_cast<OUT>(val);
+	return NumericCast<OUT>(val);
 }
 
 } // namespace duckdb

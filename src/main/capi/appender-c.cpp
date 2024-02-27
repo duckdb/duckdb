@@ -197,7 +197,7 @@ duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val) {
 }
 
 duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length) {
-	return duckdb_append_internal<string_t>(appender, string_t(val, length));
+	return duckdb_append_internal<string_t>(appender, string_t(val, duckdb::UnsafeNumericCast<uint32_t>(length)));
 }
 duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length) {
 	auto value = duckdb::Value::BLOB((duckdb::const_data_ptr_t)data, length);

@@ -36,12 +36,12 @@ ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, 
 	}
 	// end with a null-terminator
 	data[pos] = '\0';
-	return ARTKey(data, len);
+	return ARTKey(data, UnsafeNumericCast<uint32_t>(len));
 }
 
 template <>
 ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, const char *value) {
-	return ARTKey::CreateARTKey(allocator, type, string_t(value, strlen(value)));
+	return ARTKey::CreateARTKey(allocator, type, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
 }
 
 template <>
@@ -51,7 +51,7 @@ void ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, AR
 
 template <>
 void ARTKey::CreateARTKey(ArenaAllocator &allocator, const LogicalType &type, ARTKey &key, const char *value) {
-	ARTKey::CreateARTKey(allocator, type, key, string_t(value, strlen(value)));
+	ARTKey::CreateARTKey(allocator, type, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
 }
 
 bool ARTKey::operator>(const ARTKey &k) const {
