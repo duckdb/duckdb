@@ -128,12 +128,11 @@ public:
 		SelectionVector key_no_match_sel;
 
 		// Selection vectors for the find entries loop. There are three options:
-		// 1. Entry is empty -> return null
+		// 1. Entry is empty -> return null (do nothing, vector is already null)
 		// 2. Entry is full and salt matches -> compare the keys
 		// 3. Entry is full and salt does not match -> continue probing
 		SelectionVector salt_match_sel;
 		SelectionVector salt_no_match_sel;
-		SelectionVector entry_empty_sel;
 	};
 
 	struct InsertState : ProbeState {

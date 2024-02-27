@@ -15,8 +15,8 @@ using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::ProbeState::ProbeState()
     : hash_salts_v(LogicalType::UBIGINT), ht_offsets_v(LogicalType::UBIGINT), row_ptr_insert_to_v(LogicalType::POINTER),
-      key_no_match_sel(STANDARD_VECTOR_SIZE), salt_match_sel(STANDARD_VECTOR_SIZE), salt_no_match_sel(STANDARD_VECTOR_SIZE),
-      entry_empty_sel(STANDARD_VECTOR_SIZE) {
+      key_no_match_sel(STANDARD_VECTOR_SIZE), salt_match_sel(STANDARD_VECTOR_SIZE),
+      salt_no_match_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::InsertState::InsertState(unique_ptr<TupleDataCollection> &data_collection) {
@@ -154,7 +154,8 @@ static void IncrementAndWrap(idx_t &value, uint64_t bitmask) {
 	value &= bitmask;
 }
 
-static void AppendSelectionVector(SelectionVector &sel, const idx_t &from, const SelectionVector &other, const idx_t &count) {
+static void AppendSelectionVector(SelectionVector &sel, const idx_t &from, const SelectionVector &other,
+                                  const idx_t &count) {
 	sel_t *sel_data = &sel[from];
 	sel_t *other_data = &other[0];
 	memcpy(sel_data, other_data, count * sizeof(sel_t));
@@ -222,9 +223,9 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 			}
 
 			// Perform row comparisons, after function call salt_match_sel will point to the keys that match
-			key_match_count = row_matcher_build.Match(
-			    keys, key_state.vector_data, probe_state.salt_match_sel, salt_match_count, layout,
-			    probe_state.row_ptr_insert_to_v, &probe_state.key_no_match_sel, key_no_match_count);
+			key_match_count = row_matcher_build.Match(keys, key_state.vector_data, probe_state.salt_match_sel,
+			                                          salt_match_count, layout, probe_state.row_ptr_insert_to_v,
+			                                          &probe_state.key_no_match_sel, key_no_match_count);
 
 			D_ASSERT(key_match_count + key_no_match_count == salt_match_count);
 
@@ -238,18 +239,43 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 
 		// update the overall selection vector to only point the entries that still need to be inserted
 		// as there was no match found for them yet or the salt did not match
-
-		AppendSelectionVector(probe_state.salt_no_match_sel, salt_match_count, probe_state.key_no_match_sel,
+		SelectionVector &remaining_after_iteration_sel = probe_state.salt_no_match_sel;
+		AppendSelectionVector(remaining_after_iteration_sel, salt_match_count, probe_state.key_no_match_sel,
 		                      key_no_match_count);
-		remaining_sel = &probe_state.salt_no_match_sel;
-		remaining_count = salt_no_match_count + key_no_match_count;
+		idx_t remaining_after_iteration = salt_no_match_count + key_no_match_count;
+
+		// reuse the salt_match_sel vector for selecting the entries that need to be processed in the next iteration
+		SelectionVector &process_next_iteration_sel = probe_state.salt_match_sel;
+		idx_t process_next_iteration_count = 0;
 
 		// increment the ht_offset for all entries that remain
-		for (idx_t i = 0; i < remaining_count; i++) {
-			const auto row_index = remaining_sel->get_index(i);
+		for (idx_t i = 0; i < remaining_after_iteration; i++) {
+			const auto row_index = remaining_after_iteration_sel.get_index(i);
 			auto &ht_offset = ht_offsets[row_index];
-			IncrementAndWrap(ht_offset, bitmask);
+
+			bool occupied;
+			bool salt_match;
+
+			// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
+			do {
+				IncrementAndWrap(ht_offset, bitmask);
+				// the entries we need to process in the next iteration are the ones that are occupied and the salt
+				// does not match, the ones that are empty need no further processing
+				auto &entry = entries[ht_offset];
+				occupied = entry.IsOccupied();
+				salt_match = entry.GetSalt() == hash_salts[row_index];
+
+				// condition for processing in next iteration: occupied and salt does match -> needs to be compared
+				bool occupied_and_salt_match = occupied && salt_match;
+				process_next_iteration_sel.set_index(process_next_iteration_count, row_index);
+				process_next_iteration_count += occupied_and_salt_match;
+
+				// condition for incrementing the ht_offset: occupied and salt does not match -> move to next entry
+			} while (occupied && !salt_match);
 		}
+
+		remaining_sel = &process_next_iteration_sel;
+		remaining_count = process_next_iteration_count;
 	}
 }
 
