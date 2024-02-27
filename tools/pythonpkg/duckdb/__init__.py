@@ -13,6 +13,7 @@ from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
     ExplainType,
+    StatementType,
     PythonExceptionHandling,
     RenderMode,
     Expression,
