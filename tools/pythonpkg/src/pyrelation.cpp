@@ -43,6 +43,14 @@ bool DuckDBPyRelation::CanBeRegisteredBy(Connection &con) {
 	return context == con.context;
 }
 
+DuckDBPyRelation::~DuckDBPyRelation() {
+	// FIXME: It makes sense to release the GIL here, but it causes a crash
+	// because pybind11's gil_scoped_acquire and gil_scoped_release can not be nested
+	// The Relation will need to call the destructor of the ExternalDependency, which might need to hold the GIL
+	// py::gil_scoped_release gil;
+	rel.reset();
+}
+
 DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
