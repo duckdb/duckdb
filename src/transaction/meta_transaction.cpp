@@ -54,7 +54,6 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 }
 
 void MetaTransaction::RemoveTransaction(AttachedDatabase &db) {
-	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		throw InternalException("MetaTransaction::RemoveTransaction called but meta transaction did not have a "
@@ -75,7 +74,6 @@ Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 }
 
 ErrorData MetaTransaction::Commit() {
-	lock_guard<mutex> guard(lock);
 	ErrorData error;
 #ifdef DEBUG
 	reference_set_t<AttachedDatabase> committed_tx;
@@ -107,7 +105,6 @@ ErrorData MetaTransaction::Commit() {
 }
 
 void MetaTransaction::Rollback() {
-	lock_guard<mutex> guard(lock);
 	// rollback transactions in reverse order
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto &db = all_transactions[i - 1].get();
