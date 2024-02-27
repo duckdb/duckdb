@@ -88,8 +88,8 @@ protected:
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
 	//! return nullptr when loading a database
 	bool load_complete = false;
-
-	//! TODO
+	//! Size of a memory slot managed by the StorageManager.
+	//! This is the quantum of allocation for blocks on DuckDB.
 	const idx_t block_alloc_size;
 
 public:

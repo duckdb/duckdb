@@ -77,7 +77,7 @@ public:
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);
 
 	MetadataManager &GetMetadataManager();
-	idx_t GetBlockAllocSize() const {
+	inline idx_t GetBlockAllocSize() const {
 		return block_alloc_size;
 	}
 
@@ -88,8 +88,7 @@ private:
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 	//! The metadata manager
 	unique_ptr<MetadataManager> metadata_manager;
-
-	//! TODO
+	//! The allocation size of blocks belonging to this block manager
 	const idx_t block_alloc_size;
 };
 } // namespace duckdb

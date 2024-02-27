@@ -31,8 +31,7 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
-class AttachOptions {
-public:
+struct AttachOptions {
 	AttachOptions(AccessMode access_mode, const string &db_type);
 	AttachOptions(const unique_ptr<AttachInfo> &info, AccessMode access_mode_p);
 

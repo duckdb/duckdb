@@ -130,41 +130,40 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	}
 }
 
-void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
-                                      const string &unrecognized_option) {
+void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
+                                      AttachOptions &options) {
 
 	// duckdb database file
-	if (StringUtil::CIEquals(db_type, "DUCKDB")) {
-		db_type = "";
+	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
+		options.db_type = "";
 
 		// DUCKDB format does not allow unrecognized options
-		if (!unrecognized_option.empty()) {
-			throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+		if (!options.unrecognized_option.empty()) {
+			throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
 		}
 		return;
 	}
 
 	// try to extract database type from path
-	if (db_type.empty()) {
+	if (options.db_type.empty()) {
 		CheckPathConflict(context, info.path);
-
-		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
+		DBPathAndType::CheckMagicBytes(info.path, options.db_type, config);
 	}
 
 	// if we are loading a database type from an extension - check if that extension is loaded
-	if (!db_type.empty()) {
-		if (!Catalog::TryAutoLoad(context, db_type)) {
+	if (!options.db_type.empty()) {
+		if (!Catalog::TryAutoLoad(context, options.db_type)) {
 			// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 			// so that either there will be success or a message to throw, and load will be
 			// attempted only once respecting the auto-loading options
-			ExtensionHelper::LoadExternalExtension(context, db_type);
+			ExtensionHelper::LoadExternalExtension(context, options.db_type);
 		}
 		return;
 	}
 
 	// DUCKDB format does not allow unrecognized options
-	if (!unrecognized_option.empty()) {
-		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
+	if (!options.unrecognized_option.empty()) {
+		throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
 	}
 }
 

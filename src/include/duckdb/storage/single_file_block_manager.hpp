@@ -25,6 +25,7 @@ struct MetadataHandle;
 struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
+	idx_t block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 };
 
@@ -34,8 +35,7 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions options,
-	                       const idx_t block_alloc_size);
+	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions &options);
 
 	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
 	void CreateNewDatabase();

@@ -143,9 +143,8 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 	return T::Read(source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options,
-                                               const idx_t block_alloc_size)
-    : BlockManager(BufferManager::GetBufferManager(db), block_alloc_size), db(db), path(std::move(path_p)),
+SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions &options)
+    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(std::move(path_p)),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
                     Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {

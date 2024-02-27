@@ -142,6 +142,7 @@ void SingleFileStorageManager::LoadDatabase() {
 	StorageManagerOptions options;
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
+	options.block_alloc_size = block_alloc_size;
 	options.debug_initialize = config.options.debug_initialize;
 
 	// first check if the database exists
@@ -159,14 +160,14 @@ void SingleFileStorageManager::LoadDatabase() {
 		}
 
 		// initialize the block manager while creating a new db file
-		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options, block_alloc_size);
+		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 
 	} else {
 		// initialize the block manager while loading the current db file
-		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options, block_alloc_size);
+		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);

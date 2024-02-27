@@ -54,6 +54,20 @@ AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, AccessMode acce
 
 		if (entry.first == "block_size") {
 			block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+			if (!IsPowerOfTwo(block_alloc_size)) {
+				throw InvalidInputException("the block size must be a power of two, got %llu", block_alloc_size);
+			}
+			if (block_alloc_size < MIN_BLOCK_ALLOC_SIZE) {
+				throw InvalidInputException(
+				    "the block size must be greater or equal than the minimum block size of %llu, got %llu",
+				    MIN_BLOCK_ALLOC_SIZE, block_alloc_size);
+			}
+			if (block_alloc_size != DEFAULT_BLOCK_ALLOC_SIZE) {
+				throw NotImplementedException(
+				    "other block sizes than the default block size are not supported, expected %llu, got %llu",
+				    DEFAULT_BLOCK_ALLOC_SIZE, block_alloc_size);
+			}
+			continue;
 		}
 
 		// we allow unrecognized options
@@ -90,7 +104,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	type = options.access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
 	                                                    : AttachedDatabaseType::READ_WRITE_DATABASE;
 	catalog = make_uniq<DuckCatalog>(*this);
-	// create the storage after the catalog to guarantee extensions to instantiate the DuckCatalog
+	// create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog
 	storage = make_uniq<SingleFileStorageManager>(
 	    *this, std::move(file_path_p), options.access_mode == AccessMode::READ_ONLY, options.block_alloc_size);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);

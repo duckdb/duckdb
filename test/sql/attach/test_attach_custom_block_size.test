@@ -1,4 +1,36 @@
 # name: test/sql/attach/test_attach_custom_block_size.test
 # group: [attach]
 
-# TODO
+statement error
+ATTACH '__TEST_DIR__/not_pow_of_two.db' (BLOCK_SIZE 123456);
+----
+must be a power of two
+
+statement error
+ATTACH '__TEST_DIR__/not_pow_of_two.db' (BLOCK_SIZE 16384);
+----
+not supported
+
+statement error
+ATTACH '__TEST_DIR__/too_small.db' (BLOCK_SIZE 128);
+----
+must be greater or equal than the minimum
+
+# default block size works
+
+statement ok
+ATTACH '__TEST_DIR__/default_block_size.db' (BLOCK_SIZE 262144);
+
+# detach and then try to attach with a different block size
+statement ok
+DETACH default_block_size;
+
+# FIXME: once we implement this feature, we expect this to fail because the file
+# already exists with a different block size
+statement error
+ATTACH '__TEST_DIR__/default_block_size.dbe' (BLOCK_SIZE 16384);
+----
+not supported
+
+statement ok
+ATTACH '__TEST_DIR__/default_block_size.db';
