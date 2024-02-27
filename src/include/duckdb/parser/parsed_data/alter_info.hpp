@@ -61,8 +61,6 @@ public:
 	string name;
 	//! Allow altering internal entries
 	bool allow_internal;
-	//! Dependencies of the altered entry
-	LogicalDependencyList dependencies;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;

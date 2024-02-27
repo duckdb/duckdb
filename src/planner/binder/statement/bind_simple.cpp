@@ -27,8 +27,6 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		entry = info.TryResolveCatalogEntry(entry_retriever);
 	} else {
 		// All other AlterTypes
-		auto &dependencies = stmt.info->dependencies;
-		SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 		entry = entry_retriever.GetEntry(stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
 		                                 stmt.info->name, stmt.info->if_not_found);
 	}

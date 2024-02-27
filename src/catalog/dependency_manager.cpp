@@ -397,8 +397,7 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 	}
 }
 
-void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
-                                    const LogicalDependencyList &added_dependencies) {
+void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj) {
 	if (IsSystemEntry(new_obj)) {
 		D_ASSERT(IsSystemEntry(old_obj));
 		// Don't do anything for this
@@ -442,9 +441,6 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dep_info.dependent.entry = new_info;
 		dependencies.emplace_back(dep_info);
 	});
-
-	//// Add the additional dependencies introduced by the ALTER statement
-	// CreateDependencies(transaction, new_obj, added_dependencies);
 
 	// FIXME: we should update dependencies in the future
 	// some alters could cause dependencies to change (imagine types of table columns)

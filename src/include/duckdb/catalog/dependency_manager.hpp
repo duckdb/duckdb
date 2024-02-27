@@ -116,8 +116,7 @@ public:
 private:
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
-	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj,
-	                 const LogicalDependencyList &dependencies);
+	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 
 private:
 	void RemoveDependency(CatalogTransaction transaction, const DependencyInfo &info);
