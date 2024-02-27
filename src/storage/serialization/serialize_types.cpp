@@ -92,7 +92,7 @@ shared_ptr<ExtraTypeInfo> AnyTypeInfo::Deserialize(Deserializer &deserializer) {
 void ArrayTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WriteProperty<LogicalType>(200, "child_type", child_type);
-	serializer.WritePropertyWithDefault<uint32_t>(201, "size", NumericCast<uint32_t>(size));
+	serializer.WritePropertyWithDefault<uint32_t>(201, "size", size);
 }
 
 shared_ptr<ExtraTypeInfo> ArrayTypeInfo::Deserialize(Deserializer &deserializer) {

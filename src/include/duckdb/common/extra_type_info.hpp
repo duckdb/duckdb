@@ -190,8 +190,8 @@ private:
 
 struct ArrayTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
-	idx_t size;
-	explicit ArrayTypeInfo(LogicalType child_type_p, idx_t size_p);
+	uint32_t size;
+	explicit ArrayTypeInfo(LogicalType child_type_p, uint32_t size_p);
 
 public:
 	void Serialize(Serializer &serializer) const override;
