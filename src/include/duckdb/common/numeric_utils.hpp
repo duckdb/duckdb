@@ -69,26 +69,26 @@ static void ThrowNumericCastError(IN in, OUT minval, OUT maxval) {
 template <class OUT, class IN>
 OUT NumericCast(IN in) {
 	// some dance around signed-unsigned integer comparison below
-	auto min = NumericLimits<OUT>::Minimum();
-	auto max = NumericLimits<OUT>::Maximum();
+	auto minval = NumericLimits<OUT>::Minimum();
+	auto maxval = NumericLimits<OUT>::Maximum();
 	auto unsigned_in = static_cast<typename MakeUnsigned<IN>::type>(in);
-	auto unsigned_min = static_cast<typename MakeUnsigned<OUT>::type>(min);
-	auto unsigned_max = static_cast<typename MakeUnsigned<OUT>::type>(max);
+	auto unsigned_min = static_cast<typename MakeUnsigned<OUT>::type>(minval);
+	auto unsigned_max = static_cast<typename MakeUnsigned<OUT>::type>(maxval);
 	auto signed_in = static_cast<typename MakeSigned<IN>::type>(in);
-	auto signed_min = static_cast<typename MakeSigned<OUT>::type>(min);
-	auto signed_max = static_cast<typename MakeSigned<OUT>::type>(max);
+	auto signed_min = static_cast<typename MakeSigned<OUT>::type>(minval);
+	auto signed_max = static_cast<typename MakeSigned<OUT>::type>(maxval);
 
 	if (std::is_unsigned<IN>() && std::is_unsigned<OUT>() &&
 	    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
-		ThrowNumericCastError(in, min, max);
+		ThrowNumericCastError(in, minval, maxval);
 	}
 
 	if (std::is_signed<IN>() && std::is_signed<OUT>() && (signed_in < signed_min || signed_in > signed_max)) {
-		ThrowNumericCastError(in, min, max);
+		ThrowNumericCastError(in, minval, maxval);
 	}
 
 	if (std::is_signed<IN>() != std::is_signed<OUT>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
-		ThrowNumericCastError(in, min, max);
+		ThrowNumericCastError(in, minval, maxval);
 	}
 
 	return static_cast<OUT>(in);
