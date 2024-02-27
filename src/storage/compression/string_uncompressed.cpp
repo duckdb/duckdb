@@ -164,7 +164,7 @@ UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t 
 		auto handle = buffer_manager.Pin(segment.block);
 		StringDictionaryContainer dictionary;
 		dictionary.size = 0;
-		dictionary.end = segment.SegmentSize();
+		dictionary.end = UnsafeNumericCast<uint32_t>(segment.SegmentSize());
 		SetDictionary(segment, handle, dictionary);
 	}
 	auto result = make_uniq<UncompressedStringSegmentState>();
@@ -283,7 +283,7 @@ void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t str
 
 void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
                                                   int32_t &result_offset) {
-	uint32_t total_length = string.GetSize() + sizeof(uint32_t);
+	auto total_length = UnsafeNumericCast<uint32_t>(string.GetSize() + sizeof(uint32_t));
 	shared_ptr<BlockHandle> block;
 	BufferHandle handle;
 
@@ -309,11 +309,11 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	}
 
 	result_block = state.head->block->BlockId();
-	result_offset = state.head->offset;
+	result_offset = UnsafeNumericCast<int32_t>(state.head->offset);
 
 	// copy the string and the length there
 	auto ptr = handle.Ptr() + state.head->offset;
-	Store<uint32_t>(string.GetSize(), ptr);
+	Store<uint32_t>(UnsafeNumericCast<uint32_t>(string.GetSize()), ptr);
 	ptr += sizeof(uint32_t);
 	memcpy(ptr, string.GetData(), string.GetSize());
 	state.head->offset += total_length;

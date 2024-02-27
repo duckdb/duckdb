@@ -213,7 +213,7 @@ public:
 
 		// Update buffers and map
 		index_buffer.push_back(current_dictionary.size);
-		selection_buffer.push_back(index_buffer.size() - 1);
+		selection_buffer.push_back(UnsafeNumericCast<uint32_t>(index_buffer.size() - 1));
 		if (str.IsInlined()) {
 			current_string_map.insert({str, index_buffer.size() - 1});
 		} else {
@@ -286,8 +286,8 @@ public:
 		memcpy(base_ptr + index_buffer_offset, index_buffer.data(), index_buffer_size);
 
 		// Store sizes and offsets in segment header
-		Store<uint32_t>(index_buffer_offset, data_ptr_cast(&header_ptr->index_buffer_offset));
-		Store<uint32_t>(index_buffer.size(), data_ptr_cast(&header_ptr->index_buffer_count));
+		Store<uint32_t>(NumericCast<uint32_t>(index_buffer_offset), data_ptr_cast(&header_ptr->index_buffer_offset));
+		Store<uint32_t>(NumericCast<uint32_t>(index_buffer.size()), data_ptr_cast(&header_ptr->index_buffer_count));
 		Store<uint32_t>((uint32_t)current_width, data_ptr_cast(&header_ptr->bitpacking_width));
 
 		D_ASSERT(current_width == BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1));
@@ -508,7 +508,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 			// Lookup dict offset in index buffer
 			auto string_number = scan_state.sel_vec->get_index(i + start_offset);
 			auto dict_offset = index_buffer_ptr[string_number];
-			uint16_t str_len = GetStringLength(index_buffer_ptr, string_number);
+			auto str_len = GetStringLength(index_buffer_ptr, UnsafeNumericCast<sel_t>(string_number));
 			result_data[result_offset + i] = FetchStringFromDict(segment, dict, baseptr, dict_offset, str_len);
 		}
 

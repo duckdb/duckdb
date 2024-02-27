@@ -97,7 +97,8 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 			// the 'match_group' address is guaranteed to be bigger than that of the source
 			D_ASSERT(const_char_ptr_cast(match_group.begin()) >= string.GetData());
 			idx_t offset = match_group.begin() - string.GetData();
-			list_content[child_idx] = string_t(string.GetData() + offset, match_group.size());
+			list_content[child_idx] =
+			    string_t(string.GetData() + offset, UnsafeNumericCast<uint32_t>(match_group.size()));
 		}
 		current_list_size++;
 		if (startpos > input.size()) {

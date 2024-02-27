@@ -85,13 +85,13 @@ struct ArrowVarcharData {
 				    "%u but the offset of %lu exceeds this.",
 				    NumericLimits<int32_t>::Maximum(), current_offset);
 			}
-			offset_data[offset_idx] = current_offset;
+			offset_data[offset_idx] = UnsafeNumericCast<BUFTYPE>(current_offset);
 
 			// resize the string buffer if required, and write the string data
 			append_data.aux_buffer.resize(current_offset);
 			OP::WriteData(append_data.aux_buffer.data() + last_offset, data[source_idx]);
 
-			last_offset = current_offset;
+			last_offset = UnsafeNumericCast<BUFTYPE>(current_offset);
 		}
 		append_data.row_count += size;
 	}

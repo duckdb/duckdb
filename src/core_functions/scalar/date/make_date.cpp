@@ -13,7 +13,8 @@ namespace duckdb {
 struct MakeDateOperator {
 	template <typename YYYY, typename MM, typename DD, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(YYYY yyyy, MM mm, DD dd) {
-		return Date::FromDate(yyyy, mm, dd);
+		return Date::FromDate(UnsafeNumericCast<int32_t>(yyyy), UnsafeNumericCast<int32_t>(mm),
+		                      UnsafeNumericCast<int32_t>(dd));
 	}
 };
 
@@ -48,10 +49,12 @@ struct MakeTimeOperator {
 	static RESULT_TYPE Operation(HH hh, MM mm, SS ss) {
 		int64_t secs = ss;
 		int64_t micros = std::round((ss - secs) * Interval::MICROS_PER_SEC);
-		if (!Time::IsValidTime(hh, mm, secs, micros)) {
+		if (!Time::IsValidTime(UnsafeNumericCast<int32_t>(hh), UnsafeNumericCast<int32_t>(mm),
+		                       UnsafeNumericCast<int32_t>(secs), UnsafeNumericCast<int32_t>(micros))) {
 			throw ConversionException("Time out of range: %d:%d:%d.%d", hh, mm, secs, micros);
 		}
-		return Time::FromTime(hh, mm, secs, micros);
+		return Time::FromTime(UnsafeNumericCast<int32_t>(hh), UnsafeNumericCast<int32_t>(mm),
+		                      UnsafeNumericCast<int32_t>(secs), UnsafeNumericCast<int32_t>(micros));
 	}
 };
 

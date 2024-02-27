@@ -275,11 +275,11 @@ shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) 
 	auto enum_internal_type = EnumTypeInfo::DictType(values_count);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
-		return EnumTypeInfoTemplated<uint8_t>::Deserialize(deserializer, values_count);
+		return EnumTypeInfoTemplated<uint8_t>::Deserialize(deserializer, NumericCast<uint32_t>(values_count));
 	case PhysicalType::UINT16:
-		return EnumTypeInfoTemplated<uint16_t>::Deserialize(deserializer, values_count);
+		return EnumTypeInfoTemplated<uint16_t>::Deserialize(deserializer, NumericCast<uint32_t>(values_count));
 	case PhysicalType::UINT32:
-		return EnumTypeInfoTemplated<uint32_t>::Deserialize(deserializer, values_count);
+		return EnumTypeInfoTemplated<uint32_t>::Deserialize(deserializer, NumericCast<uint32_t>(values_count));
 	default:
 		throw InternalException("Invalid Physical Type for ENUMs");
 	}

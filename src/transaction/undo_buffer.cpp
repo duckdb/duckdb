@@ -24,7 +24,7 @@ data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	auto data = allocator.Allocate(needed_space);
 	Store<UndoFlags>(type, data);
 	data += sizeof(UndoFlags);
-	Store<uint32_t>(len, data);
+	Store<uint32_t>(UnsafeNumericCast<uint32_t>(len), data);
 	data += sizeof(uint32_t);
 	return data;
 }

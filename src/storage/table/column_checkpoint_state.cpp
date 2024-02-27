@@ -97,7 +97,7 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 
 	// move over the segments
 	for (auto &segment : other.segments) {
-		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
+		AddSegmentToTail(segment.data, segment.segment, NumericCast<uint32_t>(segment.offset_in_block + offset));
 	}
 
 	other.Clear();
@@ -134,7 +134,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		partial_block_lock = partial_block_manager.GetLock();
 
 		// non-constant block
-		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
+		PartialBlockAllocation allocation =
+		    partial_block_manager.GetBlockAllocation(NumericCast<uint32_t>(segment_size));
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset;
 

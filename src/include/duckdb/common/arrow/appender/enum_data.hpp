@@ -45,13 +45,13 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 
 			// append the offset data
 			auto current_offset = last_offset + string_length;
-			offset_data[offset_idx] = current_offset;
+			offset_data[offset_idx] = UnsafeNumericCast<uint32_t>(current_offset);
 
 			// resize the string buffer if required, and write the string data
 			append_data.aux_buffer.resize(current_offset);
 			WriteData(append_data.aux_buffer.data() + last_offset, data[i]);
 
-			last_offset = current_offset;
+			last_offset = UnsafeNumericCast<uint32_t>(current_offset);
 		}
 		append_data.row_count += size;
 	}
