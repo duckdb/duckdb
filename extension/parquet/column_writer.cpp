@@ -1891,7 +1891,6 @@ void ArrayColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ArrayColumnWriterState>();
 
-	// auto list_data = FlatVector::GetData<list_entry_t>(vector);
 	auto array_size = ArrayType::GetSize(vector.GetType());
 	auto &validity = FlatVector::Validity(vector);
 

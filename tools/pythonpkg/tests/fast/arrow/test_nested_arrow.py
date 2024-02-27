@@ -58,7 +58,7 @@ class TestArrowNested(object):
         arrow_table = pa.Table.from_arrays([data], ['a'])
         rel = duckdb.from_arrow(arrow_table)
         res = rel.execute().fetchall()
-        assert res == [([1],), (None,), ([2],)]
+        assert res == [((1,),), (None,), ((2,),)]
 
         # Complex nested structures with different list types
         data = [
@@ -69,7 +69,7 @@ class TestArrowNested(object):
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2]], ['a', 'b', 'c'])
         rel = duckdb.from_arrow(arrow_table)
         res = rel.project('a').execute().fetchall()
-        assert res == [([1],), (None,), ([2],)]
+        assert res == [((1,),), (None,), ((2,),)]
         res = rel.project('b').execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
         res = rel.project('c').execute().fetchall()
@@ -81,9 +81,9 @@ class TestArrowNested(object):
         rel = duckdb.from_arrow(arrow_table)
         res = rel.execute().fetchall()
         assert res == [
-            ({'fixed': [1], 'large': [1], 'normal': [1, 2, 3]},),
+            ({'fixed': (1,), 'large': [1], 'normal': [1, 2, 3]},),
             ({'fixed': None, 'large': None, 'normal': None},),
-            ({'fixed': [2], 'large': [2], 'normal': [2, 1]},),
+            ({'fixed': (2,), 'large': [2], 'normal': [2, 1]},),
         ]
 
     def test_lists_roundtrip(self, duckdb_cursor):
