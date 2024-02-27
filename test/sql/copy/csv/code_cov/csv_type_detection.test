@@ -23,5 +23,4 @@ select * from read_csv_auto('data/csv/small_file.csv', sample_size=1)
 query I
 select * from read_csv_auto('data/csv/date_format_percentage.csv')
 ----
-test
 336%584%3205

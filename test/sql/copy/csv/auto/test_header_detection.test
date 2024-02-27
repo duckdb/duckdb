@@ -55,7 +55,7 @@ DROP TABLE test;
 
 # CSV file with two lines both only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_multi_line.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_multi_line.csv', header = 0);
 
 query TTT
 SELECT * FROM test ORDER BY column0;
@@ -68,7 +68,7 @@ DROP TABLE test;
 
 # CSV file with one line, two columns, only strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_single_line.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/varchar_single_line.csv', header = 0);
 
 query TT
 SELECT column0, column1 FROM test ORDER BY column0;
@@ -97,7 +97,6 @@ CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/s
 query T
 SELECT * FROM test;
 ----
-Test
 
 statement ok
 DROP TABLE test;
@@ -132,3 +131,44 @@ SELECT id FROM test;
 
 statement ok
 DROP TABLE test;
+
+statement ok
+CREATE TABLE my_varchars(a VARCHAR, b VARCHAR, c VARCHAR);
+
+statement ok
+INSERT INTO my_varchars VALUES ('Hello', 'Beautiful', 'World');
+
+statement ok
+COPY my_varchars TO '__TEST_DIR__/varchar_header.csv' (HEADER 1);
+
+statement ok
+COPY my_varchars TO '__TEST_DIR__/varchar_no_header.csv' (HEADER 0);
+
+statement ok
+COPY my_varchars FROM '__TEST_DIR__/varchar_header.csv';
+
+statement ok
+COPY my_varchars FROM '__TEST_DIR__/varchar_no_header.csv';
+
+query III
+FROM my_varchars;
+----
+Hello	Beautiful	World
+Hello	Beautiful	World
+Hello	Beautiful	World
+
+statement ok
+COPY my_varchars TO '__TEST_DIR__/big_varchar.csv';
+
+statement ok
+COPY my_varchars FROM '__TEST_DIR__/big_varchar.csv';
+
+query III
+FROM my_varchars;
+----
+Hello	Beautiful	World
+Hello	Beautiful	World
+Hello	Beautiful	World
+Hello	Beautiful	World
+Hello	Beautiful	World
+Hello	Beautiful	World

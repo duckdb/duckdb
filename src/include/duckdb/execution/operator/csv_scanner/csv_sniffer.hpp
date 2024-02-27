@@ -142,7 +142,8 @@ private:
 	void DetectTypes();
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type);
+	bool TryCastValue(const DialectOptions &dialect_options, const string &decimal_separator, const Value &value,
+	                  const LogicalType &sql_type);
 	void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
 
 	//! Function that initialized the necessary variables used for date and timestamp detection
@@ -178,6 +179,7 @@ private:
 	//! ------------------ Header Detection ----------------- //
 	//! ------------------------------------------------------//
 	void DetectHeader();
+	bool DetectHeaderWithSetColumn();
 	vector<string> names;
 
 	//! ------------------------------------------------------//

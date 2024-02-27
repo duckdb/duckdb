@@ -6,12 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT * from read_csv_auto('data/csv/escape.csv', escape=']')
+SELECT * from read_csv_auto('data/csv/escape.csv', escape=']', header = 0)
 ----
 "bla"
 
 query I
-SELECT * from read_csv_auto('data/csv/escape.csv')
+SELECT * from read_csv_auto('data/csv/escape.csv', header = 0)
 ----
 "]"bla]""
 

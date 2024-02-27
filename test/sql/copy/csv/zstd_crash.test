@@ -52,4 +52,4 @@ statement ok
 COPY test_zst TO '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD);
 
 statement ok
-COPY test_zst FROM '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD, HEADER 1);
+COPY test_zst FROM '__TEST_DIR__/noext.csv' (COMPRESSION ZSTD);

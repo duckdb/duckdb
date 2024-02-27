@@ -84,27 +84,28 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 	return result;
 }
 
-bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type) {
+bool CSVSniffer::TryCastValue(const DialectOptions &dialect_options, const string &decimal_separator,
+                              const Value &value, const LogicalType &sql_type) {
 	if (value.IsNull()) {
 		return true;
 	}
-	if (!candidate.dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty() &&
+	if (!dialect_options.date_format.find(LogicalTypeId::DATE)->second.GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
-		return candidate.dialect_options.date_format.find(LogicalTypeId::DATE)
+		return dialect_options.date_format.find(LogicalTypeId::DATE)
 		    ->second.GetValue()
 		    .TryParseDate(string_t(StringValue::Get(value)), result, error_message);
 	}
-	if (!candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty() &&
+	if (!dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)->second.GetValue().Empty() &&
 	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
+		return dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.GetValue()
 		    .TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
 	}
-	if (candidate.options.decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
+	if (decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
 		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(StringValue::Get(value));
 	}
 	Value new_value;
@@ -240,7 +241,8 @@ void CSVSniffer::DetectTypes() {
 						// Nothing to convert it to
 						continue;
 					}
-					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {
+					if (TryCastValue(sniffing_state_machine.dialect_options,
+					                 sniffing_state_machine.options.decimal_separator, dummy_val, sql_type)) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
