@@ -35,7 +35,7 @@ statement ok
 CREATE TABLE test2 (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test2 FROM '__TEST_DIR__/test2.csv' (HEADER 1);
+COPY test2 FROM '__TEST_DIR__/test2.csv' ;
 ----
 5000
 
@@ -51,7 +51,7 @@ statement ok
 CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 
 statement error
-COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0, HEADER 1);
+COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0);
 ----
 
 # create CSV file from query
@@ -65,7 +65,7 @@ statement ok
 CREATE TABLE test3 (a INTEGER, b INTEGER);
 
 query I
-COPY test3 FROM '__TEST_DIR__/test3.csv' (HEADER 1);
+COPY test3 FROM '__TEST_DIR__/test3.csv';
 ----
 4000
 

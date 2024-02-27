@@ -27,6 +27,12 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 	}
 }
 
+DuckDBPyResult::~DuckDBPyResult() {
+	py::gil_scoped_release gil;
+	result.reset();
+	current_chunk.reset();
+}
+
 const vector<string> &DuckDBPyResult::GetNames() {
 	if (!result) {
 		throw InternalException("Calling GetNames without a result object");
