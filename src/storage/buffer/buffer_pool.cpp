@@ -37,7 +37,7 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), total_dead_nodes(0),
-      purge_active(false), purged_dead_nodes(0) {
+      purge_active(false) {
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		memory_usage_per_tag[i] = 0;
 	}
@@ -92,35 +92,62 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
                                                    unique_ptr<FileBuffer> *buffer) {
 	BufferEvictionNode node;
 	TempBufferPoolReservation r(tag, *this, extra_memory);
+
 	while (current_memory > memory_limit) {
+
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
-			// Failed to reserve. Adjust size of temp reservation to 0.
-			r.Resize(0);
-			return {false, std::move(r)};
+			// we could not dequeue any eviction node, so we try one more time,
+			// but more aggressively
+			if (!TryDequeueWithoutConcurrentPurge(node)) {
+				// still no success, we return
+				r.Resize(0);
+				return {false, std::move(r)};
+			}
 		}
+
+		evict_queue_insertions--;
+
 		// get a reference to the underlying block pointer
 		auto handle = node.TryGetBlockHandle();
 		if (!handle) {
+			total_dead_nodes--;
 			continue;
 		}
+
 		// we might be able to free this block: grab the mutex and check if we can free it
 		lock_guard<mutex> lock(handle->lock);
 		if (!node.CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
+			total_dead_nodes--;
 			continue;
 		}
+
 		// hooray, we can unload the block
 		if (buffer && handle->buffer->AllocSize() == extra_memory) {
-			// we can actually re-use the memory directly!
+			// we can re-use the memory directly
 			*buffer = handle->UnloadAndTakeBlock();
 			return {true, std::move(r)};
-		} else {
-			// release the memory and mark the block as unloaded
-			handle->Unload();
 		}
+
+		// release the memory and mark the block as unloaded
+		handle->Unload();
 	}
 	return {true, std::move(r)};
+}
+
+bool BufferPool::TryDequeueWithoutConcurrentPurge(BufferEvictionNode &node) {
+
+	// we only proceed if we can guarantee that there is no active purge
+	bool actual_purge_active;
+	do {
+		actual_purge_active = purge_active;
+	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
+
+	// dequeue a node, if possible
+	bool success = queue->q.try_dequeue(node);
+	purge_active = false;
+	return success;
 }
 
 void BufferPool::PurgeIteration(const idx_t purge_size) {
@@ -147,9 +174,7 @@ void BufferPool::PurgeIteration(const idx_t purge_size) {
 
 	// bulk enqueue
 	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
-
-	// increment the total number of purged nodes
-	purged_dead_nodes += actually_dequeued - alive_nodes;
+	atomic_fetch_sub(&total_dead_nodes, actually_dequeued - alive_nodes);
 }
 
 void BufferPool::PurgeQueue() {
@@ -211,8 +236,6 @@ void BufferPool::PurgeQueue() {
 		}
 
 		idx_t approx_dead_nodes = total_dead_nodes;
-		approx_dead_nodes = approx_dead_nodes < purged_dead_nodes ? 0 : approx_dead_nodes - purged_dead_nodes;
-
 		approx_dead_nodes = approx_dead_nodes > approx_q_size ? approx_q_size : approx_dead_nodes;
 		idx_t approx_alive_nodes = approx_q_size - approx_dead_nodes;
 
