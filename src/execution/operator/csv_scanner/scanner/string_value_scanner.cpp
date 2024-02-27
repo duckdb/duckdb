@@ -946,10 +946,19 @@ void StringValueScanner::SkipUntilNewLine() {
 	// Now skip until next newline
 	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
 	    NewLineIdentifier::CARRY_ON) {
+		bool carriage_return = false;
+		bool not_carriage_return = false;
 		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
+				carriage_return = true;
+			} else if (buffer_handle_ptr[iterator.pos.buffer_pos] != '\n') {
+				not_carriage_return = true;
+			}
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
-				iterator.pos.buffer_pos++;
-				return;
+				if (carriage_return || not_carriage_return) {
+					iterator.pos.buffer_pos++;
+					return;
+				}
 			}
 		}
 	} else {
