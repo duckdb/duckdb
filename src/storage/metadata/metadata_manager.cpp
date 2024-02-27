@@ -1,7 +1,6 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
 #include "duckdb/storage/database_size.hpp"
@@ -86,7 +85,7 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, Storage::BLOCK_SIZE, false, &new_block.block);
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
-		new_block.free_blocks.push_back(UnsafeNumericCast<uint8_t>(METADATA_BLOCK_COUNT - i - 1));
+		new_block.free_blocks.push_back(NumericCast<uint8_t>(METADATA_BLOCK_COUNT - i - 1));
 	}
 	// zero-initialize the handle
 	memset(handle.Ptr(), 0, Storage::BLOCK_SIZE);
@@ -166,7 +165,7 @@ MetaBlockPointer MetadataManager::FromBlockPointer(BlockPointer block_pointer) {
 	D_ASSERT(offset < MetadataManager::METADATA_BLOCK_SIZE);
 	MetaBlockPointer result;
 	result.block_pointer = idx_t(block_pointer.block_id) | index << 56ULL;
-	result.offset = UnsafeNumericCast<uint8_t>(index);
+	result.offset = UnsafeNumericCast<uint32_t>(offset);
 	return result;
 }
 
