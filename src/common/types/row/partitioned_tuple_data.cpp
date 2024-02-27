@@ -32,12 +32,6 @@ void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState
 	state.partition_sel.Initialize();
 	state.reverse_partition_sel.Initialize();
 
-	vector<column_t> column_ids;
-	column_ids.reserve(layout.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-		column_ids.emplace_back(col_idx);
-	}
-
 	InitializeAppendStateInternal(state, properties);
 }
 
