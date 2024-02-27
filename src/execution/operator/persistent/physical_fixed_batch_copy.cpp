@@ -48,8 +48,8 @@ public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state,
 	                                   idx_t minimum_memory_per_thread)
 	    : memory_manager(context_p, minimum_memory_per_thread), rows_copied(0), global_state(std::move(global_state)),
-		  batch_size(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
-		  minimum_memory_per_thread(minimum_memory_per_thread) {
+	      batch_size(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
 	BatchMemoryManager memory_manager;
@@ -346,7 +346,7 @@ static bool CorrectSizeForBatch(idx_t collection_size, idx_t desired_size) {
 void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
                                                 bool final) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
-	auto &task_helper = gstate.task_manager;
+	auto &task_manager = gstate.task_manager;
 
 	// repartition batches until the min index is reached
 	lock_guard<mutex> l(gstate.lock);
@@ -393,7 +393,8 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			if (CorrectSizeForBatch(collection->Count(), gstate.batch_size)) {
 				// the collection is ~approximately equal to the batch size (off by at most one vector)
 				// use it directly
-				task_helper.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(collection)));
+				task_manager.AddTask(
+				    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(collection)));
 				collection.reset();
 			} else if (collection->Count() < gstate.batch_size) {
 				// the collection is smaller than the batch size - use it as a starting point
@@ -422,7 +423,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 				continue;
 			}
 			// the collection is full - move it to the result and create a new one
-			task_helper.AddTask(
+			task_manager.AddTask(
 			    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
 			current_collection =
 			    make_uniq<ColumnDataCollection>(context, children[0]->types, ColumnDataAllocatorType::HYBRID);
@@ -434,7 +435,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 		// AND this is not the final collection
 		// re-add it to the set of raw (to-be-merged) batches
 		if (final || CorrectSizeForBatch(current_collection->Count(), gstate.batch_size)) {
-			task_helper.AddTask(
+			task_manager.AddTask(
 			    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
 		} else {
 			gstate.raw_batches[max_batch_index] = std::move(current_collection);
