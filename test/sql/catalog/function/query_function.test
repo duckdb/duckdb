@@ -26,11 +26,6 @@ FROM query('SELECT abs(-42)');
 42
 
 query I
-FROM query('FROM query("SELECT 1")');
-----
-1
-
-query I
 SELECT * FROM query('SELECT * FROM (SELECT 1 + 2)');
 ----
 3
@@ -39,11 +34,6 @@ query III
 FROM query('SELECT 1, 2, 3');
 ----
 1	2	3
-
-query I
-SELECT * FROM query('FROM query(''SELECT 17 + 25'')');
-----
-42
 
 query I
 FROM query('SELECT 42;;;--- hello;');
@@ -63,10 +53,10 @@ hello
 
 # query from table
 statement ok
-CREATE TABLE tbl1 (a INT, b INT);
+CREATE TABLE tbl (a INT, b INT);
 
 statement ok
-FROM query('SELECT *, 1 + 2 FROM tbl1');
+FROM query('SELECT *, 1 + 2 FROM tbl');
 
 statement ok
 CREATE TABLE tbl2 (a INT, b INT, c INT);
@@ -134,23 +124,6 @@ Parser Error: Expected a single SELECT statement
 
 
 # test query_table()
-statement ok
-create table t as select 42;
-
-statement ok
-create table t2 as select 'duckdb';
-
-statement ok
-create table t3 as select '';
-
-statement ok
-create table t4 as select '1?ch@racter$';
-
-query I
-from query_table('t');
-----
-42
-
 query III
 from query_table(tbl2);
 ----
@@ -158,18 +131,33 @@ from query_table(tbl2);
 4	5	6
 7	8	9
 
-query I
-from query_table('t','t2','t4');
-----
-42
-duckdb
-1?ch@racter$
+statement ok
+create table t_int as select 42;
+
+statement ok
+create table t_varchar as select 'duckdb';
+
+statement ok
+create table t_empty as select '';
+
+statement ok
+create table t2_varchar as select '1?ch@racter$';
 
 query I
-from query_table(t, t2);
+from query_table('t_int');
 ----
 42
-duckdb
+
+query I
+from query_table(['t_int']);
+----
+42
+
+query I
+from query_table(['t_int', t2_varchar]);
+----
+42
+1?ch@racter$
 
 query I
 from query_table('(select 17 + 25)');
@@ -177,7 +165,7 @@ from query_table('(select 17 + 25)');
 42
 
 query I
-from query_table('t', 't2', 't3', t4, '(select ''I am a subquery'')');
+from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')']);
 ----
 42
 duckdb
@@ -185,10 +173,26 @@ duckdb
 1?ch@racter$
 I am a subquery
 
+# test incorrect usage
 statement error
-from query_table(['t', 't2', 't3', t4, '(select ''I am a subquery'')']);
+from query_table([]);
 ----
-Binder Error: No function matches the given name and argument types 'query_table(VARCHAR[])'.
+Binder Error: No function matches the given name and argument types 'query_table(INTEGER[])'.
+
+statement error
+from query_table(['']);
+----
+Parser Error: syntax error at end of input
+
+statement error
+from query_table('t_int', 't_varchar', t2_varchar);
+----
+Binder Error: No function matches the given name and argument types 'query_table(VARCHAR, VARCHAR, VARCHAR)'.
+
+statement error
+from query_table([t_int, tbl2]);
+----
+Binder Error: Set operations can only apply to expressions with the same number of result columns
 
 statement error
 from query_table(not_defined_tbl);
@@ -213,8 +217,17 @@ from query_table(tbl2, by_name=true);
 4	5	6
 7	8	9
 
+query I
+from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')'], by_name=false);
+----
+42
+duckdb
+(empty)
+1?ch@racter$
+I am a subquery
+
 query IIIII
-from query_table('t', 't2', 't3', t4, '(select ''I am a subquery'')', by_name=true);
+from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')'], by_name=true);
 ----
 42	NULL	NULL	NULL	NULL
 NULL	duckdb	NULL	NULL	NULL
@@ -222,7 +235,8 @@ NULL	NULL	(empty)	NULL	NULL
 NULL	NULL	NULL	1?ch@racter$	NULL
 NULL	NULL	NULL	NULL	I am a subquery
 
+# test incorrect usage
 statement error
-from query_table('t', not_valid=true);
+from query_table('t_int', not_valid=true);
 ----
 Binder Error: Invalid named parameter "not_valid" for function query_table
