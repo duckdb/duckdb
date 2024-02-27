@@ -60,66 +60,66 @@ struct IsIntegral<uhugeint_t> {
 	static constexpr bool value = true;
 };
 
-template <class OUT, class IN>
-static void ThrowNumericCastError(IN in, OUT minval, OUT maxval) {
+template <class TO, class FROM>
+static void ThrowNumericCastError(FROM in, TO minval, TO maxval) {
 	throw InternalException("Information loss on integer cast: value %d outside of target range [%d, %d]", in, minval,
 	                        maxval);
 }
 
-template <class OUT, class IN>
-OUT NumericCast(IN in) {
+template <class TO, class FROM>
+TO NumericCast(FROM val) {
 	// some dance around signed-unsigned integer comparison below
-	auto minval = NumericLimits<OUT>::Minimum();
-	auto maxval = NumericLimits<OUT>::Maximum();
-	auto unsigned_in = static_cast<typename MakeUnsigned<IN>::type>(in);
-	auto unsigned_min = static_cast<typename MakeUnsigned<OUT>::type>(minval);
-	auto unsigned_max = static_cast<typename MakeUnsigned<OUT>::type>(maxval);
-	auto signed_in = static_cast<typename MakeSigned<IN>::type>(in);
-	auto signed_min = static_cast<typename MakeSigned<OUT>::type>(minval);
-	auto signed_max = static_cast<typename MakeSigned<OUT>::type>(maxval);
+	auto minval = NumericLimits<TO>::Minimum();
+	auto maxval = NumericLimits<TO>::Maximum();
+	auto unsigned_in = static_cast<typename MakeUnsigned<FROM>::type>(val);
+	auto unsigned_min = static_cast<typename MakeUnsigned<TO>::type>(minval);
+	auto unsigned_max = static_cast<typename MakeUnsigned<TO>::type>(maxval);
+	auto signed_in = static_cast<typename MakeSigned<FROM>::type>(val);
+	auto signed_min = static_cast<typename MakeSigned<TO>::type>(minval);
+	auto signed_max = static_cast<typename MakeSigned<TO>::type>(maxval);
 
-	if (std::is_unsigned<IN>() && std::is_unsigned<OUT>() &&
+	if (std::is_unsigned<FROM>() && std::is_unsigned<TO>() &&
 	    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
-		ThrowNumericCastError(in, minval, maxval);
+		ThrowNumericCastError(val, minval, maxval);
 	}
 
-	if (std::is_signed<IN>() && std::is_signed<OUT>() && (signed_in < signed_min || signed_in > signed_max)) {
-		ThrowNumericCastError(in, minval, maxval);
+	if (std::is_signed<FROM>() && std::is_signed<TO>() && (signed_in < signed_min || signed_in > signed_max)) {
+		ThrowNumericCastError(val, minval, maxval);
 	}
 
-	if (std::is_signed<IN>() != std::is_signed<OUT>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
-		ThrowNumericCastError(in, minval, maxval);
+	if (std::is_signed<FROM>() != std::is_signed<TO>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
+		ThrowNumericCastError(val, minval, maxval);
 	}
 
-	return static_cast<OUT>(in);
+	return static_cast<TO>(val);
 }
 
-template <class OUT>
-OUT NumericCast(double val) {
-	return static_cast<OUT>(val);
+template <class TO>
+TO NumericCast(double val) {
+	return static_cast<TO>(val);
 }
 
-template <class OUT>
-OUT NumericCast(float val) {
-	return static_cast<OUT>(val);
+template <class TO>
+TO NumericCast(float val) {
+	return static_cast<TO>(val);
 }
 
-template <class OUT, class IN>
-OUT UnsafeNumericCast(IN in) {
+template <class TO, class FROM>
+TO UnsafeNumericCast(FROM in) {
 #ifdef DEBUG
-	return NumericCast<OUT, IN>(in);
+	return NumericCast<TO, FROM>(in);
 #endif
-	return static_cast<OUT>(in);
+	return static_cast<TO>(in);
 }
 
-template <class OUT>
-OUT UnsafeNumericCast(double val) {
-	return NumericCast<OUT>(val);
+template <class TO>
+TO UnsafeNumericCast(double val) {
+	return NumericCast<TO>(val);
 }
 
-template <class OUT>
-OUT UnsafeNumericCast(float val) {
-	return NumericCast<OUT>(val);
+template <class TO>
+TO UnsafeNumericCast(float val) {
+	return NumericCast<TO>(val);
 }
 
 } // namespace duckdb
