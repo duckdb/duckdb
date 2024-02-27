@@ -412,7 +412,7 @@ void PhysicalBatchInsert::ExecuteTasks(ClientContext &context, GlobalSinkState &
 SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
-	auto &batch_helper = gstate.memory_manager;
+	auto &memory_manager = gstate.memory_manager;
 
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	if (lstate.current_collection) {
@@ -425,7 +425,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 		                     std::move(lstate.current_collection), lstate.writer);
 
-		auto any_unblocked = batch_helper.UnblockTasks();
+		auto any_unblocked = memory_manager.UnblockTasks();
 		if (!any_unblocked) {
 			ExecuteTasks(context.client, gstate, lstate);
 		}
@@ -434,7 +434,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 	lstate.current_index = batch_index;
 
 	// unblock any blocked tasks
-	batch_helper.UnblockTasks();
+	memory_manager.UnblockTasks();
 
 	return SinkNextBatchType::READY;
 }
@@ -445,28 +445,28 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
-	auto &batch_helper = gstate.memory_manager;
+	auto &memory_manager = gstate.memory_manager;
 
 	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	// check if we should process this batch
-	if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
-		batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
+	if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
+		memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
 		// we are not processing the current min batch index
 		// check if we have exceeded the maximum number of unflushed rows
-		if (batch_helper.OutOfMemory(batch_index)) {
+		if (memory_manager.OutOfMemory(batch_index)) {
 			// out-of-memory
 			// execute tasks while we wait (if any are available)
 			ExecuteTasks(context.client, gstate, lstate);
 
-			lock_guard<mutex> l(batch_helper.GetBlockedTaskLock());
-			if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
+			lock_guard<mutex> l(memory_manager.GetBlockedTaskLock());
+			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				//  we are not the minimum batch index and we have no memory available to buffer - block the task for
 				//  now
-				batch_helper.BlockTask(input.interrupt_state);
+				memory_manager.BlockTask(input.interrupt_state);
 				return SinkResultType::BLOCKED;
 			}
 		}
@@ -500,12 +500,12 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
-	auto &batch_helper = gstate.memory_manager;
+	auto &memory_manager = gstate.memory_manager;
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
-	batch_helper.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
+	memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
 	if (lstate.current_collection && lstate.current_collection->GetTotalRows() > 0) {
 		TransactionData tdata(0, 0);
@@ -519,7 +519,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	}
 
 	// unblock any blocked tasks
-	batch_helper.UnblockTasks();
+	memory_manager.UnblockTasks();
 
 	return SinkCombineResultType::FINISHED;
 }

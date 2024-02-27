@@ -134,29 +134,29 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
                                             OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
-	auto &batch_helper = gstate.memory_manager;
+	auto &memory_manager = gstate.memory_manager;
 	auto batch_index = state.partition_info.batch_index.GetIndex();
 	if (state.current_task == FixedBatchCopyState::PROCESSING_TASKS) {
 		ExecuteTasks(context.client, gstate);
-		FlushBatchData(context.client, gstate, batch_helper.GetMinimumBatchIndex());
+		FlushBatchData(context.client, gstate, memory_manager.GetMinimumBatchIndex());
 
-		if (!batch_helper.IsMinimumBatchIndex(batch_index) && batch_helper.OutOfMemory(batch_index)) {
-			lock_guard<mutex> l(batch_helper.GetBlockedTaskLock());
-			if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
+		if (!memory_manager.IsMinimumBatchIndex(batch_index) && memory_manager.OutOfMemory(batch_index)) {
+			lock_guard<mutex> l(memory_manager.GetBlockedTaskLock());
+			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				// no tasks to process, we are not the minimum batch index and we have no memory available to buffer
 				// block the task for now
-				batch_helper.BlockTask(input.interrupt_state);
+				memory_manager.BlockTask(input.interrupt_state);
 				return SinkResultType::BLOCKED;
 			}
 		}
 		state.current_task = FixedBatchCopyState::SINKING_DATA;
 	}
-	if (!batch_helper.IsMinimumBatchIndex(batch_index)) {
-		batch_helper.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
+	if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
+		memory_manager.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 
 		// we are not processing the current min batch index
 		// check if we have exceeded the maximum number of unflushed rows
-		if (batch_helper.OutOfMemory(batch_index)) {
+		if (memory_manager.OutOfMemory(batch_index)) {
 			// out-of-memory - stop sinking chunks and instead assist in processing tasks for the minimum batch index
 			state.current_task = FixedBatchCopyState::PROCESSING_TASKS;
 			return Sink(context, chunk, input);
@@ -171,7 +171,7 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	auto new_memory_usage = state.collection->AllocationSize();
 	if (new_memory_usage > state.local_memory_usage) {
 		// memory usage increased - add to global state
-		batch_helper.IncreaseUnflushedMemory(new_memory_usage - state.local_memory_usage);
+		memory_manager.IncreaseUnflushedMemory(new_memory_usage - state.local_memory_usage);
 		state.local_memory_usage = new_memory_usage;
 	} else if (new_memory_usage < state.local_memory_usage) {
 		throw InternalException("PhysicalFixedBatchCopy - memory usage decreased somehow?");
@@ -183,14 +183,14 @@ SinkCombineResultType PhysicalFixedBatchCopy::Combine(ExecutionContext &context,
                                                       OperatorSinkCombineInput &input) const {
 	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
-	auto &batch_helper = gstate.memory_manager;
+	auto &memory_manager = gstate.memory_manager;
 	gstate.rows_copied += state.rows_copied;
 	if (!gstate.any_finished) {
 		// signal that this thread is finished processing batches and that we should move on to Finalize
 		lock_guard<mutex> l(gstate.lock);
 		gstate.any_finished = true;
 	}
-	batch_helper.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
+	memory_manager.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	ExecuteTasks(context.client, gstate);
 
 	return SinkCombineResultType::FINISHED;
@@ -444,7 +444,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 
 void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
-	auto &batch_helper = gstate.memory_manager;
+	auto &memory_manager = gstate.memory_manager;
 
 	// flush batch data to disk (if there are any to flush)
 	// grab the flush lock - we can only call flush_batch with this lock
@@ -478,7 +478,7 @@ void PhysicalFixedBatchCopy::FlushBatchData(ClientContext &context, GlobalSinkSt
 		}
 		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
 		batch_data->prepared_data.reset();
-		batch_helper.ReduceUnflushedMemory(batch_data->memory_usage);
+		memory_manager.ReduceUnflushedMemory(batch_data->memory_usage);
 		gstate.flushed_batch_index++;
 	}
 }
@@ -510,7 +510,7 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
-	auto &batch_helper = gstate.memory_manager;
+	auto &memory_manager = gstate.memory_manager;
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
@@ -520,17 +520,17 @@ SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
 		// attempt to repartition to our desired batch size
 		RepartitionBatches(context.client, gstate_p, min_batch_index);
 		// unblock tasks so they can help process batches (if any are blocked)
-		auto any_unblocked = batch_helper.UnblockTasks();
+		auto any_unblocked = memory_manager.UnblockTasks();
 		// if any threads were unblocked they can pick up execution of the tasks
 		// otherwise we will execute a task and flush here
 		if (!any_unblocked) {
 			//! Execute a single repartition task
 			ExecuteTask(context.client, gstate);
 			//! Flush batch data to disk (if any is ready)
-			FlushBatchData(context.client, gstate, batch_helper.GetMinimumBatchIndex());
+			FlushBatchData(context.client, gstate, memory_manager.GetMinimumBatchIndex());
 		}
 	}
-	batch_helper.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
+	memory_manager.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 
 	state.InitializeCollection(context.client, *this);
