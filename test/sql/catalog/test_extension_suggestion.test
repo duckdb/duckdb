@@ -9,4 +9,4 @@ require no_extension_autoloading
 statement error
 SELECT get_substrait("select 1");
 ----
-it exists in the substrait extension
+Catalog Error: Scalar Function with name "get_substrait" is not in the catalog, a function by this name exists in the substrait extension, but it's of a different type, namely Table Function

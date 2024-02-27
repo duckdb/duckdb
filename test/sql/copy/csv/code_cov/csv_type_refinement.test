@@ -11,6 +11,6 @@ select count(*) from read_csv_auto('data/csv/borked_date.csv', header = 0)
 2070
 
 query I
-select count(*) from read_csv_auto('data/csv/big_not_bool.csv')
+select count(*) from read_csv_auto('data/csv/big_not_bool.csv', header = 0)
 ----
 2450

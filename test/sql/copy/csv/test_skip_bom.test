@@ -25,7 +25,6 @@ CREATE TABLE people2 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/peop
 query TT
 SELECT * FROM people2
 ----
-Person	Region
 Anna Andreadi	West
 Chuck Magee	East
 Kelly Williams	Central
