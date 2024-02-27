@@ -915,7 +915,7 @@ const char *skipDollarQuotedString(const char *zSql, const char *delimiterStart,
 				return nullptr;
 			}
 			// check if the dollar quoted string name matches
-			if (delimiterLength == zSql - start) {
+			if (delimiterLength == idx_t(zSql - start)) {
 				if (memcmp(start, delimiterStart, delimiterLength) == 0) {
 					return zSql;
 				}
