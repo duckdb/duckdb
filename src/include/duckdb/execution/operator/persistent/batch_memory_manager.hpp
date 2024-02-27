@@ -101,9 +101,6 @@ public:
 		if (blocked_tasks.empty()) {
 			return false;
 		}
-#if 0
-		Printer::PrintF("Unblock %llu tasks", blocked_tasks.size());
-#endif
 		for (auto &entry : blocked_tasks) {
 			entry.Callback();
 		}
