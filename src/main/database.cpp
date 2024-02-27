@@ -162,7 +162,6 @@ void DatabaseInstance::CreateMainDatabase() {
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		// TODO: block alloc size should come from the database config options?
 		AttachOptions options(config.options.access_mode, config.options.database_type);
 		initial_database = db_manager->AttachDatabase(*con.context, info, options);
 		con.Commit();
