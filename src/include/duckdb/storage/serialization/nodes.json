@@ -110,6 +110,36 @@
     "constructor": ["type", "null_order", "expression"]
   },
   {
+    "class": "BoundLimitNode",
+    "includes": [
+      "duckdb/planner/bound_result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "LimitNodeType"
+      },
+      {
+        "id": 101,
+        "name": "constant_integer",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "constant_percentage",
+        "type": "double"
+      },
+      {
+        "id": 103,
+        "name": "expression",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "constant_integer", "constant_percentage", "expression"]
+  },
+  {
     "class": "CaseCheck",
     "includes": [
       "duckdb/parser/expression/case_expression.hpp"

@@ -9,10 +9,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers(i INTEGER)
+CREATE TABLE integers(i INTEGER);
 
 statement ok
-INSERT INTO integers VALUES (1), (2), (3), (NULL)
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
 
 # temporary solution until decorrelation of materialized CTEs is implemented
 require noalternativeverify
