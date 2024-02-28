@@ -588,9 +588,6 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
-	if (parent_offset != 0) {
-		(void)array_state;
-	}
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
 
@@ -1070,10 +1067,10 @@ static bool CanContainNull(ArrowArray &array, ValidityMask *parent_mask) {
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                           ValidityMask *parent_mask, uint64_t parent_offset) {
+	D_ASSERT(arrow_type.HasDictionary());
 	auto &scan_state = array_state.state;
-
 	const bool has_nulls = CanContainNull(array, parent_mask);
-	if (!array_state.HasDictionary()) {
+	if (array_state.CacheOutdated(array.dictionary)) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, 0, has_nulls);
@@ -1095,7 +1092,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		};
-		array_state.AddDictionary(std::move(base_vector));
+		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
 	auto offset_type = arrow_type.GetDuckType();
 	//! Get Pointer to Indices of Dictionary
@@ -1120,6 +1117,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		SetSelectionVector(sel, indices, offset_type, size);
 	}
 	vector.Slice(array_state.GetDictionary(), sel, size);
+	vector.Verify(size);
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
@@ -1144,19 +1142,16 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
-		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
-		if (scan_state.arrow_owned_data.find(idx) == scan_state.arrow_owned_data.end()) {
-			auto arrow_data = make_shared<ArrowArrayWrapper>();
-			arrow_data->arrow_array = scan_state.chunk->arrow_array;
-			scan_state.chunk->arrow_array.release = nullptr;
-			scan_state.arrow_owned_data[idx] = arrow_data;
-		}
-
-		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.arrow_owned_data[idx]));
 
 		D_ASSERT(arrow_convert_data.find(col_idx) != arrow_convert_data.end());
 		auto &arrow_type = *arrow_convert_data.at(col_idx);
 		auto &array_state = scan_state.GetState(col_idx);
+
+		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
+		if (!array_state.owned_data) {
+			array_state.owned_data = scan_state.chunk;
+		}
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 
 		auto array_physical_type = GetArrowArrayPhysicalType(arrow_type);
 

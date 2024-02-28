@@ -46,8 +46,8 @@ CREATE TABLE test4 as SELECT id FROM range(10000,20000) tbl(id);
 statement ok
 COPY test3 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=1/test.parquet';
 COPY test4 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=2/test.parquet';
-COPY test3 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=1/test.csv' (HEADER 1);
-COPY test4 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=2/test.csv' (HEADER 1);
+COPY test3 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=1/test.csv';
+COPY test4 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=2/test.csv';
 
 query II
 select min(id), max(id) from parquet_scan('s3://test-bucket/hive-partitioning/medium/*/*/test.parquet', HIVE_PARTITIONING=1) where part2=2

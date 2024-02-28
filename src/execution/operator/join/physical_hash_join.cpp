@@ -1086,4 +1086,21 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 	return progress * 100.0;
 }
 
+string PhysicalHashJoin::ParamsToString() const {
+	string result = EnumUtil::ToString(join_type) + "\n";
+	for (auto &it : conditions) {
+		string op = ExpressionTypeToOperator(it.comparison);
+		result += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
+	}
+	result += "\n[INFOSEPARATOR]\n";
+	if (perfect_join_statistics.is_build_small) {
+		// perfect hash join
+		result += "Build Min: " + perfect_join_statistics.build_min.ToString() + "\n";
+		result += "Build Max: " + perfect_join_statistics.build_max.ToString() + "\n";
+		result += "\n[INFOSEPARATOR]\n";
+	}
+	result += StringUtil::Format("EC: %llu\n", estimated_cardinality);
+	return result;
+}
+
 } // namespace duckdb
