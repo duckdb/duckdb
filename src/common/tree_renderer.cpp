@@ -499,8 +499,8 @@ string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	string extra_info;
-	if (op.settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		extra_info = op.settings.get_setting(TreeNodeSettingsType::EXTRA_INFO).ToString();
+	if (op.settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
+		extra_info = op.settings.GetSetting(TreeNodeSettingsType::EXTRA_INFO).ToString();
 	}
 	auto result = TreeRenderer::CreateRenderNode(op.name, extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";

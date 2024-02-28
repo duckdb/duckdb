@@ -116,9 +116,9 @@ void QueryProfiler::Finalize(TreeNode &node) {
 	for (auto &child : node.children) {
 		Finalize(*child);
 		if (node.type == PhysicalOperatorType::UNION &&
-		    node.settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
-			node.settings.set_setting(TreeNodeSettingsType::OPERATOR_CARDINALITY,
-			                          child->settings.get_setting(TreeNodeSettingsType::OPERATOR_CARDINALITY));
+		    node.info.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+			node.info.settings.SetSetting(TreeNodeSettingsType::OPERATOR_CARDINALITY,
+			                         child->info.settings.GetSetting(TreeNodeSettingsType::OPERATOR_CARDINALITY));
 		}
 	}
 }
@@ -228,15 +228,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p), active_operator(nullptr) {
-}
-
-void OperatorProfiler::EnableOperatorTiming() {
-	operator_timing_enabled = true;
-}
-
-void OperatorProfiler::EnableOperatorCardinality() {
-	operator_cardinality_enabled = true;
+OperatorProfiler::OperatorProfiler(bool enabled_p, unique_ptr<TreeNodeSettings> &settings_p) : enabled(enabled_p), settings(settings_p), active_operator(nullptr) {
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -251,7 +243,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	if (operator_timing_enabled) {
+	if (settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
 		op.Start();
 	}
 }
@@ -265,16 +257,18 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	if (operator_timing_enabled || operator_cardinality_enabled) {
+	bool timing_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING);
+	bool cardinality_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY);
+	if (timing_enabled || cardinality_enabled) {
 		double time = 0;
 		idx_t elements = 0;
 
 		// finish timing for the current element
-		if (operator_timing_enabled) {
+		if (timing_enabled) {
 			op.End();
 			time = op.Elapsed();
 		}
-		if (operator_cardinality_enabled) {
+		if (cardinality_enabled) {
 			elements = chunk ? chunk->size() : 0;
 		}
 		AddTiming(*active_operator, time, elements);
@@ -289,22 +283,26 @@ void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t 
 	if (!Value::DoubleIsFinite(time)) {
 		return;
 	}
+
+	bool timing_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING);
+	bool cardinality_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY);
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
 		timings[op] = OperatorInformation();
-		if (operator_timing_enabled) {
-			timings[op].time = time;
+		timings[op].settings = *settings;
+		if (timing_enabled) {
+			timings[op].settings.SetSetting(TreeNodeSettingsType::OPERATOR_TIMING, Value(time));
 		}
-		if (operator_cardinality_enabled) {
-			timings[op].elements = elements;
+		if (cardinality_enabled) {
+			timings[op].settings.SetSetting(TreeNodeSettingsType::OPERATOR_CARDINALITY, Value::UBIGINT(elements));
 		}
 	} else {
 		// add to existing entry
-		if (operator_timing_enabled) {
-			entry->second.time += time;
+		if (timing_enabled) {
+			entry->second.settings
 		}
-		if (operator_cardinality_enabled) {
+		if (cardinality_enabled) {
 			entry->second.elements += elements;
 		}
 	}
@@ -565,16 +563,16 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
-	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
 		ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
 	}
-	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
 		ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
 	}
-	if (settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
 		ss << string(depth * 3, ' ')
 		   << "   \"extra_info\": \"" +
-		          JSONSanitize(settings.get_setting(TreeNodeSettingsType::EXTRA_INFO).ToString()) + "\",\n";
+		          JSONSanitize(settings.GetSetting(TreeNodeSettingsType::EXTRA_INFO).ToString()) + "\",\n";
 		ss << string(depth * 3, ' ') << "   \"timings\": [";
 		int32_t function_counter = 1;
 		int32_t expression_counter = 1;
@@ -631,17 +629,17 @@ string QueryProfiler::ToJSON() const {
 	ss << "{\n";
 	ss << "   \"name\":  \"Query\", \n";
 
-	if (settings.setting_enabled(TreeNodeSettingsType::CPU_TIME)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::CPU_TIME)) {
 		ss << "   \"cpu_time\": " + to_string(GetTotalCPUTime(*root)) + ",\n";
 	}
-	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
 		ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
 	}
-	if (settings.setting_enabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
 		ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
 	}
 	// JSON cannot have literal control characters in string literals
-	if (settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
 		string extra_info = JSONSanitize(query);
 		ss << "   \"extra-info\": \"" + extra_info + "\", \n";
 		// print the phase timings
@@ -687,8 +685,8 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOper
 	node->depth = depth;
 	ClientConfig &config = ClientConfig::GetConfig(context);
 	node->settings = config.profiler_settings;
-	if (node->settings.setting_enabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		node->settings.set_setting(TreeNodeSettingsType::EXTRA_INFO, Value(root.ParamsToString()));
+	if (node->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
+		node->settings.SetSetting(TreeNodeSettingsType::EXTRA_INFO, Value(root.ParamsToString()));
 	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
 	auto children = root.GetChildren();

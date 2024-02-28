@@ -21,7 +21,7 @@
 #include <stack>
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/deque.hpp"
-#include "duckdb/main/client_config.hpp"
+#include "duckdb/main/tree_node_settings.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -88,8 +88,7 @@ struct OperatorInformation {
 	explicit OperatorInformation() {
 	}
 
-	double time = 0;
-	idx_t elements = 0;
+	TreeNodeSettings settings;
 	string name;
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
@@ -100,16 +99,12 @@ class OperatorProfiler {
 	friend class QueryProfiler;
 
 public:
-	DUCKDB_API explicit OperatorProfiler(bool enabled_p);
+	DUCKDB_API explicit OperatorProfiler(bool enabled_p, unique_ptr<TreeNodeSettings> &settings_p);
 
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor, const string &name,
 	                      int id);
-
-	void EnableOperatorTiming();
-
-	void EnableOperatorCardinality();
 
 	~OperatorProfiler() {
 	}
@@ -119,19 +114,13 @@ private:
 
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	//! Where or not the timing profiler is enabled
-	bool operator_timing_enabled = false;
-	//! Whether or not the cardinality profiler is enabled
-	bool operator_cardinality_enabled = false;
-	//! The timer used to time the execution time of the individual Physical Operators
+	unique_ptr<TreeNodeSettings> &settings;
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to recorded timings
 	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
 };
-
-class TreeNodeSettings;
 
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
@@ -145,7 +134,6 @@ public:
 		OperatorInformation info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
-		TreeNodeSettings settings;
 	};
 
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
