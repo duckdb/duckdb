@@ -26,11 +26,11 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 }
 
 bool QueryProfiler::IsEnabled() const {
-	return is_explain_analyze ? true : ClientConfig::GetConfig(context).enable_profiler;
+	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
 }
 
 bool QueryProfiler::IsDetailedEnabled() const {
-	return is_explain_analyze ? false : ClientConfig::GetConfig(context).enable_detailed_profiling;
+	return !is_explain_analyze && ClientConfig::GetConfig(context).enable_detailed_profiling;
 }
 
 ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
@@ -115,16 +115,24 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 void QueryProfiler::Finalize(TreeNode &node) {
 	for (auto &child : node.children) {
 		Finalize(*child);
-		if (node.type == PhysicalOperatorType::UNION &&
-		    node.info.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
-			node.info.settings.SetSetting(TreeNodeSettingsType::OPERATOR_CARDINALITY,
-			                         child->info.settings.GetSetting(TreeNodeSettingsType::OPERATOR_CARDINALITY));
+		if (node.type == PhysicalOperatorType::UNION) {
+			node.settings.AddToOperatorCardinality(child->settings.GetOperatorCardinality());
 		}
 	}
 }
 
 void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
+}
+
+static double GetTotalCPUTime(QueryProfiler::TreeNode &node) {
+	double cpu_time = node.settings.GetOperatorTiming();
+	if (!node.children.empty()) {
+		for (const auto & i : node.children) {
+			cpu_time += GetTotalCPUTime(*i);
+		}
+	}
+	return cpu_time;
 }
 
 void QueryProfiler::EndQuery() {
@@ -134,15 +142,32 @@ void QueryProfiler::EndQuery() {
 	}
 
 	main_query.End();
-	if (root) {
+	if (root && root->settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
 		Finalize(*root);
 	}
 	this->running = false;
 	// print or output the query profiling after termination
 	// EXPLAIN ANALYSE should not be outputted by the profiler
 	if (IsEnabled() && !is_explain_analyze) {
+		// add extra outer node for the query
+		auto outer_root = make_uniq<TreeNode>();
+		outer_root->name = "Query";
+		outer_root->settings.SetMetrics(root->settings.GetMetrics());
+		outer_root->children.push_back(std::move(root));
+		root = std::move(outer_root);
+		if (root->settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
+			root->settings.SetOperatorTiming(main_query.Elapsed());
+		}
+		if (root->settings.SettingEnabled(TreeNodeSettingsType::CPU_TIME)) {
+			root->settings.SetCpuTime(GetTotalCPUTime(*root));
+		}
+		if (root->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
+			root->settings.SetExtraInfo(query);
+		}
+
 		string query_info = ToString();
 		auto save_location = GetSaveLocation();
+
 		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
 			// disable output
 		} else if (save_location.empty()) {
@@ -228,8 +253,9 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_p, unique_ptr<TreeNodeSettings> &settings_p) : enabled(enabled_p), settings(settings_p), active_operator(nullptr) {
+OperatorProfiler::OperatorProfiler(bool enabled_p, TreeNodeSettings settings_p) : enabled(enabled_p), settings(settings_p), active_operator(nullptr) {
 }
+
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
 	if (!enabled) {
@@ -243,7 +269,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	// start timing for current element
-	if (settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
+	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
 		op.Start();
 	}
 }
@@ -257,8 +283,8 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
 	}
 
-	bool timing_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING);
-	bool cardinality_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY);
+	bool timing_enabled = settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING);
+	bool cardinality_enabled = settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY);
 	if (timing_enabled || cardinality_enabled) {
 		double time = 0;
 		idx_t elements = 0;
@@ -284,23 +310,22 @@ void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t 
 		return;
 	}
 
-	bool timing_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING);
-	bool cardinality_enabled = settings->SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY);
+	bool timing_enabled = settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING);
+	bool cardinality_enabled = settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY);
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
 		timings[op] = OperatorInformation();
-		timings[op].settings = *settings;
 		if (timing_enabled) {
-			timings[op].settings.SetSetting(TreeNodeSettingsType::OPERATOR_TIMING, Value(time));
+			timings[op].time = time;
 		}
 		if (cardinality_enabled) {
-			timings[op].settings.SetSetting(TreeNodeSettingsType::OPERATOR_CARDINALITY, Value::UBIGINT(elements));
+			timings[op].elements = elements;
 		}
 	} else {
 		// add to existing entry
 		if (timing_enabled) {
-			entry->second.settings
+			entry->second.time += time;
 		}
 		if (cardinality_enabled) {
 			entry->second.elements += elements;
@@ -332,8 +357,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		tree_node.info.time += node.second.time;
-		tree_node.info.elements += node.second.elements;
+		tree_node.settings.AddToOperatorTiming(node.second.time);
+		tree_node.settings.AddToOperatorCardinality(node.second.elements);
+		tree_node.executors_info = std::move(node.second.executors_info);
 		if (!IsDetailedEnabled()) {
 			continue;
 		}
@@ -342,10 +368,10 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 				continue;
 			}
 			auto info_id = info->id;
-			if (int32_t(tree_node.info.executors_info.size()) <= info_id) {
-				tree_node.info.executors_info.resize(info_id + 1);
+			if (int32_t(tree_node.executors_info.size()) <= info_id) {
+				tree_node.executors_info.resize(info_id + 1);
 			}
-			tree_node.info.executors_info[info_id] = std::move(info);
+			tree_node.executors_info[info_id] = std::move(info);
 		}
 	}
 	profiler.timings.clear();
@@ -549,35 +575,18 @@ static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id
 	}
 }
 
-double GetTotalCPUTime(QueryProfiler::TreeNode &node) {
-	if (!node.children.empty()) {
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			return GetTotalCPUTime(*node.children[i]) + node.info.time;
-		}
-	}
-	return node.info.time;
-}
-
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
 	auto &settings = node.settings;
 
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
-	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
-		ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
-	}
-	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
-		ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
-	}
+	settings.PrintAllMetricsToSS(ss, string(depth * 3, ' '));
 	if (settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		ss << string(depth * 3, ' ')
-		   << "   \"extra_info\": \"" +
-		          JSONSanitize(settings.GetSetting(TreeNodeSettingsType::EXTRA_INFO).ToString()) + "\",\n";
 		ss << string(depth * 3, ' ') << "   \"timings\": [";
 		int32_t function_counter = 1;
 		int32_t expression_counter = 1;
 		ss << "\n ";
-		for (auto &expr_executor : node.info.executors_info) {
+		for (auto &expr_executor : node.executors_info) {
 			// For each Expression tree
 			if (!expr_executor) {
 				continue;
@@ -627,22 +636,11 @@ string QueryProfiler::ToJSON() const {
 
 	std::stringstream ss;
 	ss << "{\n";
-	ss << "   \"name\":  \"Query\", \n";
+	ss << "   \"name\": \"" + JSONSanitize(root->name) + "\",\n";
 
-	if (settings.SettingEnabled(TreeNodeSettingsType::CPU_TIME)) {
-		ss << "   \"cpu_time\": " + to_string(GetTotalCPUTime(*root)) + ",\n";
-	}
-	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
-		ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
-	}
-	if (settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
-		ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
-	}
+	settings.PrintAllMetricsToSS(ss, "");
 	// JSON cannot have literal control characters in string literals
 	if (settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		string extra_info = JSONSanitize(query);
-		ss << "   \"extra-info\": \"" + extra_info + "\", \n";
-		// print the phase timings
 		ss << "   \"timings\": [\n";
 		const auto &ordered_phase_timings = GetOrderedPhaseTimings();
 		for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
@@ -659,7 +657,7 @@ string QueryProfiler::ToJSON() const {
 	}
 	// recursively print the physical operator tree
 	ss << "   \"children\": [\n";
-	ToJSONRecursive(*root, ss);
+	ToJSONRecursive(*root->children[0], ss);
 	ss << "   ]\n";
 	ss << "}";
 	return ss.str();
@@ -685,9 +683,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOper
 	node->depth = depth;
 	ClientConfig &config = ClientConfig::GetConfig(context);
 	node->settings = config.profiler_settings;
-	if (node->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		node->settings.SetSetting(TreeNodeSettingsType::EXTRA_INFO, Value(root.ParamsToString()));
-	}
+	node->settings.SetExtraInfo(root.ParamsToString());
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
 	auto children = root.GetChildren();
 	for (auto &child : children) {
