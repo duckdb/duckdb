@@ -147,7 +147,6 @@ void CSVGlobalState::FillRejectsTable() {
 		lock_guard<mutex> lock(rejects->write_lock);
 		auto &table = rejects->GetTable(context);
 		InternalAppender appender(context, table);
-
 		for (auto &file : file_scans) {
 			auto file_name = file->file_path;
 			auto &errors = file->error_handler->errors;
@@ -177,8 +176,11 @@ void CSVGlobalState::FillRejectsTable() {
 						// 4. Column Name (If Applicable)
 						appender.Append(string_t("\"" + col_name + "\""));
 						// 5. Error Type (ENUM?)
-						// 6. Full Error Message
-						// 7. Original CSV Line
+						appender.Append(string_t("CAST"));
+						// 6. Original CSV Line
+						appender.Append(string_t(error.csv_row));
+						// 7. Full Error Message
+						appender.Append(string_t(error.error_message));
 						appender.EndRow();
 					}
 					appender.Close();

@@ -324,13 +324,12 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 
 //! Reconstructs the current line to be used in error messages
 string StringValueResult::ReconstructCurrentLine() {
-	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
-	idx_t current_line_size = current_line_start - previous_line_start;
+	idx_t current_line_size = previous_line_start - pre_previous_line_start;
 	string result;
-	result.resize(current_line_size);
-	if (iterator.pos.buffer_idx == previous_line_start.buffer_idx) {
+	result.resize(current_line_size - 1);
+	if (previous_line_start.buffer_idx == pre_previous_line_start.buffer_idx) {
 		idx_t result_idx = 0;
-		for (idx_t i = previous_line_start.buffer_pos; i < iterator.pos.buffer_pos; i++) {
+		for (idx_t i = pre_previous_line_start.buffer_pos + 1; i < previous_line_start.buffer_pos; i++) {
 			result[result_idx++] = buffer_ptr[i];
 		}
 	} else {

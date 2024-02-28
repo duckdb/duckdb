@@ -27,10 +27,10 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	string enum_name = "CSV_ERROR_TYPE";
 	Vector order_errors(LogicalType::VARCHAR, 5);
 	order_errors.SetValue(0, "CAST");
-	order_errors.SetValue(0, "MISSING COLUMNS");
-	order_errors.SetValue(0, "TOO MANY COLUMNS");
-	order_errors.SetValue(0, "UNQUOTED VALUE");
-	order_errors.SetValue(0, "LINE SIZE OVER MAXIMUM");
+	order_errors.SetValue(1, "MISSING COLUMNS");
+	order_errors.SetValue(2, "TOO MANY COLUMNS");
+	order_errors.SetValue(3, "UNQUOTED VALUE");
+	order_errors.SetValue(4, "LINE SIZE OVER MAXIMUM");
 	LogicalType enum_type = LogicalType::ENUM(enum_name, order_errors, 5);
 	auto type_info = make_uniq<CreateTypeInfo>(enum_name, enum_type);
 	type_info->temporary = true;
@@ -46,18 +46,16 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	// 2. Row Line
 	info->columns.AddColumn(ColumnDefinition("line", LogicalType::BIGINT));
 	// 3. Column Index (If Applicable)
-	info->columns.AddColumn(ColumnDefinition("column", LogicalType::BIGINT));
+	info->columns.AddColumn(ColumnDefinition("column_idx", LogicalType::BIGINT));
 	// 4. Column Name (If Applicable)
 	info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
 	// 5. Error Type
 	info->columns.AddColumn(ColumnDefinition("error_type", enum_type));
-	// 6. Full Error Message
-	info->columns.AddColumn(ColumnDefinition("error_message", LogicalType::VARCHAR));
-	// 7. Original CSV Line
+	// 6. Original CSV Line
 	info->columns.AddColumn(ColumnDefinition("csv_line", LogicalType::VARCHAR));
-
+	// 7. Full Error Message
+	info->columns.AddColumn(ColumnDefinition("error_message", LogicalType::VARCHAR));
 	catalog.CreateTable(context, std::move(info));
-
 	count = 0;
 }
 
