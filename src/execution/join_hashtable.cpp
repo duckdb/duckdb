@@ -185,10 +185,10 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 		auto &ht_offset = ht_offsets[row_index];
 		auto salt = hash_salts[row_index];
 
-		state.entry_cache[row_index] = entries[ht_offset];
+		auto &entry = entries[ht_offset];
 
-		bool is_occupied = state.entry_cache[row_index].IsOccupied();
-		bool salt_match = state.entry_cache[row_index].GetSalt() == salt;
+		bool is_occupied = entry.IsOccupied();
+		bool salt_match = entry.GetSalt() == salt;
 
 		bool salt_match_case = is_occupied && salt_match;
 		bool salt_no_match_case = is_occupied && !salt_match;
@@ -208,7 +208,7 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 			// Get the pointers to the rows that need to be compared
 			for (idx_t need_compare_idx = 0; need_compare_idx < salt_match_count; need_compare_idx++) {
 				const auto row_index = state.salt_match_sel.get_index(need_compare_idx);
-				const auto &entry = state.entry_cache[row_index];
+				const auto &entry = entries[ht_offsets[row_index]];
 				row_ptr_insert_to[row_index] = entry.GetPointer();
 			}
 
@@ -222,7 +222,7 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 			// Set a pointer to the matching row
 			for (idx_t i = 0; i < key_match_count; i++) {
 				const auto row_index = state.salt_match_sel.get_index(i);
-				auto &entry = state.entry_cache[row_index];
+				auto &entry = entries[ht_offsets[row_index]];
 				pointers_data[row_index] = entry.GetPointer();
 			}
 		}
@@ -252,9 +252,9 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 				// Increment and update cache
 				IncrementAndWrap(ht_offset, bitmask);
 
-				state.entry_cache[row_index] = entries[ht_offset];
-				occupied = state.entry_cache[row_index].IsOccupied();
-				salt_match = state.entry_cache[row_index].GetSalt() == hash_salts[row_index];
+				auto &entry = entries[ht_offset];
+				occupied = entry.IsOccupied();
+				salt_match = entry.GetSalt() == hash_salts[row_index];
 
 				// the entries we need to process in the next iteration are the ones that are occupied and the salt
 				// does not match, the ones that are empty need no further processing

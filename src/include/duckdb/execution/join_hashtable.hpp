@@ -133,8 +133,6 @@ public:
 		// 3. Entry is full and salt does not match -> continue probing
 		SelectionVector salt_match_sel;
 		SelectionVector salt_no_match_sel;
-
-		aggr_ht_entry_t entry_cache[STANDARD_VECTOR_SIZE];
 	};
 
 	struct InsertState : ProbeState {

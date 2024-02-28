@@ -1,0 +1,3 @@
+benchmark/micro/join/asof_join.benchmark
+benchmark/micro/join/blockwise_nl_join.benchmark
+benchmark/micro/join/range_join_small_rhs.benchmark
