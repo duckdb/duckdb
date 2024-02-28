@@ -50,6 +50,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		}
 		auto &window_expr = expr->Cast<BoundWindowExpression>();
 		auto &partitions = window_expr.partitions;
+		if (partitions.empty()) {
+			// all window expressions need to be partitioned by the same column
+			// in order to push down the window.
+			return FinishPushdown(std::move(op));
+		}
 		column_binding_set_t parition_bindings;
 		// 2. Get the binding information of the partitions
 		for (auto &partition_expr : partitions) {
