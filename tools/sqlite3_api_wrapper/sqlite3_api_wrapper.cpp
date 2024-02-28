@@ -235,53 +235,58 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 }
 
 char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar) {
-	if (!pStmt) {
-		return nullptr;
-	}
-	if (!pStmt->prepared) {
-		pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
-		return nullptr;
-	}
-	if (pStmt->result) {
-		pStmt->db->last_error = ErrorData("Statement has already been executed");
-		return nullptr;
-	}
-	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
-	if (pStmt->result->HasError()) {
-		// error in execute: clear prepared statement
-		pStmt->db->last_error = pStmt->result->GetErrorObject();
-		pStmt->prepared = nullptr;
-		return nullptr;
-	}
-	auto &materialized = (MaterializedQueryResult &)*pStmt->result;
-	auto properties = pStmt->prepared->GetStatementProperties();
-	if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
-		// update total changes
-		auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
-		if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
-			pStmt->db->last_changes = row_changes.GetValue<int64_t>();
-			pStmt->db->total_changes += row_changes.GetValue<int64_t>();
+	try {
+		if (!pStmt) {
+			return nullptr;
 		}
+		if (!pStmt->prepared) {
+			pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
+			return nullptr;
+		}
+		if (pStmt->result) {
+			pStmt->db->last_error = ErrorData("Statement has already been executed");
+			return nullptr;
+		}
+		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+		if (pStmt->result->HasError()) {
+			// error in execute: clear prepared statement
+			pStmt->db->last_error = pStmt->result->GetErrorObject();
+			pStmt->prepared = nullptr;
+			return nullptr;
+		}
+		auto &materialized = (MaterializedQueryResult &)*pStmt->result;
+		auto properties = pStmt->prepared->GetStatementProperties();
+		if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
+			// update total changes
+			auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
+			if (!row_changes.IsNull() && row_changes.DefaultTryCastAs(LogicalType::BIGINT)) {
+				pStmt->db->last_changes = row_changes.GetValue<int64_t>();
+				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
+			}
+		}
+		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+			// only SELECT statements return results
+			return nullptr;
+		}
+		BoxRendererConfig config;
+		if (max_rows != 0) {
+			config.max_rows = max_rows;
+		}
+		if (null_value) {
+			config.null_value = null_value;
+		}
+		if (columnar) {
+			config.render_mode = RenderMode::COLUMNS;
+		}
+		config.max_width = max_width;
+		BoxRenderer renderer(config);
+		auto result_rendering =
+		    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
+		return sqlite3_strdup(result_rendering.c_str());
+	} catch (std::exception &ex) {
+		string error_str = ErrorData(ex).Message() + "\n";
+		return sqlite3_strdup(error_str.c_str());
 	}
-	if (properties.return_type != StatementReturnType::QUERY_RESULT) {
-		// only SELECT statements return results
-		return nullptr;
-	}
-	BoxRendererConfig config;
-	if (max_rows != 0) {
-		config.max_rows = max_rows;
-	}
-	if (null_value) {
-		config.null_value = null_value;
-	}
-	if (columnar) {
-		config.render_mode = RenderMode::COLUMNS;
-	}
-	config.max_width = max_width;
-	BoxRenderer renderer(config);
-	auto result_rendering =
-	    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
-	return sqlite3_strdup(result_rendering.c_str());
 }
 
 /* Prepare the next result to be retrieved */
