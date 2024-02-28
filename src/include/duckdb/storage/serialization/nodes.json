@@ -111,9 +111,6 @@
   },
   {
     "class": "BoundLimitNode",
-    "includes": [
-      "duckdb/planner/bound_result_modifier.hpp"
-    ],
     "members": [
       {
         "id": 100,
