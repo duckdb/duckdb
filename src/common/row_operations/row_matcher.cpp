@@ -176,7 +176,7 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	Vector key(type);
 	const auto gather_function = TupleDataCollection::GetGatherFunction(type);
 	gather_function.function(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
-	                         *FlatVector::IncrementalSelectionVector(), key, gather_function.child_functions);
+	                         *FlatVector::IncrementalSelectionVector(), nullptr, gather_function.child_functions);
 
 	// Densify the input column
 	Vector sliced(lhs_vector, sel, count);

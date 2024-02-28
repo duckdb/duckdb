@@ -242,7 +242,7 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
-	static constexpr const idx_t INITIAL_RADIX_BITS = 3;
+	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
 
 	struct ProbeSpillLocalAppendState {
 		//! Local partition and append state (if partitioned)

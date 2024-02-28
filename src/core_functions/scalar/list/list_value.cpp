@@ -34,6 +34,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 	result.Verify(args.size());
 }
 
+template <bool IS_UNPIVOT = false>
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
@@ -42,20 +43,28 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			string list_arguments = "Full list: ";
-			idx_t error_index = list_arguments.size();
-			for (idx_t k = 0; k < arguments.size(); k++) {
-				if (k > 0) {
-					list_arguments += ", ";
+			if (IS_UNPIVOT) {
+				string list_arguments = "Full list: ";
+				idx_t error_index = list_arguments.size();
+				for (idx_t k = 0; k < arguments.size(); k++) {
+					if (k > 0) {
+						list_arguments += ", ";
+					}
+					if (k == i) {
+						error_index = list_arguments.size();
+					}
+					list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
 				}
-				if (k == i) {
-					error_index = list_arguments.size();
-				}
-				list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+				auto error =
+				    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
+				                       child_type.ToString(), arg_type.ToString());
+				throw BinderException(arguments[i]->query_location,
+				                      QueryErrorContext::Format(list_arguments, error, int(error_index), false));
+			} else {
+				throw BinderException(arguments[i]->query_location,
+				                      "Cannot create a list of types %s and %s - an explicit cast is required",
+				                      child_type.ToString(), arg_type.ToString());
 			}
-			auto error = StringUtil::Format("Cannot create a list of types %s and %s - an explicit cast is required",
-			                                child_type.ToString(), arg_type.ToString());
-			throw BinderException(QueryErrorContext::Format(list_arguments, error, int(error_index), false));
 		}
 	}
 	child_type = LogicalType::NormalizeType(child_type);
@@ -83,6 +92,13 @@ ScalarFunction ListValueFun::GetFunction() {
 	                   ListValueStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
+}
+
+ScalarFunction UnpivotListFun::GetFunction() {
+	auto fun = ListValueFun::GetFunction();
+	fun.name = "unpivot_list";
+	fun.bind = ListValueBind<true>;
 	return fun;
 }
 

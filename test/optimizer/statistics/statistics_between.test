@@ -62,12 +62,6 @@ EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETW
 ----
 logical_opt	<REGEX>:.*EMPTY_RESULT.*
 
-# wide between: both are always true, entire filter can be pruned
-query II
-EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
-----
-logical_opt	<!REGEX>:.*FILTER.*
-
 # lower clause is always true: between should be converted into i <= 2
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 2;
@@ -178,3 +172,14 @@ SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AN
 1
 2
 3
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# wide between: both are always true, entire filter can be pruned. (happens during physical planning).
+# see https://github.com/duckdb/duckdb-fuzzer/issues/1357
+# https://github.com/duckdb/duckdb-fuzzer/issues/1358
+query II
+EXPLAIN SELECT * FROM (SELECT * FROM integers LIMIT 10) integers(i) WHERE i BETWEEN 0 AND 10;
+----
+physical_plan	<!REGEX>:.*FILTER*

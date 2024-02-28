@@ -172,3 +172,18 @@ class TestDuckDBQuery(object):
         # If we try to create anything other than a STRUCT or a LIST out of the tuple, we throw an error
         with pytest.raises(duckdb.InvalidInputException, match="Can't convert tuple to a Value of type VARCHAR"):
             result = con.execute("select $1", [Value((21, 42), str)])
+
+    def test_column_name_behavior(self, duckdb_cursor):
+        _ = pytest.importorskip("pandas")
+
+        expected_names = ['one', 'ONE_1']
+
+        df = duckdb_cursor.execute('select 1 as one, 2 as "ONE"').fetchdf()
+        assert expected_names == list(df.columns)
+
+        duckdb_cursor.register('tbl', df)
+        df = duckdb_cursor.execute("select * from tbl").fetchdf()
+        assert expected_names == list(df.columns)
+
+        df = duckdb_cursor.execute('with t as (select 1 as one, 2 as "ONE") select * from t').fetchdf()
+        assert expected_names == list(df.columns)

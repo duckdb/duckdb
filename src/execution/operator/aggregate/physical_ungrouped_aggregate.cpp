@@ -431,7 +431,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 	auto &aggregates = op.aggregates;
 	auto &distinct_data = *op.distinct_data;
 
-	idx_t n_threads = 0;
+	idx_t n_tasks = 0;
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
 	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
@@ -451,13 +451,14 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		// Create global state for scanning
 		auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table_p = *distinct_data.radix_tables[table_idx];
-		n_threads += radix_table_p.MaxThreads(*gstate.distinct_state->radix_states[table_idx]);
+		n_tasks += radix_table_p.MaxThreads(*gstate.distinct_state->radix_states[table_idx]);
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
-	n_threads = MaxValue<idx_t>(n_threads, 1);
+	n_tasks = MaxValue<idx_t>(n_tasks, 1);
+	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
 
 	vector<shared_ptr<Task>> tasks;
-	for (idx_t i = 0; i < n_threads; i++) {
+	for (idx_t i = 0; i < n_tasks; i++) {
 		tasks.push_back(
 		    make_uniq<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(), op, gstate));
 		tasks_scheduled++;

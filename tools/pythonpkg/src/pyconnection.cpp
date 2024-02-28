@@ -62,6 +62,14 @@ DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
 
+DuckDBPyConnection::~DuckDBPyConnection() {
+	py::gil_scoped_release gil;
+	// Release any structures that do not need to hold the GIL here
+	database.reset();
+	connection.reset();
+	temporary_views.clear();
+}
+
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
 	auto main_module = py::module_::import("__main__");
@@ -673,6 +681,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		RegisterArrowObject(arrow_object, name);
 	} else if (DuckDBPyRelation::IsRelation(python_object)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
+		if (!pyrel->CanBeRegisteredBy(*connection)) {
+			throw InvalidInputException(
+			    "The relation you are attempting to register was not made from this connection");
+		}
 		pyrel->CreateView(name, true);
 	} else {
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));

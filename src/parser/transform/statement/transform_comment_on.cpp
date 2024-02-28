@@ -2,6 +2,7 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -83,14 +84,8 @@ unique_ptr<AlterStatement> Transformer::TransformCommentOn(duckdb_libpgquery::PG
 		info = make_uniq<SetCommentInfo>(type, qualified_name.catalog, qualified_name.schema, qualified_name.name,
 		                                 comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_COLUMN) {
-		// Special case: Table Column
-		AlterEntryData alter_entry_data;
-		alter_entry_data.catalog = qualified_name.catalog;
-		alter_entry_data.schema = qualified_name.schema;
-		alter_entry_data.name = qualified_name.name;
-		alter_entry_data.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
-
-		info = make_uniq<SetColumnCommentInfo>(alter_entry_data, column_name, comment_value);
+		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
+		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
 	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_DATABASE) {
 		throw NotImplementedException("Adding comments to databases is not implemented");
 	} else if (stmt.object_type == duckdb_libpgquery::PG_OBJECT_SCHEMA) {

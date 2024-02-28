@@ -585,10 +585,6 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 string StringUtil::GetFileName(const string &file_path) {
 
-	if (EndsWith(file_path, "..")) {
-		return "";
-	}
-
 	idx_t pos = file_path.find_last_of("/\\");
 	if (pos == string::npos) {
 		return file_path;

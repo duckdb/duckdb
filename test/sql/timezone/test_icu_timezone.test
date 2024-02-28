@@ -901,3 +901,14 @@ query II
 SELECT '2024-03-31 00:59:00-01'::TIMESTAMPTZ, '2024-03-31 01:00:00-01'::TIMESTAMPTZ;
 ----
 2024-03-31 00:59:00-01	2024-03-31 01:00:00-01
+
+
+# 2024a
+# Kazakhstan unifies on UTC+5 beginning 2024-03-01.
+statement ok
+SET TimeZone = 'Asia/Almaty';
+
+query II
+select '2024-02-29 00:00:00+06'::TIMESTAMPTZ, '2024-03-01 01:00:00+06'::TIMESTAMPTZ;
+----
+2024-02-29 00:00:00+06	2024-03-01 00:00:00+05

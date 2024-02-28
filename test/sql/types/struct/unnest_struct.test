@@ -98,7 +98,7 @@ SELECT UNNEST({'a': 44, 'b': 88}), UNNEST([[1, 2, 3], [4, 5]], recursive := true
 
 # duplicate names
 query III
-SELECT a, "a:1", b FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursive := true))
+SELECT a, "a_1", b FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursive := true))
 ----
 42	88	99
 

@@ -630,13 +630,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(std::move(query));
-		} else {
+		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
 			// two cases:
 			// 1: create a type with a non-existent type as source, Binder::BindLogicalType(...) will throw exception.
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			Binder::BindLogicalType(context, create_type_info.type);
+			create_type_info.type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
+			                                         UserType::GetTypeName(create_type_info.type));
+		} else {
+			auto preserved_type = create_type_info.type;
+			BindLogicalType(context, create_type_info.type);
+			create_type_info.type = preserved_type;
 		}
 		break;
 	}

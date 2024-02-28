@@ -372,30 +372,31 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, c
 	}
 }
 
+// Find the index of the first run-end that is strictly greater than the offset.
+// count is returned if no such run-end is found.
 template <class RUN_END_TYPE>
 static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offset) {
+	// Binary-search within the [0, count) range. For example:
+	// [0, 0, 0, 1, 1, 2] encoded as
+	// run_ends: [3, 5, 6]:
+	// 0, 1, 2 -> 0
+	//    3, 4 -> 1
+	//       5 -> 2
+	// 6, 7 .. -> 3 (3 == count [not found])
 	idx_t begin = 0;
-	idx_t end = count - 1;
+	idx_t end = count;
 	while (begin < end) {
-		idx_t middle = static_cast<idx_t>(std::floor((begin + end) / 2));
+		idx_t middle = (begin + end) / 2;
+		// begin < end implies middle < end
 		if (offset >= static_cast<idx_t>(run_ends[middle])) {
-			// Our offset starts after this run has ended
+			// keep searching in [middle + 1, end)
 			begin = middle + 1;
 		} else {
-			// This offset might fall into this run_end
-			if (middle == 0) {
-				return middle;
-			}
-			if (offset >= static_cast<idx_t>(run_ends[middle - 1])) {
-				// For example [0, 0, 0, 1, 1, 2]
-				// encoded as run_ends: [3, 5, 6]
-				// 3 (run_ends[0]) >= offset < 5 (run_ends[1])
-				return middle;
-			}
-			end = middle - 1;
+			// offset < run_ends[middle], so keep searching in [begin, middle)
+			end = middle;
 		}
 	}
-	return end;
+	return begin;
 }
 
 template <class RUN_END_TYPE, class VALUE_TYPE>
@@ -587,9 +588,6 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
-	if (parent_offset != 0) {
-		(void)array_state;
-	}
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
 
@@ -1069,10 +1067,10 @@ static bool CanContainNull(ArrowArray &array, ValidityMask *parent_mask) {
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                           ValidityMask *parent_mask, uint64_t parent_offset) {
+	D_ASSERT(arrow_type.HasDictionary());
 	auto &scan_state = array_state.state;
-
 	const bool has_nulls = CanContainNull(array, parent_mask);
-	if (!array_state.HasDictionary()) {
+	if (array_state.CacheOutdated(array.dictionary)) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, 0, has_nulls);
@@ -1094,7 +1092,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		};
-		array_state.AddDictionary(std::move(base_vector));
+		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
 	auto offset_type = arrow_type.GetDuckType();
 	//! Get Pointer to Indices of Dictionary
@@ -1119,6 +1117,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 		SetSelectionVector(sel, indices, offset_type, size);
 	}
 	vector.Slice(array_state.GetDictionary(), sel, size);
+	vector.Verify(size);
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
@@ -1143,19 +1142,16 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
-		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
-		if (scan_state.arrow_owned_data.find(idx) == scan_state.arrow_owned_data.end()) {
-			auto arrow_data = make_shared<ArrowArrayWrapper>();
-			arrow_data->arrow_array = scan_state.chunk->arrow_array;
-			scan_state.chunk->arrow_array.release = nullptr;
-			scan_state.arrow_owned_data[idx] = arrow_data;
-		}
-
-		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.arrow_owned_data[idx]));
 
 		D_ASSERT(arrow_convert_data.find(col_idx) != arrow_convert_data.end());
 		auto &arrow_type = *arrow_convert_data.at(col_idx);
 		auto &array_state = scan_state.GetState(col_idx);
+
+		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
+		if (!array_state.owned_data) {
+			array_state.owned_data = scan_state.chunk;
+		}
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 
 		auto array_physical_type = GetArrowArrayPhysicalType(arrow_type);
 

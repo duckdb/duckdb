@@ -83,9 +83,25 @@ static jclass J_UUID;
 static jmethodID J_UUID_getMostSignificantBits;
 static jmethodID J_UUID_getLeastSignificantBits;
 
+static jclass J_DuckDBDate;
+static jmethodID J_DuckDBDate_getDaysSinceEpoch;
+
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);
+}
+
+static duckdb::vector<jclass> toFree;
+
+static jclass GetClassRef(JNIEnv *env, const string &name) {
+	jclass tmpLocalRef;
+	tmpLocalRef = env->FindClass(name.c_str());
+	D_ASSERT(tmpLocalRef);
+	jclass globalRef = (jclass)env->NewGlobalRef(tmpLocalRef);
+	D_ASSERT(globalRef);
+	toFree.emplace_back(globalRef);
+	env->DeleteLocalRef(tmpLocalRef);
+	return globalRef;
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -146,6 +162,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBTimestampTZ");
 	J_TimestampTZ = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
+
+	J_DuckDBDate = GetClassRef(env, "org/duckdb/DuckDBDate");
+	J_DuckDBDate_getDaysSinceEpoch = env->GetMethodID(J_DuckDBDate, "getDaysSinceEpoch", "()J");
+	D_ASSERT(J_DuckDBDate_getDaysSinceEpoch);
+
 	tmpLocalRef = env->FindClass("java/math/BigDecimal");
 	J_Decimal = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
@@ -255,6 +276,10 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	env->DeleteGlobalRef(J_DuckResultSetMeta);
 	env->DeleteGlobalRef(J_DuckVector);
 	env->DeleteGlobalRef(J_ByteBuffer);
+
+	for (auto &clazz : toFree) {
+		env->DeleteGlobalRef(clazz);
+	}
 }
 
 static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
@@ -560,6 +585,10 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 				duckdb_params.push_back(
 				    Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
 				continue;
+			} else if (env->IsInstanceOf(param, J_DuckDBDate)) {
+				duckdb_params.push_back(
+				    Value::DATE((date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
+
 			} else if (env->IsInstanceOf(param, J_Timestamp)) {
 				duckdb_params.push_back(
 				    Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));

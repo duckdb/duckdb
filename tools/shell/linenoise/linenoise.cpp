@@ -1138,7 +1138,8 @@ int Linenoise::Edit() {
 				buf[len] = '\0';
 				if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
 					// not a complete SQL statement yet! continuation
-					// insert "\r\n"
+					// insert "\r\n" at the end
+					pos = len;
 					if (EditInsertMulti("\r\n")) {
 						return -1;
 					}
@@ -1337,7 +1338,9 @@ int Linenoise::Edit() {
 		case CTRL_W: /* ctrl+w, delete previous word */
 			EditDeletePrevWord();
 			break;
-		case CTRL_X:
+		case CTRL_X: /* ctrl+x, insert newline */
+			EditInsertMulti("\r\n");
+			break;
 		case CTRL_Y:
 			// unsupported
 			break;

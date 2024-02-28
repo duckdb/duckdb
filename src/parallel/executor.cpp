@@ -160,9 +160,8 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		auto root_entry = event_map.find(*pipeline);
 		D_ASSERT(root_entry != event_map.end());
 		auto &pipeline_stack = root_entry->second;
-		// iterate in reverse so the deepest dependencies are added first
-		for (auto it = dependencies->rbegin(); it != dependencies->rend(); ++it) {
-			auto event_entry = event_map.find(*it);
+		for (auto &dependency : *dependencies) {
+			auto event_entry = event_map.find(dependency);
 			D_ASSERT(event_entry != event_map.end());
 			auto &dependency_stack = event_entry->second;
 			pipeline_stack.pipeline_event.AddDependency(dependency_stack.pipeline_event);
@@ -175,8 +174,8 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	D_ASSERT(events.empty());
 
 	// create all the required pipeline events
-	for (auto &pipeline : event_data.meta_pipelines) {
-		SchedulePipeline(pipeline, event_data);
+	for (auto &meta_pipeline : event_data.meta_pipelines) {
+		SchedulePipeline(meta_pipeline, event_data);
 	}
 
 	// set up the dependencies across MetaPipelines
@@ -193,6 +192,27 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 			D_ASSERT(event_map_entry != event_map.end());
 			auto &dep_entry = event_map_entry->second;
 			entry.second.pipeline_event.AddDependency(dep_entry.pipeline_complete_event);
+		}
+	}
+
+	// make pipeline_finish_event of each MetaPipeline depend on the pipeline_event of the base pipeline of its sublings
+	// this allows TemporaryMemoryManager to more fairly distribute memory
+	for (auto &meta_pipeline : event_data.meta_pipelines) {
+		vector<shared_ptr<MetaPipeline>> children;
+		meta_pipeline->GetMetaPipelines(children, false, true);
+		for (auto &child1 : children) {
+			auto &child1_base = *child1->GetBasePipeline();
+			auto child1_entry = event_map.find(child1_base);
+			D_ASSERT(child1_entry != event_map.end());
+			for (auto &child2 : children) {
+				if (RefersToSameObject(*child1, *child2)) {
+					continue;
+				}
+				auto &child2_base = *child2->GetBasePipeline();
+				auto child2_entry = event_map.find(child2_base);
+				D_ASSERT(child2_entry != event_map.end());
+				child1_entry->second.pipeline_finish_event.AddDependency(child2_entry->second.pipeline_event);
+			}
 		}
 	}
 
@@ -390,7 +410,9 @@ void Executor::CancelTasks() {
 		to_be_rescheduled_tasks.clear();
 		events.clear();
 	}
+	// Take all pending tasks and execute them until they cancel
 	WorkOnTasks();
+	// In case there are still tasks being worked, wait for those to properly finish as well
 	for (auto &weak_ref : weak_references) {
 		while (true) {
 			auto weak = weak_ref.lock();

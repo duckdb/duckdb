@@ -37,6 +37,9 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0),
       temporary_memory_manager(make_uniq<TemporaryMemoryManager>()) {
+	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
+		memory_usage_per_tag[i] = 0;
+	}
 }
 BufferPool::~BufferPool() {
 }

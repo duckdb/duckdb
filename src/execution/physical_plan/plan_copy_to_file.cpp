@@ -14,11 +14,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	op.file_path = fs.ExpandPath(op.file_path);
 	if (op.use_tmp_file) {
 		auto path = StringUtil::GetFilePath(op.file_path);
-		auto base = StringUtil::GetFileStem(op.file_path);
-		auto extension = StringUtil::GetFileExtension(op.file_path);
-		extension = extension.empty() ? extension : "." + extension;
-
-		op.file_path = fs.JoinPath(path, base + "_tmp" + extension);
+		auto base = StringUtil::GetFileName(op.file_path);
+		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.partition_output || !op.partition_columns.empty() ||
 	    op.overwrite_or_ignore) {

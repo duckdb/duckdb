@@ -267,6 +267,9 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			}
 			if (ALLOW_EXPONENT) {
 				if (buf[pos] == 'e' || buf[pos] == 'E') {
+					if (strict) {
+						return false;
+					}
 					if (pos == start_pos) {
 						return false;
 					}
