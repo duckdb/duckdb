@@ -7,11 +7,14 @@ import time
 import argparse
 from typing import Dict, List, Any
 
-TPCH_NQUERIES = 22
 TPCH_QUERIES = []
-for i in range(1, TPCH_NQUERIES + 1):
-    TPCH_QUERIES.append(f'PRAGMA tpch({i})')
-
+res = duckdb.execute(
+    """
+    select query from tpch_queries()
+"""
+).fetchall()
+for x in res:
+    TPCH_QUERIES.append(x[0])
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--verbose", action="store_true", help="Enable verbose mode", default=False)
