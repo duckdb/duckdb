@@ -28,7 +28,7 @@ def visit_enum(cursor):
 
 def parse_enum(file_path, clang_path: Optional[str] = None):
     if clang_path:
-        clang.cindex.Config.set_library_file(clang_path)
+        clang.cindex.Config.set_library_path(clang_path)
 
     # Create index
     index = clang.cindex.Index.create()
