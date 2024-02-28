@@ -779,7 +779,8 @@ public:
 		scan_state.table_state.Initialize(types);
 		scan_state.table_state.max_row = idx_t(-1);
 		idx_t merged_row_groups = 0;
-		for (idx_t c_idx = segment_idx; merged_row_groups < merge_count && c_idx < vacuum_state.row_group_counts.size(); c_idx++) {
+		for (idx_t c_idx = segment_idx; merged_row_groups < merge_count && c_idx < vacuum_state.row_group_counts.size();
+		     c_idx++) {
 			if (vacuum_state.row_group_counts[c_idx] == 0) {
 				continue;
 			}
