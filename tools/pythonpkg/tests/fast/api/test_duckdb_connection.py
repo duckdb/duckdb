@@ -128,7 +128,6 @@ class TestDuckDBConnection(object):
 
         duckdb.execute("create table tbl(a integer)")
         statements = duckdb.extract_statements('insert into tbl select $1')
-        # TODO: this should error??
         with pytest.raises(
             duckdb.InvalidInputException, match='executemany requires a non-empty list of parameter sets to be provided'
         ):
