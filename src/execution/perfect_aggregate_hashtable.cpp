@@ -199,7 +199,7 @@ static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min,
 	auto min_data = min.GetValueUnsafe<T>();
 	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
-		auto group_index = (group_values[i] >> shift) & mask;
+		auto group_index = UnsafeNumericCast<int32_t>((group_values[i] >> shift) & mask);
 		if (group_index == 0) {
 			// if it is 0, the value is NULL
 			validity_mask.SetInvalid(i);
