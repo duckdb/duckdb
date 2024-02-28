@@ -50,13 +50,14 @@ enum CSVErrorType : uint8_t {
 class CSVError {
 public:
 	CSVError() {};
-	CSVError(string error_message, CSVErrorType type, idx_t column_idx, string csv_row, LinesPerBoundary error_info);
+	CSVError(string error_message, CSVErrorType type, idx_t column_idx, string csv_row, LinesPerBoundary error_info,
+	         idx_t byte_position);
 	CSVError(string error_message, CSVErrorType type, LinesPerBoundary error_info);
 	//! Produces error messages for column name -> type mismatch.
 	static CSVError ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column, const vector<string> &names);
 	//! Produces error messages for casting errors
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
-	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info);
+	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t byte_position);
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info);
 	//! Produces error for when the sniffer couldn't find viable options
@@ -84,6 +85,8 @@ public:
 	string csv_row;
 	//! Line information regarding this error
 	LinesPerBoundary error_info;
+	//! Global Byte Position where error occurred.
+	idx_t byte_position;
 };
 
 class CSVErrorHandler {

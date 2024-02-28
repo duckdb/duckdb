@@ -354,8 +354,9 @@ bool StringValueResult::AddRowInternal() {
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
 			auto borked_line = ReconstructCurrentLine();
-			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
-			                                     cast_error.first, borked_line, lines_per_batch);
+			auto csv_error = CSVError::CastError(
+			    state_machine.options, names[cast_error.first], error_string, cast_error.first, borked_line,
+			    lines_per_batch, pre_previous_line_start.GetGlobalPosition(buffer_handles.front()->requested_size));
 			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -623,7 +624,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				//				auto borked_line = result.ReconstructCurrentLine();
 				string empty;
 				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-				                                     error_message, col_idx, empty, lines_per_batch);
+				                                     error_message, col_idx, empty, lines_per_batch, 0);
 				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
@@ -641,7 +642,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					                                 lines_read - parse_chunk.size() + line_error);
 					string empty;
 					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx, empty, lines_per_batch);
+					                                     error_message, col_idx, empty, lines_per_batch, 0);
 
 					error_handler->Error(csv_error);
 				}

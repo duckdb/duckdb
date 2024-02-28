@@ -171,15 +171,17 @@ void CSVGlobalState::FillRejectsTable() {
 						appender.Append(string_t(file_name));
 						// 2. Row Line
 						appender.Append(row_line);
-						// 3. Column Index (If Applicable)
+						// 3. Byte Position where error occurred
+						appender.Append(error.byte_position);
+						// 4. Column Index (If Applicable)
 						appender.Append(col_idx);
-						// 4. Column Name (If Applicable)
+						// 5. Column Name (If Applicable)
 						appender.Append(string_t("\"" + col_name + "\""));
-						// 5. Error Type (ENUM?)
+						// 6. Error Type (ENUM?)
 						appender.Append(string_t("CAST"));
-						// 6. Original CSV Line
+						// 7. Original CSV Line
 						appender.Append(string_t(error.csv_row));
-						// 7. Full Error Message
+						// 8. Full Error Message
 						appender.Append(string_t(error.error_message));
 						appender.EndRow();
 					}
