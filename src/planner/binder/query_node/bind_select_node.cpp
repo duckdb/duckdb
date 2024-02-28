@@ -70,8 +70,8 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 			} else {
 				percentage_val = val.GetValue<double>();
 			}
-			if (percentage_val < 0) {
-				throw BinderException(expr->query_location, "LIMIT cannot be negative");
+			if (Value::IsNan(percentage_val) || percentage_val < 0 || percentage_val > 100) {
+				throw OutOfRangeException("Limit percent out of range, should be between 0% and 100%");
 			}
 			return BoundLimitNode::ConstantPercentage(percentage_val);
 		} else {
