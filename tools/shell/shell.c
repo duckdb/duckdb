@@ -14805,12 +14805,20 @@ static void output_reset(ShellState *p){
   p->out = stdout;
 }
 
+static void printDatabaseError(const char *zErr) {
+  if (strstr(zErr, "Error: ")) {
+    utf8_printf(stderr, "%s\n", zErr);
+  } else {
+    utf8_printf(stderr, "Error: %s\n", zErr);
+  }
+}
+
 /*
 ** Print the current sqlite3_errmsg() value to stderr and return 1.
 */
 static int shellDatabaseError(sqlite3 *db){
   const char *zErr = sqlite3_errmsg(db);
-  utf8_printf(stderr, "Error: %s\n", zErr);
+  printDatabaseError(zErr);
   return 1;
 }
 
@@ -15369,7 +15377,7 @@ static int arErrorMsg(ArCommand *pAr, const char *zFmt, ...){
   va_start(ap, zFmt);
   z = sqlite3_vmprintf(zFmt, ap);
   va_end(ap);
-  utf8_printf(stderr, "Error: %s\n", z);
+  printDatabaseError(z);
   if( pAr->fromCmdLine ){
     utf8_printf(stderr, "Use \"-A\" for more help\n");
   }else{
@@ -15779,7 +15787,7 @@ static int arExecSql(ArCommand *pAr, const char *zSql){
     char *zErr = 0;
     rc = sqlite3_exec(pAr->db, zSql, 0, 0, &zErr);
     if( zErr ){
-      utf8_printf(stdout, "ERROR: %s\n", zErr);
+      printDatabaseError(zErr);
       sqlite3_free(zErr);
     }
   }
@@ -16824,7 +16832,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     open_db(p, 0);
     pBackup = sqlite3_backup_init(pDest, "main", p->db, zDb);
     if( pBackup==0 ){
-      utf8_printf(stderr, "Error: %s\n", sqlite3_errmsg(pDest));
+      shellDatabaseError(pDest);
       close_db(pDest);
       return 1;
     }
@@ -16833,7 +16841,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     if( rc==SQLITE_DONE ){
       rc = 0;
     }else{
-      utf8_printf(stderr, "Error: %s\n", sqlite3_errmsg(pDest));
+      shellDatabaseError(pDest);
       rc = 1;
     }
     close_db(pDest);
@@ -16933,7 +16941,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     sqlite3_exec(p->db, "SELECT name, file FROM pragma_database_list",
                  callback, &data, &zErrMsg);
     if( zErrMsg ){
-      utf8_printf(stderr,"Error: %s\n", zErrMsg);
+      printDatabaseError(zErrMsg);
       sqlite3_free(zErrMsg);
       rc = 1;
     }
@@ -17544,7 +17552,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     sqlite3_free(zSql);
     if( rc ){
       if (pStmt) sqlite3_finalize(pStmt);
-      utf8_printf(stderr,"Error: %s\n", sqlite3_errmsg(p->db));
+      shellDatabaseError(p->db);
       import_cleanup(&sCtx);
       rc = 1;
       goto meta_command_exit;
@@ -17572,7 +17580,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     rc = sqlite3_prepare_v2(p->db, zSql, -1, &pStmt, 0);
     sqlite3_free(zSql);
     if( rc ){
-      utf8_printf(stderr, "Error: %s\n", sqlite3_errmsg(p->db));
+      shellDatabaseError(p->db);
       if (pStmt) sqlite3_finalize(pStmt);
       import_cleanup(&sCtx);
       rc = 1;
@@ -17838,7 +17846,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     open_db(p, 0);
     rc = sqlite3_load_extension(p->db, zFile, zProc, &zErrMsg);
     if( rc!=SQLITE_OK ){
-      utf8_printf(stderr, "Error: %s\n", zErrMsg);
+      printDatabaseError(zErrMsg);
       sqlite3_free(zErrMsg);
       rc = 1;
     }
@@ -18230,7 +18238,7 @@ static int do_meta_command(char *zLine, ShellState *p){
         rx = sqlite3_prepare_v2(p->db, zSql, -1, &pStmt, 0);
         sqlite3_free(zSql);
         if( rx!=SQLITE_OK ){
-          utf8_printf(p->out, "Error: %s\n", sqlite3_errmsg(p->db));
+          shellDatabaseError(p->db);
           sqlite3_finalize(pStmt);
           pStmt = 0;
           rc = 1;
@@ -18375,7 +18383,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     open_db(p, 0);
     pBackup = sqlite3_backup_init(p->db, zDb, pSrc, "main");
     if( pBackup==0 ){
-      utf8_printf(stderr, "Error: %s\n", sqlite3_errmsg(p->db));
+      shellDatabaseError(p->db);
       close_db(pSrc);
       return 1;
     }
@@ -18393,7 +18401,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       raw_printf(stderr, "Error: source database is busy\n");
       rc = 1;
     }else{
-      utf8_printf(stderr, "Error: %s\n", sqlite3_errmsg(p->db));
+      shellDatabaseError(p->db);
       rc = 1;
     }
     close_db(pSrc);
@@ -18467,7 +18475,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       freeText(&sSelect);
     }
     if( zErrMsg ){
-      utf8_printf(stderr,"Error: %s\n", zErrMsg);
+      printDatabaseError(zErrMsg);
       sqlite3_free(zErrMsg);
       rc = 1;
     }else if( rc != SQLITE_OK ){
@@ -19544,7 +19552,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     const char *error = NULL;
     if (linenoiseParseOption((const char**) azArg, nArg, &error)) {
       if (error) {
-        utf8_printf(stderr, "Error: %s\n", error);
+        printDatabaseError(error);
         rc = 1;
       }
     } else {
@@ -19657,19 +19665,12 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline){
   rc = shell_exec(p, zSql, &zErrMsg);
   END_TIMER;
   if( rc || zErrMsg ){
-    char zPrefix[100];
-    if( in!=0 || !stdin_is_interactive ){
-      sqlite3_snprintf(sizeof(zPrefix), zPrefix,
-                       "Error: near line %d:", startline);
-    }else{
-      sqlite3_snprintf(sizeof(zPrefix), zPrefix, "Error:");
-    }
     if( zErrMsg!=0 ){
-      utf8_printf(stderr, "%s %s\n", zPrefix, zErrMsg);
+	  printDatabaseError(zErrMsg);
       sqlite3_free(zErrMsg);
       zErrMsg = 0;
     }else{
-      utf8_printf(stderr, "%s %s\n", zPrefix, sqlite3_errmsg(p->db));
+	  shellDatabaseError(p->db);
     }
     return 1;
   }else if( ShellHasFlag(p, SHFLG_CountChanges) ){
@@ -20491,7 +20492,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
         open_db(&data, 0);
         rc = shell_exec(&data, z, &zErrMsg);
         if( zErrMsg!=0 ){
-          utf8_printf(stderr,"Error: %s\n", zErrMsg);
+          printDatabaseError(zErrMsg);
           sqlite3_free(zErrMsg);
           if( bail_on_error ){
             free(azCmd);
@@ -20548,7 +20549,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
         open_db(&data, 0);
         rc = shell_exec(&data, azCmd[i], &zErrMsg);
         if( zErrMsg!=0 ){
-          utf8_printf(stderr,"Error: %s\n", zErrMsg);
+          printDatabaseError(zErrMsg);
           sqlite3_free(zErrMsg);
           free(azCmd);
           return rc!=0 ? rc : 1;

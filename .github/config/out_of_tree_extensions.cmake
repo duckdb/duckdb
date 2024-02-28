@@ -15,8 +15,6 @@ if (NOT WIN32)
 endif()
 
 ################## AWS
-# FIXME - enable on windows again once building issue is resolved
-if (NOT WIN32)
 if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
@@ -32,7 +30,6 @@ if (NOT MINGW)
             GIT_URL https://github.com/duckdb/duckdb_azure
             GIT_TAG 3ad0348334d2a263e5f19ef08fd02311bdae82f3
             )
-endif()
 endif()
 
 ################# ICEBERG
