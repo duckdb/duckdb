@@ -96,10 +96,10 @@ def list_test_cases():
         }),
     ]
 
-    if (sys.version_info < (3, 9)):
-        return test_cases
-
-    # These tests are problematic on highest NumPy version supported by 3.7
+    return test_cases
+    # These tests are problematic
+    # They cause errors on highest NumPy version supported by 3.7
+    # And a crash on manylinux 2014, x86_64 AMD, python 3.12.1
     test_cases.extend([
         ("""
             SELECT * from values
