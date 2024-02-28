@@ -12,6 +12,7 @@ _exported_symbols.extend([
 from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
+	Statement,
     ExplainType,
     StatementType,
     ExpectedResultType,

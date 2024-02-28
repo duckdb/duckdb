@@ -160,7 +160,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def(
 	        "execute",
 	        [](DuckDBPyConnection &conn, const py::object &query, py::object params, bool many) {
-		        return conn.Execute(query, params, many);
+		        return conn.Execute(query, std::move(params), many);
 	        },
 	        "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
 	        py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false)

@@ -274,7 +274,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 
 static void RegisterStatementType(py::handle &m) {
 	auto statement_type = py::enum_<duckdb::StatementType>(m, "StatementType");
-	static const duckdb::StatementType types[] = {
+	static const duckdb::StatementType TYPES[] = {
 	    duckdb::StatementType::INVALID_STATEMENT,      duckdb::StatementType::SELECT_STATEMENT,
 	    duckdb::StatementType::INSERT_STATEMENT,       duckdb::StatementType::UPDATE_STATEMENT,
 	    duckdb::StatementType::CREATE_STATEMENT,       duckdb::StatementType::DELETE_STATEMENT,
@@ -290,9 +290,9 @@ static void RegisterStatementType(py::handle &m) {
 	    duckdb::StatementType::LOGICAL_PLAN_STATEMENT, duckdb::StatementType::ATTACH_STATEMENT,
 	    duckdb::StatementType::DETACH_STATEMENT,       duckdb::StatementType::MULTI_STATEMENT,
 	    duckdb::StatementType::COPY_DATABASE_STATEMENT};
-	static const idx_t amount = sizeof(types) / sizeof(duckdb::StatementType);
-	for (idx_t i = 0; i < amount; i++) {
-		auto &type = types[i];
+	static const idx_t AMOUNT = sizeof(TYPES) / sizeof(duckdb::StatementType);
+	for (idx_t i = 0; i < AMOUNT; i++) {
+		auto &type = TYPES[i];
 		statement_type.value(StatementTypeToString(type).c_str(), type);
 	}
 	statement_type.export_values();
@@ -300,12 +300,12 @@ static void RegisterStatementType(py::handle &m) {
 
 static void RegisterExpectedResultType(py::handle &m) {
 	auto expected_return_type = py::enum_<duckdb::StatementReturnType>(m, "ExpectedResultType");
-	static const duckdb::StatementReturnType types[] = {duckdb::StatementReturnType::QUERY_RESULT,
+	static const duckdb::StatementReturnType TYPES[] = {duckdb::StatementReturnType::QUERY_RESULT,
 	                                                    duckdb::StatementReturnType::CHANGED_ROWS,
 	                                                    duckdb::StatementReturnType::NOTHING};
-	static const idx_t amount = sizeof(types) / sizeof(duckdb::StatementReturnType);
-	for (idx_t i = 0; i < amount; i++) {
-		auto &type = types[i];
+	static const idx_t AMOUNT = sizeof(TYPES) / sizeof(duckdb::StatementReturnType);
+	for (idx_t i = 0; i < AMOUNT; i++) {
+		auto &type = TYPES[i];
 		expected_return_type.value(StatementReturnTypeToString(type).c_str(), type);
 	}
 	expected_return_type.export_values();
