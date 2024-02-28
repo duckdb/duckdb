@@ -40,7 +40,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 }
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
-
+	lock_guard<mutex> parallel_lock(main_mutex);
 	idx_t total_files = bind_data.files.size();
 	// get the progress WITHIN the current file
 	double progress;

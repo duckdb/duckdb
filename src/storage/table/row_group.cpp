@@ -26,12 +26,12 @@
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
-    : SegmentBase<RowGroup>(start, count), collection(collection) {
+    : SegmentBase<RowGroup>(start, count), collection(collection), allocation_size(0) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection) {
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection), allocation_size(0) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -717,7 +717,9 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 	D_ASSERT(chunk.ColumnCount() == GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
+		auto prev_allocation_size = col_data.GetAllocationSize();
 		col_data.Append(state.states[i], chunk.data[i], append_count);
+		allocation_size += col_data.GetAllocationSize() - prev_allocation_size;
 	}
 	state.offset_in_row_group += append_count;
 }

@@ -101,6 +101,10 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
+	if (bound->return_type == LogicalType::SQLNULL) {
+		QueryErrorContext error_context(bound->query_location);
+		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
+	}
 	children.emplace_back(std::move(bound));
 
 	ErrorData error;

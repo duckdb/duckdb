@@ -1,16 +1,16 @@
-#include "duckdb_odbc.hpp"
 #include "driver.hpp"
-#include "odbc_diagnostic.hpp"
-#include "odbc_fetch.hpp"
-#include "odbc_utils.hpp"
-#include "handle_functions.hpp"
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
+#include "duckdb_odbc.hpp"
+#include "handle_functions.hpp"
+#include "odbc_diagnostic.hpp"
+#include "odbc_fetch.hpp"
+#include "odbc_utils.hpp"
 
-#include <odbcinst.h>
 #include <locale>
 
+using namespace duckdb;
 using duckdb::OdbcDiagnostic;
 using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
@@ -196,99 +196,6 @@ SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		                                   "Optional feature not implemented.", SQLStateType::ST_HYC00, "");
 	}
 	return SQL_SUCCESS;
-}
-
-/**
- * Get the new database name from the DSN string.
- * Otherwise, try to read the database name from odbc.ini
- */
-static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *conn_str, string &new_db_name) {
-	OdbcUtils::SetValueFromConnStr(conn_str, "Database", new_db_name);
-
-	// given preference for the connection attribute
-	if (!dbc->sql_attr_current_catalog.empty() && new_db_name.empty()) {
-		new_db_name = dbc->sql_attr_current_catalog;
-		return;
-	}
-#if defined ODBC_LINK_ODBCINST || defined WIN32
-	if (new_db_name.empty()) {
-		string dsn_name;
-		OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dsn_name);
-		if (!dsn_name.empty()) {
-			const int MAX_DB_NAME = 256;
-			char db_name[MAX_DB_NAME];
-			SQLGetPrivateProfileString(dsn_name.c_str(), "Database", "", db_name, MAX_DB_NAME, "odbc.ini");
-			new_db_name = string(db_name);
-		}
-	}
-#endif
-}
-
-//! The database instance cache, used so that multiple connections to the same file point to the same database object
-duckdb::DBInstanceCache instance_cache;
-
-static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
-	// TODO actually interpret Database in in_connection_string
-	if (!connection_handle) {
-		return SQL_ERROR;
-	}
-	auto *dbc = (duckdb::OdbcHandleDbc *)connection_handle;
-	if (dbc->type != duckdb::OdbcHandleType::DBC) {
-		return SQL_ERROR;
-	}
-
-	// set DSN
-	OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dbc->dsn);
-
-	string db_name;
-	GetDatabaseNameFromDSN(dbc, conn_str, db_name);
-	dbc->SetDatabaseName(db_name);
-	db_name = dbc->GetDatabaseName();
-
-	if (!db_name.empty()) {
-		duckdb::DBConfig config;
-		if (dbc->sql_attr_access_mode == SQL_MODE_READ_ONLY) {
-			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
-		}
-		bool cache_instance = db_name != ":memory:" && !db_name.empty();
-
-		config.SetOptionByName("duckdb_api", "odbc");
-		std::string custom_user_agent;
-		OdbcUtils::SetValueFromConnStr(conn_str, "custom_user_agent", custom_user_agent);
-		if (!custom_user_agent.empty()) {
-			config.SetOptionByName("custom_user_agent", custom_user_agent);
-		}
-
-		dbc->env->db = instance_cache.GetOrCreateInstance(db_name, config, cache_instance);
-	}
-
-	if (!dbc->conn) {
-		dbc->conn = duckdb::make_uniq<duckdb::Connection>(*dbc->env->db);
-		dbc->conn->SetAutoCommit(dbc->autocommit);
-	}
-	return SQL_SUCCESS;
-}
-
-SQLRETURN SQL_API SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
-                                   SQLSMALLINT string_length1, SQLCHAR *out_connection_string,
-                                   SQLSMALLINT buffer_length, SQLSMALLINT *string_length2_ptr,
-                                   SQLUSMALLINT driver_completion) {
-	auto ret = SetConnection(connection_handle, in_connection_string);
-	std::string connect_str = "DuckDB connection";
-	if (string_length2_ptr) {
-		*string_length2_ptr = connect_str.size();
-	}
-	if (ret == SQL_SUCCESS && out_connection_string) {
-		memcpy(out_connection_string, connect_str.c_str(),
-		       duckdb::MinValue<SQLSMALLINT>((SQLSMALLINT)connect_str.size(), buffer_length));
-	}
-	return ret;
-}
-
-SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1,
-                             SQLCHAR *user_name, SQLSMALLINT name_length2, SQLCHAR *authentication,
-                             SQLSMALLINT name_length3) {
-	return SetConnection(connection_handle, server_name);
 }
 
 SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,

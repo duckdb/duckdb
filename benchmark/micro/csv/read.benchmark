@@ -7,10 +7,11 @@ group csv
 
 require tpch
 
-cache tpch_sf1.duckdb
+cache lineitem_sf1.csv
 
-load benchmark/tpch/sf1/load.sql
-COPY lineitem TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+load
+CALL dbgen(sf=1);
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem_sf1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
 
 run
-SELECT * FROM '${BENCHMARK_DIR}/lineitem.csv'
+SELECT * FROM '${BENCHMARK_DIR}/lineitem_sf1.csv'

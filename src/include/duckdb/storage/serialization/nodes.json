@@ -216,7 +216,8 @@
       {
         "id": 101,
         "name": "star_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "property": "expr"
       },
       {
         "id": 102,
