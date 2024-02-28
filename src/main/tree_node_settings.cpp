@@ -113,7 +113,7 @@ string TreeNodeSettings::GetMetricAsString(TreeNodeSettingsType setting) const {
 		case TreeNodeSettingsType::CPU_TIME:
 			return to_string(GetCpuTime());
 		case TreeNodeSettingsType::EXTRA_INFO:
-			return GetExtraInfo();
+			return JSONSanitize(GetExtraInfo());
 		case TreeNodeSettingsType::OPERATOR_CARDINALITY:
 			return to_string(GetOperatorCardinality());
 		case TreeNodeSettingsType::OPERATOR_TIMING:
