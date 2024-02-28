@@ -26,6 +26,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	buffer_ptr = buffer_handle->Ptr();
 	buffer_size = buffer_handle->actual_size;
 	last_position = buffer_position;
+	requested_size = buffer_handle->requested_size;
 
 	// Current Result information
 	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
@@ -354,9 +355,9 @@ bool StringValueResult::AddRowInternal() {
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
 			auto borked_line = ReconstructCurrentLine();
-			auto csv_error = CSVError::CastError(
-			    state_machine.options, names[cast_error.first], error_string, cast_error.first, borked_line,
-			    lines_per_batch, pre_previous_line_start.GetGlobalPosition(buffer_handles.front()->requested_size));
+			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
+			                                     cast_error.first, borked_line, lines_per_batch,
+			                                     pre_previous_line_start.GetGlobalPosition(requested_size));
 			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -414,20 +415,20 @@ bool StringValueResult::AddRowInternal() {
 }
 
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
+	LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
+	                                   result.buffer_size};
+	idx_t current_line_size = current_line_start - result.previous_line_start;
+	if (result.store_line_size) {
+		result.error_handler.NewMaxLineSize(current_line_size);
+	}
+	if (current_line_size > result.state_machine.options.maximum_line_size) {
+		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
+		auto csv_error = CSVError::LineSizeError(result.state_machine.options, current_line_size, lines_per_batch);
+		result.error_handler.Error(csv_error);
+	}
+	result.pre_previous_line_start = result.previous_line_start;
+	result.previous_line_start = current_line_start;
 	if (result.last_position <= buffer_pos) {
-		LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
-		                                   result.buffer_size};
-		idx_t current_line_size = current_line_start - result.previous_line_start;
-		if (result.store_line_size) {
-			result.error_handler.NewMaxLineSize(current_line_size);
-		}
-		if (current_line_size > result.state_machine.options.maximum_line_size) {
-			LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
-			auto csv_error = CSVError::LineSizeError(result.state_machine.options, current_line_size, lines_per_batch);
-			result.error_handler.Error(csv_error);
-		}
-		result.pre_previous_line_start = result.previous_line_start;
-		result.previous_line_start = current_line_start;
 		// We add the value
 		if (result.quoted) {
 			StringValueResult::AddQuotedValue(result, buffer_pos);

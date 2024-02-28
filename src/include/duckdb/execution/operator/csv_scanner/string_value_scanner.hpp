@@ -104,6 +104,9 @@ public:
 	//! We must ensure that we keep the buffers alive until processing the query result
 	vector<shared_ptr<CSVBufferHandle>> buffer_handles;
 
+	//! Requested size of buffers (i.e., either 32Mb or set by buffer_size parameter)
+	idx_t requested_size;
+
 	//! If the current row has an error, we have to skip it
 	bool ignore_current_row = false;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
