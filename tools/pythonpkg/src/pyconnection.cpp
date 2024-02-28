@@ -572,9 +572,7 @@ vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const py::obj
 	}
 	if (py::isinstance<py::str>(query)) {
 		auto sql_query = std::string(py::str(query));
-		Parser parser(connection->context->GetParserOptions());
-		parser.ParseQuery(sql_query);
-		return std::move(parser.statements);
+		return connection->ExtractStatements(sql_query);
 	}
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");
 }
