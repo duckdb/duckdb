@@ -90,7 +90,7 @@ jobs:
     - name: Verify C enum integrity
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: python scripts/verify_enum_integrity.py src/include/duckdb.h --library_path $(/usr/bin/llvm-config --libdir)
+      run: python scripts/verify_enum_integrity.py src/include/duckdb.h --library_path $(llvm-config --libdir)
 
   tidy-check:
     name: Tidy Check
