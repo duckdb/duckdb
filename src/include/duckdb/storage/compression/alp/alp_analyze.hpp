@@ -164,6 +164,10 @@ idx_t AlpFinalAnalyze(AnalyzeState &state) {
 	// Flush last unfinished segment
 	analyze_state.FlushSegment();
 
+	if (compressed_values == 0) {
+		return DConstants::INVALID_INDEX;
+	}
+
 	// We estimate the size by taking into account the portion of the values we took
 	const auto factor_of_sampling = analyze_state.total_values_count / compressed_values;
 	const auto final_analyze_size = analyze_state.TotalUsedBytes() * factor_of_sampling;

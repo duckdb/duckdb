@@ -51,7 +51,7 @@ private:
 	vector<shared_ptr<CSVFileScan>> file_scans;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)
-	mutex main_mutex;
+	mutable mutex main_mutex;
 
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
