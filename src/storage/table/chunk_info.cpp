@@ -93,9 +93,9 @@ bool ChunkConstantInfo::HasDeletes() const {
 idx_t ChunkConstantInfo::GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id,
                                                   idx_t max_count) {
 	if (CommittedVersionOperator::UseDeletedVersion(min_start_id, min_transaction_id, delete_id)) {
-		return max_count;
+		return 0;
 	}
-	return 0;
+	return max_count;
 }
 
 void ChunkConstantInfo::Write(WriteStream &writer) const {
