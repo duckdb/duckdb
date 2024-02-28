@@ -663,19 +663,17 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 
 	auto &column_writer = writer.GetWriter();
 	auto start_offset = column_writer.GetTotalWritten();
-	auto page_offset = start_offset;
 	// flush the dictionary
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
 		column_chunk.meta_data.statistics.__isset.distinct_count = true;
-		column_chunk.meta_data.dictionary_page_offset = page_offset;
+		column_chunk.meta_data.dictionary_page_offset = start_offset;
 		column_chunk.meta_data.__isset.dictionary_page_offset = true;
 		FlushDictionary(state, state.stats_state.get());
-		page_offset += state.write_info[0].compressed_size;
 	}
 
 	// record the start position of the pages for this column
-	column_chunk.meta_data.data_page_offset = page_offset;
+	column_chunk.meta_data.data_page_offset = column_writer.GetTotalWritten();
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk
