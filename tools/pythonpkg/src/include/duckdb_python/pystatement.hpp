@@ -23,6 +23,7 @@ public:
 	string Query() const;
 	py::set NamedParameters() const;
 	StatementType Type() const;
+	py::list ExpectedResultType() const;
 
 public:
 	static void Initialize(py::handle &m);

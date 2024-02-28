@@ -298,6 +298,19 @@ static void RegisterStatementType(py::handle &m) {
 	statement_type.export_values();
 }
 
+static void RegisterExpectedResultType(py::handle &m) {
+	auto expected_return_type = py::enum_<duckdb::StatementReturnType>(m, "ExpectedResultType");
+	static const duckdb::StatementReturnType types[] = {duckdb::StatementReturnType::QUERY_RESULT,
+	                                                    duckdb::StatementReturnType::CHANGED_ROWS,
+	                                                    duckdb::StatementReturnType::NOTHING};
+	static const idx_t amount = sizeof(types) / sizeof(duckdb::StatementReturnType);
+	for (idx_t i = 0; i < amount; i++) {
+		auto &type = types[i];
+		expected_return_type.value(StatementReturnTypeToString(type).c_str(), type);
+	}
+	expected_return_type.export_values();
+}
+
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
@@ -305,6 +318,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	    .export_values();
 
 	RegisterStatementType(m);
+
+	RegisterExpectedResultType(m);
 
 	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
 	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)

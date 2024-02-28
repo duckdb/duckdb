@@ -14,6 +14,7 @@ from .duckdb import (
     DuckDBPyConnection,
     ExplainType,
     StatementType,
+    ExpectedResultType,
     PythonExceptionHandling,
     RenderMode,
     Expression,

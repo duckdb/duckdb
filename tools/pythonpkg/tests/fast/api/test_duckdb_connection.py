@@ -105,6 +105,7 @@ class TestDuckDBConnection(object):
         assert statements[0].query == 'select $1'
         assert statements[0].type == duckdb.StatementType.SELECT
         assert statements[0].named_parameters == set('1')
+        assert statements[0].expected_result_type == [duckdb.ExpectedResultType.QUERY_RESULT]
 
         assert statements[1].query == ' select 21'
         assert statements[1].type == duckdb.StatementType.SELECT
@@ -128,6 +129,10 @@ class TestDuckDBConnection(object):
 
         duckdb.execute("create table tbl(a integer)")
         statements = duckdb.extract_statements('insert into tbl select $1')
+        assert statements[0].expected_result_type == [
+            duckdb.ExpectedResultType.CHANGED_ROWS,
+            duckdb.ExpectedResultType.QUERY_RESULT,
+        ]
         with pytest.raises(
             duckdb.InvalidInputException, match='executemany requires a non-empty list of parameter sets to be provided'
         ):
