@@ -634,17 +634,17 @@ function _close_pending_result(pending::PendingQueryResult)
     return
 end
 
-function fetch_error(stmt::Stmt, error_ptr)
+function fetch_error(sql::AbstractString, error_ptr)
     if error_ptr == C_NULL
-        return string("Execute of query \"", stmt.sql, "\" failed: unknown error")
+        return string("Execute of query \"", sql, "\" failed: unknown error")
     else
-        return string("Execute of query \"", stmt.sql, "\" failed: ", unsafe_string(error_ptr))
+        return string("Execute of query \"", sql, "\" failed: ", unsafe_string(error_ptr))
     end
 end
 
 function get_error(stmt::Stmt, pending::PendingQueryResult)
     error_ptr = duckdb_pending_error(pending.handle)
-    error_message = fetch_error(stmt, error_ptr)
+    error_message = fetch_error(stmt.sql, error_ptr)
     _close_pending_result(pending)
     return error_message
 end
@@ -762,7 +762,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     ret = duckdb_execute_pending(pending.handle, handle)
     if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
-        error_message = fetch_error(stmt, error_ptr)
+        error_message = fetch_error(stmt.sql, error_ptr)
         duckdb_destroy_result(handle)
         throw(QueryException(error_message))
     end
@@ -857,3 +857,15 @@ DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)
 
 Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.columntable(result))
+
+function query(con::DuckDB.Connection, sql::AbstractString)
+    handle = Ref{duckdb_result}()
+    ret = duckdb_query(con.handle, sql, handle)
+    if ret != DuckDBSuccess
+        error_ptr = duckdb_result_error(handle)
+        error_message = fetch_error(sql, error_ptr)
+        duckdb_destroy_result(handle)
+        throw(QueryException(error_message))
+    end
+    return QueryResult(handle)
+end
