@@ -605,19 +605,19 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	}
 
 	auto metrics = FillTreeNodeSettings(json);
-	config.profiler_settings.set_metrics(metrics);
+	config.profiler_settings.SetMetrics(metrics);
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_settings.reset_metrics();
+	config.profiler_settings.ResetMetrics();
 }
 
 Value CustomProfilingSettings::GetSetting(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	string profiling_settings_str;
-	for (auto &entry : config.profiler_settings.get_metrics()) {
+	for (auto &entry : config.profiler_settings.GetMetrics()) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
