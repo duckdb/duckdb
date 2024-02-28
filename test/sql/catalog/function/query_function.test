@@ -211,14 +211,14 @@ Parser Error: syntax error at or near "NULL"
 
 # test by_name argument
 query III
-from query_table(tbl2, by_name=true);
+from query_table(tbl2, true);
 ----
 1	2	3
 4	5	6
 7	8	9
 
 query I
-from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')'], by_name=false);
+from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')'], false);
 ----
 42
 duckdb
@@ -227,7 +227,7 @@ duckdb
 I am a subquery
 
 query IIIII
-from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')'], by_name=true);
+from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')'], true);
 ----
 42	NULL	NULL	NULL	NULL
 NULL	duckdb	NULL	NULL	NULL
@@ -237,6 +237,6 @@ NULL	NULL	NULL	NULL	I am a subquery
 
 # test incorrect usage
 statement error
-from query_table('t_int', not_valid=true);
+from query_table(true);
 ----
-Binder Error: Invalid named parameter "not_valid" for function query_table
+Binder Error: No function matches the given name and argument types 'query_table(BOOLEAN)'.

@@ -8,19 +8,19 @@
 namespace duckdb {
 
 static unique_ptr<SubqueryRef> parse_subquery(const string &query, const ParserOptions &options,
-                                              const string &error_msg) {
+                                              const string &err_msg) {
 	Parser parser(options);
 	parser.ParseQuery(query);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw ParserException(error_msg);
+		throw ParserException(err_msg);
 	}
 	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
 static void union_tables_query(TableFunctionBindInput &input, string &query) {
-	auto it = input.named_parameters.find("by_name");
-	string by_name = (it != input.named_parameters.end() && it->second.GetValue<bool>())
+	string by_name = (input.inputs.size() == 2 &&
+	                  (input.inputs[1].type().id() == LogicalTypeId::BOOLEAN && input.inputs[1].GetValue<bool>()))
 	                     ? "BY NAME "
 	                     : ""; // 'by_name' variable defaults to false
 	if (input.inputs[0].type().id() == LogicalTypeId::VARCHAR) {
@@ -36,25 +36,23 @@ static void union_tables_query(TableFunctionBindInput &input, string &query) {
 			auto child = children[i].ToString();
 			query += union_all_clause + child;
 		}
+	} else {
+		throw InvalidInputException("Expected a table or a list with tables as input");
 	}
 }
 
 static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto query = input.inputs[0].ToString();
 	auto subquery_ref = parse_subquery(query, context.GetParserOptions(), "Expected a single SELECT statement");
-	return subquery_ref;
+	return std::move(subquery_ref);
 }
 
 static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	D_ASSERT(input.named_parameters.size() == 0 || input.named_parameters.size() == 1); // expected only by_name arg
-	string err_msg = "Expected a table or a list with tables as input";
-	if (input.inputs.size() != 1) {
-		throw ParserException(err_msg);
-	}
 	string query;
 	union_tables_query(input, query);
-	auto subquery_ref = parse_subquery(query, context.GetParserOptions(), err_msg);
-	return subquery_ref;
+	auto subquery_ref =
+	    parse_subquery(query, context.GetParserOptions(), "Expected a table or a list with tables as input");
+	return std::move(subquery_ref);
 }
 
 void QueryTableFunction::RegisterFunction(BuiltinFunctions &set) {
@@ -64,11 +62,16 @@ void QueryTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 	TableFunctionSet query_table("query_table");
 	TableFunction query_table_function({LogicalType::LIST(LogicalType::VARCHAR)}, nullptr, nullptr);
-	query_table_function.named_parameters["by_name"] = LogicalType::BOOLEAN;
 	query_table_function.bind_replace = TableBindReplace;
+	query_table.AddFunction(query_table_function);
+	// add by_name option
+	query_table_function.arguments.emplace_back(LogicalType::BOOLEAN);
 	query_table.AddFunction(query_table_function);
 
 	query_table_function.arguments = {LogicalType::VARCHAR};
+	query_table.AddFunction(query_table_function);
+	// add by_name option
+	query_table_function.arguments.emplace_back(LogicalType::BOOLEAN);
 	query_table.AddFunction(query_table_function);
 	set.AddFunction(query_table);
 }
