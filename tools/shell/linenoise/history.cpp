@@ -73,17 +73,42 @@ int History::Add(const char *line) {
 
 	/* Add an heap allocated copy of the line in the history.
 	 * If we reached the max length, remove the older line. */
-	linecopy = strdup(line);
-	if (!linecopy) {
-		return 0;
-	}
 	if (!Terminal::IsMultiline()) {
 		// replace all newlines with spaces
+		linecopy = strdup(line);
+		if (!linecopy) {
+			return 0;
+		}
 		for (auto ptr = linecopy; *ptr; ptr++) {
 			if (*ptr == '\n' || *ptr == '\r') {
 				*ptr = ' ';
 			}
 		}
+	} else {
+		// replace all '\n' with '\r\n'
+		idx_t replaced_newline_count = 0;
+		idx_t len;
+		for (len = 0; line[len]; len++) {
+			if (line[len] == '\r' && line[len + 1] == '\n') {
+				// \r\n - skip past the \n
+				len++;
+			} else if (line[len] == '\n') {
+				replaced_newline_count++;
+			}
+		}
+		linecopy = (char *)malloc((len + replaced_newline_count + 1) * sizeof(char));
+		idx_t pos = 0;
+		for (len = 0; line[len]; len++) {
+			if (line[len] == '\r' && line[len + 1] == '\n') {
+				// \r\n - skip past the \n
+				linecopy[pos++] = '\r';
+				len++;
+			} else if (line[len] == '\n') {
+				linecopy[pos++] = '\r';
+			}
+			linecopy[pos++] = line[len];
+		}
+		linecopy[pos] = '\0';
 	}
 	if (history_len == history_max_len) {
 		free(history[0]);

@@ -89,6 +89,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
                                          idx_t &best_consistent_rows, idx_t &prev_padding_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	auto &sniffed_column_counts = scanner->ParseChunk();
+	if (sniffed_column_counts.error) {
+		// This candidate has an error (i.e., over maximum line size or never unquoting quoted values)
+		return;
+	}
 	idx_t start_row = options.dialect_options.skip_rows.GetValue();
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[start_row];
