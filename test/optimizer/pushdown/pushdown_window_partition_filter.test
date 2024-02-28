@@ -9,6 +9,9 @@ statement ok
 create table t1 as from VALUES ('A', 1), ('B', 3), ('C', 12), ('A', 5), ('B', 8), ('C', 9), ('A', 10), ('B', 20), ('C', 3) t(a, b);
 
 statement ok
+pragma explain_output=OPTIMIZED_ONLY
+
+statement ok
 create view window_with_filter as select a,  b, LEAD(b) OVER (partition by a) as lead from t1 where a != 'C';
 
 statement ok
@@ -24,10 +27,15 @@ select * from window_no_filter where a != 'C' order by a;
 ----
 
 statement ok
-create table partition_and_rank_me as from values ('A', 10, 'A', 'id'), ('A', 20, 'A', 'id'), ('A', 30, 'B', 'id'), ('D', 40, 'B', 'id'), ('D', 50, 'C', 'id'), ('D', 60, 'C', 'id') t(a, b, c, d);
+create table partition_and_rank_me as from values 
+	('A', 10, 'A', 'id'), 
+	('A', 20, 'A', 'id'),
+	('A', 30, 'B', 'id'),
+	('D', 40, 'B', 'id'),
+	('D', 50, 'C', 'id'),
+	('D', 60, 'C', 'id') 
+t(a, b, c, d);
 
-# can't push down the filter c!='B', since the values of the rank() window function
-# are affected by the existence of the rows where c='B'
 query IIII
 select a, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY d ORDER BY b), c from partition_and_rank_me order by all
 ----
@@ -48,8 +56,24 @@ A	30	2	A
 D	110	5	C
 D	110	6	C
 
-statement ok
-pragma explain_output=OPTIMIZED_ONLY
+# The filter is on the partitioned column, but is parto of a conjunction, so we dont push it down
+query IIII
+select * from (select a, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b), c from partition_and_rank_me) where (c = 'B' AND a = 'D') order by all;
+----
+D	70	2	B
+
+# result of above query with pushdown
+query IIII
+select * from (select a, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b), c from partition_and_rank_me where (c = 'B' AND a = 'D')) order by all;
+----
+D	40	1	B
+
+# can't push down the filter c!='B', since the values of the rank() window function
+# are affected by the existence of the rows where c='B'
+query II
+explain select * from (select a, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY d ORDER BY b), c from partition_and_rank_me) where c != 'B' order by all;
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
 
 query II
 explain select * from window_no_filter where a != 'C' order by a;
