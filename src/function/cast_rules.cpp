@@ -1,4 +1,5 @@
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 

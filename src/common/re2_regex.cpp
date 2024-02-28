@@ -1,3 +1,4 @@
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
 #include <memory>
 
