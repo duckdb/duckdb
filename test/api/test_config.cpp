@@ -19,7 +19,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
 	test_options["enable_external_access"] = {"true", "false"};
 	test_options["enable_object_cache"] = {"true", "false"};
 	test_options["max_memory"] = {"-1", "16GB"};
-	test_options["threads"] = {"-1", "4"};
+	test_options["threads"] = {"1", "4"};
 
 	REQUIRE(config.GetOptionByName("unknownoption") == nullptr);
 

@@ -38,7 +38,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
                                                                const string &db_type, AccessMode access_mode) {
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
-	auto attached_db = db.CreateAttachedDatabase(info, db_type, access_mode);
+	auto attached_db = db.CreateAttachedDatabase(context, info, db_type, access_mode);
 
 	if (db_type.empty()) {
 		InsertDatabasePath(context, info.path, attached_db->name);

@@ -66,16 +66,18 @@ class TestMultipleColumnsSameName(object):
         )
         con = duckdb.connect()
         con.register('df_view', df)
-        assert con.execute("DESCRIBE df_view;").fetchall() == [
+        rel = con.sql("DESCRIBE df_view;")
+        res = rel.fetchall()
+        assert res == [
             ('a_1', 'BIGINT', 'YES', None, None, None),
             ('a', 'BIGINT', 'YES', None, None, None),
-            ('a_3', 'BIGINT', 'YES', None, None, None),
             ('a_2', 'BIGINT', 'YES', None, None, None),
+            ('a_2_1', 'BIGINT', 'YES', None, None, None),
         ]
         assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
         assert con.execute("select a from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
-        assert con.execute("select a_3 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
-        assert con.execute("select a_2 from df_view;").fetchall() == [(13,), (14,), (15,), (16,)]
+        assert con.execute("select a_2 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
+        assert con.execute("select a_2_1 from df_view;").fetchall() == [(13,), (14,), (15,), (16,)]
         # Verify we are not changing original dataframe
         assert all(df.columns == ['a_1', 'a', 'a', 'a_2']), df.columns
 

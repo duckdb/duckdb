@@ -312,4 +312,13 @@ struct ListInnerProductFunAlias {
 	static constexpr const char *Name = "<#>";
 };
 
+struct UnpivotListFun {
+	static constexpr const char *Name = "unpivot_list";
+	static constexpr const char *Parameters = "any,...";
+	static constexpr const char *Description = "Identical to list_value, but generated as part of unpivot for better error messages";
+	static constexpr const char *Example = "unpivot_list(4, 5, 6)";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

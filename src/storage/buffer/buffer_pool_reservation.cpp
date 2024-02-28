@@ -3,15 +3,16 @@
 
 namespace duckdb {
 
-BufferPoolReservation::BufferPoolReservation(BufferPool &pool) : pool(pool) {
+BufferPoolReservation::BufferPoolReservation(MemoryTag tag, BufferPool &pool) : tag(tag), pool(pool) {
 }
 
-BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexcept : pool(src.pool) {
+BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexcept : tag(src.tag), pool(src.pool) {
 	size = src.size;
 	src.size = 0;
 }
 
 BufferPoolReservation &BufferPoolReservation::operator=(BufferPoolReservation &&src) noexcept {
+	tag = src.tag;
 	size = src.size;
 	src.size = 0;
 	return *this;
@@ -23,7 +24,7 @@ BufferPoolReservation::~BufferPoolReservation() {
 
 void BufferPoolReservation::Resize(idx_t new_size) {
 	int64_t delta = (int64_t)new_size - size;
-	pool.IncreaseUsedMemory(delta);
+	pool.IncreaseUsedMemory(tag, delta);
 	size = new_size;
 }
 

@@ -90,6 +90,10 @@ public:
 	}
 
 public:
+	//! Deduplicate column names for interop with external libraries
+	static void DeduplicateColumns(vector<string> &names);
+
+public:
 	//! Returns the name of the column for the given index
 	DUCKDB_API const string &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.

@@ -107,7 +107,8 @@ static void ScatterNestedVector(Vector &vec, UnifiedVectorFormat &col, Vector &r
 	}
 
 	// Serialise the data
-	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, validitymask_locations);
+	NestedValidity parent_validity(validitymask_locations, col_no);
+	RowOperations::HeapScatter(vec, vcount, sel, count, data_locations, &parent_validity);
 }
 
 void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,

@@ -67,6 +67,30 @@ QueryResult::QueryResult(QueryResultType type, ErrorData error)
 QueryResult::~QueryResult() {
 }
 
+void QueryResult::DeduplicateColumns(vector<string> &names) {
+	unordered_map<string, idx_t> name_map;
+	for (auto &column_name : names) {
+		// put it all lower_case
+		auto low_column_name = StringUtil::Lower(column_name);
+		if (name_map.find(low_column_name) == name_map.end()) {
+			// Name does not exist yet
+			name_map[low_column_name]++;
+		} else {
+			// Name already exists, we add _x where x is the repetition number
+			string new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
+			auto new_column_name_low = StringUtil::Lower(new_column_name);
+			while (name_map.find(new_column_name_low) != name_map.end()) {
+				// This name is already here due to a previous definition
+				name_map[low_column_name]++;
+				new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
+				new_column_name_low = StringUtil::Lower(new_column_name);
+			}
+			column_name = new_column_name;
+			name_map[new_column_name_low]++;
+		}
+	}
+}
+
 const string &QueryResult::ColumnName(idx_t index) const {
 	D_ASSERT(index < names.size());
 	return names[index];

@@ -15,6 +15,7 @@ struct DuckDBSecretsData : public GlobalTableFunctionState {
 	DuckDBSecretsData() : offset(0) {
 	}
 	idx_t offset;
+	duckdb::vector<duckdb::SecretEntry> secrets;
 };
 
 struct DuckDBSecretsBindData : public FunctionData {
@@ -84,8 +85,11 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &secret_manager = SecretManager::Get(context);
 
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-	auto secrets = secret_manager.AllSecrets(transaction);
 
+	if (data.secrets.empty()) {
+		data.secrets = secret_manager.AllSecrets(transaction);
+	}
+	auto &secrets = data.secrets;
 	if (data.offset >= secrets.size()) {
 		// finished returning values
 		return;
@@ -97,17 +101,17 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		auto &secret_entry = secrets[data.offset];
 
 		vector<Value> scope_value;
-		for (const auto &scope_entry : secret_entry.get().secret->GetScope()) {
+		for (const auto &scope_entry : secret_entry.secret->GetScope()) {
 			scope_value.push_back(scope_entry);
 		}
 
-		const auto &secret = *secret_entry.get().secret;
+		const auto &secret = *secret_entry.secret;
 
 		output.SetValue(0, count, secret.GetName());
 		output.SetValue(1, count, Value(secret.GetType()));
 		output.SetValue(2, count, Value(secret.GetProvider()));
-		output.SetValue(3, count, Value(secret_entry.get().persist_type == SecretPersistType::PERSISTENT));
-		output.SetValue(4, count, Value(secret_entry.get().storage_mode));
+		output.SetValue(3, count, Value(secret_entry.persist_type == SecretPersistType::PERSISTENT));
+		output.SetValue(4, count, Value(secret_entry.storage_mode));
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, scope_value));
 		output.SetValue(6, count, secret.ToString(bind_data.redact));
 

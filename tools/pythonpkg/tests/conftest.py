@@ -102,9 +102,9 @@ def pandas_2_or_higher():
 
 def pandas_supports_arrow_backend():
     try:
-        from pandas.compat import pa_version_under7p0
+        from pandas.compat import pa_version_under11p0
 
-        if pa_version_under7p0 == True:
+        if pa_version_under11p0 == True:
             return False
     except ImportError:
         return False

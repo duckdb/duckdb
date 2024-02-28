@@ -110,7 +110,7 @@ void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, 
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
-	data[index] = duckdb::StringVector::AddString(*v, str, str_len);
+	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
 }
 
 duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector) {

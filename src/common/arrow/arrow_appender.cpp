@@ -236,11 +236,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		break;
 	}
 	case LogicalTypeId::MAP:
-		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			InitializeAppenderForType<ArrowMapData<int64_t>>(append_data);
-		} else {
-			InitializeAppenderForType<ArrowMapData<int32_t>>(append_data);
-		}
+		// Arrow MapArray only supports 32-bit offsets. There is no LargeMapArray type in Arrow.
+		InitializeAppenderForType<ArrowMapData<int32_t>>(append_data);
 		break;
 	default:
 		throw NotImplementedException("Unsupported type in DuckDB -> Arrow Conversion: %s\n", type.ToString());

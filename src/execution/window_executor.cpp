@@ -940,6 +940,64 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 	WindowExecutor::Sink(input_chunk, input_idx, total_count);
 }
 
+static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, BaseStatistics *base, bool is_start) {
+	// Avoid overflow by clamping to the frame bounds
+	auto base_stats = delta;
+
+	switch (boundary) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		if (is_start) {
+			delta.end = 0;
+			return;
+		}
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		if (!is_start) {
+			delta.begin = 0;
+			return;
+		}
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		delta.begin = delta.end = 0;
+		return;
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			//	Preceding so negative offset from current row
+			base_stats.begin = NumericStats::GetMin<int64_t>(*base);
+			base_stats.end = NumericStats::GetMax<int64_t>(*base);
+			if (delta.begin < base_stats.end && base_stats.end < delta.end) {
+				delta.begin = -base_stats.end;
+			}
+			if (delta.begin < base_stats.begin && base_stats.begin < delta.end) {
+				delta.end = -base_stats.begin + 1;
+			}
+		}
+		return;
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
+			base_stats.begin = NumericStats::GetMin<int64_t>(*base);
+			base_stats.end = NumericStats::GetMax<int64_t>(*base);
+			if (base_stats.end < delta.end) {
+				delta.end = base_stats.end + 1;
+			}
+		}
+		return;
+
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		return;
+	default:
+		break;
+	}
+
+	if (is_start) {
+		throw InternalException("Unsupported window start boundary");
+	} else {
+		throw InternalException("Unsupported window end boundary");
+	}
+}
+
 void WindowAggregateExecutor::Finalize() {
 	D_ASSERT(aggregator);
 
@@ -951,66 +1009,12 @@ void WindowAggregateExecutor::Finalize() {
 	//	First entry is the frame start
 	stats[0] = FrameDelta(-count, count);
 	auto base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[0].get();
-	switch (wexpr.start) {
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		stats[0].end = 0;
-		break;
-	case WindowBoundary::CURRENT_ROW_ROWS:
-		stats[0].begin = stats[0].end = 0;
-		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			//	Preceding so negative offset from current row
-			stats[0].begin = -NumericStats::GetMax<int64_t>(*base);
-			stats[0].end = -NumericStats::GetMin<int64_t>(*base) + 1;
-		}
-		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			stats[0].begin = NumericStats::GetMin<int64_t>(*base);
-			stats[0].end = NumericStats::GetMax<int64_t>(*base) + 1;
-		}
-		break;
-
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		break;
-	default:
-		throw InternalException("Unsupported window start boundary");
-	}
+	ApplyWindowStats(wexpr.start, stats[0], base, true);
 
 	//	Second entry is the frame end
 	stats[1] = FrameDelta(-count, count);
 	base = wexpr.expr_stats.empty() ? nullptr : wexpr.expr_stats[1].get();
-	switch (wexpr.end) {
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		stats[1].begin = 0;
-		break;
-	case WindowBoundary::CURRENT_ROW_ROWS:
-		stats[1].begin = stats[1].end = 0;
-		break;
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			//	Preceding so negative offset from current row
-			stats[1].begin = -NumericStats::GetMax<int64_t>(*base);
-			stats[1].end = -NumericStats::GetMin<int64_t>(*base) + 1;
-		}
-		break;
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		if (base && base->GetStatsType() == StatisticsType::NUMERIC_STATS && NumericStats::HasMinMax(*base)) {
-			stats[1].begin = NumericStats::GetMin<int64_t>(*base);
-			stats[1].end = NumericStats::GetMax<int64_t>(*base) + 1;
-		}
-		break;
-
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		break;
-	default:
-		throw InternalException("Unsupported window end boundary");
-	}
+	ApplyWindowStats(wexpr.end, stats[1], base, false);
 
 	aggregator->Finalize(stats);
 }

@@ -69,7 +69,7 @@ public:
 	optional_idx batch_index;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), op.children[0]->types);
+		collection = make_uniq<ColumnDataCollection>(context, op.children[0]->types, ColumnDataAllocatorType::HYBRID);
 		collection->InitializeAppend(append_state);
 	}
 };

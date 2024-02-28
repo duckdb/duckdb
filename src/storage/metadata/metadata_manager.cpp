@@ -67,7 +67,7 @@ void MetadataManager::ConvertToTransient(MetadataBlock &block) {
 
 	// allocate a new transient block to replace it
 	shared_ptr<BlockHandle> new_block;
-	auto new_buffer = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
+	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, Storage::BLOCK_SIZE, false, &new_block);
 
 	// copy the data to the transient block
 	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), Storage::BLOCK_SIZE);
@@ -82,7 +82,7 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
-	auto handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
+	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, Storage::BLOCK_SIZE, false, &new_block.block);
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);

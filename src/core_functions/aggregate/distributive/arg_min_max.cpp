@@ -1,6 +1,7 @@
 #include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -284,6 +285,8 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, int32_t>(by_type, type);
 	case PhysicalType::INT64:
 		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, int64_t>(by_type, type);
+	case PhysicalType::INT128:
+		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, hugeint_t>(by_type, type);
 	case PhysicalType::DOUBLE:
 		return GetVectorArgMinMaxFunctionInternal<OP, ARG_TYPE, double>(by_type, type);
 	case PhysicalType::VARCHAR:
@@ -294,9 +297,9 @@ AggregateFunction GetVectorArgMinMaxFunctionBy(const LogicalType &by_type, const
 }
 
 static const vector<LogicalType> ArgMaxByTypes() {
-	vector<LogicalType> types = {LogicalType::INTEGER,      LogicalType::BIGINT, LogicalType::DOUBLE,
-	                             LogicalType::VARCHAR,      LogicalType::DATE,   LogicalType::TIMESTAMP,
-	                             LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
+	vector<LogicalType> types = {LogicalType::INTEGER,   LogicalType::BIGINT,       LogicalType::HUGEINT,
+	                             LogicalType::DOUBLE,    LogicalType::VARCHAR,      LogicalType::DATE,
+	                             LogicalType::TIMESTAMP, LogicalType::TIMESTAMP_TZ, LogicalType::BLOB};
 	return types;
 }
 
@@ -328,12 +331,14 @@ AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const Logic
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int32_t>(by_type, type);
 	case PhysicalType::INT64:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int64_t>(by_type, type);
+	case PhysicalType::INT128:
+		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, hugeint_t>(by_type, type);
 	case PhysicalType::DOUBLE:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, double>(by_type, type);
 	case PhysicalType::VARCHAR:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, string_t>(by_type, type);
 	default:
-		throw InternalException("Unimplemented arg_min/arg_max aggregate");
+		throw InternalException("Unimplemented arg_min/arg_max by aggregate");
 	}
 }
 
@@ -365,6 +370,25 @@ static unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, Agg
                                                      vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	auto by_type = arguments[1]->return_type;
+
+	// To avoid a combinatorial explosion, cast the ordering argument to one from the list
+	auto by_types = ArgMaxByTypes();
+	idx_t best_target = DConstants::INVALID_INDEX;
+	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
+	for (idx_t i = 0; i < by_types.size(); ++i) {
+		auto cast_cost = CastFunctionSet::Get(context).ImplicitCastCost(by_type, by_types[i]);
+		if (cast_cost < 0) {
+			continue;
+		}
+		if (cast_cost < lowest_cost) {
+			best_target = i;
+		}
+	}
+
+	if (best_target != DConstants::INVALID_INDEX) {
+		by_type = by_types[best_target];
+	}
+
 	auto name = std::move(function.name);
 	function = GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type);
 	function.name = std::move(name);

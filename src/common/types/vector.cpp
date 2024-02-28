@@ -28,7 +28,7 @@
 namespace duckdb {
 
 Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
-    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr) {
+    : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
 		Initialize(zero_data, capacity);
 	}
@@ -908,6 +908,8 @@ void Vector::Flatten(idx_t count) {
 			//	             =>    ..   | 1 |
 			//                          | 2 |
 			// 							 ...
+
+			child.Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
@@ -1887,59 +1889,75 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 }
 
 MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
+
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	UnifiedVectorFormat map_vdata;
 
-	map.ToUnifiedFormat(count, map_vdata);
-	auto &map_validity = map_vdata.validity;
+	// unify the MAP vector, which is a physical LIST vector
+	UnifiedVectorFormat map_data;
+	map.ToUnifiedFormat(count, map_data);
+	auto map_entries = UnifiedVectorFormat::GetDataNoConst<list_entry_t>(map_data);
+	auto maps_length = ListVector::GetListSize(map);
 
-	auto list_data = ListVector::GetData(map);
+	// unify the child vector containing the keys
 	auto &keys = MapVector::GetKeys(map);
-	UnifiedVectorFormat key_vdata;
-	keys.ToUnifiedFormat(count, key_vdata);
-	auto &key_validity = key_vdata.validity;
+	UnifiedVectorFormat key_data;
+	keys.ToUnifiedFormat(maps_length, key_data);
 
-	for (idx_t row = 0; row < count; row++) {
-		auto mapped_row = sel.get_index(row);
-		auto map_idx = map_vdata.sel->get_index(mapped_row);
-		// map is allowed to be NULL
-		if (!map_validity.RowIsValid(map_idx)) {
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+
+		auto mapped_row = sel.get_index(row_idx);
+		auto map_idx = map_data.sel->get_index(mapped_row);
+
+		if (!map_data.validity.RowIsValid(map_idx)) {
 			continue;
 		}
+
 		value_set_t unique_keys;
-		for (idx_t i = 0; i < list_data[map_idx].length; i++) {
-			auto index = list_data[map_idx].offset + i;
-			index = key_vdata.sel->get_index(index);
-			if (!key_validity.RowIsValid(index)) {
+		auto length = map_entries[map_idx].length;
+		auto offset = map_entries[map_idx].offset;
+
+		for (idx_t child_idx = 0; child_idx < length; child_idx++) {
+			auto key_idx = key_data.sel->get_index(offset + child_idx);
+
+			if (!key_data.validity.RowIsValid(key_idx)) {
 				return MapInvalidReason::NULL_KEY;
 			}
-			auto value = keys.GetValue(index);
-			auto result = unique_keys.insert(value);
-			if (!result.second) {
+
+			auto value = keys.GetValue(key_idx);
+			auto unique = unique_keys.insert(value).second;
+			if (!unique) {
 				return MapInvalidReason::DUPLICATE_KEY;
 			}
 		}
 	}
+
 	return MapInvalidReason::VALID;
 }
 
 void MapVector::MapConversionVerify(Vector &vector, idx_t count) {
-	auto valid_check = MapVector::CheckMapValidity(vector, count);
-	switch (valid_check) {
+	auto reason = MapVector::CheckMapValidity(vector, count);
+	EvalMapInvalidReason(reason);
+}
+
+void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
+	switch (reason) {
 	case MapInvalidReason::VALID:
-		break;
-	case MapInvalidReason::DUPLICATE_KEY: {
-		throw InvalidInputException("Map keys have to be unique");
-	}
-	case MapInvalidReason::NULL_KEY: {
-		throw InvalidInputException("Map keys can not be NULL");
-	}
-	case MapInvalidReason::NULL_KEY_LIST: {
-		throw InvalidInputException("The list of map keys is not allowed to be NULL");
-	}
-	default: {
+		return;
+	case MapInvalidReason::DUPLICATE_KEY:
+		throw InvalidInputException("Map keys must be unique.");
+	case MapInvalidReason::NULL_KEY:
+		throw InvalidInputException("Map keys can not be NULL.");
+	case MapInvalidReason::NULL_KEY_LIST:
+		throw InvalidInputException("The list of map keys must not be NULL.");
+	case MapInvalidReason::NULL_VALUE_LIST:
+		throw InvalidInputException("The list of map values must not be NULL.");
+	case MapInvalidReason::NOT_ALIGNED:
+		throw InvalidInputException("The map key list does not align with the map value list.");
+	case MapInvalidReason::INVALID_PARAMS:
+		throw InvalidInputException("Invalid map argument(s). Valid map arguments are a list of key-value pairs (MAP "
+		                            "{'key1': 'val1', ...}), two lists (MAP ([1, 2], [10, 11])), or no arguments.");
+	default:
 		throw InternalException("MapInvalidReason not implemented");
-	}
 	}
 }
 
@@ -2345,14 +2363,6 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		return ArrayVector::GetTotalSize(child);
 	}
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChildSize();
-}
-
-void ArrayVector::AllocateDummyListEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::ARRAY);
-	auto array_size = ArrayType::GetSize(vector.GetType());
-	auto array_count = ArrayVector::GetTotalSize(vector) / array_size;
-	vector.buffer = VectorBuffer::CreateStandardVector(LogicalType::HUGEINT, array_count);
-	vector.data = vector.buffer->GetData();
 }
 
 } // namespace duckdb

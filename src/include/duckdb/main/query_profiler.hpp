@@ -230,36 +230,4 @@ private:
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
 };
 
-//! The QueryProfilerHistory can be used to access the profiler of previous queries
-class QueryProfilerHistory {
-private:
-	static constexpr uint64_t DEFAULT_SIZE = 20;
-
-	//! Previous Query profilers
-	deque<pair<transaction_t, shared_ptr<QueryProfiler>>> prev_profilers;
-	//! Previous Query profilers size
-	uint64_t prev_profilers_size = DEFAULT_SIZE;
-
-public:
-	deque<pair<transaction_t, shared_ptr<QueryProfiler>>> &GetPrevProfilers() {
-		return prev_profilers;
-	}
-	QueryProfilerHistory() {
-	}
-
-	void SetPrevProfilersSize(uint64_t prevProfilersSize) {
-		prev_profilers_size = prevProfilersSize;
-	}
-	uint64_t GetPrevProfilersSize() const {
-		return prev_profilers_size;
-	}
-
-public:
-	void SetProfilerHistorySize(uint64_t size) {
-		this->prev_profilers_size = size;
-	}
-	void ResetProfilerHistorySize() {
-		this->prev_profilers_size = DEFAULT_SIZE;
-	}
-};
 } // namespace duckdb

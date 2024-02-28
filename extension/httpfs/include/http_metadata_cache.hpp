@@ -8,6 +8,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
 
 #include <stddef.h>
 #include <string>
@@ -74,7 +75,7 @@ public:
 	}
 
 	//! Called by the ClientContext when the current query ends
-	void QueryEnd() override {
+	void QueryEnd(ClientContext &context) override {
 		if (flush_on_query_end) {
 			Clear();
 		}

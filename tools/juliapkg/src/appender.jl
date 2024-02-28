@@ -1,7 +1,39 @@
 using Dates
 
 """
-An appender object that can be used to append to a table
+An appender object that can be used to append rows to an existing table.
+
+* DateTime objects in Julia are stored in milliseconds since the Unix epoch but are converted to microseconds when stored in duckdb.
+* Time objects in Julia are stored in nanoseconds since midnight but are converted to microseconds when stored in duckdb.
+* Missing and Nothing are stored as NULL in duckdb, but will be converted to Missing when the data is queried back.
+
+# Example
+```julia
+using DuckDB, DataFrames, Dates
+db = DuckDB.DB()
+
+# create a table
+DBInterface.execute(db, "CREATE OR REPLACE TABLE data(id INT PRIMARY KEY, value FLOAT, timestamp TIMESTAMP, date DATE)")
+
+# data to insert 
+len = 100
+df = DataFrames.DataFrame(id=collect(1:len),
+    value=rand(len),
+    timestamp=Dates.now() + Dates.Second.(1:len),
+    date=Dates.today() + Dates.Day.(1:len))
+
+# append data by row
+appender = DuckDB.Appender(db, "data")
+for i in eachrow(df)
+    for j in i
+        DuckDB.append(appender, j)
+    end
+    DuckDB.end_row(appender)
+end
+# flush the appender after all rows
+DuckDB.flush(appender)
+DuckDB.close(appender)
+```
 """
 mutable struct Appender
     handle::duckdb_appender
@@ -56,7 +88,7 @@ append(appender::Appender, val::Type{Missing}) = duckdb_append_null(appender.han
 append(appender::Appender, val::Type{Nothing}) = duckdb_append_null(appender.handle);
 append(appender::Appender, val::AbstractString) = duckdb_append_varchar(appender.handle, val);
 append(appender::Appender, val::Vector{UInt8}) = duckdb_append_blob(appender.handle, val, sizeof(val));
-append(appender::Appender, val::WeakRefString{UInt8}) = duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
+# append(appender::Appender, val::WeakRefString{UInt8}) = duckdb_append_varchar(stmt.handle, i, val.ptr, val.len);
 append(appender::Appender, val::Date) =
     duckdb_append_date(appender.handle, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS);
 # nanosecond to microseconds
@@ -80,4 +112,4 @@ function flush(appender::Appender)
     return
 end
 
-DBInterface.close!(appender::Appender) = _close_appender(db)
+DBInterface.close!(appender::Appender) = _close_appender(appender)

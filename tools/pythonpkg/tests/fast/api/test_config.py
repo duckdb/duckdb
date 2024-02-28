@@ -74,3 +74,8 @@ class TestDBConfig(object):
         assert regex.match(con_regular.sql("PRAGMA user_agent").fetchone()[0]) is not None
         custom_user_agent = con_regular.sql("SELECT current_setting('custom_user_agent')").fetchone()
         assert custom_user_agent[0] == 'CUSTOM_STRING'
+
+    def test_secret_manager_option(self, duckdb_cursor):
+        con = duckdb.connect(':memory:', config={'allow_persistent_secrets': False})
+        result = con.execute('select count(*) from duckdb_secrets()').fetchall()
+        assert result == [(0,)]

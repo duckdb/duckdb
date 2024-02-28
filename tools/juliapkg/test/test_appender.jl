@@ -16,18 +16,25 @@ end
     DuckDB.close(appender)
     DuckDB.close(appender)
 
+    # close!
+    appender = DuckDB.Appender(db, "integers")
+    DBInterface.close!(appender)
+
     appender = DuckDB.Appender(db, "integers")
     for i in 0:9
         DuckDB.append(appender, i)
         DuckDB.end_row(appender)
     end
     DuckDB.flush(appender)
+    DuckDB.close(appender)
 
     results = DBInterface.execute(db, "SELECT * FROM integers")
     df = DataFrame(results)
     @test names(df) == ["i"]
     @test size(df, 1) == 10
     @test df.i == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # close the database 
+    DuckDB.close(appender)
 end
 
 @testset "Appender API" begin

@@ -560,7 +560,7 @@ void CustomExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 }
 
 void CustomExtensionRepository::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.custom_extension_repo = StringUtil::Lower(input.ToString());
+	config.options.custom_extension_repo = input.ToString();
 }
 
 Value CustomExtensionRepository::GetSetting(ClientContext &context) {
@@ -576,7 +576,7 @@ void AutoloadExtensionRepository::ResetGlobal(DatabaseInstance *db, DBConfig &co
 }
 
 void AutoloadExtensionRepository::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.autoinstall_extension_repo = StringUtil::Lower(input.ToString());
+	config.options.autoinstall_extension_repo = input.ToString();
 }
 
 Value AutoloadExtensionRepository::GetSetting(ClientContext &context) {
@@ -722,11 +722,23 @@ Value ExtensionDirectorySetting::GetSetting(ClientContext &context) {
 // External Threads Setting
 //===--------------------------------------------------------------------===//
 void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.external_threads = input.GetValue<int64_t>();
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 0) {
+		throw SyntaxException("Must have a non-negative number of external threads!");
+	}
+	idx_t new_external_threads = new_val;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
+	}
+	config.options.external_threads = new_external_threads;
 }
 
 void ExternalThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.external_threads = DBConfig().options.external_threads;
+	idx_t new_external_threads = DBConfig().options.external_threads;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
+	}
+	config.options.external_threads = new_external_threads;
 }
 
 Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
@@ -1067,27 +1079,6 @@ Value ExportLargeBufferArrow::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Profiler History Size
-//===--------------------------------------------------------------------===//
-void ProfilerHistorySize::ResetLocal(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	client_data.query_profiler_history->ResetProfilerHistorySize();
-}
-
-void ProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
-	auto size = input.GetValue<int64_t>();
-	if (size <= 0) {
-		throw ParserException("Size should be >= 0");
-	}
-	auto &client_data = ClientData::Get(context);
-	client_data.query_profiler_history->SetProfilerHistorySize(size);
-}
-
-Value ProfilerHistorySize::GetSetting(ClientContext &context) {
-	return Value();
-}
-
-//===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//
 void ProfileOutputSetting::ResetLocal(ClientContext &context) {
@@ -1246,14 +1237,23 @@ Value TempDirectorySetting::GetSetting(ClientContext &context) {
 // Threads Setting
 //===--------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.maximum_threads = input.GetValue<int64_t>();
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads);
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 1) {
+		throw SyntaxException("Must have at least 1 thread!");
 	}
+	idx_t new_maximum_threads = new_val;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+	}
+	config.options.maximum_threads = new_maximum_threads;
 }
 
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.SetDefaultMaxThreads();
+	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+	}
+	config.options.maximum_threads = new_maximum_threads;
 }
 
 Value ThreadsSetting::GetSetting(ClientContext &context) {

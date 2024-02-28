@@ -111,6 +111,14 @@ idx_t ColumnDataCollection::SizeInBytes() const {
 	return total_size;
 }
 
+idx_t ColumnDataCollection::AllocationSize() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment->AllocationSize();
+	}
+	return total_size;
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnDataRow
 //===--------------------------------------------------------------------===//
@@ -289,6 +297,7 @@ const ColumnDataRow &ColumnDataRowIterationHelper::ColumnDataRowIterator::operat
 //===--------------------------------------------------------------------===//
 void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
 	D_ASSERT(!finished_append);
+	state.current_chunk_state.handles.clear();
 	state.vector_data.resize(types.size());
 	if (segments.empty()) {
 		CreateSegment();

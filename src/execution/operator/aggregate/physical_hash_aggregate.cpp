@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
@@ -14,7 +15,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 
@@ -565,9 +565,10 @@ private:
 };
 
 void HashAggregateDistinctFinalizeEvent::Schedule() {
-	const auto n_threads = CreateGlobalSources();
+	auto n_tasks = CreateGlobalSources();
+	n_tasks = MinValue<idx_t>(n_tasks, TaskScheduler::GetScheduler(context).NumberOfThreads());
 	vector<shared_ptr<Task>> tasks;
-	for (idx_t i = 0; i < n_threads; i++) {
+	for (idx_t i = 0; i < n_tasks; i++) {
 		tasks.push_back(make_uniq<HashAggregateDistinctFinalizeTask>(*pipeline, shared_from_this(), op, gstate));
 	}
 	SetTasks(std::move(tasks));
@@ -577,7 +578,7 @@ idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 	auto &aggregates = op.grouped_aggregate_data.aggregates;
 	global_source_states.reserve(op.groupings.size());
 
-	idx_t n_threads = 0;
+	idx_t n_tasks = 0;
 	for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 		auto &grouping = op.groupings[grouping_idx];
 		auto &distinct_state = *gstate.grouping_states[grouping_idx].distinct_state;
@@ -597,13 +598,13 @@ idx_t HashAggregateDistinctFinalizeEvent::CreateGlobalSources() {
 
 			auto table_idx = distinct_data.info.table_map.at(agg_idx);
 			auto &radix_table_p = distinct_data.radix_tables[table_idx];
-			n_threads += radix_table_p->MaxThreads(*distinct_state.radix_states[table_idx]);
+			n_tasks += radix_table_p->MaxThreads(*distinct_state.radix_states[table_idx]);
 			aggregate_sources.push_back(radix_table_p->GetGlobalSourceState(context));
 		}
 		global_source_states.push_back(std::move(aggregate_sources));
 	}
 
-	return MaxValue<idx_t>(n_threads, 1);
+	return MaxValue<idx_t>(n_tasks, 1);
 }
 
 void HashAggregateDistinctFinalizeEvent::FinishEvent() {

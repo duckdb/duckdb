@@ -58,7 +58,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	if (segment_size < Storage::BLOCK_SIZE) {
 		block = buffer_manager.RegisterSmallMemory(segment_size);
 	} else {
-		buffer_manager.Allocate(segment_size, false, &block);
+		buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, segment_size, false, &block);
 	}
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, *function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0, segment_size);
@@ -150,7 +150,7 @@ void ColumnSegment::Resize(idx_t new_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	shared_ptr<BlockHandle> new_block;
-	auto new_handle = buffer_manager.Allocate(new_size, false, &new_block);
+	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size, false, &new_block);
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 
 	this->block_id = new_block->BlockId();

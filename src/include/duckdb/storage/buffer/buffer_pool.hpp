@@ -49,7 +49,7 @@ public:
 	//! blocks can be evicted
 	void SetLimit(idx_t limit, const char *exception_postscript);
 
-	void IncreaseUsedMemory(idx_t size);
+	void IncreaseUsedMemory(MemoryTag tag, idx_t size);
 
 	idx_t GetUsedMemory() const;
 
@@ -70,7 +70,7 @@ protected:
 		bool success;
 		TempBufferPoolReservation reservation;
 	};
-	virtual EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit,
+	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Garbage collect eviction queue
@@ -90,6 +90,8 @@ protected:
 	atomic<uint32_t> queue_insertions;
 	//! Memory manager for concurrently used temporary memory, e.g., for physical operators
 	unique_ptr<TemporaryMemoryManager> temporary_memory_manager;
+	//! Memory usage per tag
+	atomic<idx_t> memory_usage_per_tag[MEMORY_TAG_COUNT];
 };
 
 } // namespace duckdb
