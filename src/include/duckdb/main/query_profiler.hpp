@@ -88,7 +88,8 @@ struct OperatorInformation {
 	explicit OperatorInformation() {
 	}
 
-	TreeNodeSettings settings;
+	double time;
+	idx_t elements;
 	string name;
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
@@ -99,7 +100,7 @@ class OperatorProfiler {
 	friend class QueryProfiler;
 
 public:
-	DUCKDB_API explicit OperatorProfiler(bool enabled_p, unique_ptr<TreeNodeSettings> &settings_p);
+	DUCKDB_API explicit OperatorProfiler(bool enabled_p, TreeNodeSettings settings_p);
 
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
@@ -114,7 +115,7 @@ private:
 
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	unique_ptr<TreeNodeSettings> &settings;
+	TreeNodeSettings settings;
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
@@ -131,7 +132,8 @@ public:
 	struct TreeNode {
 		PhysicalOperatorType type;
 		string name;
-		OperatorInformation info;
+		TreeNodeSettings settings;
+		vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
 	};

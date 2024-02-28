@@ -556,14 +556,14 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 // Custom Profiling Settings
 //===--------------------------------------------------------------------===//
 
-static unordered_map<TreeNodeSettingsType, Value> FillTreeNodeSettings(unordered_map<string, string> &json) {
-	unordered_map<TreeNodeSettingsType, Value> metrics;
+static unordered_set<TreeNodeSettingsType> FillTreeNodeSettings(unordered_map<string, string> &json) {
+	unordered_set<TreeNodeSettingsType> metrics;
 
 	string invalid_settings;
 	for (auto &entry : json) {
 		auto setting = EnumUtil::FromString<TreeNodeSettingsType>(StringUtil::Upper(entry.first));
 		if (StringUtil::Lower(entry.second) == "true") {
-			metrics[setting] = Value();
+			metrics.insert(setting);
 		}
 	}
 
@@ -606,6 +606,10 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 
 	auto metrics = FillTreeNodeSettings(json);
 	config.profiler_settings.SetMetrics(metrics);
+	config.profiler_settings.SetCpuTime(0);
+	config.profiler_settings.SetExtraInfo("");
+	config.profiler_settings.SetOperatorCardinality(0);
+	config.profiler_settings.SetOperatorTiming(0);
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
@@ -621,7 +625,7 @@ Value CustomProfilingSettings::GetSetting(ClientContext &context) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}
-		profiling_settings_str += EnumUtil::ToString(entry.first);
+		profiling_settings_str += EnumUtil::ToString(entry);
 	}
 
 	return Value(profiling_settings_str);

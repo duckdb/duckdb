@@ -19,43 +19,61 @@ namespace duckdb {
 
 enum class TreeNodeSettingsType : uint8_t { CPU_TIME, EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING };
 
-const unordered_map<TreeNodeSettingsType, Value> default_metrics = {
-    {TreeNodeSettingsType::CPU_TIME, Value()},
-    {TreeNodeSettingsType::EXTRA_INFO, Value()},
-    {TreeNodeSettingsType::OPERATOR_CARDINALITY, Value()},
-    {TreeNodeSettingsType::OPERATOR_TIMING, Value()},
+const unordered_set<TreeNodeSettingsType> default_metrics = {
+    TreeNodeSettingsType::CPU_TIME,
+    TreeNodeSettingsType::EXTRA_INFO,
+    TreeNodeSettingsType::OPERATOR_CARDINALITY,
+    TreeNodeSettingsType::OPERATOR_TIMING,
+};
+
+struct profilingValues {
+	double cpu_time;
+	string extra_info;
+	idx_t operator_cardinality;
+	double operator_timing;
 };
 
 class TreeNodeSettings {
 private:
 	// map of metrics with their values; only enabled metrics are present in the map
-	unordered_map<TreeNodeSettingsType, Value> metrics = default_metrics;
+	unordered_set<TreeNodeSettingsType> metrics = default_metrics;
+	profilingValues values;
 
 public:
 	TreeNodeSettings() = default;
 	TreeNodeSettings(TreeNodeSettings &) = default;
-	TreeNodeSettings &operator=(TreeNodeSettings &) = default;
-
-
-public:
-	//set the value of a metric
-	void SetSetting(const TreeNodeSettingsType &setting, const Value &value);
-	//add to the value of a metric
-	void AddToExistingSetting(const TreeNodeSettingsType &setting, const Value &value);
-	//get the value of a metric
-	Value GetSetting(const TreeNodeSettingsType &setting);
-	//get the value of a metric
-	Value GetSetting(const TreeNodeSettingsType &setting) const;
+	TreeNodeSettings &operator=(TreeNodeSettings const&) = default;
 
 public:
 	//set the metrics map
-	void SetMetrics(unordered_map<TreeNodeSettingsType, Value> &n_metrics);
+	void SetMetrics(unordered_set<TreeNodeSettingsType> &n_metrics);
 	//get the metrics map
-	unordered_map<TreeNodeSettingsType, Value> &GetMetrics();
+	unordered_set<TreeNodeSettingsType> &GetMetrics();
+
+public:
+	void SetCpuTime(double cpu_time);
+	void AddToCpuTime(double cpu_time);
+	double GetCpuTime() const;
+
+	void SetExtraInfo(string extra_info);
+	void AddToExtraInfo(string extra_info);
+	string GetExtraInfo() const;
+
+	void SetOperatorCardinality(idx_t operator_cardinality);
+	void AddToOperatorCardinality(idx_t operator_cardinality);
+	idx_t GetOperatorCardinality() const;
+
+	void SetOperatorTiming(double operator_timing);
+	void AddToOperatorTiming(double operator_timing);
+	double GetOperatorTiming() const;
 
 public:
 	//reset the metrics to default
 	void ResetMetrics();
-	bool SettingEnabled(const TreeNodeSettingsType setting) const;
+	bool SettingEnabled(TreeNodeSettingsType setting) const;
+
+public:
+	string GetMetricAsString(TreeNodeSettingsType setting) const;
+	void PrintAllMetricsToSS(std::ostream &ss, string depth);
 };
 } // namespace duckdb
