@@ -323,18 +323,17 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 }
 
 //! Reconstructs the current line to be used in error messages
-string StringValueResult::ReconstructCurrentLine(){
-	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
-		                                   buffer_size};
+string StringValueResult::ReconstructCurrentLine() {
+	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - previous_line_start;
 	string result;
 	result.resize(current_line_size);
-	if (iterator.pos.buffer_idx == previous_line_start.buffer_idx){
+	if (iterator.pos.buffer_idx == previous_line_start.buffer_idx) {
 		idx_t result_idx = 0;
-		for (idx_t  i = previous_line_start.buffer_pos; i < iterator.pos.buffer_pos; i ++){
+		for (idx_t i = previous_line_start.buffer_pos; i < iterator.pos.buffer_pos; i++) {
 			result[result_idx++] = buffer_ptr[i];
 		}
-	} else{
+	} else {
 		throw InternalException("Oh no");
 	}
 	return result;
@@ -622,7 +621,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				}
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
-//				auto borked_line = result.ReconstructCurrentLine();
+				//				auto borked_line = result.ReconstructCurrentLine();
 				string empty;
 				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
 				                                     error_message, col_idx, empty, lines_per_batch);

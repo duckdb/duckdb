@@ -154,7 +154,7 @@ void CSVGlobalState::FillRejectsTable() {
 			for (auto &error_vector : errors) {
 				for (auto &error : error_vector.second) {
 					if (error.type != CSVErrorType::CAST_ERROR) {
-						// For now we only will use it for casting errors
+						// For now, we only will use it for casting errors
 						continue;
 					}
 					// short circuit if we already have too many rejects
@@ -168,21 +168,17 @@ void CSVGlobalState::FillRejectsTable() {
 						auto col_name = bind_data.return_names[col_idx];
 						// Add the row to the rejects table
 						appender.BeginRow();
-						// 1. File Name
+						// 1. File Path
 						appender.Append(string_t(file_name));
 						// 2. Row Line
 						appender.Append(row_line);
-						// 3. Column Index
+						// 3. Column Index (If Applicable)
 						appender.Append(col_idx);
-						// 4. Column Name
+						// 4. Column Name (If Applicable)
 						appender.Append(string_t("\"" + col_name + "\""));
-						// 5 Parsed Value
-						appender.Append(error.row[col_idx]);
-
-						auto row_error_msg =
-						    StringUtil::Format("Could not convert string '%s' to '%s'", error.row[col_idx].ToString(),
-						                       file->types[col_idx].ToString());
-						appender.Append(string_t(row_error_msg));
+						// 5. Error Type (ENUM?)
+						// 6. Full Error Message
+						// 7. Original CSV Line
 						appender.EndRow();
 					}
 					appender.Close();

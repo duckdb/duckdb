@@ -102,7 +102,8 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 	return CSVError(exception, CSVErrorType::COLUMN_NAME_TYPE_MISMATCH, {});
 }
 
-CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error, idx_t column_idx, string &csv_row, LinesPerBoundary error_info) {
+CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error, idx_t column_idx,
+                             string &csv_row, LinesPerBoundary error_info) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\"." << std::endl;
