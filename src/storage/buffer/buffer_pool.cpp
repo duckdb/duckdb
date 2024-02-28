@@ -139,10 +139,14 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 bool BufferPool::TryDequeueWithoutConcurrentPurge(BufferEvictionNode &node) {
 
 	// we only proceed if we can guarantee that there is no active purge
-	bool actual_purge_active;
-	do {
-		actual_purge_active = purge_active;
-	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
+	bool expected = false;
+	while (!std::atomic_compare_exchange_weak(&purge_active, &expected, true)) {
+		// Atomically compares the contents of memory pointed to by obj (purge_active) with the contents
+		// of memory pointed to by expected (actual_purge_active), and if those are bitwise equal (no purge active),
+		// replaces the former with desired (sets purge_active to true). Otherwise, loads the
+		// actual contents of memory pointed to by obj into *expected (performs load operation).
+		expected = false;
+	}
 
 	// dequeue a node, if possible
 	bool success = queue->q.try_dequeue(node);
