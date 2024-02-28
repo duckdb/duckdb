@@ -20,10 +20,10 @@ DELETE FROM test WHERE pk > 738645 AND pk < 978908;
 ----
 240262
 
-query I
-SELECT COUNT(*) FROM test;
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
 ----
-759739
+759739	293669140557
 
 restart
 
@@ -32,10 +32,10 @@ DELETE FROM test WHERE pk > 282475 AND pk < 522738;
 ----
 240262
 
-query I
-SELECT COUNT(*) FROM test;
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
 ----
-519477
+519477	196938097654
 
 restart
 
@@ -44,22 +44,22 @@ INSERT INTO test SELECT * FROM generate_series(1201414, 1201514);
 ----
 101
 
-query I
-SELECT COUNT(*) FROM test;
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
 ----
-519577
+519578	197059445518
 
 restart
 
-query I
-SELECT COUNT(*) FROM test;
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
 ----
-519577
+519578	197059445518
 
 statement ok
 CHECKPOINT;
 
-query I
-SELECT COUNT(*) FROM test;
+query II
+SELECT COUNT(*), SUM(pk) FROM test;
 ----
-519577
+519578	197059445518

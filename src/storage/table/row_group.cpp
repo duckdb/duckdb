@@ -813,11 +813,7 @@ idx_t RowGroup::GetCommittedRowCount() {
 	if (!vinfo) {
 		return count;
 	}
-	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
-
-	auto lowest_active_start = transaction_manager.LowestActiveStart();
-	auto lowest_active_id = transaction_manager.LowestActiveId();
-	return count - vinfo->GetCommittedDeletedCount(lowest_active_start, lowest_active_id, count);
+	return count - vinfo->GetCommittedDeletedCount(count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {

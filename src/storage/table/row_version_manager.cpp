@@ -22,8 +22,7 @@ void RowVersionManager::SetStart(idx_t new_start) {
 	}
 }
 
-idx_t RowVersionManager::GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id,
-                                                  idx_t count) {
+idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
 	lock_guard<mutex> l(version_lock);
 	idx_t deleted_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
@@ -34,7 +33,7 @@ idx_t RowVersionManager::GetCommittedDeletedCount(transaction_t min_start_id, tr
 		if (max_count == 0) {
 			break;
 		}
-		deleted_count += vector_info[i]->GetCommittedDeletedCount(min_start_id, min_transaction_id, max_count);
+		deleted_count += vector_info[i]->GetCommittedDeletedCount(max_count);
 	}
 	return deleted_count;
 }
