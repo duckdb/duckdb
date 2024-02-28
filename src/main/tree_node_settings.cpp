@@ -2,7 +2,6 @@
 
 namespace duckdb {
 
-
 void TreeNodeSettings::SetMetrics(unordered_set<TreeNodeSettingsType> &n_metrics) {
 	this->metrics = n_metrics;
 }
@@ -95,7 +94,6 @@ double TreeNodeSettings::GetOperatorTiming() const {
 	return values.operator_timing;
 }
 
-
 void TreeNodeSettings::ResetMetrics() {
 	metrics.clear();
 	metrics = default_metrics;
@@ -110,21 +108,22 @@ bool TreeNodeSettings::SettingEnabled(const TreeNodeSettingsType setting) const 
 
 string TreeNodeSettings::GetMetricAsString(TreeNodeSettingsType setting) const {
 	switch (setting) {
-		case TreeNodeSettingsType::CPU_TIME:
-			return to_string(GetCpuTime());
-		case TreeNodeSettingsType::EXTRA_INFO:
-			return JSONSanitize(GetExtraInfo());
-		case TreeNodeSettingsType::OPERATOR_CARDINALITY:
-			return to_string(GetOperatorCardinality());
-		case TreeNodeSettingsType::OPERATOR_TIMING:
-			return to_string(GetOperatorTiming());
+	case TreeNodeSettingsType::CPU_TIME:
+		return to_string(GetCpuTime());
+	case TreeNodeSettingsType::EXTRA_INFO:
+		return JSONSanitize(GetExtraInfo());
+	case TreeNodeSettingsType::OPERATOR_CARDINALITY:
+		return to_string(GetOperatorCardinality());
+	case TreeNodeSettingsType::OPERATOR_TIMING:
+		return to_string(GetOperatorTiming());
 	}
 }
 
 void TreeNodeSettings::PrintAllMetricsToSS(std::ostream &ss, string depth) {
 	for (auto &metric : metrics) {
-		ss << depth << "   \"" << StringUtil::Lower(EnumUtil::ToString(metric)) << "\": " << "\"" << GetMetricAsString(metric) << "\",\n";
+		ss << depth << "   \"" << StringUtil::Lower(EnumUtil::ToString(metric)) << "\": "
+		   << "\"" << GetMetricAsString(metric) << "\",\n";
 	}
 }
 
-}
+} // namespace duckdb

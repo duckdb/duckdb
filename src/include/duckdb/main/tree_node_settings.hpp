@@ -42,12 +42,12 @@ private:
 public:
 	TreeNodeSettings() = default;
 	TreeNodeSettings(TreeNodeSettings &) = default;
-	TreeNodeSettings &operator=(TreeNodeSettings const&) = default;
+	TreeNodeSettings &operator=(TreeNodeSettings const &) = default;
 
 public:
-	//set the metrics map
+	// set the metrics map
 	void SetMetrics(unordered_set<TreeNodeSettingsType> &n_metrics);
-	//get the metrics map
+	// get the metrics map
 	unordered_set<TreeNodeSettingsType> &GetMetrics();
 
 public:
@@ -68,7 +68,7 @@ public:
 	double GetOperatorTiming() const;
 
 public:
-	//reset the metrics to default
+	// reset the metrics to default
 	void ResetMetrics();
 	bool SettingEnabled(TreeNodeSettingsType setting) const;
 

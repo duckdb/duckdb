@@ -128,7 +128,7 @@ void QueryProfiler::StartExplainAnalyze() {
 static double GetTotalCPUTime(QueryProfiler::TreeNode &node) {
 	double cpu_time = node.settings.GetOperatorTiming();
 	if (!node.children.empty()) {
-		for (const auto & i : node.children) {
+		for (const auto &i : node.children) {
 			cpu_time += GetTotalCPUTime(*i);
 		}
 	}
@@ -253,9 +253,9 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_p, TreeNodeSettings settings_p) : enabled(enabled_p), settings(settings_p), active_operator(nullptr) {
+OperatorProfiler::OperatorProfiler(bool enabled_p, TreeNodeSettings settings_p)
+    : enabled(enabled_p), settings(settings_p), active_operator(nullptr) {
 }
-
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
 	if (!enabled) {
