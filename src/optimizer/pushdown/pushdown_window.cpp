@@ -19,8 +19,7 @@ static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Express
 			}
 			break;
 		}
-		case ExpressionType::CONJUNCTION_AND:
-		case ExpressionType::CONJUNCTION_OR: {
+		case ExpressionType::CONJUNCTION_AND: {
 			filter_is_on_partition = false;
 			return;
 		}
