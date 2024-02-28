@@ -1,5 +1,10 @@
-# name: test/sql/attach/test_attach_custom_block_size.test
+# name: test/sql/attach/attach_custom_block_size.test
 # group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
 
 statement error
 ATTACH '__TEST_DIR__/not_pow_of_two.db' (BLOCK_SIZE 123456);
