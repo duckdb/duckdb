@@ -947,12 +947,15 @@ void StringValueScanner::SkipUntilNewLine() {
 	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
 	    NewLineIdentifier::CARRY_ON) {
 		bool carriage_return = false;
+		bool not_carriage_return = false;
 		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
 				carriage_return = true;
+			} else if (buffer_handle_ptr[iterator.pos.buffer_pos] != '\n') {
+				not_carriage_return = true;
 			}
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
-				if (carriage_return) {
+				if (carriage_return || not_carriage_return) {
 					iterator.pos.buffer_pos++;
 					return;
 				}
@@ -1024,6 +1027,7 @@ void StringValueScanner::SetStart() {
 			// When Null Padding, we assume we start from the correct new-line
 			return;
 		}
+
 		scan_finder = make_uniq<StringValueScanner>(0, buffer_manager, state_machine,
 		                                            make_shared<CSVErrorHandler>(true), csv_file_scan, iterator, 1);
 		auto &tuples = scan_finder->ParseChunk();
@@ -1041,6 +1045,14 @@ void StringValueScanner::SetStart() {
 					iterator.done = scan_finder->iterator.done;
 					return;
 				}
+			}
+			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
+				// If things go terribly wrong, we never loop indefinetly.
+				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
+				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
+				result.last_position = iterator.pos.buffer_pos;
+				iterator.done = scan_finder->iterator.done;
+				return;
 			}
 		}
 	} while (!line_found);

@@ -1,0 +1,33 @@
+# name: test/sql/storage/types/list/empty_float_arrays.test
+# description: Test storage of empty float arrays
+# group: [list]
+
+load __TEST_DIR__/array_empty_storage.db
+
+foreach compression <compression> uncompressed
+
+statement ok
+CREATE TABLE test_table (
+    id INTEGER,
+    emb FLOAT[],
+    emb_arr FLOAT[3]
+);
+
+statement ok
+INSERT INTO test_table (id) VALUES (42);
+
+statement ok
+CHECKPOINT;
+
+query III
+FROM test_table
+----
+42	NULL	NULL
+
+statement ok
+DROP TABLE test_table
+
+statement ok
+SET force_compression='${compression}'
+
+endloop

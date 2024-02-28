@@ -163,6 +163,33 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_quoted[escape] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\n')] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\r')] = false;
+
+	transition_array.delimiter = delimiter;
+	transition_array.new_line = static_cast<uint8_t>('\n');
+	transition_array.carriage_return = static_cast<uint8_t>('\r');
+	transition_array.quote = quote;
+	transition_array.escape = escape;
+
+	// Shift and OR to replicate across all bytes
+	transition_array.delimiter |= transition_array.delimiter << 8;
+	transition_array.delimiter |= transition_array.delimiter << 16;
+	transition_array.delimiter |= transition_array.delimiter << 32;
+
+	transition_array.new_line |= transition_array.new_line << 8;
+	transition_array.new_line |= transition_array.new_line << 16;
+	transition_array.new_line |= transition_array.new_line << 32;
+
+	transition_array.carriage_return |= transition_array.carriage_return << 8;
+	transition_array.carriage_return |= transition_array.carriage_return << 16;
+	transition_array.carriage_return |= transition_array.carriage_return << 32;
+
+	transition_array.quote |= transition_array.quote << 8;
+	transition_array.quote |= transition_array.quote << 16;
+	transition_array.quote |= transition_array.quote << 32;
+
+	transition_array.escape |= transition_array.escape << 8;
+	transition_array.escape |= transition_array.escape << 16;
+	transition_array.escape |= transition_array.escape << 32;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
