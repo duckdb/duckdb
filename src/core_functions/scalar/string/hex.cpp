@@ -309,7 +309,7 @@ struct FromHexOperator {
 		for (; i < size; i += 2) {
 			uint8_t major = StringUtil::GetHexValue(data[i]);
 			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
-			*output = UnsafeNumericCast<char>((major << 4) | minor);
+			*output = UnsafeNumericCast<uint8_t>((major << 4) | minor);
 			output++;
 		}
 
