@@ -44,7 +44,8 @@ public:
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
-	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
+	virtual idx_t GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id,
+	                                       idx_t max_count) = 0;
 
 	virtual bool HasDeletes() const = 0;
 
@@ -85,7 +86,8 @@ public:
 	                            SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
-	idx_t GetCommittedDeletedCount(idx_t max_count) override;
+	idx_t GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id,
+	                               idx_t max_count) override;
 
 	bool HasDeletes() const override;
 
@@ -122,7 +124,8 @@ public:
 	                            SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
-	idx_t GetCommittedDeletedCount(idx_t max_count) override;
+	idx_t GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id,
+	                               idx_t max_count) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 

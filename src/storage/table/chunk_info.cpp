@@ -90,8 +90,12 @@ bool ChunkConstantInfo::HasDeletes() const {
 	return is_deleted;
 }
 
-idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) {
-	return delete_id < TRANSACTION_ID_START ? max_count : 0;
+idx_t ChunkConstantInfo::GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id,
+                                                  idx_t max_count) {
+	if (CommittedVersionOperator::UseDeletedVersion(min_start_id, min_transaction_id, delete_id)) {
+		return max_count;
+	}
+	return 0;
 }
 
 void ChunkConstantInfo::Write(WriteStream &writer) const {
@@ -166,7 +170,10 @@ idx_t ChunkVectorInfo::GetSelVector(transaction_t start_time, transaction_t tran
 
 idx_t ChunkVectorInfo::GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
                                              SelectionVector &sel_vector, idx_t max_count) {
-	return TemplatedGetSelVector<CommittedVersionOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
+	auto count =
+	    TemplatedGetSelVector<CommittedVersionOperator>(min_start_id, min_transaction_id, sel_vector, max_count);
+	D_ASSERT(count == (max_count - GetCommittedDeletedCount(min_start_id, min_transaction_id, max_count)));
+	return count;
 }
 
 idx_t ChunkVectorInfo::GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) {
@@ -229,13 +236,14 @@ bool ChunkVectorInfo::HasDeletes() const {
 	return any_deleted;
 }
 
-idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
+idx_t ChunkVectorInfo::GetCommittedDeletedCount(transaction_t min_start_id, transaction_t min_transaction_id,
+                                                idx_t max_count) {
 	if (!any_deleted) {
 		return 0;
 	}
 	idx_t delete_count = 0;
 	for (idx_t i = 0; i < max_count; i++) {
-		if (deleted[i] < TRANSACTION_ID_START) {
+		if (!CommittedVersionOperator::UseDeletedVersion(min_start_id, min_transaction_id, deleted[i])) {
 			delete_count++;
 		}
 	}
