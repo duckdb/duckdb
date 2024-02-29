@@ -115,7 +115,8 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 void QueryProfiler::Finalize(TreeNode &node) {
 	for (auto &child : node.children) {
 		Finalize(*child);
-		if (node.type == PhysicalOperatorType::UNION && node.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+		if (node.type == PhysicalOperatorType::UNION &&
+		    node.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
 			node.settings.values.operator_cardinality += child->settings.values.operator_cardinality;
 		}
 	}
