@@ -1144,12 +1144,8 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			// Create a copy so we dont mutate the original vector
-			Vector serialized_vector(GetType());
-			serialized_vector.Reference(*this);
-			serialized_vector.Flatten(count);
-			auto &child = ArrayVector::GetEntry(serialized_vector);
-			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
+			auto &child = ArrayVector::GetEntry(*this);
+			auto array_size = ArrayType::GetSize(type);
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
 			serializer.WriteObject(104, "child", [&](Serializer &object) { child.Serialize(object, child_size); });
