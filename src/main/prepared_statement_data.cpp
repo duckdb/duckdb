@@ -2,6 +2,8 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
