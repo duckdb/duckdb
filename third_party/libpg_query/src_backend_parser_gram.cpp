@@ -2905,7 +2905,7 @@ static const char *const yytname[] =
   "millisecond_keyword", "microsecond_keyword", "week_keyword",
   "decade_keyword", "century_keyword", "millennium_keyword",
   "opt_interval", "a_expr", "b_expr", "c_expr", "d_expr",
-  "indirection_expr", "indirection_expr_or_a_expr", "struct_expr",
+  "indirection_expr_or_a_expr", "indirection_expr", "struct_expr",
   "func_application", "func_expr", "func_expr_windowless",
   "func_expr_common_subexpr", "list_comprehension", "within_group_clause",
   "filter_clause", "export_clause", "window_clause",

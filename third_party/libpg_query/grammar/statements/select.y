@@ -1131,7 +1131,7 @@ single_pivot_value:
 
 pivot_header:
 	| d_expr	                 			{ $$ = list_make1($1); }
-	| indirection_expr_or_a_expr			{ $$ = list_make1($1); }
+	| indirection_expr						{ $$ = list_make1($1); }
 	| '(' c_expr_list_opt_comma ')' 		{ $$ = $2; }
 
 pivot_value:
@@ -2659,7 +2659,7 @@ b_expr:		c_expr
  * ambiguity to the b_expr syntax.
  */
 c_expr:		d_expr
-			| indirection_expr opt_extended_indirection
+			| indirection_expr_or_a_expr opt_extended_indirection
 				{
 					if ($2)
 					{
@@ -2730,12 +2730,12 @@ d_expr:		columnref								{ $$ = $1; }
 			  }
 		;
 
-indirection_expr:
+indirection_expr_or_a_expr:
 			'(' a_expr ')'
 				{
 					$$ = $2;
 				}
-			| indirection_expr_or_a_expr
+			| indirection_expr
 				{
 					$$ = $1;
 				}
@@ -2745,7 +2745,7 @@ indirection_expr:
 			}
 		;
 
-indirection_expr_or_a_expr:
+indirection_expr:
 			'?'
 				{
 					$$ = makeParamRef(0, @1);
