@@ -34,7 +34,7 @@ struct profilingValues {
 };
 
 class TreeNodeSettings {
-private:
+public:
 	// map of metrics with their values; only enabled metrics are present in the map
 	unordered_set<TreeNodeSettingsType> metrics = default_metrics;
 	profilingValues values;
@@ -51,25 +51,9 @@ public:
 	unordered_set<TreeNodeSettingsType> &GetMetrics();
 
 public:
-	void SetCpuTime(double cpu_time);
-	void AddToCpuTime(double cpu_time);
-	double GetCpuTime() const;
-
-	void SetExtraInfo(string extra_info);
-	void AddToExtraInfo(string extra_info);
-	string GetExtraInfo() const;
-
-	void SetOperatorCardinality(idx_t operator_cardinality);
-	void AddToOperatorCardinality(idx_t operator_cardinality);
-	idx_t GetOperatorCardinality() const;
-
-	void SetOperatorTiming(double operator_timing);
-	void AddToOperatorTiming(double operator_timing);
-	double GetOperatorTiming() const;
-
-public:
 	// reset the metrics to default
 	void ResetMetrics();
+	void ResetValues();
 	bool SettingEnabled(TreeNodeSettingsType setting) const;
 
 public:

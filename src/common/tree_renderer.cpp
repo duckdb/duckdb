@@ -500,13 +500,16 @@ string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	string extra_info;
 	if (op.settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
-		extra_info = op.settings.GetExtraInfo();
+		extra_info = op.settings.values.extra_info;
 	}
 	auto result = TreeRenderer::CreateRenderNode(op.name, extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
-	result->extra_text += "\n" + to_string(op.settings.GetOperatorCardinality());
-	string timing = StringUtil::Format("%.2f", op.settings.GetOperatorTiming());
-	result->extra_text += "\n(" + timing + "s)";
+	if (op.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+		result->extra_text += "\n" + to_string(op.settings.values.operator_cardinality);
+	}
+	if (op.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
+		result->extra_text += "\n(" + StringUtil::Format("%.2f", op.settings.values.operator_timing) + "s)";
+	}
 	if (config.detailed) {
 		for (auto &info : op.executors_info) {
 			if (!info) {
