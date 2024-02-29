@@ -8,8 +8,13 @@ shared_ptr<DuckDBPyType> DuckDBPyConnection::MapType(const shared_ptr<DuckDBPyTy
 	return make_shared<DuckDBPyType>(map_type);
 }
 
-shared_ptr<DuckDBPyType> DuckDBPyConnection::ArrayType(const shared_ptr<DuckDBPyType> &type) {
+shared_ptr<DuckDBPyType> DuckDBPyConnection::ListType(const shared_ptr<DuckDBPyType> &type) {
 	auto array_type = LogicalType::LIST(type->Type());
+	return make_shared<DuckDBPyType>(array_type);
+}
+
+shared_ptr<DuckDBPyType> DuckDBPyConnection::ArrayType(const shared_ptr<DuckDBPyType> &type, idx_t size) {
+	auto array_type = LogicalType::ARRAY(type->Type(), size);
 	return make_shared<DuckDBPyType>(array_type);
 }
 

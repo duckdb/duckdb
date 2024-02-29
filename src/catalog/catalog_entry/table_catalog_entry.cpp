@@ -217,6 +217,7 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 		// lists and maps and unions don't support updates directly
