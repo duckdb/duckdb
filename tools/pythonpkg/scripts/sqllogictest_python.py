@@ -61,7 +61,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             Require: self.execute_require,
             Skip: self.execute_skip,
             Unskip: self.execute_unskip,
-            Restart: None,  # <-- restart is hard, have to get transaction status
+            # Restart: None,  # <-- restart is hard, have to get transaction status
         }
         # TODO: get this from the `duckdb` package
         self.AUTOLOADABLE_EXTENSIONS = [
@@ -205,14 +205,17 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             conn.execute(sql_query)
             result = conn.fetchall()
             try:
+                # FIXME transactions cant be nested, this blows up when we are already in a transaction
                 conn.execute("BEGIN TRANSACTION")
                 rel = conn.query(f'{sql_query}')
                 if rel != None:
+                    print("yes", types)
                     types = rel.types
                 else:
                     types = []
                 conn.execute("ABORT")
             except Exception as e:
+                print("no")
                 types = []
             if expected_result.lines == None:
                 return
@@ -381,7 +384,12 @@ def main():
             print(f'Failed to parse {file_path}')
             exit(1)
 
-        result = executor.execute_test(test)
+        try:
+            result = executor.execute_test(test)
+        except Exception as e:
+            if 'skipped because the following statement types are not supported' in str(e):
+                continue
+            raise e
         print(result.type.name)
         if result.type == ExecuteResult.Type.SKIPPED:
             continue

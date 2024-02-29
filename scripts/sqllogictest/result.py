@@ -28,6 +28,7 @@ class QueryResult:
         return self._row_count
 
     def column_count(self) -> int:
+        assert self._column_count != 0
         return self._column_count
 
     def has_error(self) -> bool:
@@ -263,6 +264,7 @@ class SQLLogicRunner:
                 expected_column_count = result.column_count()
                 column_count_mismatch = True
 
+            print(len(comparison_values), expected_column_count)
             expected_rows = len(comparison_values) / expected_column_count
             row_wise = expected_column_count > 1 and len(comparison_values) == result.row_count()
 
