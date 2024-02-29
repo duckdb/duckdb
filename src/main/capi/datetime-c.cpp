@@ -45,9 +45,19 @@ duckdb_time_struct duckdb_from_time(duckdb_time time) {
 }
 
 duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz input) {
-	duckdb::dtime_tz_t time(input.bits);
 	duckdb_time_tz_struct result;
-	result.time.micros = time.time().micros;
+	duckdb_time_struct time_struct;
+	int32_t hour, minute, second, micros;
+
+	duckdb::dtime_tz_t time(input.bits);
+	Time::Convert(time.time(), hour, minute, second, micros);
+
+	time_struct.hour = hour;
+	time_struct.min = minute;
+	time_struct.sec = second;
+	time_struct.micros = micros;
+
+	result.time = time_struct;
 	result.offset = time.offset();
 	return result;
 }

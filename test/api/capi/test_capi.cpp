@@ -430,11 +430,10 @@ TEST_CASE("decompose timetz with duckdb_from_time_tz", "[capi]") {
 
 	auto time_tz = duckdb_from_time_tz(data[0]);
 
-	auto val = duckdb_from_time(time_tz.time);
-	REQUIRE(val.hour == 11);
-	REQUIRE(val.min == 30);
-	REQUIRE(val.sec == 0);
-	REQUIRE(val.micros == 123456);
+	REQUIRE(time_tz.time.hour == 11);
+	REQUIRE(time_tz.time.min == 30);
+	REQUIRE(time_tz.time.sec == 0);
+	REQUIRE(time_tz.time.micros == 123456);
 
 	REQUIRE(time_tz.offset == -7200);
 }
@@ -456,11 +455,10 @@ TEST_CASE("create time_tz value") {
 	REQUIRE(micros.micros == inverse.time.micros);
 	REQUIRE(offset == inverse.offset);
 
-	time = duckdb_from_time(inverse.time);
-	REQUIRE(time.hour == 4);
-	REQUIRE(time.min == 2);
-	REQUIRE(time.sec == 6);
-	REQUIRE(time.micros == 9);
+	REQUIRE(inverse.time.hour == 4);
+	REQUIRE(inverse.time.min == 2);
+	REQUIRE(inverse.time.sec == 6);
+	REQUIRE(inverse.time.micros == 9);
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
