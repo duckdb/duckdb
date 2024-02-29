@@ -95,7 +95,9 @@ struct BitStringAggOperation {
 
 	template <class INPUT_TYPE>
 	static idx_t GetRange(INPUT_TYPE min, INPUT_TYPE max) {
-		D_ASSERT(max >= min);
+		if (min > max) {
+			throw InvalidInputException("Invalid explicit bitstring range: Minimum (%d) > maximum (%d)", min, max);
+		}
 		INPUT_TYPE result;
 		if (!TrySubtractOperator::Operation(max, min, result)) {
 			return NumericLimits<idx_t>::Maximum();
