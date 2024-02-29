@@ -2811,6 +2811,44 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value) {
+	switch(value) {
+	case LimitNodeType::UNSET:
+		return "UNSET";
+	case LimitNodeType::CONSTANT_VALUE:
+		return "CONSTANT_VALUE";
+	case LimitNodeType::CONSTANT_PERCENTAGE:
+		return "CONSTANT_PERCENTAGE";
+	case LimitNodeType::EXPRESSION_VALUE:
+		return "EXPRESSION_VALUE";
+	case LimitNodeType::EXPRESSION_PERCENTAGE:
+		return "EXPRESSION_PERCENTAGE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value) {
+	if (StringUtil::Equals(value, "UNSET")) {
+		return LimitNodeType::UNSET;
+	}
+	if (StringUtil::Equals(value, "CONSTANT_VALUE")) {
+		return LimitNodeType::CONSTANT_VALUE;
+	}
+	if (StringUtil::Equals(value, "CONSTANT_PERCENTAGE")) {
+		return LimitNodeType::CONSTANT_PERCENTAGE;
+	}
+	if (StringUtil::Equals(value, "EXPRESSION_VALUE")) {
+		return LimitNodeType::EXPRESSION_VALUE;
+	}
+	if (StringUtil::Equals(value, "EXPRESSION_PERCENTAGE")) {
+		return LimitNodeType::EXPRESSION_PERCENTAGE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value) {
 	switch(value) {
 	case LoadType::LOAD:
@@ -2865,8 +2903,6 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_DISTINCT";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "LOGICAL_SAMPLE";
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		return "LOGICAL_LIMIT_PERCENT";
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return "LOGICAL_PIVOT";
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
@@ -3005,9 +3041,6 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_SAMPLE")) {
 		return LogicalOperatorType::LOGICAL_SAMPLE;
-	}
-	if (StringUtil::Equals(value, "LOGICAL_LIMIT_PERCENT")) {
-		return LogicalOperatorType::LOGICAL_LIMIT_PERCENT;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_PIVOT")) {
 		return LogicalOperatorType::LOGICAL_PIVOT;

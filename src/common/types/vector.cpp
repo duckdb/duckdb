@@ -889,14 +889,14 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto &child = ArrayVector::GetEntry(*this);
+			auto &original_child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
 
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 			auto &new_child = flattened_buffer->GetChild();
 
 			// Make sure to initialize a validity mask for the new child vector with the correct size
-			if (!child.validity.AllValid()) {
+			if (!original_child.validity.AllValid()) {
 				new_child.validity.Initialize(array_size * count);
 			}
 
@@ -909,7 +909,8 @@ void Vector::Flatten(idx_t count) {
 			//                          | 2 |
 			// 							 ...
 
-			child.Flatten(count * array_size);
+			auto child_vec = make_uniq<Vector>(original_child);
+			child_vec->Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
@@ -917,7 +918,7 @@ void Vector::Flatten(idx_t count) {
 				for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
 					auto position = array_idx * array_size + elem_idx;
 					// Broadcast the validity
-					if (FlatVector::IsNull(child, elem_idx)) {
+					if (FlatVector::IsNull(*child_vec, elem_idx)) {
 						FlatVector::SetNull(new_child, position, true);
 					}
 					sel.set_index(position, elem_idx);
@@ -925,7 +926,7 @@ void Vector::Flatten(idx_t count) {
 			}
 
 			// Copy over the data to the new buffer
-			VectorOperations::Copy(child, new_child, sel, count * array_size, 0, 0);
+			VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
 
 		} break;
@@ -1067,6 +1068,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	auxiliary.reset();
 }
 
+// FIXME: This should ideally be const
 void Vector::Serialize(Serializer &serializer, idx_t count) {
 	auto &logical_type = GetType();
 

@@ -49,6 +49,7 @@ struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
+struct BoundLimitNode;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 
@@ -218,9 +219,8 @@ private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
-	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
-	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
-	                                     Value &delimiter_value);
+	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
+	                              bool is_offset);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);

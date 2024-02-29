@@ -126,6 +126,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_UNION;
 	case LogicalTypeId::UUID:
 		return DUCKDB_TYPE_UUID;
+	case LogicalTypeId::ARRAY:
+		return DUCKDB_TYPE_ARRAY;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;

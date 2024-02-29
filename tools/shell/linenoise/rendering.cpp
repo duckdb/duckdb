@@ -393,6 +393,59 @@ void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highlightToken>
 
 enum class ScanState { STANDARD, IN_SINGLE_QUOTE, IN_DOUBLE_QUOTE, IN_COMMENT, DOLLAR_QUOTED_STRING };
 
+static void OpenBracket(vector<idx_t> &brackets, vector<idx_t> &cursor_brackets, idx_t pos, idx_t i) {
+	// check if the cursor is at this position
+	if (pos == i) {
+		// cursor is exactly on this position - always highlight this bracket
+		if (!cursor_brackets.empty()) {
+			cursor_brackets.clear();
+		}
+		cursor_brackets.push_back(i);
+	}
+	if (cursor_brackets.empty() && ((i + 1) == pos || (pos + 1) == i)) {
+		// cursor is either BEFORE or AFTER this bracket and we don't have any highlighted bracket yet
+		// highlight this bracket
+		cursor_brackets.push_back(i);
+	}
+	brackets.push_back(i);
+}
+
+static void CloseBracket(vector<idx_t> &brackets, vector<idx_t> &cursor_brackets, idx_t pos, idx_t i,
+                         vector<idx_t> &errors) {
+	if (pos == i) {
+		// cursor is on this closing bracket
+		// clear any selected brackets - we always select this one
+		cursor_brackets.clear();
+	}
+	if (brackets.empty()) {
+		// closing bracket without matching opening bracket
+		errors.push_back(i);
+	} else {
+		if (cursor_brackets.size() == 1) {
+			if (cursor_brackets.back() == brackets.back()) {
+				// this closing bracket matches the highlighted opening cursor bracket - highlight both
+				cursor_brackets.push_back(i);
+			}
+		} else if (cursor_brackets.empty() && (pos == i || (i + 1) == pos || (pos + 1) == i)) {
+			// no cursor bracket selected yet and cursor is BEFORE or AFTER this bracket
+			// add this bracket
+			cursor_brackets.push_back(i);
+			cursor_brackets.push_back(brackets.back());
+		}
+		brackets.pop_back();
+	}
+}
+
+static void HandleBracketErrors(const vector<idx_t> &brackets, vector<idx_t> &errors) {
+	if (brackets.empty()) {
+		return;
+	}
+	// if there are unclosed brackets remaining not all brackets were closed
+	for (auto &bracket : brackets) {
+		errors.push_back(bracket);
+	}
+}
+
 void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vector<highlightToken> &tokens) const {
 	static constexpr const idx_t MAX_ERROR_LENGTH = 2000;
 	if (!enableErrorRendering) {
@@ -406,7 +459,9 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 	// * single quotes without matching closing single quote
 	// * double quote without matching double quote
 	ScanState state = ScanState::STANDARD;
-	vector<idx_t> brackets;
+	vector<idx_t> brackets;        // ()
+	vector<idx_t> square_brackets; // []
+	vector<idx_t> curly_brackets;  // {}
 	vector<idx_t> errors;
 	vector<idx_t> cursor_brackets;
 	vector<idx_t> comment_start;
@@ -435,46 +490,23 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 				state = ScanState::IN_DOUBLE_QUOTE;
 				quote_pos = i;
 				break;
-			case '(': {
-				// check if the cursor is at this position
-				if (pos == i) {
-					// cursor is exactly on this position - always highlight this bracket
-					if (!cursor_brackets.empty()) {
-						cursor_brackets.clear();
-					}
-					cursor_brackets.push_back(i);
-				}
-				if (cursor_brackets.empty() && ((i + 1) == pos || (pos + 1) == i)) {
-					// cursor is either BEFORE or AFTER this bracket and we don't have any highlighted bracket yet
-					// highlight this bracket
-					cursor_brackets.push_back(i);
-				}
-				brackets.push_back(i);
+			case '(':
+				OpenBracket(brackets, cursor_brackets, pos, i);
 				break;
-			}
+			case '[':
+				OpenBracket(square_brackets, cursor_brackets, pos, i);
+				break;
+			case '{':
+				OpenBracket(curly_brackets, cursor_brackets, pos, i);
+				break;
 			case ')':
-				if (pos == i) {
-					// cursor is on this closing bracket
-					// clear any selected brackets - we always select this one
-					cursor_brackets.clear();
-				}
-				if (brackets.empty()) {
-					// closing bracket without matching opening bracket
-					errors.push_back(i);
-				} else {
-					if (cursor_brackets.size() == 1) {
-						if (cursor_brackets.back() == brackets.back()) {
-							// this closing bracket matches the highlighted opening cursor bracket - highlight both
-							cursor_brackets.push_back(i);
-						}
-					} else if (cursor_brackets.empty() && (pos == i || (i + 1) == pos || (pos + 1) == i)) {
-						// no cursor bracket selected yet and cursor is BEFORE or AFTER this bracket
-						// add this bracket
-						cursor_brackets.push_back(i);
-						cursor_brackets.push_back(brackets.back());
-					}
-					brackets.pop_back();
-				}
+				CloseBracket(brackets, cursor_brackets, pos, i, errors);
+				break;
+			case ']':
+				CloseBracket(square_brackets, cursor_brackets, pos, i, errors);
+				break;
+			case '}':
+				CloseBracket(curly_brackets, cursor_brackets, pos, i, errors);
 				break;
 			case '$': // dollar symbol
 				if (i + 1 >= len) {
@@ -587,12 +619,10 @@ void Linenoise::AddErrorHighlighting(idx_t render_start, idx_t render_end, vecto
 		// quote is never closed
 		errors.push_back(quote_pos);
 	}
-	if (!brackets.empty()) {
-		// if there are unclosed brackets remaining not all brackets were closed
-		for (auto &bracket : brackets) {
-			errors.push_back(bracket);
-		}
-	}
+	HandleBracketErrors(brackets, errors);
+	HandleBracketErrors(square_brackets, errors);
+	HandleBracketErrors(curly_brackets, errors);
+
 	// insert all the errors for highlighting
 	for (auto &error : errors) {
 		Linenoise::Log("Error found at position %llu\n", error);
