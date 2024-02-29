@@ -5,10 +5,10 @@
 statement ok
 PRAGMA custom_profiling_settings='__BUILD_DIRECTORY__/test/sql/pragma/test.json'
 
-#query I
-#SELECT current_setting('custom_profiling_settings');
-#----
-#EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING, CPU_TIME
+query I
+SELECT current_setting('custom_profiling_settings');
+----
+EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING, CPU_TIME
 
 statement ok
 PRAGMA enable_profiling = 'json';
