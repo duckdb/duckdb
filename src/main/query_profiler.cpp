@@ -26,11 +26,11 @@ QueryProfiler::QueryProfiler(ClientContext &context_p)
 }
 
 bool QueryProfiler::IsEnabled() const {
-	return is_explain_analyze || ClientConfig::GetConfig(context).enable_profiler;
+	return is_explain_analyze ? true : ClientConfig::GetConfig(context).enable_profiler;
 }
 
 bool QueryProfiler::IsDetailedEnabled() const {
-	return !is_explain_analyze && ClientConfig::GetConfig(context).enable_detailed_profiling;
+	return is_explain_analyze ? false : ClientConfig::GetConfig(context).enable_detailed_profiling;
 }
 
 ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
@@ -151,19 +151,21 @@ void QueryProfiler::EndQuery() {
 	// EXPLAIN ANALYSE should not be outputted by the profiler
 	if (IsEnabled() && !is_explain_analyze) {
 		// add an outer node for the query
-		auto outer_root = make_uniq<TreeNode>();
-		outer_root->name = "Query";
-		outer_root->settings.SetMetrics(root->settings.GetMetrics());
-		outer_root->children.push_back(std::move(root));
-		root = std::move(outer_root);
-		if (root->settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
-			root->settings.values.operator_timing = main_query.Elapsed();
-		}
-		if (root->settings.SettingEnabled(TreeNodeSettingsType::CPU_TIME)) {
-			root->settings.values.cpu_time = GetTotalCPUTime(*root);
-		}
-		if (root->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
-			root->settings.values.extra_info = query;
+		if (root) {
+			auto outer_root = make_uniq<TreeNode>();
+			outer_root->name = "Query";
+			outer_root->settings.SetMetrics(root->settings.GetMetrics());
+			outer_root->children.push_back(std::move(root));
+			root = std::move(outer_root);
+			if (root->settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
+				root->settings.values.operator_timing = main_query.Elapsed();
+			}
+			if (root->settings.SettingEnabled(TreeNodeSettingsType::CPU_TIME)) {
+				root->settings.values.cpu_time = GetTotalCPUTime(*root);
+			}
+			if (root->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
+				root->settings.values.extra_info = query;
+			}
 		}
 
 		string query_info = ToString();
