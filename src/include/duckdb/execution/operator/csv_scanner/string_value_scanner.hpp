@@ -43,6 +43,9 @@ public:
 		return other.buffer_size - other.buffer_pos + buffer_pos;
 	}
 	idx_t GetGlobalPosition(idx_t requested_buffer_size) {
+		if (buffer_pos == requested_buffer_size) {
+			return requested_buffer_size * buffer_idx + buffer_pos;
+		}
 		return requested_buffer_size * buffer_idx + buffer_pos + 1;
 	}
 	idx_t buffer_pos = 0;

@@ -353,6 +353,18 @@ string StringValueResult::ReconstructCurrentLine() {
 }
 
 bool StringValueResult::AddRowInternal() {
+	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
+	idx_t current_line_size = current_line_start - previous_line_start;
+	if (store_line_size) {
+		error_handler.NewMaxLineSize(current_line_size);
+	}
+	if (current_line_size > state_machine.options.maximum_line_size) {
+		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
+		auto csv_error = CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch);
+		error_handler.Error(csv_error);
+	}
+	pre_previous_line_start = previous_line_start;
+	previous_line_start = current_line_start;
 	if (ignore_current_row) {
 		// An error occurred on this row, we are ignoring it and resetting our control flag
 		ignore_current_row = false;
@@ -428,19 +440,6 @@ bool StringValueResult::AddRowInternal() {
 }
 
 bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos) {
-	LinePosition current_line_start = {result.iterator.pos.buffer_idx, result.iterator.pos.buffer_pos,
-	                                   result.buffer_size};
-	idx_t current_line_size = current_line_start - result.previous_line_start;
-	if (result.store_line_size) {
-		result.error_handler.NewMaxLineSize(current_line_size);
-	}
-	if (current_line_size > result.state_machine.options.maximum_line_size) {
-		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
-		auto csv_error = CSVError::LineSizeError(result.state_machine.options, current_line_size, lines_per_batch);
-		result.error_handler.Error(csv_error);
-	}
-	result.pre_previous_line_start = result.previous_line_start;
-	result.previous_line_start = current_line_start;
 	if (result.last_position <= buffer_pos) {
 		// We add the value
 		if (result.quoted) {
@@ -1082,6 +1081,7 @@ void StringValueScanner::SetStart() {
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
 				result.last_position = iterator.pos.buffer_pos;
 				iterator.done = scan_finder->iterator.done;
+				result.lines_read++;
 				return;
 			}
 		}
