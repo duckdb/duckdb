@@ -1,0 +1,50 @@
+# name: test/sql/binder/test_alias_reference_in_select.test
+# description: Test that a correct error message is thrown
+# group: [binder]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE testjson (
+	example JSON
+);
+
+statement ok
+INSERT INTO testjson VALUES ('{ "location" : { "address" : "123 Main St" }, "sampleField" : null, "anotherField" : 123, "yetAnotherField" : "abc" }');
+
+statement error
+SELECT (WITH keys AS (
+    		SELECT unnest(json_keys(example)) AS k
+    	), nonNull AS (
+    		SELECT
+    			keys.k,
+    			example->keys.k AS v
+    		FROM keys
+    		WHERE v IS NOT NULL
+    	)
+    	SELECT json_group_object(nonNull.k, nonNull.v)
+    	FROM nonNull
+)
+FROM testjson;
+----
+"example" not found
+
+query I
+SELECT (WITH keys AS (
+    		SELECT unnest(json_keys(example)) AS k
+    	), nonNull AS (
+    		SELECT
+    			keys.k,
+    			keys.k AS v
+    		FROM keys
+    		WHERE v IS NOT NULL
+    	)
+    	SELECT json_group_object(nonNull.k, nonNull.v)
+    	FROM nonNull
+)
+FROM testjson;
+----
+{"location":"location","sampleField":"sampleField","anotherField":"anotherField","yetAnotherField":"yetAnotherField"}

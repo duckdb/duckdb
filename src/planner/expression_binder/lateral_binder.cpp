@@ -50,7 +50,7 @@ BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr,
 }
 
 string LateralBinder::UnsupportedAggregateMessage() {
-	return "LATERAL join cannot contain aggregates!";
+	throw BinderException("LATERAL join cannot contain aggregates!");
 }
 
 class ExpressionDepthReducer : public LogicalOperatorVisitor {

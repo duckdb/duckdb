@@ -45,7 +45,7 @@ unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, uni
 BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {
 	// bind the children of the function expression
 	if (depth > 0) {
-		return BindResult(BinderException(function, "UNNEST() for correlated expressions is not supported yet"));
+		throw BinderException(function, "UNNEST() for correlated expressions is not supported yet");
 	}
 	ErrorData error;
 	if (function.children.empty()) {

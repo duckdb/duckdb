@@ -100,6 +100,10 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message) {
 	// try to bind in one of the outer queries, if the binding error occurred in a subquery
 	auto &active_binders = binder.GetActiveBinders();
+	if (active_binders.size() == 1) {
+		// no other binders to consider
+		return BindResult(std::move(error_message));
+	}
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
 	auto bind_error = std::move(error_message);
@@ -117,6 +121,11 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 		active_binders.pop_back();
 	}
 	active_binders = binders;
+	if (bind_error.HasError()) {
+		// we still have an error
+		auto &top_binder = active_binders.back().get();
+		bind_error = top_binder.Bind(expr, 0);
+	}
 	return BindResult(bind_error);
 }
 
