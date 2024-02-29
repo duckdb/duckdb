@@ -99,15 +99,21 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             return self.con
 
         if name not in self.cursors:
-            self.cursors[name] = self.conn.cursor()
+            self.cursors[name] = self.con.cursor()
         return self.cursors[name]
+
+    def get_test_directory(self) -> str:
+        test_directory = TEST_DIRECTORY_PATH
+        if not os.path.exists(test_directory):
+            os.makedirs(test_directory)
+        return test_directory
 
     def replace_keywords(self, input: str):
         # Replace environment variables in the SQL
         for name, value in self.environment_variables.items():
             input = input.replace(f"${{{name}}}", value)
 
-        input = input.replace("__TEST_DIR__", TEST_DIRECTORY_PATH)
+        input = input.replace("__TEST_DIR__", self.get_test_directory())
         input = input.replace("__WORKING_DIRECTORY__", os.getcwd())
         input = input.replace("__BUILD_DIRECTORY__", duckdb.__build_dir__)
         return input
@@ -191,22 +197,23 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         assert isinstance(query, Query)
         conn = self.get_connection(query.connection_name)
         sql_query = '\n'.join(query.lines)
+        sql_query = self.replace_keywords(sql_query)
 
         expected_result = query.expected_result
         assert expected_result.type == ExpectedResult.Type.SUCCES
         try:
+            conn.execute(sql_query)
+            result = conn.fetchall()
             try:
                 conn.execute("BEGIN TRANSACTION")
                 rel = conn.query(f'{sql_query}')
-                if rel:
+                if rel != None:
                     types = rel.types
                 else:
                     types = []
                 conn.execute("ABORT")
-            except:
+            except Exception as e:
                 types = []
-            conn.execute(sql_query)
-            result = conn.fetchall()
             if expected_result.lines == None:
                 return
             actual = []
@@ -218,16 +225,16 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             query_result = QueryResult(result, types)
         except Exception as e:
             query_result = QueryResult([], [], e)
-        
+
         print(sql_query)
         compare_result = self.check_query_result(query, query_result)
         if not compare_result:
             self.fail(f'Failed: {self.test.path}:{query.get_query_line()}')
-            #if context.is_parallel:
+            # if context.is_parallel:
             #    self.finished_processing_file = True
             #    context.error_file = file_name
             #    context.error_line = query_line
-            #else:
+            # else:
             #    fail_line(file_name, query_line, 0)
 
     def execute_skip(self, statement: Skip):

@@ -26,6 +26,7 @@ class SQLLogicTestLogger:
                 print(value, end="")
                 c += 1
                 if c >= columns:
+                    c = 0
                     print()
 
     def print_line_sep(self):
@@ -120,7 +121,7 @@ class SQLLogicTestLogger:
         self.print_error_header("Wrong row count in query!")
         row_count = len(result_values_string)
         print(
-            f"Expected {termcolor.colored(expected_rows, 'white', attrs=['bold'])} rows, but got {termcolor.colored(row_count, 'white', attrs=['bold'])} rows"
+            f"Expected {termcolor.colored(int(expected_rows), 'white', attrs=['bold'])} rows, but got {termcolor.colored(row_count, 'white', attrs=['bold'])} rows"
         )
         self.print_line_sep()
         self.print_sql()
@@ -145,7 +146,7 @@ class SQLLogicTestLogger:
         self.print_line_sep()
         self.print_error_header(f"Error in test! Column count mismatch after splitting on tab on row {row_number}!")
         print(
-            f"Expected {termcolor.colored(expected_column_count, 'white', attrs=['bold'])} columns, but got {termcolor.colored(split_count, 'white', attrs=['bold'])} columns"
+            f"Expected {termcolor.colored(int(expected_column_count), 'white', attrs=['bold'])} columns, but got {termcolor.colored(split_count, 'white', attrs=['bold'])} columns"
         )
         print("Does the result contain tab values? In that case, place every value on a single row.")
         self.print_line_sep()

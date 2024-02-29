@@ -57,50 +57,9 @@ def compare_values(result: QueryResult, actual_str, expected_str, current_column
             return True
 
     sql_type = result.types[current_column]
-
-    if sql_type == int:
-        class ConvertResult:
-            def __init__(self, value):
-                self.converted = False
-                self.value = value
-
-            def convert(self, value):
-                self.converted = True
-                self.value = value
-
-        def convert_numeric(value: str, constructor) -> ConvertResult:
-            result = ConvertResult(value)
-            if value == "NULL":
-                result.convert(None)
-            else:
-                try:
-                    converted = constructor(value)
-                    result.convert(converted)
-                except:
-                    pass
-            return result
-
-        actual = convert_numeric(actual_str)
-        expected = convert_numeric(expected_str)
-
-        if actual.converted and expected.converted:
-            error = actual.value != expected.value
-        else:
-            error = True
-
-    elif sql_type == bool:
-        low_expected = expected_str.lower()
-        low_actual = actual_str.lower()
-
-        true_str = "true"
-
-        actual = int(1) if low_actual == true_str or actual_str == "1" else int(0)
-        expected = int(1) if low_expected == true_str or expected_str == "1" else int(0)
-
-        error = actual != expected
-
-    else:
-        error = True
+    expected = sql_logic_test_convert_value(expected_str, sql_type, False)
+    actual = actual_str
+    error = actual != expected
 
     if error:
         return False
@@ -152,23 +111,12 @@ def load_result_from_file(fname, names):
 
 
 def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool):
-    if value is None:
-        return "NULL"
-    else:
-        if is_sqlite_test:
-            # sqlite test hashes want us to convert floating point numbers to integers
-            if sql_type in [decimal.Decimal, float, float]:
-                return str(value.cast_as(int))
-        # Convert boolean value to 1 or 0
-        if sql_type == bool:
-            return "1" if value else "0"
-        else:
-            # Convert to string
-            str_value = str(value)
-            if not str_value:
-                return "(empty)"
-            else:
-                return str_value.replace("\0", "\\0")
+    if value is None or value == 'NULL':
+        return 'NULL'
+    query = f"select $1::{sql_type}"
+    val = duckdb.Value(value, sql_type)
+    res = duckdb.execute(query, [val]).fetchone()
+    return res[0]
 
 
 def duck_db_convert_result(result: QueryResult, is_sqlite_test: bool) -> List[str]:
@@ -194,9 +142,7 @@ class SQLLogicRunner:
         self.dbpath = ''
         self.loaded_databases: Dict[str, duckdb.DuckDBPyConnection] = {}
         self.db: Optional[duckdb.DuckDBPyConnection] = None
-        self.config: Dict[str, Any] = {
-            'allow_unsigned_extensions': True
-        }
+        self.config: Dict[str, Any] = {'allow_unsigned_extensions': True}
 
         self.con: Optional[duckdb.DuckDBPyConnection] = None
         self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
@@ -231,10 +177,10 @@ class SQLLogicRunner:
 
     def skip(self):
         self.skip_level += 1
-    
+
     def unskip(self):
         self.skip_level -= 1
-    
+
     def skip_active(self) -> bool:
         return self.skip_level > 0
 
@@ -301,7 +247,7 @@ class SQLLogicRunner:
         if self.output_hash_mode or compare_hash:
             hash_context = md5()
             for val in result_values_string:
-                hash_context.update(val.encode())
+                hash_context.update(str(val).encode())
                 hash_context.update("\n".encode())
             digest = hash_context.hexdigest()
             hash_value = f"{total_value_count} values hashing to {digest}"
@@ -317,7 +263,6 @@ class SQLLogicRunner:
                 expected_column_count = result.column_count()
                 column_count_mismatch = True
 
-            print(len(comparison_values), expected_column_count)
             expected_rows = len(comparison_values) / expected_column_count
             row_wise = expected_column_count > 1 and len(comparison_values) == result.row_count()
 
@@ -339,7 +284,9 @@ class SQLLogicRunner:
                 if column_count_mismatch:
                     logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
                 else:
-                    logger.wrong_row_count(expected_rows, result_values_string, comparison_values, expected_column_count, row_wise)
+                    logger.wrong_row_count(
+                        expected_rows, result_values_string, comparison_values, expected_column_count, row_wise
+                    )
                 return False
 
             if row_wise:
@@ -356,9 +303,6 @@ class SQLLogicRunner:
                         rvalue_str = split_val
                         success = compare_values(result, lvalue_str, split_val, c)
                         if not success:
-                            print(lvalue_str.__class__)
-                            print(comparison_values)
-                            exit()
                             logger.print_error_header("Wrong result in query!")
                             logger.print_line_sep()
                             logger.print_sql()
