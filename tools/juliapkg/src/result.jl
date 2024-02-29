@@ -858,6 +858,11 @@ DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
 
 Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.columntable(result))
 
+"""
+Executes a SQL query within a connection and returns the full (materialized) result. 
+
+The query function is able to run queries with multiple statements, unlike `DBInterface.execute`(@ref) which is only able to prepare a single statement.
+"""
 function query(con::DuckDB.Connection, sql::AbstractString)
     handle = Ref{duckdb_result}()
     ret = duckdb_query(con.handle, sql, handle)
@@ -869,3 +874,4 @@ function query(con::DuckDB.Connection, sql::AbstractString)
     end
     return QueryResult(handle)
 end
+query(db::DuckDB.DB, sql::AbstractString) = query(db.main_connection, sql)

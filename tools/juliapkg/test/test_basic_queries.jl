@@ -107,8 +107,9 @@ end
 end
 
 # test a PIVOT query that generates multiple prepared statements and will fail with execute
-@testset "Test DBInterface.execute" begin
-    con = DuckDB.connect(DuckDB.DB())
+@testset "Test DBInterface.query" begin
+    db = DuckDB.DB()
+    con = DuckDB.connect(db)
     DuckDB.execute(con, "CREATE TABLE Cities (Country VARCHAR, Name VARCHAR, Year INT, Population INT);")
     DuckDB.execute(con, "INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005)")
     DuckDB.execute(con, "INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065)")
@@ -128,6 +129,8 @@ end
     @test df[1, :Name] == "Amsterdam"
     @test df[1, "2000"] == 1005
     @test df[1, 4] == 1065
+
+    @test DataFrame(DuckDB.query(db, "select 'a'; select 2;"))[1, 1] == "a"
 
     DBInterface.close!(con)
 end
