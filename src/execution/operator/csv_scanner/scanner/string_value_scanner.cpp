@@ -252,7 +252,15 @@ void StringValueResult::Reset() {
 	for (auto &v : validity_mask) {
 		v->SetAllValid(result_size);
 	}
+	// We keep a reference to the buffer from our current iteration if it already exists
+	shared_ptr<CSVBufferHandle> cur_buffer;
+	if (buffer_handles.find(iterator.GetBufferIdx()) != buffer_handles.end()) {
+		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
+	}
 	buffer_handles.clear();
+	if (cur_buffer) {
+		buffer_handles[cur_buffer->buffer_idx] = cur_buffer;
+	}
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
