@@ -46,7 +46,10 @@ public:
 	DUCKDB_API ArenaChunk *GetTail();
 
 	DUCKDB_API bool IsEmpty() const;
+	//! Get the total *used* size (not cached)
 	DUCKDB_API idx_t SizeInBytes() const;
+	//! Get the currently allocated size in bytes (cached, read from "allocated_size")
+	DUCKDB_API idx_t AllocationSize() const;
 
 	//! Returns an "Allocator" wrapper for this arena allocator
 	Allocator &GetAllocator() {
@@ -61,6 +64,8 @@ private:
 	ArenaChunk *tail;
 	//! An allocator wrapper using this arena allocator
 	Allocator arena_allocator;
+	//! The total allocated size
+	idx_t allocated_size = 0;
 };
 
 } // namespace duckdb

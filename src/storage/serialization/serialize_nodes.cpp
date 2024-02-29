@@ -25,8 +25,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_option.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -42,6 +42,22 @@ BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &deserializer) {
 	BoundCaseCheck result;
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "when_expr", result.when_expr);
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "then_expr", result.then_expr);
+	return result;
+}
+
+void BoundLimitNode::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<LimitNodeType>(100, "type", type);
+	serializer.WritePropertyWithDefault<idx_t>(101, "constant_integer", constant_integer);
+	serializer.WriteProperty<double>(102, "constant_percentage", constant_percentage);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(103, "expression", expression);
+}
+
+BoundLimitNode BoundLimitNode::Deserialize(Deserializer &deserializer) {
+	auto type = deserializer.ReadProperty<LimitNodeType>(100, "type");
+	auto constant_integer = deserializer.ReadPropertyWithDefault<idx_t>(101, "constant_integer");
+	auto constant_percentage = deserializer.ReadProperty<double>(102, "constant_percentage");
+	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(103, "expression");
+	BoundLimitNode result(type, constant_integer, constant_percentage, std::move(expression));
 	return result;
 }
 
@@ -363,14 +379,14 @@ PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 
 void PivotColumnEntry::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", star_expr);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
 	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
 }
 
 PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
 	PivotColumnEntry result;
 	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.star_expr);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
 	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
 	return result;
 }

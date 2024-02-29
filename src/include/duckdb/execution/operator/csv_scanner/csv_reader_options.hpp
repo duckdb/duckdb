@@ -1,0 +1,163 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/execution/operator/csv_scanner/csv_reader_options.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/execution/operator/csv_scanner/state_machine_options.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
+
+namespace duckdb {
+
+struct DialectOptions {
+	CSVStateMachineOptions state_machine_options;
+	//! Expected number of columns
+	idx_t num_cols = 0;
+	//! Whether or not the file has a header line
+	CSVOption<bool> header = false;
+	//! The date format to use (if any is specified)
+	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
+	                                                             {LogicalTypeId::TIMESTAMP, {}}};
+	//! How many leading rows to skip
+	CSVOption<idx_t> skip_rows = 0;
+};
+
+struct CSVReaderOptions {
+	//===--------------------------------------------------------------------===//
+	// CommonCSVOptions
+	//===--------------------------------------------------------------------===//
+	//! See struct above.
+	DialectOptions dialect_options;
+	//! Whether or not we should ignore InvalidInput errors
+	bool ignore_errors = false;
+	//! Rejects table name
+	string rejects_table_name;
+	//! Rejects table entry limit (0 = no limit)
+	idx_t rejects_limit = 0;
+	//! Columns to use as recovery key for rejected rows when reading with ignore_errors = true
+	vector<string> rejects_recovery_columns;
+	//! Index of the recovery columns
+	vector<idx_t> rejects_recovery_column_ids;
+	//! Number of samples to buffer
+	idx_t buffer_sample_size = (idx_t)STANDARD_VECTOR_SIZE * 50;
+	//! Specifies the string that represents a null value
+	string null_str;
+	//! Whether file is compressed or not, and if so which compression type
+	//! AUTO_DETECT (default; infer from file extension)
+	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! Option to convert quoted values to NULL values
+	bool allow_quoted_nulls = true;
+
+	//===--------------------------------------------------------------------===//
+	// CSVAutoOptions
+	//===--------------------------------------------------------------------===//
+	//! SQL Type list mapping of name to SQL type index in sql_type_list
+	case_insensitive_map_t<idx_t> sql_types_per_column;
+	//! User-defined SQL type list
+	vector<LogicalType> sql_type_list;
+	//! User-defined name list
+	vector<string> name_list;
+	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
+	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
+	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
+	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
+	//! In case the sniffer found a mismatch error from user defined types or dialect
+	string sniffer_user_mismatch_error;
+
+	//===--------------------------------------------------------------------===//
+	// ReadCSVOptions
+	//===--------------------------------------------------------------------===//
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
+	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
+	idx_t maximum_line_size = 2097152;
+	//! Whether or not header names shall be normalized
+	bool normalize_names = false;
+	//! True, if column with that index must skip null check
+	vector<bool> force_not_null;
+	//! Number of sample chunks used in auto-detection
+	idx_t sample_size_chunks = 20480 / STANDARD_VECTOR_SIZE;
+	//! Consider all columns to be of type varchar
+	bool all_varchar = false;
+	//! Whether or not to automatically detect dialect and datatypes
+	bool auto_detect = true;
+	//! The file path of the CSV file to read
+	string file_path;
+	//! Multi-file reader options
+	MultiFileReaderOptions file_options;
+	//! Buffer Size (Parallel Scan)
+	idx_t buffer_size = CSVBuffer::CSV_BUFFER_SIZE;
+	//! Decimal separator when reading as numeric
+	string decimal_separator = ".";
+	//! Whether or not to pad rows that do not have enough columns with NULL values
+	bool null_padding = false;
+	//! If we should attempt to run parallel scanning over one file
+	bool parallel = true;
+
+	//! User defined parameters for the csv function concatenated on a string
+	string user_defined_parameters;
+	//===--------------------------------------------------------------------===//
+	// WriteCSVOptions
+	//===--------------------------------------------------------------------===//
+	//! True, if column with that index must be quoted
+	vector<bool> force_quote;
+	//! Prefix/suffix/custom newline the entire file once (enables writing of files as JSON arrays)
+	string prefix;
+	string suffix;
+	string write_newline;
+
+	//! The date format to use (if any is specified)
+	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! The date format to use for writing (if any is specified)
+	map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! Whether or not a type format is specified
+	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+
+	void Serialize(Serializer &serializer) const;
+	static CSVReaderOptions Deserialize(Deserializer &deserializer);
+
+	void SetCompression(const string &compression);
+
+	bool GetHeader() const;
+	void SetHeader(bool has_header);
+
+	string GetEscape() const;
+	void SetEscape(const string &escape);
+
+	int64_t GetSkipRows() const;
+	void SetSkipRows(int64_t rows);
+
+	string GetQuote() const;
+	void SetQuote(const string &quote);
+	void SetDelimiter(const string &delimiter);
+	string GetDelimiter() const;
+
+	NewLineIdentifier GetNewline() const;
+	void SetNewline(const string &input);
+	//! Set an option that is supported by both reading and writing functions, called by
+	//! the SetReadOption and SetWriteOption methods
+	bool SetBaseOption(const string &loption, const Value &value);
+
+	//! loption - lowercase string
+	//! set - argument(s) to the option
+	//! expected_names - names expected if the option is "columns"
+	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
+	void SetWriteOption(const string &loption, const Value &value);
+	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
+	void ToNamedParameters(named_parameter_map_t &out);
+	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context, vector<LogicalType> &return_types,
+	                         vector<string> &names);
+
+	string ToString() const;
+};
+} // namespace duckdb

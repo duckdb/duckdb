@@ -1,7 +1,7 @@
-#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/util/csv_casting.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/skip_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/table_function/csv_file_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
+#include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
@@ -84,6 +84,16 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	for (auto &col : parse_chunk.data) {
 		vector_ptr.push_back(FlatVector::GetData<string_t>(col));
 		validity_mask.push_back(&FlatVector::Validity(col));
+	}
+}
+
+StringValueResult::~StringValueResult() {
+	// We have to insert the lines read by this scanner
+	error_handler.Insert(iterator.GetBoundaryIdx(), lines_read);
+	if (!iterator.done) {
+		// Some operators, like Limit, might cause a future error to incorrectly report the wrong error line
+		// Better to print nothing to print something wrong
+		error_handler.DontPrintErrorLine();
 	}
 }
 
@@ -287,10 +297,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::HandleOverLimitRows() {
-	auto csv_error =
-	    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id + 1);
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
-	error_handler.Error(lines_per_batch, csv_error);
+	auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns,
+	                                                      cur_col_id + 1, lines_per_batch);
+	error_handler.Error(csv_error);
 	// If we get here we need to remove the last line
 	cur_col_id = 0;
 	chunk_col_id = 0;
@@ -306,9 +316,9 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line && iterator.done) {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel and it's the
 		// last row of this thread.
-		auto csv_error = CSVError::NullPaddingFail(state_machine.options);
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
-		error_handler.Error(lines_per_batch, csv_error, true);
+		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch);
+		error_handler.Error(csv_error);
 	}
 }
 
@@ -337,10 +347,11 @@ bool StringValueResult::AddRowInternal() {
 			error << "Could not convert string \"" << cast_error.second << "\" to \'"
 			      << LogicalTypeIdToString(parse_types[cast_error.first]) << "\'";
 			auto error_string = error.str();
-			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
-			                                     cast_error.first, row);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
-			error_handler.Error(lines_per_batch, csv_error);
+
+			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
+			                                     cast_error.first, row, lines_per_batch);
+			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
 		// row
@@ -378,10 +389,10 @@ bool StringValueResult::AddRowInternal() {
 			}
 		} else {
 			// If we are not null-padding this is an error
-			auto csv_error =
-			    CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns, cur_col_id);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
-			error_handler.Error(lines_per_batch, csv_error);
+			auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns,
+			                                                      cur_col_id, lines_per_batch);
+			error_handler.Error(csv_error);
 			// If we are here we ignore_errors, so we delete this line
 			number_of_rows--;
 		}
@@ -405,9 +416,9 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 			result.error_handler.NewMaxLineSize(current_line_size);
 		}
 		if (current_line_size > result.state_machine.options.maximum_line_size) {
-			auto csv_error = CSVError::LineSizeError(result.state_machine.options, current_line_size);
 			LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
-			result.error_handler.Error(lines_per_batch, csv_error, true);
+			auto csv_error = CSVError::LineSizeError(result.state_machine.options, current_line_size, lines_per_batch);
+			result.error_handler.Error(csv_error);
 		}
 		result.pre_previous_line_start = result.previous_line_start;
 		result.previous_line_start = current_line_start;
@@ -435,11 +446,11 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 
 void StringValueResult::InvalidState(StringValueResult &result) {
 	// FIXME: How do we recover from an invalid state? Can we restart the state machine and jump to the next row?
+	LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
 	auto csv_error = CSVError::UnterminatedQuotesError(result.state_machine.options,
 	                                                   static_cast<string_t *>(result.vector_ptr[result.chunk_col_id]),
-	                                                   result.number_of_rows, result.cur_col_id);
-	LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
-	result.error_handler.Error(lines_per_batch, csv_error);
+	                                                   result.number_of_rows, result.cur_col_id, lines_per_batch);
+	result.error_handler.Error(csv_error);
 }
 
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
@@ -517,6 +528,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &process_result = ParseChunk();
 	// First Get Parsed Chunk
 	auto &parse_chunk = process_result.ToChunk();
+	// We have to check if we got to error
+	error_handler->ErrorIfNeeded();
 
 	if (parse_chunk.size() == 0) {
 		return;
@@ -600,11 +613,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 					row.push_back(parse_chunk.GetValue(col, line_error));
 				}
-				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-				                                     error_message, col_idx, row);
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
-				error_handler->Error(lines_per_batch, csv_error);
+				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
+				                                     error_message, col_idx, row, lines_per_batch);
+				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
 			D_ASSERT(state_machine->options.ignore_errors);
@@ -617,11 +630,12 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
 					}
-					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx, row);
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
-					error_handler->Error(lines_per_batch, csv_error);
+					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
+					                                     error_message, col_idx, row, lines_per_batch);
+
+					error_handler->Error(csv_error);
 				}
 			}
 		}
@@ -933,12 +947,15 @@ void StringValueScanner::SkipUntilNewLine() {
 	if (state_machine->options.dialect_options.state_machine_options.new_line.GetValue() ==
 	    NewLineIdentifier::CARRY_ON) {
 		bool carriage_return = false;
+		bool not_carriage_return = false;
 		for (; iterator.pos.buffer_pos < cur_buffer_handle->actual_size; iterator.pos.buffer_pos++) {
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
 				carriage_return = true;
+			} else if (buffer_handle_ptr[iterator.pos.buffer_pos] != '\n') {
+				not_carriage_return = true;
 			}
 			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
-				if (carriage_return) {
+				if (carriage_return || not_carriage_return) {
 					iterator.pos.buffer_pos++;
 					return;
 				}
@@ -1010,6 +1027,7 @@ void StringValueScanner::SetStart() {
 			// When Null Padding, we assume we start from the correct new-line
 			return;
 		}
+
 		scan_finder = make_uniq<StringValueScanner>(0, buffer_manager, state_machine,
 		                                            make_shared<CSVErrorHandler>(true), csv_file_scan, iterator, 1);
 		auto &tuples = scan_finder->ParseChunk();
@@ -1027,6 +1045,14 @@ void StringValueScanner::SetStart() {
 					iterator.done = scan_finder->iterator.done;
 					return;
 				}
+			}
+			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
+				// If things go terribly wrong, we never loop indefinetly.
+				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
+				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
+				result.last_position = iterator.pos.buffer_pos;
+				iterator.done = scan_finder->iterator.done;
+				return;
 			}
 		}
 	} while (!line_found);

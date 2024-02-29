@@ -8,7 +8,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
 #include "pid.hpp"

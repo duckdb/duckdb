@@ -31,10 +31,11 @@ if(MSVC OR MINGW)
   set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr)
 endif()
 
+if(MSVC)
+  add_definitions(/bigobj)
+endif()
+
 if(AMALGAMATION_BUILD)
-  if(WIN32)
-    add_definitions(/bigobj)
-  endif()
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
