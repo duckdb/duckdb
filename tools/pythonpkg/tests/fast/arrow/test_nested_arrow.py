@@ -18,12 +18,14 @@ def compare_results(duckdb_cursor, query):
 def arrow_to_pandas(duckdb_cursor, query):
     return duckdb_cursor.query(query).arrow().to_pandas()['a'].values.tolist()
 
+
 def get_use_list_view_options():
     result = []
     result.append(False)
     if hasattr(pa, 'ListViewArray'):
         result.append(True)
     return result
+
 
 class TestArrowNested(object):
     def test_lists_basic(self, duckdb_cursor):
