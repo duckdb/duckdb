@@ -595,7 +595,7 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnClassName(1), DuckDBArray.class.getName());
 
             assertTrue(rs.next());
-            assertEquals(toJavaObject(rs.getObject(1)), asList(0, 1));
+            assertListsEqual(toJavaObject(rs.getObject(1)), asList(0L, 1L));
         }
     }
 
@@ -3577,14 +3577,14 @@ public class TestDuckDBJDBC {
         return out;
     }
 
-    private static Object toJavaObject(Object t) {
+    private static <T> T toJavaObject(Object t) {
         try {
             if (t instanceof Array) {
                 t = arrayToList((Array) t);
             } else if (t instanceof Struct) {
                 t = structToMap((DuckDBStruct) t);
             }
-            return t;
+            return (T) t;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
