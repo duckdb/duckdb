@@ -470,6 +470,8 @@ struct ArrayVector {
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
 	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
+	//! Gets the "count" to use for the child array depending on the vector type
+	DUCKDB_API static idx_t GetChildCount(const Vector &vector, idx_t count);
 };
 
 enum class UnionInvalidReason : uint8_t {
