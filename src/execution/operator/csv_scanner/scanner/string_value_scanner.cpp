@@ -21,7 +21,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p) {
 	// Vector information
 	D_ASSERT(number_of_columns > 0);
-	buffer_handles.push_back(buffer_handle);
+	buffer_handles[buffer_handle->buffer_idx] = buffer_handle;
 	// Buffer Information
 	buffer_ptr = buffer_handle->Ptr();
 	buffer_size = buffer_handle->actual_size;
@@ -327,14 +327,27 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 string StringValueResult::ReconstructCurrentLine() {
 	idx_t current_line_size = previous_line_start - pre_previous_line_start;
 	string result;
-	result.resize(current_line_size - 1);
 	if (previous_line_start.buffer_idx == pre_previous_line_start.buffer_idx) {
+		result.resize(current_line_size - 1);
 		idx_t result_idx = 0;
 		for (idx_t i = pre_previous_line_start.buffer_pos + 1; i < previous_line_start.buffer_pos; i++) {
 			result[result_idx++] = buffer_ptr[i];
 		}
 	} else {
-		throw InternalException("Oh no");
+		result.resize(current_line_size);
+		if (buffer_handles.find(pre_previous_line_start.buffer_idx) == buffer_handles.end()) {
+			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
+			                        "your query and dataset.");
+		}
+		idx_t result_idx = 0;
+		auto first_buffer = buffer_handles[pre_previous_line_start.buffer_idx]->Ptr();
+		auto first_buffer_size = buffer_handles[pre_previous_line_start.buffer_idx]->actual_size;
+		for (idx_t i = pre_previous_line_start.buffer_pos + 1; i < first_buffer_size; i++) {
+			result[result_idx++] = first_buffer[i];
+		}
+		for (idx_t i = 0; i < previous_line_start.buffer_pos; i++) {
+			result[result_idx++] = buffer_ptr[i];
+		}
 	}
 	return result;
 }
@@ -884,7 +897,6 @@ bool StringValueScanner::MoveToNextBuffer() {
 	if (iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 		previous_buffer_handle = cur_buffer_handle;
 		cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
-		result.buffer_handles.push_back(cur_buffer_handle);
 		if (!cur_buffer_handle) {
 			iterator.pos.buffer_idx--;
 			buffer_handle_ptr = nullptr;
@@ -914,6 +926,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 			}
 			return false;
 		}
+		result.buffer_handles[cur_buffer_handle->buffer_idx] = cur_buffer_handle;
+
 		iterator.pos.buffer_pos = 0;
 		buffer_handle_ptr = cur_buffer_handle->Ptr();
 		// Handle overbuffer value
@@ -1057,6 +1071,12 @@ void StringValueScanner::SetStart() {
 				}
 			}
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
+				// Propagate any errors
+				for (auto &error_vector : scan_finder->error_handler->errors) {
+					for (auto &error : error_vector.second) {
+						error_handler->Error(error);
+					}
+				}
 				// If things go terribly wrong, we never loop indefinetly.
 				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
