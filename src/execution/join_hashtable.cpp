@@ -75,6 +75,10 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 		row_matcher_probe->Initialize(false, layout, non_equality_predicates, non_equality_predicate_columns);
 		row_matcher_probe_no_match_sel->Initialize(true, layout, non_equality_predicates,
 		                                           non_equality_predicate_columns);
+
+		needs_chain_matcher = true;
+	} else {
+		needs_chain_matcher = false;
 	}
 
 	// todo: What happens if there is a predicate that is dependent on the probe side? Need to filter this out
@@ -645,7 +649,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys, TupleDataChunkSt
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
-    : key_state(key_state_p), pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE), ht(ht_p),
+    : key_state(key_state_p), pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE),
+      chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE), ht(ht_p),
       finished(false) {
 }
 
@@ -690,28 +695,34 @@ bool ScanStructure::PointersExhausted() const {
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
 
-	// Start with the scan selection
+	// Initialize the found_match array to the current sel_vector
 	for (idx_t i = 0; i < this->count; ++i) {
-		match_sel.set_index(i, this->sel_vector.get_index(i));
+		chain_match_sel_vector.set_index(i, this->sel_vector.get_index(i));
 	}
-	idx_t no_match_count = 0;
 
-	auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
 	// If there is a matcher for the probing side because of non-equality predicates, use it
-	if (matcher) {
+	if (ht.needs_chain_matcher) {
+
+		idx_t no_match_count = 0;
+
+		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
+
+		D_ASSERT(matcher);
 
 		// we need to only use the vectors with the indices of the columns that are used in the probe phase, namely
 		// the non-equality columns
 
 		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, ht.layout, pointers, no_match_sel,
 		                      no_match_count);
-	} else { // Otherwise, just return the count as we assume that the HT chains are already filtered
+	} else {
+		// no match sel is the opposite of match sel
 		return this->count;
 	}
 }
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
 	while (true) {
+
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, result_vector, nullptr);
 
@@ -770,15 +781,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		return;
 	}
 
-	SelectionVector result_vector(STANDARD_VECTOR_SIZE);
+	idx_t result_count = ScanInnerJoin(keys, chain_match_sel_vector);
 
-	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
 		if (PropagatesBuildSide(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
-				auto idx = result_vector.get_index(i);
+				auto idx = chain_match_sel_vector.get_index(i);
 				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
 				// threads Technically it is, but it does not matter, since the only value that can be written is
 				// "true"
@@ -790,14 +800,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			// matches were found
 			// construct the result
 			// on the LHS, we create a slice using the result vector
-			result.Slice(left, result_vector, result_count);
+			result.Slice(left, chain_match_sel_vector, result_count);
 
 			// on the RHS, we need to fetch the data from the hash table
 			for (idx_t i = 0; i < ht.output_columns.size(); i++) {
 				auto &vector = result.data[left.ColumnCount() + i];
 				const auto output_col_idx = ht.output_columns[i];
 				D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
-				GatherResult(vector, result_vector, result_count, output_col_idx);
+				GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
 			}
 		}
 		AdvancePointers();
@@ -810,19 +820,20 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// we handle the entire chunk in one call to Next().
 	// for every pointer, we keep chasing pointers and doing comparisons.
 	// this results in a boolean array indicating whether or not the tuple has a match
-	// todo: maybe add the two selection vectors to a state
-	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
+	// Start with the scan selection
+
 	while (this->count > 0) {
+
 		// resolve the equality_predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
+		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
 		for (idx_t i = 0; i < match_count; i++) {
-			found_match[match_sel.get_index(i)] = true;
+			found_match[chain_match_sel_vector.get_index(i)] = true;
 		}
 		// continue searching for the ones where we did not find a match yet
-		AdvancePointers(no_match_sel, no_match_count);
+		AdvancePointers(chain_no_match_sel_vector, no_match_count);
 	}
 }
 
@@ -1022,21 +1033,22 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	// (2) we return NULL for that data if there is no match
 	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
+
 	while (this->count > 0) {
+
 		// resolve the equality_predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
+		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
 		for (idx_t i = 0; i < match_count; i++) {
 			// found a match for this index
-			auto index = match_sel.get_index(i);
+			auto index = chain_match_sel_vector.get_index(i);
 			found_match[index] = true;
 			result_sel.set_index(result_count++, index);
 		}
 		// continue searching for the ones where we did not find a match yet
-		AdvancePointers(no_match_sel, no_match_count);
+		AdvancePointers(chain_no_match_sel_vector, no_match_count);
 	}
 	// reference the columns of the left side from the result
 	D_ASSERT(input.ColumnCount() > 0);

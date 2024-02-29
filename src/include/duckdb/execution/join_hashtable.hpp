@@ -71,6 +71,9 @@ public:
 		Vector pointers;
 		idx_t count;
 		SelectionVector sel_vector;
+		SelectionVector chain_match_sel_vector;
+		SelectionVector chain_no_match_sel_vector;
+
 		// whether or not the given tuple has found a match
 		unsafe_unique_array<bool> found_match;
 		JoinHashTable &ht;
@@ -208,6 +211,8 @@ public:
 	unique_ptr<RowMatcher> row_matcher_probe;
 	//! Matches the same rows as the row_matcher, but also returns a vector for no matches
 	unique_ptr<RowMatcher> row_matcher_probe_no_match_sel;
+	//! Is true if there are predicates that are not equality predicates and we need to use the matchers during probing
+	bool needs_chain_matcher;
 
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
