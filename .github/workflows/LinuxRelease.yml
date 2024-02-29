@@ -318,7 +318,7 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -361,7 +361,7 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install Ninja
       shell: bash
@@ -408,7 +408,7 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v1
