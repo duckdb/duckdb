@@ -72,58 +72,6 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	DeleteDatabase(storage_database);
 }
 
-TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager size", "[storage][.]") {
-	duckdb::unique_ptr<MaterializedQueryResult> result;
-	auto storage_database = TestCreatePath("storage_test");
-	auto config = GetTestConfig();
-
-	// maximum memory is 10MB
-	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
-	config->options.maximum_memory = 10000000;
-	config->options.maximum_threads = 1;
-
-	// create a table of size 10 times the buffer pool size
-	uint64_t size = 0, size_a, sum_a, sum_b;
-	uint64_t table_size = 100000000 / sizeof(int32_t);
-	// make sure the database does not exist
-	DeleteDatabase(storage_database);
-	{
-		// create a database and insert the big string
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 10), (2, 20), (3, 30), (NULL, NULL)"));
-		size_a = 3;
-		sum_a = 1 + 2 + 3;
-		sum_b = 10 + 20 + 30;
-		for (size = 4; size < table_size; size *= 2) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
-			size_a *= 2;
-			sum_a *= 2;
-			sum_b *= 2;
-		}
-
-		// check the aggregate statistics of the table
-		result = con.Query("SELECT COUNT(*), COUNT(a), SUM(a), SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(size)}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(size_a)}));
-		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(sum_a)}));
-		REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(sum_b)}));
-	}
-	for (idx_t i = 0; i < 2; i++) {
-		// reload the table and checkpoint, still with a 10MB limit
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-
-		result = con.Query("SELECT COUNT(*), COUNT(a), SUM(a), SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(size)}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(size_a)}));
-		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(sum_a)}));
-		REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(sum_b)}));
-	}
-	DeleteDatabase(storage_database);
-}
-
 TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory database", "[storage][.]") {
 	duckdb::unique_ptr<MaterializedQueryResult> result;
 
