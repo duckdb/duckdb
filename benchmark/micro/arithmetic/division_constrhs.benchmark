@@ -1,0 +1,15 @@
+# name: benchmark/micro/arithmetic/division_constrhs.benchmark
+# description: Integer division of benchmark/micro/arithmetic/division_constrhs.benchmark values by 100
+# group: [arithmetic]
+
+name Integer Multiplication
+group micro
+
+load
+CREATE TABLE integers AS SELECT ((i * 53) % 100)::UINT32 AS i FROM range(0, 1000000000) tbl(i);
+
+run
+SELECT MIN(i//100) FROM integers
+
+result I
+0
