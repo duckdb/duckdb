@@ -41,7 +41,7 @@ public:
 
 public:
 	DUCKDB_API static MetaTransaction &Get(ClientContext &context);
-	timestamp_t GetCurrentTransactionStartTimestamp() {
+	timestamp_t GetCurrentTransactionStartTimestamp() const {
 		return start_timestamp;
 	}
 
