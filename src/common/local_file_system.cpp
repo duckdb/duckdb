@@ -436,10 +436,17 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = write(fd, buffer, nr_bytes);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
-		                  strerror(errno));
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(NumericLimits<int32_t>::Maximum(), idx_t(nr_bytes));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		nr_bytes -= current_bytes_written;
 	}
 	return bytes_written;
 }
