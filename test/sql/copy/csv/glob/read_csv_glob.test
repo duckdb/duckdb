@@ -95,7 +95,7 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv') ORDER BY 1
 
 # forcing string parsing works
 query I
-SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1) ORDER BY 1
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING')) ORDER BY 1
 ----
 1
 2
@@ -111,7 +111,7 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PAC
 3
 
 query II
-SELECT a, b LIKE '%a_.csv' FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1, filename=1) t(a,b) ORDER BY 1
+SELECT a, b LIKE '%a_.csv' FROM read_csv('test/sql/copy/csv/data/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1) t(a,b) ORDER BY 1
 ----
 1	0
 2	0

@@ -474,7 +474,7 @@ statement ok
 CREATE TABLE int_list(col INT[]);
 
 statement ok
-COPY (SELECT [1,2,3]) TO '__TEST_DIR__/int_list.csv' (Header 0);
+COPY (SELECT [1,2,3]) TO '__TEST_DIR__/int_list.csv';
 
 statement ok
 COPY int_list FROM '__TEST_DIR__/int_list.csv';

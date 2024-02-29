@@ -1,0 +1,30 @@
+# name: test/sql/types/timestamp/infinity_cast_coverage.test
+# description: Test casting to TIMESTAMP WITH TIME ZONE from any unit
+# group: [timestamp]
+
+statement ok
+pragma enable_verification;
+
+require icu
+
+foreach infinity_string infinity -infinity
+
+foreach base_type TIMESTAMP TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S TIMESTAMPTZ
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+foreach target_type TIMESTAMPTZ TIMESTAMP
+
+query I
+select '${infinity_string}'::${base_type}::${target_type} == '${infinity_string}'
+----
+true
+
+# target_type
+endloop
+
+# base_type
+endloop
+
+# infinity_string
+endloop

@@ -1,0 +1,64 @@
+# name: test/sql/pivot/unpivot_expression.test
+# description: Test expressions in UNPIVOT
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+unpivot (select 42 as col1, 'woot' as col2)
+    on col1::VARCHAR, col2;
+----
+col1	42
+col2	woot
+
+query II
+unpivot (select 42 as col1, 'woot' as col2)
+    on COLUMNS(*)::VARCHAR;
+----
+col1	42
+col2	woot
+
+query II
+unpivot (select 42 as col1, 'woot' as col2)
+    on (col1 + 100)::VARCHAR, col2;
+----
+col1	142
+col2	woot
+
+query II
+unpivot (select 42 as col1, 'woot' as col2)
+    on (col1 + 100)::VARCHAR AS c, col2;
+----
+c	142
+col2	woot
+
+query II
+select * from (select 42 as col1, 'woot' as col2) UNPIVOT ("value" FOR "name" IN (col1::VARCHAR, col2))
+----
+col1	42
+col2	woot
+
+# subqueries
+statement error
+unpivot (select 42 as col1, 'woot' as col2)
+    on (col1 + (SELECT col1))::VARCHAR, col2;
+----
+UNPIVOT list cannot contain subqueries
+
+statement error
+unpivot (select 42 as col1, 'woot' as col2)
+    on random(), col2;
+----
+UNPIVOT clause must contain exactly one column
+
+statement error
+unpivot (select 42 as col1, 'woot' as col2)
+    on col1 + col2;
+----
+UNPIVOT clause must contain exactly one column
+
+statement error
+unpivot (select 42 as col1, 'woot' as col2)
+    on t.col1::VARCHAR, col2;
+----

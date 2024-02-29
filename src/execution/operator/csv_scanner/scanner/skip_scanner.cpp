@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/csv_scanner/scanner/skip_scanner.hpp"
-#include "duckdb/execution/operator/csv_scanner/scanner/column_count_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/column_count_scanner.hpp"
 
 namespace duckdb {
 

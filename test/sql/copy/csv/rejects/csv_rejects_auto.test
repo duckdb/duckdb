@@ -56,7 +56,7 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*) FROM read_csv_au
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=3000,
     rejects_table='csv_rejects_table',
-    ignore_errors=true);
+    ignore_errors=true, header = 0);
 ----
 VARCHAR	VARCHAR	11048
 

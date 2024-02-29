@@ -56,9 +56,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install
       shell: bash
@@ -89,6 +89,12 @@ jobs:
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+
+    - name: Regression Test Ingestion Perf
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/ingestion.csv --verbose --threads=2
 
     - name: Regression Test TPCH
       if: always()
@@ -142,9 +148,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install
       shell: bash
@@ -222,7 +228,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -292,9 +298,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Install
       shell: bash

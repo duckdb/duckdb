@@ -16,8 +16,9 @@ bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcH
 		return true;
 	case LogicalTypeId::VARCHAR: {
 		string error_message;
+		CastParameters parameters(false, &error_message);
 		auto &val_str = StringValue::Get(value);
-		if (!TryCastErrorMessage::Operation<string_t, interval_t>(string_t(val_str), interval, &error_message)) {
+		if (!TryCastErrorMessage::Operation<string_t, interval_t>(string_t(val_str), interval, parameters)) {
 			error_message = CastExceptionText<string_t, interval_t>(string_t(val_str));
 			auto data_source = hstmt->dbc->GetDataSourceName();
 			duckdb::DiagRecord diag_rec(error_message, SQLStateType::ST_22007, data_source);

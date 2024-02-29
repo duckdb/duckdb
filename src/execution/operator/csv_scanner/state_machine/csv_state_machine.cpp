@@ -1,8 +1,8 @@
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 
 namespace duckdb {
 

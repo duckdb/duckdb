@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
 
@@ -80,7 +80,12 @@ shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 }
 
 void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
-	D_ASSERT(buffer_idx < cached_buffers.size() && cached_buffers[buffer_idx]);
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (buffer_idx >= cached_buffers.size()) {
+		// Nothing to reset
+		return;
+	}
+	D_ASSERT(cached_buffers[buffer_idx]);
 	if (buffer_idx == 0 && cached_buffers.size() > 1) {
 		cached_buffers[buffer_idx].reset();
 		idx_t cur_buffer = buffer_idx + 1;

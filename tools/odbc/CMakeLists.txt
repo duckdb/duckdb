@@ -32,7 +32,7 @@ add_library(
   duckdb_odbc SHARED
   duckdb_odbc.cpp
   driver.cpp
-  connection.cpp
+  connect/connection.cpp
   statement.cpp
   prepared.cpp
   result.cpp
@@ -49,7 +49,8 @@ add_library(
   odbc_diagnostic.cpp
   duckdb_odbc.def
   handle_functions.cpp
-  include/handle_functions.hpp)
+  connect/connect.cpp
+  connect/driver_connect.cpp)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)

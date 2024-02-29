@@ -70,6 +70,10 @@ public:
 
 	void IncrementVersion();
 
+	idx_t GetAllocationSize() const {
+		return allocation_size;
+	}
+
 	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
 	const LogicalType &RootType() const;
@@ -168,6 +172,8 @@ protected:
 	idx_t version;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
+	//! Total transient allocation size
+	idx_t allocation_size;
 };
 
 } // namespace duckdb

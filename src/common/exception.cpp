@@ -215,19 +215,6 @@ void Exception::SetQueryLocation(optional_idx error_location, unordered_map<stri
 	}
 }
 
-ConversionException::ConversionException(const PhysicalType orig_type, const PhysicalType new_type)
-    : Exception(ExceptionType::CONVERSION,
-                "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
-}
-
-ConversionException::ConversionException(const LogicalType &orig_type, const LogicalType &new_type)
-    : Exception(ExceptionType::CONVERSION,
-                "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
-}
-
-ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
-}
-
 InvalidTypeException::InvalidTypeException(PhysicalType type, const string &msg)
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
 }
@@ -245,8 +232,14 @@ TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const Ph
 }
 
 TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg)
+    : TypeMismatchException(optional_idx(), type_1, type_2, msg) {
+}
+
+TypeMismatchException::TypeMismatchException(optional_idx error_location, const LogicalType &type_1,
+                                             const LogicalType &type_2, const string &msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
-                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
+                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg,
+                Exception::InitializeExtraInfo(error_location)) {
 }
 
 TypeMismatchException::TypeMismatchException(const string &msg) : Exception(ExceptionType::MISMATCH_TYPE, msg) {

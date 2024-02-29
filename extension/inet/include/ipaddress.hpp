@@ -13,6 +13,7 @@
 #include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
+struct CastParameters;
 
 enum class IPAddressType : uint8_t { IP_ADDRESS_INVALID = 0, IP_ADDRESS_V4 = 1, IP_ADDRESS_V6 = 2 };
 
@@ -31,7 +32,7 @@ public:
 public:
 	static IPAddress FromIPv4(int32_t address, uint16_t mask);
 	static IPAddress FromIPv6(hugeint_t address, uint16_t mask);
-	static bool TryParse(string_t input, IPAddress &result, string *error_message);
+	static bool TryParse(string_t input, IPAddress &result, CastParameters &parameters);
 	static IPAddress FromString(string_t input);
 
 	string ToString() const;

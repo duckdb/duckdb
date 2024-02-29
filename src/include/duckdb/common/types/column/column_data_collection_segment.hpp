@@ -126,7 +126,10 @@ public:
 	}
 
 	idx_t ChunkCount() const;
+	//! Get the total *used* size (not cached)
 	idx_t SizeInBytes() const;
+	//! Get the currently allocated size in bytes (cached)
+	idx_t AllocationSize() const;
 
 	void FetchChunk(idx_t chunk_idx, DataChunk &result);
 	void FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids);

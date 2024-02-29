@@ -278,6 +278,7 @@ simple_select:
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->aggrs = $4;
+					n->location = @1;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -288,6 +289,7 @@ simple_select:
 					n->source = $2;
 					n->aggrs = $4;
 					n->groups = $7;
+					n->location = @1;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -297,6 +299,7 @@ simple_select:
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->groups = $5;
+					n->location = @1;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -316,6 +319,7 @@ simple_select:
 					n->source = $2;
 					n->columns = $4;
 					n->groups = $7;
+					n->location = @1;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -326,6 +330,7 @@ simple_select:
 					n->source = $2;
 					n->columns = $4;
 					n->aggrs = $6;
+					n->location = @1;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -337,6 +342,7 @@ simple_select:
 					n->columns = $4;
 					n->aggrs = $6;
 					n->groups = $9;
+					n->location = @1;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
@@ -346,6 +352,7 @@ simple_select:
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->unpivots = $9;
+					n->location = @1;
 					PGPivot *piv = makeNode(PGPivot);
 					piv->unpivot_columns = list_make1(makeString($7));
 					piv->pivot_value = $4;
@@ -360,6 +367,7 @@ simple_select:
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->unpivots = list_make1(makeString("value"));
+					n->location = @1;
 					PGPivot *piv = makeNode(PGPivot);
 					piv->unpivot_columns = list_make1(makeString("name"));
 					piv->pivot_value = $4;
@@ -1078,6 +1086,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->pivots = $6;
 					n->groups = $7;
 					n->alias = $9;
+					n->location = @2;
 					$$ = (PGNode *) n;
 				}
 			| table_ref UNPIVOT opt_include_nulls '(' unpivot_header FOR unpivot_value_list ')' opt_alias_clause
@@ -1088,6 +1097,7 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->unpivots = $5;
 					n->pivots = $7;
 					n->alias = $9;
+					n->location = @2;
 					$$ = (PGNode *) n;
 				}
 		;

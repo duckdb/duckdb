@@ -59,4 +59,8 @@ idx_t StringHeap::SizeInBytes() const {
 	return allocator.SizeInBytes();
 }
 
+idx_t StringHeap::AllocationSize() const {
+	return allocator.AllocationSize();
+}
+
 } // namespace duckdb

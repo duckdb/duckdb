@@ -154,6 +154,8 @@ enum class JoinType : uint8_t;
 
 enum class KeywordCategory : uint8_t;
 
+enum class LimitNodeType : uint8_t;
+
 enum class LoadType : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
@@ -493,6 +495,9 @@ const char* EnumUtil::ToChars<JoinType>(JoinType value);
 
 template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
+
+template<>
+const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
@@ -911,6 +916,9 @@ JoinType EnumUtil::FromString<JoinType>(const char *value);
 
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
+
+template<>
+LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
 
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
