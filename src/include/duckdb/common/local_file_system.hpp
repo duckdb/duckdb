@@ -90,6 +90,9 @@ public:
 	//! systems.
 	static std::string GetLastErrorAsString();
 
+	//! Creates an empty file with private permissions
+	static void CreatePrivateFile(const string &path_p, FileOpener *opener);
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);

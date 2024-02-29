@@ -203,6 +203,9 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 		fs.RemoveFile(file_path);
 	}
 
+	//! Ensure we are writing to a private file with 600 permission
+	LocalFileSystem::CreatePrivateFile(file_path, nullptr);
+
 	auto file_writer = BufferedFileWriter(fs, file_path);
 
 	auto serializer = BinarySerializer(file_writer);

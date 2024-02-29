@@ -267,6 +267,19 @@ static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
 }
 #endif
 
+
+void LocalFileSystem::CreatePrivateFile(const string &path_p, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
+
+	int open_flags = O_WRONLY;
+	open_flags |= O_CLOEXEC;
+	open_flags |= O_CREAT;
+	open_flags |= O_APPEND;
+
+	int fd = open(path.c_str(), open_flags, 0600);
+	close(fd);
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -720,6 +733,13 @@ static string AdditionalLockInfo(const std::wstring path) {
 
 	RmEndSession(session);
 	return conflict_string;
+}
+
+void LocalFileSystem::CreatePrivateFile(const string &path_p, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	HANDLE hFile = CreateFileW(unicode_path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	CloseHandle(hFile);
 }
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
