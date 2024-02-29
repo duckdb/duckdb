@@ -24,6 +24,7 @@ def visit_enum(cursor):
                 error = textwrap.dedent(error)
                 raise Exception(error)
             enum_constants[value] = name
+    print(f"Succesfully verified the integrity of enum {enum_name}")
 
 
 def parse_enum(file_path, clang_path: Optional[str] = None):
@@ -37,13 +38,20 @@ def parse_enum(file_path, clang_path: Optional[str] = None):
     tu = index.parse(file_path)
 
     # Traverse the AST
+    parsed_enums = set()
     for cursor in tu.cursor.walk_preorder():
         try:
-            is_enum = cursor.kind == clang.cindex.CursorKind.ENUM_DECL
+            kind = cursor.kind
+            is_enum = kind == clang.cindex.CursorKind.ENUM_DECL
         except:
             is_enum = False
-        if is_enum:
-            visit_enum(cursor)
+        if not is_enum:
+            continue
+        name = cursor.spelling
+        if name in parsed_enums:
+            continue
+        visit_enum(cursor)
+        parsed_enums.add(name)
 
 
 if __name__ == "__main__":
