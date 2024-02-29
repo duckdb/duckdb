@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -15,10 +16,17 @@ static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Express
 			auto &col_ref = child->Cast<BoundColumnRefExpression>();
 			if (partition_bindings.find(col_ref.binding) != partition_bindings.end()) {
 				filter_is_on_partition = true;
-				return;
+				// if the filter has more columns, break to make sure the other
+				// columns of the filter are also partitioned on.
+				break;
 			}
-			break;
+			// the filter is not on a column that is partitioned. immediately return.
+			filter_is_on_partition = false;
+			return;
 		}
+		// for simplicity, we don't push down filters that are functions.
+		// conjunction and filters we don't pushdown either
+		case ExpressionType::BOUND_FUNCTION:
 		case ExpressionType::CONJUNCTION_AND: {
 			filter_is_on_partition = false;
 			return;
