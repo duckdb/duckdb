@@ -86,6 +86,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/tree_node_settings.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -6333,7 +6334,6 @@ const char* EnumUtil::ToChars<TransactionType>(TransactionType value) {
 	}
 }
 
-
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 	if (StringUtil::Equals(value, "INVALID")) {
@@ -6351,35 +6351,35 @@ TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
-template <>
-const char *EnumUtil::ToChars<TreeNodeSettingsType>(TreeNodeSettingsType value) {
-	switch (value) {
+template<>
+const char* EnumUtil::ToChars<TreeNodeSettingsType>(TreeNodeSettingsType value) {
+	switch(value) {
 	case TreeNodeSettingsType::CPU_TIME:
 		return "CPU_TIME";
-	case TreeNodeSettingsType::OPERATOR_TIMING:
-		return "OPERATOR_TIMING";
-	case TreeNodeSettingsType::OPERATOR_CARDINALITY:
-		return "OPERATOR_CARDINALITY";
 	case TreeNodeSettingsType::EXTRA_INFO:
 		return "EXTRA_INFO";
+	case TreeNodeSettingsType::OPERATOR_CARDINALITY:
+		return "OPERATOR_CARDINALITY";
+	case TreeNodeSettingsType::OPERATOR_TIMING:
+		return "OPERATOR_TIMING";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
 }
 
 template<>
-TreeNodeSettingsType EnumUtil::FromString<TreeNodeSettingsType>(const char *value){
+TreeNodeSettingsType EnumUtil::FromString<TreeNodeSettingsType>(const char *value) {
 	if (StringUtil::Equals(value, "CPU_TIME")) {
 		return TreeNodeSettingsType::CPU_TIME;
 	}
-	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
-		return TreeNodeSettingsType::OPERATOR_TIMING;
+	if (StringUtil::Equals(value, "EXTRA_INFO")) {
+		return TreeNodeSettingsType::EXTRA_INFO;
 	}
 	if (StringUtil::Equals(value, "OPERATOR_CARDINALITY")) {
 		return TreeNodeSettingsType::OPERATOR_CARDINALITY;
 	}
-	if (StringUtil::Equals(value, "EXTRA_INFO")) {
-		return TreeNodeSettingsType::EXTRA_INFO;
+	if (StringUtil::Equals(value, "OPERATOR_TIMING")) {
+		return TreeNodeSettingsType::OPERATOR_TIMING;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
