@@ -191,27 +191,8 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 
 static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &array, idx_t size,
                                                    const ArrowType &arrow_type, idx_t effective_offset) {
-	ArrowListOffsetData result;
-	auto &start_offset = result.start_offset;
-	auto &list_size = result.list_size;
-
-	list_size = 0;
 	auto &list_info = arrow_type.GetTypeInfo<ArrowListInfo>();
 	auto size_type = list_info.GetSizeType();
-	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
-		auto fixed_size = list_info.FixedSize();
-		//! Have to check validity mask before setting this up
-		effective_offset *= fixed_size;
-		start_offset = effective_offset;
-		auto list_data = FlatVector::GetData<list_entry_t>(vector);
-		for (idx_t i = 0; i < size; i++) {
-			auto &le = list_data[i];
-			le.offset = list_size;
-			le.length = fixed_size;
-			list_size += fixed_size;
-		}
-		return result;
-	}
 	if (list_info.IsView()) {
 		if (size_type == ArrowVariableSizeType::NORMAL) {
 			return ConvertArrowListViewOffsetsTemplated<uint32_t>(vector, array, size, effective_offset);
@@ -227,7 +208,6 @@ static ArrowListOffsetData ConvertArrowListOffsets(Vector &vector, ArrowArray &a
 			return ConvertArrowListOffsetsTemplated<uint64_t>(vector, array, size, effective_offset);
 		}
 	}
-	return result;
 }
 
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
@@ -282,6 +262,61 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowArrayScanS
 		break;
 	default:
 		throw NotImplementedException("ArrowArrayPhysicalType not recognized");
+	}
+}
+
+static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
+                               const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
+                               int64_t parent_offset) {
+
+	auto &array_info = arrow_type.GetTypeInfo<ArrowArrayInfo>();
+	auto &scan_state = array_state.state;
+	auto array_size = array_info.FixedSize();
+	auto child_count = array_size * size;
+	auto child_offset = GetEffectiveOffset(array, parent_offset, scan_state, nested_offset) * array_size;
+
+	SetValidityMask(vector, array, scan_state, size, parent_offset, nested_offset);
+
+	auto &child_vector = ArrayVector::GetEntry(vector);
+	SetValidityMask(child_vector, *array.children[0], scan_state, child_count, array.offset, child_offset);
+
+	auto &array_mask = FlatVector::Validity(vector);
+	if (parent_mask) {
+		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
+		if (!parent_mask->AllValid()) {
+			for (idx_t i = 0; i < size; i++) {
+				if (!parent_mask->RowIsValid(i)) {
+					array_mask.SetInvalid(i);
+				}
+			}
+		}
+	}
+
+	// Broadcast the validity mask to the child vector
+	if (!array_mask.AllValid()) {
+		auto &child_validity_mask = FlatVector::Validity(child_vector);
+		for (idx_t i = 0; i < size; i++) {
+			if (!array_mask.RowIsValid(i)) {
+				for (idx_t j = 0; j < array_size; j++) {
+					child_validity_mask.SetInvalid(i * array_size + j);
+				}
+			}
+		}
+	}
+
+	auto &child_state = array_state.GetChild(0);
+	auto &child_array = *array.children[0];
+	auto &child_type = array_info.GetChild();
+	if (child_count == 0 && child_offset == 0) {
+		D_ASSERT(!child_array.dictionary);
+		ColumnArrowToDuckDB(child_vector, child_array, child_state, child_count, child_type, -1);
+	} else {
+		if (child_array.dictionary) {
+			ColumnArrowToDuckDBDictionary(child_vector, child_array, child_state, child_count, child_type,
+			                              child_offset);
+		} else {
+			ColumnArrowToDuckDB(child_vector, child_array, child_state, child_count, child_type, child_offset);
+		}
 	}
 }
 
@@ -954,6 +989,10 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	}
 	case LogicalTypeId::LIST: {
 		ArrowToDuckDBList(vector, array, array_state, size, arrow_type, nested_offset, parent_mask, parent_offset);
+		break;
+	}
+	case LogicalTypeId::ARRAY: {
+		ArrowToDuckDBArray(vector, array, array_state, size, arrow_type, nested_offset, parent_mask, parent_offset);
 		break;
 	}
 	case LogicalTypeId::MAP: {

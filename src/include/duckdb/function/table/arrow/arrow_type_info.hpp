@@ -106,13 +106,11 @@ public:
 public:
 	static unique_ptr<ArrowListInfo> ListView(unique_ptr<ArrowType> child, ArrowVariableSizeType size);
 	static unique_ptr<ArrowListInfo> List(unique_ptr<ArrowType> child, ArrowVariableSizeType size);
-	static unique_ptr<ArrowListInfo> ListFixedSize(unique_ptr<ArrowType> child, idx_t fixed_size);
 	~ArrowListInfo() override;
 
 public:
 	ArrowVariableSizeType GetSizeType() const;
 	bool IsView() const;
-	idx_t FixedSize() const;
 	ArrowType &GetChild() const;
 
 private:
@@ -121,6 +119,22 @@ private:
 private:
 	ArrowVariableSizeType size_type;
 	bool is_view = false;
+	unique_ptr<ArrowType> child;
+};
+
+struct ArrowArrayInfo : public ArrowTypeInfo {
+public:
+	static constexpr const ArrowTypeInfoType TYPE = ArrowTypeInfoType::ARRAY;
+
+public:
+	explicit ArrowArrayInfo(unique_ptr<ArrowType> child, idx_t fixed_size);
+	~ArrowArrayInfo() override;
+
+public:
+	idx_t FixedSize() const;
+	ArrowType &GetChild() const;
+
+private:
 	unique_ptr<ArrowType> child;
 	idx_t fixed_size;
 };

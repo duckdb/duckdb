@@ -137,9 +137,9 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
 
 		idx_t fixed_size = std::stoi(parameters);
-		auto list_type = LogicalType::LIST(child_type->GetDuckType());
-		auto type_info = ArrowListInfo::ListFixedSize(std::move(child_type), fixed_size);
-		return make_uniq<ArrowType>(list_type, std::move(type_info));
+		auto array_type = LogicalType::ARRAY(child_type->GetDuckType(), fixed_size);
+		auto type_info = make_uniq<ArrowArrayInfo>(std::move(child_type), fixed_size);
+		return make_uniq<ArrowType>(array_type, std::move(type_info));
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ArrowType>> children;

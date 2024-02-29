@@ -237,6 +237,9 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::STRUCT:
 		InitializeAppenderForType<ArrowStructData>(append_data);
 		break;
+	case LogicalTypeId::ARRAY:
+		InitializeAppenderForType<ArrowFixedSizeListData>(append_data);
+		break;
 	case LogicalTypeId::LIST: {
 		if (append_data.options.arrow_use_list_view) {
 			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {

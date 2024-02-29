@@ -82,7 +82,7 @@ idx_t ArrowStringInfo::FixedSize() const {
 //===--------------------------------------------------------------------===//
 
 ArrowListInfo::ArrowListInfo(unique_ptr<ArrowType> child, ArrowVariableSizeType size)
-    : ArrowTypeInfo(ArrowTypeInfoType::LIST), size_type(size), child(std::move(child)), fixed_size(0) {
+    : ArrowTypeInfo(ArrowTypeInfoType::LIST), size_type(size), child(std::move(child)) {
 }
 
 ArrowListInfo::~ArrowListInfo() {
@@ -100,12 +100,6 @@ unique_ptr<ArrowListInfo> ArrowListInfo::List(unique_ptr<ArrowType> child, Arrow
 	return unique_ptr<ArrowListInfo>(new ArrowListInfo(std::move(child), size));
 }
 
-unique_ptr<ArrowListInfo> ArrowListInfo::ListFixedSize(unique_ptr<ArrowType> child, idx_t fixed_size) {
-	auto list_info = unique_ptr<ArrowListInfo>(new ArrowListInfo(std::move(child), ArrowVariableSizeType::FIXED_SIZE));
-	list_info->fixed_size = fixed_size;
-	return list_info;
-}
-
 ArrowVariableSizeType ArrowListInfo::GetSizeType() const {
 	return size_type;
 }
@@ -114,12 +108,27 @@ bool ArrowListInfo::IsView() const {
 	return is_view;
 }
 
-idx_t ArrowListInfo::FixedSize() const {
-	D_ASSERT(size_type == ArrowVariableSizeType::FIXED_SIZE);
+ArrowType &ArrowListInfo::GetChild() const {
+	return *child;
+}
+
+//===--------------------------------------------------------------------===//
+// ArrowArrayInfo
+//===--------------------------------------------------------------------===//
+
+ArrowArrayInfo::ArrowArrayInfo(unique_ptr<ArrowType> child, idx_t fixed_size)
+    : ArrowTypeInfo(ArrowTypeInfoType::ARRAY), child(std::move(child)), fixed_size(fixed_size) {
+	D_ASSERT(fixed_size > 0);
+}
+
+ArrowArrayInfo::~ArrowArrayInfo() {
+}
+
+idx_t ArrowArrayInfo::FixedSize() const {
 	return fixed_size;
 }
 
-ArrowType &ArrowListInfo::GetChild() const {
+ArrowType &ArrowArrayInfo::GetChild() const {
 	return *child;
 }
 
