@@ -262,16 +262,23 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		// For arrays, we cheat a bit and pretend that they are lists by creating and assigning list_entry_t's to the
 		// vector This allows us to reuse all the list serialization functions for array types too.
 		auto array_size = ArrayType::GetSize(vector.GetType());
-		format.array_list_entries = make_uniq_array<list_entry_t>(count);
+
+		// Get the max offset from the sel vector
+		idx_t max_offset = count;
+		for (idx_t i = 0; i < count; i++) {
+			max_offset = MaxValue(max_offset, format.unified.sel->get_index(i));
+		}
+		max_offset++;
 
 		// create list entries
-		for (idx_t i = 0; i < count; i++) {
+		format.array_list_entries = make_uniq_array<list_entry_t>(max_offset);
+		for (idx_t i = 0; i < max_offset; i++) {
 			format.array_list_entries[i].length = array_size;
 			format.array_list_entries[i].offset = i * array_size;
 		}
 		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), ArrayVector::GetTotalSize(vector));
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), count * array_size);
 	} break;
 	default:
 		break;
