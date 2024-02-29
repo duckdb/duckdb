@@ -3601,11 +3601,7 @@ public class TestDuckDBJDBC {
 
     public static void test_getColumnClassName() throws Exception {
         try (Connection conn = DriverManager.getConnection(JDBC_URL); Statement s = conn.createStatement();) {
-            try (ResultSet rs = s.executeQuery(
-                     "select * exclude(fixed_int_array, fixed_varchar_array"
-                     +
-                     ", fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, "
-                     + "fixed_array_of_int_list, list_of_fixed_int_array) from test_all_types()")) {
+            try (ResultSet rs = s.executeQuery("select * from test_all_types()")) {
                 ResultSetMetaData rsmd = rs.getMetaData();
                 rs.next();
                 for (int i = 1; i <= rsmd.getColumnCount(); i++) {
@@ -3724,14 +3720,14 @@ public class TestDuckDBJDBC {
                                                          OffsetDateTime.parse("-290308-12-21T19:59:05.224193Z"), null,
                                                          OffsetDateTime.parse("2022-05-12T23:23:45Z")));
         correct_answer_map.put("varchar_array", trio("🦆🦆🦆🦆🦆🦆", "goose", null, ""));
-        correct_answer_map.put("nested_int_array", trio(emptyList(), asList(42, 999, null, null, -42), null,
-                                                        emptyList(), asList(42, 999, null, null, -42)));
-        correct_answer_map.put("struct_of_arrays", asList(mapOf("a", null, "b", null),
-                                                          mapOf("a", asList(42, 999, null, null, -42), "b",
-                                                                asList("🦆🦆🦆🦆🦆🦆", "goose", null, "")),
-                                                          null));
-        correct_answer_map.put("array_of_structs", trio(mapOf("a", null, "b", null),
-                                                        mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
+        List<Integer> numbers = asList(42, 999, null, null, -42);
+        correct_answer_map.put("nested_int_array", trio(emptyList(), numbers, null, emptyList(), numbers));
+        Map<Object, Object> abnull = mapOf("a", null, "b", null);
+        correct_answer_map.put(
+            "struct_of_arrays",
+            asList(abnull, mapOf("a", numbers, "b", asList("🦆🦆🦆🦆🦆🦆", "goose", null, "")), null));
+        Map<Object, Object> ducks = mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆");
+        correct_answer_map.put("array_of_structs", trio(abnull, ducks, null));
         correct_answer_map.put("bool", asList(false, true, null));
         correct_answer_map.put("tinyint", asList((byte) -128, (byte) 127, null));
         correct_answer_map.put("smallint", asList((short) -32768, (short) 32767, null));
@@ -3764,8 +3760,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("small_enum", asList("DUCK_DUCK_ENUM", "GOOSE", null));
         correct_answer_map.put("medium_enum", asList("enum_0", "enum_299", null));
         correct_answer_map.put("large_enum", asList("enum_0", "enum_69999", null));
-        correct_answer_map.put(
-            "struct", asList(mapOf("a", null, "b", null), mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
+        correct_answer_map.put("struct", asList(abnull, ducks, null));
         correct_answer_map.put("map",
                                asList(mapOf(), mapOf("key1", "🦆🦆🦆🦆🦆🦆", "key2", "goose"), null));
         correct_answer_map.put("union", asList("Frank", (short) 5, null));
@@ -3788,15 +3783,36 @@ public class TestDuckDBJDBC {
             "timestamp_tz",
             asList(OffsetDateTime.of(LocalDateTime.of(-290308, 12, 22, 0, 0, 0), ZoneOffset.UTC),
                    OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775806000), ZoneOffset.UTC), null));
+
+        List<Integer> int_array = asList(null, 2, 3);
+        List<String> varchar_array = asList("a", null, "c");
+        List<Integer> int_list = asList(4, 5, 6);
+        List<String> def = asList("d", "e", "f");
+
+        correct_answer_map.put("fixed_int_array", asList(int_array, int_list, null));
+        correct_answer_map.put("fixed_varchar_array", asList(varchar_array, def, null));
+        correct_answer_map.put("fixed_nested_int_array",
+                               asList(asList(int_array, null, int_array), asList(int_list, int_array, int_list), null));
+        correct_answer_map.put("fixed_nested_varchar_array", asList(asList(varchar_array, null, varchar_array),
+                                                                    asList(def, varchar_array, def), null));
+
+        correct_answer_map.put("fixed_struct_array",
+                               asList(asList(abnull, ducks, abnull), asList(ducks, abnull, ducks), null));
+
+        correct_answer_map.put("struct_of_fixed_array",
+                               asList(mapOf("a", int_array, "b", varchar_array), mapOf("a", int_list, "b", def), null));
+
+        correct_answer_map.put("fixed_array_of_int_list", asList(asList(emptyList(), numbers, emptyList()),
+                                                                 asList(numbers, emptyList(), numbers), null));
+
+        correct_answer_map.put("list_of_fixed_int_array", asList(asList(int_array, int_list, int_array),
+                                                                 asList(int_list, int_array, int_list), null));
     }
 
     public static void test_all_types() throws Exception {
         Logger logger = Logger.getAnonymousLogger();
         String sql =
-            "select * EXCLUDE(time, time_tz, "
-            +
-            "fixed_int_array, fixed_varchar_array, fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array,"
-            + "struct_of_fixed_array, fixed_array_of_int_list, list_of_fixed_int_array)"
+            "select * EXCLUDE(time, time_tz)"
             + "\n    , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time"
             +
             "\n    , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz"
