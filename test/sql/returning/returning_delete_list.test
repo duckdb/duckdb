@@ -2,7 +2,6 @@
 # description: Test returning with a nested integer list
 # group: [returning]
 
-
 statement ok
 CREATE TABLE all_types("varchar" VARCHAR, nested_int_array INTEGER[][]);;
 
