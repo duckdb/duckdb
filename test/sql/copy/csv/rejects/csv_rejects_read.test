@@ -46,7 +46,7 @@ query IIIIIII rowsort
 SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
 FROM csv_rejects_table;
 ----
-test/sql/copy/csv/data/error/mismatch/bad2.csv	1	2	"col2"	CAST	,2,DDD,	1
+test/sql/copy/csv/data/error/mismatch/bad2.csv	1	2	"col2"	CAST	1,2,DDD,	0
 test/sql/copy/csv/data/error/mismatch/bad2.csv	3	0	"col0"	CAST	EEE,7,FFF,	16
 test/sql/copy/csv/data/error/mismatch/bad2.csv	3	2	"col2"	CAST	EEE,7,FFF,	16
 
