@@ -7,14 +7,14 @@ using namespace duckdb;
 using namespace std;
 
 static void SelectTable(Connection con) {
-	for(idx_t i = 0; i < 1000; i++) {
+	for (idx_t i = 0; i < 1000; i++) {
 		auto prepare = con.Prepare("select * from foo");
 		REQUIRE_NO_FAIL(prepare->Execute());
 	}
 }
 
 static void RecreateTable(Connection con) {
-	for(idx_t i = 0; i < 1000; i++) {
+	for (idx_t i = 0; i < 1000; i++) {
 		auto prepare = con.Prepare("create or replace table foo as select * from foo");
 		REQUIRE_NO_FAIL(prepare->Execute());
 	}

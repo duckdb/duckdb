@@ -55,10 +55,10 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, optional_ptr<c
 	}
 	// prior to checking the catalog version we need to explicitly start transactions in all affected databases
 	// this ensures all catalog entries we rely on are cached
-	for(auto &catalog_name : properties.read_databases) {
+	for (auto &catalog_name : properties.read_databases) {
 		StartTransactionInCatalog(context, catalog_name);
 	}
-	for(auto &catalog_name : properties.modified_databases) {
+	for (auto &catalog_name : properties.modified_databases) {
 		StartTransactionInCatalog(context, catalog_name);
 	}
 	if (Catalog::GetSystemCatalog(context).GetCatalogVersion() != catalog_version) {

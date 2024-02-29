@@ -181,8 +181,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-		                  ref.table_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
+		                  OnEntryNotFound::THROW_EXCEPTION, error_context);
 		throw InternalException("Catalog::GetEntry should have thrown an exception above");
 	}
 
