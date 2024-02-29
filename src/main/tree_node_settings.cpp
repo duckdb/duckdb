@@ -34,7 +34,7 @@ string TreeNodeSettings::GetMetricAsString(TreeNodeSettingsType setting) const {
 	case TreeNodeSettingsType::CPU_TIME:
 		return to_string(values.cpu_time);
 	case TreeNodeSettingsType::EXTRA_INFO:
-		return JSONSanitize(values.extra_info);
+		return "\"" + JSONSanitize(values.extra_info) + "\"";
 	case TreeNodeSettingsType::OPERATOR_CARDINALITY:
 		return to_string(values.operator_cardinality);
 	case TreeNodeSettingsType::OPERATOR_TIMING:
@@ -45,8 +45,9 @@ string TreeNodeSettings::GetMetricAsString(TreeNodeSettingsType setting) const {
 
 void TreeNodeSettings::PrintAllMetricsToSS(std::ostream &ss, string depth) {
 	for (auto &metric : metrics) {
+
 		ss << depth << "   \"" << StringUtil::Lower(EnumUtil::ToString(metric)) << "\": "
-		   << "\"" << GetMetricAsString(metric) << "\",\n";
+		   << GetMetricAsString(metric) << ",\n";
 	}
 }
 
