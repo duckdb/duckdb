@@ -45,6 +45,22 @@ BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void BoundLimitNode::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<LimitNodeType>(100, "type", type);
+	serializer.WritePropertyWithDefault<idx_t>(101, "constant_integer", constant_integer);
+	serializer.WriteProperty<double>(102, "constant_percentage", constant_percentage);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(103, "expression", expression);
+}
+
+BoundLimitNode BoundLimitNode::Deserialize(Deserializer &deserializer) {
+	auto type = deserializer.ReadProperty<LimitNodeType>(100, "type");
+	auto constant_integer = deserializer.ReadPropertyWithDefault<idx_t>(101, "constant_integer");
+	auto constant_percentage = deserializer.ReadProperty<double>(102, "constant_percentage");
+	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(103, "expression");
+	BoundLimitNode result(type, constant_integer, constant_percentage, std::move(expression));
+	return result;
+}
+
 void BoundOrderByNode::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OrderType>(100, "type", type);
 	serializer.WriteProperty<OrderByNullType>(101, "null_order", null_order);
