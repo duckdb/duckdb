@@ -71,6 +71,9 @@ public:
 		Vector pointers;
 		idx_t count;
 		SelectionVector sel_vector;
+		SelectionVector chain_match_sel_vector;
+		SelectionVector chain_no_match_sel_vector;
+
 		// whether or not the given tuple has found a match
 		unsafe_unique_array<bool> found_match;
 		JoinHashTable &ht;
@@ -107,7 +110,6 @@ public:
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
 	public:
-		void InitializeSelectionVector(const SelectionVector *&current_sel);
 		void AdvancePointers();
 		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
 		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
@@ -132,7 +134,6 @@ public:
 		// 2. Entry is full and salt matches -> compare the keys
 		// 3. Entry is full and salt does not match -> continue probing
 		SelectionVector salt_match_sel;
-		SelectionVector salt_no_match_sel;
 	};
 
 	struct InsertState : ProbeState {
@@ -210,6 +211,8 @@ public:
 	unique_ptr<RowMatcher> row_matcher_probe;
 	//! Matches the same rows as the row_matcher, but also returns a vector for no matches
 	unique_ptr<RowMatcher> row_matcher_probe_no_match_sel;
+	//! Is true if there are predicates that are not equality predicates and we need to use the matchers during probing
+	bool needs_chain_matcher;
 
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
@@ -250,9 +253,10 @@ private:
 	                                                  const SelectionVector *&current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
-	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing
+	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the match_sel
+	//! vectorand the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-	                    const SelectionVector &sel, idx_t count, Vector &pointers);
+	                    const SelectionVector &sel, idx_t &count, Vector &pointers, SelectionVector &match_sel);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v

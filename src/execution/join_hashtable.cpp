@@ -15,8 +15,7 @@ using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::ProbeState::ProbeState()
     : hash_salts_v(LogicalType::UBIGINT), ht_offsets_v(LogicalType::UBIGINT), row_ptr_insert_to_v(LogicalType::POINTER),
-      key_no_match_sel(STANDARD_VECTOR_SIZE), salt_match_sel(STANDARD_VECTOR_SIZE),
-      salt_no_match_sel(STANDARD_VECTOR_SIZE) {
+      key_no_match_sel(STANDARD_VECTOR_SIZE), salt_match_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::InsertState::InsertState(unique_ptr<TupleDataCollection> &data_collection) {
@@ -76,6 +75,10 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 		row_matcher_probe->Initialize(false, layout, non_equality_predicates, non_equality_predicate_columns);
 		row_matcher_probe_no_match_sel->Initialize(true, layout, non_equality_predicates,
 		                                           non_equality_predicate_columns);
+
+		needs_chain_matcher = true;
+	} else {
+		needs_chain_matcher = false;
 	}
 
 	// todo: What happens if there is a predicate that is dependent on the probe side? Need to filter this out
@@ -149,20 +152,18 @@ static void ApplyBitmaskAndGetSalt(Vector &hashes_v, const idx_t &count, const i
 }
 
 // uses an AND operation to apply the bitmask instead of an in condition
-static void IncrementAndWrap(idx_t &value, uint64_t bitmask) {
-	value++;
+inline void IncrementAndWrap(idx_t &value, idx_t increment, uint64_t bitmask) {
+	value += increment;
 	value &= bitmask;
 }
 
-static void AppendSelectionVector(SelectionVector &sel, const idx_t &from, const SelectionVector &other,
-                                  const idx_t &count) {
-	sel_t *sel_data = &sel[from];
-	sel_t *other_data = &other[0];
-	memcpy(sel_data, other_data, count * sizeof(sel_t));
+inline void IncrementAndWrap(idx_t &value, uint64_t bitmask) {
+	IncrementAndWrap(value, 1, bitmask);
 }
 
 void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-                                   const SelectionVector &sel, idx_t count, Vector &pointers) {
+                                   const SelectionVector &sel, idx_t &count, Vector &pointers,
+                                   SelectionVector &match_sel) {
 
 	ApplyBitmaskAndGetSalt(hashes_v, count, bitmask, state.ht_offsets_v, state.hash_salts_v, sel);
 
@@ -172,37 +173,54 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 	auto pointers_data = FlatVector::GetData<data_ptr_t>(pointers);
 	auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(state.row_ptr_insert_to_v);
 
-	idx_t salt_match_count = 0;
-	idx_t salt_no_match_count = 0;
-	idx_t key_match_count = 0;
-	idx_t key_no_match_count = 0;
+	const SelectionVector *remaining_sel = &sel;
+	idx_t remaining_count = count;
 
-	// iterate over each entry to find out whether it is empty or occupied and if it is occupied whether the
-	// salt matches
-	for (idx_t i = 0; i < count; i++) {
+	idx_t &match_count = count;
+	match_count = 0;
 
-		const auto row_index = sel.get_index(i);
-		auto &ht_offset = ht_offsets[row_index];
-		auto salt = hash_salts[row_index];
-
-		auto &entry = entries[ht_offset];
-
-		bool is_occupied = entry.IsOccupied();
-		bool salt_match = entry.GetSalt() == salt;
-
-		bool salt_match_case = is_occupied && salt_match;
-		bool salt_no_match_case = is_occupied && !salt_match;
-
-		state.salt_match_sel.set_index(salt_match_count, row_index);
-		state.salt_no_match_sel.set_index(salt_no_match_count, row_index);
-
-		salt_match_count += salt_match_case;
-		salt_no_match_count += salt_no_match_case;
-	}
-
-	idx_t remaining_count = salt_match_count + salt_no_match_count;
-
+	// untill every entry has been processed
 	while (remaining_count > 0) {
+
+		idx_t salt_match_count = 0;
+		idx_t key_no_match_count = 0;
+
+		// for each entry, linear probing until
+		// a) an empty entry is found -> return nullptr (do nothing, as vector is zeroed)
+		// b) an entry is found where the salt matches -> need to compare the keys
+		for (idx_t i = 0; i < remaining_count; i++) {
+			const auto row_index = remaining_sel->get_index(i);
+			auto &ht_offset = ht_offsets[row_index];
+
+			idx_t increment;
+
+			// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
+			do {
+
+				auto &entry = entries[ht_offset];
+				bool occupied = entry.IsOccupied();
+
+				// no need to do anything, as the vector is zeroed
+				if (!occupied) {
+					break;
+				}
+
+				bool salt_match = entry.GetSalt() == hash_salts[row_index];
+
+				// the entries we need to process in the next iteration are the ones that are occupied and the salt
+				// does not match, the ones that are empty need no further processing
+				state.salt_match_sel.set_index(salt_match_count, row_index);
+				salt_match_count += salt_match;
+
+				// condition for incrementing the ht_offset: occupied and salt does not match -> move to next entry
+				increment = !salt_match;
+				IncrementAndWrap(ht_offset, increment, bitmask);
+
+			} while (increment);
+		}
+
+		// at this step, for all the pointers we stepped either until we found an empty entry or an entry with a
+		// matching salt, we need to compare the keys for the ones that have a matching salt
 
 		if (salt_match_count > 0) {
 			// Get the pointers to the rows that need to be compared
@@ -213,7 +231,8 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 			}
 
 			// Perform row comparisons, after function call salt_match_sel will point to the keys that match
-			key_match_count =
+
+			idx_t key_match_count =
 			    row_matcher_build.Match(keys, key_state.vector_data, state.salt_match_sel, salt_match_count, layout,
 			                            state.row_ptr_insert_to_v, &state.key_no_match_sel, key_no_match_count);
 
@@ -224,54 +243,22 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 				const auto row_index = state.salt_match_sel.get_index(i);
 				auto &entry = entries[ht_offsets[row_index]];
 				pointers_data[row_index] = entry.GetPointer();
+
+				match_sel.set_index(match_count, row_index);
+				match_count++;
+			}
+
+			// update the ht_offset to point to the next entry for the ones that did not match
+			for (idx_t i = 0; i < key_no_match_count; i++) {
+				const auto row_index = state.key_no_match_sel.get_index(i);
+				auto &ht_offset = ht_offsets[row_index];
+
+				IncrementAndWrap(ht_offset, 1, bitmask);
 			}
 		}
 
-		// update the overall selection vector to only point the entries that still need to be inserted
-		// as there was no match found for them yet or the salt did not match
-		// todo: after the second iteration the state.key_no_match_sel will be bigger as the state.salt_no_match_sel
-		// will be empty
-		AppendSelectionVector(state.salt_no_match_sel, salt_no_match_count, state.key_no_match_sel, key_no_match_count);
-		idx_t remaining_after_iteration = salt_no_match_count + key_no_match_count;
-
-		// again find the entries where the salt matches by linear probing until either finding an empty entry or
-		// an entry where the salt does not match
-		salt_match_count = 0;
-
-		// linear probing for all entries that remain
-		for (idx_t i = 0; i < remaining_after_iteration; i++) {
-			const auto row_index = state.salt_no_match_sel.get_index(i);
-			auto &ht_offset = ht_offsets[row_index];
-
-			bool occupied;
-			bool salt_match;
-
-			// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
-			do {
-
-				// Increment and update cache
-				IncrementAndWrap(ht_offset, bitmask);
-
-				auto &entry = entries[ht_offset];
-				occupied = entry.IsOccupied();
-				salt_match = entry.GetSalt() == hash_salts[row_index];
-
-				// the entries we need to process in the next iteration are the ones that are occupied and the salt
-				// does not match, the ones that are empty need no further processing
-				bool occupied_and_salt_match = occupied && salt_match;
-				state.salt_match_sel.set_index(salt_match_count, row_index);
-				salt_match_count += occupied_and_salt_match;
-
-				// condition for incrementing the ht_offset: occupied and salt does not match -> move to next entry
-			} while (occupied && !salt_match);
-		}
-
-		// after stepping until either the entry is empty or the salt matches, we know that salt_no_match_count
-		// is zero
-		salt_no_match_count = 0;
-
-		// in the next iteration, compare all the entries that are occupied and the salt does match
-		remaining_count = salt_match_count;
+		remaining_sel = &state.key_no_match_sel;
+		remaining_count = key_no_match_count;
 	}
 }
 
@@ -489,8 +476,6 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 					// Still need to set nullptr at the end to mark the end of the list
 					data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
 					InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset);
-					printf("Inserting after empty entry: row_ptr=%p, salt=%lu, pointer_offset=%lu\n", row_ptr, salt,
-					       pointer_offset);
 					break;
 				}
 			}
@@ -534,8 +519,6 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 				auto &entry = entries[ht_offsets[entry_index]];
 				data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
 				auto salt = hash_salts[entry_index];
-				printf("Inserting after key match: row_ptr=%p, salt=%lu, ht_offset=%lu, pointer_offset=%lu\n", row_ptr,
-				       salt, ht_offsets[entry_index], pointer_offset);
 				InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset);
 			}
 		}
@@ -544,10 +527,7 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 		for (idx_t i = 0; i < no_match_count; i++) {
 			const auto entry_index = no_match_sel.get_index(i);
 			auto &ht_offset = ht_offsets[entry_index];
-			auto &row_ptr = row_ptrs_to_insert[entry_index];
 
-			printf("Stepping after no key match: row_ptr=%p, ht_offset=%lu, pointer_offset=%lu\n", row_ptr, ht_offset,
-			       pointer_offset);
 			ht_offset++;
 			if (ht_offset >= capacity) {
 				ht_offset = 0;
@@ -654,24 +634,23 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys, TupleDataChunkSt
 	}
 
 	if (precomputed_hashes) {
-		GetRowPointers(keys, key_state, probe_state, *precomputed_hashes, *current_sel, ss->count, ss->pointers);
+		GetRowPointers(keys, key_state, probe_state, *precomputed_hashes, *current_sel, ss->count, ss->pointers,
+		               ss->sel_vector);
 	} else {
 		// hash all the keys
 		Vector hashes(LogicalType::HASH);
 		Hash(keys, *current_sel, ss->count, hashes);
 
 		// now initialize the pointers of the scan structure based on the hashes
-		GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, ss->count, ss->pointers);
+		GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, ss->count, ss->pointers, ss->sel_vector);
 	}
-
-	// create the selection vector linking to only non-empty entries
-	ss->InitializeSelectionVector(current_sel);
 
 	return ss;
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
-    : key_state(key_state_p), pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE), ht(ht_p),
+    : key_state(key_state_p), pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE),
+      chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE), ht(ht_p),
       finished(false) {
 }
 
@@ -715,28 +694,35 @@ bool ScanStructure::PointersExhausted() const {
 }
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
-	// Start with the scan selection
-	for (idx_t i = 0; i < this->count; ++i) {
-		match_sel.set_index(i, this->sel_vector.get_index(i));
-	}
-	idx_t no_match_count = 0;
 
-	auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
+	// Initialize the found_match array to the current sel_vector
+	for (idx_t i = 0; i < this->count; ++i) {
+		chain_match_sel_vector.set_index(i, this->sel_vector.get_index(i));
+	}
+
 	// If there is a matcher for the probing side because of non-equality predicates, use it
-	if (matcher) {
+	if (ht.needs_chain_matcher) {
+
+		idx_t no_match_count = 0;
+
+		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
+
+		D_ASSERT(matcher);
 
 		// we need to only use the vectors with the indices of the columns that are used in the probe phase, namely
 		// the non-equality columns
 
 		return matcher->Match(keys, key_state.vector_data, match_sel, this->count, ht.layout, pointers, no_match_sel,
 		                      no_match_count);
-	} else { // Otherwise, just return the count as we assume that the HT chains are already filtered
+	} else {
+		// no match sel is the opposite of match sel
 		return this->count;
 	}
 }
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
 	while (true) {
+
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, result_vector, nullptr);
 
@@ -772,19 +758,6 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	this->count = new_count;
 }
 
-void ScanStructure::InitializeSelectionVector(const SelectionVector *&current_sel) {
-	idx_t non_empty_count = 0;
-	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
-	auto cnt = count;
-	for (idx_t i = 0; i < cnt; i++) {
-		const auto idx = current_sel->get_index(i);
-		if (ptrs[idx]) {
-			sel_vector.set_index(non_empty_count++, idx);
-		}
-	}
-	count = non_empty_count;
-}
-
 void ScanStructure::AdvancePointers() {
 	AdvancePointers(this->sel_vector, this->count);
 }
@@ -808,15 +781,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		return;
 	}
 
-	SelectionVector result_vector(STANDARD_VECTOR_SIZE);
+	idx_t result_count = ScanInnerJoin(keys, chain_match_sel_vector);
 
-	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
 		if (PropagatesBuildSide(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
-				auto idx = result_vector.get_index(i);
+				auto idx = chain_match_sel_vector.get_index(i);
 				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
 				// threads Technically it is, but it does not matter, since the only value that can be written is
 				// "true"
@@ -828,14 +800,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			// matches were found
 			// construct the result
 			// on the LHS, we create a slice using the result vector
-			result.Slice(left, result_vector, result_count);
+			result.Slice(left, chain_match_sel_vector, result_count);
 
 			// on the RHS, we need to fetch the data from the hash table
 			for (idx_t i = 0; i < ht.output_columns.size(); i++) {
 				auto &vector = result.data[left.ColumnCount() + i];
 				const auto output_col_idx = ht.output_columns[i];
 				D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
-				GatherResult(vector, result_vector, result_count, output_col_idx);
+				GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
 			}
 		}
 		AdvancePointers();
@@ -848,18 +820,20 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// we handle the entire chunk in one call to Next().
 	// for every pointer, we keep chasing pointers and doing comparisons.
 	// this results in a boolean array indicating whether or not the tuple has a match
-	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
+	// Start with the scan selection
+
 	while (this->count > 0) {
+
 		// resolve the equality_predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
+		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
 		for (idx_t i = 0; i < match_count; i++) {
-			found_match[match_sel.get_index(i)] = true;
+			found_match[chain_match_sel_vector.get_index(i)] = true;
 		}
 		// continue searching for the ones where we did not find a match yet
-		AdvancePointers(no_match_sel, no_match_count);
+		AdvancePointers(chain_no_match_sel_vector, no_match_count);
 	}
 }
 
@@ -1059,21 +1033,22 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	// (2) we return NULL for that data if there is no match
 	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
+
 	while (this->count > 0) {
+
 		// resolve the equality_predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
+		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
 		for (idx_t i = 0; i < match_count; i++) {
 			// found a match for this index
-			auto index = match_sel.get_index(i);
+			auto index = chain_match_sel_vector.get_index(i);
 			found_match[index] = true;
 			result_sel.set_index(result_count++, index);
 		}
 		// continue searching for the ones where we did not find a match yet
-		AdvancePointers(no_match_sel, no_match_count);
+		AdvancePointers(chain_no_match_sel_vector, no_match_count);
 	}
 	// reference the columns of the left side from the result
 	D_ASSERT(input.ColumnCount() > 0);
@@ -1121,11 +1096,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = state.offset_in_chunk; i < count; i++) {
-
 			auto found_match = Load<bool>(row_locations[i] + tuple_size);
-			printf("Full Outer: Checking for match: row_ptr=%p, value=%d match=%d\n", row_locations[i],
-			       Load<bool>(row_locations[i] + tuple_size), (found_match == match_propagation_value));
-
 			if (found_match == match_propagation_value) {
 				key_locations[found_entries++] = row_locations[i];
 				if (found_entries == STANDARD_VECTOR_SIZE) {
@@ -1368,10 +1339,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, TupleDat
 	}
 
 	// now initialize the pointers of the scan structure based on the hashes
-	GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, ss->count, ss->pointers);
-
-	// create the selection vector linking to only non-empty entries
-	ss->InitializeSelectionVector(current_sel);
+	GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, ss->count, ss->pointers, ss->sel_vector);
 
 	return ss;
 }
