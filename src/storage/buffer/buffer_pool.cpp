@@ -142,7 +142,7 @@ bool BufferPool::TryDequeueWithoutConcurrentPurge(BufferEvictionNode &node) {
 	bool expected = false;
 	while (!std::atomic_compare_exchange_weak(&purge_active, &expected, true)) {
 		// Atomically compares the contents of memory pointed to by obj (purge_active) with the contents
-		// of memory pointed to by expected (actual_purge_active), and if those are bitwise equal (no purge active),
+		// of memory pointed to by expected, and if those are bitwise equal (no purge active),
 		// replaces the former with desired (sets purge_active to true). Otherwise, loads the
 		// actual contents of memory pointed to by obj into *expected (performs load operation).
 		expected = false;
@@ -172,12 +172,11 @@ void BufferPool::PurgeIteration(const idx_t purge_size) {
 		auto &node = purge_nodes[i];
 		auto handle = node.TryGetBlockHandle();
 		if (handle) {
-			purge_nodes[alive_nodes++] = std::move(node);
+			queue->q.enqueue(std::move(node));
+			alive_nodes++;
 		}
 	}
 
-	// bulk enqueue
-	queue->q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 	atomic_fetch_sub(&total_dead_nodes, actually_dequeued - alive_nodes);
 }
 
