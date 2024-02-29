@@ -85,7 +85,7 @@ jobs:
     - name: Install libclang
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
-      run: apt-get update && apt install llvm-dev apt install libclang-dev
+      run: sudo apt-get update && sudo apt install llvm-dev && sudo apt install libclang-dev
 
     - name: Verify C enum integrity
       if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
