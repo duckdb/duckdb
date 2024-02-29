@@ -161,8 +161,8 @@ static void AppendSelectionVector(SelectionVector &sel, const idx_t &from, const
 	memcpy(sel_data, other_data, count * sizeof(sel_t));
 }
 
-void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state,
-                                   Vector &hashes_v, const SelectionVector &sel, idx_t count, Vector &pointers) {
+void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
+                                   const SelectionVector &sel, idx_t count, Vector &pointers) {
 
 	ApplyBitmaskAndGetSalt(hashes_v, count, bitmask, state.ht_offsets_v, state.hash_salts_v, sel);
 
@@ -204,7 +204,7 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 
 	while (remaining_count > 0) {
 
-		if (salt_match_count > 0){
+		if (salt_match_count > 0) {
 			// Get the pointers to the rows that need to be compared
 			for (idx_t need_compare_idx = 0; need_compare_idx < salt_match_count; need_compare_idx++) {
 				const auto row_index = state.salt_match_sel.get_index(need_compare_idx);
@@ -229,9 +229,9 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 
 		// update the overall selection vector to only point the entries that still need to be inserted
 		// as there was no match found for them yet or the salt did not match
-		// todo: after the second iteration the state.key_no_match_sel will be bigger as the state.salt_no_match_sel will be empty
-		AppendSelectionVector(state.salt_no_match_sel, salt_no_match_count, state.key_no_match_sel,
-		                      key_no_match_count);
+		// todo: after the second iteration the state.key_no_match_sel will be bigger as the state.salt_no_match_sel
+		// will be empty
+		AppendSelectionVector(state.salt_no_match_sel, salt_no_match_count, state.key_no_match_sel, key_no_match_count);
 		idx_t remaining_after_iteration = salt_no_match_count + key_no_match_count;
 
 		// again find the entries where the salt matches by linear probing until either finding an empty entry or
@@ -489,6 +489,8 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 					// Still need to set nullptr at the end to mark the end of the list
 					data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
 					InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset);
+					printf("Inserting after empty entry: row_ptr=%p, salt=%lu, pointer_offset=%lu\n", row_ptr, salt,
+					       pointer_offset);
 					break;
 				}
 			}
@@ -532,6 +534,8 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 				auto &entry = entries[ht_offsets[entry_index]];
 				data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
 				auto salt = hash_salts[entry_index];
+				printf("Inserting after key match: row_ptr=%p, salt=%lu, ht_offset=%lu, pointer_offset=%lu\n", row_ptr,
+				       salt, ht_offsets[entry_index], pointer_offset);
 				InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset);
 			}
 		}
@@ -540,7 +544,10 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 		for (idx_t i = 0; i < no_match_count; i++) {
 			const auto entry_index = no_match_sel.get_index(i);
 			auto &ht_offset = ht_offsets[entry_index];
+			auto &row_ptr = row_ptrs_to_insert[entry_index];
 
+			printf("Stepping after no key match: row_ptr=%p, ht_offset=%lu, pointer_offset=%lu\n", row_ptr, ht_offset,
+			       pointer_offset);
 			ht_offset++;
 			if (ht_offset >= capacity) {
 				ht_offset = 0;
@@ -1114,7 +1121,11 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = state.offset_in_chunk; i < count; i++) {
+
 			auto found_match = Load<bool>(row_locations[i] + tuple_size);
+			printf("Full Outer: Checking for match: row_ptr=%p, value=%d match=%d\n", row_locations[i],
+			       Load<bool>(row_locations[i] + tuple_size), (found_match == match_propagation_value));
+
 			if (found_match == match_propagation_value) {
 				key_locations[found_entries++] = row_locations[i];
 				if (found_entries == STANDARD_VECTOR_SIZE) {
