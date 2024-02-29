@@ -220,4 +220,11 @@ bool RefersToSameObject(const T &A, const T &B) {
 	return &A == &B;
 }
 
+template<class T, class SRC>
+void DynamicCastCheck(SRC *source) {
+#ifndef __APPLE__
+	D_ASSERT(dynamic_cast<T *>(source));
+#endif
+}
+
 } // namespace duckdb
