@@ -4,6 +4,7 @@ import glob
 import json
 from typing import Optional, List, Dict, Any
 import duckdb
+from enum import Enum
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
@@ -57,8 +58,32 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             RequireEnv: self.execute_require_env,
             Query: self.execute_query,
             Load: self.execute_load,
+            Require: self.execute_require,
+            Skip: self.execute_skip,
+            Unskip: self.execute_unskip,
             Restart: None,  # <-- restart is hard, have to get transaction status
         }
+        # TODO: get this from the `duckdb` package
+        self.AUTOLOADABLE_EXTENSIONS = [
+            "arrow",
+            "aws",
+            "autocomplete",
+            "excel",
+            "fts",
+            "httpfs",
+            "json",
+            "parquet",
+            "postgres_scanner",
+            "sqlsmith",
+            "sqlite_scanner",
+            "tpcds",
+            "tpch",
+            # "azure",
+            # "inet",
+            # "icu",
+            # "spatial",
+            # TODO: table function isnt always autoloaded so test fails
+        ]
 
     def fail(self, message):
         raise Exception(message)
@@ -166,14 +191,22 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         assert isinstance(query, Query)
         conn = self.get_connection(query.connection_name)
         sql_query = '\n'.join(query.lines)
-        print(sql_query)
 
         expected_result = query.expected_result
         assert expected_result.type == ExpectedResult.Type.SUCCES
         try:
+            try:
+                conn.execute("BEGIN TRANSACTION")
+                rel = conn.query(f'{sql_query}')
+                if rel:
+                    types = rel.types
+                else:
+                    types = []
+                conn.execute("ABORT")
+            except:
+                types = []
             conn.execute(sql_query)
             result = conn.fetchall()
-            print(result)
             if expected_result.lines == None:
                 return
             actual = []
@@ -182,23 +215,38 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 actual.append(converted_row)
             actual = str(actual)
 
-            query_result = QueryResult(result)
+            query_result = QueryResult(result, types)
         except Exception as e:
-            query_result = QueryResult([], e)
+            query_result = QueryResult([], [], e)
+        
+        print(sql_query)
         compare_result = self.check_query_result(query, query_result)
+        if not compare_result:
+            self.fail(f'Failed: {self.test.path}:{query.get_query_line()}')
+            #if context.is_parallel:
+            #    self.finished_processing_file = True
+            #    context.error_file = file_name
+            #    context.error_line = query_line
+            #else:
+            #    fail_line(file_name, query_line, 0)
+
+    def execute_skip(self, statement: Skip):
+        self.skip()
+
+    def execute_unskip(self, statement: Unskip):
+        self.unskip()
 
     def execute_statement(self, statement: Statement):
         assert isinstance(statement, Statement)
         conn = self.get_connection(statement.connection_name)
         sql_query = '\n'.join(statement.lines)
+        sql_query = self.replace_keywords(sql_query)
         print(sql_query)
 
         expected_result = statement.expected_result
         try:
             conn.execute(sql_query)
             result = conn.fetchall()
-            if len(result) > 0:
-                print(result[0])
             if expected_result.type == ExpectedResult.Type.ERROR:
                 self.fail(f"Query unexpectedly succeeded")
             assert expected_result.lines == None
@@ -213,6 +261,66 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                     f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
                 )
 
+    class RequireResult(Enum):
+        MISSING = 0
+        PRESENT = 1
+
+    def check_require(self, statement: Require) -> RequireResult:
+        not_an_extension = [
+            "notmingw",
+            "mingw",
+            "notwindows",
+            "windows",
+            "longdouble",
+            "64bit",
+            "noforcestorage",
+            "nothreadsan",
+            "strinline",
+            "vector_size",
+            "exact_vector_size",
+            "block_size",
+            "skip_reload",
+            "noalternativeverify",
+        ]
+        param = statement.header.parameters[0].lower()
+        if param in not_an_extension:
+            return self.RequireResult.MISSING
+
+        if param == "no_extension_autoloading":
+            if 'autoload_known_extensions' in self.config:
+                # If autoloading is on, we skip this test
+                return self.RequireResult.MISSING
+            return self.RequireResult.PRESENT
+
+        excluded_from_autoloading = True
+        for ext in self.AUTOLOADABLE_EXTENSIONS:
+            if ext == param:
+                excluded_from_autoloading = False
+                break
+
+        if not 'autoload_known_extensions' in self.config:
+            query = f"""
+                LOAD '__BUILD_DIRECTORY__/test/extension/{param}/{param}.duckdb_extension';
+            """
+            query = self.replace_keywords(query)
+            try:
+                self.con.execute(query)
+            except:
+                return self.RequireResult.MISSING
+        elif excluded_from_autoloading:
+            return self.RequireResult.MISSING
+
+        return self.RequireResult.PRESENT
+
+    def execute_require(self, statement: Require):
+        require_result = self.check_require(statement)
+        if require_result == self.RequireResult.MISSING:
+            param = statement.header.parameters[0].lower()
+            if self.is_required(param):
+                # This extension / setting was explicitly required
+                self.fail("require {}: FAILED".format(param))
+            self.skipped = True
+
     def execute_require_env(self, statement: BaseStatement):
         self.skipped = True
 
@@ -222,13 +330,16 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.original_sqlite_test = self.test.is_sqlite_test()
         unsupported = self.get_unsupported_statements(test)
         if unsupported != []:
-            error = 'Test skipped because the following statement types are not supported: '
+            error = f'Test {test.path} skipped because the following statement types are not supported: '
             types = set([x.__class__ for x in unsupported])
             error += str(list([x.__name__ for x in types]))
             raise Exception(error)
 
         self.load_database(self.dbpath)
         for statement in test.statements:
+            if self.skip_active() and statement.__class__ != Unskip:
+                # Keep skipping until Unskip is found
+                continue
             method = self.STATEMENTS.get(statement.__class__)
             if not method:
                 raise Exception(f"Not supported: {statement.__class__.__name__}")
@@ -259,12 +370,14 @@ def main():
     for file_path in file_paths:
         print(file_path)
         test = sql_parser.parse(file_path)
+        if not test:
+            print(f'Failed to parse {file_path}')
+            exit(1)
 
         result = executor.execute_test(test)
         print(result.type.name)
         if result.type == ExecuteResult.Type.SKIPPED:
             continue
-        exit()
 
 
 if __name__ == '__main__':

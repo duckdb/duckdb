@@ -101,7 +101,7 @@ class SQLLogicTestLogger:
         print(hash_value)
         self.print_line_sep()
 
-    def column_count_mismatch(self, result, result_values_string, expected_column_count, row_wise):
+    def column_count_mismatch(self, result_values_string, expected_column_count, row_wise):
         self.print_error_header("Wrong column count in query!")
         print(
             f"Expected {termcolor.colored(expected_column_count, 'white', attrs=['bold'])} columns, but got {termcolor.colored(result.column_count, 'white', attrs=['bold'])} columns"
@@ -109,22 +109,23 @@ class SQLLogicTestLogger:
         self.print_line_sep()
         self.print_sql()
         self.print_line_sep()
-        self.print_result_error(result, result_values_string, expected_column_count, row_wise)
+        self.print_result_error(result_values_string, expected_column_count, row_wise)
 
     def not_cleanly_divisible(self, expected_column_count, actual_column_count):
         self.print_error_header("Error in test!")
         print(f"Expected {expected_column_count} columns, but {actual_column_count} values were supplied")
         print("This is not cleanly divisible (i.e. the last row does not have enough values)")
 
-    def wrong_row_count(self, expected_rows, result, comparison_values, expected_column_count, row_wise):
+    def wrong_row_count(self, expected_rows, result_values_string, comparison_values, expected_column_count, row_wise):
         self.print_error_header("Wrong row count in query!")
+        row_count = len(result_values_string)
         print(
-            f"Expected {termcolor.colored(expected_rows, 'white', attrs=['bold'])} rows, but got {termcolor.colored(result.row_count, 'white', attrs=['bold'])} rows"
+            f"Expected {termcolor.colored(expected_rows, 'white', attrs=['bold'])} rows, but got {termcolor.colored(row_count, 'white', attrs=['bold'])} rows"
         )
         self.print_line_sep()
         self.print_sql()
         self.print_line_sep()
-        self.print_result_error(result, comparison_values, expected_column_count, row_wise)
+        self.print_result_error(result_values_string, comparison_values, expected_column_count, row_wise)
 
     def column_count_mismatch_correct_result(self, original_expected_columns, expected_column_count, result):
         self.print_line_sep()
@@ -136,7 +137,7 @@ class SQLLogicTestLogger:
         self.print_sql()
         print(f"The expected result {termcolor.colored('matched', 'white', attrs=['bold'])} the query result.")
         print(
-            f"Suggested fix: modify header to \"{termcolor.colored('query', 'green')} {'I' * result.column_count}{termcolor.colored('', 'white')}\""
+            f"Suggested fix: modify header to \"{termcolor.colored('query', 'green')} {'I' * result.column_count()}{termcolor.colored('', 'white')}\""
         )
         self.print_line_sep()
 

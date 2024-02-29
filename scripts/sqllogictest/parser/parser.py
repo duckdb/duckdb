@@ -354,6 +354,7 @@ class SQLLogicParser:
         expected_lines: Optional[List[str]] = self.extract_expected_lines()
         if expected_lines != None:
             expected_result.add_lines(expected_lines)
+        expected_result.set_expected_column_count(expected_column_count)
         query.expected_result = expected_result
 
         def get_sort_style(parameters: List[str]) -> SortStyle:
@@ -406,6 +407,8 @@ class SQLLogicParser:
             return Mode(header, self.current_line + 1, parameter)
 
     def statement_require(self, header: Token) -> Optional[BaseStatement]:
+        if len(header.parameters) < 1:
+            self.fail("require requires a single parameter")
         return Require(header, self.current_line + 1)
 
     def statement_set(self, header: Token) -> Optional[BaseStatement]:
@@ -565,7 +568,7 @@ class SQLLogicParser:
             line = self.peek_no_strip()
             if line.strip('\n') == "----":
                 break
-            statement.append(line)
+            statement.append(line.strip('\n'))
             self.consume()
         return statement
 

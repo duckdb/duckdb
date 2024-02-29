@@ -13,12 +13,13 @@ import decimal
 
 
 class QueryResult:
-    def __init__(self, result: List[Tuple[Any]], error: Optional[Exception] = None):
+    def __init__(self, result: List[Tuple[Any]], types: List[str], error: Optional[Exception] = None):
         self._result = result
-        self.types = self.extract_type(result)
+        self.types = types
         self.error = error
-        self._column_count = len(self.types)
-        self._row_count = len(result)
+        if not error:
+            self._column_count = len(self.types)
+            self._row_count = len(result)
 
     def get_value(self, column, row):
         return self._result[row][column]
@@ -29,13 +30,6 @@ class QueryResult:
     def column_count(self) -> int:
         return self._column_count
 
-    def extract_type(self, rows):
-        if rows == []:
-            return
-        first_row = rows[0]
-        values = list(first_row)
-        return [x.__class__ for x in values]
-
     def has_error(self) -> bool:
         return self.error != None
 
@@ -43,30 +37,28 @@ class QueryResult:
         return self.error
 
 
-def compare_values(result: QueryResult, lvalue_str, rvalue_str, current_column):
+def compare_values(result: QueryResult, actual_str, expected_str, current_column):
     error = False
 
-    if lvalue_str == rvalue_str:
+    if actual_str == expected_str:
         return True
 
-    if lvalue_str.startswith("<REGEX>:") or lvalue_str.startswith("<!REGEX>:"):
-        if lvalue_str.startswith("<REGEX>:"):
+    if expected_str.startswith("<REGEX>:") or expected_str.startswith("<!REGEX>:"):
+        if expected_str.startswith("<REGEX>:"):
             should_match = True
-            regex_str = lvalue_str.replace("<REGEX>:", "")
-            re_options = 0
+            regex_str = expected_str.replace("<REGEX>:", "")
         else:
             should_match = False
-            regex_str = lvalue_str.replace("<!REGEX>:", "")
-            re_options = re.DOTALL
+            regex_str = expected_str.replace("<!REGEX>:", "")
+        re_options = re.DOTALL
         re_pattern = re.compile(regex_str, re_options)
-        regex_matches = bool(re_pattern.fullmatch(rvalue_str))
+        regex_matches = bool(re_pattern.fullmatch(actual_str))
         if regex_matches == should_match:
             return True
 
     sql_type = result.types[current_column]
 
     if sql_type == int:
-
         class ConvertResult:
             def __init__(self, value):
                 self.converted = False
@@ -88,24 +80,24 @@ def compare_values(result: QueryResult, lvalue_str, rvalue_str, current_column):
                     pass
             return result
 
-        lvalue = convert_numeric(lvalue_str)
-        rvalue = convert_numeric(rvalue_str)
+        actual = convert_numeric(actual_str)
+        expected = convert_numeric(expected_str)
 
-        if lvalue.converted and rvalue.converted:
-            error = lvalue.value != rvalue.value
+        if actual.converted and expected.converted:
+            error = actual.value != expected.value
         else:
             error = True
 
     elif sql_type == bool:
-        low_r_val = rvalue_str.lower()
-        low_l_val = lvalue_str.lower()
+        low_expected = expected_str.lower()
+        low_actual = actual_str.lower()
 
         true_str = "true"
 
-        lvalue = int(1) if low_l_val == true_str or lvalue_str == "1" else int(0)
-        rvalue = int(1) if low_r_val == true_str or rvalue_str == "1" else int(0)
+        actual = int(1) if low_actual == true_str or actual_str == "1" else int(0)
+        expected = int(1) if low_expected == true_str or expected_str == "1" else int(0)
 
-        error = not lvalue, rvalue
+        error = actual != expected
 
     else:
         error = True
@@ -197,11 +189,14 @@ class SQLLogicRunner:
     def reset(self):
         self.skipped = False
         self.error: Optional[str] = None
+        self.skip_level: int = 0
 
         self.dbpath = ''
         self.loaded_databases: Dict[str, duckdb.DuckDBPyConnection] = {}
         self.db: Optional[duckdb.DuckDBPyConnection] = None
-        self.config: Dict[str, Any] = {}
+        self.config: Dict[str, Any] = {
+            'allow_unsigned_extensions': True
+        }
 
         self.con: Optional[duckdb.DuckDBPyConnection] = None
         self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
@@ -213,6 +208,7 @@ class SQLLogicRunner:
         self.hash_label_map: Dict[str, str] = {}
         self.result_label_map: Dict[str, Any] = {}
 
+        self.required_requires: set = set()
         self.output_hash_mode = False
         self.output_result_mode = False
 
@@ -226,12 +222,24 @@ class SQLLogicRunner:
 
     def skip_error_message(self, message):
         for error_message in self.ignore_error_messages:
-            if error_message in message:
+            if error_message in str(message):
                 return True
         return False
 
     def __init__(self):
         self.reset()
+
+    def skip(self):
+        self.skip_level += 1
+    
+    def unskip(self):
+        self.skip_level -= 1
+    
+    def skip_active(self) -> bool:
+        return self.skip_level > 0
+
+    def is_required(self, param):
+        return param in self.required_requires
 
     def check_query_result(self, query: Query, result: QueryResult):
         expected_column_count = query.expected_result.get_expected_column_count()
@@ -309,6 +317,7 @@ class SQLLogicRunner:
                 expected_column_count = result.column_count()
                 column_count_mismatch = True
 
+            print(len(comparison_values), expected_column_count)
             expected_rows = len(comparison_values) / expected_column_count
             row_wise = expected_column_count > 1 and len(comparison_values) == result.row_count()
 
@@ -330,13 +339,13 @@ class SQLLogicRunner:
                 if column_count_mismatch:
                     logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
                 else:
-                    logger.wrong_row_count(expected_rows, result, comparison_values, expected_column_count, row_wise)
+                    logger.wrong_row_count(expected_rows, result_values_string, comparison_values, expected_column_count, row_wise)
                 return False
 
             if row_wise:
                 current_row = 0
                 for i, val in enumerate(comparison_values):
-                    splits = val.split("\t")
+                    splits = [x for x in val.split("\t") if x != '']
                     if len(splits) != expected_column_count:
                         if column_count_mismatch:
                             logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
@@ -347,6 +356,9 @@ class SQLLogicRunner:
                         rvalue_str = split_val
                         success = compare_values(result, lvalue_str, split_val, c)
                         if not success:
+                            print(lvalue_str.__class__)
+                            print(comparison_values)
+                            exit()
                             logger.print_error_header("Wrong result in query!")
                             logger.print_line_sep()
                             logger.print_sql()
