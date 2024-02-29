@@ -10,10 +10,10 @@
 
 #include "duckdb.h"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 #endif
 
 namespace duckdb {
