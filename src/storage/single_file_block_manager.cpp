@@ -95,7 +95,7 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<idx_t>(meta_block);
 	ser.Write<idx_t>(free_list);
 	ser.Write<uint64_t>(block_count);
-	ser.Write<idx_t>(block_size);
+	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
 }
 
@@ -106,15 +106,10 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	header.free_list = source.Read<idx_t>();
 	header.block_count = source.Read<uint64_t>();
 
-	header.block_size = source.Read<idx_t>();
-	if (!header.block_size) {
+	header.block_alloc_size = source.Read<idx_t>();
+	if (!header.block_alloc_size) {
 		// backwards compatibility
-		header.block_size = DEFAULT_BLOCK_ALLOC_SIZE;
-	}
-	if (header.block_size != Storage::BLOCK_ALLOC_SIZE) {
-		throw IOException("Cannot read database file: DuckDB's compiled block size is %llu bytes, but the file has a "
-		                  "block size of %llu bytes.",
-		                  Storage::BLOCK_ALLOC_SIZE, header.block_size);
+		header.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	}
 
 	header.vector_size = source.Read<idx_t>();
@@ -199,7 +194,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h1.meta_block = INVALID_BLOCK;
 	h1.free_list = INVALID_BLOCK;
 	h1.block_count = 0;
-	h1.block_size = GetBlockAllocSize();
+	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
@@ -210,7 +205,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.meta_block = INVALID_BLOCK;
 	h2.free_list = INVALID_BLOCK;
 	h2.block_count = 0;
-	h2.block_size = GetBlockAllocSize();
+	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
@@ -288,10 +283,10 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 	iteration_count = header.iteration;
 	max_block = header.block_count;
 
-	if (GetBlockAllocSize() != header.block_size) {
+	if (GetBlockAllocSize() != header.block_alloc_size) {
 		throw InvalidInputException("cannot initialize the same database with a different block size: provided block "
 		                            "size: %llu, file block size: %llu",
-		                            GetBlockAllocSize(), header.block_size);
+		                            GetBlockAllocSize(), header.block_alloc_size);
 	}
 }
 

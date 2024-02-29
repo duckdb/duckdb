@@ -9,7 +9,7 @@ require vector_size 2048
 statement error
 ATTACH 'data/storage/block_size_16kb.db' (TYPE DUCKDB, READONLY)
 ----
-Cannot read database file
+cannot initialize the same database with a different block size
 
 statement error
 ATTACH 'data/storage/vector_size_512.db' (TYPE DUCKDB, READONLY)
