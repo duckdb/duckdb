@@ -115,8 +115,8 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 void QueryProfiler::Finalize(TreeNode &node) {
 	for (auto &child : node.children) {
 		Finalize(*child);
-		if (node.type == PhysicalOperatorType::UNION) {
-			node.settings.AddToOperatorCardinality(child->settings.GetOperatorCardinality());
+		if (node.type == PhysicalOperatorType::UNION && node.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+			node.settings.values.operator_cardinality += child->settings.values.operator_cardinality;
 		}
 	}
 }
@@ -126,7 +126,7 @@ void QueryProfiler::StartExplainAnalyze() {
 }
 
 static double GetTotalCPUTime(QueryProfiler::TreeNode &node) {
-	double cpu_time = node.settings.GetOperatorTiming();
+	double cpu_time = node.settings.values.operator_timing;
 	if (!node.children.empty()) {
 		for (const auto &i : node.children) {
 			cpu_time += GetTotalCPUTime(*i);
@@ -149,20 +149,20 @@ void QueryProfiler::EndQuery() {
 	// print or output the query profiling after termination
 	// EXPLAIN ANALYSE should not be outputted by the profiler
 	if (IsEnabled() && !is_explain_analyze) {
-		// add extra outer node for the query
+		// add an outer node for the query
 		auto outer_root = make_uniq<TreeNode>();
 		outer_root->name = "Query";
 		outer_root->settings.SetMetrics(root->settings.GetMetrics());
 		outer_root->children.push_back(std::move(root));
 		root = std::move(outer_root);
 		if (root->settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
-			root->settings.SetOperatorTiming(main_query.Elapsed());
+			root->settings.values.operator_timing = main_query.Elapsed();
 		}
 		if (root->settings.SettingEnabled(TreeNodeSettingsType::CPU_TIME)) {
-			root->settings.SetCpuTime(GetTotalCPUTime(*root));
+			root->settings.values.cpu_time = GetTotalCPUTime(*root);
 		}
 		if (root->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
-			root->settings.SetExtraInfo(query);
+			root->settings.values.extra_info = query;
 		}
 
 		string query_info = ToString();
@@ -297,12 +297,13 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		if (cardinality_enabled) {
 			elements = chunk ? chunk->size() : 0;
 		}
-		AddTiming(*active_operator, time, elements);
+		AddTiming(*active_operator, time, elements, timing_enabled, cardinality_enabled);
 	}
 	active_operator = nullptr;
 }
 
-void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t elements) {
+void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t elements, bool timing_enabled,
+                                 bool cardinality_enabled) {
 	if (!enabled) {
 		return;
 	}
@@ -310,8 +311,6 @@ void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t 
 		return;
 	}
 
-	bool timing_enabled = settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING);
-	bool cardinality_enabled = settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY);
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
@@ -357,8 +356,12 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		D_ASSERT(entry != tree_map.end());
 		auto &tree_node = entry->second.get();
 
-		tree_node.settings.AddToOperatorTiming(node.second.time);
-		tree_node.settings.AddToOperatorCardinality(node.second.elements);
+		if (profiler.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_TIMING)) {
+			tree_node.settings.values.operator_timing += node.second.time;
+		}
+		if (profiler.settings.SettingEnabled(TreeNodeSettingsType::OPERATOR_CARDINALITY)) {
+			tree_node.settings.values.operator_cardinality += node.second.elements;
+		}
 		tree_node.executors_info = std::move(node.second.executors_info);
 		if (!IsDetailedEnabled()) {
 			continue;
@@ -683,7 +686,9 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOper
 	node->depth = depth;
 	ClientConfig &config = ClientConfig::GetConfig(context);
 	node->settings = config.profiler_settings;
-	node->settings.SetExtraInfo(root.ParamsToString());
+	if (node->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
+		node->settings.values.extra_info = root.ParamsToString();
+	}
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
 	auto children = root.GetChildren();
 	for (auto &child : children) {

@@ -111,7 +111,8 @@ public:
 	}
 
 private:
-	void AddTiming(const PhysicalOperator &op, double time, idx_t elements);
+	void AddTiming(const PhysicalOperator &op, double time, idx_t elements, bool timing_enabled,
+	               bool cardinality_enabled);
 
 	//! Whether or not the profiler is enabled
 	bool enabled;
