@@ -42,11 +42,8 @@ public:
 		}
 		return other.buffer_size - other.buffer_pos + buffer_pos;
 	}
-	idx_t GetGlobalPosition(idx_t requested_buffer_size) {
-		if (buffer_pos == requested_buffer_size) {
-			return requested_buffer_size * buffer_idx + buffer_pos;
-		}
-		return requested_buffer_size * buffer_idx + buffer_pos + 1;
+	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl) {
+		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
 	}
 	idx_t buffer_pos = 0;
 	idx_t buffer_size = 0;
@@ -127,7 +124,7 @@ public:
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
 	//! Reconstructs the current line to be used in error messages
-	string ReconstructCurrentLine();
+	string ReconstructCurrentLine(bool &first_char_nl);
 
 	void HandleOverLimitRows();
 

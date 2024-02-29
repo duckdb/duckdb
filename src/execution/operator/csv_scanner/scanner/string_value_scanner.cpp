@@ -324,29 +324,35 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 }
 
 //! Reconstructs the current line to be used in error messages
-string StringValueResult::ReconstructCurrentLine() {
-	idx_t current_line_size = previous_line_start - pre_previous_line_start;
+string StringValueResult::ReconstructCurrentLine(bool &first_char_nl) {
 	string result;
 	if (previous_line_start.buffer_idx == pre_previous_line_start.buffer_idx) {
-		result.resize(current_line_size - 1);
-		idx_t result_idx = 0;
-		for (idx_t i = pre_previous_line_start.buffer_pos + 1; i < previous_line_start.buffer_pos; i++) {
-			result[result_idx++] = buffer_ptr[i];
-		}
-	} else {
-		result.resize(current_line_size);
-		if (buffer_handles.find(pre_previous_line_start.buffer_idx) == buffer_handles.end()) {
+		if (buffer_handles.find(previous_line_start.buffer_idx) == buffer_handles.end()) {
 			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
 			                        "your query and dataset.");
 		}
-		idx_t result_idx = 0;
+		auto buffer = buffer_handles[pre_previous_line_start.buffer_idx]->Ptr();
+		first_char_nl =
+		    buffer[pre_previous_line_start.buffer_pos] == '\n' || buffer[pre_previous_line_start.buffer_pos] == '\r';
+		for (idx_t i = pre_previous_line_start.buffer_pos + first_char_nl; i < previous_line_start.buffer_pos; i++) {
+			result += buffer[i];
+		}
+	} else {
+		if (buffer_handles.find(pre_previous_line_start.buffer_idx) == buffer_handles.end() ||
+		    buffer_handles.find(previous_line_start.buffer_idx) == buffer_handles.end()) {
+			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
+			                        "your query and dataset.");
+		}
 		auto first_buffer = buffer_handles[pre_previous_line_start.buffer_idx]->Ptr();
 		auto first_buffer_size = buffer_handles[pre_previous_line_start.buffer_idx]->actual_size;
-		for (idx_t i = pre_previous_line_start.buffer_pos + 1; i < first_buffer_size; i++) {
-			result[result_idx++] = first_buffer[i];
+		auto second_buffer = buffer_handles[previous_line_start.buffer_idx]->Ptr();
+		first_char_nl = first_buffer[pre_previous_line_start.buffer_pos] == '\n' ||
+		                first_buffer[pre_previous_line_start.buffer_pos] == '\r';
+		for (idx_t i = pre_previous_line_start.buffer_pos + first_char_nl; i < first_buffer_size; i++) {
+			result += first_buffer[i];
 		}
 		for (idx_t i = 0; i < previous_line_start.buffer_pos; i++) {
-			result[result_idx++] = buffer_ptr[i];
+			result += second_buffer[i];
 		}
 	}
 	return result;
@@ -379,10 +385,11 @@ bool StringValueResult::AddRowInternal() {
 			      << LogicalTypeIdToString(parse_types[cast_error.first]) << "\'";
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
-			auto borked_line = ReconstructCurrentLine();
+			bool first_nl;
+			auto borked_line = ReconstructCurrentLine(first_nl);
 			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
 			                                     cast_error.first, borked_line, lines_per_batch,
-			                                     pre_previous_line_start.GetGlobalPosition(requested_size));
+			                                     pre_previous_line_start.GetGlobalPosition(requested_size, first_nl));
 			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -1069,23 +1076,35 @@ void StringValueScanner::SetStart() {
 					return;
 				}
 			}
-			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
+			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
+			    scan_finder->iterator.GetBufferIdx() >= iterator.GetBufferIdx()) {
 				// Propagate any errors
-				for (auto &error_vector : scan_finder->error_handler->errors) {
-					for (auto &error : error_vector.second) {
-						error_handler->Error(error);
+				if (!scan_finder->error_handler->errors.empty()) {
+					for (auto &error_vector : scan_finder->error_handler->errors) {
+						for (auto &error : error_vector.second) {
+							error_handler->Error(error);
+						}
 					}
+					result.lines_read++;
 				}
 				// If things go terribly wrong, we never loop indefinetly.
 				iterator.pos.buffer_idx = scan_finder->iterator.pos.buffer_idx;
 				iterator.pos.buffer_pos = scan_finder->iterator.pos.buffer_pos;
 				result.last_position = iterator.pos.buffer_pos;
 				iterator.done = scan_finder->iterator.done;
-				result.lines_read++;
 				return;
 			}
 		}
 	} while (!line_found);
+	// Propagate any errors
+	if (!scan_finder->error_handler->errors.empty()) {
+		for (auto &error_vector : scan_finder->error_handler->errors) {
+			for (auto &error : error_vector.second) {
+				error_handler->Error(error);
+			}
+		}
+		result.lines_read++;
+	}
 	iterator.pos.buffer_idx = scan_finder->result.pre_previous_line_start.buffer_idx;
 	iterator.pos.buffer_pos = scan_finder->result.pre_previous_line_start.buffer_pos;
 	result.last_position = iterator.pos.buffer_pos;

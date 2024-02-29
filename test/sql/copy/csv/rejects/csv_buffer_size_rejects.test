@@ -7,49 +7,53 @@ require skip_reload
 # FIXME: https://github.com/duckdb/duckdb/issues/7755
 require vector_size 2048
 
+loop buffer_size 5 10
+
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
 query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=1,
-    buffer_size=5,
+    buffer_size=${buffer_size},
     rejects_table='csv_rejects_table',
     ignore_errors=true);
 ----
 BIGINT	VARCHAR	11044	11044	2
 
-query IIIIIII rowsort
-SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+query IIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), column_idx, column_name, error_type, csv_line, byte_position
 FROM csv_rejects_table;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	2176	0	"column0"	CAST	B, A	10875
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	4176	0	"column0"	CAST	C, A	20875
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3680	0	"column0"	CAST	B, A	18395
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	5680	0	"column0"	CAST	C, A	28395
+test/sql/copy/csv/data/error/mismatch/big_bad.csv	0	"column0"	CAST	B, A	10875
+test/sql/copy/csv/data/error/mismatch/big_bad.csv	0	"column0"	CAST	C, A	20875
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	0	"column0"	CAST	B, A	18395
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	0	"column0"	CAST	C, A	28395
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=2176 and column_idx=0;
+FROM csv_rejects_table where byte_position = 10875;
 ----
 <REGEX>:.*Could not convert string "B" to 'BIGINT'.*
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=4176 and column_idx=0;
+FROM csv_rejects_table where byte_position = 20875;
 ----
 <REGEX>:.*Could not convert string "C" to 'BIGINT'.*
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=3680 and column_idx=0;
+FROM csv_rejects_table where  byte_position = 18395;
 ----
 <REGEX>:.*Could not convert string "B" to 'BIGINT'.*
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=5680 and column_idx=0;
+FROM csv_rejects_table where byte_position = 28395;
 ----
 <REGEX>:.*Could not convert string "C" to 'BIGINT'.*
 
 statement ok
 DROP TABLE csv_rejects_table;
+
+endloop
