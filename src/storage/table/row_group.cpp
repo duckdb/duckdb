@@ -660,16 +660,19 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
                         row_t row_id, DataChunk &result, idx_t result_idx) {
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto column = column_ids[col_idx];
+		auto &result_vector = result.data[col_idx];
+		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			D_ASSERT(result.data[col_idx].GetType().InternalType() == PhysicalType::INT64);
-			result.data[col_idx].SetVectorType(VectorType::FLAT_VECTOR);
-			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
+			D_ASSERT(result_vector.GetType().InternalType() == PhysicalType::INT64);
+			result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+			auto data = FlatVector::GetData<row_t>(result_vector);
 			data[result_idx] = row_id;
 		} else {
 			// regular column: fetch data from the base column
 			auto &col_data = GetColumn(column);
-			col_data.FetchRow(transaction, state, row_id, result.data[col_idx], result_idx);
+			col_data.FetchRow(transaction, state, row_id, result_vector, result_idx);
 		}
 	}
 }
