@@ -1087,7 +1087,7 @@ void StringValueScanner::SetStart() {
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
 			    scan_finder->iterator.GetBufferIdx() >= iterator.GetBufferIdx()) {
 				// Propagate any errors
-				if (!scan_finder->error_handler->errors.empty()) {
+				if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors) {
 					for (auto &error_vector : scan_finder->error_handler->errors) {
 						for (auto &error : error_vector.second) {
 							error_handler->Error(error);
@@ -1105,7 +1105,7 @@ void StringValueScanner::SetStart() {
 		}
 	} while (!line_found);
 	// Propagate any errors
-	if (!scan_finder->error_handler->errors.empty()) {
+	if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors) {
 		for (auto &error_vector : scan_finder->error_handler->errors) {
 			for (auto &error : error_vector.second) {
 				error_handler->Error(error);
