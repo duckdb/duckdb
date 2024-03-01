@@ -29,7 +29,7 @@ struct TreeNodeSettingsTypeHashFunction {
 	}
 };
 
-const unordered_set<TreeNodeSettingsType> default_metrics = {
+const unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction> default_metrics = {
     TreeNodeSettingsType::CPU_TIME,
     TreeNodeSettingsType::EXTRA_INFO,
     TreeNodeSettingsType::OPERATOR_CARDINALITY,
@@ -46,7 +46,7 @@ struct profilingValues {
 class TreeNodeSettings {
 public:
 	// map of metrics with their values; only enabled metrics are present in the map
-	unordered_set<TreeNodeSettingsType> metrics = default_metrics;
+	unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction> metrics = default_metrics;
 	profilingValues values;
 
 public:
