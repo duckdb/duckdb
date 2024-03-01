@@ -302,7 +302,8 @@ struct ListConvert {
 };
 
 struct ArrayConvert {
-	static py::tuple ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
+	static py::tuple ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
 		auto val = input.GetValue(chunk_offset);
 		auto &array_values = ArrayValue::GetChildren(val);
 		auto &array_type = input.GetType();
