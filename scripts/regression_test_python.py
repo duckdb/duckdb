@@ -243,6 +243,38 @@ class ArrowDictionaryBenchmark:
             results.append(BenchmarkResult(duration, nrun))
         return results
 
+class PandasDFLoadBenchmark:
+    def __init__(self):
+        pass
+    def initialize_connection(self):
+        self.con = duckdb.connect()
+        if not threads:
+            return
+        print_msg(f'Limiting threads to {threads}')
+        self.con.execute(f"SET threads={threads}")
+
+    def generate(self, unique_values, values, arrow_dict: ArrowDictionary):
+        self.con.execute("call dbgen(sf=0.2)")
+        new_table = "*, " + ", ".join([l_shipdate] * 300)
+        self.con.exucute(f"create table wide as select {new_table} from lineitem")
+        self.con.execute(f"copy wide to 'wide_table.csv' (FORMAT CSV)")
+
+    def benchmark(self) -> List[BenchmarkResult]:
+        results = []
+        for nrun in range(nruns):
+            duration = 0.0
+            pandas_df = pd.read_csv('wide_table.csv')
+            start = time.time()
+            for amplification in range(30):
+                res = self.con.execute(
+                    """select * from pandas_df"""
+                ).df()
+            end = time.time()
+            duration = float(end - start)
+            del res
+            results.append(BenchmarkResult(duration, nrun))
+        return results
+
 
 def test_arrow_dictionaries_scan():
     DICT_SIZE = 26 * 1000
@@ -259,9 +291,19 @@ def test_arrow_dictionaries_scan():
             write_result(benchmark_name, run_number, duration)
 
 
+def test_loading_pandas_df_many_times():
+    test = PandasDFLoadBenchmark()
+    results = test.benchmark()
+    benchmark_name = f"load pandas df many times"
+    for res in results:
+        run_number = res.run_number
+        duration = res.duration
+        write_result(benchmark_name, run_number, duration)
+
 def main():
     test_tpch()
     test_arrow_dictionaries_scan()
+    test_loading_pandas_df_many_times()
 
     close_result()
 
