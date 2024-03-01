@@ -85,11 +85,11 @@ struct ExpressionExecutorInfo {
 };
 
 struct OperatorInformation {
-	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+	explicit OperatorInformation() {
 	}
 
-	double time = 0;
-	idx_t elements = 0;
+	double time;
+	idx_t elements;
 	string name;
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
