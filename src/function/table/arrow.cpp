@@ -119,7 +119,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
 		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
-		auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), fixed_size);
+		auto list_type = make_uniq<ArrowType>(LogicalType::ARRAY(child_type->GetDuckType(), fixed_size), fixed_size);
 		list_type->AddChild(std::move(child_type));
 		return list_type;
 	} else if (format == "+s") {

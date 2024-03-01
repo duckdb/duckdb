@@ -221,9 +221,9 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type STRUCT";
 			for (auto &child_mask : child_masks) {
-				child_mask.get().SetInvalid(idx); // some values may have already been found and set valid
+				child_mask.get().SetInvalid(i); // some values may have already been found and set valid
 			}
-			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, vector_cast_data);
+			HandleVectorCastError::Operation<string_t>(text, result_mask, i, vector_cast_data);
 		}
 	}
 

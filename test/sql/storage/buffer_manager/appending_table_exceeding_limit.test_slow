@@ -1,0 +1,53 @@
+# name: test/sql/storage/buffer_manager/appending_table_exceeding_limit.test_slow
+# description: Test appending and checkpointing a table that exceeds buffer manager size
+# group: [buffer_manager]
+
+# load the DB from disk
+load __TEST_DIR__/test_table_exceeding_limit.db
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+SET memory_limit = '10MB'
+
+statement ok
+SET threads=1
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1, 10), (2, 20), (3, 30), (NULL, NULL)
+
+loop i 0 23
+
+statement ok
+INSERT INTO test SELECT * FROM test
+
+endloop
+
+query IIII
+SELECT COUNT(*), COUNT(a), SUM(a), SUM(b) FROM test
+----
+33554432	25165824	50331648	503316480
+
+loop i 0 2
+
+restart
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+SET memory_limit = '10MB'
+
+statement ok
+SET threads=1
+
+query IIII
+SELECT COUNT(*), COUNT(a), SUM(a), SUM(b) FROM test
+----
+33554432	25165824	50331648	503316480
+
+endloop

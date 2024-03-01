@@ -301,6 +301,22 @@ struct ListConvert {
 	}
 };
 
+struct ArrayConvert {
+	static py::tuple ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
+		auto val = input.GetValue(chunk_offset);
+		auto &array_values = ArrayValue::GetChildren(val);
+		auto &array_type = input.GetType();
+		auto array_size = ArrayType::GetSize(array_type);
+		auto &child_type = ArrayType::GetChildType(array_type);
+
+		py::tuple arr(array_size);
+		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+			arr[elem_idx] = PythonObject::FromValue(array_values[elem_idx], child_type, client_properties);
+		}
+		return arr;
+	}
+};
+
 struct StructConvert {
 	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
 		auto &client_properties = append_data.client_properties;
@@ -695,6 +711,9 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		break;
 	case LogicalTypeId::LIST:
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::ListConvert>(append_data);
+		break;
+	case LogicalTypeId::ARRAY:
+		may_have_null = ConvertNested<py::tuple, duckdb_py_convert::ArrayConvert>(append_data);
 		break;
 	case LogicalTypeId::MAP:
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::MapConvert>(append_data);
