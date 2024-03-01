@@ -50,6 +50,18 @@ public:
 	idx_t buffer_idx = 0;
 };
 
+//! Keeps track of start and end of line positions in regard to the CSV file
+class FullLinePosition {
+public:
+	FullLinePosition() {};
+	LinePosition begin;
+	LinePosition end;
+
+	//! Reconstructs the current line to be used in error messages
+	string ReconstructCurrentLine(bool &first_char_nl,
+	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles);
+};
+
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
@@ -83,9 +95,10 @@ public:
 	//! Information to properly handle errors
 	CSVErrorHandler &error_handler;
 	CSVIterator &iterator;
-	//! Where the previous line started, used to validate the maximum_line_size option
-	LinePosition previous_line_start;
-	LinePosition pre_previous_line_start;
+	//! Line position of the current line
+	FullLinePosition current_line_position;
+	//! Used for CSV line reconstruction on flushed errors
+	unordered_map<idx_t, FullLinePosition> line_positions_per_row;
 	bool store_line_size = false;
 	bool added_last_line = false;
 	bool quoted_new_line = false;
@@ -123,8 +136,6 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
-	//! Reconstructs the current line to be used in error messages
-	string ReconstructCurrentLine(bool &first_char_nl);
 
 	void HandleOverLimitRows();
 

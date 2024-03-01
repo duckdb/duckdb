@@ -29,8 +29,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	requested_size = buffer_handle->requested_size;
 
 	// Current Result information
-	previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
-	pre_previous_line_start = previous_line_start;
+	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_handle->actual_size};
+	current_line_position.end = current_line_position.begin;
 	// Fill out Parse Types
 	vector<LogicalType> logical_types;
 	parse_types = make_unsafe_uniq_array<LogicalTypeId>(number_of_columns);
@@ -332,34 +332,33 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 }
 
 //! Reconstructs the current line to be used in error messages
-string StringValueResult::ReconstructCurrentLine(bool &first_char_nl) {
+string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
+                                                unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles) {
 	string result;
-	if (previous_line_start.buffer_idx == pre_previous_line_start.buffer_idx) {
-		if (buffer_handles.find(previous_line_start.buffer_idx) == buffer_handles.end()) {
+	if (end.buffer_idx == begin.buffer_idx) {
+		if (buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
 			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
 			                        "your query and dataset.");
 		}
-		auto buffer = buffer_handles[pre_previous_line_start.buffer_idx]->Ptr();
-		first_char_nl =
-		    buffer[pre_previous_line_start.buffer_pos] == '\n' || buffer[pre_previous_line_start.buffer_pos] == '\r';
-		for (idx_t i = pre_previous_line_start.buffer_pos + first_char_nl; i < previous_line_start.buffer_pos; i++) {
+		auto buffer = buffer_handles[begin.buffer_idx]->Ptr();
+		first_char_nl = buffer[begin.buffer_pos] == '\n' || buffer[begin.buffer_pos] == '\r';
+		for (idx_t i = begin.buffer_pos + first_char_nl; i < end.buffer_pos; i++) {
 			result += buffer[i];
 		}
 	} else {
-		if (buffer_handles.find(pre_previous_line_start.buffer_idx) == buffer_handles.end() ||
-		    buffer_handles.find(previous_line_start.buffer_idx) == buffer_handles.end()) {
+		if (buffer_handles.find(begin.buffer_idx) == buffer_handles.end() ||
+		    buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
 			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
 			                        "your query and dataset.");
 		}
-		auto first_buffer = buffer_handles[pre_previous_line_start.buffer_idx]->Ptr();
-		auto first_buffer_size = buffer_handles[pre_previous_line_start.buffer_idx]->actual_size;
-		auto second_buffer = buffer_handles[previous_line_start.buffer_idx]->Ptr();
-		first_char_nl = first_buffer[pre_previous_line_start.buffer_pos] == '\n' ||
-		                first_buffer[pre_previous_line_start.buffer_pos] == '\r';
-		for (idx_t i = pre_previous_line_start.buffer_pos + first_char_nl; i < first_buffer_size; i++) {
+		auto first_buffer = buffer_handles[begin.buffer_idx]->Ptr();
+		auto first_buffer_size = buffer_handles[begin.buffer_idx]->actual_size;
+		auto second_buffer = buffer_handles[end.buffer_idx]->Ptr();
+		first_char_nl = first_buffer[begin.buffer_pos] == '\n' || first_buffer[begin.buffer_pos] == '\r';
+		for (idx_t i = begin.buffer_pos + first_char_nl; i < first_buffer_size; i++) {
 			result += first_buffer[i];
 		}
-		for (idx_t i = 0; i < previous_line_start.buffer_pos; i++) {
+		for (idx_t i = 0; i < end.buffer_pos; i++) {
 			result += second_buffer[i];
 		}
 	}
@@ -368,7 +367,7 @@ string StringValueResult::ReconstructCurrentLine(bool &first_char_nl) {
 
 bool StringValueResult::AddRowInternal() {
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
-	idx_t current_line_size = current_line_start - previous_line_start;
+	idx_t current_line_size = current_line_start - current_line_position.end;
 	if (store_line_size) {
 		error_handler.NewMaxLineSize(current_line_size);
 	}
@@ -377,8 +376,8 @@ bool StringValueResult::AddRowInternal() {
 		auto csv_error = CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch);
 		error_handler.Error(csv_error);
 	}
-	pre_previous_line_start = previous_line_start;
-	previous_line_start = current_line_start;
+	current_line_position.begin = current_line_position.end;
+	current_line_position.end = current_line_start;
 	if (ignore_current_row) {
 		// An error occurred on this row, we are ignoring it and resetting our control flag
 		ignore_current_row = false;
@@ -394,10 +393,10 @@ bool StringValueResult::AddRowInternal() {
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
 			bool first_nl;
-			auto borked_line = ReconstructCurrentLine(first_nl);
-			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
-			                                     cast_error.first, borked_line, lines_per_batch,
-			                                     pre_previous_line_start.GetGlobalPosition(requested_size, first_nl));
+			auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
+			auto csv_error = CSVError::CastError(
+			    state_machine.options, names[cast_error.first], error_string, cast_error.first, borked_line,
+			    lines_per_batch, current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 			error_handler.Error(csv_error);
 		}
 		// If we got here it means we are ignoring errors, hence we need to signify to our result scanner to ignore this
@@ -444,6 +443,7 @@ bool StringValueResult::AddRowInternal() {
 			number_of_rows--;
 		}
 	}
+	line_positions_per_row[number_of_rows] = current_line_position;
 	cur_col_id = 0;
 	chunk_col_id = 0;
 	number_of_rows++;
@@ -699,9 +699,10 @@ void StringValueScanner::Initialize() {
 		SetStart();
 	}
 	result.last_position = iterator.pos.buffer_pos;
-	result.previous_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, cur_buffer_handle->actual_size};
+	result.current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
+	                                      cur_buffer_handle->actual_size};
 
-	result.pre_previous_line_start = result.previous_line_start;
+	result.current_line_position.end = result.current_line_position.begin;
 }
 
 void StringValueScanner::ProcessExtraRow() {
@@ -1113,8 +1114,8 @@ void StringValueScanner::SetStart() {
 		}
 		result.lines_read++;
 	}
-	iterator.pos.buffer_idx = scan_finder->result.pre_previous_line_start.buffer_idx;
-	iterator.pos.buffer_pos = scan_finder->result.pre_previous_line_start.buffer_pos;
+	iterator.pos.buffer_idx = scan_finder->result.current_line_position.begin.buffer_idx;
+	iterator.pos.buffer_pos = scan_finder->result.current_line_position.begin.buffer_pos;
 	result.last_position = iterator.pos.buffer_pos;
 }
 
