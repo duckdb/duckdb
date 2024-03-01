@@ -90,8 +90,10 @@ public:
 	//! systems.
 	static std::string GetLastErrorAsString();
 
-	//! Creates an empty file with private permissions
+	//! Creates an empty file with private permissions (600 on linux/macos, default permissions on windows)
 	static void CreatePrivateFile(const string &path_p, FileOpener *opener);
+	//! Checks a file is private (checks for 600 on linux/macos, TODO: currently always returns true on windows)
+	static bool IsPrivateFile(const string &path_p, FileOpener *opener);
 
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location

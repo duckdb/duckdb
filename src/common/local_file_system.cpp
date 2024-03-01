@@ -279,6 +279,25 @@ void LocalFileSystem::CreatePrivateFile(const string &path_p, FileOpener *opener
 	close(fd);
 }
 
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
+
+	struct stat st;
+
+	if (lstat(path.c_str(), &st) != 0) {
+		throw IOException(
+		    "Failed to stat '%s' when checking file permissions, file may be missing or have incorrect permissions",
+		    path.c_str());
+	}
+
+	// If group or other have any permission, the file is not private
+	if (st.st_mode & (S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH)) {
+		return false;
+	}
+
+	return true;
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	auto path = FileSystem::ExpandPath(path_p, opener);
@@ -732,6 +751,11 @@ static string AdditionalLockInfo(const std::wstring path) {
 
 	RmEndSession(session);
 	return conflict_string;
+}
+
+bool LocalFileSystem::IsPrivateFile(const string &path_p, FileOpener *opener) {
+	// TODO: detect if file is shared in windows
+	return true;
 }
 
 void LocalFileSystem::CreatePrivateFile(const string &path_p, FileOpener *opener) {
