@@ -10,7 +10,9 @@ Catalog Error: Table Function with name "json" is not in the catalog, a function
 statement error
 select json_execute_serialized_sql(42) from range(5);
 ----
-Catalog Error: Scalar Function with name "json_execute_serialized_sql" is not in the catalog, functions with this name exist in the json extension, but they are of different types, namely Pragma Function, Table Function
+Binder Error: Function "json_execute_serialized_sql" is a table function but it was used as a scalar function. This function has to be called in a FROM clause (similar to a table).
+
+require no_extension_autoloading
 
 # One of the two options is Table Function
 statement error
