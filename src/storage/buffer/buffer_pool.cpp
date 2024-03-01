@@ -36,8 +36,7 @@ shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
 
 BufferPool::BufferPool(idx_t maximum_memory)
     : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()),
-      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), total_dead_nodes(0),
-      purge_active(false) {
+      temporary_memory_manager(make_uniq<TemporaryMemoryManager>()), evict_queue_insertions(0), total_dead_nodes(0) {
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		memory_usage_per_tag[i] = 0;
 	}
@@ -61,7 +60,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 		total_dead_nodes++;
 	}
 
-	if (++evict_queue_insertions >= INSERT_INTERVAL) {
+	if (++evict_queue_insertions % INSERT_INTERVAL == 0) {
 		return true;
 	}
 	return false;
@@ -99,14 +98,12 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 		if (!queue->q.try_dequeue(node)) {
 			// we could not dequeue any eviction node, so we try one more time,
 			// but more aggressively
-			if (!TryDequeueWithoutConcurrentPurge(node)) {
+			if (!TryDequeueWithLock(node)) {
 				// still no success, we return
 				r.Resize(0);
 				return {false, std::move(r)};
 			}
 		}
-
-		evict_queue_insertions--;
 
 		// get a reference to the underlying block pointer
 		auto handle = node.TryGetBlockHandle();
@@ -136,22 +133,9 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 	return {true, std::move(r)};
 }
 
-bool BufferPool::TryDequeueWithoutConcurrentPurge(BufferEvictionNode &node) {
-
-	// we only proceed if we can guarantee that there is no active purge
-	bool expected = false;
-	while (!std::atomic_compare_exchange_weak(&purge_active, &expected, true)) {
-		// Atomically compares the contents of memory pointed to by obj (purge_active) with the contents
-		// of memory pointed to by expected, and if those are bitwise equal (no purge active),
-		// replaces the former with desired (sets purge_active to true). Otherwise, loads the
-		// actual contents of memory pointed to by obj into *expected (performs load operation).
-		expected = false;
-	}
-
-	// dequeue a node, if possible
-	bool success = queue->q.try_dequeue(node);
-	purge_active = false;
-	return success;
+bool BufferPool::TryDequeueWithLock(BufferEvictionNode &node) {
+	lock_guard<mutex> lock(purge_lock);
+	return queue->q.try_dequeue(node);
 }
 
 void BufferPool::PurgeIteration(const idx_t purge_size) {
@@ -177,25 +161,19 @@ void BufferPool::PurgeIteration(const idx_t purge_size) {
 		}
 	}
 
-	atomic_fetch_sub(&total_dead_nodes, actually_dequeued - alive_nodes);
+	total_dead_nodes -= actually_dequeued - alive_nodes;
 }
 
 void BufferPool::PurgeQueue() {
 
 	// only one thread purges the queue, all other threads early-out
-	bool actual_purge_active;
-	do {
-		actual_purge_active = purge_active;
-		if (actual_purge_active) {
-			return;
-		}
-	} while (!std::atomic_compare_exchange_weak(&purge_active, &actual_purge_active, true));
+	if (!purge_lock.try_lock()) {
+		return;
+	}
+	lock_guard<mutex> lock {purge_lock, std::adopt_lock};
 
-	// retrieve the number of insertions since the previous purge
-	// this value is expected to be around INSERT_INTERVAL
-	idx_t queue_insertions = atomic_fetch_sub(&evict_queue_insertions, INSERT_INTERVAL);
-	// we purge PURGE_SIZE_MULTIPLIER * queue_insertions nodes
-	idx_t purge_size = queue_insertions * PURGE_SIZE_MULTIPLIER;
+	// we purge INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER nodes
+	idx_t purge_size = INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER;
 
 	// get an estimate of the queue size as-of now
 	idx_t approx_q_size = queue->q.size_approx();
@@ -203,14 +181,13 @@ void BufferPool::PurgeQueue() {
 	// early-out, if the queue is not big enough to justify purging
 	// - we want to keep the LRU characteristic alive
 	if (approx_q_size < purge_size * EARLY_OUT_MULTIPLIER) {
-		purge_active = false;
 		return;
 	}
 
 	// There are two types of situations.
 
-	// For most scenarios, purging PURGE_SIZE_MULTIPLIER more nodes than we insert is enough.
-	// This also counters oscillation for scenarios where most nodes are dead.
+	// For most scenarios, purging INSERT_INTERVAL * PURGE_SIZE_MULTIPLIER nodes is enough.
+	// Purging more nodes than we insert also counters oscillation for scenarios where most nodes are dead.
 	// If we always purge slightly more, we trigger a purge less often, as we purge below the trigger.
 
 	// However, if the pressure on the queue becomes too contested, we need to purge more aggressively,
@@ -219,8 +196,7 @@ void BufferPool::PurgeQueue() {
 	// dead nodes grows faster than we can purge, we keep purging until we hit one of the following conditions.
 
 	// 2.1. We're back at an approximate queue size less than purge_size * EARLY_OUT_MULTIPLIER.
-	// 2.2. We're back at a ratio of 1*alive_node:(ALIVE_NODE_MULTIPLIER - 1)*dead_nodes. We go below our initial
-	// ratio of 1*alive_node:ALIVE_NODE_MULTIPLIER*dead_nodes to decrease oscillation.
+	// 2.2. We're back at a ratio of 1*alive_node:ALIVE_NODE_MULTIPLIER*dead_nodes.
 	// 2.3. We've purged the entire queue: max_purges is zero. This is a worst-case scenario,
 	// guaranteeing that we always exit the loop.
 
@@ -234,8 +210,7 @@ void BufferPool::PurgeQueue() {
 
 		// early-out according to (2.1)
 		if (approx_q_size < purge_size * EARLY_OUT_MULTIPLIER) {
-			purge_active = false;
-			return;
+			break;
 		}
 
 		idx_t approx_dead_nodes = total_dead_nodes;
@@ -244,14 +219,11 @@ void BufferPool::PurgeQueue() {
 
 		// early-out according to (2.2)
 		if (approx_alive_nodes * (ALIVE_NODE_MULTIPLIER - 1) > approx_dead_nodes) {
-			purge_active = false;
-			return;
+			break;
 		}
 
 		max_purges--;
 	}
-
-	purge_active = false;
 }
 
 void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {

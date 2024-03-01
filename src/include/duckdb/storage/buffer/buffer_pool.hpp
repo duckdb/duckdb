@@ -72,9 +72,8 @@ protected:
 	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
 
-	//! Tries to dequeue an element from the eviction queue, but only after acquiring
-	//! the purge_active lock.
-	bool TryDequeueWithoutConcurrentPurge(BufferEvictionNode &node);
+	//! Tries to dequeue an element from the eviction queue, but only after acquiring the purge queue lock.
+	bool TryDequeueWithLock(BufferEvictionNode &node);
 	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
 	void PurgeIteration(const idx_t purge_size);
 	//! Garbage collect dead nodes in the eviction queue.
@@ -82,6 +81,11 @@ protected:
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
+
+	//! Increment the dead node counter in the purge queue.
+	inline void IncrementDeadNodes() {
+		total_dead_nodes++;
+	}
 
 protected:
 	//! The lock for changing the memory limit
@@ -113,8 +117,9 @@ protected:
 	//! Total dead nodes in the eviction queue. There are two scenarios in which a node dies: (1) we destroy its block
 	//! handle, or (2) we insert a newer version into the eviction queue.
 	atomic<idx_t> total_dead_nodes;
-	//! Whether a queue purge is currently active. Only lets a single thread enter the purge phase.
-	atomic<bool> purge_active;
+	//! Locked, if a queue purge is currently active or we're trying to forcefully evict a node.
+	//! Only lets a single thread enter the purge phase.
+	mutex purge_lock;
 
 	//! A pre-allocated vector of eviction nodes. We reuse this to keep the allocation overhead of purges small.
 	vector<BufferEvictionNode> purge_nodes;
