@@ -59,18 +59,18 @@ public:
 	static CSVError CastError(const CSVReaderOptions &options, string &column_name, string &cast_error,
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t byte_position);
 	//! Produces error for when the line size exceeds the maximum line size option
-	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info);
+	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
+	                              string &csv_row, idx_t byte_position);
 	//! Produces error for when the sniffer couldn't find viable options
 	static CSVError SniffingError(string &file_path);
 	//! Produces error messages for unterminated quoted values
-	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
-	                                        idx_t vector_line_start, idx_t current_column, LinesPerBoundary error_info);
+	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
+	                                        LinesPerBoundary error_info, string &csv_row, idx_t byte_position);
 	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
 	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
-	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
-	                                           idx_t vector_line_start, idx_t actual_columns,
-	                                           LinesPerBoundary error_info);
+	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
+	                                           LinesPerBoundary error_info, string &csv_row, idx_t byte_position);
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;
 	}

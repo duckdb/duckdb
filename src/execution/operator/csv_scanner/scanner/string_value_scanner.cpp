@@ -307,8 +307,11 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 
 void StringValueResult::HandleOverLimitRows() {
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
-	auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns,
-	                                                      cur_col_id + 1, lines_per_batch);
+	bool first_nl;
+	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
+	auto csv_error =
+	    CSVError::IncorrectColumnAmountError(state_machine.options, cur_col_id + 1, lines_per_batch, borked_line,
+	                                         current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 	error_handler.Error(csv_error);
 	// If we get here we need to remove the last line
 	cur_col_id = 0;
@@ -372,8 +375,12 @@ bool StringValueResult::AddRowInternal() {
 		error_handler.NewMaxLineSize(current_line_size);
 	}
 	if (current_line_size > state_machine.options.maximum_line_size) {
+		bool first_nl;
+		auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
-		auto csv_error = CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch);
+		auto csv_error =
+		    CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch, borked_line,
+		                            current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 		error_handler.Error(csv_error);
 	}
 	current_line_position.begin = current_line_position.end;
@@ -435,9 +442,12 @@ bool StringValueResult::AddRowInternal() {
 			}
 		} else {
 			// If we are not null-padding this is an error
+			bool first_nl;
+			auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
-			auto csv_error = CSVError::IncorrectColumnAmountError(state_machine.options, nullptr, number_of_columns,
-			                                                      cur_col_id, lines_per_batch);
+			auto csv_error = CSVError::IncorrectColumnAmountError(
+			    state_machine.options, cur_col_id, lines_per_batch, borked_line,
+			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 			error_handler.Error(csv_error);
 			// If we are here we ignore_errors, so we delete this line
 			number_of_rows--;
@@ -481,9 +491,12 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 void StringValueResult::InvalidState(StringValueResult &result) {
 	// FIXME: How do we recover from an invalid state? Can we restart the state machine and jump to the next row?
 	LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
-	auto csv_error = CSVError::UnterminatedQuotesError(result.state_machine.options,
-	                                                   static_cast<string_t *>(result.vector_ptr[result.chunk_col_id]),
-	                                                   result.number_of_rows, result.cur_col_id, lines_per_batch);
+	bool first_nl;
+	auto borked_line = result.current_line_position.ReconstructCurrentLine(first_nl, result.buffer_handles);
+
+	auto csv_error = CSVError::UnterminatedQuotesError(
+	    result.state_machine.options, result.cur_col_id, lines_per_batch, borked_line,
+	    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl));
 	result.error_handler.Error(csv_error);
 }
 

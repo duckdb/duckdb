@@ -115,12 +115,13 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, csv_row, error_info, byte_position);
 }
 
-CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info) {
+CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
+                                 string &csv_row, idx_t byte_position) {
 	std::ostringstream error;
 	error << "Maximum line size of " << options.maximum_line_size << " bytes exceeded. ";
 	error << "Actual Size:" << actual_size << " bytes." << std::endl;
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE, error_info);
+	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE, 0, csv_row, error_info, byte_position);
 }
 
 CSVError CSVError::SniffingError(string &file_path) {
@@ -141,26 +142,26 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoun
 	return CSVError(error.str(), CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE, error_info);
 }
 
-CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, string_t *vector_ptr,
-                                           idx_t vector_line_start, idx_t current_column, LinesPerBoundary error_info) {
+CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
+                                           LinesPerBoundary error_info, string &csv_row, idx_t byte_position) {
 	std::ostringstream error;
 	error << "Value with unterminated quote found." << std::endl;
 	error << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, error_info);
+	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, current_column, csv_row, error_info, byte_position);
 }
 
-CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, string_t *vector_ptr,
-                                              idx_t vector_line_start, idx_t actual_columns,
-                                              LinesPerBoundary error_info) {
+CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
+                                              LinesPerBoundary error_info, string &csv_row, idx_t byte_position) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
 	      << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, error_info);
+	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, actual_columns, csv_row, error_info,
+	                byte_position);
 }
 
 bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
