@@ -649,10 +649,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				}
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
-				//				auto borked_line = result.ReconstructCurrentLine();
-				string empty;
-				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-				                                     error_message, col_idx, empty, lines_per_batch, 0);
+				bool first_nl;
+				auto borked_line =
+				    result.line_positions_per_row[line_error].ReconstructCurrentLine(first_nl, result.buffer_handles);
+				auto csv_error = CSVError::CastError(
+				    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
+				    lines_per_batch,
+				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl));
 				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
@@ -668,9 +671,14 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
-					string empty;
-					auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
-					                                     error_message, col_idx, empty, lines_per_batch, 0);
+					bool first_nl;
+					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
+					    first_nl, result.buffer_handles);
+					auto csv_error =
+					    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message,
+					                        col_idx, borked_line, lines_per_batch,
+					                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
+					                            result.result_size, first_nl));
 
 					error_handler->Error(csv_error);
 				}
