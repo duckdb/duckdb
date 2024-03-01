@@ -554,6 +554,8 @@ const char* EnumUtil::ToChars<ArrowTypeInfoType>(ArrowTypeInfoType value) {
 		return "DATE_TIME";
 	case ArrowTypeInfoType::STRING:
 		return "STRING";
+	case ArrowTypeInfoType::ARRAY:
+		return "ARRAY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -572,6 +574,9 @@ ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "STRING")) {
 		return ArrowTypeInfoType::STRING;
+	}
+	if (StringUtil::Equals(value, "ARRAY")) {
+		return ArrowTypeInfoType::ARRAY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
