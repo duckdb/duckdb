@@ -616,7 +616,7 @@ void WindowSegmentTree::Finalize(const FrameStats &stats) {
 }
 
 WindowSegmentTree::~WindowSegmentTree() {
-	if (!aggr.function.destructor) {
+	if (!aggr.function.destructor || !gstate) {
 		// nothing to destroy
 		return;
 	}
