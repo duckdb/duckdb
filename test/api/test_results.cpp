@@ -8,10 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test results API", "[api]") {
-	DBConfig config;
-	config.options.allow_unsigned_extensions = true;
-
-	DuckDB db(nullptr, &config);
+	DuckDB db(nullptr);
 	Connection con(db);
 
 	// result equality
@@ -191,10 +188,7 @@ TEST_CASE("Test UUID", "[api][uuid]") {
 }
 
 TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
-	DBConfig config;
-	config.options.allow_unsigned_extensions = true;
-
-	DuckDB db(nullptr, &config);
+	DuckDB db(nullptr);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (a INT, b INT, c INT)"));
