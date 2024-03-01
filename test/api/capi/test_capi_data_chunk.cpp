@@ -448,7 +448,7 @@ TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
 
 	auto vec = (Vector &)(*array_vector);
 	for (int i = 0; i < 2; i++) {
-		auto child_vals = ArrayValue::GetChildren(vec.GetValue(i));
+		auto &child_vals = ArrayValue::GetChildren(vec.GetValue(i));
 		for (int j = 0; j < 3; j++) {
 			REQUIRE(child_vals[j].GetValue<int>() == i * 3 + j);
 		}
