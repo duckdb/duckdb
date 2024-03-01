@@ -243,9 +243,11 @@ class ArrowDictionaryBenchmark:
             results.append(BenchmarkResult(duration, nrun))
         return results
 
+
 class PandasDFLoadBenchmark:
     def __init__(self):
         pass
+
     def initialize_connection(self):
         self.con = duckdb.connect()
         if not threads:
@@ -253,9 +255,9 @@ class PandasDFLoadBenchmark:
         print_msg(f'Limiting threads to {threads}')
         self.con.execute(f"SET threads={threads}")
 
-    def generate(self, unique_values, values, arrow_dict: ArrowDictionary):
+    def generate(self):
         self.con.execute("call dbgen(sf=0.2)")
-        new_table = "*, " + ", ".join([l_shipdate] * 300)
+        new_table = "*, " + ", ".join(["l_shipdate"] * 300)
         self.con.exucute(f"create table wide as select {new_table} from lineitem")
         self.con.execute(f"copy wide to 'wide_table.csv' (FORMAT CSV)")
 
@@ -266,9 +268,7 @@ class PandasDFLoadBenchmark:
             pandas_df = pd.read_csv('wide_table.csv')
             start = time.time()
             for amplification in range(30):
-                res = self.con.execute(
-                    """select * from pandas_df"""
-                ).df()
+                res = self.con.execute("""select * from pandas_df""").df()
             end = time.time()
             duration = float(end - start)
             del res
@@ -294,11 +294,12 @@ def test_arrow_dictionaries_scan():
 def test_loading_pandas_df_many_times():
     test = PandasDFLoadBenchmark()
     results = test.benchmark()
-    benchmark_name = f"load pandas df many times"
+    benchmark_name = f"load_pandas_df_many_times"
     for res in results:
         run_number = res.run_number
         duration = res.duration
         write_result(benchmark_name, run_number, duration)
+
 
 def main():
     test_tpch()
