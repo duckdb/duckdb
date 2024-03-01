@@ -47,7 +47,7 @@ void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 }
 
 MetaBlockPointer MetadataReader::GetMetaBlockPointer() {
-	return manager.GetDiskPointer(block.pointer, offset);
+	return manager.GetDiskPointer(block.pointer, UnsafeNumericCast<uint32_t>(offset));
 }
 
 void MetadataReader::ReadNextBlock() {

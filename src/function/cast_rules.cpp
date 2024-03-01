@@ -1,4 +1,5 @@
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -410,7 +411,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 					auto &from_member_type = UnionType::GetMemberType(from, from_member_idx);
 					auto &to_member_type = UnionType::GetMemberType(to, to_member_idx);
 
-					int child_cost = ImplicitCast(from_member_type, to_member_type);
+					int child_cost = NumericCast<int>(ImplicitCast(from_member_type, to_member_type));
 					if (child_cost > cost) {
 						cost = child_cost;
 					}

@@ -1,4 +1,5 @@
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/bit.hpp"
@@ -129,7 +130,7 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 		}
 	}
 	if (padded_byte != 0) {
-		*(output++) = (8 - padded_byte); // the first byte contains the number of padded zeroes
+		*(output++) = UnsafeNumericCast<char>((8 - padded_byte)); // the first byte contains the number of padded zeroes
 	}
 	*(output++) = byte;
 
@@ -150,7 +151,7 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 string Bit::ToBit(string_t str) {
 	auto bit_len = GetBitSize(str);
 	auto buffer = make_unsafe_uniq_array<char>(bit_len);
-	string_t output_str(buffer.get(), bit_len);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit_len));
 	Bit::ToBit(str, output_str);
 	return output_str.GetString();
 }
@@ -166,7 +167,7 @@ void Bit::BlobToBit(string_t blob, string_t &output_str) {
 
 string Bit::BlobToBit(string_t blob) {
 	auto buffer = make_unsafe_uniq_array<char>(blob.GetSize() + 1);
-	string_t output_str(buffer.get(), blob.GetSize() + 1);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(blob.GetSize() + 1));
 	Bit::BlobToBit(blob, output_str);
 	return output_str.GetString();
 }
@@ -192,7 +193,7 @@ string Bit::BitToBlob(string_t bit) {
 	D_ASSERT(bit.GetSize() > 1);
 
 	auto buffer = make_unsafe_uniq_array<char>(bit.GetSize() - 1);
-	string_t output_str(buffer.get(), bit.GetSize() - 1);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit.GetSize() - 1));
 	Bit::BitToBlob(bit, output_str);
 	return output_str.GetString();
 }
@@ -289,11 +290,11 @@ void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 }
 
 void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
-	char *buf = bit_string.GetDataWriteable();
+	auto buf = bit_string.GetDataWriteable();
 
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
-	char shift_byte = 1 << (7 - (n % 8));
+	auto shift_byte = UnsafeNumericCast<uint8_t>(1 << (7 - (n % 8)));
 	if (new_value == 0) {
 		shift_byte = ~shift_byte;
 		buf[idx] &= shift_byte;

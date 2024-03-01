@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -17,8 +18,8 @@ duckdb_date_struct duckdb_from_date(duckdb_date date) {
 
 	duckdb_date_struct result;
 	result.year = year;
-	result.month = month;
-	result.day = day;
+	result.month = duckdb::UnsafeNumericCast<int8_t>(month);
+	result.day = duckdb::UnsafeNumericCast<int8_t>(day);
 	return result;
 }
 
@@ -37,9 +38,9 @@ duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	Time::Convert(dtime_t(time.micros), hour, minute, second, micros);
 
 	duckdb_time_struct result;
-	result.hour = hour;
-	result.min = minute;
-	result.sec = second;
+	result.hour = duckdb::UnsafeNumericCast<int8_t>(hour);
+	result.min = duckdb::UnsafeNumericCast<int8_t>(minute);
+	result.sec = duckdb::UnsafeNumericCast<int8_t>(second);
 	result.micros = micros;
 	return result;
 }

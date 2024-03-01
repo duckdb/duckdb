@@ -20,9 +20,12 @@ if(NOT MSVC)
   endif()
 endif()
 set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}"
+                                                  STREQUAL "AppleClang")
   set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors")
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors -Wimplicit-int-conversion -Wshorten-64-to-32 -Wnarrowing"
+  )
 endif()
 
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})

@@ -778,11 +778,14 @@ public:
 		scan_state.Initialize(column_ids);
 		scan_state.table_state.Initialize(types);
 		scan_state.table_state.max_row = idx_t(-1);
-		idx_t next_idx = segment_idx + merge_count;
-		for (idx_t c_idx = segment_idx; c_idx < next_idx; c_idx++) {
+		idx_t merged_groups = 0;
+		idx_t total_row_groups = vacuum_state.row_group_counts.size();
+		for (idx_t c_idx = segment_idx; merged_groups < merge_count && c_idx < total_row_groups; c_idx++) {
 			if (vacuum_state.row_group_counts[c_idx] == 0) {
 				continue;
 			}
+			merged_groups++;
+
 			auto &current_row_group = *checkpoint_state.segments[c_idx].node;
 
 			current_row_group.InitializeScan(scan_state.table_state);
