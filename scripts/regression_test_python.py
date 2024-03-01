@@ -246,7 +246,8 @@ class ArrowDictionaryBenchmark:
 
 class PandasDFLoadBenchmark:
     def __init__(self):
-        pass
+        self.initialize_connection()
+        self.generate()
 
     def initialize_connection(self):
         self.con = duckdb.connect()
@@ -258,7 +259,9 @@ class PandasDFLoadBenchmark:
     def generate(self):
         self.con.execute("call dbgen(sf=0.2)")
         new_table = "*, " + ", ".join(["l_shipdate"] * 300)
-        self.con.exucute(f"create table wide as select {new_table} from lineitem")
+        self.con.execute(f"create table wide as select {new_table} from lineitem")
+        import pdb
+        pdb.set_trace()
         self.con.execute(f"copy wide to 'wide_table.csv' (FORMAT CSV)")
 
     def benchmark(self) -> List[BenchmarkResult]:
