@@ -182,6 +182,10 @@ template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
+	if (input.GetVectorType() != VectorType::CONSTANT_VECTOR || input.GetVectorType() != VectorType::FLAT_VECTOR) {
+		input.Flatten(count);
+	}
+
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
