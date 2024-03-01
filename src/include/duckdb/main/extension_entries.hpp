@@ -330,8 +330,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "azure", "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
-    // "inet",
-    // "icu",
+    "inet",
+    "icu",
     "json", "parquet", "sqlsmith", "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
