@@ -54,7 +54,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
     : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
-      row_start(row_start_p) {
+      row_start(row_start_p), allocation_size(0) {
 	row_groups = make_shared<RowGroupSegmentTree>(*this);
 }
 
@@ -345,7 +345,9 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
+			auto previous_allocation_size = current_row_group->GetAllocationSize();
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
+			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
 			// merge the stats
 			auto stats_lock = stats.GetLock();
 			for (idx_t i = 0; i < types.size(); i++) {
@@ -776,11 +778,14 @@ public:
 		scan_state.Initialize(column_ids);
 		scan_state.table_state.Initialize(types);
 		scan_state.table_state.max_row = idx_t(-1);
-		idx_t next_idx = segment_idx + merge_count;
-		for (idx_t c_idx = segment_idx; c_idx < next_idx; c_idx++) {
+		idx_t merged_groups = 0;
+		idx_t total_row_groups = vacuum_state.row_group_counts.size();
+		for (idx_t c_idx = segment_idx; merged_groups < merge_count && c_idx < total_row_groups; c_idx++) {
 			if (vacuum_state.row_group_counts[c_idx] == 0) {
 				continue;
 			}
+			merged_groups++;
+
 			auto &current_row_group = *checkpoint_state.segments[c_idx].node;
 
 			current_row_group.InitializeScan(scan_state.table_state);

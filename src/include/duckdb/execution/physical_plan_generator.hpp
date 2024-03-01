@@ -12,7 +12,6 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
-#include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -71,7 +70,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalFilter &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimit &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimitPercent &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOrder &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalTopN &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPositionalJoin &op);

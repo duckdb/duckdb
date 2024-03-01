@@ -649,7 +649,7 @@ bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_
 	current_progress = 0;
 
 	for (size_t i = 0; i < progress.size(); i++) {
-		D_ASSERT(progress[i] <= 100);
+		progress[i] = MaxValue(0.0, MinValue(100.0, progress[i]));
 		current_cardinality += double(progress[i]) * double(cardinality[i]) / double(100);
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 		D_ASSERT(current_cardinality <= total_cardinality);

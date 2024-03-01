@@ -92,7 +92,7 @@ class TestArrowListType(object):
         )
         create_and_register_comparison_result(
             [
-                ('a', 'FLOAT[]', data),
+                ('a', f'FLOAT[{list_size}]', data),
             ],
             duckdb_conn,
         )

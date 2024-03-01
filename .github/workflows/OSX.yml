@@ -29,7 +29,7 @@ env:
 jobs:
   xcode-debug:
     name: OSX Debug
-    runs-on: macos-latest
+    runs-on: macos-14
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
@@ -39,9 +39,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -82,7 +82,7 @@ jobs:
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
-    runs-on: macos-latest
+    runs-on: macos-14
     needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
@@ -98,9 +98,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.12'
 
       - name: Install Ninja
         run: brew install ninja
@@ -114,7 +114,6 @@ jobs:
       - name: Install UnixODBC
         shell: bash
         run: |
-          brew remove --ignore-dependencies unixodbc
           CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
       - name: Install pytest
@@ -183,7 +182,7 @@ jobs:
   xcode-extensions:
     # Builds extensions for osx_arm64 and osx_amd64
     name: OSX Extensions Release
-    runs-on: macos-latest
+    runs-on: macos-14
     needs: xcode-debug
     strategy:
       matrix:
@@ -193,12 +192,12 @@ jobs:
             osx_arch: x86_64
             duckdb_arch: osx_amd64
             vcpkg_triplet: x64-osx
-            run_autoload_tests: 1
+            run_autoload_tests: 0
           - label: arm64
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            run_autoload_tests: 0
+            run_autoload_tests: 1
 
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
@@ -212,9 +211,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.12'
 
       - name: Install Ninja and Pkg-config
         run: brew install pkg-config ninja
@@ -238,7 +237,7 @@ jobs:
           ninja: 1
 
       - name: Test statically linked extensions
-        if: ${{ matrix.osx_arch == 'x86_64' }}
+        if: ${{ matrix.osx_arch == 'arm64' }}
         shell: bash
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
@@ -272,7 +271,7 @@ jobs:
           fi
 
       - name: Test loadable extensions
-        if: ${{ matrix.osx_arch == 'x86_64' }}
+        if: ${{ matrix.osx_arch == 'arm64' }}
         shell: bash
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
@@ -284,7 +283,7 @@ jobs:
           fi
 
       - name: Rebuild DuckDB without any extensions linked, but with same extension config
-        if: ${{ matrix.osx_arch == 'x86_64' }}
+        if: ${{ matrix.osx_arch == 'arm64' }}
         shell: bash
         env:
           EXTENSION_TESTS_ONLY: 1
@@ -296,7 +295,7 @@ jobs:
 
       # Run autoload unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
       - name: Run tests with auto loading
-        if: ${{ matrix.osx_arch == 'x86_64' && !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ matrix.osx_arch == 'arm64' && !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         env:
           LOCAL_EXTENSION_REPO: ${{ github.workspace }}

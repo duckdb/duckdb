@@ -53,6 +53,9 @@ public:
 	PerfectHashJoinStats perfect_join_statistics;
 
 public:
+	string ParamsToString() const override;
+
+public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 

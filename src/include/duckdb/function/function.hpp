@@ -53,7 +53,7 @@ struct FunctionData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>

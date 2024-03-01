@@ -40,7 +40,7 @@ Unable to connect to URL
 
 #test with .csv file
 statement ok
-COPY test TO 's3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}' WITH (HEADER 1);
+COPY test TO 's3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}';
 
 query I
 SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
@@ -84,7 +84,7 @@ statement ok
 CREATE TABLE test_2 as SELECT * FROM range(100,110) tbl(j);
 
 statement ok
-COPY test_2 TO 's3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=minio_duckdb_user_2&s3_secret_access_key=minio_duckdb_user_2_password' WITH (HEADER 1);
+COPY test_2 TO 's3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=minio_duckdb_user_2&s3_secret_access_key=minio_duckdb_user_2_password' ;
 
 query I
 SELECT j FROM "s3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=minio_duckdb_user_2&s3_secret_access_key=minio_duckdb_user_2_password" LIMIT 3

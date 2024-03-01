@@ -336,7 +336,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				// empty key name unsupported
 				return false;
 			}
-			string_t found_key(buf + key_start, key_end - key_start);
+			string_t found_key(buf + key_start, UnsafeNumericCast<uint32_t>(key_end - key_start));
 
 			auto it = child_names.find(found_key);
 			if (it == child_names.end()) {

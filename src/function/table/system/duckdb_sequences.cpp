@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 
@@ -121,7 +122,8 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// cycle, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq_data.cycle));
 		// last_value, BIGINT
-		output.SetValue(col++, count, seq_data.usage_count == 0 ? Value() : Value::BOOLEAN(seq_data.last_value));
+		output.SetValue(col++, count,
+		                seq_data.usage_count == 0 ? Value() : Value::BOOLEAN(NumericCast<int8_t>(seq_data.last_value)));
 		// sql, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(seq.ToSQL()));
 

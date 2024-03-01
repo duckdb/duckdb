@@ -431,3 +431,30 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	duckdb_destroy_logical_type(&list_type);
 	duckdb_destroy_logical_type(&elem_type);
 }
+
+TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
+
+	auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
+	auto array_type = duckdb_create_array_type(elem_type, 3);
+	duckdb_logical_type schema[] = {array_type};
+	auto chunk = duckdb_create_data_chunk(schema, 1);
+	duckdb_data_chunk_set_size(chunk, 2);
+	auto array_vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	auto child = duckdb_array_vector_get_child(array_vector);
+	for (int i = 0; i < 6; i++) {
+		((int *)duckdb_vector_get_data(child))[i] = i;
+	}
+
+	auto vec = (Vector &)(*array_vector);
+	for (int i = 0; i < 2; i++) {
+		auto child_vals = ArrayValue::GetChildren(vec.GetValue(i));
+		for (int j = 0; j < 3; j++) {
+			REQUIRE(child_vals[j].GetValue<int>() == i * 3 + j);
+		}
+	}
+
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&array_type);
+	duckdb_destroy_logical_type(&elem_type);
+}

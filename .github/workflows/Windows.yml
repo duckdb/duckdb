@@ -47,9 +47,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -171,9 +171,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -258,9 +258,9 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - uses: ./.github/actions/build_extensions
        with:

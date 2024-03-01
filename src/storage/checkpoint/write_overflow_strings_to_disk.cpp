@@ -47,19 +47,19 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 		AllocateNewBlock(state, block_manager.GetFreeBlockId());
 	}
 	result_block = block_id;
-	result_offset = offset;
+	result_offset = UnsafeNumericCast<int32_t>(offset);
 
 	// write the length field
 	auto data_ptr = handle.Ptr();
 	auto string_length = string.GetSize();
-	Store<uint32_t>(string_length, data_ptr + offset);
+	Store<uint32_t>(UnsafeNumericCast<uint32_t>(string_length), data_ptr + offset);
 	offset += sizeof(uint32_t);
 
 	// now write the remainder of the string
 	auto strptr = string.GetData();
-	uint32_t remaining = string_length;
+	auto remaining = UnsafeNumericCast<uint32_t>(string_length);
 	while (remaining > 0) {
-		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);
+		uint32_t to_write = MinValue<uint32_t>(remaining, UnsafeNumericCast<uint32_t>(STRING_SPACE - offset));
 		if (to_write > 0) {
 			memcpy(data_ptr + offset, strptr, to_write);
 
