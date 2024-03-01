@@ -111,6 +111,10 @@ void RewriteCorrelatedRecursive::VisitBoundTableRef(BoundTableRef &ref) {
 				corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			}
 		}
+	} else if (ref.type == TableReferenceType::SUBQUERY) {
+		auto &subquery = ref.Cast<BoundSubqueryRef>();
+		RewriteCorrelatedSubquery(*subquery.binder, *subquery.subquery);
+		return;
 	}
 	// visit the children of the table ref
 	BoundNodeVisitor::VisitBoundTableRef(ref);
@@ -147,9 +151,7 @@ void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> &express
 	} else if (expression->type == ExpressionType::SUBQUERY) {
 		// we encountered another subquery: rewrite recursively
 		auto &bound_subquery = expression->Cast<BoundSubqueryExpression>();
-		RewriteCorrelatedRecursive rewrite(base_binding, correlated_map);
-		rewrite.RewriteCorrelatedSubquery(*bound_subquery.binder, *bound_subquery.subquery);
-		return;
+		RewriteCorrelatedSubquery(*bound_subquery.binder, *bound_subquery.subquery);
 	}
 	// recurse into the children of this subquery
 	BoundNodeVisitor::VisitExpression(expression);

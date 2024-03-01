@@ -88,7 +88,8 @@ static void ReduceExpressionSubquery(BoundSubqueryExpression &expr,
 
 class ExpressionDepthReducerRecursive : public BoundNodeVisitor {
 public:
-	ExpressionDepthReducerRecursive(const vector<CorrelatedColumnInfo> &correlated) : correlated_columns(correlated) {
+	explicit ExpressionDepthReducerRecursive(const vector<CorrelatedColumnInfo> &correlated)
+	    : correlated_columns(correlated) {
 	}
 
 	void VisitExpression(unique_ptr<Expression> &expression) override {
