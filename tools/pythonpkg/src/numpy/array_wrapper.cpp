@@ -273,6 +273,18 @@ struct UUIDConvert {
 	}
 };
 
+static py::object InternalCreateList(Vector &input, idx_t total_size, idx_t offset, idx_t size,
+                                     NumpyAppendData &append_data) {
+	// Initialize the array we'll append the list data to
+	auto &type = input.GetType();
+	ArrayWrapper result(type, append_data.client_properties, append_data.pandas);
+	result.Initialize(size);
+
+	D_ASSERT(offset + size <= total_size);
+	result.Append(0, input, total_size, offset, size);
+	return result.ToArray();
+}
+
 struct ListConvert {
 	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
 		auto &client_properties = append_data.client_properties;
@@ -286,35 +298,30 @@ struct ListConvert {
 
 		auto list_size = list_entry.length;
 		auto list_offset = list_entry.offset;
-
-		// Initialize the array we'll append the list data to
-		auto &child_type = ListType::GetChildType(input.GetType());
-		ArrayWrapper result(child_type, client_properties, append_data.pandas);
-		result.Initialize(list_size);
-
-		// Get the child vector and append the relevant entries to our result array
 		auto child_size = ListVector::GetListSize(input);
 		auto &child_vector = ListVector::GetEntry(input);
-		D_ASSERT(list_offset + list_size <= child_size);
-		result.Append(0, child_vector, child_size, list_offset, list_size);
-		return result.ToArray();
+
+		return InternalCreateList(child_vector, child_size, list_offset, list_size, append_data);
 	}
 };
 
 struct ArrayConvert {
-	static py::tuple ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
-		auto &client_properties = append_data.client_properties;
-		auto val = input.GetValue(chunk_offset);
-		auto &array_values = ArrayValue::GetChildren(val);
-		auto &array_type = input.GetType();
-		auto array_size = ArrayType::GetSize(array_type);
-		auto &child_type = ArrayType::GetChildType(array_type);
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &array_data = append_data.idata;
 
-		py::tuple arr(array_size);
-		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
-			arr[elem_idx] = PythonObject::FromValue(array_values[elem_idx], child_type, client_properties);
-		}
-		return arr;
+		// Get the list entry information from the parent
+		const auto array_sel = *array_data.sel;
+		auto array_index = array_sel.get_index(chunk_offset);
+
+		auto &array_type = input.GetType();
+		D_ASSERT(array_type.id() == LogicalTypeId::ARRAY);
+
+		auto array_size = ArrayType::GetSize(array_type);
+		auto array_offset = array_index * array_size;
+		auto child_size = ArrayVector::GetTotalSize(input);
+		auto &child_vector = ArrayVector::GetEntry(input);
+
+		return InternalCreateList(child_vector, child_size, array_offset, array_size, append_data);
 	}
 };
 
@@ -714,7 +721,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::ListConvert>(append_data);
 		break;
 	case LogicalTypeId::ARRAY:
-		may_have_null = ConvertNested<py::tuple, duckdb_py_convert::ArrayConvert>(append_data);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::ArrayConvert>(append_data);
 		break;
 	case LogicalTypeId::MAP:
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::MapConvert>(append_data);
