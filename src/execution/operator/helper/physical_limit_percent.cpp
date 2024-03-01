@@ -126,7 +126,13 @@ SourceResultType PhysicalLimitPercent::GetData(ExecutionContext &context, DataCh
 	auto &limit = state.limit;
 	auto &current_offset = state.current_offset;
 
-	if (gstate.is_limit_set && !limit.IsValid()) {
+	if (!limit.IsValid()) {
+		if (!gstate.is_limit_set) {
+			// no limit value and we have not set limit_percent
+			// we are running LIMIT % with a subquery over an empty table
+			D_ASSERT(gstate.data.Count() == 0);
+			return SourceResultType::FINISHED;
+		}
 		idx_t count = gstate.data.Count();
 		if (count > 0) {
 			count += offset.GetIndex();
