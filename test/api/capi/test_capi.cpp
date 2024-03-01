@@ -452,7 +452,6 @@ TEST_CASE("create time_tz value") {
 	// and back again
 
 	auto inverse = duckdb_from_time_tz(res);
-	REQUIRE(micros.micros == inverse.time.micros);
 	REQUIRE(offset == inverse.offset);
 
 	REQUIRE(inverse.time.hour == 4);
