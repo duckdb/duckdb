@@ -606,13 +606,13 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 
 	auto metrics = FillTreeNodeSettings(json);
 	config.profiler_settings.SetMetrics(metrics);
-	config.profiler_settings.ResetMetrics();
+	config.profiler_settings.ResetValues();
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_settings.ResetMetrics();
-	config.profiler_settings.ResetMetrics();
+	config.profiler_settings.ResetValues();
 }
 
 Value CustomProfilingSettings::GetSetting(ClientContext &context) {

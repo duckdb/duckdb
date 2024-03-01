@@ -1,0 +1,6 @@
+{
+  "cpu_time":"true",
+  "operator_cardinality":"true",
+  "operator_timing":"true",
+  "extra_info":"true"
+}
