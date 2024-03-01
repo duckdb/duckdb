@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_flush_cast.test
+# description: Test that Flush Cast functions properly for the rejects tables
+# group: [rejects]
+
+require skip_reload
+
+# FIXME: https://github.com/duckdb/duckdb/issues/7755
+require vector_size 2048
+
+query III
+SELECT typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
+    'data/csv/error/flush_cast.csv',
+    columns = {'a': 'DATE', 'b': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    delim = ',',
+    dateformat = '%d-%m-%Y',
+    ignore_errors=true);
+----
+DATE	VARCHAR	2811
+
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+test/sql/copy/csv/data/error/mismatch/bad.csv	2	1	"col1"	CAST	4,BBB,9,	9
+
+query I
+SELECT error_message
+FROM csv_rejects_table;
+----
+<REGEX>:.*Could not convert string "BBB" to 'INTEGER'.*
+
+statement ok
+DROP TABLE csv_rejects_table;
