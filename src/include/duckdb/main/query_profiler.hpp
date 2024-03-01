@@ -233,4 +233,6 @@ private:
 	void ReadAndSetCustomProfilerSettings(const string &settings_path);
 };
 
+string JSONSanitize(const string &text);
+
 } // namespace duckdb

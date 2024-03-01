@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 

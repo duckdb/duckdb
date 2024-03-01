@@ -1,4 +1,6 @@
 #include "duckdb/main/tree_node_settings.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
