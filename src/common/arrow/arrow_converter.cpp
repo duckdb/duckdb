@@ -228,7 +228,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	case LogicalTypeId::ARRAY: {
 		auto array_size = ArrayType::GetSize(type);
-		auto child_type = ArrayType::GetChildType(type);
+		auto &child_type = ArrayType::GetChildType(type);
 		auto format = "+w:" + to_string(array_size);
 		root_holder.owned_type_names.push_back(AddName(format));
 		child.format = root_holder.owned_type_names.back().get();
