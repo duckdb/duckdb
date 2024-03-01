@@ -126,14 +126,14 @@ void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
 }
 
-static double GetTotalCPUTime(QueryProfiler::TreeNode &node) {
-	double cpu_time = node.settings.values.operator_timing;
+static void GetTotalCPUTime(QueryProfiler::TreeNode &node) {
+	node.settings.values.cpu_time = node.settings.values.operator_timing;
 	if (!node.children.empty()) {
 		for (const auto &i : node.children) {
-			cpu_time += GetTotalCPUTime(*i);
+			GetTotalCPUTime(*i);
+			node.settings.values.cpu_time += i->settings.values.cpu_time;
 		}
 	}
-	return cpu_time;
 }
 
 void QueryProfiler::EndQuery() {
@@ -161,7 +161,7 @@ void QueryProfiler::EndQuery() {
 				root->settings.values.operator_timing = main_query.Elapsed();
 			}
 			if (root->settings.SettingEnabled(TreeNodeSettingsType::CPU_TIME)) {
-				root->settings.values.cpu_time = GetTotalCPUTime(*root);
+				GetTotalCPUTime(*root);
 			}
 			if (root->settings.SettingEnabled(TreeNodeSettingsType::EXTRA_INFO)) {
 				root->settings.values.extra_info = query;
