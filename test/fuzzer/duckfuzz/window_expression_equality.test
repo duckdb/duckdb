@@ -1,4 +1,3 @@
-
 # name: test/fuzzer/duckfuzz/window_expression_equality.test
 # description: Window expression equality test
 # group: [duckfuzz]
