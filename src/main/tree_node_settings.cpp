@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-void TreeNodeSettings::SetMetrics(unordered_set<TreeNodeSettingsType> &n_metrics) {
+void TreeNodeSettings::SetMetrics(unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction> &n_metrics) {
 	this->metrics = n_metrics;
 }
 
-unordered_set<TreeNodeSettingsType> &TreeNodeSettings::GetMetrics() {
+unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction> &TreeNodeSettings::GetMetrics() {
 	return metrics;
 }
 

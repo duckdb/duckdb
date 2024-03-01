@@ -16,7 +16,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
-#
 
 namespace duckdb {
 
@@ -56,9 +55,9 @@ public:
 
 public:
 	// set the metrics map
-	void SetMetrics(unordered_set<TreeNodeSettingsType> &n_metrics);
+	void SetMetrics(unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction> &n_metrics);
 	// get the metrics map
-	unordered_set<TreeNodeSettingsType> &GetMetrics();
+	unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction> &GetMetrics();
 
 public:
 	// reset the metrics to default
