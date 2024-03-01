@@ -319,7 +319,6 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 	result->types = planner.types;
 	result->value_map = std::move(planner.value_map);
 	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
-
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}

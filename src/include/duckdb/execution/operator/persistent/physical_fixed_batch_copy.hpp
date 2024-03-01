@@ -15,6 +15,7 @@
 #include "duckdb/common/filename_pattern.hpp"
 
 namespace duckdb {
+struct FixedRawBatchData;
 
 class PhysicalFixedBatchCopy : public PhysicalOperator {
 public:
@@ -61,7 +62,7 @@ public:
 
 public:
 	void AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
-	                     unique_ptr<ColumnDataCollection> collection) const;
+	                     unique_ptr<FixedRawBatchData> collection) const;
 	void RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
 	                        bool final = false) const;
 	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
