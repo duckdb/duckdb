@@ -19,7 +19,6 @@
 
 namespace duckdb {
 
-
 enum class TreeNodeSettingsType : uint8_t { CPU_TIME, EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING };
 
 struct TreeNodeSettingsTypeHashFunction {
