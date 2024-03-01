@@ -517,7 +517,9 @@ def write_header(data: ExtensionData):
     "icu",
     "json",
     "parquet",
+    "sqlite_scanner",
     "sqlsmith",
+    "postgres_scanner",
     "tpcds",
     "tpch"
     }; // END_OF_AUTOLOADABLE_EXTENSIONS
