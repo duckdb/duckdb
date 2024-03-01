@@ -2374,16 +2374,4 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChildSize();
 }
 
-idx_t ArrayVector::GetChildCount(const Vector &vector, idx_t count) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
-	D_ASSERT(vector.auxiliary);
-	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vector);
-		return ArrayVector::GetChildCount(child, count);
-	}
-	auto array_size = ArrayType::GetSize(vector.GetType());
-	auto is_constant = vector.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	return array_size * (is_constant ? 1 : count);
-}
-
 } // namespace duckdb
