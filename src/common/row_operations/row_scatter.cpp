@@ -82,7 +82,7 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
 			const auto &str = string_data[col_idx];
-			string_t inserted(const_char_ptr_cast(str_locations[i]), str.GetSize());
+			string_t inserted(const_char_ptr_cast(str_locations[i]), UnsafeNumericCast<uint32_t>(str.GetSize()));
 			memcpy(inserted.GetDataWriteable(), str.GetData(), str.GetSize());
 			str_locations[i] += str.GetSize();
 			inserted.Finalize();
@@ -167,7 +167,7 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 			// Pointer to this row in the heap block
 			Store<data_ptr_t>(data_locations[i], row + heap_pointer_offset);
 			// Row size is stored in the heap in front of each row
-			Store<uint32_t>(entry_sizes[i], data_locations[i]);
+			Store<uint32_t>(NumericCast<uint32_t>(entry_sizes[i]), data_locations[i]);
 			data_locations[i] += sizeof(uint32_t);
 		}
 	}

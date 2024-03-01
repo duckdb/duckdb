@@ -114,6 +114,7 @@ class DuckDBVector {
         case MAP:
             return getMap(idx);
         case LIST:
+        case ARRAY:
             return getArray(idx);
         case STRUCT:
             return getStruct(idx);
@@ -228,7 +229,7 @@ class DuckDBVector {
         if (check_and_null(idx)) {
             return null;
         }
-        if (isType(DuckDBColumnType.LIST)) {
+        if (isType(DuckDBColumnType.LIST) || isType(DuckDBColumnType.ARRAY)) {
             return (Array) varlen_data[idx];
         }
         throw new SQLFeatureNotSupportedException("getArray");

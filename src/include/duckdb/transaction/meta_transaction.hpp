@@ -41,7 +41,7 @@ public:
 
 public:
 	DUCKDB_API static MetaTransaction &Get(ClientContext &context);
-	timestamp_t GetCurrentTransactionStartTimestamp() {
+	timestamp_t GetCurrentTransactionStartTimestamp() const {
 		return start_timestamp;
 	}
 
@@ -60,6 +60,8 @@ public:
 	}
 
 private:
+	//! Lock to prevent all_transactions and transactions from getting out of sync
+	mutex lock;
 	//! The set of active transactions for each database
 	reference_map_t<AttachedDatabase, reference<Transaction>> transactions;
 	//! The set of transactions in order of when they were started
