@@ -484,10 +484,10 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		    ListBoundCastData::InitListLocalState);
 	case LogicalTypeId::ARRAY:
 		// the second argument allows for a secondary casting function to be passed in the CastParameters
-		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToArray>,
-		                     ArrayBoundCastData::BindArrayToArrayCast(
-		                         input, LogicalType::ARRAY_UNKNOWN_SIZE(LogicalType::VARCHAR), target),
-		                     ArrayBoundCastData::InitArrayLocalState);
+		return BoundCastInfo(
+		    &StringToNestedTypeCast<VectorStringToArray>,
+		    ArrayBoundCastData::BindArrayToArrayCast(input, LogicalType::ARRAYUNBOUNDED(LogicalType::VARCHAR), target),
+		    ArrayBoundCastData::InitArrayLocalState);
 	case LogicalTypeId::STRUCT:
 		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToStruct>,
 		                     StructBoundCastData::BindStructToStructCast(input, InitVarcharStructType(target), target),
