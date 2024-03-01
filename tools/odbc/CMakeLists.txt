@@ -26,34 +26,17 @@ if(ODBC_FOUND)
 endif()
 
 add_definitions(-DNO_FRAMEWORKS)
+
 include_directories(${ODBC_INCLUDE_DIRS} include)
 
-add_library(
-  duckdb_odbc SHARED
-  duckdb_odbc.cpp
-  driver.cpp
-  connect/connection.cpp
-  statement.cpp
-  prepared.cpp
-  result.cpp
-  api_info.cpp
-  statement_functions.cpp
-  odbc_interval.cpp
-  odbc_fetch.cpp
-  odbc_utils.cpp
-  empty_stubs.cpp
-  descriptor.cpp
-  parameter_descriptor.cpp
-  row_descriptor.cpp
-  cursor.cpp
-  odbc_diagnostic.cpp
-  duckdb_odbc.def
-  handle_functions.cpp
-  connect/connect.cpp
-  connect/driver_connect.cpp)
+add_subdirectory(src)
+
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES})
+
+add_library(duckdb_odbc ${ALL_OBJECT_FILES})
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
-target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)
+target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} ${ODBC_LIBRARIES} duckdb_static)
 
 if(NOT CLANG_TIDY)
   add_subdirectory(test)
