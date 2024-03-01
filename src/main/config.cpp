@@ -94,6 +94,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
+                                                 DUCKDB_GLOBAL(MaximumTempDirectorySize),
                                                  DUCKDB_GLOBAL(OldImplicitCasting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
@@ -261,9 +262,9 @@ void DBConfig::SetDefaultMaxMemory() {
 
 void DBConfig::SetDefaultMaxSwapSpace() {
 	auto memory_limit = options.maximum_memory;
-	if (!TryMultiplyOperator::Operation(memory_limit, 2, options.maximum_memory)) {
+	if (!TryMultiplyOperator::Operation(memory_limit, static_cast<idx_t>(2), options.maximum_swap_space)) {
 		// Can't default to 2x memory: fall back to 5GB instead
-		options.maximum_memory = ParseMemoryLimit("5GB");
+		options.maximum_swap_space = ParseMemoryLimit("5GB");
 	}
 }
 

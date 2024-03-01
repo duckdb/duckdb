@@ -259,7 +259,6 @@ TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &t
 
 TemporaryFileManager::~TemporaryFileManager() {
 	files.clear();
-	D_ASSERT(size_on_disk.load() == 0);
 }
 
 TemporaryFileManager::TemporaryManagerLock::TemporaryManagerLock(mutex &mutex) : lock(mutex) {
@@ -308,7 +307,21 @@ idx_t TemporaryFileManager::GetTotalUsedSpaceInBytes() {
 }
 
 void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
+	auto &config = DBConfig::GetConfig(db);
+	auto max_swap_space = config.options.maximum_swap_space;
+
+	auto current_size_on_disk = size_on_disk.load();
 	size_on_disk += bytes;
+	if (size_on_disk.load() > max_swap_space) {
+		auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
+		auto max = StringUtil::BytesToHumanReadableString(max_swap_space);
+		auto data_size = StringUtil::BytesToHumanReadableString(bytes);
+		throw OutOfMemoryException(R"(failed to offload data block of size %s (%s/%s used).
+This limit was set by the 'max_temp_directory_size' setting.
+This defaults to twice the size of 'max_memory'.
+You can adjust this setting, by using (for example) PRAGMA max_temp_directory_size='10GiB')",
+		                           data_size, used, max);
+	}
 }
 
 void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
