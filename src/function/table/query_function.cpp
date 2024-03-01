@@ -7,8 +7,7 @@
 
 namespace duckdb {
 
-static unique_ptr<SubqueryRef> parse_subquery(const string &query, const ParserOptions &options,
-                                              const string &err_msg) {
+static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOptions &options, const string &err_msg) {
 	Parser parser(options);
 	parser.ParseQuery(query);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
@@ -18,7 +17,7 @@ static unique_ptr<SubqueryRef> parse_subquery(const string &query, const ParserO
 	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
-static void union_tables_query(TableFunctionBindInput &input, string &query) {
+static void UnionTablesQuery(TableFunctionBindInput &input, string &query) {
 	string by_name = (input.inputs.size() == 2 &&
 	                  (input.inputs[1].type().id() == LogicalTypeId::BOOLEAN && input.inputs[1].GetValue<bool>()))
 	                     ? "BY NAME "
@@ -43,15 +42,15 @@ static void union_tables_query(TableFunctionBindInput &input, string &query) {
 
 static unique_ptr<TableRef> QueryBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto query = input.inputs[0].ToString();
-	auto subquery_ref = parse_subquery(query, context.GetParserOptions(), "Expected a single SELECT statement");
+	auto subquery_ref = ParseSubquery(query, context.GetParserOptions(), "Expected a single SELECT statement");
 	return std::move(subquery_ref);
 }
 
 static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	string query;
-	union_tables_query(input, query);
+	UnionTablesQuery(input, query);
 	auto subquery_ref =
-	    parse_subquery(query, context.GetParserOptions(), "Expected a table or a list with tables as input");
+	    ParseSubquery(query, context.GetParserOptions(), "Expected a table or a list with tables as input");
 	return std::move(subquery_ref);
 }
 
