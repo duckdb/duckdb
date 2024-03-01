@@ -57,7 +57,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 	if (ts != 1) {
 		// we add a newer version, i.e., we kill exactly one previous version
-		total_dead_nodes++;
+		IncrementDeadNodes();
 	}
 
 	if (++evict_queue_insertions % INSERT_INTERVAL == 0) {
@@ -108,7 +108,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 		// get a reference to the underlying block pointer
 		auto handle = node.TryGetBlockHandle();
 		if (!handle) {
-			total_dead_nodes--;
+			DecrementDeadNodes();
 			continue;
 		}
 
@@ -116,7 +116,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 		lock_guard<mutex> lock(handle->lock);
 		if (!node.CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
-			total_dead_nodes--;
+			DecrementDeadNodes();
 			continue;
 		}
 

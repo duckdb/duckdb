@@ -86,6 +86,10 @@ protected:
 	inline void IncrementDeadNodes() {
 		total_dead_nodes++;
 	}
+	//! Decrement the dead node counter in the purge queue.
+	inline void DecrementDeadNodes() {
+		total_dead_nodes--;
+	}
 
 protected:
 	//! The lock for changing the memory limit
