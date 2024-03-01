@@ -23,9 +23,26 @@ namespace duckdb {
 // BlockIndexManager
 //===--------------------------------------------------------------------===//
 
+class TemporaryFileManager;
+
+struct FileSizeMonitor {
+public:
+	static constexpr idx_t TEMPFILE_BLOCK_SIZE = Storage::BLOCK_ALLOC_SIZE;
+
+public:
+	FileSizeMonitor(TemporaryFileManager &manager);
+
+public:
+	void Increase(idx_t blocks);
+	void Decrease(idx_t blocks);
+
+private:
+	TemporaryFileManager &manager;
+};
+
 struct BlockIndexManager {
 public:
-	BlockIndexManager();
+	BlockIndexManager(unique_ptr<FileSizeMonitor> file_size_monitor = nullptr);
 
 public:
 	//! Obtains a new block index from the index manager
@@ -43,6 +60,7 @@ private:
 	idx_t max_index;
 	set<idx_t> free_indexes;
 	set<idx_t> indexes_in_use;
+	unique_ptr<FileSizeMonitor> file_size_monitor;
 };
 
 //===--------------------------------------------------------------------===//
@@ -69,7 +87,8 @@ class TemporaryFileHandle {
 	constexpr static idx_t MAX_ALLOWED_INDEX_BASE = 4000;
 
 public:
-	TemporaryFileHandle(idx_t temp_file_count, DatabaseInstance &db, const string &temp_directory, idx_t index);
+	TemporaryFileHandle(idx_t temp_file_count, DatabaseInstance &db, const string &temp_directory, idx_t index,
+	                    TemporaryFileManager &manager);
 
 public:
 	struct TemporaryFileLock {
@@ -103,8 +122,6 @@ private:
 	BlockIndexManager index_manager;
 };
 
-class TemporaryFileManager;
-
 //===--------------------------------------------------------------------===//
 // TemporaryDirectoryHandle
 //===--------------------------------------------------------------------===//
@@ -130,6 +147,7 @@ private:
 class TemporaryFileManager {
 public:
 	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p);
+	~TemporaryFileManager();
 
 public:
 	struct TemporaryManagerLock {
@@ -145,6 +163,11 @@ public:
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer);
 	void DeleteTemporaryBuffer(block_id_t id);
 	vector<TemporaryFileInformation> GetTemporaryFiles();
+	idx_t GetTotalUsedSpaceInBytes();
+	//! Register temporary file size growth
+	void IncreaseSizeOnDisk(idx_t amount);
+	//! Register temporary file size decrease
+	void DecreaseSizeOnDisk(idx_t amount);
 
 private:
 	void EraseUsedBlock(TemporaryManagerLock &lock, block_id_t id, TemporaryFileHandle *handle,
@@ -164,6 +187,8 @@ private:
 	unordered_map<block_id_t, TemporaryFileIndex> used_blocks;
 	//! Manager of in-use temporary file indexes
 	BlockIndexManager index_manager;
+	//! The size in bytes of the temporary files that are currently alive
+	atomic<idx_t> size_on_disk;
 };
 
 } // namespace duckdb

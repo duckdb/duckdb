@@ -1,5 +1,6 @@
 #include "duckdb/main/config.hpp"
 
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
@@ -255,6 +256,14 @@ void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
 	if (memory != DConstants::INVALID_INDEX) {
 		options.maximum_memory = memory * 8 / 10;
+	}
+}
+
+void DBConfig::SetDefaultMaxSwapSpace() {
+	auto memory_limit = options.maximum_memory;
+	if (!TryMultiplyOperator::Operation(memory_limit, 2, options.maximum_memory)) {
+		// Can't default to 2x memory: fall back to 5GB instead
+		options.maximum_memory = ParseMemoryLimit("5GB");
 	}
 }
 

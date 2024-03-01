@@ -118,6 +118,8 @@ struct DBConfigOptions {
 	string autoinstall_extension_repo = "";
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
+	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default 2x 'maximum_memory'
+	idx_t maximum_swap_space = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
 	idx_t maximum_threads = (idx_t)-1;
 	//! The number of external threads that work on DuckDB tasks. Default: 1.
@@ -276,6 +278,7 @@ public:
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	void SetDefaultMaxMemory();
+	void SetDefaultMaxSwapSpace();
 
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;

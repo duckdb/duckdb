@@ -949,6 +949,25 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Maximum Temp Directory Size
+//===--------------------------------------------------------------------===//
+void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
+	if (db) {
+		BufferManager::GetBufferManager(*db).SetLimit(config.options.maximum_swap_space);
+	}
+}
+
+void MaximumTempDirectorySize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.SetDefaultMaxSwapSpace();
+}
+
+Value MaximumTempDirectorySize::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_swap_space));
+}
+
+//===--------------------------------------------------------------------===//
 // Old Implicit Casting
 //===--------------------------------------------------------------------===//
 void OldImplicitCasting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

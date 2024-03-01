@@ -333,6 +333,9 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();
 	}
+	if (config.options.maximum_swap_space == (idx_t)-1) {
+		config.SetDefaultMaxSwapSpace();
+	}
 	if (new_config.options.maximum_threads == (idx_t)-1) {
 		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	}

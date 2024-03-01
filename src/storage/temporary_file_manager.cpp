@@ -5,10 +5,28 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
+// FileSizeMonitor
+//===--------------------------------------------------------------------===//
+
+FileSizeMonitor::FileSizeMonitor(TemporaryFileManager &manager) : manager(manager) {
+}
+
+void FileSizeMonitor::Increase(idx_t blocks) {
+	auto size_on_disk = blocks * TEMPFILE_BLOCK_SIZE;
+	manager.IncreaseSizeOnDisk(size_on_disk);
+}
+
+void FileSizeMonitor::Decrease(idx_t blocks) {
+	auto size_on_disk = blocks * TEMPFILE_BLOCK_SIZE;
+	manager.DecreaseSizeOnDisk(size_on_disk);
+}
+
+//===--------------------------------------------------------------------===//
 // BlockIndexManager
 //===--------------------------------------------------------------------===//
 
-BlockIndexManager::BlockIndexManager() : max_index(0) {
+BlockIndexManager::BlockIndexManager(unique_ptr<FileSizeMonitor> file_size_monitor)
+    : max_index(0), file_size_monitor(std::move(file_size_monitor)) {
 }
 
 idx_t BlockIndexManager::GetNewBlockIndex() {
@@ -27,12 +45,17 @@ bool BlockIndexManager::RemoveIndex(idx_t index) {
 	free_indexes.insert(index);
 	// check if we can truncate the file
 
+	auto old_max = max_index;
+
 	// get the max_index in use right now
-	auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin();
+	auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin() + 1;
 	if (max_index_in_use < max_index) {
 		// max index in use is lower than the max_index
 		// reduce the max_index
 		max_index = indexes_in_use.empty() ? 0 : max_index_in_use + 1;
+		if (file_size_monitor) {
+			file_size_monitor->Decrease(old_max - max_index);
+		}
 		// we can remove any free_indexes that are larger than the current max_index
 		while (!free_indexes.empty()) {
 			auto max_entry = *free_indexes.rbegin();
@@ -56,7 +79,12 @@ bool BlockIndexManager::HasFreeBlocks() {
 
 idx_t BlockIndexManager::GetNewBlockIndexInternal() {
 	if (free_indexes.empty()) {
-		return max_index++;
+		auto new_index = max_index;
+		max_index++;
+		if (file_size_monitor) {
+			file_size_monitor->Increase(1);
+		}
+		return new_index;
 	}
 	auto entry = free_indexes.begin();
 	auto index = *entry;
@@ -69,9 +97,10 @@ idx_t BlockIndexManager::GetNewBlockIndexInternal() {
 //===--------------------------------------------------------------------===//
 
 TemporaryFileHandle::TemporaryFileHandle(idx_t temp_file_count, DatabaseInstance &db, const string &temp_directory,
-                                         idx_t index)
+                                         idx_t index, TemporaryFileManager &manager)
     : max_allowed_index((1 << temp_file_count) * MAX_ALLOWED_INDEX_BASE), db(db), file_index(index),
-      path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")) {
+      path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")),
+      index_manager(make_uniq<FileSizeMonitor>(manager)) {
 }
 
 TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(mutex) {
@@ -135,7 +164,7 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 		return;
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
-	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	uint8_t open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
 	handle = fs.OpenFile(path, open_flags);
 }
 
@@ -225,7 +254,12 @@ bool TemporaryFileIndex::IsValid() const {
 //===--------------------------------------------------------------------===//
 
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
-    : db(db), temp_directory(temp_directory_p) {
+    : db(db), temp_directory(temp_directory_p), size_on_disk(0) {
+}
+
+TemporaryFileManager::~TemporaryFileManager() {
+	files.clear();
+	D_ASSERT(size_on_disk.load() == 0);
 }
 
 TemporaryFileManager::TemporaryManagerLock::TemporaryManagerLock(mutex &mutex) : lock(mutex) {
@@ -250,7 +284,7 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 		if (!handle) {
 			// no existing handle to write to; we need to create & open a new file
 			auto new_file_index = index_manager.GetNewBlockIndex();
-			auto new_file = make_uniq<TemporaryFileHandle>(files.size(), db, temp_directory, new_file_index);
+			auto new_file = make_uniq<TemporaryFileHandle>(files.size(), db, temp_directory, new_file_index, *this);
 			handle = new_file.get();
 			files[new_file_index] = std::move(new_file);
 
@@ -267,6 +301,18 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 bool TemporaryFileManager::HasTemporaryBuffer(block_id_t block_id) {
 	lock_guard<mutex> lock(manager_lock);
 	return used_blocks.find(block_id) != used_blocks.end();
+}
+
+idx_t TemporaryFileManager::GetTotalUsedSpaceInBytes() {
+	return size_on_disk.load();
+}
+
+void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
+	size_on_disk += bytes;
+}
+
+void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
+	size_on_disk -= bytes;
 }
 
 unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
