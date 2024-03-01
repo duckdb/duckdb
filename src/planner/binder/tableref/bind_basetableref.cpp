@@ -181,14 +181,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-		                                  ref.table_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
+		                  OnEntryNotFound::THROW_EXCEPTION, error_context);
+		throw InternalException("Catalog::GetEntry should have thrown an exception above");
 	}
+
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
 		auto &table = table_or_view->Cast<TableCatalogEntry>();
+		properties.read_databases.insert(table.ParentCatalog().GetName());
 
 		unique_ptr<FunctionData> bind_data;
 		auto scan_function = table.GetScanFunction(context, bind_data);

@@ -18,7 +18,8 @@ namespace duckdb {
 class BatchMemoryManager {
 public:
 	BatchMemoryManager(ClientContext &context, idx_t initial_memory_request)
-	    : context(context), unflushed_memory_usage(0), min_batch_index(0), can_increase_memory(true) {
+	    : context(context), unflushed_memory_usage(0), min_batch_index(0), available_memory(0),
+	      can_increase_memory(true) {
 		memory_state = TemporaryMemoryManager::Get(context).Register(context);
 		SetMemorySize(initial_memory_request);
 	}
@@ -143,7 +144,7 @@ public:
 
 	void ReduceUnflushedMemory(idx_t memory_reduction) {
 		if (unflushed_memory_usage < memory_reduction) {
-			unflushed_memory_usage = 0;
+			throw InternalException("Reducing unflushed memory usage below zero!?");
 		} else {
 			unflushed_memory_usage -= memory_reduction;
 		}
@@ -151,6 +152,13 @@ public:
 
 	bool IsMinimumBatchIndex(idx_t batch_index) {
 		return batch_index <= min_batch_index;
+	}
+
+	void FinalCheck() {
+		if (unflushed_memory_usage != 0) {
+			throw InternalException("Unflushed memory usage is not zero at finalize but %llu",
+			                        unflushed_memory_usage.load());
+		}
 	}
 };
 

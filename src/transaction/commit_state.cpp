@@ -284,6 +284,8 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		if (!StringUtil::CIEquals(catalog_entry->name, catalog_entry->Parent().name)) {
 			catalog_entry->set->UpdateTimestamp(*catalog_entry, commit_id);
 		}
+		// modify catalog on commit
+		duck_catalog.ModifyCatalog();
 
 		if (HAS_LOG) {
 			// push the catalog update to the WAL

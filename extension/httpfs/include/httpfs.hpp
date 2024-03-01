@@ -1,10 +1,10 @@
 #pragma once
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/http_state.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 
@@ -36,6 +36,7 @@ struct HTTPParams {
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
+	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
 
 	uint64_t timeout;
 	uint64_t retries;
@@ -43,6 +44,8 @@ struct HTTPParams {
 	float retry_backoff;
 	bool force_download;
 	bool keep_alive;
+	bool enable_server_cert_verification;
+	std::string ca_cert_file;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };

@@ -530,6 +530,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
+	auto &memory_manager = gstate.memory_manager;
 
 	if (gstate.optimistically_written || gstate.insert_count >= LocalStorage::MERGE_THRESHOLD) {
 		// we have written data to disk optimistically or are inserting a large amount of data
@@ -545,6 +546,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 					current_merger = make_uniq<CollectionMerger>(context);
 				}
 				current_merger->AddCollection(std::move(entry.collection));
+				memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 			} else {
 				// this collection has been flushed: it does not need to be merged
 				// create a separate collection merger only for this entry
@@ -584,6 +586,11 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		storage.InitializeLocalAppend(append_state, context);
 		auto &transaction = DuckTransaction::Get(context, table.catalog);
 		for (auto &entry : gstate.collections) {
+			if (entry.type != RowGroupBatchType::NOT_FLUSHED) {
+				throw InternalException("Encountered a flushed batch");
+			}
+
+			memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 			entry.collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 				storage.LocalAppend(append_state, table, context, insert_chunk);
 				return true;
@@ -591,6 +598,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		}
 		storage.FinalizeLocalAppend(append_state);
 	}
+	memory_manager.FinalCheck();
 	return SinkFinalizeType::READY;
 }
 
