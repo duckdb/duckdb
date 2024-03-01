@@ -8,7 +8,10 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test results API", "[api]") {
-	DuckDB db(nullptr);
+	DBConfig config;
+	config.options.allow_unsigned_extensions = true;
+
+	DuckDB db(nullptr, &config);
 	Connection con(db);
 
 	// result equality
@@ -188,7 +191,10 @@ TEST_CASE("Test UUID", "[api][uuid]") {
 }
 
 TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
-	DuckDB db(nullptr);
+	DBConfig config;
+	config.options.allow_unsigned_extensions = true;
+
+	DuckDB db(nullptr, &config);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (a INT, b INT, c INT)"));
@@ -200,7 +206,10 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 }
 
 TEST_CASE("Issue #9417", "[api][.]") {
-	DuckDB db("issue_replication.db");
+	DBConfig config;
+	config.options.allow_unsigned_extensions = true;
+
+	DuckDB db("issue_replication.db", &config);
 	Connection con(db);
 	auto result = con.SendQuery("with max_period as ("
 	                            "            select max(reporting_date) as max_record\n"
