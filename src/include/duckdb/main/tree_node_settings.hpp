@@ -16,10 +16,18 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
+#
 
 namespace duckdb {
 
+
 enum class TreeNodeSettingsType : uint8_t { CPU_TIME, EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING };
+
+struct TreeNodeSettingsTypeHashFunction {
+	uint64_t operator()(const TreeNodeSettingsType &index) const {
+		return std::hash<uint8_t>()(static_cast<uint8_t>(index));
+	}
+};
 
 const unordered_set<TreeNodeSettingsType> default_metrics = {
     TreeNodeSettingsType::CPU_TIME,
