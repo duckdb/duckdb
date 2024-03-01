@@ -72,7 +72,8 @@ struct BitStringAggOperation {
 				    NumericHelper::ToString(state.min), NumericHelper::ToString(state.max));
 			}
 			idx_t len = Bit::ComputeBitstringLen(bit_range);
-			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], len) : string_t(len);
+			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], UnsafeNumericCast<uint32_t>(len))
+			                                            : string_t(UnsafeNumericCast<uint32_t>(len));
 			Bit::SetEmptyBitString(target, bit_range);
 
 			state.value = target;
@@ -138,7 +139,7 @@ struct BitStringAggOperation {
 			auto len = input.GetSize();
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
-			state.value = string_t(ptr, len);
+			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 

@@ -250,7 +250,7 @@ struct RLEScanState : public SegmentScanState {
 		handle = buffer_manager.Pin(segment.block);
 		entry_pos = 0;
 		position_in_entry = 0;
-		rle_count_offset = Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset());
+		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
 		D_ASSERT(rle_count_offset <= Storage::BLOCK_SIZE);
 	}
 

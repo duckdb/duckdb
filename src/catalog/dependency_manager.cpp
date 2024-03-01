@@ -27,19 +27,16 @@ static void AssertMangledName(const string &mangled_name, idx_t expected_null_by
 }
 
 MangledEntryName::MangledEntryName(const CatalogEntryInfo &info) {
-	static const auto NULL_BYTE = string(1, '\0');
-
 	auto &type = info.type;
 	auto &schema = info.schema;
 	auto &name = info.name;
 
-	this->name = CatalogTypeToString(type) + NULL_BYTE + schema + NULL_BYTE + name;
+	this->name = CatalogTypeToString(type) + '\0' + schema + '\0' + name;
 	AssertMangledName(this->name, 2);
 }
 
 MangledDependencyName::MangledDependencyName(const MangledEntryName &from, const MangledEntryName &to) {
-	static const auto NULL_BYTE = string(1, '\0');
-	this->name = from.name + NULL_BYTE + to.name;
+	this->name = from.name + '\0' + to.name;
 	AssertMangledName(this->name, 5);
 }
 

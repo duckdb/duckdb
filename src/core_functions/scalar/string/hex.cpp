@@ -1,5 +1,6 @@
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
@@ -308,7 +309,7 @@ struct FromHexOperator {
 		for (; i < size; i += 2) {
 			uint8_t major = StringUtil::GetHexValue(data[i]);
 			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
-			*output = (major << 4) | minor;
+			*output = UnsafeNumericCast<uint8_t>((major << 4) | minor);
 			output++;
 		}
 

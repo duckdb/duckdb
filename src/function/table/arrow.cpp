@@ -64,7 +64,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		if (width > 38 || bitwidth > 128) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
-		return make_uniq<ArrowType>(LogicalType::DECIMAL(width, scale));
+		return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)));
 	} else if (format == "u") {
 		return make_uniq<ArrowType>(LogicalType::VARCHAR, ArrowVariableSizeType::NORMAL);
 	} else if (format == "U") {

@@ -1693,19 +1693,19 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 // StringVector
 //===--------------------------------------------------------------------===//
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddString(vector, string_t(data, len));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddStringOrBlob(vector, string_t(data, len));
+	return StringVector::AddStringOrBlob(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data) {
-	return StringVector::AddString(vector, string_t(data, strlen(data)));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(strlen(data))));
 }
 
 string_t StringVector::AddString(Vector &vector, const string &data) {
-	return StringVector::AddString(vector, string_t(data.c_str(), data.size()));
+	return StringVector::AddString(vector, string_t(data.c_str(), UnsafeNumericCast<uint32_t>(data.size())));
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
@@ -1739,7 +1739,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (len <= string_t::INLINE_LENGTH) {
-		return string_t(len);
+		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
@@ -1786,7 +1786,7 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 // FSSTVector
 //===--------------------------------------------------------------------===//
 string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
-	return FSSTVector::AddCompressedString(vector, string_t(data, len));
+	return FSSTVector::AddCompressedString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {

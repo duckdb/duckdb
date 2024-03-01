@@ -8,6 +8,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -672,7 +673,7 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
 	if (other_width > effective_width) {
-		auto new_width = other_width + scale;
+		auto new_width = NumericCast<uint8_t>(other_width + scale);
 		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
 		if (new_width > DecimalType::MaxWidth()) {
 			new_width = DecimalType::MaxWidth();
@@ -824,13 +825,14 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		// using the max of these of the two types gives us the new decimal size
 		auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
 		auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-		auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
+		auto extra_width =
+		    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
 		auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-		auto width = extra_width + scale;
+		auto width = NumericCast<uint8_t>(extra_width + scale);
 		if (width > DecimalType::MaxWidth()) {
 			// if the resulting decimal does not fit, we truncate the scale
 			width = DecimalType::MaxWidth();
-			scale = width - extra_width;
+			scale = NumericCast<uint8_t>(width - extra_width);
 		}
 		result = LogicalType::DECIMAL(width, scale);
 		return true;
@@ -1168,7 +1170,7 @@ uint8_t DecimalType::MaxWidth() {
 	return DecimalWidth<hugeint_t>::max;
 }
 
-LogicalType LogicalType::DECIMAL(int width, int scale) {
+LogicalType LogicalType::DECIMAL(uint8_t width, uint8_t scale) {
 	D_ASSERT(width >= scale);
 	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
 	return LogicalType(LogicalTypeId::DECIMAL, std::move(type_info));

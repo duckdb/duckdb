@@ -245,7 +245,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 			if (vdata.validity.RowIsValid(source_idx)) {
 				auto &string_entry = strings[source_idx];
 				// store string size
-				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
+				Store<uint32_t>(NumericCast<uint32_t>(string_entry.GetSize()), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
@@ -259,7 +259,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 			if (vdata.validity.RowIsValid(source_idx)) {
 				auto &string_entry = strings[source_idx];
 				// store string size
-				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
+				Store<uint32_t>(NumericCast<uint32_t>(string_entry.GetSize()), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
