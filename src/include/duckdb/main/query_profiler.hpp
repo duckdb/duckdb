@@ -85,11 +85,11 @@ struct ExpressionExecutorInfo {
 };
 
 struct OperatorInformation {
-	explicit OperatorInformation() {
+	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
 	}
 
-	double time;
-	idx_t elements;
+	double time = 0;
+	idx_t elements = 0;
 	string name;
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
@@ -117,6 +117,7 @@ private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
 	TreeNodeSettings settings;
+	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
