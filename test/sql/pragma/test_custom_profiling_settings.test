@@ -5,10 +5,13 @@
 statement ok
 PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/test.json'
 
-query I
-SELECT current_setting('custom_profiling_settings');
+query I rowsort
+SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
 ----
-CPU_TIME, EXTRA_INFO, OPERATOR_CARDINALITY, OPERATOR_TIMING
+CPU_TIME
+EXTRA_INFO
+OPERATOR_CARDINALITY
+OPERATOR_TIMING
 
 statement ok
 PRAGMA enable_profiling = 'json';
