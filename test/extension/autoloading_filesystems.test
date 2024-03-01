@@ -6,9 +6,8 @@
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
-# FIXME: This is needed since otherwise s3_endpoint will not work correctly in presence of local secrets
 statement ok
-set secret_directory='__TEST_DIR__/storered_secrets'
+set allow_persistent_secrets=false;
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok

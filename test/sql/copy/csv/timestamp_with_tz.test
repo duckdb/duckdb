@@ -13,8 +13,7 @@ timestamp that is not UTC
 
 require icu
 
-statement ok
-LOAD icu
+require no_extension_autoloading
 
 # we can load this into a timestamptz table
 statement ok
