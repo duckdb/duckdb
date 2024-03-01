@@ -93,10 +93,10 @@ function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
     time_tz = duckdb_from_time_tz(val)
     # TODO: how to preserve the offset?
     return Dates.Time(
-        time_tz.time.hour, 
-        time_tz.time.min, 
-        time_tz.time.sec, 
-        time_tz.time.micros ÷ 1000, 
+        time_tz.time.hour,
+        time_tz.time.min,
+        time_tz.time.sec,
+        time_tz.time.micros ÷ 1000,
         time_tz.time.micros % 1000
     )
 end
