@@ -512,7 +512,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	}
 }
 
-static string JSONSanitize(const string &text) {
+string JSONSanitize(const string &text) {
 	string result;
 	result.reserve(text.size());
 	for (idx_t i = 0; i < text.size(); i++) {
