@@ -39,7 +39,7 @@ public:
 	static DatabaseManager &Get(ClientContext &db);
 	static DatabaseManager &Get(AttachedDatabase &db);
 
-	void InitializeSystemCatalog();
+	void InitializeSystemCatalog(const idx_t block_alloc_size);
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Attach a new database

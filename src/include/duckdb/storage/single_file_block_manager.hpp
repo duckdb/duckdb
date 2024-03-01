@@ -39,7 +39,7 @@ public:
 
 	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
 	void CreateNewDatabase();
-	void LoadExistingDatabase();
+	void LoadExistingDatabase(const idx_t block_alloc_size);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -74,7 +74,7 @@ private:
 	//! Load the free list from the file
 	void LoadFreeList();
 
-	void Initialize(DatabaseHeader &header);
+	void Initialize(DatabaseHeader &header, const idx_t block_alloc_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;

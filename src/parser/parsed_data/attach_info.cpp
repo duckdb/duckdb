@@ -11,4 +11,19 @@ unique_ptr<AttachInfo> AttachInfo::Copy() const {
 	return result;
 }
 
+idx_t AttachInfo::GetBlockAllocSize() const {
+
+	for (auto &entry : options) {
+		if (entry.first == "block_size") {
+			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
+			// even though the corresponding option we expose to the user is called "block_size".
+
+			idx_t block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+			Storage::VerifyBlockAllocSize(block_alloc_size);
+			return block_alloc_size;
+		}
+	}
+	return DConstants::INVALID_INDEX;
+}
+
 } // namespace duckdb

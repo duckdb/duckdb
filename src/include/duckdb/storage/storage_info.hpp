@@ -24,7 +24,7 @@ struct FileHandle;
 #define MAXIMUM_BLOCK 4611686018427388000LL
 //! The default block allocation size (1 << 18).
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144
-//! The minimum block allocation size.
+//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 #define MIN_BLOCK_ALLOC_SIZE 16384
 
 using block_id_t = int64_t;
@@ -46,6 +46,9 @@ struct Storage {
 	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
 	//! The number of vectors per row group
 	constexpr static const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
+
+	//! Ensures that a user-provided block allocation size matches all requirements.
+	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
 };
 
 //! The version number of the database storage format
@@ -112,6 +115,12 @@ struct DatabaseHeader {
 #endif
 #if (STANDARD_ROW_GROUPS_SIZE < STANDARD_VECTOR_SIZE)
 #error Row groups must be able to hold at least one vector
+#endif
+#if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)
+#error The default block allocation size must be a power of two
+#endif
+#if (MIN_BLOCK_ALLOC_SIZE & (MIN_BLOCK_ALLOC_SIZE - 1) != 0)
+#error The minimum block allocation size must be a power of two
 #endif
 
 static_assert(Storage::BLOCK_ALLOC_SIZE % Storage::SECTOR_SIZE == 0,

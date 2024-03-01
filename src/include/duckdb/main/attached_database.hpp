@@ -31,22 +31,18 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
-//! AttachOptions holds information about a database we plan to attach.
+//! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
+//! they have to apply to any database file type (duckdb, sqlite, etc.).
 struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
-	AttachOptions(AccessMode access_mode, const string &db_type);
+	AttachOptions(const DBConfigOptions &options);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
-	//! Parses the provided AttachInfo options.
-	AttachOptions(const unique_ptr<AttachInfo> &info, AccessMode access_mode_p);
+	AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode access_mode_p);
 
 	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
 	AccessMode access_mode;
 	//! The file format type. The default type is a duckdb database file, but other file formats are possible.
 	string db_type;
-	//! The allocation size of blocks in this database file. Defaults to DEFAULT_BLOCK_ALLOC_SIZE.
-	//! This is NOT the actual memory available on a block (block_size), even though the corresponding option
-	//! we expose to the user is called "block_size".
-	idx_t block_alloc_size;
 	//! We only set this, if we detect any unrecognized option.
 	string unrecognized_option;
 };
@@ -64,7 +60,7 @@ public:
 	                 const AttachInfo &info, const AttachOptions &options);
 	~AttachedDatabase() override;
 
-	void Initialize();
+	void Initialize(const idx_t block_alloc_size);
 
 	Catalog &ParentCatalog() override;
 	StorageManager &GetStorageManager();

@@ -162,13 +162,13 @@ void DatabaseInstance::CreateMainDatabase() {
 	{
 		Connection con(*this);
 		con.BeginTransaction();
-		AttachOptions options(config.options.access_mode, config.options.database_type);
+		AttachOptions options(config.options);
 		initial_database = db_manager->AttachDatabase(*con.context, info, options);
 		con.Commit();
 	}
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize();
+	initial_database->Initialize(config.options.preferred_block_size);
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
@@ -181,6 +181,7 @@ void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &un
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
+
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
 	if (user_config) {
@@ -227,7 +228,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	config.secret_manager->Initialize(*this);
 
 	// initialize the system catalog
-	db_manager->InitializeSystemCatalog();
+	db_manager->InitializeSystemCatalog(config.options.preferred_block_size);
 
 	if (!config.options.database_type.empty()) {
 		// if we are opening an extension database - load the extension

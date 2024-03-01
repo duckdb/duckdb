@@ -39,7 +39,7 @@ public:
 class StorageManager {
 public:
 	StorageManager() = delete;
-	StorageManager(AttachedDatabase &db, string path, bool read_only, const idx_t block_alloc_size);
+	StorageManager(AttachedDatabase &db, string path, bool read_only);
 	virtual ~StorageManager();
 
 public:
@@ -47,7 +47,7 @@ public:
 	static StorageManager &Get(Catalog &catalog);
 
 	//! Initialize a database or load an existing database from the given path
-	void Initialize();
+	void Initialize(const idx_t block_alloc_size);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -65,12 +65,6 @@ public:
 	string GetWALPath();
 	bool InMemory();
 
-	//! Returns the block allocation size of this block manager.
-	//! Not to be confused with the block_size.
-	inline idx_t GetBlockAllocSize() const {
-		return block_alloc_size;
-	}
-
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
 	virtual unique_ptr<StorageCommitState> GenStorageCommitState(Transaction &transaction, bool checkpoint) = 0;
 	virtual bool IsCheckpointClean(MetaBlockPointer checkpoint_id) = 0;
@@ -80,7 +74,7 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 
 protected:
-	virtual void LoadDatabase() = 0;
+	virtual void LoadDatabase(const idx_t block_alloc_size) = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -94,9 +88,6 @@ protected:
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
 	//! return nullptr when loading a database
 	bool load_complete = false;
-	//! The allocation size of blocks managed by this storage manager. Defaults to DEFAULT_BLOCK_ALLOC_SIZE.
-	//! This is NOT the actual memory available on a block (block_size).
-	const idx_t block_alloc_size;
 
 public:
 	template <class TARGET>
@@ -115,7 +106,7 @@ public:
 class SingleFileStorageManager : public StorageManager {
 public:
 	SingleFileStorageManager() = delete;
-	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only, const idx_t block_alloc_size);
+	SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only);
 
 	//! The BlockManager to read/store meta information and data in blocks
 	unique_ptr<BlockManager> block_manager;
@@ -132,6 +123,6 @@ public:
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 
 protected:
-	void LoadDatabase() override;
+	void LoadDatabase(const idx_t block_alloc_size) override;
 };
 } // namespace duckdb

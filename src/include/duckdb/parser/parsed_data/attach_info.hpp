@@ -35,6 +35,10 @@ public:
 
 public:
 	unique_ptr<AttachInfo> Copy() const;
+	//! Returns the block allocation size, which is the allocation size of blocks in this database file.
+	//! Returns DConstants::INVALID_INDEX, if not provided. This is NOT the actual memory available on a block
+	//! (block_size), even though the corresponding option we expose to the user is called "block_size".
+	idx_t GetBlockAllocSize() const;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);

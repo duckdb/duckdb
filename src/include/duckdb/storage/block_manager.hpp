@@ -82,6 +82,10 @@ public:
 	inline idx_t GetBlockAllocSize() const {
 		return block_alloc_size;
 	}
+	//! Sets the block allocation size. Should only happen when initializing an existing database.
+	void SetBlockAllocSize(const idx_t block_alloc_size_p) {
+		block_alloc_size = block_alloc_size_p;
+	}
 
 private:
 	//! The lock for the set of blocks
@@ -92,6 +96,6 @@ private:
 	unique_ptr<MetadataManager> metadata_manager;
 	//! The allocation size of blocks managed by this block manager. Defaults to DEFAULT_BLOCK_ALLOC_SIZE.
 	//! This is NOT the actual memory available on a block (block_size).
-	const idx_t block_alloc_size;
+	idx_t block_alloc_size;
 };
 } // namespace duckdb

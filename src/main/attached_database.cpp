@@ -17,12 +17,12 @@ namespace duckdb {
 // Attach Options
 //===--------------------------------------------------------------------===//
 
-AttachOptions::AttachOptions(const AccessMode access_mode, const string &db_type)
-    : access_mode(access_mode), db_type(db_type), block_alloc_size(DEFAULT_BLOCK_ALLOC_SIZE) {
+AttachOptions::AttachOptions(const DBConfigOptions &options)
+    : access_mode(options.access_mode), db_type(options.database_type) {
 }
 
-AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, AccessMode access_mode_p)
-    : access_mode(access_mode_p), block_alloc_size(DEFAULT_BLOCK_ALLOC_SIZE) {
+AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode access_mode_p)
+    : access_mode(access_mode_p) {
 
 	for (auto &entry : info->options) {
 
@@ -56,27 +56,6 @@ AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, AccessMode acce
 			continue;
 		}
 
-		if (entry.first == "block_size") {
-			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
-			// even though the corresponding option we expose to the user is called "block_size".
-
-			block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
-			if (!IsPowerOfTwo(block_alloc_size)) {
-				throw InvalidInputException("the block size must be a power of two, got %llu", block_alloc_size);
-			}
-			if (block_alloc_size < MIN_BLOCK_ALLOC_SIZE) {
-				throw InvalidInputException(
-				    "the block size must be greater or equal than the minimum block size of %llu, got %llu",
-				    MIN_BLOCK_ALLOC_SIZE, block_alloc_size);
-			}
-			if (block_alloc_size != DEFAULT_BLOCK_ALLOC_SIZE) {
-				throw NotImplementedException(
-				    "other block sizes than the default block size are not supported, expected %llu, got %llu",
-				    DEFAULT_BLOCK_ALLOC_SIZE, block_alloc_size);
-			}
-			continue;
-		}
-
 		// We allow unrecognized options in storage extensions. To track that we saw an unrecognized option,
 		// we set unrecognized_option.
 		if (unrecognized_option.empty()) {
@@ -97,7 +76,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	// This database does not have storage, so we default to the DEFAULT_BLOCK_ALLOC_SIZE.
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
-		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), false, DEFAULT_BLOCK_ALLOC_SIZE);
+		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), false);
 	}
 
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -118,7 +97,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
 	auto read_only = options.access_mode == AccessMode::READ_ONLY;
-	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), read_only, options.block_alloc_size);
+	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), read_only);
 	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
 }
@@ -143,7 +122,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	if (catalog->IsDuckCatalog()) {
 		// DuckCatalog, instantiate storage
 		auto read_only = options.access_mode == AccessMode::READ_ONLY;
-		storage = make_uniq<SingleFileStorageManager>(*this, info.path, read_only, options.block_alloc_size);
+		storage = make_uniq<SingleFileStorageManager>(*this, info.path, read_only);
 	}
 
 	transaction_manager = storage_extension.create_transaction_manager(storage_info, *this, *catalog);
@@ -201,14 +180,14 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return fs.ExtractBaseName(dbpath);
 }
 
-void AttachedDatabase::Initialize() {
+void AttachedDatabase::Initialize(const idx_t block_alloc_size) {
 	if (IsSystem()) {
 		catalog->Initialize(true);
 	} else {
 		catalog->Initialize(false);
 	}
 	if (storage) {
-		storage->Initialize();
+		storage->Initialize(block_alloc_size);
 	}
 }
 

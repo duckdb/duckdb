@@ -9,7 +9,7 @@ namespace duckdb {
 BlockManager::BlockManager(BufferManager &buffer_manager, const idx_t block_alloc_size)
     : buffer_manager(buffer_manager), metadata_manager(make_uniq<MetadataManager>(*this, buffer_manager)),
       block_alloc_size(block_alloc_size) {
-	D_ASSERT(IsPowerOfTwo(block_alloc_size));
+	D_ASSERT(block_alloc_size == DConstants::INVALID_INDEX || IsPowerOfTwo(block_alloc_size));
 	D_ASSERT(block_alloc_size >= MIN_BLOCK_ALLOC_SIZE);
 }
 

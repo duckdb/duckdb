@@ -54,7 +54,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	// get the database type and attach the database
 	db_manager.GetDatabaseType(context.client, *info, config, options);
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
-	attached_db->Initialize();
+	const idx_t block_alloc_size = info->GetBlockAllocSize();
+	attached_db->Initialize(block_alloc_size);
 	return SourceResultType::FINISHED;
 }
 

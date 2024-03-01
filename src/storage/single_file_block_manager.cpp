@@ -218,7 +218,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase() {
+void SingleFileBlockManager::LoadExistingDatabase(const idx_t block_alloc_size) {
 	uint8_t flags;
 	FileLockType lock;
 	GetFileFlags(flags, lock, false);
@@ -245,11 +245,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	if (h1.iteration > h2.iteration) {
 		// h1 is active header
 		active_header = 0;
-		Initialize(h1);
+		Initialize(h1, block_alloc_size);
 	} else {
 		// h2 is active header
 		active_header = 1;
-		Initialize(h2);
+		Initialize(h2, block_alloc_size);
 	}
 	LoadFreeList();
 }
@@ -277,16 +277,25 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	block.Write(*handle, location);
 }
 
-void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
+void SingleFileBlockManager::Initialize(DatabaseHeader &header, const idx_t block_alloc_size) {
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = header.block_count;
+	SetBlockAllocSize(header.block_alloc_size);
 
-	if (GetBlockAllocSize() != header.block_alloc_size) {
+	if (block_alloc_size != DConstants::INVALID_INDEX && block_alloc_size != header.block_alloc_size) {
+
 		throw InvalidInputException("cannot initialize the same database with a different block size: provided block "
 		                            "size: %llu, file block size: %llu",
 		                            GetBlockAllocSize(), header.block_alloc_size);
+	}
+
+	// FIXME: remove this once we start supporting different block sizes
+	if (DEFAULT_BLOCK_ALLOC_SIZE != header.block_alloc_size) {
+		throw NotImplementedException("cannot initialize a database with a different block size than the default block "
+		                              "size: default block size: %llu, file block size: %llu",
+		                              DEFAULT_BLOCK_ALLOC_SIZE, header.block_alloc_size);
 	}
 }
 

@@ -190,6 +190,8 @@ struct DBConfigOptions {
 	string custom_user_agent;
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
+	//! Preferred block allocation size for new duckdb database files (new as-in, they do not yet exist).
+	idx_t preferred_block_size = DEFAULT_BLOCK_ALLOC_SIZE;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
