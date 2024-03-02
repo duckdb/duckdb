@@ -1,0 +1,10 @@
+# name: test/sql/parser/test_columns_unpacked.test
+# group: [parser]
+
+statement ok
+create table t as select NULL a, 2 b, 3 c;
+
+query I
+select COALESCE(*COLUMNS(*)) from t;
+----
+2
