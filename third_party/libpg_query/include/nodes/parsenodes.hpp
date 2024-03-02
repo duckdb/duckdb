@@ -311,6 +311,7 @@ typedef struct PGAStar {
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
 	bool columns;         /* whether or not this is a columns list */
+	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 

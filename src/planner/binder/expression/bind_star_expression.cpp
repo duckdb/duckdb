@@ -89,6 +89,33 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
 }
 
+void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr,
+                                           vector<unique_ptr<ParsedExpression>> &replacements,
+                                           vector<unique_ptr<ParsedExpression>> &new_children) {
+	D_ASSERT(expr);
+	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+		D_ASSERT(!replacements.empty());
+		auto original_alias = expr->alias;
+		// Replace the current expression with the expressions of the unpacked COLUMNS expression
+		for (auto &replacement : replacements) {
+			D_ASSERT(replacement);
+			auto new_child = replacement->Copy();
+			if (!original_alias.empty()) {
+				new_child->alias = original_alias;
+			}
+			new_children.push_back(std::move(new_child));
+		}
+		return;
+	}
+	// Visit the children of this expression, potentially replacing them
+	vector<unique_ptr<ParsedExpression>> new_nested_children;
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child_expr) {
+		ReplaceUnpackedStarExpression(child_expr, replacements, new_nested_children);
+	}) expr->ReplaceChildren(std::move(new_nested_children));
+	// This child was not replaced, move it as is
+	new_children.push_back(std::move(expr));
+}
+
 static string ReplaceColumnsAlias(const string &alias, const string &column_name, optional_ptr<duckdb_re2::RE2> regex) {
 	string result;
 	result.reserve(alias.size());

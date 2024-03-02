@@ -31,6 +31,8 @@ public:
 	unique_ptr<ParsedExpression> expr;
 	//! Whether or not this is a COLUMNS expression
 	bool columns = false;
+	//! Whether the columns are unpacked
+	bool unpacked = false;
 
 public:
 	string ToString() const override;

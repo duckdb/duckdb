@@ -60,6 +60,9 @@ bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
 	if (a.columns != b.columns) {
 		return false;
 	}
+	if (a.unpacked != b.unpacked) {
+		return false;
+	}
 	if (a.replace_list.size() != b.replace_list.size()) {
 		return false;
 	}
