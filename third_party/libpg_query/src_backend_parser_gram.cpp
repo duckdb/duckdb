@@ -23272,13 +23272,13 @@ yyreduce:
 
   case 318: /* ColumnSpec: target_el  */
 #line 290 "third_party/libpg_query/grammar/statements/pgq.y"
-                                                                { (yyval.list) = list_make2(makeInteger(PG_COLUMNSPEC_EXPR), (yyvsp[0].target)); }
+                                                                { (yyval.list) = list_make1((yyvsp[0].target)); }
 #line 23277 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
   case 319: /* ColumnList: ColumnSpec  */
 #line 294 "third_party/libpg_query/grammar/statements/pgq.y"
-                                                        { (yyval.list) = list_make1((yyvsp[0].list)); }
+                                                        { (yyval.list) = (yyvsp[0].list); }
 #line 23283 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 
