@@ -38,6 +38,8 @@ void InetExtension::Load(DuckDB &db) {
 	// add inet functions
 	ExtensionUtil::RegisterFunction(*db.instance,
 	                                ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host));
+	ExtensionUtil::RegisterFunction(
+	    *db.instance, ScalarFunction("family", {inet_type}, LogicalType::UTINYINT, INetFunctions::Family));
 
 	// Add - function with ALTER_ON_CONFLICT
 	ScalarFunction substract_fun("-", {inet_type, LogicalType::HUGEINT}, inet_type, INetFunctions::Subtract);

@@ -19,6 +19,7 @@ struct INetFunctions {
 	static bool CastINETToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 	static void Host(DataChunk &args, ExpressionState &state, Vector &result);
+	static void Family(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Subtract(DataChunk &args, ExpressionState &state, Vector &result);
 	static void Add(DataChunk &args, ExpressionState &state, Vector &result);
 };

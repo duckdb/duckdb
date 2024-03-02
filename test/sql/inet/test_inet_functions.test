@@ -25,6 +25,11 @@ SELECT host(a) from (values ('127.0.0.1/17')) t(a);
 ----
 No function matches
 
+query I
+SELECT family('127.0.0.1/17');
+----
+4
+
 # subtract
 query I
 SELECT INET '127.0.0.255' - 32;

@@ -100,6 +100,14 @@ void INetFunctions::Host(DataChunk &args, ExpressionState &state, Vector &result
 	    });
 }
 
+void INetFunctions::Family(DataChunk &args, ExpressionState &state, Vector &result) {
+	GenericExecutor::ExecuteUnary<INET_TYPE, PrimitiveType<uint8_t>>(
+	    args.data[0], result, args.size(), [&](INET_TYPE input) {
+		    auto inetType = IPAddressType(input.a_val);
+		    return inetType == IPAddressType::IP_ADDRESS_V4 ? 4 : 6;
+	    });
+}
+
 // The signed hugeint_t value cannot extend through the full IPv6 range in one
 // operation, but it is the largest native signed type available and should be
 // appropriate for most realistic operations. Using the signed type will make
