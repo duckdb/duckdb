@@ -147,12 +147,15 @@ unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClaus
 		match_info->path_patterns.push_back(std::move(transformed_path));
 	}
 
-	for (auto node = root.columns->head; node != nullptr; node = lnext(node)) {
-		auto column = reinterpret_cast<duckdb_libpgquery::PGList *>(node->data.ptr_value);
-		auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(column->head->next->data.ptr_value);
-		auto res_target = TransformResTarget(*target);
-		match_info->column_list.push_back(std::move(res_target));
-	}
+
+	TransformExpressionList(*root.columns, match_info->column_list);
+
+//	for (auto node = root.columns->head; node != nullptr; node = lnext(node)) {
+//		auto column = reinterpret_cast<duckdb_libpgquery::PGList *>(node->data.ptr_value);
+//		auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(column->head->next->data.ptr_value);
+//		auto res_target = TransformResTarget(*target);
+//		match_info->column_list.push_back(std::move(res_target));
+//	}
 
 	auto children = vector<unique_ptr<ParsedExpression>>();
 	children.push_back(std::move(match_info));
