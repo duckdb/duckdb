@@ -295,7 +295,7 @@ jobs:
     - uses: actions/download-artifact@v3
       with:
         name: linux-extensions-64
-        path: /tmp
+        path: build/release/repository
 
     - name: Check if extension_entries.hpp is up to date
       shell: bash
