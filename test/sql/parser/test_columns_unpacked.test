@@ -8,3 +8,41 @@ query I
 select COALESCE(*COLUMNS(*)) from t;
 ----
 2
+
+statement ok
+create table contains_test as select '123abc234' a, 4 b, 'abc' c;
+
+# Feed columns a and c into contains, equivalent to contains(a, c)
+query I
+select contains(*COLUMNS('[a|c]')) from contains_test;
+----
+true
+
+# COLUMNS and *COLUMNS are equivalent as a root expression
+query II
+select COLUMNS('[a|c]') from contains_test;
+----
+123abc234	abc
+
+query II
+select *COLUMNS('[a|c]') from contains_test;
+----
+123abc234	abc
+
+statement ok
+create table sales as from ( values
+	(150, '2017/06/12'::DATE, 3),
+	(125, '2017/08/29'::DATE, 2),
+	(175, '2017/06/12'::DATE, 4),
+) t(amount, date, priority)
+
+query I
+SELECT first(amount ORDER BY date ASC, priority DESC) FROM sales;
+----
+175
+
+# TODO: this could be supported
+statement error
+select first(amount ORDER BY *COLUMNS('date|priority') ASC) from sales;
+----
+*COLUMNS(...) is not supported in the order expression
