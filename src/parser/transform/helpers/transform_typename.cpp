@@ -132,7 +132,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		D_ASSERT(!children.empty());
 		result_type = LogicalType::UNION(std::move(children));
 	} else {
-		int64_t width, scale;
+		idx_t width, scale;
 		if (base_type == LogicalTypeId::DECIMAL) {
 			// default decimal width/scale
 			width = 18;
@@ -186,7 +186,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			if (scale > width) {
 				throw ParserException("Scale cannot be bigger than width");
 			}
-			result_type = LogicalType::DECIMAL(width, scale);
+			result_type = LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale));
 			break;
 		case LogicalTypeId::INTERVAL:
 			if (modifier_idx > 1) {

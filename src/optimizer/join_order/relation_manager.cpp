@@ -29,12 +29,19 @@ idx_t RelationManager::NumRelations() {
 	return relations.size();
 }
 
-void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
-                                           const RelationStats &stats) {
+void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+                                                   const RelationStats &stats, LogicalOperatorType op_type) {
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
 
-	auto table_indexes = op.GetTableIndex();
+	LogicalOperator *aggr_op = &op;
+	while (aggr_op->type != op_type) {
+		if (aggr_op->children.empty()) {
+			throw InternalException("Parent of Aggregate/window operation by does not have window/window op as child.");
+		}
+		aggr_op = aggr_op->children[0].get();
+	}
+	auto table_indexes = aggr_op->GetTableIndex();
 	for (auto &index : table_indexes) {
 		D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
 		relation_mapping[index] = relation_id;
@@ -184,7 +191,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		if (!datasource_filters.empty()) {
 			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 		}
-		AddAggregateRelation(input_op, parent, operator_stats);
+		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
@@ -194,7 +201,10 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
 		auto &window = op->Cast<LogicalWindow>();
 		auto operator_stats = RelationStatisticsHelper::ExtractWindowStats(window, child_stats);
-		AddAggregateRelation(input_op, parent, operator_stats);
+		if (!datasource_filters.empty()) {
+			operator_stats.cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+		}
+		AddAggregateOrWindowRelation(input_op, parent, operator_stats, op->type);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:

@@ -1,3 +1,4 @@
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
 #include <memory>
 
@@ -25,7 +26,7 @@ bool RegexSearchInternal(const char *input, Match &match, const Regex &r, RE2::A
 	for (auto &group : target_groups) {
 		GroupMatch group_match;
 		group_match.text = group.ToString();
-		group_match.position = group.data() - input;
+		group_match.position = group.data() != nullptr ? duckdb::NumericCast<uint32_t>(group.data() - input) : 0;
 		match.groups.emplace_back(group_match);
 	}
 	return true;

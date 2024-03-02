@@ -409,8 +409,8 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
 	auto pat_ldata = make_unsafe_uniq_array<char>(pat_llength);
 	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
-	string_t str_lcase(str_ldata.get(), str_llength);
-	string_t pat_lcase(pat_ldata.get(), pat_llength);
+	string_t str_lcase(str_ldata.get(), UnsafeNumericCast<uint32_t>(str_llength));
+	string_t pat_lcase(pat_ldata.get(), UnsafeNumericCast<uint32_t>(pat_llength));
 	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
 }
 

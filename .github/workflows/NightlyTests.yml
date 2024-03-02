@@ -42,9 +42,9 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install Ninja
        shell: bash
@@ -136,9 +136,9 @@ jobs:
         version: "14.0"
         directory: '/home/runner/work/llvm'
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -218,9 +218,9 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install
        shell: bash
@@ -482,9 +482,9 @@ jobs:
          fetch-depth: 0
          path: unsafe
 
-     - uses: actions/setup-python@v4
+     - uses: actions/setup-python@v5
        with:
-         python-version: '3.7'
+         python-version: '3.12'
 
      - name: Install
        shell: bash
@@ -643,9 +643,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -670,9 +670,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.7'
+          python-version: '3.12'
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -767,7 +767,7 @@ jobs:
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 

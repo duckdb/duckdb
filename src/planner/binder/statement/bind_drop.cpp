@@ -35,7 +35,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 		auto entry = Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema, stmt.info->name,
-		                               OnEntryNotFound::RETURN_NULL);
+		                               stmt.info->if_not_found);
 		if (!entry) {
 			break;
 		}

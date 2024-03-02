@@ -23,7 +23,7 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), parent(parent), version(0) {
+      type(std::move(type_p)), parent(parent), version(0), allocation_size(0) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -210,8 +210,10 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
-	result.Flatten(scan_count);
-	ColumnSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
+
+	UnifiedVectorFormat vdata;
+	result.ToUnifiedFormat(scan_count, vdata);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, count);
 }
 
 void ColumnData::FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -406,6 +408,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 
 	// the segment size is bound by the block size, but can be smaller
 	idx_t segment_size = Storage::BLOCK_SIZE < vector_segment_size ? Storage::BLOCK_SIZE : vector_segment_size;
+	allocation_size += segment_size;
 	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row, segment_size);
 	data.AppendSegment(l, std::move(new_segment));
 }

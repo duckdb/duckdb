@@ -1,5 +1,6 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
 
@@ -195,13 +196,13 @@ void ValidityMask::Write(WriteStream &writer, idx_t count) {
 		// serialize (in)valid value indexes as [COUNT][V0][V1][...][VN]
 		auto flag = serialize_valid ? ValiditySerialization::VALID_VALUES : ValiditySerialization::INVALID_VALUES;
 		writer.Write(flag);
-		writer.Write<uint32_t>(MinValue<uint32_t>(valid_values, invalid_values));
+		writer.Write<uint32_t>(NumericCast<uint32_t>(MinValue(valid_values, invalid_values)));
 		for (idx_t i = 0; i < count; i++) {
 			if (RowIsValid(i) == serialize_valid) {
 				if (need_u32) {
-					writer.Write<uint32_t>(i);
+					writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(i));
 				} else {
-					writer.Write<uint16_t>(i);
+					writer.Write<uint16_t>(UnsafeNumericCast<uint16_t>(i));
 				}
 			}
 		}
