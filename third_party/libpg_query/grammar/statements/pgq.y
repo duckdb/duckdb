@@ -286,6 +286,7 @@ GraphTableStmt:
 			}
 		;
 
+/*
 ColumnSpec:
 		target_el					{ $$ = list_make1($1); }
 		;
@@ -295,6 +296,7 @@ ColumnList:
 		|
 		ColumnList ',' ColumnSpec	{ $$ = lappend($1, $3); }
 		;
+*/
 
 KeepOptional:
 		KEEP PathPrefix				{ $$ = $2; }
