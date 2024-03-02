@@ -10,6 +10,7 @@ namespace duckdb {
 
 constexpr static const int32_t HEX_BITSIZE = 4;
 constexpr static const int32_t MAX_QUIBBLE_DIGITS = 4;
+constexpr static const idx_t QUIBBLES_PER_HALF = 4;
 
 IPAddress::IPAddress() : type(IPAddressType::IP_ADDRESS_INVALID) {
 }
@@ -124,12 +125,23 @@ parse_mask:
   canonical and should be preferred in textual output. More examples can be
   found in test cases, such as test/sql/inet/test_ipv6_inet_type.test.
 */
-static void ParseQuibble(uhugeint_t &address, const char *buf, idx_t len) {
-	uint16_t result = 0;
+static void ParseQuibble(uint16_t &result, const char *buf, idx_t len) {
+	result = 0;
 	for (idx_t c = 0; c < len; ++c) {
 		result = (result << HEX_BITSIZE) + StringUtil::GetHexValue(buf[c]);
 	}
-	address = (address << IPAddress::IPV6_QUIBBLE_BITS) + result;
+}
+
+/*
+Compute the bitshift to store or retrieve a given quibble from one of the halves
+of an address.
+ */
+static idx_t QuibbleHalfAddressBitShift(const idx_t quibble, bool &is_upper) {
+	const idx_t this_offset = quibble % QUIBBLES_PER_HALF;
+	const idx_t quibble_shift = (QUIBBLES_PER_HALF - 1) - this_offset;
+	is_upper = quibble < QUIBBLES_PER_HALF;
+
+	return quibble_shift * IPAddress::IPV6_QUIBBLE_BITS;
 }
 
 static bool TryParseIPv6(string_t input, IPAddress &result, CastParameters &parameters) {
@@ -137,8 +149,7 @@ static bool TryParseIPv6(string_t input, IPAddress &result, CastParameters &para
 	auto size = input.GetSize();
 	idx_t c = 0;
 	int parsed_quibble_count = 0;
-	uhugeint_t first_address = 0;
-	uhugeint_t second_address = 0;
+	uint16_t quibbles[IPAddress::IPV6_NUM_QUIBBLE] = {};
 	int first_quibble_count = -1;
 	result.type = IPAddressType::IP_ADDRESS_V6;
 	result.mask = IPAddress::IPV6_DEFAULT_MASK;
@@ -172,13 +183,8 @@ static bool TryParseIPv6(string_t input, IPAddress &result, CastParameters &para
 			}
 
 			// Put the ipv4 parsed 2 quibbles into the proper address location.
-			const int bitshift = 2 * IPAddress::IPV6_QUIBBLE_BITS;
-			if (first_quibble_count == -1) {
-				first_address = (first_address << bitshift) | ipv4.address;
-			} else {
-				second_address = (second_address << bitshift) | ipv4.address;
-			}
-			parsed_quibble_count += 2;
+			quibbles[parsed_quibble_count++] = ipv4.address.lower >> IPAddress::IPV6_QUIBBLE_BITS;
+			quibbles[parsed_quibble_count++] = ipv4.address.lower & 0xffff;
 			continue;
 		}
 
@@ -187,12 +193,7 @@ static bool TryParseIPv6(string_t input, IPAddress &result, CastParameters &para
 		}
 
 		if (len > 0) {
-			if (first_quibble_count == -1) {
-				ParseQuibble(first_address, &data[start], len);
-			} else {
-				ParseQuibble(second_address, &data[start], len);
-			}
-			++parsed_quibble_count;
+			ParseQuibble(quibbles[parsed_quibble_count++], &data[start], len);
 		}
 
 		// Check for double colon
@@ -236,21 +237,33 @@ static bool TryParseIPv6(string_t input, IPAddress &result, CastParameters &para
 		return IPAddressError(input, parameters, "Unexpected extra characters");
 	}
 
-	// Special handling if a double colon was encountered
-	if (first_quibble_count != -1) {
-		int missing_quibbles = IPAddress::IPV6_NUM_QUIBBLE - parsed_quibble_count;
-		if (missing_quibbles == 0) {
-			return IPAddressError(input, parameters, "Invalid double-colon, too many hex digits.");
+	// Operate on each half of the 128 bit address directly to make the bit operations much more
+	// efficient.
+	result.address.upper = 0;
+	result.address.lower = 0;
+
+	idx_t output_idx = 0;
+	for (int parsed_idx = 0; parsed_idx < parsed_quibble_count; ++parsed_idx, ++output_idx) {
+		if (parsed_idx == first_quibble_count) {
+			// All the quibbles before the double-colon were output, now skip
+			// to where the bottom set was defined.
+			int missing_quibbles = IPAddress::IPV6_NUM_QUIBBLE - parsed_quibble_count;
+			if (missing_quibbles == 0) {
+				return IPAddressError(input, parameters, "Invalid double-colon, too many hex digits.");
+			}
+			// Advanced the output by the number of missing quibbles, they will be zero.
+			output_idx += missing_quibbles;
 		}
-		int shift_quibbles = IPAddress::IPV6_NUM_QUIBBLE - first_quibble_count;
-		// Shift the quibbles up in the first address to account for the missing
-		// quibbles (which will be zero) and the quibbles parsed into the second
-		// address.
-		first_address <<= shift_quibbles * IPAddress::IPV6_QUIBBLE_BITS;
-		// "Or in" the bits from the second address to fill out the lower quibbles
-		first_address |= second_address;
+
+		bool is_upper;
+		const idx_t bitshift = QuibbleHalfAddressBitShift(output_idx, is_upper);
+		if (is_upper) {
+			result.address.upper |= static_cast<uint64_t>(quibbles[parsed_idx]) << bitshift;
+		} else {
+			result.address.lower |= static_cast<uint64_t>(quibbles[parsed_idx]) << bitshift;
+		}
 	}
-	result.address = first_address;
+
 	return true;
 }
 
@@ -307,8 +320,15 @@ static string ToStringIPv6(const IPAddress &addr) {
 
 	// Convert the packed bits into quibbles while looking for the maximum run of zeros
 	for (idx_t i = 0; i < IPAddress::IPV6_NUM_QUIBBLE; ++i) {
-		int bitshift = (IPAddress::IPV6_NUM_QUIBBLE - 1 - i) * IPAddress::IPV6_QUIBBLE_BITS;
-		quibbles[i] = Hugeint::Cast<uint16_t>((addr.address >> bitshift) & 0xFFFF);
+		bool is_upper;
+		const idx_t bitshift = QuibbleHalfAddressBitShift(i, is_upper);
+		// Operate on each half separately to make the bit operations more efficient.
+		if (is_upper) {
+			quibbles[i] = Hugeint::Cast<uint16_t>((addr.address.upper >> bitshift) & 0xFFFF);
+		} else {
+			quibbles[i] = Hugeint::Cast<uint16_t>((addr.address.lower >> bitshift) & 0xFFFF);
+		}
+
 		if (quibbles[i] == 0 && this_zero_start == IPAddress::IPV6_NUM_QUIBBLE) {
 			this_zero_start = i;
 		} else if (quibbles[i] != 0 && this_zero_start != IPAddress::IPV6_NUM_QUIBBLE) {
