@@ -111,59 +111,70 @@ SELECT '::ffff:0:192.0.2.128/96'::INET, '::ffff:0:c000:280/96'::INET;
 statement error
 SELECT '2001:db8:100:0:c59b:cef3:a0d189:6de4'::INET;
 ----
+Expected 4 or fewer hex digits
 
 # Too many quibbles
 statement error
 SELECT '2001:db8:100:0:c59b:cef3:a0d1:6de4:d16d'::INET;
 ----
+Unexpected extra characters
 
 # Not enough quibbles
 statement error
 SELECT '2001:db8:100:0:c59b:cef3:a0d1'::INET;
 ----
+Expected 8 sets of 4 hex digits.
 
 # Not enough quibbles
 statement error
 SELECT ':2:'::INET;
 ----
+Expected 8 sets of 4 hex digits.
 
 # Too many double colons
 statement error
 SELECT '2001:db8::cef3::363/96'::INET;
 ----
+Encountered more than one double-colon
 
 # Triple colons are not valid
 statement error
- SELECT ':::1234:5678'::INET
+SELECT ':::1234:5678'::INET
 ----
+Encountered more than two consecutive colons
 
 # Invalid subnet mask
 statement error
 SELECT '2001:db8:100:0:c59b:cef3::/266'::INET;
 ----
+Expected a number between 0 and 128
 
 # Invalid subnet mask
 statement error
 SELECT '2001:db8:100:0:c59b:cef3::/130'::INET;
 ----
+Expected a number between 0 and 128
 
 # Invalid characters
 statement error
 SELECT '2001:db8:100:0z:c59b:cef3::/120'::INET;
 ----
+Unexpected character found
 
 # Invalid use of the IPv4 format
 statement error
 SELECT '64:ff9b::192.0.2.128:1:3/96'::INET;
 ----
+IPv4 format can only be used for the final 2 quibbles.
 
 # Invalid IPv4 address
 statement error
 SELECT '::ffff:0:192.0.268.128/96'::INET
 ----
+Expected a number between 0 and 255
 
 # Invalid double colon use
 statement error
 SELECT '2001:DB8:100:30::C59B:CEF3:A0D1:6DE4'::INET;
 ----
-
+Invalid double-colon, too many hex digits.

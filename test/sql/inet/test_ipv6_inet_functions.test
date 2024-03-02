@@ -51,8 +51,10 @@ SELECT INET '::ffff:127.0.0.31' + 32;
 statement error
 SELECT INET '::' - 32;
 ----
+Out of Range Error: Overflow in subtraction
 
 # overflow
 statement error
 SELECT INET 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff' - -32;
 ----
+Out of Range Error: Overflow in addition

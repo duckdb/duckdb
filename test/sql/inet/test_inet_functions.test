@@ -46,12 +46,12 @@ SELECT INET '127.0.0.31' - -32;
 ----
 127.0.0.63
 
-# underflow
 statement error
 SELECT INET '0.0.0.0' - 32;
 ----
+Out of Range Error: Overflow in subtraction
 
-# overflow
 statement error
 select INET '255.255.255.255' + 1
 ----
+Out of Range Error: Cannot add 1

@@ -31,3 +31,4 @@ SELECT [INET '2345:425::5673:23b5/64', NULL, '2266:25::12:0:ad12/96']
 statement error
 SELECT [INET '2345:425::5673:23b5/64', 3, INET '2266:25::12:0:ad12/96']::VARCHAR[]
 ----
+Unimplemented type for cast
