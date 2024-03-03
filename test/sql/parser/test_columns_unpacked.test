@@ -1,13 +1,21 @@
 # name: test/sql/parser/test_columns_unpacked.test
 # group: [parser]
 
-statement ok
-create table t as select NULL a, 2 b, 3 c;
-
 query I
-select COALESCE(*COLUMNS(*)) from t;
+select COALESCE(*COLUMNS(*)) from (select NULL, 2, 3) t(a, b, c);
 ----
 2
+
+query I
+select column_name from (describe select COALESCE(*COLUMNS(*)) from (select NULL, 2, 3) t(a, b, c));
+----
+COALESCE(t.a, t.b, t.c)
+
+# Aliasing the result
+query I
+select column_name from (describe select COALESCE(*COLUMNS(*)) as a from (select NULL, 2, 3) t(a, b, c));
+----
+a
 
 statement ok
 create table contains_test as select '123abc234' a, 4 b, 'abc' c;
@@ -46,3 +54,15 @@ statement error
 select first(amount ORDER BY *COLUMNS('date|priority') ASC) from sales;
 ----
 *COLUMNS(...) is not supported in the order expression
+
+# Using a lambda in *COLUMNS
+query I
+select COALESCE(*COLUMNS(c -> c in ('a', 'c'))) from (select NULL, 2, 3) t(a, b, c);
+----
+3
+
+# IN (...)
+query I
+select 2 in (*COLUMNS(*)) from (select 1, 2, 3) t(a, b, c);
+----
+true
