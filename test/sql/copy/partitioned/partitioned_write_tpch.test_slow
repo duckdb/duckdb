@@ -1,0 +1,39 @@
+# name: test/sql/copy/partitioned/partitioned_write_tpch.test_slow
+# description: TPC-H test for hive partitioned write
+# group: [partitioned]
+
+require parquet
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+# write lineitem partitioned by l_returnflag and l_linestatus
+statement ok
+COPY lineitem TO  '__TEST_DIR__/lineitem_partitioned' (FORMAT PARQUET, PARTITION_BY (l_returnflag, l_linestatus));
+
+statement ok
+DROP TABLE lineitem
+
+statement ok
+CREATE VIEW lineitem AS FROM '__TEST_DIR__/lineitem_partitioned/**/*.parquet'
+
+# now run tpc-h - results should be the same
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

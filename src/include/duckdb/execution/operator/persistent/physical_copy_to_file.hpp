@@ -72,6 +72,8 @@ public:
 
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 
+	string GetTrimmedPath(ClientContext &context) const;
+
 private:
 	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink) const;
 };
