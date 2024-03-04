@@ -105,6 +105,7 @@ private:
 
 	static ScalarFunctionSet GetArrayTailFunction();
 	static ScalarFunctionSet GetArrayAppendFunction();
+	static ScalarFunctionSet GetObjectAddFunction();
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 
 	template <class FUNCTION_INFO>

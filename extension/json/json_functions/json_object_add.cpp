@@ -1,0 +1,145 @@
+#include "json_executors.hpp"
+
+namespace duckdb {
+
+//! Add a JSON Object or String to an object
+yyjson_mut_val *ObjectAddStringOrJSON(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, string_t value,
+                                      yyjson_alc *alc, Vector &result) {
+	if (!yyjson_mut_is_obj(obj)) {
+		throw InvalidInputException("JSON input not an JSON Object");
+	}
+
+	const char *_key = key.GetDataWriteable();
+	auto mut_key = yyjson_mut_strcpy(doc, _key);
+
+	auto vdoc = JSONCommon::ReadDocument(value, JSONCommon::READ_FLAG, alc);
+	auto mut_vdoc = yyjson_doc_mut_copy(vdoc, alc);
+
+	yyjson_mut_obj_add(obj, mut_key, mut_vdoc->root);
+	return obj;
+}
+
+//! Add a boolean to an object
+yyjson_mut_val *ObjectAddBoolean(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, bool value, yyjson_alc *alc,
+                                 Vector &result) {
+	if (!yyjson_mut_is_obj(obj)) {
+		throw InvalidInputException("JSON input not an JSON Object");
+	}
+
+	const char *_key = key.GetDataWriteable();
+	auto mut_key = yyjson_mut_strcpy(doc, _key);
+	auto k = yyjson_mut_get_str(mut_key);
+
+	yyjson_mut_obj_add_bool(doc, obj, k, value);
+	return obj;
+}
+
+//! Add an unsigned integer to an object
+yyjson_mut_val *ObjectAddUnsignedInteger(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, uint64_t value,
+                                         yyjson_alc *alc, Vector &result) {
+	if (!yyjson_mut_is_obj(obj)) {
+		throw InvalidInputException("JSON input not an JSON Object");
+	}
+
+	const char *_key = key.GetDataWriteable();
+	auto mut_key = yyjson_mut_strcpy(doc, _key);
+	auto k = yyjson_mut_get_str(mut_key);
+
+	yyjson_mut_obj_add_uint(doc, obj, k, value);
+	return obj;
+}
+
+//! Add an signed integer to an object
+yyjson_mut_val *ObjectAddSignedInteger(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, int64_t value,
+                                       yyjson_alc *alc, Vector &result) {
+	if (!yyjson_mut_is_obj(obj)) {
+		throw InvalidInputException("JSON input not an JSON Object");
+	}
+
+	const char *_key = key.GetDataWriteable();
+	auto mut_key = yyjson_mut_strcpy(doc, _key);
+	auto k = yyjson_mut_get_str(mut_key);
+
+	yyjson_mut_obj_add_int(doc, obj, k, value);
+	return obj;
+}
+
+//! Add a real value to an object
+yyjson_mut_val *ObjectAddFloating(yyjson_mut_val *obj, yyjson_mut_doc *doc, string_t key, double value, yyjson_alc *alc,
+                                  Vector &result) {
+	if (!yyjson_mut_is_obj(obj)) {
+		throw InvalidInputException("JSON input not an JSON Object");
+	}
+
+	const char *_key = key.GetDataWriteable();
+	auto mut_key = yyjson_mut_strcpy(doc, _key);
+	auto k = yyjson_mut_get_str(mut_key);
+
+	yyjson_mut_obj_add_real(doc, obj, k, value);
+	return obj;
+}
+
+//! Add key-value pairs to a json object
+static void ObjectAddFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto obj_type = args.data[0].GetType();
+	D_ASSERT(obj_type == LogicalType::VARCHAR || obj_type == JSONCommon::JSONType());
+	auto first_type = args.data[1].GetType();
+	D_ASSERT(first_type == LogicalType::VARCHAR);
+
+	auto second_type = args.data[2].GetType();
+
+	switch (second_type.id()) {
+	case LogicalType::VARCHAR:
+		JSONExecutors::TernaryMutExecute<string_t, string_t>(args, state, result, ObjectAddStringOrJSON);
+		break;
+	case LogicalType::BOOLEAN:
+		JSONExecutors::TernaryMutExecute<string_t, bool>(args, state, result, ObjectAddBoolean);
+		break;
+	case LogicalType::UBIGINT:
+		JSONExecutors::TernaryMutExecute<string_t, uint64_t>(args, state, result, ObjectAddUnsignedInteger);
+		break;
+	case LogicalType::BIGINT:
+		JSONExecutors::TernaryMutExecute<string_t, int64_t>(args, state, result, ObjectAddSignedInteger);
+		break;
+	case LogicalType::DOUBLE:
+		JSONExecutors::TernaryMutExecute<string_t, double>(args, state, result, ObjectAddFloating);
+		break;
+	default:
+		// Shouldn't be thrown except implicit casting changes
+		throw InvalidInputException("Not a valid input type");
+	}
+}
+
+static void GetObjectAddFunctionInternal(ScalarFunctionSet &set, const LogicalType &obj, const LogicalType &first,
+                                         const LogicalType &second) {
+	set.AddFunction(ScalarFunction("json_obj_add", {obj, first, second}, JSONCommon::JSONType(), ObjectAddFunction,
+	                               nullptr, nullptr, nullptr, JSONFunctionLocalState::Init));
+}
+
+ScalarFunctionSet JSONFunctions::GetObjectAddFunction() {
+	ScalarFunctionSet set("json_obj_add");
+
+	// Use different executor for these
+
+	// Boolean
+	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::BOOLEAN);
+
+	// Integer Types
+
+	// unsigned
+	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::UBIGINT);
+
+	// signed
+	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::BIGINT);
+
+	// Floating Types
+	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::DOUBLE);
+
+	// JSON values
+	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, JSONCommon::JSONType());
+	GetObjectAddFunctionInternal(set, JSONCommon::JSONType(), LogicalType::VARCHAR, LogicalType::VARCHAR);
+
+	return set;
+}
+
+} // namespace duckdb
