@@ -7,7 +7,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include <algorithm>
 
 namespace duckdb {
