@@ -10,17 +10,18 @@ INSERT INTO df VALUES (0, 2), (1, NULL), (2, 4), (3, 5), (4, NULL);
 
 statement ok
 SELECT
-      x,
-      COALESCE(
-          y,
-          (
-              SELECT 
-                  prev.y + ( (next.y - prev.y) * (parent.x - prev.x) / (next.x - prev.x) )
-              FROM
-                  ( SELECT x, y FROM df WHERE x <= parent.x and y is not null ORDER BY x DESC LIMIT 1 ) AS prev
-              CROSS JOIN
-                  ( SELECT x, y FROM df WHERE x >= parent.x and y is not null ORDER BY x ASC LIMIT 1 ) AS next
-          )
-      ) AS y
-  FROM
-      df parent;
+  x,
+  COALESCE(
+	  y,
+	  (
+		  SELECT 
+			  prev.y + ( (next.y - prev.y) * (parent.x - prev.x) / (next.x - prev.x) )
+		  FROM
+			  ( SELECT x, y FROM df WHERE x <= parent.x and y is not null ORDER BY x DESC LIMIT 1 ) AS prev
+		  CROSS JOIN
+			  ( SELECT x, y FROM df WHERE x >= parent.x and y is not null ORDER BY x ASC LIMIT 1 ) AS next
+	  )
+  ) AS y
+FROM
+  df parent;
+
