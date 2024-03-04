@@ -70,11 +70,11 @@ py::list DuckDBPyStatement::ExpectedResultType() const {
 		break;
 	}
 	case StatementType::COPY_STATEMENT:
-	case StatementType::UPDATE_STATEMENT:
 	case StatementType::DELETE_STATEMENT: {
 		possibilities.append(StatementReturnType::CHANGED_ROWS);
 		break;
 	}
+	case StatementType::UPDATE_STATEMENT:
 	case StatementType::INSERT_STATEMENT: {
 		possibilities.append(StatementReturnType::CHANGED_ROWS);
 		possibilities.append(StatementReturnType::QUERY_RESULT);
