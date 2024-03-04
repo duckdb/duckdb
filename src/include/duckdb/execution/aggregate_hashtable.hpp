@@ -50,12 +50,10 @@ public:
 
 	// Will only return if cell is occupied
 	inline data_ptr_t GetPointer() const {
-		if (!IsOccupied()) {
-			return nullptr;
-		}
 		D_ASSERT(IsOccupied());
 		return reinterpret_cast<data_ptr_t>(value & POINTER_MASK);
 	}
+
 	inline void SetPointer(const data_ptr_t &pointer) {
 		// Pointer shouldn't use upper bits
 		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);

@@ -394,24 +394,48 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 }
 
 template <bool PARALLEL>
-static inline void InsertRowToEntry(atomic<aggr_ht_entry_t> &entry, data_ptr_t row_ptr_to_insert, const hash_t salt,
-                                    const idx_t pointer_offset) {
+static inline bool InsertRowToEntry(atomic<aggr_ht_entry_t> &entry, data_ptr_t row_ptr_to_insert, const hash_t salt,
+                                    const idx_t pointer_offset, bool expect_empty) {
 
 	if (PARALLEL) {
-		aggr_ht_entry_t current_entry = entry.load();
+		aggr_ht_entry_t expected_current_entry = entry.load();
 		aggr_ht_entry_t new_entry;
-		do {
-			data_ptr_t current_row_pointer = current_entry.GetPointerOrNull();
-			Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
-			new_entry = aggr_ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
-		} while (!std::atomic_compare_exchange_weak(&entry, &current_entry, new_entry));
 
-	} else {
+		// if we expect the entry to be empty, if the operation fails we need to cancel the whole operation as another
+		// key might have been inserted in the meantime that does not match the current key
+		if (expect_empty) {
+			// we expect the entry to be empty, so we can just try to insert the key
+			D_ASSERT(!expected_current_entry.IsOccupied());
+
+			// add nullptr to the end of the list to mark the end
+			Store<data_ptr_t>(nullptr, row_ptr_to_insert + pointer_offset);
+
+			new_entry = aggr_ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
+			bool successful_swap = std::atomic_compare_exchange_weak(&entry, &expected_current_entry, new_entry);
+			return successful_swap;
+		}
+
+		// if we expect the entry to be full, we know that even if the insert fails the keys still match so we can
+		// just keep trying until we succeed
+		else {
+			do {
+				data_ptr_t current_row_pointer = expected_current_entry.GetPointer();
+				Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
+				new_entry = aggr_ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
+			} while (!std::atomic_compare_exchange_weak(&entry, &expected_current_entry, new_entry));
+
+			return true;
+		}
+	}
+	// if we are not in parallel mode, we can just do the operation without any checks
+	else {
 		aggr_ht_entry_t current_entry = entry.load();
 		data_ptr_t current_row_pointer = current_entry.GetPointerOrNull();
 		Store<data_ptr_t>(current_row_pointer, row_ptr_to_insert + pointer_offset);
 
 		entry = aggr_ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
+
+		return true;
 	}
 }
 
@@ -478,8 +502,12 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 
 					// Still need to set nullptr at the end to mark the end of the list
 					data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
-					InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset);
-					break;
+					bool successful_insertion = InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset, true);
+
+					// if the insertion was successful, we can stop the loop for this entry
+					if (successful_insertion) {
+						break;
+					}
 				}
 			}
 		}
@@ -534,7 +562,7 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 				auto &entry = entries[ht_offsets[entry_index]];
 				data_ptr_t row_ptr = row_ptrs_to_insert[entry_index];
 				auto salt = hash_salts[entry_index];
-				InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset);
+				InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset, false);
 			}
 
 			// Linear probing: each of the entries that do not match move to the next entry in the HT
