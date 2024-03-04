@@ -227,7 +227,12 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 original_rel = conn.query(sql_query)
                 original_types = original_rel.types
                 aliased_columns = ", ".join([f'c{i}' for i in range(len(original_types))])
-                stringified_rel = conn.query(f"select COLUMNS(*)::VARCHAR from original_rel t({aliased_columns})")
+                try:
+                    stringified_rel = conn.query(
+                        f"select COLUMNS(*)::VARCHAR from original_rel unnamed_subquery_blabla({aliased_columns})"
+                    )
+                except Exception as e:
+                    self.fail(f"Could not select from the ValueRelation: {str(e)}")
                 result = stringified_rel.fetchall()
                 query_result = QueryResult(result, original_types)
             else:
@@ -243,7 +248,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             print(e)
             query_result = QueryResult([], [], e)
 
-        print(sql_query)
         self.check_query_result(query, query_result)
 
     def execute_skip(self, statement: Skip):

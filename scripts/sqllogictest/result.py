@@ -115,10 +115,16 @@ def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool):
     if value is None or value == 'NULL':
         return 'NULL'
     query = "select $1::VARCHAR"
-    print(sql_type)
-    if sql_type in [duckdb.typing.BOOLEAN, duckdb.typing.DOUBLE]:
+    if sql_type in [
+        duckdb.typing.BOOLEAN,
+        duckdb.typing.DOUBLE,
+    ]:
         res = duckdb.execute(query, [duckdb.Value(value, sql_type)]).fetchone()
     else:
+        if len(value) == 0:
+            value = "(empty)"
+        else:
+            value = value.replace("\0", "\\0")
         res = duckdb.execute(query, [value]).fetchone()
     return res[0]
 
@@ -220,6 +226,7 @@ class SQLLogicRunner:
             if self.skip_error_message(result.get_error()):
                 self.finished_processing_file = True
                 return
+            print(result.get_error())
             self.fail_query(query)
 
         row_count = result.row_count()
@@ -338,8 +345,6 @@ class SQLLogicRunner:
                 for i, val in enumerate(comparison_values):
                     lvalue_str = result_values_string[current_row * expected_column_count + current_column]
                     rvalue_str = val.strip(' ')
-                    print(rvalue_str, rvalue_str.__class__)
-                    print(lvalue_str, lvalue_str.__class__)
                     success = compare_values(result, lvalue_str, rvalue_str, current_column)
                     if not success:
                         logger.print_error_header("Wrong result in query!")
