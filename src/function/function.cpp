@@ -13,6 +13,11 @@ namespace duckdb {
 FunctionData::~FunctionData() {
 }
 
+FunctionData::FunctionData() : with_ordinality(false), original_ordinality_id(0) {
+}
+
+FunctionData::FunctionData(const FunctionData &other) = default;
+
 bool FunctionData::Equals(const FunctionData *left, const FunctionData *right) {
 	if (left == right) {
 		return true;

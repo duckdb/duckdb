@@ -47,6 +47,8 @@ enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTEN
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
 
+	DUCKDB_API FunctionData();
+	FunctionData(const FunctionData &other);
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
