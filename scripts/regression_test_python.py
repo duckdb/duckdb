@@ -90,7 +90,7 @@ class TPCHData:
         return results
 
 
-class TPCHTester:
+class TPCHBenchmarker:
     def __init__(self, name: str):
         self.initialize_connection()
         self.name = name
@@ -131,7 +131,7 @@ class TPCHTester:
         return results
 
 
-def main():
+def test_tpch():
     print_msg(f"Generating TPCH (sf={scale_factor})")
     tpch = TPCHData(scale_factor)
 
@@ -171,7 +171,7 @@ def main():
     # Convert TPCH data to the right format, then run TPCH queries on that data
     for convertor in CONVERTORS:
         tables = tpch.get_tables(CONVERTORS[convertor])
-        tester = TPCHTester(convertor)
+        tester = TPCHBenchmarker(convertor)
         tester.register_tables(tables)
         collector = COLLECTORS[convertor]
         results: List[BenchmarkResult] = tester.run_tpch(collector)
@@ -180,6 +180,89 @@ def main():
             run_number = res.run_number
             duration = res.duration
             write_result(benchmark_name, run_number, duration)
+
+
+def generate_string(seed: int):
+    output = ''
+    for _ in range(10):
+        output += chr(ord('A') + int(seed % 26))
+        seed /= 26
+    return output
+
+
+class ArrowDictionary:
+    def __init__(self, unique_values):
+        self.size = unique_values
+        self.dict = [generate_string(x) for x in range(unique_values)]
+
+
+class ArrowDictionaryBenchmark:
+    def __init__(self, unique_values, values, arrow_dict: ArrowDictionary):
+        assert unique_values <= arrow_dict.size
+        self.initialize_connection()
+        self.generate(unique_values, values, arrow_dict)
+
+    def initialize_connection(self):
+        self.con = duckdb.connect()
+        if not threads:
+            return
+        print_msg(f'Limiting threads to {threads}')
+        self.con.execute(f"SET threads={threads}")
+
+    def generate(self, unique_values, values, arrow_dict: ArrowDictionary):
+        self.input = []
+        self.expected = []
+        for x in range(values):
+            value = arrow_dict.dict[x % unique_values]
+            self.input.append(value)
+            self.expected.append((value,))
+
+        array = pa.array(
+            self.input,
+            type=pa.dictionary(pa.int64(), pa.string()),
+        )
+        self.table = pa.table([array], names=["x"])
+
+    def benchmark(self) -> List[BenchmarkResult]:
+        self.con.register('arrow_table', self.table)
+        results = []
+        for nrun in range(nruns):
+            duration = 0.0
+            start = time.time()
+            res = self.con.execute(
+                """
+                select * from arrow_table
+            """
+            ).fetchall()
+            end = time.time()
+            duration = float(end - start)
+            assert self.expected == res
+            del res
+            padding = " " * len(str(nruns))
+            print_msg(f"T{padding}: {duration}s")
+            results.append(BenchmarkResult(duration, nrun))
+        return results
+
+
+def test_arrow_dictionaries_scan():
+    DICT_SIZE = 26 * 1000
+    print_msg(f"Generating a unique dictionary of size {DICT_SIZE}")
+    arrow_dict = ArrowDictionary(DICT_SIZE)
+    DATASET_SIZE = 10000000
+    for unique_values in [2, 1000, DICT_SIZE]:
+        test = ArrowDictionaryBenchmark(unique_values, DATASET_SIZE, arrow_dict)
+        results = test.benchmark()
+        benchmark_name = f"arrow_dict_unique_{unique_values}_total_{DATASET_SIZE}"
+        for res in results:
+            run_number = res.run_number
+            duration = res.duration
+            write_result(benchmark_name, run_number, duration)
+
+
+def main():
+    test_tpch()
+    test_arrow_dictionaries_scan()
+
     close_result()
 
 

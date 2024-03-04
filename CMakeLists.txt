@@ -292,7 +292,7 @@ endif()
 
 string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
 
-if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND DEFINED GIT_COMMIT_HASH)
+if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND NOT GIT_COMMIT_HASH STREQUAL "")
   set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
 else()
   set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
@@ -845,7 +845,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
-macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES)
+macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES SUBMODULES)
   include(FetchContent)
   if (${APPLY_PATCHES})
     set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
@@ -854,7 +854,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
           ${NAME}_extension_fc
           GIT_REPOSITORY ${URL}
           GIT_TAG ${COMMIT}
-          GIT_SUBMODULES ""
+          GIT_SUBMODULES "${SUBMODULES}"
           PATCH_COMMAND ${PATCH_COMMAND}
   )
   message(STATUS "Load extension '${NAME}' from ${URL} @ ${COMMIT}")
@@ -878,7 +878,7 @@ endmacro()
 function(duckdb_extension_load NAME)
   # Parameter parsing
   set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES)
-  set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG)
+  set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG SUBMODULES)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
@@ -902,7 +902,7 @@ function(duckdb_extension_load NAME)
     if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
       error("Git URL specified but no valid git commit was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_SUBMODULES}")
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
     message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")

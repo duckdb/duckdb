@@ -61,7 +61,7 @@ pragma debug_force_external=false
 
 # higher memory limit for this because the strings are so large
 statement ok
-pragma memory_limit='150mb'
+pragma memory_limit='200mb'
 
 # add some strings that are longer than Storage::BLOCK_SIZE
 statement ok

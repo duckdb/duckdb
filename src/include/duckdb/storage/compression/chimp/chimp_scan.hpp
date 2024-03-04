@@ -12,6 +12,7 @@
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -210,7 +211,7 @@ public:
 		auto group_size = MinValue<idx_t>(segment_count - total_value_count, ChimpPrimitives::CHIMP_SEQUENCE_SIZE);
 		// Reduce by one, because the first value of a group does not have a flag
 		auto flag_count = group_size - 1;
-		uint16_t flag_byte_count = (AlignValue<uint16_t, 4>(flag_count) / 4);
+		uint16_t flag_byte_count = AlignValue<uint16_t, 4>(UnsafeNumericCast<uint16_t>(flag_count)) / 4;
 
 		// Load the flags
 		metadata_ptr -= flag_byte_count;

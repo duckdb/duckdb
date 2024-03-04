@@ -40,8 +40,10 @@ public:
 	static shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name,
 	                                                    shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type,
+	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type, idx_t size,
 	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> ListType(const shared_ptr<DuckDBPyType> &type,
+	                                         shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key, const shared_ptr<DuckDBPyType> &value,
 	                                        shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> StructType(const py::object &fields,

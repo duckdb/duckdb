@@ -119,6 +119,10 @@ public:
 		return *info;
 	}
 
+	idx_t GetAllocationSize() const {
+		return allocation_size;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
@@ -136,6 +140,8 @@ private:
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
+	//! Allocation size, only tracked for appends
+	idx_t allocation_size;
 };
 
 } // namespace duckdb

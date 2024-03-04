@@ -431,14 +431,13 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			gstate.initialized = true;
 		}
 
+		if (return_chunk) {
+			gstate.return_collection.Append(lstate.insert_chunk);
+		}
 		idx_t updated_tuples = OnConflictHandling(table, context, lstate);
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
-
-		if (return_chunk) {
-			gstate.return_collection.Append(lstate.insert_chunk);
-		}
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append

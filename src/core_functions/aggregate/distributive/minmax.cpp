@@ -166,7 +166,7 @@ struct StringMinMaxBase : public MinMaxBase {
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
 
-			state.value = string_t(ptr, len);
+			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 
@@ -457,7 +457,7 @@ struct VectorMinMaxBase {
 			state.value = new Vector(input.GetType());
 			state.value->SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
-		sel_t selv = idx;
+		sel_t selv = UnsafeNumericCast<sel_t>(idx);
 		SelectionVector sel(&selv);
 		VectorOperations::Copy(input, *state.value, sel, 1, 0, 0);
 	}

@@ -27,7 +27,7 @@ MetaBlockPointer MetadataWriter::GetMetaBlockPointer() {
 		NextBlock();
 		D_ASSERT(capacity > 0);
 	}
-	return manager.GetDiskPointer(block.pointer, offset);
+	return manager.GetDiskPointer(block.pointer, UnsafeNumericCast<uint32_t>(offset));
 }
 
 MetadataHandle MetadataWriter::NextHandle() {

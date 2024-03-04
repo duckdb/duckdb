@@ -14,8 +14,9 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -34,7 +35,7 @@ string SanitizeExportIdentifier(const string &str) {
 
 		if (c >= 'A' && c <= 'Z') {
 			// To lowercase
-			result[i] = tolower(c);
+			result[i] = NumericCast<char>(tolower(c));
 		} else {
 			// Substitute to underscore
 			result[i] = '_';
@@ -127,6 +128,11 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 	case LogicalTypeId::LIST: {
 		auto child = AlterLogicalType(ListType::GetChildType(original), type_check);
 		return LogicalType::LIST(child);
+	}
+	case LogicalTypeId::ARRAY: {
+		// Attempt to convert the array to a list
+		auto &child = ArrayType::GetChildType(original);
+		return AlterLogicalType(LogicalType::LIST(child), type_check);
 	}
 	case LogicalTypeId::STRUCT: {
 		auto &original_children = StructType::GetChildTypes(original);

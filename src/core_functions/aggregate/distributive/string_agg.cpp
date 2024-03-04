@@ -113,7 +113,8 @@ struct StringAggFunction {
 			// source is not set: skip combining
 			return;
 		}
-		PerformOperation(target, string_t(source.dataptr, source.size), aggr_input_data.bind_data);
+		PerformOperation(target, string_t(source.dataptr, UnsafeNumericCast<uint32_t>(source.size)),
+		                 aggr_input_data.bind_data);
 	}
 };
 
