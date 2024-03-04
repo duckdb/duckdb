@@ -25,7 +25,7 @@ static bool FilterIsOnPartition(column_binding_set_t partition_bindings, Express
 			return;
 		}
 		// for simplicity, we don't push down filters that are functions.
-		// conjunction and filters we don't pushdown either
+		// CONJUNCTION_AND filters are also not pushed down
 		case ExpressionType::BOUND_FUNCTION:
 		case ExpressionType::CONJUNCTION_AND: {
 			filter_is_on_partition = false;
