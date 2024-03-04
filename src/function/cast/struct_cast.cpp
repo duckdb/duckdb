@@ -14,7 +14,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	auto source_is_unnamed = StructType::IsUnnamed(source);
 
 	if (source_child_types.size() != result_child_types.size()) {
-		throw TypeMismatchException(source, target, "Cannot cast STRUCTs of different size");
+		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
 	bool named_struct_cast = !source_is_unnamed && !target_is_unnamed;
 	case_insensitive_map_t<idx_t> target_members;
@@ -36,7 +36,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 			// named struct cast - find corresponding member in target
 			auto entry = target_members.find(source_child.first);
 			if (entry == target_members.end()) {
-				throw TypeMismatchException(source, target,
+				throw TypeMismatchException(input.query_location, source, target,
 				                            "Cannot cast STRUCTs - element \"" + source_child.first +
 				                                "\" in source struct was not found in target struct");
 			}

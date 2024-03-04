@@ -32,7 +32,7 @@ static void AddCharacter(char chr, LikeString &ret, bool contains) {
 	// if we are not converting into a contains, and the string has LIKE special characters
 	// then don't return a possible LIKE match
 	// same if the character is a control character
-	if (iscntrl(chr) || (!contains && (chr == '%' || chr == '_'))) {
+	if (iscntrl(static_cast<unsigned char>(chr)) || (!contains && (chr == '%' || chr == '_'))) {
 		ret.exists = false;
 		return;
 	}

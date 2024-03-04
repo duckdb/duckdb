@@ -14,13 +14,8 @@ COMMENT ON COLUMN test.a IS 'comment-2'
 statement ok
 CREATE VIEW test_view AS FROM test;
 
-# TODO comment on view column
-mode skip
-
 statement ok
 COMMENT ON COLUMN test_view.a IS 'comment-2.5'
-
-mode unskip
 
 statement ok
 CREATE INDEX test_index ON test(a)
@@ -73,6 +68,15 @@ LEFT JOIN pg_description AS pg
 WHERE pg.objsubid=1 AND ddb.table_name='test'
 ----
 comment-2	comment-2
+
+query II
+SELECT ddb.comment, pg.description
+FROM duckdb_columns AS ddb
+LEFT JOIN pg_description AS pg
+    ON pg.classoid=ddb.database_oid AND pg.objoid=ddb.table_oid
+WHERE pg.objsubid=1 AND ddb.table_name='test_view'
+----
+comment-2.5	comment-2.5
 
 query II
 SELECT ddb.comment, pg.description

@@ -26,3 +26,28 @@ SELECT COUNT(*) FROM nfcstrings WHERE nfc COLLATE NFC=nfd
 ----
 18819
 
+statement ok
+DROP TABLE nfcstrings
+
+statement ok
+CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);
+
+query I
+COPY nfcstrings FROM 'test/sql/copy/csv/data/real/nfc_normalization_rn.csv' DELIMITER '|';
+----
+18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings
+----
+18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings WHERE source COLLATE NFC=nfc
+----
+18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings WHERE nfc COLLATE NFC=nfd
+----
+18819

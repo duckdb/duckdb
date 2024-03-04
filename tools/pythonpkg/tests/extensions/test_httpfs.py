@@ -3,6 +3,7 @@ import os
 from pytest import raises, mark
 import pytest
 from conftest import NumpyPandas, ArrowPandas
+import datetime
 
 # We only run this test if this env var is set
 pytestmark = mark.skipif(
@@ -13,9 +14,21 @@ pytestmark = mark.skipif(
 class TestHTTPFS(object):
     def test_read_json_httpfs(self, require):
         connection = require('httpfs')
-        # FIXME: add test back
-        # res = connection.read_json('https://jsonplaceholder.typicode.com/todos')
-        # assert len(res.types) == 4
+        try:
+            res = connection.read_json('https://jsonplaceholder.typicode.com/todos')
+            assert len(res.types) == 4
+        except duckdb.Error as e:
+            if '403' in e:
+                pytest.skip(reason="Test is flaky, sometimes returns 403")
+            else:
+                pytest.fail(str(e))
+
+    def test_s3fs(self, require):
+        connection = require('httpfs')
+
+        rel = connection.read_csv(f"s3://duckdb-blobs/data/Star_Trek-Season_1.csv", header=True)
+        res = rel.fetchone()
+        assert res == (1, 0, datetime.date(1965, 2, 28), 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 6, 0, 0, 0, 0)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_httpfs(self, require, pandas):

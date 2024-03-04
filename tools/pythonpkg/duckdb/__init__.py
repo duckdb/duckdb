@@ -12,7 +12,10 @@ _exported_symbols.extend([
 from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
+	Statement,
     ExplainType,
+    StatementType,
+    ExpectedResultType,
     PythonExceptionHandling,
     RenderMode,
     Expression,
@@ -148,6 +151,7 @@ from .duckdb import (
     enum_type,
     execute,
     executemany,
+    extract_statements,
     fetch_arrow_table,
     fetch_df,
     fetch_df_chunk,

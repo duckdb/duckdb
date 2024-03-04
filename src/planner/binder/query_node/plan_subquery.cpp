@@ -29,7 +29,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	case SubqueryType::EXISTS: {
 		// uncorrelated EXISTS
 		// we only care about existence, hence we push a LIMIT 1 operator
-		auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
+		auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(1), BoundLimitNode());
 		limit->AddChild(std::move(plan));
 		plan = std::move(limit);
 
@@ -79,7 +79,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// in the uncorrelated case we are only interested in the first result of the query
 		// hence we simply push a LIMIT 1 to get the first row of the subquery
-		auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
+		auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(1), BoundLimitNode());
 		limit->AddChild(std::move(plan));
 		plan = std::move(limit);
 

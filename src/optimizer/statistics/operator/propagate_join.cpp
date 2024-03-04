@@ -103,7 +103,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						// then the whole result should be empty.
 						// TODO: write better CE logic for limits so that we can just look at
 						//  join.children[1].estimated_cardinality.
-						auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
+						auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(1), BoundLimitNode());
 						limit->AddChild(std::move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 						*node_ptr = std::move(cross_product);

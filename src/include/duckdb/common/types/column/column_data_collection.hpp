@@ -63,6 +63,8 @@ public:
 
 	//! The size (in bytes) of this ColumnDataCollection
 	idx_t SizeInBytes() const;
+	//! The allocation size (in bytes) of this ColumnDataCollection - this property is cached
+	idx_t AllocationSize() const;
 
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;

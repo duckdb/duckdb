@@ -1,0 +1,47 @@
+# name: test/sql/storage/storage_exceeds_block_large_string.test
+# description: Test storing big strings
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/exceed_single_block_types.db
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test (a VARCHAR, j BIGINT);
+
+statement ok
+INSERT INTO test VALUES (repeat('a', 64), 1)
+
+loop i 2 6
+
+statement ok
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, ${i} FROM test
+
+statement ok
+DELETE FROM test WHERE j=${i} - 1
+
+endloop
+
+query I
+SELECT LENGTH(a) FROM test
+----
+640000
+
+restart
+
+query I
+SELECT LENGTH(a) FROM test
+----
+640000
+
+query I
+SELECT LENGTH(a) FROM test
+----
+640000
+
+query I
+SELECT LENGTH(a) FROM test
+----
+640000

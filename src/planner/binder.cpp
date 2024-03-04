@@ -21,20 +21,20 @@
 
 namespace duckdb {
 
-Binder *Binder::GetRootBinder() {
-	Binder *root = this;
-	while (root->parent) {
-		root = root->parent.get();
+Binder &Binder::GetRootBinder() {
+	reference<Binder> root = *this;
+	while (root.get().parent) {
+		root = *root.get().parent;
 	}
-	return root;
+	return root.get();
 }
 
 idx_t Binder::GetBinderDepth() const {
-	const Binder *root = this;
+	const_reference<Binder> root = *this;
 	idx_t depth = 1;
-	while (root->parent) {
+	while (root.get().parent) {
 		depth++;
-		root = root->parent.get();
+		root = *root.get().parent;
 	}
 	return depth;
 }
@@ -299,8 +299,8 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 }
 
 idx_t Binder::GenerateTableIndex() {
-	auto root_binder = GetRootBinder();
-	return root_binder->bound_tables++;
+	auto &root_binder = GetRootBinder();
+	return root_binder.bound_tables++;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
@@ -326,13 +326,13 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	auto root_binder = GetRootBinder();
-	return root_binder->active_binders;
+	auto &root_binder = GetRootBinder();
+	return root_binder.active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
-	auto root_binder = GetRootBinder();
-	root_binder->bind_context.AddUsingBindingSet(std::move(set));
+	auto &root_binder = GetRootBinder();
+	root_binder.bind_context.AddUsingBindingSet(std::move(set));
 }
 
 void Binder::MoveCorrelatedExpressions(Binder &other) {
@@ -401,14 +401,13 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
-	auto root_binder = GetRootBinder();
-	// FIXME: this used to also set the 'mode' for the current binder, was that necessary?
-	root_binder->mode = mode;
+	auto &root_binder = GetRootBinder();
+	root_binder.mode = mode;
 }
 
 BindingMode Binder::GetBindingMode() {
-	auto root_binder = GetRootBinder();
-	return root_binder->mode;
+	auto &root_binder = GetRootBinder();
+	return root_binder.mode;
 }
 
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
@@ -428,13 +427,13 @@ void Binder::SetAlwaysRequireRebind() {
 }
 
 void Binder::AddTableName(string table_name) {
-	auto root_binder = GetRootBinder();
-	root_binder->table_names.insert(std::move(table_name));
+	auto &root_binder = GetRootBinder();
+	root_binder.table_names.insert(std::move(table_name));
 }
 
 const unordered_set<string> &Binder::GetTableNames() {
-	auto root_binder = GetRootBinder();
-	return root_binder->table_names;
+	auto &root_binder = GetRootBinder();
+	return root_binder.table_names;
 }
 
 // FIXME: this is extremely naive
