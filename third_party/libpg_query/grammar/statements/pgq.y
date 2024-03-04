@@ -252,12 +252,14 @@ GraphTableNameOptional:
         ;
 
 ColumnsOptional:
-    COLUMNS '(' target_list_opt_comma ')' { $$ = $3; }
+        COLUMNS '(' target_list_opt_comma ')' { $$ = $3; }
     |
-    /* EMPTY */ {
-        PGAStar *star = makeNode(PGAStar);
-        $$ = list_make1(star);
-    }
+        /* EMPTY */
+            {
+                PGAStar *star = makeNode(PGAStar);
+                $$ = list_make1(star);
+            }
+    ;
 
 
 GraphTableStmt:
