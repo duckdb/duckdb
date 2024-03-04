@@ -38,7 +38,10 @@ public:
 	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions &options);
 
 	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
+	//! Creates a new database.
 	void CreateNewDatabase();
+	//! Loads an existing database. We pass the provided block allocation size as a parameter
+	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase(const idx_t block_alloc_size);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
@@ -71,9 +74,10 @@ public:
 	idx_t FreeBlocks() override;
 
 private:
-	//! Load the free list from the file
+	//! Loads the free list of the file.
 	void LoadFreeList();
-
+	//! Initializes the database header. We pass the provided block allocation size as a parameter
+	//!	to detect inconsistencies with the file header.
 	void Initialize(DatabaseHeader &header, const idx_t block_alloc_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;

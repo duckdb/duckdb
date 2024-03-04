@@ -1,5 +1,7 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 
+#include "duckdb/storage/storage_info.hpp"
+
 namespace duckdb {
 
 unique_ptr<AttachInfo> AttachInfo::Copy() const {

@@ -194,6 +194,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h1.meta_block = INVALID_BLOCK;
 	h1.free_list = INVALID_BLOCK;
 	h1.block_count = 0;
+	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
@@ -205,6 +206,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.meta_block = INVALID_BLOCK;
 	h2.free_list = INVALID_BLOCK;
 	h2.block_count = 0;
+	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
@@ -285,17 +287,16 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header, const idx_t bloc
 	SetBlockAllocSize(header.block_alloc_size);
 
 	if (block_alloc_size != DConstants::INVALID_INDEX && block_alloc_size != header.block_alloc_size) {
-
 		throw InvalidInputException("cannot initialize the same database with a different block size: provided block "
 		                            "size: %llu, file block size: %llu",
 		                            GetBlockAllocSize(), header.block_alloc_size);
 	}
 
-	// FIXME: remove this once we start supporting different block sizes
-	if (DEFAULT_BLOCK_ALLOC_SIZE != header.block_alloc_size) {
+	// FIXME: remove this once we start supporting different block sizes.
+	if (Storage::BLOCK_ALLOC_SIZE != header.block_alloc_size) {
 		throw NotImplementedException("cannot initialize a database with a different block size than the default block "
 		                              "size: default block size: %llu, file block size: %llu",
-		                              DEFAULT_BLOCK_ALLOC_SIZE, header.block_alloc_size);
+		                              Storage::BLOCK_ALLOC_SIZE, header.block_alloc_size);
 	}
 }
 

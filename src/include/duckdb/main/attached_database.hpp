@@ -35,9 +35,9 @@ enum class AttachedDatabaseType {
 //! they have to apply to any database file type (duckdb, sqlite, etc.).
 struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
-	AttachOptions(const DBConfigOptions &options);
+	explicit AttachOptions(const DBConfigOptions &options);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
-	AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode access_mode_p);
+	AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode default_access_mode);
 
 	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
 	AccessMode access_mode;
@@ -47,7 +47,7 @@ struct AttachOptions {
 	string unrecognized_option;
 };
 
-//! The AttachedDatabase represents an attached database instance
+//! The AttachedDatabase represents an attached database instance.
 class AttachedDatabase : public CatalogEntry {
 public:
 	//! Create the built-in system attached database (without storage)
@@ -60,6 +60,7 @@ public:
 	                 const AttachInfo &info, const AttachOptions &options);
 	~AttachedDatabase() override;
 
+	//! Initializes the catalog and storage of the attached database.
 	void Initialize(const idx_t block_alloc_size);
 
 	Catalog &ParentCatalog() override;

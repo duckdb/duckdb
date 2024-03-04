@@ -21,8 +21,8 @@ AttachOptions::AttachOptions(const DBConfigOptions &options)
     : access_mode(options.access_mode), db_type(options.database_type) {
 }
 
-AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode access_mode_p)
-    : access_mode(access_mode_p) {
+AttachOptions::AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode default_access_mode)
+    : access_mode(default_access_mode) {
 
 	for (auto &entry : info->options) {
 
@@ -73,7 +73,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
                    type == AttachedDatabaseType::SYSTEM_DATABASE ? SYSTEM_CATALOG : TEMP_CATALOG, 0),
       db(db), type(type) {
 
-	// This database does not have storage, so we default to the DEFAULT_BLOCK_ALLOC_SIZE.
+	// This database does not have storage, so we default to the preferred_block_alloc_size (DBConfig).
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
 		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), false);

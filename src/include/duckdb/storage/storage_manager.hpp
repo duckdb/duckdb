@@ -34,8 +34,7 @@ public:
 	virtual void FlushCommit() = 0;
 };
 
-//! StorageManager is responsible for managing the physical storage of the
-//! database on disk
+//! StorageManager is responsible for managing the physical storage of the database on disk.
 class StorageManager {
 public:
 	StorageManager() = delete;
@@ -46,7 +45,10 @@ public:
 	static StorageManager &Get(AttachedDatabase &db);
 	static StorageManager &Get(Catalog &catalog);
 
-	//! Initialize a database or load an existing database from the given path
+	//! Initialize a database or load an existing database from the given path.
+	//! The block_alloc_size is either set, or DConstants::INVALID_INDEX. For DConstants::INVALID_INDEX,
+	//! DuckDB defaults to the preferred_block_alloc_size (config), or the file's block allocation size,
+	//! if it is an existing database.
 	void Initialize(const idx_t block_alloc_size);
 
 	DatabaseInstance &GetDatabase();

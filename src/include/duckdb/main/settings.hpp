@@ -428,7 +428,7 @@ struct OldImplicitCasting {
 };
 
 struct PreferredBlockAllocSize {
-	static constexpr const char *Name = "preferred_block_size";
+	static constexpr const char *Name = "preferred_block_alloc_size";
 	static constexpr const char *Description =
 	    "The preferred block size for new duckdb database files (new as-in, they do not yet exist).";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;

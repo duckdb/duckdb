@@ -91,7 +91,7 @@ void StorageManager::Initialize(const idx_t block_alloc_size) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
-	// create or load the database from disk, if not in-memory mode
+	// Create or load the database from disk, if not in-memory mode.
 	LoadDatabase(block_alloc_size);
 }
 
@@ -140,8 +140,11 @@ void SingleFileStorageManager::LoadDatabase(const idx_t block_alloc_size) {
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
 
-	// first check if the database exists
+	// Check if the database file already exists.
+	// Note: a file can also exist, if there was a ROLLBACK on a previous transaction creating that file.
 	if (!fs.FileExists(path)) {
+
+		// The file does not yet exist.
 		if (read_only) {
 			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 		}
@@ -154,21 +157,26 @@ void SingleFileStorageManager::LoadDatabase(const idx_t block_alloc_size) {
 			fs.RemoveFile(wal_path);
 		}
 
-		// set the block allocation size for the new database file
+		// Set the block allocation size for the new database file.
 		if (block_alloc_size == DConstants::INVALID_INDEX) {
-			options.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
+			// No explicit option provided: use the default option.
+			options.block_alloc_size = config.options.preferred_block_alloc_size;
 		} else {
+			// Use the option provided by the user.
 			options.block_alloc_size = block_alloc_size;
 		}
 
-		// initialize the block manager while creating a new db file
+		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 
 	} else {
-		// initialize the block manager while loading the current db file
+
+		// The file exists. Initialize the block manager while loading the database file.
+		// We'll construct the SingleFileBlockManager with the default block allocation size, and later adjust it
+		// when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->LoadExistingDatabase(block_alloc_size);
 		block_manager = std::move(sf_block_manager);

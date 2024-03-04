@@ -168,7 +168,7 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize(config.options.preferred_block_size);
+	initial_database->Initialize(config.options.preferred_block_alloc_size);
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
@@ -228,7 +228,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	config.secret_manager->Initialize(*this);
 
 	// initialize the system catalog
-	db_manager->InitializeSystemCatalog(config.options.preferred_block_size);
+	db_manager->InitializeSystemCatalog(config.options.preferred_block_alloc_size);
 
 	if (!config.options.database_type.empty()) {
 		// if we are opening an extension database - load the extension
