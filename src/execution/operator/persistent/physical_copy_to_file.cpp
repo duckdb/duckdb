@@ -93,7 +93,7 @@ public:
 	}
 
 	static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-							   string path, FileSystem &fs) {
+	                           string path, FileSystem &fs) {
 		for (idx_t i = 0; i < cols.size(); i++) {
 			const auto &partition_col_name = names[cols[i]];
 			const auto &partition_value = values[i];
@@ -121,7 +121,7 @@ public:
 	}
 
 	PartitionWriteInfo &GetPartitionWriteInfo(ExecutionContext &context, const PhysicalCopyToFile &op,
-											  const vector<Value> &values) {
+	                                          const vector<Value> &values) {
 		auto l = lock.GetExclusiveLock();
 		// check if we have already started writing this partition
 		auto entry = active_partitioned_writes.find(values);
@@ -136,7 +136,7 @@ public:
 		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
 		if (fs.FileExists(full_path) && !op.overwrite_or_ignore) {
 			throw IOException("failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing",
-							  full_path);
+			                  full_path);
 		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
