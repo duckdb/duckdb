@@ -155,7 +155,7 @@ TEST_CASE("PIVOT statement", "[odbc]") {
 	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);");
 
 	// Pivot the table
-	auto ret = SQLExecDirect(hstmt, (SQLCHAR *)"PIVOT Cities ON Year USING sum(Population);", SQL_NTS);
+	auto ret = SQLExecDirect(hstmt, (SQLCHAR *)"PIVOT Cities ON Year USING sum(Population) order by Country, Name;", SQL_NTS);
 	if (ret != SQL_SUCCESS) {
 		std::string state;
 		std::string message;
