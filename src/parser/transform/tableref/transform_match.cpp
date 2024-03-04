@@ -147,7 +147,6 @@ unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClaus
 		match_info->path_patterns.push_back(std::move(transformed_path));
 	}
 
-
 	TransformExpressionList(*root.columns, match_info->column_list);
 
 	auto children = vector<unique_ptr<ParsedExpression>>();
