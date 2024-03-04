@@ -483,21 +483,33 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 
 		if (need_compare_count != 0) {
 
+			// Get the data for the rows that need to be compared
+			DataChunk lhs_data;
+			data_collection->InitializeChunk(lhs_data); // makes sure DataChunk has the right format
+
 			// makes sure DataChunk has the right size, we will use the same index space for the chunk as for the
 			// overall hashes_v so make sure they have the same size. The DataChunk will however only be sparsely
 			// filled based on the entries that need a comparison
-			state.lhs_data.SetCardinality(count);
+			lhs_data.SetCardinality(count);
+
+			TupleDataChunkState chunk_state;
+			data_collection->InitializeChunkState(chunk_state);
+
+			// makes sure DataChunk has the right size, we will use the same index space for the chunk as for the
+			// overall hashes_v so make sure they have the same size. The DataChunk will however only be sparsely
+			// filled based on the entries that need a comparison
+			lhs_data.SetCardinality(need_compare_count);
 
 			// The target selection vector says where to write the results into the lhs_data, we just want to write
 			// sequentially
 			// We can't use the standard flat vector as this one has no internal selection vector and the Match
 			// Function Also marks the found rows in the selection vector, so we need to make sure there is one
-			data_collection->Gather(row_locations, entry_compare_sel_vector, need_compare_count, state.lhs_data,
-			                        entry_compare_sel_vector, state.chunk_state.cached_cast_vectors);
+			data_collection->Gather(row_locations, entry_compare_sel_vector, need_compare_count, lhs_data,
+			                        entry_compare_sel_vector, chunk_state.cached_cast_vectors);
 
-			TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.lhs_data);
+			TupleDataCollection::ToUnifiedFormat(chunk_state, lhs_data);
 
-			vector<TupleDataVectorFormat> &lhs_formats = state.chunk_state.vector_data;
+			vector<TupleDataVectorFormat> &lhs_formats = chunk_state.vector_data;
 
 			// Get the pointers to the rows that need to be compared
 			for (idx_t need_compare_idx = 0; need_compare_idx < need_compare_count; need_compare_idx++) {
@@ -508,7 +520,7 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 
 			// Perform row comparisons
 			idx_t match_count =
-			    row_matcher_build.Match(state.lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count,
+			    row_matcher_build.Match(lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count,
 			                            layout, state.row_ptr_insert_to_v, &no_match_sel, no_match_count);
 
 			D_ASSERT(match_count + no_match_count == need_compare_count);
@@ -521,16 +533,17 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 				auto salt = hash_salts[entry_index];
 				InsertRowToEntry<PARALLEL>(entry, row_ptr, salt, pointer_offset);
 			}
-		}
 
-		// Linear probing: each of the entries that do not match move to the next entry in the HT
-		for (idx_t i = 0; i < no_match_count; i++) {
-			const auto entry_index = no_match_sel.get_index(i);
-			auto &ht_offset = ht_offsets[entry_index];
+			// Linear probing: each of the entries that do not match move to the next entry in the HT
+			for (idx_t i = 0; i < no_match_count; i++) {
 
-			ht_offset++;
-			if (ht_offset >= capacity) {
-				ht_offset = 0;
+				const auto entry_index = no_match_sel.get_index(i);
+				auto &ht_offset = ht_offsets[entry_index];
+
+				ht_offset++;
+				if (ht_offset >= capacity) {
+					ht_offset = 0;
+				}
 			}
 		}
 
