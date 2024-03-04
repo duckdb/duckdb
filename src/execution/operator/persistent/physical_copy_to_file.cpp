@@ -70,7 +70,6 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 }
 
 struct PartitionWriteInfo {
-	unique_ptr<LocalFunctionData> local_state;
 	unique_ptr<GlobalFunctionData> global_state;
 };
 
@@ -172,7 +171,6 @@ public:
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
-		info->local_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 		auto &result = *info;
 		// store in active write map
 		active_write_map.insert(make_pair(values, std::move(info)));
@@ -185,10 +183,8 @@ public:
 			return;
 		}
 		// finalize the partition
-		op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *info.local_state);
 		op.function.copy_to_finalize(context.client, *op.bind_data, *info.global_state);
 		info.global_state.reset();
-		info.local_state.reset();
 	}
 
 	void ResetAppendState() {
@@ -210,10 +206,13 @@ public:
 			// get the partition write info for this buffer
 			auto &info = GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
 
+			auto local_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
 			for (auto &chunk : partitions[i]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *info.local_state, chunk);
+				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_state, chunk);
 			}
+			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_state);
+			local_state.reset();
 			if (final_flush) {
 				// if this is the final flush already finalize the write
 				FinalizePartition(context, op, info);
