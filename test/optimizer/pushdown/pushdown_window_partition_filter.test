@@ -104,6 +104,16 @@ D	B	70	2
 D	C	110	1
 D	C	110	2
 
+# The filter is a function expression, so we don't push it down
+query IIII
+select * from (
+	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b)
+	from partition_and_rank_me
+) where (c || 'Z' = 'BZ') order by all;
+----
+A	B	70	1
+D	B	70	2
+
 
 # can't push down the filter c!='B', since the values of the rank() window function
 # are affected by the existence of the rows where c='B'
