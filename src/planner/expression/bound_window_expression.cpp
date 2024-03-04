@@ -56,6 +56,9 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::ListEquals(children, other.children)) {
 		return false;
 	}
+	if (!Expression::ListEquals(partitions, other.partitions)) {
+		return false;
+	}
 	// check if the filter expressions are equivalent
 	if (!Expression::Equals(filter_expr, other.filter_expr)) {
 		return false;
