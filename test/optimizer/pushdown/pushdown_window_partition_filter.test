@@ -60,7 +60,7 @@ A	A	30	2
 D	C	110	5
 D	C	110	6
 
-# The filter is on the partitioned column, but is part of an AND conjunction, so we dont push it down
+# One filter clause is on the partitioned column but the filter clause is an AND conjunction, so we don't push that down.
 query IIII
 select * from (
 	select a, c, sum(b) OVER (PARTITION BY c), rank() OVER (PARTITION BY c ORDER BY b)

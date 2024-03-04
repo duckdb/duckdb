@@ -54,14 +54,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 			// in order to push down the window.
 			return FinishPushdown(std::move(op));
 		}
-		column_binding_set_t parition_bindings;
+		column_binding_set_t partition_bindings;
 		// 2. Get the binding information of the partitions
 		for (auto &partition_expr : partitions) {
 			switch (partition_expr->type) {
 			// TODO: Add expressions for function expressions like FLOOR, CEIL etc.
 			case ExpressionType::BOUND_COLUMN_REF: {
 				auto &partition_col = partition_expr->Cast<BoundColumnRefExpression>();
-				parition_bindings.insert(partition_col.binding);
+				partition_bindings.insert(partition_col.binding);
 				break;
 			}
 			default:
@@ -77,7 +77,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		//    tpcds q47 caught this
 		for (idx_t i = 0; i < filters.size(); i++) {
 			auto &filter = filters.at(i);
-			if (FilterIsOnPartition(parition_bindings, *filter->filter) && filters_to_pushdown[i] >= 0) {
+			if (FilterIsOnPartition(partition_bindings, *filter->filter) && filters_to_pushdown[i] >= 0) {
 				filters_to_pushdown[i] = 1;
 				continue;
 			}
