@@ -179,7 +179,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	auto reservation =
 	    EvictBlocksOrThrow(handle->tag, required_memory, &reusable_buffer, "failed to pin block of size %s%s",
 	                       StringUtil::BytesToHumanReadableString(required_memory));
-	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
+	// lock the handle again and repeat the check (in case anybody loaded in the meantime)
 	lock_guard<mutex> lock(handle->lock);
 	// check if the block is already loaded
 	if (handle->state == BlockState::BLOCK_LOADED) {
@@ -223,15 +223,23 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 }
 
 void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
-	lock_guard<mutex> lock(handle->lock);
-	if (!handle->buffer || handle->buffer->type == FileBufferType::TINY_BUFFER) {
-		return;
+	bool purge = false;
+	{
+		lock_guard<mutex> lock(handle->lock);
+		if (!handle->buffer || handle->buffer->type == FileBufferType::TINY_BUFFER) {
+			return;
+		}
+		D_ASSERT(handle->readers > 0);
+		handle->readers--;
+		if (handle->readers == 0) {
+			VerifyZeroReaders(handle);
+			purge = buffer_pool.AddToEvictionQueue(handle);
+		}
 	}
-	D_ASSERT(handle->readers > 0);
-	handle->readers--;
-	if (handle->readers == 0) {
-		VerifyZeroReaders(handle);
-		buffer_pool.AddToEvictionQueue(handle);
+
+	// We do not have to keep the handle locked while purging.
+	if (purge) {
+		PurgeQueue();
 	}
 }
 
