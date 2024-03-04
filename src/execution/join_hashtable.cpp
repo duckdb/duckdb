@@ -130,8 +130,9 @@ static void ApplyBitmaskAndGetSalt(Vector &hashes_v, const idx_t &count, const i
 		hashes_v.Flatten(count);
 
 		for (idx_t i = 0; i < count; i++) {
-			hash_salts[i] = salt;
-			ht_offsets[i] = offset;
+			auto row_index = sel.get_index(i);
+			hash_salts[row_index] = salt;
+			ht_offsets[row_index] = offset;
 		}
 	} else {
 		UnifiedVectorFormat hashes_v_unified;
@@ -256,6 +257,8 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 				IncrementAndWrap(ht_offset, 1, bitmask);
 			}
 		}
+
+		// todo: maybe we can leave here right away if we have a full match
 
 		remaining_sel = &state.key_no_match_sel;
 		remaining_count = key_no_match_count;
