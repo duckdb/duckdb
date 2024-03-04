@@ -12,6 +12,37 @@
 
 namespace duckdb {
 
+struct PartitionWriteInfo {
+	unique_ptr<GlobalFunctionData> global_state;
+};
+
+struct VectorOfValuesHashFunction {
+	uint64_t operator()(const vector<Value> &values) const {
+		hash_t result = 0;
+		for (auto &val : values) {
+			result ^= val.Hash();
+		}
+		return result;
+	}
+};
+
+struct VectorOfValuesEquality {
+	bool operator()(const vector<Value> &a, const vector<Value> &b) const {
+		if (a.size() != b.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < a.size(); i++) {
+			if (ValueOperations::DistinctFrom(a[i], b[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+template <class T>
+using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
+
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
@@ -60,6 +91,65 @@ public:
 		}
 		created_directories = global_partitions.size();
 	}
+
+	static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+							   string path, FileSystem &fs) {
+		for (idx_t i = 0; i < cols.size(); i++) {
+			const auto &partition_col_name = names[cols[i]];
+			const auto &partition_value = values[i];
+			string p_dir = partition_col_name + "=" + partition_value.ToString();
+			path = fs.JoinPath(path, p_dir);
+		}
+		return path;
+	}
+
+	void FinalizePartition(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
+		if (!info.global_state) {
+			// already finalized
+			return;
+		}
+		// finalize the partition
+		op.function.copy_to_finalize(context, *op.bind_data, *info.global_state);
+		info.global_state.reset();
+	}
+
+	void FinalizePartitions(ClientContext &context, const PhysicalCopyToFile &op) {
+		// finalize any remaining partitions
+		for (auto &entry : active_partitioned_writes) {
+			FinalizePartition(context, op, *entry.second);
+		}
+	}
+
+	PartitionWriteInfo &GetPartitionWriteInfo(ExecutionContext &context, const PhysicalCopyToFile &op,
+											  const vector<Value> &values) {
+		auto l = lock.GetExclusiveLock();
+		// check if we have already started writing this partition
+		auto entry = active_partitioned_writes.find(values);
+		if (entry != active_partitioned_writes.end()) {
+			// we have - continue writing in this partition
+			return *entry->second;
+		}
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		// Create a writer for the current file
+		auto trimmed_path = op.GetTrimmedPath(context.client);
+		string hive_path = GetDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
+		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
+		if (fs.FileExists(full_path) && !op.overwrite_or_ignore) {
+			throw IOException("failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing",
+							  full_path);
+		}
+		// initialize writes
+		auto info = make_uniq<PartitionWriteInfo>();
+		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
+		auto &result = *info;
+		// store in active write map
+		active_partitioned_writes.insert(make_pair(values, std::move(info)));
+		return result;
+	}
+
+private:
+	//! The active writes per partition (for partitioned write)
+	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
 };
 
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
@@ -68,37 +158,6 @@ string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
 	StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
 	return trimmed_path;
 }
-
-struct PartitionWriteInfo {
-	unique_ptr<GlobalFunctionData> global_state;
-};
-
-struct VectorOfValuesHashFunction {
-	uint64_t operator()(const vector<Value> &values) const {
-		hash_t result = 0;
-		for (auto &val : values) {
-			result ^= val.Hash();
-		}
-		return result;
-	}
-};
-
-struct VectorOfValuesEquality {
-	bool operator()(const vector<Value> &a, const vector<Value> &b) const {
-		if (a.size() != b.size()) {
-			return false;
-		}
-		for (idx_t i = 0; i < a.size(); i++) {
-			if (ValueOperations::DistinctFrom(a[i], b[i])) {
-				return false;
-			}
-		}
-		return true;
-	}
-};
-
-template <class T>
-using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
 
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
@@ -111,8 +170,6 @@ public:
 	//! Buffers the tuples in partitions before writing
 	unique_ptr<HivePartitionedColumnData> part_buffer;
 	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
-
-	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_write_map;
 
 	idx_t writer_offset;
 	idx_t append_count = 0;
@@ -136,55 +193,8 @@ public:
 		append_count += chunk.size();
 		if (append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
 			// flush all cached partitions
-			FlushPartitions(context, op, g, false);
+			FlushPartitions(context, op, g);
 		}
-	}
-
-	static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-	                           string path, FileSystem &fs) {
-		for (idx_t i = 0; i < cols.size(); i++) {
-			const auto &partition_col_name = names[cols[i]];
-			const auto &partition_value = values[i];
-			string p_dir = partition_col_name + "=" + partition_value.ToString();
-			path = fs.JoinPath(path, p_dir);
-		}
-		return path;
-	}
-
-	PartitionWriteInfo &GetPartitionWriteInfo(ExecutionContext &context, const PhysicalCopyToFile &op,
-	                                          const vector<Value> &values) {
-		// check if we have already started writing this partition
-		auto entry = active_write_map.find(values);
-		if (entry != active_write_map.end()) {
-			// we have - continue writing in this partition
-			return *entry->second;
-		}
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		// Create a writer for the current file
-		auto trimmed_path = op.GetTrimmedPath(context.client);
-		string hive_path = GetDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
-		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, writer_offset));
-		if (fs.FileExists(full_path) && !op.overwrite_or_ignore) {
-			throw IOException("failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing",
-			                  full_path);
-		}
-		// initialize writes
-		auto info = make_uniq<PartitionWriteInfo>();
-		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
-		auto &result = *info;
-		// store in active write map
-		active_write_map.insert(make_pair(values, std::move(info)));
-		return result;
-	}
-
-	void FinalizePartition(ExecutionContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
-		if (!info.global_state) {
-			// already finalized
-			return;
-		}
-		// finalize the partition
-		op.function.copy_to_finalize(context.client, *op.bind_data, *info.global_state);
-		info.global_state.reset();
 	}
 
 	void ResetAppendState() {
@@ -193,8 +203,7 @@ public:
 		append_count = 0;
 	}
 
-	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g,
-	                     bool final_flush) {
+	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
 		if (!part_buffer) {
 			return;
 		}
@@ -207,7 +216,7 @@ public:
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			// get the partition write info for this buffer
-			auto &info = GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
+			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
 
 			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
@@ -216,20 +225,9 @@ public:
 			}
 			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
 			local_copy_state.reset();
-			if (final_flush) {
-				// if this is the final flush already finalize the write
-				FinalizePartition(context, op, info);
-			}
 			partitions[i].reset();
 		}
 		ResetAppendState();
-	}
-
-	void FinalizePartitions(ExecutionContext &context, const PhysicalCopyToFile &op) {
-		// finalize any remaining partitions
-		for (auto &entry : active_write_map) {
-			FinalizePartition(context, op, *entry.second);
-		}
 	}
 };
 
@@ -373,9 +371,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 
 	if (partition_output) {
 		// flush all remaining partitions
-		l.FlushPartitions(context, *this, g, true);
-		// finalize any outstanding partitions
-		l.FinalizePartitions(context, *this);
+		l.FlushPartitions(context, *this, g);
 	} else if (function.copy_to_combine) {
 		if (per_thread_output) {
 			// For PER_THREAD_OUTPUT, we can combine/finalize immediately
@@ -396,7 +392,12 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
-	if (per_thread_output || partition_output) {
+	if (partition_output) {
+		// finalize any outstanding partitions
+		gstate.FinalizePartitions(context, *this);
+		return SinkFinalizeType::READY;
+	}
+	if (per_thread_output) {
 		// already happened in combine
 		return SinkFinalizeType::READY;
 	}
