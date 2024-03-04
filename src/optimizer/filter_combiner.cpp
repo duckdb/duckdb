@@ -833,7 +833,9 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
  * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
  */
 FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root) {
-	D_ASSERT(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
+	if (!IsGreaterThan(comparison.type) && !IsLessThan(comparison.type)) {
+		return FilterResult::UNSUPPORTED;
+	}
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*comparison.left);
 	reference<Expression> right_node = GetNode(*comparison.right);

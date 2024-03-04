@@ -230,7 +230,7 @@ Value TransformArrayValue(py::handle ele, const LogicalType &target_type = Logic
 		values.push_back(std::move(new_value));
 	}
 
-	return Value::ARRAY(element_type, values);
+	return Value::ARRAY(element_type, std::move(values));
 }
 
 Value TransformDictionary(const PyDictionary &dict) {
