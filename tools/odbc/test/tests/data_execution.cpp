@@ -129,3 +129,63 @@ TEST_CASE("Test SQLBindParameter, SQLParamData, and SQLPutData", "[odbc]") {
 
 	DISCONNECT_FROM_DATABASE(env, dbc);
 }
+
+// Execute a pivot statement
+TEST_CASE("PIVOT statement", "[odbc]") {
+	SQLHANDLE env;
+	SQLHANDLE dbc;
+
+	HSTMT hstmt = SQL_NULL_HSTMT;
+
+	// Connect to the database using SQLConnect
+	CONNECT_TO_DATABASE(env, dbc);
+
+	// Allocate a statement handle
+	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
+
+	EXEC_SQL(hstmt, "CREATE TABLE Cities (Country VARCHAR, Name VARCHAR, Year INT, Population INT);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);");
+	EXEC_SQL(hstmt, "INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);");
+
+	// Pivot the table
+	auto ret = SQLExecDirect(hstmt, (SQLCHAR *)"PIVOT Cities ON Year USING sum(Population);", SQL_NTS);
+	if (ret != SQL_SUCCESS) {
+		std::string state;
+		std::string message;
+		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+		FAIL("SQLExecDirect failed with state: " + state + " and message: " + message);
+    }
+
+	// Fetch the results
+    EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+    DATA_CHECK(hstmt, 0, "NL");
+    DATA_CHECK(hstmt, 1, "Amsterdam");
+	DATA_CHECK(hstmt, 2, "1005");
+	DATA_CHECK(hstmt, 3, "1065");
+	DATA_CHECK(hstmt, 4, "1158");
+    EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+    DATA_CHECK(hstmt, 0, "US");
+    DATA_CHECK(hstmt, 1, "Seattle");
+	DATA_CHECK(hstmt, 2, "564");
+	DATA_CHECK(hstmt, 3, "608");
+	DATA_CHECK(hstmt, 4, "738");
+    EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+    DATA_CHECK(hstmt, 0, "US");
+    DATA_CHECK(hstmt, 1, "New York City");
+	DATA_CHECK(hstmt, 2, "8015");
+	DATA_CHECK(hstmt, 3, "8175");
+	DATA_CHECK(hstmt, 4, "8772");
+
+	// Free the statement handle
+	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
+	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
+
+	DISCONNECT_FROM_DATABASE(env, dbc);
+}
