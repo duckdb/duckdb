@@ -260,8 +260,6 @@ class PandasDFLoadBenchmark:
         self.con.execute("call dbgen(sf=0.2)")
         new_table = "*, " + ", ".join(["l_shipdate"] * 300)
         self.con.execute(f"create table wide as select {new_table} from lineitem")
-        import pdb
-        pdb.set_trace()
         self.con.execute(f"copy wide to 'wide_table.csv' (FORMAT CSV)")
 
     def benchmark(self) -> List[BenchmarkResult]:
