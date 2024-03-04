@@ -334,13 +334,14 @@ private:
 	//! Transform a node/edge table create (SQL/PGQ)
 	shared_ptr<PropertyGraphTable> TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *node,
 	                                                           case_insensitive_set_t &global_label_set,
-																														 case_insensitive_map_t<string> &table_alias_map);
+	                                                           case_insensitive_map_t<string> &table_alias_map);
 	//! Transform a path pattern (SQL/PGQ)
 	unique_ptr<PathPattern> TransformPath(duckdb_libpgquery::PGPathPattern *root);
 	//! Transform a path element (SQL/PGQ)
 	static unique_ptr<PathElement> TransformPathElement(duckdb_libpgquery::PGPathElement *element);
 	//! Transform a subpath (SQL/PGQ)
-	unique_ptr<SubPath> TransformSubPathElement(duckdb_libpgquery::PGSubPath *element, unique_ptr<PathPattern> &path_pattern);
+	unique_ptr<SubPath> TransformSubPathElement(duckdb_libpgquery::PGSubPath *element,
+	                                            unique_ptr<PathPattern> &path_pattern);
 
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropPropertyGraphStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDropPropertyGraph(duckdb_libpgquery::PGDropPropertyGraphStmt &node);

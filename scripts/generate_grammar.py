@@ -210,6 +210,7 @@ for pur in pgq_unreserved_keywords:
         exit(1)
     pgq_unreserved_dict[pur] = True
 
+
 def add_to_other_keywords(kw, list_name):
     global unreserved_dict
     global pgq_unreserved_dict
@@ -226,6 +227,7 @@ def add_to_other_keywords(kw, list_name):
         exit(1)
     other_dict[kw] = True
 
+
 for cr in colname_keywords:
     add_to_other_keywords(cr, "colname")
 
@@ -241,7 +243,12 @@ for fr in func_name_keywords:
 type_func_name_keywords = list(type_func_name_dict.keys())
 type_func_name_keywords.sort()
 
-all_keywords = list(reserved_dict.keys()) + list(unreserved_dict.keys()) + list(pgq_unreserved_dict.keys()) + list(other_dict.keys())
+all_keywords = (
+    list(reserved_dict.keys())
+    + list(unreserved_dict.keys())
+    + list(pgq_unreserved_dict.keys())
+    + list(other_dict.keys())
+)
 all_keywords.sort()
 
 other_keyword = list(other_dict.keys())
@@ -257,6 +264,7 @@ kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
 kw_definitions += "pgq_unreserved_keyword: " + " | ".join(pgq_unreserved_keywords) + "\n"
 kw_definitions += "pgq_col_name_keyword: " + " | ".join(pgq_colname_keywords) + "\n"
 text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
+
 
 # types
 def concat_dir(dname, extension, add_line_numbers=False):

@@ -69,6 +69,5 @@ public:
 	bool hasTableNameAlias() {
 		return !table_name_alias.empty();
 	}
-
 };
 } // namespace duckdb

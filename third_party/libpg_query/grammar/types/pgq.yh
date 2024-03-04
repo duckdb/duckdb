@@ -56,3 +56,4 @@
 %type <str> LabelOptional
 %type <list> EdgeTablesClauseOptional
 %type <range> GraphTableNameOptional
+%type <list> ColumnsOptional

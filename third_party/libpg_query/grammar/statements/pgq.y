@@ -251,9 +251,20 @@ GraphTableNameOptional:
         /* EMPTY */				{ $$ = NULL; }
         ;
 
+ColumnsOptional:
+        COLUMNS '(' target_list_opt_comma ')' { $$ = $3; }
+    |
+        /* EMPTY */
+            {
+                PGAStar *star = makeNode(PGAStar);
+                $$ = list_make1(star);
+            }
+    ;
+
+
 GraphTableStmt:
 		'(' PGQ_IDENT MATCH PathPatternList KeepOptional GraphTableWhereOptional
-		COLUMNS '(' ColumnList ')' ')' GraphTableNameOptional
+		ColumnsOptional ')' GraphTableNameOptional
 			{
 				PGMatchClause *n = makeNode(PGMatchClause);
 				n->pg_name = $2;
@@ -271,21 +282,22 @@ GraphTableStmt:
 					}
 				}
 				n->where_clause = $6;
-				n->columns = $9;
-				n->graph_table = $12;
+				n->columns = $7;
+				n->graph_table = $9;
 				$$ = (PGNode *) n;
 			}
 		;
 
+/*
 ColumnSpec:
 		target_el					{ $$ = list_make2(makeInteger(PG_COLUMNSPEC_EXPR), $1); }
 		;
-
 ColumnList:
 		ColumnSpec  				{ $$ = list_make1($1); }
 		|
 		ColumnList ',' ColumnSpec	{ $$ = lappend($1, $3); }
 		;
+*/
 
 KeepOptional:
 		KEEP PathPrefix				{ $$ = $2; }

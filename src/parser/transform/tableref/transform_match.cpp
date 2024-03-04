@@ -39,7 +39,8 @@ unique_ptr<PathElement> Transformer::TransformPathElement(duckdb_libpgquery::PGP
 	return result;
 }
 
-unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSubPath *root, unique_ptr<PathPattern> &path_pattern) {
+unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSubPath *root,
+                                                         unique_ptr<PathPattern> &path_pattern) {
 	auto result = make_uniq<SubPath>(PGQPathReferenceType::SUBPATH);
 
 	result->where_clause = TransformExpression(root->where_clause);
@@ -72,10 +73,10 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 	if (result->path_mode > PGQPathMode::WALK) {
 		throw NotImplementedException("Path modes other than WALK have not been implemented yet.");
 	}
-	if (result->upper == 1<<30 && path_pattern->all && result->path_mode <= PGQPathMode::WALK) {
+	if (result->upper == 1 << 30 && path_pattern->all && result->path_mode <= PGQPathMode::WALK) {
 		throw ConstraintException("ALL unbounded with path mode WALK is not possible as this "
-															"could lead to infinite results. Consider specifying an upper bound or"
-															" path mode other than WALK");
+		                          "could lead to infinite results. Consider specifying an upper bound or"
+		                          " path mode other than WALK");
 	}
 
 	//! Path sequence
@@ -147,12 +148,7 @@ unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClaus
 		match_info->path_patterns.push_back(std::move(transformed_path));
 	}
 
-	for (auto node = root.columns->head; node != nullptr; node = lnext(node)) {
-		auto column = reinterpret_cast<duckdb_libpgquery::PGList *>(node->data.ptr_value);
-		auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(column->head->next->data.ptr_value);
-		auto res_target = TransformResTarget(*target);
-		match_info->column_list.push_back(std::move(res_target));
-	}
+	TransformExpressionList(*root.columns, match_info->column_list);
 
 	auto children = vector<unique_ptr<ParsedExpression>>();
 	children.push_back(std::move(match_info));
