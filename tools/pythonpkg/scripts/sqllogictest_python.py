@@ -42,6 +42,11 @@ from enum import Enum, auto
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 
 
+class SkipException(Exception):
+    def __init__(self, reason: str):
+        super().__init__(reason)
+
+
 class ExecuteResult:
     class Type(Enum):
         SUCCES = 0
@@ -90,9 +95,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # TODO: table function isnt always autoloaded so test fails
         ]
 
-    def fail(self, message):
-        raise Exception(message)
-
     def get_unsupported_statements(self, test: SQLLogicTest) -> List[BaseStatement]:
         unsupported_statements = [
             statement for statement in test.statements if statement.__class__ not in self.STATEMENTS
@@ -125,6 +127,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
 
     def in_loop(self) -> bool:
         return False
+
+    def skiptest(self, message: str):
+        raise SkipException(message)
 
     def test_delete_file(self, path):
         try:
@@ -214,45 +219,32 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         expected_result = query.expected_result
         assert expected_result.type == ExpectedResult.Type.SUCCES
 
-        def extract_types(query):
-            statements = conn.extract_statements(query)
+        try:
+            statements = conn.extract_statements(sql_query)
             statement = statements[-1]
             expected_result_types = statement.expected_result_type
-            if len(expected_result_types) != 1:
-                # Not certain what result type it has
-                return []
-            result_type = expected_result_types[-1]
-            if result_type != duckdb.ExpectedResultType.QUERY_RESULT:
-                return []
-            # Make a relation to get the types
-            rel = conn.query(query)
-            return rel.types
-
-        try:
-            conn.execute(sql_query)
-            result = conn.fetchall()
-            types = extract_types(sql_query)
+            if duckdb.ExpectedResultType.QUERY_RESULT in expected_result_types:
+                original_rel = conn.query(sql_query)
+                original_types = original_rel.types
+                aliased_columns = ", ".join([f'c{i}' for i in range(len(original_types))])
+                stringified_rel = conn.query(f"select COLUMNS(*)::VARCHAR from original_rel t({aliased_columns})")
+                result = stringified_rel.fetchall()
+                query_result = QueryResult(result, original_types)
+            else:
+                conn.execute(sql_query)
+                result = conn.fetchall()
+                query_result = QueryResult(result, [])
             if expected_result.lines == None:
                 return
-            actual = []
-            for row in result:
-                converted_row = tuple([str(x) for x in list(row)])
-                actual.append(converted_row)
-            actual = str(actual)
-
-            query_result = QueryResult(result, types)
+        except SkipException as e:
+            self.skipped = True
+            return
         except Exception as e:
+            print(e)
             query_result = QueryResult([], [], e)
 
-        compare_result = self.check_query_result(query, query_result)
-        if not compare_result:
-            self.fail(f'Failed: {self.test.path}:{query.get_query_line()}')
-            # if context.is_parallel:
-            #    self.finished_processing_file = True
-            #    context.error_file = file_name
-            #    context.error_line = query_line
-            # else:
-            #    fail_line(file_name, query_line, 0)
+        print(sql_query)
+        self.check_query_result(query, query_result)
 
     def execute_skip(self, statement: Skip):
         self.skip()
@@ -435,9 +427,10 @@ def main():
         if not test:
             print(f'Failed to parse {file_path}')
             exit(1)
-
         try:
             result = executor.execute_test(test)
+        except SkipException as e:
+            continue
         except Exception as e:
             if 'skipped because the following statement types are not supported' in str(e):
                 continue

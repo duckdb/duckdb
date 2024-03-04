@@ -114,9 +114,12 @@ def load_result_from_file(fname, names):
 def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool):
     if value is None or value == 'NULL':
         return 'NULL'
-    query = f"select $1::{sql_type}"
-    val = duckdb.Value(value, sql_type)
-    res = duckdb.execute(query, [val]).fetchone()
+    query = "select $1::VARCHAR"
+    print(sql_type)
+    if sql_type in [duckdb.typing.BOOLEAN, duckdb.typing.DOUBLE]:
+        res = duckdb.execute(query, [duckdb.Value(value, sql_type)]).fetchone()
+    else:
+        res = duckdb.execute(query, [value]).fetchone()
     return res[0]
 
 
@@ -178,6 +181,18 @@ class SQLLogicRunner:
     def __init__(self):
         self.reset()
 
+    def fail_query(self, query: Query):
+        # if context.is_parallel:
+        #    self.finished_processing_file = True
+        #    context.error_file = file_name
+        #    context.error_line = query_line
+        # else:
+        #    fail_line(file_name, query_line, 0)
+        self.fail(f'Failed: {self.test.path}:{query.get_query_line()}')
+
+    def fail(self, message):
+        raise Exception(message)
+
     def skip(self):
         self.skip_level += 1
 
@@ -190,7 +205,7 @@ class SQLLogicRunner:
     def is_required(self, param):
         return param in self.required_requires
 
-    def check_query_result(self, query: Query, result: QueryResult):
+    def check_query_result(self, query: Query, result: QueryResult) -> None:
         expected_column_count = query.expected_result.get_expected_column_count()
         values = query.expected_result.lines
         sort_style = query.get_sortstyle()
@@ -204,8 +219,8 @@ class SQLLogicRunner:
             logger.unexpected_failure(result)
             if self.skip_error_message(result.get_error()):
                 self.finished_processing_file = True
-                return True
-            return False
+                return
+            self.fail_query(query)
 
         row_count = result.row_count()
         column_count = result.column_count()
@@ -242,7 +257,7 @@ class SQLLogicRunner:
             comparison_values = load_result_from_file(fname, result.names, expected_column_count, csv_error)
             if csv_error:
                 logger.print_error_header(csv_error)
-                return False
+                self.fail_query(query)
         else:
             comparison_values = values
 
@@ -256,7 +271,7 @@ class SQLLogicRunner:
             hash_value = f"{total_value_count} values hashing to {digest}"
             if self.output_hash_mode:
                 logger.output_hash(hash_value)
-                return True
+                return
 
         if not compare_hash:
             original_expected_columns = expected_column_count
@@ -281,7 +296,7 @@ class SQLLogicRunner:
                     logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
                 else:
                     logger.not_cleanly_divisible(expected_column_count, len(comparison_values))
-                return False
+                self.fail_query(query)
 
             if expected_rows != result.row_count():
                 if column_count_mismatch:
@@ -290,7 +305,7 @@ class SQLLogicRunner:
                     logger.wrong_row_count(
                         expected_rows, result_values_string, comparison_values, expected_column_count, row_wise
                     )
-                return False
+                self.fail_query(query)
 
             if row_wise:
                 current_row = 0
@@ -300,7 +315,7 @@ class SQLLogicRunner:
                         if column_count_mismatch:
                             logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
                         logger.split_mismatch(i + 1, expected_column_count, len(splits))
-                        return False
+                        self.fail_query(query)
                     for c, split_val in enumerate(splits):
                         lvalue_str = result_values_string[current_row * expected_column_count + c]
                         rvalue_str = split_val
@@ -314,7 +329,7 @@ class SQLLogicRunner:
                             print(f"{lvalue_str} <> {rvalue_str}")
                             logger.print_line_sep()
                             logger.print_result_error(result_values_string, values, expected_column_count, row_wise)
-                            return False
+                            self.fail_query(query)
                         # Increment the assertion counter
                         assert success
                     current_row += 1
@@ -322,7 +337,9 @@ class SQLLogicRunner:
                 current_row, current_column = 0, 0
                 for i, val in enumerate(comparison_values):
                     lvalue_str = result_values_string[current_row * expected_column_count + current_column]
-                    rvalue_str = val
+                    rvalue_str = val.strip(' ')
+                    print(rvalue_str, rvalue_str.__class__)
+                    print(lvalue_str, lvalue_str.__class__)
                     success = compare_values(result, lvalue_str, rvalue_str, current_column)
                     if not success:
                         logger.print_error_header("Wrong result in query!")
@@ -333,7 +350,7 @@ class SQLLogicRunner:
                         print(f"{lvalue_str} <> {rvalue_str}")
                         logger.print_line_sep()
                         logger.print_result_error(result_values_string, values, expected_column_count, row_wise)
-                        return False
+                        self.fail_query(query)
                     # Increment the assertion counter
                     assert success
 
@@ -344,7 +361,7 @@ class SQLLogicRunner:
 
             if column_count_mismatch:
                 logger.column_count_mismatch_correct_result(original_expected_columns, expected_column_count, result)
-                return False
+                self.fail_query(query)
         else:
             hash_compare_error = False
             if query_has_label:
@@ -361,8 +378,6 @@ class SQLLogicRunner:
             if hash_compare_error:
                 expected_result = self.result_label_map.get(query_label)
                 logger.wrong_result_hash(expected_result, result)
-                return False
+                self.fail_query(query)
 
             assert not hash_compare_error
-
-        return True
