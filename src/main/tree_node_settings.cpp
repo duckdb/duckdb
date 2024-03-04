@@ -45,7 +45,7 @@ string TreeNodeSettings::GetMetricAsString(TreeNodeSettingsType setting) const {
 	return "";
 }
 
-void TreeNodeSettings::PrintAllMetricsToSS(std::ostream &ss, string depth) {
+void TreeNodeSettings::PrintAllMetricsToSS(std::ostream &ss, string &depth) {
 	for (auto &metric : metrics) {
 
 		ss << depth << "   \"" << StringUtil::Lower(EnumUtil::ToString(metric)) << "\": " << GetMetricAsString(metric)
