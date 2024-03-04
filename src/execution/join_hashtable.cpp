@@ -551,8 +551,8 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 
 			// Perform row comparisons
 			idx_t match_count =
-			    row_matcher_build.Match(lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count,
-			                            layout, state.row_ptr_insert_to_v, &no_match_sel, no_match_count);
+			    row_matcher_build.Match(lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count, layout,
+			                            state.row_ptr_insert_to_v, &no_match_sel, no_match_count);
 
 			D_ASSERT(match_count + no_match_count == need_compare_count);
 			// Insert the rows that match

@@ -52,11 +52,10 @@ def get_current_branch():
 
 def build_runner():
     # set env variables to
-    env = {"BUILD_BENCHMARK": "1", "BUILD_TPCH": "1", "BUILD_HTTPFS" : "1"}
+    env = {"BUILD_BENCHMARK": "1", "BUILD_TPCH": "1", "BUILD_HTTPFS": "1"}
     # Add the current environment
     env.update(os.environ)
     subprocess.run(["make"], env=env)
-
 
 
 def run_benchmark(old_runner, new_runner, benchmark_file):
@@ -70,13 +69,20 @@ def run_benchmark(old_runner, new_runner, benchmark_file):
         print(f"Failed to find new runner {new_runner}")
         exit(1)
 
-    command = ['python3', 'scripts/regression_test_runner.py', f'--old={old_runner}', f'--new={new_runner}',
-               f'--benchmarks={benchmark_file}', '--threads=4']
+    command = [
+        'python3',
+        'scripts/regression_test_runner.py',
+        f'--old={old_runner}',
+        f'--new={new_runner}',
+        f'--benchmarks={benchmark_file}',
+        '--threads=4',
+    ]
 
     print(f"Running command: {' '.join(command)}")
 
     # start the existing runner, make sure to pipe the output to the console
     subprocess.run(command, check=True)
+
 
 def main():
     benchmark_file = None
@@ -88,9 +94,7 @@ def main():
             stash_changes = True
 
         elif arg == "--help":
-            print(
-                "Expected usage: python3 scripts/local_regression_test_runner.py --benchmarks=/benchmark/list.csv"
-            )
+            print("Expected usage: python3 scripts/local_regression_test_runner.py --benchmarks=/benchmark/list.csv")
             print("Optional: --stas: Stash changes before running the benchmarks")
             exit(1)
 
