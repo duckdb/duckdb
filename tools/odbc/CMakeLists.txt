@@ -33,7 +33,7 @@ add_subdirectory(src)
 
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES})
 
-add_library(duckdb_odbc ${ALL_OBJECT_FILES})
+add_library(duckdb_odbc SHARED ${ALL_OBJECT_FILES})
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} ${ODBC_LIBRARIES} duckdb_static)
