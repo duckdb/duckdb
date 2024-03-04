@@ -213,9 +213,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		// By Default we add a string
 		if (!Utf8Proc::IsValid(value_ptr, size)) {
 			// Invalid unicode, we must error
-			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read + 1);
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
 			auto csv_error = CSVError::InvalidUTF8(state_machine.options, lines_per_batch);
 			error_handler.Error(csv_error);
+			// If we got here, we are ingoring errors, hence we must ignore this line.
+			ignore_current_row = true;
 		}
 		if (allocate) {
 			// If it's a value produced over multiple buffers, we must allocate
