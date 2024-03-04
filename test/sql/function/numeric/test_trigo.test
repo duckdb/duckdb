@@ -450,3 +450,10 @@ NULL
 24
 785
 
+statement error
+select asin(-2);
+----
+
+statement error
+select acos(-2);
+----
