@@ -6,6 +6,7 @@
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include <algorithm>
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -208,14 +209,23 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		          TimestampCastResult::SUCCESS;
 		break;
 	}
-	default:
+	default: {
+		// By Default we add a string
+		if (!Utf8Proc::IsValid(value_ptr, size)) {
+			// Invalid unicode, we must error
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read + 1);
+			auto csv_error = CSVError::InvalidUTF8(state_machine.options, lines_per_batch);
+			error_handler.Error(csv_error);
+		}
 		if (allocate) {
+			// If it's a value produced over multiple buffers, we must allocate
 			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
 			    StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], string_t(value_ptr, size));
 		} else {
 			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t(value_ptr, size);
 		}
 		break;
+	}
 	}
 	if (!success) {
 		// We had a casting error, we push it here because we can only error when finishing the line read.

@@ -9,3 +9,15 @@ statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/invalid_utf.csv')
 ----
 Invalid unicode (byte sequence mismatch) detected
+
+
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf.csv',columns = {'col1': 'VARCHAR'}, auto_detect=false, header = 0)
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf.csv',columns = {'col1': 'VARCHAR'}, auto_detect=false, header = 0)
+----
+CSV Error on Line: 3

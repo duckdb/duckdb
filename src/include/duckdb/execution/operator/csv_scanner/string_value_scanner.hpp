@@ -125,7 +125,6 @@ public:
 	Value GetValue(idx_t row_idx, idx_t col_idx);
 
 	DataChunk &ToChunk();
-
 	//! Resets the state of the result
 	void Reset();
 };
