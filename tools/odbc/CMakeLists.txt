@@ -36,8 +36,7 @@ set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES})
 add_library(duckdb_odbc SHARED ${ALL_OBJECT_FILES} duckdb_odbc.def)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
-target_link_libraries(duckdb_odbc ${LINK_LIB_LIST}
-                      duckdb_static)
+target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)
 
 if(NOT CLANG_TIDY)
   add_subdirectory(test)
