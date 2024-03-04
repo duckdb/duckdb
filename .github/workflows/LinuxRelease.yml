@@ -289,6 +289,7 @@ jobs:
       shell: bash
       env:
         DISABLE_BUILTIN_EXTENSIONS: 1
+        LOCAL_EXTENSION_REPO: build/release/repository_other
       run: |
         make
 
