@@ -69,11 +69,11 @@ def compare_values(result: QueryResult, actual_str, expected_str, current_column
 
 def result_is_hash(result):
     parts = result.split()
-    if len(parts) != 4:
+    if len(parts) != 5:
         return False
     if not parts[0].isdigit():
         return False
-    if parts[2] != "values" or parts[3] != "hashing" or len(parts[4]) != 32:
+    if parts[1] != "values" or parts[2] != "hashing" or len(parts[4]) != 32:
         return False
     return all([x.islower() or x.isnumeric() for x in parts[4]])
 
@@ -115,10 +115,12 @@ def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool):
     if value is None or value == 'NULL':
         return 'NULL'
     query = "select $1::VARCHAR"
+    type_strings = ['DECIMAL', 'HUGEINT']
     if sql_type in [
         duckdb.typing.BOOLEAN,
         duckdb.typing.DOUBLE,
-    ]:
+        duckdb.typing.FLOAT,
+    ] or any([type_str in str(sql_type) for type_str in type_strings]):
         res = duckdb.execute(query, [duckdb.Value(value, sql_type)]).fetchone()
     else:
         if len(value) == 0:
@@ -247,7 +249,7 @@ class SQLLogicRunner:
 
         if sort_style == SortStyle.ROW_SORT:
             ncols = result.column_count()
-            nrows = total_value_count / ncols
+            nrows = int(total_value_count / ncols)
             rows = [result_values_string[i * ncols : (i + 1) * ncols] for i in range(nrows)]
             rows.sort(key=lambda x: x)
 
