@@ -43,7 +43,7 @@ jobs:
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -167,7 +167,7 @@ jobs:
     needs: win-release-64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -207,7 +207,7 @@ jobs:
      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
      needs: win-release-64
      steps:
-       - uses: actions/checkout@v3
+       - uses: actions/checkout@v4
        - uses: msys2/setup-msys2@v2
          with:
            msystem: MINGW64
@@ -254,7 +254,7 @@ jobs:
          git config --global core.autocrlf false
          git config --global core.eol lf
 
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 

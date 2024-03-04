@@ -51,7 +51,7 @@ jobs:
       PYTEST_TIMEOUT: '600'
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -92,7 +92,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -165,7 +165,7 @@ jobs:
       DUCKDB_BUILD_UNITY: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -242,7 +242,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -308,7 +308,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -365,7 +365,7 @@ jobs:
        PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
