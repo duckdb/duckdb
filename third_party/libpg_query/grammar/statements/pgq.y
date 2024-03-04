@@ -288,11 +288,10 @@ GraphTableStmt:
 
 /*
 ColumnSpec:
-		target_el					{ $$ = list_make1($1); }
+		target_el					{ $$ = list_make2(makeInteger(PG_COLUMNSPEC_EXPR), $1); }
 		;
-
 ColumnList:
-		ColumnSpec  				{ $$ = $1; }
+		ColumnSpec  				{ $$ = list_make1($1); }
 		|
 		ColumnList ',' ColumnSpec	{ $$ = lappend($1, $3); }
 		;
