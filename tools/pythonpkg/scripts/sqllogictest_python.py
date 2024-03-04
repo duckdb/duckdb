@@ -213,20 +213,25 @@ class SQLLogicTestExecutor(SQLLogicRunner):
 
         expected_result = query.expected_result
         assert expected_result.type == ExpectedResult.Type.SUCCES
+
+        def extract_types(query):
+            statements = conn.extract_statements(query)
+            statement = statements[-1]
+            expected_result_types = statement.expected_result_type
+            if len(expected_result_types) != 1:
+                # Not certain what result type it has
+                return []
+            result_type = expected_result_types[-1]
+            if result_type != duckdb.ExpectedResultType.QUERY_RESULT:
+                return []
+            # Make a relation to get the types
+            rel = conn.query(query)
+            return rel.types
+
         try:
             conn.execute(sql_query)
             result = conn.fetchall()
-            try:
-                # FIXME transactions cant be nested, this blows up when we are already in a transaction
-                conn.execute("BEGIN TRANSACTION")
-                rel = conn.query(f'{sql_query}')
-                if rel != None:
-                    types = rel.types
-                else:
-                    types = []
-                conn.execute("ABORT")
-            except Exception as e:
-                types = []
+            types = extract_types(sql_query)
             if expected_result.lines == None:
                 return
             actual = []
@@ -239,7 +244,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         except Exception as e:
             query_result = QueryResult([], [], e)
 
-        print(sql_query)
         compare_result = self.check_query_result(query, query_result)
         if not compare_result:
             self.fail(f'Failed: {self.test.path}:{query.get_query_line()}')
