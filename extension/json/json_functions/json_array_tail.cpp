@@ -2,20 +2,21 @@
 
 namespace duckdb {
 
+yyjson_mut_val *JSONArrayTail(yyjson_mut_val *arr, yyjson_mut_doc *doc, yyjson_alc *alc, Vector &result) {
+	if (!yyjson_mut_is_arr(arr)) {
+		throw InvalidInputException("JSON input not an JSON Array");
+	}
+
+	if (yyjson_mut_arr_size(arr) == 0) {
+		return yyjson_mut_arr(doc);
+	}
+
+	yyjson_mut_arr_remove_first(arr);
+	return arr;
+}
+
 static void ArrayTailFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	JSONExecutors::UnaryMutExecute(args, state, result,
-	                               [](yyjson_mut_val *arr, yyjson_mut_doc *doc, yyjson_alc *alc, Vector &result) {
-		                               if (!yyjson_mut_is_arr(arr)) {
-			                               throw InvalidInputException("JSON input not an JSON Array");
-		                               }
-
-		                               if (yyjson_mut_arr_size(arr) == 0) {
-			                               return yyjson_mut_arr(doc);
-		                               }
-
-		                               yyjson_mut_arr_remove_first(arr);
-		                               return arr;
-	                               });
+	JSONExecutors::UnaryMutExecute(args, state, result, JSONArrayTail);
 }
 
 static void GetArrayTailFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
