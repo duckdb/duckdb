@@ -113,6 +113,7 @@ void CompressedFile::Close() {
 	stream_data.in_buff_end = nullptr;
 	stream_data.in_buf_size = 0;
 	stream_data.out_buf_size = 0;
+	stream_data.refresh = false;
 }
 
 int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {

@@ -448,7 +448,14 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
 
-		InfinityType infinity = InfinityType::NONE;
+		InfinityType infinity = GetTimestampInfinityType(timestamp);
+		if (infinity == InfinityType::POSITIVE) {
+			return py::reinterpret_borrow<py::object>(import_cache.datetime.datetime.max());
+		}
+		if (infinity == InfinityType::NEGATIVE) {
+			return py::reinterpret_borrow<py::object>(import_cache.datetime.datetime.min());
+		}
+
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
 			timestamp = Timestamp::FromEpochMs(timestamp.value);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
@@ -456,19 +463,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
 			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
 		}
-		infinity = GetTimestampInfinityType(timestamp);
 
-		// Deal with infinity
-		switch (infinity) {
-		case InfinityType::POSITIVE: {
-			return py::reinterpret_borrow<py::object>(import_cache.datetime.datetime.max());
-		}
-		case InfinityType::NEGATIVE: {
-			return py::reinterpret_borrow<py::object>(import_cache.datetime.datetime.min());
-		}
-		case InfinityType::NONE:
-			break;
-		}
 		int32_t year, month, day, hour, min, sec, micros;
 		date_t date;
 		dtime_t time;
@@ -514,6 +509,16 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 			list.append(FromValue(list_elem, ListType::GetChildType(type), client_properties));
 		}
 		return std::move(list);
+	}
+	case LogicalTypeId::ARRAY: {
+		auto &array_values = ArrayValue::GetChildren(val);
+		auto array_size = ArrayType::GetSize(type);
+		auto &child_type = ArrayType::GetChildType(type);
+		py::tuple arr(array_size);
+		for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+			arr[elem_idx] = FromValue(array_values[elem_idx], child_type, client_properties);
+		}
+		return std::move(arr);
 	}
 	case LogicalTypeId::MAP: {
 		auto &list_values = ListValue::GetChildren(val);

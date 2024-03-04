@@ -12,18 +12,15 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 	    op.children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
 		auto &limit = op.Cast<LogicalLimit>();
 
-		// When there are some expressions in the limit operator,
-		// we shouldn't use this optimizations. Because of the expressions
-		// will be lost when it convert to TopN operator.
-		if (limit.limit || limit.offset) {
+		if (limit.limit_val.Type() != LimitNodeType::CONSTANT_VALUE) {
+			// we need LIMIT to be present AND be a constant value for us to be able to use Top-N
 			return false;
 		}
-
-		// This optimization doesn't apply when OFFSET is present without LIMIT
-		// Or if offset is not constant
-		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
-			return true;
+		if (limit.offset_val.Type() == LimitNodeType::EXPRESSION_VALUE) {
+			// we need offset to be either not set (i.e. limit without offset) OR have offset be
+			return false;
 		}
+		return true;
 	}
 	return false;
 }
@@ -32,8 +29,12 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op)) {
 		auto &limit = op->Cast<LogicalLimit>();
 		auto &order_by = (op->children[0])->Cast<LogicalOrder>();
-
-		auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit.limit_val, limit.offset_val);
+		auto limit_val = int64_t(limit.limit_val.GetConstantValue());
+		int64_t offset_val = 0;
+		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+			offset_val = limit.offset_val.GetConstantValue();
+		}
+		auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit_val, offset_val);
 		topn->AddChild(std::move(order_by.children[0]));
 		op = std::move(topn);
 	} else {

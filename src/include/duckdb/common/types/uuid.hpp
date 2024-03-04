@@ -28,6 +28,9 @@ public:
 	//! Convert a hugeint object to a uuid style string
 	static void ToString(hugeint_t input, char *buf);
 
+	//! Convert a uhugeint_t object to a uuid value
+	static hugeint_t FromUHugeint(uhugeint_t input);
+
 	//! Convert a hugeint object to a uuid style string
 	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
 	static hugeint_t GenerateRandomUUID();

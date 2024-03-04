@@ -319,7 +319,6 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 	result->types = planner.types;
 	result->value_map = std::move(planner.value_map);
 	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
-
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
@@ -458,6 +457,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
+		ProcessError(error, active_query->query);
 		result.SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		result.SetError(ErrorData("Unhandled exception in ExecuteTaskInternal"));

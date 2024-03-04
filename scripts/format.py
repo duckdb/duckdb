@@ -9,6 +9,7 @@ import inspect
 import subprocess
 import difflib
 import re
+import concurrent.futures
 from python_helpers import open_utf8
 
 try:
@@ -387,16 +388,23 @@ def format_file(f, full_path, directory, ext):
 def format_directory(directory):
     files = os.listdir(directory)
     files.sort()
-    for f in files:
+
+    def process_file(f):
         full_path = os.path.join(directory, f)
         if os.path.isdir(full_path):
             if f in ignored_directories or full_path in ignored_directories:
-                continue
+                return
             if not silent:
                 print(full_path)
             format_directory(full_path)
         elif can_format_file(full_path):
             format_file(f, full_path, directory, '.' + f.split('.')[-1])
+
+    # Create thread for each file
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        threads = [executor.submit(process_file, f) for f in files]
+        # Wait for all tasks to complete
+        concurrent.futures.wait(threads)
 
 
 if format_all:

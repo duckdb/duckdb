@@ -8,7 +8,7 @@ import pytest
 def test_extension_loading(require):
     if not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False):
         return
-    extensions_list = ['json', 'excel', 'httpfs', 'tpch', 'tpcds', 'icu', 'visualizer', 'fts']
+    extensions_list = ['json', 'excel', 'httpfs', 'tpch', 'tpcds', 'icu', 'fts']
     for extension in extensions_list:
         connection = require(extension)
         assert connection is not None

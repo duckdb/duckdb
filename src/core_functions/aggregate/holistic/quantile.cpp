@@ -1263,7 +1263,7 @@ struct MadAccessor {
 	}
 
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
-		const auto delta = input - median;
+		const RESULT_TYPE delta = input - UnsafeNumericCast<RESULT_TYPE>(median);
 		return TryAbsOperator::Operation<RESULT_TYPE, RESULT_TYPE>(delta);
 	}
 };

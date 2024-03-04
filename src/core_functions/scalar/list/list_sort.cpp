@@ -1,6 +1,6 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/enum_util.hpp"
-
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -183,8 +183,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			auto source_idx = list_entry.offset + child_idx;
 			sel.set_index(offset_lists_indices, source_idx);
-			lists_indices_data[offset_lists_indices] = (uint32_t)i;
-			payload_vector_data[offset_lists_indices] = source_idx;
+			lists_indices_data[offset_lists_indices] = UnsafeNumericCast<uint16_t>(i);
+			payload_vector_data[offset_lists_indices] = NumericCast<uint32_t>(source_idx);
 			offset_lists_indices++;
 			incr_payload_count++;
 		}

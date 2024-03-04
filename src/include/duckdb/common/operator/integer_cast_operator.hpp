@@ -29,12 +29,12 @@ struct IntegerCastOperation {
 			if (DUCKDB_UNLIKELY(state.result < (NumericLimits<store_t>::Minimum() + digit) / 10)) {
 				return false;
 			}
-			state.result = state.result * 10 - digit;
+			state.result = UnsafeNumericCast<store_t>(state.result * 10 - digit);
 		} else {
 			if (DUCKDB_UNLIKELY(state.result > (NumericLimits<store_t>::Maximum() - digit) / 10)) {
 				return false;
 			}
-			state.result = state.result * 10 + digit;
+			state.result = UnsafeNumericCast<store_t>(state.result * 10 + digit);
 		}
 		return true;
 	}
@@ -45,7 +45,7 @@ struct IntegerCastOperation {
 		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<store_t>::Maximum() - digit) / 16)) {
 			return false;
 		}
-		state.result = state.result * 16 + digit;
+		state.result = UnsafeNumericCast<store_t>(state.result * 16 + digit);
 		return true;
 	}
 
@@ -55,7 +55,7 @@ struct IntegerCastOperation {
 		if (DUCKDB_UNLIKELY(state.result > (NumericLimits<store_t>::Maximum() - digit) / 2)) {
 			return false;
 		}
-		state.result = state.result * 2 + digit;
+		state.result = UnsafeNumericCast<store_t>(state.result * 2 + digit);
 		return true;
 	}
 
@@ -126,7 +126,7 @@ struct IntegerDecimalCastOperation : IntegerCastOperation {
 		}
 
 		// Handle decimals
-		e = exponent - state.decimal_digits;
+		e = UnsafeNumericCast<int16_t>(exponent - state.decimal_digits);
 		store_t remainder = 0;
 		if (e < 0) {
 			if (static_cast<uint16_t>(-e) <= NumericLimits<store_t>::Digits()) {
