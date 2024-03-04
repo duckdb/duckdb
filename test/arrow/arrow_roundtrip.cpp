@@ -17,6 +17,7 @@ static void TestArrowRoundtrip(const string &query, bool export_large_buffer = f
 
 static void TestParquetRoundtrip(const string &path) {
 	DBConfig config;
+    // This needs to be set since this test will be triggered when testing autoloading
 	config.options.allow_unsigned_extensions = true;
 
 	DuckDB db(nullptr, &config);
