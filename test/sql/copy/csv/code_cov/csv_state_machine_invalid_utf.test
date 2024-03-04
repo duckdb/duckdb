@@ -4,10 +4,14 @@
 
 # Error during sniffing
 statement error
-select * from read_csv_auto('test/sql/copy/csv/data/test/invalid_utf.csv')
+from read_csv_auto('test/sql/copy/csv/data/test/invalid_utf.csv')
 ----
 Invalid unicode (byte sequence mismatch) detected
 
+statement error
+from read_csv_auto('test/sql/copy/csv/data/test/invalid_utf.csv')
+----
+CSV Error on Line: 1
 
 # Error during parsing
 statement error
@@ -49,10 +53,51 @@ valid	valid	valid
 valid	valid	valid
 valid	valid	valid
 valid	valid	valid
+valid	valid	valid
 
 # Test error in the second vector
+statement ok
+create table t as from read_csv('test/sql/copy/csv/data/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true)
+
+query I
+select count(*) from t
+----
+3030
+
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+----
+CSV Error on Line: 3001
 
 # Test borked utf-8 within quotes
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_quoted.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
+----
+CSV Error on Line: 11
+
+query III
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
+----
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
 
 # Test error between buffers
 
