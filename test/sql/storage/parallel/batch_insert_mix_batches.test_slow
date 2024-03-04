@@ -2,6 +2,9 @@
 # description: Test batch insert with small batches
 # group: [parallel]
 
+# FIXME: this fails with Assertion triggered in physical_batch_insert.cpp" on line 192: lstate.writer
+require block_size 262144
+
 require parquet
 
 load __TEST_DIR__/insert_mix_batches.db

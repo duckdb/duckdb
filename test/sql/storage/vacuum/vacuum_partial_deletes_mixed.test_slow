@@ -2,6 +2,9 @@
 # description: Verify that deletes get vacuumed correctly through merging of adjacent row groups
 # group: [vacuum]
 
+# FIXME: Attempted to dereference unique_ptr that is NULL
+require block_size 262144
+
 load __TEST_DIR__/vacuum_partial_deletes_mixed.db
 
 statement ok

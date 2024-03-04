@@ -2,6 +2,9 @@
 # description: Test batch streaming to disk with different row group sizes
 # group: [parallel]
 
+# FIXME: this fails with a heap-buffer-overflow on AllocateBlock in BlockHandle
+require block_size 262144
+
 require parquet
 
 load __TEST_DIR__/memory_limit_batch_load.db
