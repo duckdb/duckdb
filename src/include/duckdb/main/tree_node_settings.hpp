@@ -66,6 +66,6 @@ public:
 
 public:
 	string GetMetricAsString(TreeNodeSettingsType setting) const;
-	void PrintAllMetricsToSS(std::ostream &ss, const string& depth);
+	void PrintAllMetricsToSS(std::ostream &ss, const string &depth);
 };
 } // namespace duckdb
