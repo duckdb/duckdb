@@ -365,7 +365,7 @@ bool StringValueResult::AddRowInternal() {
 			error << "Could not convert string \"" << cast_error.second << "\" to \'"
 			      << LogicalTypeIdToString(parse_types[cast_error.first]) << "\'";
 			auto error_string = error.str();
-			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - 1);
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 
 			auto csv_error = CSVError::CastError(state_machine.options, names[cast_error.first], error_string,
 			                                     cast_error.first, row, lines_per_batch);
@@ -708,17 +708,19 @@ void StringValueScanner::ProcessExtraRow() {
 				iterator.pos.buffer_pos++;
 				return;
 			}
+			lines_read++;
 			iterator.pos.buffer_pos++;
 			break;
 		case CSVState::CARRIAGE_RETURN:
-			lines_read++;
 			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
 				result.AddRow(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
+				lines_read++;
 				return;
 			} else {
 				result.EmptyLine(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
+				lines_read++;
 				return;
 			}
 		case CSVState::DELIMITER:
@@ -909,17 +911,17 @@ bool StringValueScanner::MoveToNextBuffer() {
 				result.chunk_col_id = 0;
 				return false;
 			} else if (states.NewValue()) {
-				lines_read++;
 				// we add the value
 				result.AddValue(result, previous_buffer_handle->actual_size);
 				// And an extra empty value to represent what comes after the delimiter
 				result.AddRow(result, previous_buffer_handle->actual_size);
+				lines_read++;
 			} else if (states.IsQuotedCurrent()) {
 				// Unterminated quote
 				result.InvalidState(result);
 			} else {
-				lines_read++;
 				result.AddRow(result, previous_buffer_handle->actual_size);
+				lines_read++;
 			}
 			return false;
 		}

@@ -201,10 +201,7 @@ bool CSVErrorHandler::CanGetLine(idx_t boundary_index) {
 idx_t CSVErrorHandler::GetLine(const LinesPerBoundary &error_info) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	// We start from one, since the lines are 1-indexed
-	idx_t current_line = error_info.lines_in_batch;
-	if (current_line > 1) {
-		current_line++;
-	}
+	idx_t current_line = 1 + error_info.lines_in_batch;
 	for (idx_t boundary_idx = 0; boundary_idx < error_info.boundary_idx; boundary_idx++) {
 		current_line += lines_per_batch_map[boundary_idx].lines_in_batch;
 	}

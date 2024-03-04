@@ -155,5 +155,32 @@ valid	valid	valid
 valid	valid	valid
 
 # Test error between buffers
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', buffer_size = 198)
+----
+CSV Error on Line: 11
 
 # Test error between buffers (with ignore_errors set)
+query III
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true, buffer_size = 198)
+----
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
