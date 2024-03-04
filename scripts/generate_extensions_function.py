@@ -21,7 +21,7 @@ parser.add_argument(
     '--extension_dir',
     action='store',
     help="The root directory to look for the '<extension_name>/<extension>.duckdb_extension' files, relative to the location of this script",
-    default='../build/release/repository',  # Locally, try: '../build/release/extension'
+    default='../build/release/repository',
 )
 
 args = parser.parse_args()
