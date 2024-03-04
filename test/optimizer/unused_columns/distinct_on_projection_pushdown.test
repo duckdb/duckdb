@@ -1,12 +1,29 @@
 # name: test/optimizer/unused_columns/distinct_on_projection_pushdown.test
 # description: Test DISTINCT ON ORDER BY
-# group: [distinct]
+# group: [unused_columns]
 
 statement ok
 PRAGMA enable_verification
 
 statement ok
-create table t0 as select random()*1000 col0, random()*100000 col1, random()*100000 col2, '1' col3, '2' col4, '3' col5 from range(1000000);
+SELECT SETSEED(0.12345);
+
+statement ok
+create table t0 as select random()*1000 col0, random()*1000 col1, random()*100 col2, '1' col3, '2' col4, '3' col5 from range(10000);
+
+query I
+SELECT col0
+FROM 
+(
+    SELECT 
+    DISTINCT ON (floor(col0))
+    *
+    FROM t0
+    ORDER by col0 DESC
+);
+----
+1000 values hashing to 640399b7771ea98639f947fab6fcb8a4
+
 
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
@@ -16,7 +33,7 @@ EXPLAIN SELECT col0
 FROM 
 (
     SELECT 
-    DISTINCT ON (floor(col0))	e
+    DISTINCT ON (floor(col0))
     *
     FROM t0
     ORDER by col0 DESC
