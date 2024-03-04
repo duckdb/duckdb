@@ -39,7 +39,8 @@ unique_ptr<PathElement> Transformer::TransformPathElement(duckdb_libpgquery::PGP
 	return result;
 }
 
-unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSubPath *root, unique_ptr<PathPattern> &path_pattern) {
+unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSubPath *root,
+                                                         unique_ptr<PathPattern> &path_pattern) {
 	auto result = make_uniq<SubPath>(PGQPathReferenceType::SUBPATH);
 
 	result->where_clause = TransformExpression(root->where_clause);
@@ -72,10 +73,10 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 	if (result->path_mode > PGQPathMode::WALK) {
 		throw NotImplementedException("Path modes other than WALK have not been implemented yet.");
 	}
-	if (result->upper == 1<<30 && path_pattern->all && result->path_mode <= PGQPathMode::WALK) {
+	if (result->upper == 1 << 30 && path_pattern->all && result->path_mode <= PGQPathMode::WALK) {
 		throw ConstraintException("ALL unbounded with path mode WALK is not possible as this "
-															"could lead to infinite results. Consider specifying an upper bound or"
-															" path mode other than WALK");
+		                          "could lead to infinite results. Consider specifying an upper bound or"
+		                          " path mode other than WALK");
 	}
 
 	//! Path sequence

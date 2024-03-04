@@ -9,7 +9,7 @@ namespace duckdb {
 shared_ptr<PropertyGraphTable>
 Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *graph_table,
                                          case_insensitive_set_t &global_label_set,
-																				 case_insensitive_map_t<string> &table_alias_map) {
+                                         case_insensitive_map_t<string> &table_alias_map) {
 	vector<string> column_names;
 	vector<string> except_list;
 	case_insensitive_set_t label_set;
@@ -68,8 +68,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		label_names.emplace_back(label_str);
 	}
 
-	auto pg_table = make_shared<PropertyGraphTable>(graph_table_name, table_name_alias,
-																									column_names, label_names);
+	auto pg_table = make_shared<PropertyGraphTable>(graph_table_name, table_name_alias, column_names, label_names);
 
 	pg_table->is_vertex_table = graph_table->is_vertex_table;
 	pg_table->except_columns = std::move(except_list);

@@ -177,10 +177,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	});
 
 	// compress data based on statistics for materializing operators
-//	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
-//		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
-//		compressed_materialization.Compress(plan);
-//	});
+	//	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
+	//		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
+	//		compressed_materialization.Compress(plan);
+	//	});
 
 	// transform ORDER BY + LIMIT to TopN
 	RunOptimizer(OptimizerType::TOP_N, [&]() {

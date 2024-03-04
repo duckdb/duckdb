@@ -122,7 +122,6 @@ string SubPath::ToString() const {
 		default:
 			throw InternalException("Unknown PathReferenceType found.");
 		}
-
 	}
 	if (lower != upper) {
 		result += "{" + std::to_string(lower) + "," + std::to_string(upper) + "}";

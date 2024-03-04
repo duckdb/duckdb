@@ -39,13 +39,12 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
 void CreatePropertyGraphInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<string>(100, "property_graph_name", property_graph_name);
 	serializer.WriteList(101, "vertex_tables", vertex_tables.size(), [&](Serializer::List &list, idx_t i) {
-			auto &entry = vertex_tables[i];
-			list.WriteObject([&](Serializer &obj) { entry->Serialize(obj);
-			});
+		auto &entry = vertex_tables[i];
+		list.WriteObject([&](Serializer &obj) { entry->Serialize(obj); });
 	});
 	serializer.WriteList(102, "edge_tables", edge_tables.size(), [&](Serializer::List &list, idx_t i) {
-			auto &entry = edge_tables[i];
-			list.WriteObject([&](Serializer &obj) { entry->Serialize(obj); });
+		auto &entry = edge_tables[i];
+		list.WriteObject([&](Serializer &obj) { entry->Serialize(obj); });
 	});
 	serializer.WriteProperty(103, "label_map", label_map);
 }
@@ -55,9 +54,7 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(Deserializer &deseri
 	deserializer.ReadProperty<string>(100, "property_graph_name", result->property_graph_name);
 
 	deserializer.ReadList(101, "vertex_tables", [&](Deserializer::List &list, idx_t i) {
-			list.ReadObject([&](Deserializer &obj) {
-				result->vertex_tables[i]->Deserialize(obj);
-			});
+		list.ReadObject([&](Deserializer &obj) { result->vertex_tables[i]->Deserialize(obj); });
 	});
 
 	deserializer.ReadProperty(103, "label_map", result->label_map);

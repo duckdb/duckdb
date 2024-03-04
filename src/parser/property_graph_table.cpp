@@ -229,7 +229,6 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 	}
 }
 
-
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
 	auto pg_table = make_shared<PropertyGraphTable>();
 	deserializer.ReadProperty(100, "table_name", pg_table->table_name);
@@ -301,9 +300,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 
 } // namespace duckdb
 
-
-
-//void PropertyGraphTable::Serialize(Serializer &serializer) const {
+// void PropertyGraphTable::Serialize(Serializer &serializer) const {
 //	FieldWriter writer(serializer);
 //	writer.WriteString(table_name);
 //
