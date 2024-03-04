@@ -25,7 +25,8 @@ struct MetadataHandle;
 struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
-	idx_t block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
+	//! FIXME: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
+	idx_t block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 };
 
@@ -78,7 +79,7 @@ private:
 	void LoadFreeList();
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
-	void Initialize(DatabaseHeader &header, const idx_t block_alloc_size);
+	void Initialize(const DatabaseHeader &header, const idx_t block_alloc_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;

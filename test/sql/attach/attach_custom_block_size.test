@@ -1,6 +1,9 @@
 # name: test/sql/attach/attach_custom_block_size.test
 # group: [attach]
 
+# We currently throw 'Not implemented' exceptions for other block sizes.
+require block_size 262144
+
 require skip_reload
 
 statement ok

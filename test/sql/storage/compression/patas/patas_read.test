@@ -1,6 +1,9 @@
 # name: test/sql/storage/compression/patas/patas_read.test
 # group: [patas]
 
+# we cannot read/open a file with a different block size
+require block_size 262144
+
 load test/sql/storage/compression/patas/patas.db readonly
 
 query I

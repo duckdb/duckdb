@@ -279,12 +279,11 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	block.Write(*handle, location);
 }
 
-void SingleFileBlockManager::Initialize(DatabaseHeader &header, const idx_t block_alloc_size) {
+void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const idx_t block_alloc_size) {
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = header.block_count;
-	SetBlockAllocSize(header.block_alloc_size);
 
 	if (block_alloc_size != DConstants::INVALID_INDEX && block_alloc_size != header.block_alloc_size) {
 		throw InvalidInputException("cannot initialize the same database with a different block size: provided block "
@@ -298,6 +297,8 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header, const idx_t bloc
 		                              "size: default block size: %llu, file block size: %llu",
 		                              Storage::BLOCK_ALLOC_SIZE, header.block_alloc_size);
 	}
+
+	SetBlockAllocSize(header.block_alloc_size);
 }
 
 void SingleFileBlockManager::LoadFreeList() {
