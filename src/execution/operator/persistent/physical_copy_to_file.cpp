@@ -97,10 +97,11 @@ struct VectorOfValuesEquality {
 	}
 };
 
+template <class T>
+using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
+
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
-	static constexpr const idx_t PARTITIONED_FLUSH_THRESHOLD = 500000;
-
 	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state)
 	    : local_state(std::move(local_state)), writer_offset(0) {
 	}
@@ -111,8 +112,7 @@ public:
 	unique_ptr<HivePartitionedColumnData> part_buffer;
 	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
 
-	unordered_map<vector<Value>, unique_ptr<PartitionWriteInfo>, VectorOfValuesHashFunction, VectorOfValuesEquality>
-	    active_write_map;
+	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_write_map;
 
 	idx_t writer_offset;
 	idx_t append_count = 0;
@@ -134,7 +134,7 @@ public:
 		}
 		part_buffer->Append(*part_buffer_append_state, chunk);
 		append_count += chunk.size();
-		if (append_count >= PARTITIONED_FLUSH_THRESHOLD) {
+		if (append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
 			// flush all cached partitions
 			FlushPartitions(context, op, g, false);
 		}
@@ -195,6 +195,9 @@ public:
 
 	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g,
 	                     bool final_flush) {
+		if (!part_buffer) {
+			return;
+		}
 		part_buffer->FlushAppendState(*part_buffer_append_state);
 		auto &partitions = part_buffer->GetPartitions();
 		auto partition_key_map = part_buffer->GetReverseMap();
@@ -206,13 +209,13 @@ public:
 			// get the partition write info for this buffer
 			auto &info = GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
 
-			auto local_state = op.function.copy_to_initialize_local(context, *op.bind_data);
+			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 			// push the chunks into the write state
 			for (auto &chunk : partitions[i]->Chunks()) {
-				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_state, chunk);
+				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
 			}
-			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_state);
-			local_state.reset();
+			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
+			local_copy_state.reset();
 			if (final_flush) {
 				// if this is the final flush already finalize the write
 				FinalizePartition(context, op, info);
