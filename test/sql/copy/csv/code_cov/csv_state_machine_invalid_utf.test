@@ -99,6 +99,61 @@ valid	valid	valid
 valid	valid	valid
 valid	valid	valid
 
+# Test Invalid Header
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_header.csv', delim = ',', quote = '"')
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"')
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+query III
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"', ignore_errors = true)
+----
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+
+# Test invalid unicode in between a quoted newline
+statement error
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
+----
+CSV Error on Line: 11
+
+query III
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
+----
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+valid	valid	valid
+
 # Test error between buffers
 
 # Test error between buffers (with ignore_errors set)
