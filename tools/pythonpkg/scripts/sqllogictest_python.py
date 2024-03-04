@@ -5,6 +5,7 @@ import json
 from typing import Optional, List, Dict, Any
 import duckdb
 from enum import Enum
+import time
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
@@ -28,6 +29,7 @@ from sqllogictest import (
     Restart,
     Reconnect,
     Sleep,
+    SleepUnit,
     Skip,
     Unskip,
     ExpectedResult,
@@ -61,6 +63,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             Require: self.execute_require,
             Skip: self.execute_skip,
             Unskip: self.execute_unskip,
+            Mode: self.execute_mode,
+            Sleep: self.execute_sleep,
+            Reconnect: self.execute_reconnect,
             # Restart: None,  # <-- restart is hard, have to get transaction status
         }
         # TODO: get this from the `duckdb` package
@@ -149,6 +154,13 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             self.con.execute("set autoload_known_extensions=True")
             self.con.execute(f"SET autoinstall_extension_repository='{env_var}'")
 
+    def load_extension(self, db: duckdb.DuckDBPyConnection, extension: str):
+        root = duckdb.__build_dir__
+        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
+        # Serialize it as a POSIX compliant path
+        path = path.as_posix()
+        db.execute(f"LOAD {path}")
+
     def load_database(self, dbpath):
         self.dbpath = dbpath
 
@@ -164,8 +176,8 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.reconnect()
 
         # Load any previously loaded extensions again
-        # for extension in extensions:
-        #    self.load_extension(db, extension)
+        for extension in self.extensions:
+            self.load_extension(self.db, extension)
 
     def execute_load(self, load: Load):
         if self.in_loop():
@@ -209,13 +221,11 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 conn.execute("BEGIN TRANSACTION")
                 rel = conn.query(f'{sql_query}')
                 if rel != None:
-                    print("yes", types)
                     types = rel.types
                 else:
                     types = []
                 conn.execute("ABORT")
             except Exception as e:
-                print("no")
                 types = []
             if expected_result.lines == None:
                 return
@@ -245,6 +255,44 @@ class SQLLogicTestExecutor(SQLLogicRunner):
 
     def execute_unskip(self, statement: Unskip):
         self.unskip()
+
+    def execute_reconnect(self, statement: Reconnect):
+        # if self.is_parallel:
+        #   raise Error(...)
+        self.reconnect()
+
+    def execute_sleep(self, statement: Sleep):
+        def calculate_sleep_time(duration: float, unit: SleepUnit) -> float:
+            if unit == SleepUnit.SECOND:
+                return duration
+            elif unit == SleepUnit.MILLISECOND:
+                return duration / 1000
+            elif unit == SleepUnit.MICROSECOND:
+                return duration / 1000000
+            elif unit == SleepUnit.NANOSECOND:
+                return duration / 1000000000
+            else:
+                raise ValueError("Unknown sleep unit")
+
+        unit = statement.get_unit()
+        duration = statement.get_duration()
+
+        time_to_sleep = calculate_sleep_time(duration, unit)
+        time.sleep(time_to_sleep)
+
+    def execute_mode(self, statement: Mode):
+        parameter = statement.header.parameters[0]
+        if parameter == "output_hash":
+            self.output_hash_mode = True
+        elif parameter == "output_result":
+            self.output_result_mode = True
+        elif parameter == "no_output":
+            self.output_hash_mode = False
+            self.output_result_mode = False
+        elif parameter == "debug":
+            self.debug_mode = True
+        else:
+            raise RuntimeError("unrecognized mode: " + parameter)
 
     def execute_statement(self, statement: Statement):
         assert isinstance(statement, Statement)
@@ -309,12 +357,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 break
 
         if not 'autoload_known_extensions' in self.config:
-            query = f"""
-                LOAD '__BUILD_DIRECTORY__/test/extension/{param}/{param}.duckdb_extension';
-            """
-            query = self.replace_keywords(query)
             try:
-                self.con.execute(query)
+                self.load_extension(self.con, param)
+                self.extensions.add(param)
             except:
                 return self.RequireResult.MISSING
         elif excluded_from_autoloading:
@@ -334,6 +379,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
     def execute_require_env(self, statement: BaseStatement):
         self.skipped = True
 
+    # TODO: this does not support parallel execution
+    # We likely need to add another method inbetween that takes a list of statements to execute
+    # This method should be defined on a SQLLogicContext, to support parallelism
     def execute_test(self, test: SQLLogicTest) -> ExecuteResult:
         self.reset()
         self.test = test

@@ -144,6 +144,7 @@ class SQLLogicRunner:
         self.loaded_databases: Dict[str, duckdb.DuckDBPyConnection] = {}
         self.db: Optional[duckdb.DuckDBPyConnection] = None
         self.config: Dict[str, Any] = {'allow_unsigned_extensions': True}
+        self.extensions: set = set()
 
         self.con: Optional[duckdb.DuckDBPyConnection] = None
         self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
@@ -158,6 +159,7 @@ class SQLLogicRunner:
         self.required_requires: set = set()
         self.output_hash_mode = False
         self.output_result_mode = False
+        self.debug_mode = False
 
         self.finished_processing_file = False
         # If these error messages occur in a test, the test will abort but still count as passed

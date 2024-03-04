@@ -13,7 +13,7 @@ from .endloop import Endloop
 from .require_env import RequireEnv
 from .restart import Restart
 from .reconnect import Reconnect
-from .sleep import Sleep
+from .sleep import Sleep, SleepUnit
 
 from .skip import Skip, Unskip
 
@@ -33,6 +33,7 @@ all = [
     Restart,
     Reconnect,
     Sleep,
+    SleepUnit,
     Skip,
     Unskip,
     SortStyle,

@@ -17,6 +17,7 @@ from .statement import (
     Restart,
     Reconnect,
     Sleep,
+    SleepUnit,
     Skip,
     Unskip,
 )
@@ -45,6 +46,7 @@ all = [
     Restart,
     Reconnect,
     Sleep,
+    SleepUnit,
     Skip,
     Unskip,
     SkipIf,
