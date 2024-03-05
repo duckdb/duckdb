@@ -243,50 +243,45 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-find_package(Git)
-if(Git_FOUND)
-  if (NOT DEFINED GIT_COMMIT_HASH)
-    execute_process(
+
+if (OVERRIDE_GIT_DESCRIBE AND NOT OVERRIDE_GIT_DESCRIBE STREQUAL "")
+  set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
+else()
+  find_package(Git)
+  if(Git_FOUND)
+     if (NOT DEFINED GIT_COMMIT_HASH)
+     execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
-  endif()
-  execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_LAST_TAG
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(
+    endif()
+    execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_ITERATION
+          OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
-else()
-  message("Git NOT FOUND")
+  else()
+    message("Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
+    set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
+  endif()
 endif()
 
-if(GIT_RESULT EQUAL "0")
-  string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
+string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.([0-9]+)\.[0-9]+\-.*" "\\1" DUCKDB_MINOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.([0-9]+)\-.*" "\\1" DUCKDB_PATCH_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-([0-9]+)\-g.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_DESCRIBE}")
+if (NOT DEFINED GIT_COMMIT_HASH)
+  string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
+endif()
 
-  if(DUCKDB_DEV_ITERATION EQUAL 0)
-    # on a tag; directly use the version
-    set(DUCKDB_VERSION "${GIT_LAST_TAG}")
-  else()
-    # not on a tag, increment the patch version by one and add a -devX suffix
-    math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
-    set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
-  endif()
+if(DUCKDB_DEV_ITERATION EQUAL 0)
+  # on a tag; directly use the version
+  set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
 else()
-  # fallback for when building from tarball
-  set(DUCKDB_MAJOR_VERSION 0)
-  set(DUCKDB_MINOR_VERSION 0)
-  set(DUCKDB_PATCH_VERSION 1)
-  set(DUCKDB_DEV_ITERATION 0)
+  # not on a tag, increment the patch version by one and add a -devX suffix
+  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 

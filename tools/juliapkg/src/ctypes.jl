@@ -96,7 +96,7 @@ struct duckdb_time_struct
 end
 
 struct duckdb_time_tz
-    micros::Int64
+    time::duckdb_time_struct
     offset::Int32
 end
 

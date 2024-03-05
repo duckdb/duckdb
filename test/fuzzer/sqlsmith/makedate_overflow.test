@@ -12,3 +12,9 @@ SELECT make_timestamp("bigint", "bigint", "bigint", "bigint", "bigint", "double"
 FROM all_types;
 ----
 can't be cast because the value is out of range for the destination type INT32
+
+statement error
+SELECT make_date(c1) 
+FROM test_vector_types(CAST(NULL AS STRUCT("year" BIGINT, "month" BIGINT, "day" BIGINT))) AS test_vector_types(c1);
+----
+the value is out of range for the destination type INT32
