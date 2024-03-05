@@ -6,10 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SELECT SETSEED(0.12345);
-
-statement ok
-create table t0 as select random()*1000 col0, random()*1000 col1, random()*100 col2, '1' col3, '2' col4, '3' col5 from range(10000);
+create table t0 as select range%1000 col0, random()*1000 col1, random()*100 col2, '1' col3, '2' col4, '3' col5 from range(10000);
 
 query I
 SELECT col0
@@ -22,7 +19,7 @@ FROM
     ORDER by col0 DESC
 );
 ----
-1000 values hashing to 640399b7771ea98639f947fab6fcb8a4
+1000 values hashing to 796a92aea33b9601284e2a4ac9e6587e
 
 
 statement ok
