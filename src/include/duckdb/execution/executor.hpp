@@ -119,6 +119,13 @@ private:
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
 
+	void RegisterTask() {
+		executor_tasks++;
+	}
+	void UnregisterTask() {
+		executor_tasks--;
+	}
+
 private:
 	optional_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperator> owned_plan;
@@ -157,5 +164,8 @@ private:
 
 	//! Task that have been descheduled
 	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
+
+	//! Currently alive executor tasks
+	atomic<idx_t> executor_tasks;
 };
 } // namespace duckdb

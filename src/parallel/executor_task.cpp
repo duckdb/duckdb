@@ -5,12 +5,14 @@
 namespace duckdb {
 
 ExecutorTask::ExecutorTask(Executor &executor_p) : executor(executor_p) {
+	executor.RegisterTask();
 }
 
 ExecutorTask::ExecutorTask(ClientContext &context) : ExecutorTask(Executor::Get(context)) {
 }
 
 ExecutorTask::~ExecutorTask() {
+	executor.UnregisterTask();
 }
 
 void ExecutorTask::Deschedule() {

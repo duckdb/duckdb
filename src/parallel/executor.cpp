@@ -20,10 +20,14 @@
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context) {
+Executor::Executor(ClientContext &context) : context(context), executor_tasks(0) {
 }
 
 Executor::~Executor() {
+	if (executor_tasks > 0) {
+		throw InternalException("Executor was destroyed while there were still %llu outstanding executor tasks",
+		                        executor_tasks.load()); // NOLINT
+	}
 }
 
 Executor &Executor::Get(ClientContext &context) {
