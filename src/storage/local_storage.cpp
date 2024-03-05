@@ -378,17 +378,16 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 
 void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) {
 	auto &storage = table_manager.GetOrCreateStorage(table);
-	ErrorData error;
 	if (!storage.indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + storage.row_groups->GetTotalRows();
-		error = storage.AppendToIndexes(transaction, collection, storage.indexes, table.GetTypes(), base_id);
+		auto error = storage.AppendToIndexes(transaction, collection, storage.indexes, table.GetTypes(), base_id);
+		if (error.HasError()) {
+			error.Throw();
+		}
 	}
 	storage.row_groups->MergeStorage(collection);
 	storage.merged_storage = true;
-	if (error.HasError()) {
-		error.Throw();
-	}
 }
 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
