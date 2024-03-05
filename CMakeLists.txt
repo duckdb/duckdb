@@ -242,8 +242,25 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
 endif()
 
 
-if (OVERRIDE_GIT_DESCRIBE AND NOT OVERRIDE_GIT_DESCRIBE STREQUAL "")
-  set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
+if (OVERRIDE_GIT_DESCRIBE)
+  if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+    set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
+  elseif(OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+$")
+    find_package(Git)
+    if(Git_FOUND)
+      execute_process(
+            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_COMMIT_HASH
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+        set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g${GIT_COMMIT_HASH}")
+    else()
+      set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
+    endif()
+  else()
+    message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or version only 'vX.Y.Z'")
+  endif()
 else()
   find_package(Git)
   if(Git_FOUND)
