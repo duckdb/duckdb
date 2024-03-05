@@ -329,9 +329,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "azure", "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
-    // "inet",
-    // "icu",
-    "json", "parquet", "sqlsmith", "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "aws", "azure", "autocomplete", "excel",          "fts",      "httpfs",           "inet",
+    "icu", "json",  "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner", "tpcds",
+    "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

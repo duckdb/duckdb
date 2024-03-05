@@ -200,7 +200,10 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 }
 
 TEST_CASE("Issue #9417", "[api][.]") {
-	DuckDB db("issue_replication.db");
+	DBConfig config;
+	config.options.allow_unsigned_extensions = true;
+
+	DuckDB db("issue_replication.db", &config);
 	Connection con(db);
 	auto result = con.SendQuery("with max_period as ("
 	                            "            select max(reporting_date) as max_record\n"

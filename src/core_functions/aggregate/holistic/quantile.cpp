@@ -21,12 +21,6 @@
 
 namespace duckdb {
 
-// Hugeint arithmetic
-static hugeint_t MultiplyByDouble(const hugeint_t &h, const double &d) {
-	D_ASSERT(d >= 0 && d <= 1);
-	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
-}
-
 // Interval arithmetic
 static interval_t MultiplyByDouble(const interval_t &i, const double &d) { // NOLINT
 	D_ASSERT(d >= 0 && d <= 1);
@@ -189,8 +183,7 @@ timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d
 
 template <>
 hugeint_t CastInterpolation::Interpolate(const hugeint_t &lo, const double d, const hugeint_t &hi) {
-	const hugeint_t delta = hi - lo;
-	return lo + MultiplyByDouble(delta, d);
+	return Hugeint::Convert(Interpolate(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
 }
 
 template <>
