@@ -6,6 +6,7 @@ from typing import Optional, List, Dict, Any
 import duckdb
 from enum import Enum
 import time
+import shutil
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
@@ -390,7 +391,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
 
         expected_result = statement.expected_result
         try:
-            print(sql_query)
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
@@ -511,6 +511,9 @@ def main():
     arg_parser.add_argument('--file-path', '-f', type=str, help='Path to the test file')
     arg_parser.add_argument('--start-offset', '-s', type=int, help='Start offset for the tests', default=0)
     args = arg_parser.parse_args()
+
+    if os.path.exists(TEST_DIRECTORY_PATH):
+        shutil.rmtree(TEST_DIRECTORY_PATH)
 
     if args.file_path:
         file_paths = [args.file_path]
