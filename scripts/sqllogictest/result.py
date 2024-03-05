@@ -10,6 +10,7 @@ import os
 import re
 from duckdb.typing import DuckDBPyType
 import decimal
+from functools import cmp_to_key
 
 
 class QueryResult:
@@ -152,6 +153,8 @@ def load_result_from_file(fname, names):
 
 
 def convert_value(value, type: str):
+    if value is None or value == 'NULL':
+        return 'NULL'
     query = f'select $1::{type}'
     return duckdb.execute(query, [value]).fetchone()[0]
 
@@ -294,7 +297,23 @@ class SQLLogicRunner:
             ncols = result.column_count()
             nrows = int(total_value_count / ncols)
             rows = [result_values_string[i * ncols : (i + 1) * ncols] for i in range(nrows)]
-            rows.sort(key=lambda x: x)
+
+            # Define the comparison function
+            def compare_rows(a, b):
+                for col_idx, val in enumerate(a):
+                    if val != b[col_idx]:
+                        if val == 'NULL':
+                            # NULLs last
+                            return 1
+                        if b[col_idx] == 'NULL':
+                            # NULLs last
+                            return -1
+                        return -1 if val < b[col_idx] else 1
+                return 0
+
+            # Sort the individual rows based on element comparison
+            sorted_rows = sorted(rows, key=cmp_to_key(compare_rows))
+            rows = sorted_rows
 
             for row_idx, row in enumerate(rows):
                 for col_idx, val in enumerate(row):
@@ -389,7 +408,7 @@ class SQLLogicRunner:
                 current_row, current_column = 0, 0
                 for i, val in enumerate(comparison_values):
                     lvalue_str = result_values_string[current_row * expected_column_count + current_column]
-                    rvalue_str = val.strip(' ')
+                    rvalue_str = val
                     success = compare_values(result, lvalue_str, rvalue_str, current_column)
                     if not success:
                         logger.print_error_header("Wrong result in query!")

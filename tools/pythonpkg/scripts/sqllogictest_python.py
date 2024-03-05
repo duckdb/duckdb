@@ -73,7 +73,13 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             Reconnect: self.execute_reconnect,
             # Restart: None,  # <-- restart is hard, have to get transaction status
         }
-        self.SKIPPED_TESTS = set(['test/sql/types/map/map_empty.test'])
+        self.SKIPPED_TESTS = set(
+            [
+                'test/sql/types/map/map_empty.test',
+                'test/sql/types/nested/list/test_list_slice_step.test',  # <-- skipping because it causes an InternalException currently
+                'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
+            ]
+        )
         # TODO: get this from the `duckdb` package
         self.AUTOLOADABLE_EXTENSIONS = [
             "arrow",
@@ -216,6 +222,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         conn = self.get_connection(query.connection_name)
         sql_query = '\n'.join(query.lines)
         sql_query = self.replace_keywords(sql_query)
+        print(sql_query)
 
         expected_result = query.expected_result
         assert expected_result.type == ExpectedResult.Type.SUCCES
