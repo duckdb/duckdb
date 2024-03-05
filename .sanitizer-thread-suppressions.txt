@@ -2,6 +2,7 @@ deadlock:LockClients
 deadlock:RollbackTransaction
 deadlock:Checkpoint
 deadlock:MetaTransaction::GetTransaction
+race:Executor::CancelTasks
 race:NextInnerJoin
 race:~ColumnSegment
 race:duckdb_moodycamel
