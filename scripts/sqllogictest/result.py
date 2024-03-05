@@ -60,7 +60,12 @@ def compare_values(result: QueryResult, actual_str, expected_str, current_column
     sql_type = result.types[current_column]
     expected = sql_logic_test_convert_value(expected_str, sql_type, False)
     actual = actual_str
-    error = actual != expected
+    if sql_type in [duckdb.typing.FLOAT, duckdb.typing.DOUBLE]:
+        # ApproxEqual
+        epsilon = abs(actual) * 0.01 + 0.00000001
+        error = not (abs(expected - actual) <= epsilon)
+    else:
+        error = actual != expected
 
     if error:
         return False
@@ -116,20 +121,17 @@ def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool):
         return 'NULL'
     query = "select $1::VARCHAR"
     type_strings = ['DECIMAL', 'HUGEINT']
-    print(sql_type)
     if sql_type in [
         duckdb.typing.BOOLEAN,
         duckdb.typing.DOUBLE,
         duckdb.typing.FLOAT,
     ] or any([type_str in str(sql_type) for type_str in type_strings]):
-        print("heloooooo", value, value.__class__)
+        query = f"select $1::{sql_type}"
         res = duckdb.execute(query, [duckdb.Value(value, sql_type)]).fetchone()
     else:
-        print(value.__class__)
         if hasattr(value, '__len__') and len(value) == 0:
             value = "(empty)"
         elif isinstance(value, str):
-            print(value)
             value = value.replace("\0", "\\0")
         res = duckdb.execute(query, [value]).fetchone()
     return res[0]

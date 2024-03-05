@@ -226,8 +226,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 self.skiptest("Can not deal properly with a PIVOT statement")
 
             def is_query_result(sql_query, statement) -> bool:
-                print(statement.type)
-                print(statement.expected_result_type)
                 if duckdb.ExpectedResultType.QUERY_RESULT not in statement.expected_result_type:
                     return False
                 if statement.type in [
@@ -238,7 +236,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                     if 'returning' not in sql_query.lower():
                         return False
                     return True
-                print(statement.type)
                 return len(statement.expected_result_type) == 1
 
             if is_query_result(sql_query, statement):
@@ -248,11 +245,12 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 aliased_columns = [f'c{i}' for i in range(len(original_types))]
 
                 def transform_type(sql_type) -> duckdb.typing.DuckDBPyType:
-                    # This is duplicating existing behavior, DOUBLE, DECIMAL and FLOAT -> BIGINT
-                    if 'DECIMAL' in str(sql_type):
-                        return duckdb.typing.BIGINT
-                    if sql_type in [duckdb.typing.DOUBLE, duckdb.typing.FLOAT]:
-                        return duckdb.typing.BIGINT
+                    if self.test.is_sqlite_test():
+                        # This is duplicating existing behavior, DOUBLE, DECIMAL and FLOAT -> BIGINT
+                        if 'DECIMAL' in str(sql_type):
+                            return duckdb.typing.BIGINT
+                        if sql_type in [duckdb.typing.DOUBLE, duckdb.typing.FLOAT]:
+                            return duckdb.typing.BIGINT
                     return duckdb.typing.VARCHAR
 
                 expressions = [
