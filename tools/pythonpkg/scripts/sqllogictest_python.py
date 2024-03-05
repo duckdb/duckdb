@@ -36,47 +36,23 @@ from sqllogictest import (
     ExpectedResult,
 )
 
-from sqllogictest.result import SQLLogicRunner, QueryResult
+from sqllogictest.result import (
+    SQLLogicRunner,
+    SQLLogicContext,
+    RequireResult,
+    ExecuteResult,
+    SkipException,
+    QueryResult,
+)
 
 from enum import Enum, auto
 
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 
 
-class SkipException(Exception):
-    def __init__(self, reason: str):
-        super().__init__(reason)
-
-
-class ExecuteResult:
-    class Type(Enum):
-        SUCCES = 0
-        ERROR = 1
-        SKIPPED = 2
-
-    def __init__(self, type: "ExecuteResult.Type"):
-        self.type = type
-
-
 class SQLLogicTestExecutor(SQLLogicRunner):
     def __init__(self):
         super().__init__()
-        self.STATEMENTS = {
-            Statement: self.execute_statement,
-            RequireEnv: self.execute_require_env,
-            Query: self.execute_query,
-            Load: self.execute_load,
-            Require: self.execute_require,
-            Skip: self.execute_skip,
-            Unskip: self.execute_unskip,
-            Mode: self.execute_mode,
-            Sleep: self.execute_sleep,
-            Reconnect: self.execute_reconnect,
-            HashThreshold: self.execute_hash_threshold,
-            Halt: self.execute_halt,
-            Set: self.execute_set,
-            Restart: self.execute_restart,
-        }
         self.SKIPPED_TESTS = set(
             [
                 'test/sql/types/map/map_empty.test',
@@ -115,9 +91,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # TODO: table function isnt always autoloaded so test fails
         ]
 
-    def get_unsupported_statements(self, test: SQLLogicTest) -> List[BaseStatement]:
+    def get_unsupported_statements(self, context: SQLLogicContext, test: SQLLogicTest) -> List[BaseStatement]:
         unsupported_statements = [
-            statement for statement in test.statements if statement.__class__ not in self.STATEMENTS
+            statement for statement in test.statements if statement.__class__ not in context.STATEMENTS
         ]
         return unsupported_statements
 
@@ -135,22 +111,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             os.makedirs(test_directory)
         return test_directory
 
-    def replace_keywords(self, input: str):
-        # Replace environment variables in the SQL
-        for name, value in self.environment_variables.items():
-            input = input.replace(f"${{{name}}}", value)
-
-        input = input.replace("__TEST_DIR__", self.get_test_directory())
-        input = input.replace("__WORKING_DIRECTORY__", os.getcwd())
-        input = input.replace("__BUILD_DIRECTORY__", duckdb.__build_dir__)
-        return input
-
-    def in_loop(self) -> bool:
-        return False
-
-    def skiptest(self, message: str):
-        raise SkipException(message)
-
     def test_delete_file(self, path):
         try:
             if os.path.exists(path):
@@ -159,8 +119,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             pass
 
     def delete_database(self, path):
-        if False:
-            return
+        # FIXME: support custom test directory
         self.test_delete_file(path)
         self.test_delete_file(path + ".wal")
 
@@ -180,296 +139,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             self.con.execute("SET autoload_known_extensions=True")
             self.con.execute(f"SET autoinstall_extension_repository='{env_var}'")
 
-    def load_extension(self, db: duckdb.DuckDBPyConnection, extension: str):
-        root = duckdb.__build_dir__
-        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
-        # Serialize it as a POSIX compliant path
-        path = path.as_posix()
-        db.execute(f"LOAD {path}")
-
-    def load_database(self, dbpath):
-        self.dbpath = dbpath
-
-        # Restart the database with the specified db path
-        self.db = None
-        self.con = None
-        self.cursors = {}
-
-        # Now re-open the current database
-        read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
-        self.db = duckdb.connect(dbpath, read_only, self.config)
-        self.loaded_databases.add(dbpath)
-        self.reconnect()
-
-        # Load any previously loaded extensions again
-        for extension in self.extensions:
-            self.load_extension(self.db, extension)
-
-    def execute_load(self, load: Load):
-        if self.in_loop():
-            self.fail("load cannot be called in a loop")
-
-        readonly = load.readonly
-
-        if load.header.parameters:
-            dbpath = load.header.parameters[0]
-            dbpath = self.replace_keywords(dbpath)
-            if not readonly:
-                # delete the target database file, if it exists
-                self.delete_database(dbpath)
-        else:
-            dbpath = ""
-
-        # set up the config file
-        if readonly:
-            self.config['temp_directory'] = False
-            self.config['access_mode'] = 'read_only'
-        else:
-            self.config['temp_directory'] = True
-            self.config['access_mode'] = 'automatic'
-
-        # now create the database file
-        self.load_database(dbpath)
-
-    def execute_query(self, query: Query):
-        assert isinstance(query, Query)
-        conn = self.get_connection(query.connection_name)
-        sql_query = '\n'.join(query.lines)
-        sql_query = self.replace_keywords(sql_query)
-        print(sql_query)
-
-        expected_result = query.expected_result
-        assert expected_result.type == ExpectedResult.Type.SUCCES
-
-        try:
-            statements = conn.extract_statements(sql_query)
-            statement = statements[-1]
-            if 'pivot' in sql_query and len(statements) != 1:
-                self.skiptest("Can not deal properly with a PIVOT statement")
-
-            def is_query_result(sql_query, statement) -> bool:
-                if duckdb.ExpectedResultType.QUERY_RESULT not in statement.expected_result_type:
-                    return False
-                if statement.type in [
-                    duckdb.StatementType.DELETE,
-                    duckdb.StatementType.UPDATE,
-                    duckdb.StatementType.INSERT,
-                ]:
-                    if 'returning' not in sql_query.lower():
-                        return False
-                    return True
-                return len(statement.expected_result_type) == 1
-
-            if is_query_result(sql_query, statement):
-                original_rel = conn.query(sql_query)
-                original_types = original_rel.types
-                # We create new names for the columns, because they might be duplicated
-                aliased_columns = [f'c{i}' for i in range(len(original_types))]
-
-                expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
-                aliased_table = ", ".join(aliased_columns)
-                expression_list = ", ".join(expressions)
-                try:
-                    # Select from the result, converting the Values to the right type for comparison
-                    transformed_query = (
-                        f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
-                    )
-                    # print(transformed_query)
-                    stringified_rel = conn.query(transformed_query)
-                except Exception as e:
-                    self.fail(f"Could not select from the ValueRelation: {str(e)}")
-                result = stringified_rel.fetchall()
-                query_result = QueryResult(result, original_types)
-            elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
-                conn.execute(sql_query)
-                result = conn.fetchall()
-                query_result = QueryResult(result, [duckdb.typing.BIGINT])
-            else:
-                conn.execute(sql_query)
-                result = conn.fetchall()
-                query_result = QueryResult(result, [])
-            if expected_result.lines == None:
-                return
-        except SkipException as e:
-            self.skipped = True
-            return
-        except Exception as e:
-            print(e)
-            query_result = QueryResult([], [], e)
-
-        self.check_query_result(query, query_result)
-
-    def execute_skip(self, statement: Skip):
-        self.skip()
-
-    def execute_unskip(self, statement: Unskip):
-        self.unskip()
-
-    def execute_halt(self, statement: Halt):
-        self.skiptest("HALT was encountered in file")
-
-    def execute_restart(self, statement: Restart):
-        # if context.is_parallel:
-        #    raise RuntimeError("Cannot restart database in parallel")
-
-        old_settings = self.con.execute("select name, value from duckdb_settings()").df()
-        existing_search_path = self.con.execute("select current_setting('search_path')").fetchone()[0]
-
-        self.load_database(self.dbpath)
-        non_default_settings = self.con.query(
-            """
-            select
-                name,
-                other_value
-            from duckdb_settings() join old_settings t(other_name, other_value) ON (name = other_name) WHERE value != other_value
-        """
-        ).fetchall()
-
-        for setting in non_default_settings:
-            name, value = setting
-            self.con.execute(f"set {name}='{value}'")
-
-        self.con.begin()
-        self.con.execute(f"set search_path = '{existing_search_path}'")
-        self.con.commit()
-
-    def execute_set(self, statement: Set):
-        option = statement.header.parameters[0]
-        string_set = (
-            self.ignore_error_messages if option == "ignore_error_messages" else self.always_fail_error_messages
-        )
-        string_set.clear()
-        string_set = statement.error_messages
-
-    def execute_hash_threshold(self, statement: HashThreshold):
-        self.hash_threshold = statement.threshold
-
-    def execute_reconnect(self, statement: Reconnect):
-        # if self.is_parallel:
-        #   raise Error(...)
-        self.reconnect()
-
-    def execute_sleep(self, statement: Sleep):
-        def calculate_sleep_time(duration: float, unit: SleepUnit) -> float:
-            if unit == SleepUnit.SECOND:
-                return duration
-            elif unit == SleepUnit.MILLISECOND:
-                return duration / 1000
-            elif unit == SleepUnit.MICROSECOND:
-                return duration / 1000000
-            elif unit == SleepUnit.NANOSECOND:
-                return duration / 1000000000
-            else:
-                raise ValueError("Unknown sleep unit")
-
-        unit = statement.get_unit()
-        duration = statement.get_duration()
-
-        time_to_sleep = calculate_sleep_time(duration, unit)
-        time.sleep(time_to_sleep)
-
-    def execute_mode(self, statement: Mode):
-        parameter = statement.header.parameters[0]
-        if parameter == "output_hash":
-            self.output_hash_mode = True
-        elif parameter == "output_result":
-            self.output_result_mode = True
-        elif parameter == "no_output":
-            self.output_hash_mode = False
-            self.output_result_mode = False
-        elif parameter == "debug":
-            self.debug_mode = True
-        else:
-            raise RuntimeError("unrecognized mode: " + parameter)
-
-    def execute_statement(self, statement: Statement):
-        assert isinstance(statement, Statement)
-        conn = self.get_connection(statement.connection_name)
-        sql_query = '\n'.join(statement.lines)
-        sql_query = self.replace_keywords(sql_query)
-        print(sql_query)
-
-        expected_result = statement.expected_result
-        try:
-            conn.execute(sql_query)
-            result = conn.fetchall()
-            if expected_result.type == ExpectedResult.Type.ERROR:
-                self.fail(f"Query unexpectedly succeeded")
-            assert expected_result.lines == None
-        except duckdb.Error as e:
-            if expected_result.type == ExpectedResult.Type.SUCCES:
-                self.fail(f"Query unexpectedly failed: {str(e)}")
-            if expected_result.lines == None:
-                return
-            expected = '\n'.join(expected_result.lines)
-            # Sanitize the expected error
-            if expected.startswith('Dependency Error: '):
-                expected = expected.split('Dependency Error: ')[1]
-            if expected not in str(e):
-                self.fail(
-                    f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
-                )
-
-    class RequireResult(Enum):
-        MISSING = 0
-        PRESENT = 1
-
-    def check_require(self, statement: Require) -> RequireResult:
-        not_an_extension = [
-            "notmingw",
-            "mingw",
-            "notwindows",
-            "windows",
-            "longdouble",
-            "64bit",
-            "noforcestorage",
-            "nothreadsan",
-            "strinline",
-            "vector_size",
-            "exact_vector_size",
-            "block_size",
-            "skip_reload",
-            "noalternativeverify",
-        ]
-        param = statement.header.parameters[0].lower()
-        if param in not_an_extension:
-            return self.RequireResult.MISSING
-
-        if param == "no_extension_autoloading":
-            if 'autoload_known_extensions' in self.config:
-                # If autoloading is on, we skip this test
-                return self.RequireResult.MISSING
-            return self.RequireResult.PRESENT
-
-        excluded_from_autoloading = True
-        for ext in self.AUTOLOADABLE_EXTENSIONS:
-            if ext == param:
-                excluded_from_autoloading = False
-                break
-
-        if not 'autoload_known_extensions' in self.config:
-            try:
-                self.load_extension(self.con, param)
-                self.extensions.add(param)
-            except:
-                return self.RequireResult.MISSING
-        elif excluded_from_autoloading:
-            return self.RequireResult.MISSING
-
-        return self.RequireResult.PRESENT
-
-    def execute_require(self, statement: Require):
-        require_result = self.check_require(statement)
-        if require_result == self.RequireResult.MISSING:
-            param = statement.header.parameters[0].lower()
-            if self.is_required(param):
-                # This extension / setting was explicitly required
-                self.fail("require {}: FAILED".format(param))
-            self.skipped = True
-
-    def execute_require_env(self, statement: BaseStatement):
-        self.skipped = True
-
     # TODO: this does not support parallel execution
     # We likely need to add another method inbetween that takes a list of statements to execute
     # This method should be defined on a SQLLogicContext, to support parallelism
@@ -477,7 +146,8 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.reset()
         self.test = test
         self.original_sqlite_test = self.test.is_sqlite_test()
-        unsupported = self.get_unsupported_statements(test)
+        context = SQLLogicContext(self, test.statements, 1)
+        unsupported = self.get_unsupported_statements(context, test)
         if unsupported != []:
             error = f'Test {test.path} skipped because the following statement types are not supported: '
             types = set([x.__class__ for x in unsupported])
@@ -485,19 +155,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             raise Exception(error)
 
         self.load_database(self.dbpath)
-        for statement in test.statements:
-            if self.skip_active() and statement.__class__ != Unskip:
-                # Keep skipping until Unskip is found
-                continue
-            method = self.STATEMENTS.get(statement.__class__)
-            if not method:
-                raise Exception(f"Not supported: {statement.__class__.__name__}")
-            print(statement.header.type.name)
-            method(statement)
-            if self.skipped:
-                self.skipped = False
-                return ExecuteResult(ExecuteResult.Type.SKIPPED)
-        return ExecuteResult(ExecuteResult.Type.SUCCES)
+        return context.execute()
 
 
 import argparse

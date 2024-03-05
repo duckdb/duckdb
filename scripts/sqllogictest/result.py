@@ -1,17 +1,42 @@
 from hashlib import md5
 
-from .statement import Query, SortStyle
+from .base_statement import BaseStatement
+from .statement import (
+    Statement,
+    Require,
+    Mode,
+    Halt,
+    Set,
+    Load,
+    Query,
+    HashThreshold,
+    Loop,
+    Foreach,
+    Endloop,
+    RequireEnv,
+    Restart,
+    Reconnect,
+    Sleep,
+    SleepUnit,
+    Skip,
+    SortStyle,
+    Unskip,
+)
+
+from .expected_result import ExpectedResult
 from .parser import SQLLogicTest
 from typing import Optional, Any, Tuple, List, Dict, Set
 from .logger import SQLLogicTestLogger
 import duckdb
 import os
 import math
+import time
 
 import re
 from duckdb.typing import DuckDBPyType
 import decimal
 from functools import cmp_to_key
+from enum import Enum
 
 
 class QueryResult:
@@ -197,7 +222,53 @@ def duck_db_convert_result(result: QueryResult, is_sqlite_test: bool) -> List[st
     return out_result
 
 
+class RequireResult(Enum):
+    MISSING = 0
+    PRESENT = 1
+
+
+class SkipException(Exception):
+    def __init__(self, reason: str):
+        super().__init__(reason)
+
+
+class ExecuteResult:
+    class Type(Enum):
+        SUCCES = 0
+        ERROR = 1
+        SKIPPED = 2
+
+    def __init__(self, type: "ExecuteResult.Type"):
+        self.type = type
+
+
 class SQLLogicRunner:
+    __slots__ = [
+        'skipped',
+        'error',
+        'skip_level',
+        'dbpath',
+        'loaded_databases',
+        'db',
+        'config',
+        'extensions',
+        'con',
+        'cursors',
+        'environment_variables',
+        'test',
+        'hash_threshold',
+        'hash_label_map',
+        'result_label_map',
+        'required_requires',
+        'output_hash_mode',
+        'output_result_mode',
+        'debug_mode',
+        'finished_processing_file',
+        'ignore_error_messages',
+        'always_fail_error_messages',
+        'original_sqlite_test',
+    ]
+
     def reset(self):
         self.skipped = False
         self.error: Optional[str] = None
@@ -258,6 +329,9 @@ class SQLLogicRunner:
     def skip(self):
         self.skip_level += 1
 
+    def skiptest(self, message: str):
+        raise SkipException(message)
+
     def unskip(self):
         self.skip_level -= 1
 
@@ -266,6 +340,75 @@ class SQLLogicRunner:
 
     def is_required(self, param):
         return param in self.required_requires
+
+    def load_extension(self, db: duckdb.DuckDBPyConnection, extension: str):
+        root = duckdb.__build_dir__
+        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
+        # Serialize it as a POSIX compliant path
+        db.execute(f"LOAD '{path}'")
+
+    def check_require(self, statement: Require) -> RequireResult:
+        not_an_extension = [
+            "notmingw",
+            "mingw",
+            "notwindows",
+            "windows",
+            "longdouble",
+            "64bit",
+            "noforcestorage",
+            "nothreadsan",
+            "strinline",
+            "vector_size",
+            "exact_vector_size",
+            "block_size",
+            "skip_reload",
+            "noalternativeverify",
+        ]
+        param = statement.header.parameters[0].lower()
+        if param in not_an_extension:
+            return RequireResult.MISSING
+
+        if param == "no_extension_autoloading":
+            if 'autoload_known_extensions' in self.config:
+                # If autoloading is on, we skip this test
+                return RequireResult.MISSING
+            return RequireResult.PRESENT
+
+        excluded_from_autoloading = True
+        for ext in self.AUTOLOADABLE_EXTENSIONS:
+            if ext == param:
+                excluded_from_autoloading = False
+                break
+
+        if not 'autoload_known_extensions' in self.config:
+            try:
+                print("EXTENSION", param)
+                self.load_extension(self.con, param)
+                self.extensions.add(param)
+            except:
+                return RequireResult.MISSING
+        elif excluded_from_autoloading:
+            return RequireResult.MISSING
+
+        return RequireResult.PRESENT
+
+    def load_database(self, dbpath):
+        self.dbpath = dbpath
+
+        # Restart the database with the specified db path
+        self.db = None
+        self.con = None
+        self.cursors = {}
+
+        # Now re-open the current database
+        read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
+        self.db = duckdb.connect(dbpath, read_only, self.config)
+        self.loaded_databases.add(dbpath)
+        self.reconnect()
+
+        # Load any previously loaded extensions again
+        for extension in self.extensions:
+            self.load_extension(self.db, extension)
 
     def check_query_result(self, query: Query, result: QueryResult) -> None:
         expected_column_count = query.expected_result.get_expected_column_count()
@@ -454,3 +597,295 @@ class SQLLogicRunner:
                 self.fail_query(query)
 
             assert not hash_compare_error
+
+
+class SQLLogicContext:
+    __slots__ = [
+        'iterator',
+        'runner',
+        'iterations',
+        'STATEMENTS',
+        'statements',
+    ]
+
+    def reset(self):
+        self.iterator = 0
+
+    def replace_keywords(self, input: str):
+        # Replace environment variables in the SQL
+        for name, value in self.runner.environment_variables.items():
+            input = input.replace(f"${{{name}}}", value)
+
+        input = input.replace("__TEST_DIR__", self.runner.get_test_directory())
+        input = input.replace("__WORKING_DIRECTORY__", os.getcwd())
+        input = input.replace("__BUILD_DIRECTORY__", duckdb.__build_dir__)
+        return input
+
+    def __init__(self, runner: SQLLogicRunner, statements: List[BaseStatement], iterations: int):
+        self.statements = statements
+        self.runner = runner
+        self.iterations = iterations
+        self.STATEMENTS = {
+            Query: self.execute_query,
+            Statement: self.execute_statement,
+            RequireEnv: self.execute_require_env,
+            Require: self.execute_require,
+            Load: self.execute_load,
+            Skip: self.execute_skip,
+            Unskip: self.execute_unskip,
+            Mode: self.execute_mode,
+            Sleep: self.execute_sleep,
+            Reconnect: self.execute_reconnect,
+            Halt: self.execute_halt,
+            Restart: self.execute_restart,
+            HashThreshold: self.execute_hash_threshold,
+            Set: self.execute_set,
+        }
+
+    def in_loop(self) -> bool:
+        # FIXME: support loops
+        return False
+
+    def execute_load(self, load: Load):
+        if self.in_loop():
+            self.runner.fail("load cannot be called in a loop")
+
+        readonly = load.readonly
+
+        if load.header.parameters:
+            dbpath = load.header.parameters[0]
+            dbpath = self.replace_keywords(dbpath)
+            if not readonly:
+                # delete the target database file, if it exists
+                self.runner.delete_database(dbpath)
+        else:
+            dbpath = ""
+
+        # set up the config file
+        if readonly:
+            self.runner.config['temp_directory'] = False
+            self.runner.config['access_mode'] = 'read_only'
+        else:
+            self.runner.config['temp_directory'] = True
+            self.runner.config['access_mode'] = 'automatic'
+
+        # now create the database file
+        self.runner.load_database(dbpath)
+
+    def execute_query(self, query: Query):
+        assert isinstance(query, Query)
+        conn = self.runner.get_connection(query.connection_name)
+        sql_query = '\n'.join(query.lines)
+        sql_query = self.replace_keywords(sql_query)
+        print(sql_query)
+
+        expected_result = query.expected_result
+        assert expected_result.type == ExpectedResult.Type.SUCCES
+
+        try:
+            statements = conn.extract_statements(sql_query)
+            statement = statements[-1]
+            if 'pivot' in sql_query and len(statements) != 1:
+                self.runner.skiptest("Can not deal properly with a PIVOT statement")
+
+            def is_query_result(sql_query, statement) -> bool:
+                if duckdb.ExpectedResultType.QUERY_RESULT not in statement.expected_result_type:
+                    return False
+                if statement.type in [
+                    duckdb.StatementType.DELETE,
+                    duckdb.StatementType.UPDATE,
+                    duckdb.StatementType.INSERT,
+                ]:
+                    if 'returning' not in sql_query.lower():
+                        return False
+                    return True
+                return len(statement.expected_result_type) == 1
+
+            if is_query_result(sql_query, statement):
+                original_rel = conn.query(sql_query)
+                original_types = original_rel.types
+                # We create new names for the columns, because they might be duplicated
+                aliased_columns = [f'c{i}' for i in range(len(original_types))]
+
+                expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
+                aliased_table = ", ".join(aliased_columns)
+                expression_list = ", ".join(expressions)
+                try:
+                    # Select from the result, converting the Values to the right type for comparison
+                    transformed_query = (
+                        f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
+                    )
+                    # print(transformed_query)
+                    stringified_rel = conn.query(transformed_query)
+                except Exception as e:
+                    self.fail(f"Could not select from the ValueRelation: {str(e)}")
+                result = stringified_rel.fetchall()
+                query_result = QueryResult(result, original_types)
+            elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
+                conn.execute(sql_query)
+                result = conn.fetchall()
+                query_result = QueryResult(result, [duckdb.typing.BIGINT])
+            else:
+                conn.execute(sql_query)
+                result = conn.fetchall()
+                query_result = QueryResult(result, [])
+            if expected_result.lines == None:
+                return
+        except SkipException as e:
+            self.runner.skipped = True
+            return
+        except Exception as e:
+            print(e)
+            query_result = QueryResult([], [], e)
+
+        self.runner.check_query_result(query, query_result)
+
+    def execute_skip(self, statement: Skip):
+        self.runner.skip()
+
+    def execute_unskip(self, statement: Unskip):
+        self.runner.unskip()
+
+    def execute_halt(self, statement: Halt):
+        self.runner.skiptest("HALT was encountered in file")
+
+    def execute_restart(self, statement: Restart):
+        # if context.is_parallel:
+        #    raise RuntimeError("Cannot restart database in parallel")
+
+        old_settings = self.runner.con.execute("select name, value from duckdb_settings()").df()
+        existing_search_path = self.runner.con.execute("select current_setting('search_path')").fetchone()[0]
+
+        self.runner.load_database(self.runner.dbpath)
+        non_default_settings = self.runner.con.query(
+            """
+            select
+                name,
+                other_value
+            from duckdb_settings() join old_settings t(other_name, other_value) ON (name = other_name) WHERE value != other_value
+        """
+        ).fetchall()
+
+        for setting in non_default_settings:
+            name, value = setting
+            self.runner.con.execute(f"set {name}='{value}'")
+
+        self.runner.con.begin()
+        self.runner.con.execute(f"set search_path = '{existing_search_path}'")
+        self.runner.con.commit()
+
+    def execute_set(self, statement: Set):
+        option = statement.header.parameters[0]
+        string_set = (
+            self.runner.ignore_error_messages
+            if option == "ignore_error_messages"
+            else self.runner.always_fail_error_messages
+        )
+        string_set.clear()
+        string_set = statement.error_messages
+
+    def execute_hash_threshold(self, statement: HashThreshold):
+        self.runner.hash_threshold = statement.threshold
+
+    def execute_reconnect(self, statement: Reconnect):
+        # if self.is_parallel:
+        #   raise Error(...)
+        self.runner.reconnect()
+
+    def execute_sleep(self, statement: Sleep):
+        def calculate_sleep_time(duration: float, unit: SleepUnit) -> float:
+            if unit == SleepUnit.SECOND:
+                return duration
+            elif unit == SleepUnit.MILLISECOND:
+                return duration / 1000
+            elif unit == SleepUnit.MICROSECOND:
+                return duration / 1000000
+            elif unit == SleepUnit.NANOSECOND:
+                return duration / 1000000000
+            else:
+                raise ValueError("Unknown sleep unit")
+
+        unit = statement.get_unit()
+        duration = statement.get_duration()
+
+        time_to_sleep = calculate_sleep_time(duration, unit)
+        time.sleep(time_to_sleep)
+
+    def execute_mode(self, statement: Mode):
+        parameter = statement.header.parameters[0]
+        if parameter == "output_hash":
+            self.runner.output_hash_mode = True
+        elif parameter == "output_result":
+            self.runner.output_result_mode = True
+        elif parameter == "no_output":
+            self.runner.output_hash_mode = False
+            self.runner.output_result_mode = False
+        elif parameter == "debug":
+            self.runner.debug_mode = True
+        else:
+            raise RuntimeError("unrecognized mode: " + parameter)
+
+    def execute_statement(self, statement: Statement):
+        assert isinstance(statement, Statement)
+        conn = self.runner.get_connection(statement.connection_name)
+        sql_query = '\n'.join(statement.lines)
+        sql_query = self.replace_keywords(sql_query)
+        print(sql_query)
+
+        expected_result = statement.expected_result
+        try:
+            conn.execute(sql_query)
+            result = conn.fetchall()
+            if expected_result.type == ExpectedResult.Type.ERROR:
+                self.runner.fail(f"Query unexpectedly succeeded")
+            if expected_result.type != ExpectedResult.Type.UNKNOWN:
+                assert expected_result.lines == None
+        except duckdb.Error as e:
+            if expected_result.type == ExpectedResult.Type.SUCCES:
+                self.runner.fail(f"Query unexpectedly failed: {str(e)}")
+            if expected_result.lines == None:
+                return
+            expected = '\n'.join(expected_result.lines)
+            # Sanitize the expected error
+            if expected.startswith('Dependency Error: '):
+                expected = expected.split('Dependency Error: ')[1]
+            if expected not in str(e):
+                self.runner.fail(
+                    f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
+                )
+
+    def execute_require(self, statement: Require):
+        require_result = self.runner.check_require(statement)
+        if require_result == RequireResult.MISSING:
+            param = statement.header.parameters[0].lower()
+            if self.runner.is_required(param):
+                # This extension / setting was explicitly required
+                self.runner.fail("require {}: FAILED".format(param))
+            self.runner.skipped = True
+
+    def execute_require_env(self, statement: BaseStatement):
+        self.runner.skipped = True
+
+    def next_statement(self):
+        if self.iterator >= len(self.statements):
+            raise Exception("'next_statement' out of range, statements already consumed")
+        statement = self.statements[self.iterator]
+        self.iterator += 1
+        return statement
+
+    def execute(self):
+        for _ in range(self.iterations):
+            self.reset()
+            while self.iterator < len(self.statements):
+                statement = self.next_statement()
+                if self.runner.skip_active() and statement.__class__ != Unskip:
+                    # Keep skipping until Unskip is found
+                    continue
+                method = self.STATEMENTS.get(statement.__class__)
+                if not method:
+                    raise Exception(f"Not supported: {statement.__class__.__name__}")
+                method(statement)
+                if self.runner.skipped:
+                    self.runner.skipped = False
+                    return ExecuteResult(ExecuteResult.Type.SKIPPED)
+        return ExecuteResult(ExecuteResult.Type.SUCCES)
