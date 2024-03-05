@@ -79,6 +79,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/types/nested/list/test_list_slice_step.test',  # <-- skipping because it causes an InternalException currently
                 'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
                 'test/sql/cast/cast_error_location.test',  # <-- python exception doesn't contain error location yet
+                'test/sql/pragma/test_query_log.test',  # <-- query_log gets filled with NULL when con.query(...) is used
             ]
         )
         # TODO: get this from the `duckdb` package
@@ -178,14 +179,14 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.dbpath = dbpath
 
         # Restart the database with the specified db path
-        self.db = ''
+        self.db = None
         self.con = None
         self.cursors = {}
 
         # Now re-open the current database
         read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
         self.db = duckdb.connect(dbpath, read_only, self.config)
-        self.loaded_databases[dbpath] = self.db
+        self.loaded_databases.add(dbpath)
         self.reconnect()
 
         # Load any previously loaded extensions again

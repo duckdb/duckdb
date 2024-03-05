@@ -2,10 +2,11 @@ from hashlib import md5
 
 from .statement import Query, SortStyle
 from .parser import SQLLogicTest
-from typing import Optional, Any, Tuple, List, Dict
+from typing import Optional, Any, Tuple, List, Dict, Set
 from .logger import SQLLogicTestLogger
 import duckdb
 import os
+import math
 
 import re
 from duckdb.typing import DuckDBPyType
@@ -86,6 +87,8 @@ def compare_values(result: QueryResult, actual_str, expected_str, current_column
             expected = convert_value(expected_str, sql_type)
             actual = convert_value(actual_str, sql_type)
             if expected == actual:
+                return True
+            if math.isnan(expected) and math.isnan(actual):
                 return True
             epsilon = abs(actual) * 0.01 + 0.00000001
             if abs(expected - actual) <= epsilon:
@@ -201,7 +204,7 @@ class SQLLogicRunner:
         self.skip_level: int = 0
 
         self.dbpath = ''
-        self.loaded_databases: Dict[str, duckdb.DuckDBPyConnection] = {}
+        self.loaded_databases: Set[str] = set()
         self.db: Optional[duckdb.DuckDBPyConnection] = None
         self.config: Dict[str, Any] = {'allow_unsigned_extensions': True}
         self.extensions: set = set()
