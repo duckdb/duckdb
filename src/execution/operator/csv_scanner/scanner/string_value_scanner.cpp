@@ -632,9 +632,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			}
 			{
 				vector<Value> row;
-				for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-					row.push_back(parse_chunk.GetValue(col, line_error));
+
+				if (state_machine->options.ignore_errors) {
+					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+						row.push_back(parse_chunk.GetValue(col, line_error));
+					}
 				}
+
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 				                                 lines_read - parse_chunk.size() + line_error);
 				auto csv_error = CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx],
