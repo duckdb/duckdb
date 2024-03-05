@@ -175,6 +175,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	//	Restore any collation expressions
+	for (auto &part_expr : window.partitions) {
+		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
+		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type, true);
+	}
 	for (auto &order : window.orders) {
 		auto &order_expr = order.expression;
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
