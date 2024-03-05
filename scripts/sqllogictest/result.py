@@ -41,6 +41,7 @@ class QueryResult:
 def compare_values(result: QueryResult, actual_str, expected_str, current_column):
     error = False
 
+    print("ACTUAL", actual_str, "EXPECTED", expected_str)
     if actual_str == expected_str:
         return True
 
@@ -58,14 +59,45 @@ def compare_values(result: QueryResult, actual_str, expected_str, current_column
             return True
 
     sql_type = result.types[current_column]
+
+    def is_numeric(type) -> bool:
+        NUMERIC_TYPES = [
+            "TINYINT",
+            "SMALLINT",
+            "INTEGER",
+            "BIGINT",
+            "HUGEINT",
+            "FLOAT",
+            "DOUBLE",
+            "DECIMAL",
+            "UTINYINT",
+            "USMALLINT",
+            "UINTEGER",
+            "UBIGINT",
+            "UHUGEINT",
+        ]
+        return str(type) in NUMERIC_TYPES
+
+    if is_numeric(sql_type):
+        if sql_type in [duckdb.typing.FLOAT, duckdb.typing.DOUBLE]:
+            # ApproxEqual
+            expected = convert_value(expected_str, sql_type)
+            actual = convert_value(actual_str, sql_type)
+            print(expected, expected.__class__)
+            print(actual, actual.__class__)
+            if expected == actual:
+                return True
+            epsilon = abs(actual) * 0.01 + 0.00000001
+            if abs(expected - actual) <= epsilon:
+                return True
+            return False
+    if sql_type == duckdb.typing.BOOLEAN:
+        expected = convert_value(expected_str, sql_type)
+        actual = convert_value(actual_str, sql_type)
+        return expected == actual
     expected = sql_logic_test_convert_value(expected_str, sql_type, False)
     actual = actual_str
-    if sql_type in [duckdb.typing.FLOAT, duckdb.typing.DOUBLE]:
-        # ApproxEqual
-        epsilon = abs(actual) * 0.01 + 0.00000001
-        error = not (abs(expected - actual) <= epsilon)
-    else:
-        error = actual != expected
+    error = actual != expected
 
     if error:
         return False
@@ -116,25 +148,31 @@ def load_result_from_file(fname, names):
     return csv_result.fetchall()
 
 
-def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool):
+def convert_value(value, type: str):
+    query = f'select $1::{type}'
+    return duckdb.execute(query, [value]).fetchone()[0]
+
+
+def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool) -> str:
+    print("sql_logic_test_convert_value")
     if value is None or value == 'NULL':
         return 'NULL'
-    query = "select $1::VARCHAR"
-    type_strings = ['DECIMAL', 'HUGEINT']
-    if sql_type in [
-        duckdb.typing.BOOLEAN,
-        duckdb.typing.DOUBLE,
-        duckdb.typing.FLOAT,
-    ] or any([type_str in str(sql_type) for type_str in type_strings]):
-        query = f"select $1::{sql_type}"
-        res = duckdb.execute(query, [duckdb.Value(value, sql_type)]).fetchone()
+    print(sql_type)
+    print(value)
+    print(value.__class__)
+    if is_sqlite_test:
+        if sql_type in [
+            duckdb.typing.BOOLEAN,
+            duckdb.typing.DOUBLE,
+            duckdb.typing.FLOAT,
+        ] or any([type_str in str(sql_type) for type_str in ['DECIMAL', 'HUGEINT']]):
+            return convert_value(value, 'BIGINT::VARCHAR')
+    res = convert_value(value, 'VARCHAR')
+    if len(res) == 0:
+        res = "(empty)"
     else:
-        if hasattr(value, '__len__') and len(value) == 0:
-            value = "(empty)"
-        elif isinstance(value, str):
-            value = value.replace("\0", "\\0")
-        res = duckdb.execute(query, [value]).fetchone()
-    return res[0]
+        res = res.replace("\0", "\\0")
+    return res
 
 
 def duck_db_convert_result(result: QueryResult, is_sqlite_test: bool) -> List[str]:

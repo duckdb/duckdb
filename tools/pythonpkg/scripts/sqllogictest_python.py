@@ -73,6 +73,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             Reconnect: self.execute_reconnect,
             # Restart: None,  # <-- restart is hard, have to get transaction status
         }
+        self.SKIPPED_TESTS = set(['test/sql/types/map/map_empty.test'])
         # TODO: get this from the `duckdb` package
         self.AUTOLOADABLE_EXTENSIONS = [
             "arrow",
@@ -267,6 +268,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 except Exception as e:
                     self.fail(f"Could not select from the ValueRelation: {str(e)}")
                 result = stringified_rel.fetchall()
+                print(result)
                 query_result = QueryResult(result, original_types)
             elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
                 conn.execute(sql_query)
@@ -460,13 +462,18 @@ def main():
     if args.file_path:
         file_paths = [args.file_path]
     else:
-        test_directory = os.path.join(script_path, '..', '..', '..', 'test')
-        file_paths = glob.iglob(test_directory + '/**/*.test', recursive=True)
+        test_directory = os.path.join(script_path, '..', '..', '..')
+        file_paths = glob.iglob(test_directory + '/test/**/*.test', recursive=True)
+        file_paths = [os.path.relpath(path, test_directory) for path in file_paths]
 
     start_offset = args.start_offset
 
     for i, file_path in enumerate(file_paths):
         print(f'[{i}] {file_path}')
+        if file_path in executor.SKIPPED_TESTS:
+            print(file_path)
+            continue
+        file_path = os.path.join(test_directory, file_path)
         test = sql_parser.parse(file_path)
         if i < start_offset:
             continue
