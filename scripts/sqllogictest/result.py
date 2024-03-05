@@ -169,11 +169,14 @@ def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool) -> str:
             duckdb.typing.FLOAT,
         ] or any([type_str in str(sql_type) for type_str in ['DECIMAL', 'HUGEINT']]):
             return convert_value(value, 'BIGINT::VARCHAR')
-    res = convert_value(value, 'VARCHAR')
-    if len(res) == 0:
-        res = "(empty)"
+    if sql_type == duckdb.typing.BOOLEAN:
+        return "1" if convert_value(value, sql_type) else "0"
     else:
-        res = res.replace("\0", "\\0")
+        res = convert_value(value, 'VARCHAR')
+        if len(res) == 0:
+            res = "(empty)"
+        else:
+            res = res.replace("\0", "\\0")
     return res
 
 
@@ -301,14 +304,10 @@ class SQLLogicRunner:
             # Define the comparison function
             def compare_rows(a, b):
                 for col_idx, val in enumerate(a):
-                    if val != b[col_idx]:
-                        if val == 'NULL':
-                            # NULLs last
-                            return 1
-                        if b[col_idx] == 'NULL':
-                            # NULLs last
-                            return -1
-                        return -1 if val < b[col_idx] else 1
+                    a_val = val
+                    b_val = b[col_idx]
+                    if a_val != b_val:
+                        return -1 if a_val < b_val else 1
                 return 0
 
             # Sort the individual rows based on element comparison

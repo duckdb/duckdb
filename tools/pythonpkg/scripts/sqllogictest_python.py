@@ -467,6 +467,7 @@ def main():
 
     if args.file_path:
         file_paths = [args.file_path]
+        test_directory = ''
     else:
         test_directory = os.path.join(script_path, '..', '..', '..')
         file_paths = glob.iglob(test_directory + '/test/**/*.test', recursive=True)
