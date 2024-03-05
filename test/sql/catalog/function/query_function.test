@@ -210,13 +210,6 @@ from query_table(NULL);
 Parser Error: syntax error at or near "NULL"
 
 # test by_name argument
-query III
-from query_table(tbl2, true);
-----
-1	2	3
-4	5	6
-7	8	9
-
 query I
 from query_table(['t_int', 't_varchar', 't_empty', t2_varchar, '(select ''I am a subquery'')'], false);
 ----
@@ -240,3 +233,8 @@ statement error
 from query_table(true);
 ----
 Binder Error: No function matches the given name and argument types 'query_table(BOOLEAN)'.
+
+statement error
+from query_table(tbl2, true);
+----
+Binder Error: No function matches the given name and argument types 'query_table(VARCHAR, BOOLEAN)'.
