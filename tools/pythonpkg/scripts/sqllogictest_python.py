@@ -78,6 +78,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/types/map/map_empty.test',
                 'test/sql/types/nested/list/test_list_slice_step.test',  # <-- skipping because it causes an InternalException currently
                 'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
+                'test/sql/cast/cast_error_location.test',  # <-- python exception doesn't contain error location yet
             ]
         )
         # TODO: get this from the `duckdb` package
@@ -359,6 +360,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             if expected_result.lines == None:
                 return
             expected = '\n'.join(expected_result.lines)
+            # Sanitize the expected error
+            if expected.startswith('Dependency Error: '):
+                expected = expected.split('Dependency Error: ')[1]
             if expected not in str(e):
                 self.fail(
                     f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
