@@ -184,3 +184,21 @@ valid	valid	valid
 valid	valid	valid
 valid	valid	valid
 valid	valid	valid
+
+
+# We get a casting error
+statement error
+SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
+----
+Could not convert string
+
+# We get a invalid unicode error
+statement error
+SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
+----
+Invalid unicode (byte sequence mismatch) detected.
+
+statement error
+SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
+----
+CSV Error on Line: 11

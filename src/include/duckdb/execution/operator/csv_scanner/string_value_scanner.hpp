@@ -87,7 +87,7 @@ public:
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 
-	unsafe_unique_array<LogicalTypeId> parse_types;
+	unsafe_unique_array<std::pair<LogicalTypeId, bool>> parse_types;
 	vector<string> names;
 	unordered_map<idx_t, string> cast_errors;
 

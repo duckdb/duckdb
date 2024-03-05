@@ -35,10 +35,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	pre_previous_line_start = previous_line_start;
 	// Fill out Parse Types
 	vector<LogicalType> logical_types;
-	parse_types = make_unsafe_uniq_array<LogicalTypeId>(number_of_columns);
+	parse_types = make_unsafe_uniq_array<pair<LogicalTypeId, bool>>(number_of_columns);
 	if (!csv_file_scan) {
 		for (idx_t i = 0; i < number_of_columns; i++) {
-			parse_types[i] = LogicalTypeId::VARCHAR;
+			parse_types[i] = {LogicalTypeId::VARCHAR, true};
 			logical_types.emplace_back(LogicalType::VARCHAR);
 			string name = "Column_" + to_string(i);
 			names.emplace_back(name);
@@ -52,10 +52,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
 			auto &type = csv_file_scan->file_types[i];
 			if (StringValueScanner::CanDirectlyCast(type, state_machine.options.dialect_options.date_format)) {
-				parse_types[i] = type.id();
+				parse_types[i] = {type.id(), true};
 				logical_types.emplace_back(type);
 			} else {
-				parse_types[i] = LogicalTypeId::VARCHAR;
+				parse_types[i] = {LogicalTypeId::VARCHAR, type.id() == LogicalTypeId::VARCHAR};
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
@@ -76,7 +76,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 		if (!projecting_columns) {
 			for (idx_t j = logical_types.size(); j < number_of_columns; j++) {
 				// This can happen if we have sneaky null columns at the end that we wish to ignore
-				parse_types[j] = LogicalTypeId::VARCHAR;
+				parse_types[j] = {LogicalTypeId::VARCHAR, true};
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
@@ -137,7 +137,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					empty = state_machine.options.force_not_null[chunk_col_id];
 				}
 				if (empty) {
-					if (parse_types[chunk_col_id] != LogicalTypeId::VARCHAR) {
+					if (parse_types[chunk_col_id].first != LogicalTypeId::VARCHAR) {
 						// If it is not a varchar, empty values are not accepted, we must error.
 						cast_errors[chunk_col_id] = std::string("");
 					}
@@ -156,7 +156,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		}
 	}
 	bool success = true;
-	switch (parse_types[chunk_col_id]) {
+	switch (parse_types[chunk_col_id].first) {
 	case LogicalTypeId::TINYINT:
 		success = TrySimpleIntegerCast(value_ptr, size, static_cast<int8_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 		                               false);
@@ -213,7 +213,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	default: {
 		// By default we add a string
-		if (!Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
+		// We only evaluate if a string is utf8 valid, if it's actually a varchar
+		if (parse_types[chunk_col_id].second && !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
 			bool force_error = !state_machine.options.ignore_errors && sniffing;
 			// Invalid unicode, we must error
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
@@ -365,7 +366,7 @@ bool StringValueResult::AddRowInternal() {
 			std::ostringstream error;
 			// Casting Error Message
 			error << "Could not convert string \"" << cast_error.second << "\" to \'"
-			      << LogicalTypeIdToString(parse_types[cast_error.first]) << "\'";
+			      << LogicalTypeIdToString(parse_types[cast_error.first].first) << "\'";
 			auto error_string = error.str();
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 
