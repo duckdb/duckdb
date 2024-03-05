@@ -160,35 +160,35 @@ function duckdb_destroy_config(config)
     return ccall((:duckdb_destroy_config, libduckdb), Cvoid, (Ref{duckdb_config},), config)
 end
 
-# #=
-# //===--------------------------------------------------------------------===//
-# // Query Execution
-# //===--------------------------------------------------------------------===//
-# =#
-#
-# """
-# 	duckdb_query(connection,query,out_result)
-# Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.
-# If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
-# `duckdb_result_error`.
-# Note that after running `duckdb_query`, `duckdb_destroy_result` must be called on the result object even if the
-# query fails, otherwise the error stored within the result will not be freed correctly.
-# * `connection`: The connection to perform the query in.
-# * `query`: The SQL query to run.
-# * `out_result`: The query result.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# """
-# function duckdb_query(connection, query, out_result)
-#     return ccall(
-#         (:duckdb_query, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Cvoid}),
-#         connection[],
-#         query,
-#         out_result,
-#     )
-# end
-#
+#=
+//===--------------------------------------------------------------------===//
+// Query Execution
+//===--------------------------------------------------------------------===//
+=#
+
+"""
+	duckdb_query(connection,query,out_result)
+Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.
+If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
+`duckdb_result_error`.
+Note that after running `duckdb_query`, `duckdb_destroy_result` must be called on the result object even if the
+query fails, otherwise the error stored within the result will not be freed correctly.
+* `connection`: The connection to perform the query in.
+* `query`: The SQL query to run.
+* `out_result`: The query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_query(connection, query, out_result)
+    return ccall(
+        (:duckdb_query, libduckdb),
+        duckdb_state,
+        (duckdb_connection, Ptr{UInt8}, Ref{duckdb_result}),
+        connection,
+        query,
+        out_result
+    )
+end
+
 """
 	duckdb_destroy_result(result)
 Closes the result and de-allocates all memory allocated for that connection.

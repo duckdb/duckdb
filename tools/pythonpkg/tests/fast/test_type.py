@@ -71,9 +71,13 @@ class TestType(object):
         assert str(BIT) == 'BIT'
         assert str(INTERVAL) == 'INTERVAL'
 
-    def test_array_type(self):
-        type = duckdb.array_type(BIGINT)
+    def test_list_type(self):
+        type = duckdb.list_type(BIGINT)
         assert str(type) == 'BIGINT[]'
+
+    def test_array_type(self):
+        type = duckdb.array_type(BIGINT, 3)
+        assert str(type) == 'BIGINT[3]'
 
     def test_struct_type(self):
         type = duckdb.struct_type({'a': BIGINT, 'b': BOOLEAN})

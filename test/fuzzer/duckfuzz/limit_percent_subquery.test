@@ -1,0 +1,21 @@
+# name: test/fuzzer/duckfuzz/limit_percent_subquery.test
+# description: Limit percent subquery
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table tbl(i INT);
+
+query I
+FROM tbl LIMIT (EXISTS(SELECT 42))%
+----
+
+statement ok
+INSERT INTO tbl VALUES (42);
+
+query I
+FROM tbl LIMIT (EXISTS(SELECT 42))%
+----
+

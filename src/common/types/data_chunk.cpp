@@ -238,7 +238,7 @@ void DataChunk::Serialize(Serializer &serializer) const {
 
 	// write the count
 	auto row_count = size();
-	serializer.WriteProperty<sel_t>(100, "rows", row_count);
+	serializer.WriteProperty<sel_t>(100, "rows", NumericCast<sel_t>(row_count));
 
 	// we should never try to serialize empty data chunks
 	auto column_count = ColumnCount();

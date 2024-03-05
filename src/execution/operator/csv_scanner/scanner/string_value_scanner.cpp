@@ -15,7 +15,8 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
                                      idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
                                      CSVIterator &iterator_p, bool store_line_size_p,
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p)
-    : ScannerResult(states, state_machine), number_of_columns(state_machine.dialect_options.num_cols),
+    : ScannerResult(states, state_machine),
+      number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
       null_str_ptr(state_machine.options.null_str.c_str()), null_str_size(state_machine.options.null_str.size()),
       result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
@@ -212,7 +213,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 	default: {
 		// By default we add a string
-		if (!Utf8Proc::IsValid(value_ptr, size)) {
+		if (!Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
 			bool force_error = !state_machine.options.ignore_errors && sniffing;
 			// Invalid unicode, we must error
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
@@ -224,10 +225,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		}
 		if (allocate) {
 			// If it's a value produced over multiple buffers, we must allocate
-			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
-			    StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], string_t(value_ptr, size));
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = StringVector::AddStringOrBlob(
+			    parse_chunk.data[chunk_col_id], string_t(value_ptr, UnsafeNumericCast<uint32_t>(size)));
 		} else {
-			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t(value_ptr, size);
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
+			    string_t(value_ptr, UnsafeNumericCast<uint32_t>(size));
 		}
 		break;
 	}
@@ -854,7 +856,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 	string_t value;
 	if (result.quoted) {
 		value = string_t(overbuffer_string.c_str() + result.quoted_position,
-		                 overbuffer_string.size() - 1 - result.quoted_position);
+		                 UnsafeNumericCast<uint32_t>(overbuffer_string.size() - 1 - result.quoted_position));
 		if (result.escaped) {
 			const auto str_ptr = static_cast<const char *>(overbuffer_string.c_str() + result.quoted_position);
 			value =
@@ -863,7 +865,7 @@ void StringValueScanner::ProcessOverbufferValue() {
 			                                     result.parse_chunk.data[result.chunk_col_id]);
 		}
 	} else {
-		value = string_t(overbuffer_string.c_str(), overbuffer_string.size());
+		value = string_t(overbuffer_string.c_str(), UnsafeNumericCast<uint32_t>(overbuffer_string.size()));
 	}
 
 	if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {

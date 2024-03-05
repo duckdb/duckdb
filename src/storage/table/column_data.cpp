@@ -210,8 +210,10 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
-	result.Flatten(scan_count);
-	ColumnSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
+
+	UnifiedVectorFormat vdata;
+	result.ToUnifiedFormat(scan_count, vdata);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, count);
 }
 
 void ColumnData::FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
