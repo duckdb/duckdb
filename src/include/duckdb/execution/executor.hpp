@@ -99,6 +99,13 @@ public:
 	//! Returns true if all pipelines have been completed
 	bool ExecutionIsFinished();
 
+	void RegisterTask() {
+		executor_tasks++;
+	}
+	void UnregisterTask() {
+		executor_tasks--;
+	}
+
 private:
 	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
@@ -118,13 +125,6 @@ private:
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
-
-	void RegisterTask() {
-		executor_tasks++;
-	}
-	void UnregisterTask() {
-		executor_tasks--;
-	}
 
 private:
 	optional_ptr<PhysicalOperator> physical_plan;
