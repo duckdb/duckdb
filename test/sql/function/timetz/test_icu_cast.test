@@ -1,0 +1,21 @@
+# name: test/sql/function/timetz/test_icu_cast.test
+# description: have you seen the fnords?
+# group: [timetz]
+
+require icu
+
+statement ok
+SET CALENDAR='gregorian';
+
+statement ok
+SET TIMEZONE='America/Los_Angeles';
+
+query I
+SELECT '01:00:00'::TIMETZ AS ttz
+----
+01:00:00-08
+
+query I
+SELECT '01:00:00+02'::TIMETZ AS ttz
+----
+01:00:00+02
