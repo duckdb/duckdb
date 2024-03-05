@@ -88,6 +88,27 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	return std::move(bound);
 }
 
+static bool IsRangeType(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
                                        unique_ptr<ParsedExpression> &order_expr) {
 
@@ -101,8 +122,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
+	QueryErrorContext error_context(bound->query_location);
 	if (bound->return_type == LogicalType::SQLNULL) {
-		QueryErrorContext error_context(bound->query_location);
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
 	children.emplace_back(std::move(bound));
@@ -112,6 +133,11 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	auto function = function_binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error, true);
 	if (!function) {
 		error.Throw();
+	}
+	// +/- can be applied to non-scalar types,
+	// so we can't rely on function binding to catch all problems.
+	if (!IsRangeType(function->return_type)) {
+		throw BinderException(error_context, "Invalid type for Window RANGE expression");
 	}
 	bound = std::move(function);
 	return bound->return_type;
