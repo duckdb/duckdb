@@ -80,7 +80,7 @@ struct CastParameters {
 	//! Query location (if any)
 	optional_idx query_location;
 	//! In the case of a nested type, when facing a cast error, if we nullify the parent
-	const bool nullify_parent = false;
+	bool nullify_parent = false;
 };
 
 struct CastLocalStateParameters {
