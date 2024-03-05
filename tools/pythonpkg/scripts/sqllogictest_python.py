@@ -71,7 +71,10 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             Mode: self.execute_mode,
             Sleep: self.execute_sleep,
             Reconnect: self.execute_reconnect,
-            # Restart: None,  # <-- restart is hard, have to get transaction status
+            HashThreshold: self.execute_hash_threshold,
+            Halt: self.execute_halt,
+            Set: self.execute_set,
+            Restart: self.execute_restart,
         }
         self.SKIPPED_TESTS = set(
             [
@@ -300,6 +303,38 @@ class SQLLogicTestExecutor(SQLLogicRunner):
 
     def execute_unskip(self, statement: Unskip):
         self.unskip()
+
+    def execute_halt(self, statement: Halt):
+        self.skiptest("HALT was encountered in file")
+
+    def execute_restart(self, statement: Restart):
+        # if context.is_parallel:
+        #    raise RuntimeError("Cannot restart database in parallel")
+
+        # Save the main connection configurations to pass it to the new connection
+        # self.config.options = self.con.context.db.config.options
+        # client_config = self.con.context.config
+        existing_search_path = self.con.execute("select current_setting('search_path')").fetchone()[0]
+
+        self.load_database(self.dbpath)
+
+        # TODO: get the current client config settings??
+        # self.con.context.config = client_config
+
+        self.con.begin()
+        self.con.execute(f"set search_path = '{existing_search_path}'")
+        self.con.commit()
+
+    def execute_set(self, statement: Set):
+        option = statement.header.parameters[0]
+        string_set = (
+            self.ignore_error_messages if option == "ignore_error_messages" else self.always_fail_error_messages
+        )
+        string_set.clear()
+        string_set = statement.error_messages
+
+    def execute_hash_threshold(self, statement: HashThreshold):
+        self.hash_threshold = statement.threshold
 
     def execute_reconnect(self, statement: Reconnect):
         # if self.is_parallel:
