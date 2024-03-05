@@ -166,10 +166,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			remove.VisitOperator(*child);
 		}
 		return;
-	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		VisitOperatorExpressions(op);
-		VisitOperatorChildren(op);
-		return;
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
 			auto &proj = op.Cast<LogicalProjection>();
