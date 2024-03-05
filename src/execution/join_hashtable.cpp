@@ -81,7 +81,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 		needs_chain_matcher = false;
 	}
 
-	// todo: What happens if there is a predicate that is dependent on the probe side? Need to filter this out
 	row_matcher_build.Initialize(true, layout, equality_predicates);
 
 	const auto &offsets = layout.GetOffsets();
@@ -516,29 +515,18 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 
 			// Get the data for the rows that need to be compared
 			DataChunk lhs_data;
-			data_collection->InitializeChunk(lhs_data); // makes sure DataChunk has the right format
-
-			// makes sure DataChunk has the right size, we will use the same index space for the chunk as for the
-			// overall hashes_v so make sure they have the same size. The DataChunk will however only be sparsely
-			// filled based on the entries that need a comparison
-			lhs_data.SetCardinality(count);
+			data_collection->InitializeChunk(lhs_data);  // makes sure DataChunk has the right format
+			lhs_data.SetCardinality(need_compare_count); // and the right size
 
 			TupleDataChunkState chunk_state;
 			data_collection->InitializeChunkState(chunk_state);
-
-			// makes sure DataChunk has the right size, we will use the same index space for the chunk as for the
-			// overall hashes_v so make sure they have the same size. The DataChunk will however only be sparsely
-			// filled based on the entries that need a comparison
-			lhs_data.SetCardinality(need_compare_count);
-
-			// The target selection vector says where to write the results into the lhs_data, we just want to write
-			// sequentially
-			// We can't use the standard flat vector as this one has no internal selection vector and the Match
-			// Function Also marks the found rows in the selection vector, so we need to make sure there is one
-			data_collection->Gather(row_locations, entry_compare_sel_vector, need_compare_count, lhs_data,
-			                        entry_compare_sel_vector, chunk_state.cached_cast_vectors);
-
 			TupleDataCollection::ToUnifiedFormat(chunk_state, lhs_data);
+
+			column_t columns = lhs_data.ColumnCount();
+			vector<unique_ptr<Vector>> cached_cast_vectors =  vector<unique_ptr<Vector>>(columns);
+
+			data_collection->Gather(row_locations, entry_compare_sel_vector, need_compare_count, lhs_data,
+			                        entry_compare_sel_vector, cached_cast_vectors);
 
 			vector<TupleDataVectorFormat> &lhs_formats = chunk_state.vector_data;
 
@@ -549,6 +537,7 @@ static void InsertHashesLoop(atomic<aggr_ht_entry_t> entries[], Vector row_locat
 				row_ptr_insert_to[entry_index] = entry.load().GetPointer();
 			}
 
+			// todo: Gather only the columns that are needed for the comparison
 			// Perform row comparisons
 			idx_t match_count =
 			    row_matcher_build.Match(lhs_data, lhs_formats, entry_compare_sel_vector, need_compare_count, layout,
@@ -606,10 +595,13 @@ void JoinHashTable::InitializePointerTable() {
 	if (hash_map.get()) {
 		// There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(aggr_ht_entry_t);
-		if (capacity != current_capacity) {
-			// Different size, re-allocate
-			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(aggr_ht_entry_t));
+		if (capacity > current_capacity) {
+			// Need more space
+			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
 			entries = reinterpret_cast<aggr_ht_entry_t *>(hash_map.get());
+		} else {
+			// Just use the current hash map
+			capacity = current_capacity;
 		}
 	} else {
 		// Allocate a hash map
