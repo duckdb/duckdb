@@ -98,7 +98,7 @@ def compare_values(result: QueryResult, actual_str, expected_str, current_column
         actual = convert_value(actual_str, sql_type)
         return expected == actual
 
-    if sql_type == duckdb.typing.BOOLEAN:
+    if sql_type == duckdb.typing.BOOLEAN or sql_type.id == 'timestamp with time zone':
         expected = convert_value(expected_str, sql_type)
         actual = convert_value(actual_str, sql_type)
         return expected == actual

@@ -84,6 +84,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/function/list/lambdas/transform.test',  # <-- same InternalException
                 'test/sql/function/list/lambdas/filter.test',  # <-- same InternalException
                 'test/sql/function/list/lambdas/reduce.test',  # <-- same InternalException
+                'test/sql/json/table/read_json_objects.test',  # <-- Python client is always loaded with JSON available
+                'test/sql/copy/csv/zstd_crash.test',  # <-- Python client is always loaded with Parquet available
+                'test/sql/error/extension_function_error.test',  # <-- Python client is always loaded with TPCH available
             ]
         )
         # TODO: get this from the `duckdb` package
@@ -170,7 +173,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         # Set the local extension repo for autoinstalling extensions
         env_var = os.getenv("LOCAL_EXTENSION_REPO")
         if env_var:
-            self.con.execute("set autoload_known_extensions=True")
+            self.con.execute("SET autoload_known_extensions=True")
             self.con.execute(f"SET autoinstall_extension_repository='{env_var}'")
 
     def load_extension(self, db: duckdb.DuckDBPyConnection, extension: str):
@@ -224,36 +227,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         # now create the database file
         self.load_database(dbpath)
 
-    def transform_type(self, sql_type) -> duckdb.typing.DuckDBPyType:
-        id = sql_type.id
-        print(id)
-        if id in [
-            'struct',
-            'map',
-            'union',
-            'list',
-        ]:
-            children: Dict[str, duckdb.typing.DuckDBPyType] = dict()
-            for child in sql_type.children:
-                key = child[0]
-                value = child[1]
-                children[key] = self.transform_type(value)
-            print("--- CHILDREN ---", children)
-            if id == 'struct' or id == 'union':
-                return duckdb.struct_type(children)
-            elif id == 'map':
-                return duckdb.map_type(children['key'], children['value'])
-            elif id == 'list':
-                return duckdb.list_type(children['child'])
-            # elif id == 'ARRAY':
-            #    duckdb.array_type(children,)
-            else:
-                raise Exception(f"Children not implemented for {sql_type}")
-        elif id in ['decimal', 'double', 'float']:
-            return 'BIGINT'
-        else:
-            return sql_type
-
     def execute_query(self, query: Query):
         assert isinstance(query, Query)
         conn = self.get_connection(query.connection_name)
@@ -289,10 +262,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 # We create new names for the columns, because they might be duplicated
                 aliased_columns = [f'c{i}' for i in range(len(original_types))]
 
-                expressions = [
-                    f'"{name}"::{self.transform_type(sql_type)}::VARCHAR'
-                    for name, sql_type in zip(aliased_columns, original_types)
-                ]
+                expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
                 aliased_table = ", ".join(aliased_columns)
                 expression_list = ", ".join(expressions)
                 try:
@@ -300,7 +270,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                     transformed_query = (
                         f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
                     )
-                    print(transformed_query)
+                    # print(transformed_query)
                     stringified_rel = conn.query(transformed_query)
                 except Exception as e:
                     self.fail(f"Could not select from the ValueRelation: {str(e)}")
@@ -378,6 +348,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
 
         expected_result = statement.expected_result
         try:
+            print(sql_query)
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
@@ -482,6 +453,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             print(statement.header.type.name)
             method(statement)
             if self.skipped:
+                self.skipped = False
                 return ExecuteResult(ExecuteResult.Type.SKIPPED)
         return ExecuteResult(ExecuteResult.Type.SUCCES)
 
@@ -508,8 +480,9 @@ def main():
 
     start_offset = args.start_offset
 
+    total_tests = len(file_paths)
     for i, file_path in enumerate(file_paths):
-        print(f'[{i}] {file_path}')
+        print(f'[{i}/{total_tests}] {file_path}')
         if file_path in executor.SKIPPED_TESTS:
             print(file_path)
             continue
