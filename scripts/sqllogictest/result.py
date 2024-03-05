@@ -116,16 +116,20 @@ def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool):
         return 'NULL'
     query = "select $1::VARCHAR"
     type_strings = ['DECIMAL', 'HUGEINT']
+    print(sql_type)
     if sql_type in [
         duckdb.typing.BOOLEAN,
         duckdb.typing.DOUBLE,
         duckdb.typing.FLOAT,
     ] or any([type_str in str(sql_type) for type_str in type_strings]):
+        print("heloooooo", value, value.__class__)
         res = duckdb.execute(query, [duckdb.Value(value, sql_type)]).fetchone()
     else:
-        if len(value) == 0:
+        print(value.__class__)
+        if hasattr(value, '__len__') and len(value) == 0:
             value = "(empty)"
-        else:
+        elif isinstance(value, str):
+            print(value)
             value = value.replace("\0", "\\0")
         res = duckdb.execute(query, [value]).fetchone()
     return res[0]

@@ -222,19 +222,58 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         try:
             statements = conn.extract_statements(sql_query)
             statement = statements[-1]
-            expected_result_types = statement.expected_result_type
-            if duckdb.ExpectedResultType.QUERY_RESULT in expected_result_types:
+            if 'pivot' in sql_query and len(statements) != 1:
+                self.skiptest("Can not deal properly with a PIVOT statement")
+
+            def is_query_result(sql_query, statement) -> bool:
+                print(statement.type)
+                print(statement.expected_result_type)
+                if duckdb.ExpectedResultType.QUERY_RESULT not in statement.expected_result_type:
+                    return False
+                if statement.type in [
+                    duckdb.StatementType.DELETE,
+                    duckdb.StatementType.UPDATE,
+                    duckdb.StatementType.INSERT,
+                ]:
+                    if 'returning' not in sql_query.lower():
+                        return False
+                    return True
+                print(statement.type)
+                return len(statement.expected_result_type) == 1
+
+            if is_query_result(sql_query, statement):
                 original_rel = conn.query(sql_query)
                 original_types = original_rel.types
-                aliased_columns = ", ".join([f'c{i}' for i in range(len(original_types))])
+                # We create new names for the columns, because they might be duplicated
+                aliased_columns = [f'c{i}' for i in range(len(original_types))]
+
+                def transform_type(sql_type) -> duckdb.typing.DuckDBPyType:
+                    # This is duplicating existing behavior, DOUBLE, DECIMAL and FLOAT -> BIGINT
+                    if 'DECIMAL' in str(sql_type):
+                        return duckdb.typing.BIGINT
+                    if sql_type in [duckdb.typing.DOUBLE, duckdb.typing.FLOAT]:
+                        return duckdb.typing.BIGINT
+                    return duckdb.typing.VARCHAR
+
+                expressions = [
+                    f'"{name}"::{transform_type(sql_type)}' for name, sql_type in zip(aliased_columns, original_types)
+                ]
+                aliased_table = ", ".join(aliased_columns)
+                expression_list = ", ".join(expressions)
                 try:
-                    stringified_rel = conn.query(
-                        f"select COLUMNS(*)::VARCHAR from original_rel unnamed_subquery_blabla({aliased_columns})"
+                    # Select from the result, converting the Values to the right type for comparison
+                    transformed_query = (
+                        f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
                     )
+                    stringified_rel = conn.query(transformed_query)
                 except Exception as e:
                     self.fail(f"Could not select from the ValueRelation: {str(e)}")
                 result = stringified_rel.fetchall()
                 query_result = QueryResult(result, original_types)
+            elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
+                conn.execute(sql_query)
+                result = conn.fetchall()
+                query_result = QueryResult(result, [duckdb.typing.BIGINT])
             else:
                 conn.execute(sql_query)
                 result = conn.fetchall()
@@ -417,6 +456,7 @@ def main():
 
     arg_parser = argparse.ArgumentParser(description='Execute SQL logic tests.')
     arg_parser.add_argument('--file-path', '-f', type=str, help='Path to the test file')
+    arg_parser.add_argument('--start-offset', '-s', type=int, help='Start offset for the tests', default=0)
     args = arg_parser.parse_args()
 
     if args.file_path:
@@ -425,9 +465,13 @@ def main():
         test_directory = os.path.join(script_path, '..', '..', '..', 'test')
         file_paths = glob.iglob(test_directory + '/**/*.test', recursive=True)
 
-    for file_path in file_paths:
-        print(file_path)
+    start_offset = args.start_offset
+
+    for i, file_path in enumerate(file_paths):
+        print(f'[{i}] {file_path}')
         test = sql_parser.parse(file_path)
+        if i < start_offset:
+            continue
         if not test:
             print(f'Failed to parse {file_path}')
             exit(1)
