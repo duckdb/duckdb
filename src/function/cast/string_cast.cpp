@@ -173,7 +173,7 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	bool all_converted =
 	    cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
 	    vector_cast_data.all_converted;
-	if (!all_converted) {
+	if (!all_converted && parameters.nullify_parent) {
 		UnifiedVectorFormat inserted_column_data;
 		result_child.ToUnifiedFormat(total_list_size, inserted_column_data);
 		UnifiedVectorFormat parse_column_data;

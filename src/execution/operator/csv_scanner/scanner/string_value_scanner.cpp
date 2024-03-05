@@ -611,7 +611,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			} else {
 				// target type is not varchar: perform a cast
 				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
-				                                    parse_chunk.size(), &error_message);
+				                                    parse_chunk.size(), &error_message, false, true);
 				line_error_set = false;
 			}
 			if (success) {

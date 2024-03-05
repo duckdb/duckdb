@@ -192,6 +192,11 @@ SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', heade
 ----
 Could not convert string
 
+statement error
+SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
+----
+CSV Error on Line: 11
+
 # We get a invalid unicode error
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
