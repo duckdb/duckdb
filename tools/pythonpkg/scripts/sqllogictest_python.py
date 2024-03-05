@@ -311,15 +311,22 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         # if context.is_parallel:
         #    raise RuntimeError("Cannot restart database in parallel")
 
-        # Save the main connection configurations to pass it to the new connection
-        # self.config.options = self.con.context.db.config.options
-        # client_config = self.con.context.config
+        old_settings = self.con.execute("select name, value from duckdb_settings()").df()
         existing_search_path = self.con.execute("select current_setting('search_path')").fetchone()[0]
 
         self.load_database(self.dbpath)
+        non_default_settings = self.con.query(
+            """
+            select
+                name,
+                other_value
+            from duckdb_settings() join old_settings t(other_name, other_value) ON (name = other_name) WHERE value != other_value
+        """
+        ).fetchall()
 
-        # TODO: get the current client config settings??
-        # self.con.context.config = client_config
+        for setting in non_default_settings:
+            name, value = setting
+            self.con.execute(f"set {name}='{value}'")
 
         self.con.begin()
         self.con.execute(f"set search_path = '{existing_search_path}'")
