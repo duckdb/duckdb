@@ -41,7 +41,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);
 	auto &config = DBConfig::GetConfig(context);
-	temporary_objects->Initialize(config.options.preferred_block_alloc_size);
+	temporary_objects->Initialize(config.options.default_block_alloc_size);
 }
 ClientData::~ClientData() {
 }

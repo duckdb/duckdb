@@ -132,7 +132,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "profiling_output", // just an alias
 	    "duckdb_api",
 	    "custom_user_agent",
-	    "preferred_block_alloc_size"};
+	    "default_block_size"};
 	return excluded_options.count(name) == 1;
 }
 

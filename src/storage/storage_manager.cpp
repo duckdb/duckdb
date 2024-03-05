@@ -160,7 +160,7 @@ void SingleFileStorageManager::LoadDatabase(const idx_t block_alloc_size) {
 		// Set the block allocation size for the new database file.
 		if (block_alloc_size == DConstants::INVALID_INDEX) {
 			// No explicit option provided: use the default option.
-			options.block_alloc_size = config.options.preferred_block_alloc_size;
+			options.block_alloc_size = config.options.default_block_alloc_size;
 		} else {
 			// Use the option provided by the user.
 			options.block_alloc_size = block_alloc_size;

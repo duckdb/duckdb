@@ -54,22 +54,22 @@ DETACH default_size;
 # ATTACH 'dbname.db';
 
 statement error
-SET preferred_block_alloc_size = '123456';
+SET default_block_size = '123456';
 ----
 must be a power of two
 
 statement error
-SET preferred_block_alloc_size = '16384';
+SET default_block_size = '16384';
 ----
 Not implemented
 
 statement error
-SET preferred_block_alloc_size = '128';
+SET default_block_size = '128';
 ----
 must be greater or equal than the minimum
 
 statement ok
-SET preferred_block_alloc_size = '262144';
+SET default_block_size = '262144';
 
 statement ok
 ATTACH '__TEST_DIR__/default_size.db';
