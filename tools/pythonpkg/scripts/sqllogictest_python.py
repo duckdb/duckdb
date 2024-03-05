@@ -268,7 +268,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 except Exception as e:
                     self.fail(f"Could not select from the ValueRelation: {str(e)}")
                 result = stringified_rel.fetchall()
-                print(result)
                 query_result = QueryResult(result, original_types)
             elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
                 conn.execute(sql_query)

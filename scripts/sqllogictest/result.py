@@ -41,7 +41,6 @@ class QueryResult:
 def compare_values(result: QueryResult, actual_str, expected_str, current_column):
     error = False
 
-    print("ACTUAL", actual_str, "EXPECTED", expected_str)
     if actual_str == expected_str:
         return True
 
@@ -76,21 +75,25 @@ def compare_values(result: QueryResult, actual_str, expected_str, current_column
             "UBIGINT",
             "UHUGEINT",
         ]
-        return str(type) in NUMERIC_TYPES
+        if str(type) in NUMERIC_TYPES:
+            return True
+        return 'DECIMAL' in str(type)
 
     if is_numeric(sql_type):
         if sql_type in [duckdb.typing.FLOAT, duckdb.typing.DOUBLE]:
             # ApproxEqual
             expected = convert_value(expected_str, sql_type)
             actual = convert_value(actual_str, sql_type)
-            print(expected, expected.__class__)
-            print(actual, actual.__class__)
             if expected == actual:
                 return True
             epsilon = abs(actual) * 0.01 + 0.00000001
             if abs(expected - actual) <= epsilon:
                 return True
             return False
+        expected = convert_value(expected_str, sql_type)
+        actual = convert_value(actual_str, sql_type)
+        return expected == actual
+
     if sql_type == duckdb.typing.BOOLEAN:
         expected = convert_value(expected_str, sql_type)
         actual = convert_value(actual_str, sql_type)
@@ -154,12 +157,8 @@ def convert_value(value, type: str):
 
 
 def sql_logic_test_convert_value(value, sql_type, is_sqlite_test: bool) -> str:
-    print("sql_logic_test_convert_value")
     if value is None or value == 'NULL':
         return 'NULL'
-    print(sql_type)
-    print(value)
-    print(value.__class__)
     if is_sqlite_test:
         if sql_type in [
             duckdb.typing.BOOLEAN,
