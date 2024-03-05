@@ -206,7 +206,9 @@ class SQLLogicRunner:
         self.dbpath = ''
         self.loaded_databases: Set[str] = set()
         self.db: Optional[duckdb.DuckDBPyConnection] = None
-        self.config: Dict[str, Any] = {'allow_unsigned_extensions': True}
+        self.config: Dict[str, Any] = {
+            'allow_unsigned_extensions': True,
+        }
         self.extensions: set = set()
 
         self.con: Optional[duckdb.DuckDBPyConnection] = None

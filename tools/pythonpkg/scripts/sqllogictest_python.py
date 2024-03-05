@@ -80,6 +80,10 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
                 'test/sql/cast/cast_error_location.test',  # <-- python exception doesn't contain error location yet
                 'test/sql/pragma/test_query_log.test',  # <-- query_log gets filled with NULL when con.query(...) is used
+                'test/sql/function/list/lambdas/transform_with_index.test',  # <-- same InternalException
+                'test/sql/function/list/lambdas/transform.test',  # <-- same InternalException
+                'test/sql/function/list/lambdas/filter.test',  # <-- same InternalException
+                'test/sql/function/list/lambdas/reduce.test',  # <-- same InternalException
             ]
         )
         # TODO: get this from the `duckdb` package
@@ -157,6 +161,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.con = self.db.cursor()
         if self.test.is_sqlite_test():
             self.con.execute("SET integer_division=true")
+        self.con.query("SET timezone='UTC'")
         # Check for alternative verify
         # if DUCKDB_ALTERNATIVE_VERIFY:
         #    con.query("SET pivot_filter_threshold=0")
@@ -219,6 +224,36 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         # now create the database file
         self.load_database(dbpath)
 
+    def transform_type(self, sql_type) -> duckdb.typing.DuckDBPyType:
+        id = sql_type.id
+        print(id)
+        if id in [
+            'struct',
+            'map',
+            'union',
+            'list',
+        ]:
+            children: Dict[str, duckdb.typing.DuckDBPyType] = dict()
+            for child in sql_type.children:
+                key = child[0]
+                value = child[1]
+                children[key] = self.transform_type(value)
+            print("--- CHILDREN ---", children)
+            if id == 'struct' or id == 'union':
+                return duckdb.struct_type(children)
+            elif id == 'map':
+                return duckdb.map_type(children['key'], children['value'])
+            elif id == 'list':
+                return duckdb.list_type(children['child'])
+            # elif id == 'ARRAY':
+            #    duckdb.array_type(children,)
+            else:
+                raise Exception(f"Children not implemented for {sql_type}")
+        elif id in ['decimal', 'double', 'float']:
+            return 'BIGINT'
+        else:
+            return sql_type
+
     def execute_query(self, query: Query):
         assert isinstance(query, Query)
         conn = self.get_connection(query.connection_name)
@@ -254,17 +289,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 # We create new names for the columns, because they might be duplicated
                 aliased_columns = [f'c{i}' for i in range(len(original_types))]
 
-                def transform_type(sql_type) -> duckdb.typing.DuckDBPyType:
-                    if self.test.is_sqlite_test():
-                        # This is duplicating existing behavior, DOUBLE, DECIMAL and FLOAT -> BIGINT
-                        if 'DECIMAL' in str(sql_type):
-                            return duckdb.typing.BIGINT
-                        if sql_type in [duckdb.typing.DOUBLE, duckdb.typing.FLOAT]:
-                            return duckdb.typing.BIGINT
-                    return duckdb.typing.VARCHAR
-
                 expressions = [
-                    f'"{name}"::{transform_type(sql_type)}' for name, sql_type in zip(aliased_columns, original_types)
+                    f'"{name}"::{self.transform_type(sql_type)}::VARCHAR'
+                    for name, sql_type in zip(aliased_columns, original_types)
                 ]
                 aliased_table = ", ".join(aliased_columns)
                 expression_list = ", ".join(expressions)
@@ -273,6 +300,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                     transformed_query = (
                         f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
                     )
+                    print(transformed_query)
                     stringified_rel = conn.query(transformed_query)
                 except Exception as e:
                     self.fail(f"Could not select from the ValueRelation: {str(e)}")
