@@ -394,17 +394,12 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 void Executor::CancelTasks() {
 	task.reset();
-	// we do this by creating weak pointers to all pipelines
-	// then clearing our references to the pipelines
-	// and waiting until all pipelines have been destroyed
-	vector<weak_ptr<Pipeline>> weak_references;
+
 	{
 		lock_guard<mutex> elock(executor_lock);
-		weak_references.reserve(pipelines.size());
+		// mark the query as cancelled so tasks will early-out
 		cancelled = true;
-		for (auto &pipeline : pipelines) {
-			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
-		}
+		// destroy all pipelines, events and states
 		for (auto &rec_cte_ref : recursive_ctes) {
 			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
 			rec_cte.recursive_meta_pipeline.reset();
@@ -416,15 +411,10 @@ void Executor::CancelTasks() {
 	}
 	// Take all pending tasks and execute them until they cancel
 	WorkOnTasks();
-	// In case there are still tasks being worked, wait for those to properly finish as well
-	for (auto &weak_ref : weak_references) {
-		while (true) {
-			auto weak = weak_ref.lock();
-			if (!weak) {
-				break;
-			}
-		}
-	}
+	// there might still be tasks executing in background threads
+	// wait until there are no more executor tasks remaining
+	while (executor_tasks > 0)
+		;
 }
 
 void Executor::WorkOnTasks() {

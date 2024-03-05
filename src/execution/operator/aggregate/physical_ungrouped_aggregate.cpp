@@ -403,8 +403,8 @@ public:
 	UngroupedDistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p,
 	                                       const PhysicalUngroupedAggregate &op,
 	                                       UngroupedAggregateGlobalSinkState &state_p)
-	    : ExecutorTask(executor, std::move(event_p)), op(op), gstate(state_p),
-	      allocator(gstate.CreateAllocator()), aggregate_state(op.aggregates) {
+	    : ExecutorTask(executor, std::move(event_p)), op(op), gstate(state_p), allocator(gstate.CreateAllocator()),
+	      aggregate_state(op.aggregates) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
