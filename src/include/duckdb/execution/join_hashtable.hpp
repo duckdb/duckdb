@@ -137,10 +137,14 @@ public:
 	};
 
 	struct InsertState : ProbeState {
-		explicit InsertState(unique_ptr<TupleDataCollection> &data_collection);
+		InsertState();
+		// This vector will select all rows we need to compare
+		SelectionVector entry_compare_sel_vector;
 
-		DataChunk lhs_data;
-		TupleDataChunkState chunk_state;
+		// Will hold all rows that where compared and did not match
+		SelectionVector no_match_sel;
+
+		SelectionVector remaining_sel;
 	};
 
 	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
@@ -199,6 +203,9 @@ public:
 	vector<ExpressionType> equality_predicates;
 	//! The comparison predicates that contain non-equality predicates
 	vector<ExpressionType> non_equality_predicates;
+
+	//! The column indices of the equality predicates to be used to compare the rows
+	vector<column_t> equality_predicate_columns;
 	//! The column indices of the non-equality predicates to be used to compare the rows
 	vector<column_t> non_equality_predicate_columns;
 	//! Data column layout

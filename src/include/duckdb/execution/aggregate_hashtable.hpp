@@ -31,7 +31,7 @@ struct FlushMoveState;
 
 struct aggr_ht_entry_t {
 public:
-	explicit aggr_ht_entry_t(hash_t value_p) : value(value_p) {
+	explicit inline aggr_ht_entry_t(hash_t value_p) : value(value_p) {
 	}
 
 	// Add a default constructor for 32 bit linux test case
@@ -82,6 +82,10 @@ public:
 	static inline aggr_ht_entry_t GetDesiredEntry(const data_ptr_t &pointer, const hash_t &salt) {
 		auto desired = reinterpret_cast<uint64_t>(pointer) | (salt & SALT_MASK);
 		return aggr_ht_entry_t(desired);
+	}
+
+	static inline aggr_ht_entry_t GetEmptyEntry() {
+		return aggr_ht_entry_t(0);
 	}
 
 private:
