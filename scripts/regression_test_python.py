@@ -257,9 +257,9 @@ class PandasDFLoadBenchmark:
         self.con.execute(f"SET threads={threads}")
 
     def generate(self):
-        self.con.execute("call dbgen(sf=0.2)")
+        self.con.execute("call dbgen(sf=0.1)")
         new_table = "*, " + ", ".join(["l_shipdate"] * 300)
-        self.con.execute(f"create table wide as select {new_table} from lineitem")
+        self.con.execute(f"create table wide as select {new_table} from lineitem limit 500")
         self.con.execute(f"copy wide to 'wide_table.csv' (FORMAT CSV)")
 
     def benchmark(self) -> List[BenchmarkResult]:
