@@ -407,8 +407,11 @@ void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {
 
 void TupleDataCollection::InitializeChunk(DataChunk &chunk, const vector<column_t> &column_ids) const {
 	vector<LogicalType> chunk_types(column_ids.size());
-	for (auto &col : column_ids) {
-		chunk_types.push_back(layout.GetTypes()[col]);
+	// keep the order of the columns
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column_idx = column_ids[i];
+		D_ASSERT(column_idx < layout.ColumnCount());
+		chunk_types[i] = layout.GetTypes()[column_idx];
 	}
 	chunk.Initialize(allocator->GetAllocator(), chunk_types);
 }

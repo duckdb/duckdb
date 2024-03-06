@@ -138,12 +138,8 @@ public:
 
 	struct InsertState : ProbeState {
 		InsertState();
-		// This vector will select all rows we need to compare
-		SelectionVector entry_compare_sel_vector;
 
-		// Will hold all rows that where compared and did not match
-		SelectionVector no_match_sel;
-
+		/// Because of the index hick up
 		SelectionVector remaining_sel;
 	};
 
@@ -263,7 +259,8 @@ private:
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the match_sel
 	//! vectorand the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-	                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v, SelectionVector &match_sel);
+	                    const SelectionVector &sel, idx_t &count, Vector &pointers_result_v,
+	                    SelectionVector &match_sel);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
