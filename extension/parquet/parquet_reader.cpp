@@ -692,7 +692,9 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 		} else {
 			state.prefetch_mode = false;
 		}
-
+		if (parquet_options.force_direct_io && file_handle->CanSeek()) {
+			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+		}
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
 

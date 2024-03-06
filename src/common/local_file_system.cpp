@@ -138,14 +138,14 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, std::move(path)), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd, bool direct_io = false) : FileHandle(file_system, std::move(path)), fd(fd), direct_io(direct_io) {
 	}
 	~UnixFileHandle() override {
 		UnixFileHandle::Close();
 	}
 
 	int fd;
-
+	bool direct_io;
 public:
 	void Close() override {
 		if (fd != -1) {
@@ -360,7 +360,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			}
 		}
 	}
-	return make_uniq<UnixFileHandle>(*this, path, fd);
+	return make_uniq<UnixFileHandle>(*this, path, fd, !!(open_flags & O_DIRECT));
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -382,11 +382,60 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 	return position;
 }
 
+#define NO_LOCATION (((uint64_t) 1) << 63)
+
+int64_t aligned_read(FileHandle &file_handle, void* read_buffer, int64_t nr_bytes, idx_t location) {
+	auto &handle = file_handle.Cast<UnixFileHandle>();
+	bool is_read = (location == NO_LOCATION);
+	uint64_t read_address = 0, position = 0, bytes = 0;
+	if (handle.direct_io) {
+		read_address = (uint64_t)read_address;
+		bytes = nr_bytes;
+		position = is_read ? file_handle.SeekPosition() : location;
+	}
+	if (((position | read_address | bytes) & 511) == 0) { // no need for alignment
+		return is_read ? read(handle.fd, read_buffer, nr_bytes) : pread(handle.fd, read_buffer, nr_bytes, location);
+	}
+	// get a buffer that is aligned on 512 bytes
+	char* tmp = (char*) malloc(nr_bytes + 1024);
+	if (tmp == NULL) {
+		return -1;
+	}
+	char* buf = (char*) ((((uint64_t) tmp) + 511) & ~((uint64_t) 511));
+
+	// go back in the file to a location that is aligned
+	uint64_t go_back = position & 511;
+	position -= go_back;
+	if (go_back && is_read) {
+		if (!file_handle.CanSeek()) {
+			return -1;
+		}
+		file_handle.Seek(position);
+	}
+
+	// adjust the amount to be read bytes to include go_back and round up to a multiple of 512
+	bytes += go_back + 511;
+	bytes &= ~((uint64_t) 511);
+
+	// finally, do the aligned read
+	auto ret = is_read ? read(handle.fd, buf, bytes) : pread(handle.fd, buf, bytes, position);
+
+	if (ret != -1) {
+		if (ret <= (ssize_t) go_back) {
+			ret = 0; // no bytes beyond the skip point
+		} else {
+			ret -= go_back;
+			memcpy(read_buffer, buf + go_back, ret);
+		}
+	}
+	free(tmp);
+	return ret;
+}
+
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
-		int64_t bytes_read = pread(fd, read_buffer, nr_bytes, location);
+		int64_t bytes_read = aligned_read(handle, read_buffer, nr_bytes, location);
 		if (bytes_read == -1) {
 			throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -402,8 +451,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_read = read(fd, buffer, nr_bytes);
+	int64_t bytes_read = aligned_read(handle, buffer, nr_bytes, NO_LOCATION);
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));

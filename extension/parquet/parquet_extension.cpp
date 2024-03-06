@@ -159,6 +159,7 @@ BindInfo ParquetGetBindInfo(const optional_ptr<FunctionData> bind_data) {
 	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
 	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind.parquet_options.binary_as_string));
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind.parquet_options.file_row_number));
+	bind_info.InsertOption("force_direct_io", Value::BOOLEAN(parquet_bind.parquet_options.file_row_number));
 	parquet_bind.parquet_options.file_options.AddBatchInfo(bind_info);
 	// LCOV_EXCL_STOP
 	return bind_info;
@@ -340,6 +341,8 @@ public:
 				parquet_options.binary_as_string = GetBooleanArgument(option);
 			} else if (loption == "file_row_number") {
 				parquet_options.file_row_number = GetBooleanArgument(option);
+			} else if (loption == "force_direct_io") {
+				parquet_options.force_direct_io = GetBooleanArgument(option);
 			} else if (loption == "encryption_config") {
 				if (option.second.size() != 1) {
 					throw BinderException("Parquet encryption_config cannot be empty!");
@@ -458,6 +461,8 @@ public:
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			} else if (loption == "file_row_number") {
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
+			} else if (loption == "force_direct_io") {
+				parquet_options.force_direct_io = BooleanValue::Get(kv.second);
 			} else if (loption == "schema") {
 				// Argument is a map that defines the schema
 				const auto &schema_value = kv.second;
