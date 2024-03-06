@@ -407,11 +407,9 @@ void Executor::CancelTasks() {
 		events.clear();
 	}
 	// Take all pending tasks and execute them until they cancel
-	WorkOnTasks();
-	// there might still be tasks executing in background threads
-	// wait until there are no more executor tasks remaining
-	while (executor_tasks > 0)
-		;
+	while (executor_tasks > 0) {
+		WorkOnTasks();
+	}
 }
 
 void Executor::WorkOnTasks() {
