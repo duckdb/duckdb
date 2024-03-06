@@ -111,7 +111,7 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
-	if (ignore_current_row) {
+	if (current_error.is_set) {
 		cur_col_id++;
 		return;
 	}
@@ -122,7 +122,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			error = !IsValueNull(null_str_ptr, value_ptr, size);
 		}
 		if (error) {
-			ignore_current_row = true;
+			current_error = {CSVErrorType::TOO_MANY_COLUMNS};
 		}
 		return;
 	}
@@ -221,11 +221,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		if (parse_types[chunk_col_id].second && !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
 			bool force_error = !state_machine.options.ignore_errors && sniffing;
 			// Invalid unicode, we must error
-			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
-			auto csv_error = CSVError::InvalidUTF8(state_machine.options, lines_per_batch);
-			error_handler.Error(csv_error, force_error);
+			if (force_error) {
+				HandleUnicodeError(force_error);
+			}
 			// If we got here, we are ingoring errors, hence we must ignore this line.
-			ignore_current_row = true;
+			current_error = {CSVErrorType::INVALID_UNICODE};
 			break;
 		}
 		if (allocate) {
@@ -282,7 +282,7 @@ void StringValueResult::Reset() {
 	if (cur_buffer) {
 		buffer_handles[cur_buffer->buffer_idx] = cur_buffer;
 	}
-	ignore_current_row = false;
+	current_error.Reset();
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -335,6 +335,20 @@ void StringValueResult::HandleOverLimitRows() {
 	    CSVError::IncorrectColumnAmountError(state_machine.options, cur_col_id + 1, lines_per_batch, borked_line,
 	                                         current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 	error_handler.Error(csv_error);
+}
+
+void StringValueResult::HandleUnicodeError(bool force_error) {
+	bool first_nl;
+	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
+	// sanitize borked line
+	std::vector<char> charArray(borked_line.begin(), borked_line.end());
+	charArray.push_back('\0'); // Null-terminate the character array
+	Utf8Proc::MakeValid(&charArray[0], charArray.size());
+	borked_line = {charArray.begin(), charArray.end() - 1};
+	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
+	auto csv_error = CSVError::InvalidUTF8(state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
+	                                       current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
+	error_handler.Error(csv_error, force_error);
 }
 
 void StringValueResult::QuotedNewLine(StringValueResult &result) {
@@ -403,14 +417,21 @@ bool StringValueResult::AddRowInternal() {
 	}
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
-	if (ignore_current_row) {
-		if (cur_col_id >= number_of_columns) {
+	if (current_error.is_set) {
+		switch (current_error.type) {
+		case CSVErrorType::TOO_MANY_COLUMNS:
 			HandleOverLimitRows();
+			break;
+		case CSVErrorType::INVALID_UNICODE:
+			HandleUnicodeError();
+			break;
+		default:
+			InvalidInputException("CSV Error not allowed when inserting row");
 		}
 		cur_col_id = 0;
 		chunk_col_id = 0;
 		// An error occurred on this row, we are ignoring it and resetting our control flag
-		ignore_current_row = false;
+		current_error.Reset();
 		return false;
 	}
 	if (!cast_errors.empty()) {
@@ -766,14 +787,14 @@ void StringValueScanner::ProcessExtraRow() {
 			return;
 		case CSVState::RECORD_SEPARATOR:
 			if (states.states[0] == CSVState::RECORD_SEPARATOR) {
-				lines_read++;
 				result.EmptyLine(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
+				lines_read++;
 				return;
 			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
-				lines_read++;
 				result.AddRow(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
+				lines_read++;
 				return;
 			}
 			lines_read++;

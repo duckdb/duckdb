@@ -144,6 +144,7 @@ bool IsCSVErrorAcceptedReject(CSVErrorType type) {
 	case CSVErrorType::TOO_FEW_COLUMNS:
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
 	case CSVErrorType::UNTERMINATED_QUOTES:
+	case CSVErrorType::INVALID_UNICODE:
 		return true;
 	default:
 		return false;
@@ -162,6 +163,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 		return "LINE SIZE OVER MAXIMUM";
 	case CSVErrorType::UNTERMINATED_QUOTES:
 		return "UNQUOTED VALUE";
+	case CSVErrorType::INVALID_UNICODE:
+		return "INVALID UNICODE";
 	default:
 		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
 	}
@@ -195,7 +198,7 @@ void CSVGlobalState::FillRejectsTable() {
 						auto row_line = file->error_handler->GetLine(error.error_info);
 						auto col_idx = error.column_idx;
 						string col_name;
-						if (error.type != CSVErrorType::TOO_MANY_COLUMNS){
+						if (error.type != CSVErrorType::TOO_MANY_COLUMNS) {
 							// Too many columns does not have a name, all other errors have
 							col_name = bind_data.return_names[col_idx];
 						}
@@ -210,7 +213,7 @@ void CSVGlobalState::FillRejectsTable() {
 						// 4. Column Index
 						appender.Append(col_idx);
 						// 5. Column Name (If Applicable)
-						if (col_name.empty()){
+						if (col_name.empty()) {
 							appender.Append(Value());
 						} else {
 							appender.Append(string_t("\"" + col_name + "\""));

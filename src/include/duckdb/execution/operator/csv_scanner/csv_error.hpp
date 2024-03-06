@@ -72,7 +72,8 @@ public:
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
 	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &state_machine, idx_t actual_columns,
 	                                           LinesPerBoundary error_info, string &csv_row, idx_t byte_position);
-	static CSVError InvalidUTF8(const CSVReaderOptions &options, LinesPerBoundary error_info);
+	static CSVError InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
+	                            string &csv_row, idx_t byte_position);
 
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;

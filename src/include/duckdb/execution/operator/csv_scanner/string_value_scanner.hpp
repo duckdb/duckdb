@@ -62,6 +62,17 @@ public:
 	                              unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles);
 };
 
+class CurrentError {
+public:
+	CurrentError() : is_set(false) {};
+	CurrentError(CSVErrorType type) : is_set(true), type(type) {};
+	void Reset() {
+		is_set = false;
+	}
+	bool is_set;
+	CSVErrorType type;
+};
+
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
@@ -120,8 +131,8 @@ public:
 	//! Requested size of buffers (i.e., either 32Mb or set by buffer_size parameter)
 	idx_t requested_size;
 
-	//! If the current row has an error, we have to skip it
-	bool ignore_current_row = false;
+	//! Current Error if any
+	CurrentError current_error;
 
 	bool sniffing;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
@@ -140,6 +151,7 @@ public:
 	inline bool AddRowInternal();
 
 	void HandleOverLimitRows();
+	void HandleUnicodeError(bool force_error = false);
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 

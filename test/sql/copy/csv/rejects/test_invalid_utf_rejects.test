@@ -1,0 +1,15 @@
+# name: test/sql/copy/csv/rejects/test_invalid_utf_rejects.test
+# description: Test that invalid unicodes return correct info as rejects tables
+# group: [rejects]
+
+require skip_reload
+
+statement ok
+from read_csv('test/sql/copy/csv/data/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'},
+ auto_detect=false, rejects_table='csv_rejects_table', header = 0, delim = ',', ignore_errors=true)
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+

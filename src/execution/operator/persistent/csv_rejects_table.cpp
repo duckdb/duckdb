@@ -31,7 +31,8 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	order_errors.SetValue(2, "TOO MANY COLUMNS");
 	order_errors.SetValue(3, "UNQUOTED VALUE");
 	order_errors.SetValue(4, "LINE SIZE OVER MAXIMUM");
-	LogicalType enum_type = LogicalType::ENUM(enum_name, order_errors, 5);
+	order_errors.SetValue(5, "INVALID UNICODE");
+	LogicalType enum_type = LogicalType::ENUM(enum_name, order_errors, 6);
 	auto type_info = make_uniq<CreateTypeInfo>(enum_name, enum_type);
 	type_info->temporary = true;
 	type_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
