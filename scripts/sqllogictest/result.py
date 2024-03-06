@@ -277,6 +277,7 @@ class SQLLogicRunner:
         self.db: Optional[duckdb.DuckDBPyConnection] = None
         self.config: Dict[str, Any] = {
             'allow_unsigned_extensions': True,
+            'allow_unredacted_secrets': True,
         }
         self.extensions: set = set()
 
