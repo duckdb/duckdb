@@ -134,13 +134,15 @@ public:
 		// 2. Entry is full and salt matches -> compare the keys
 		// 3. Entry is full and salt does not match -> continue probing
 		SelectionVector salt_match_sel;
+		SelectionVector salt_no_match_sel;
 	};
 
 	struct InsertState : ProbeState {
 		InsertState();
 
 		/// Because of the index hick up
-		SelectionVector remaining_sel;
+		SelectionVector key_remaining_sel;
+		SelectionVector empty_sel;
 	};
 
 	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
