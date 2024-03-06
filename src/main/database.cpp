@@ -389,7 +389,7 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 	return instance->ExtensionIsLoaded(name);
 }
 
-void DatabaseInstance::SetExtensionLoaded(const std::string &name, std::string extension_version) {
+void DatabaseInstance::SetExtensionLoaded(const std::string &name, const std::string &extension_version) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 	loaded_extensions.insert(extension_name);
 	loaded_extensions_data.insert({extension_name, ExtensionInfo(extension_version)});
