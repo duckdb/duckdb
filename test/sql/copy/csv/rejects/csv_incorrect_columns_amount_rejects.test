@@ -16,7 +16,7 @@ query IIIIIII rowsort
 SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
 FROM csv_rejects_table;
 ----
-data/csv/rejects/incorrect_columns/few_columns.csv	1816	3	"d"	MISSING COLUMNS	1,2,3	14504
-data/csv/rejects/incorrect_columns/few_columns.csv	1825	1	"b"	MISSING COLUMNS	1	14574
-data/csv/rejects/incorrect_columns/few_columns.csv	2380	1	"b"	MISSING COLUMNS	1	19008
-data/csv/rejects/incorrect_columns/few_columns.csv	2764	2	"c"	MISSING COLUMNS	1,2	22074
+data/csv/rejects/incorrect_columns/few_columns.csv	1814	3	"d"	MISSING COLUMNS	1,2,3	14504
+data/csv/rejects/incorrect_columns/few_columns.csv	1823	1	"b"	MISSING COLUMNS	1	14574
+data/csv/rejects/incorrect_columns/few_columns.csv	2378	1	"b"	MISSING COLUMNS	1	19008
+data/csv/rejects/incorrect_columns/few_columns.csv	2762	2	"c"	MISSING COLUMNS	1,2	22074
