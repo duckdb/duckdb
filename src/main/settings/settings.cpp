@@ -476,6 +476,29 @@ Value AllowUnsignedExtensionsSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Allow Unredacted Secrets
+//===--------------------------------------------------------------------===//
+void AllowUnredactedSecretsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<bool>();
+	if (db && new_value) {
+		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
+	}
+	config.options.allow_unredacted_secrets = new_value;
+}
+
+void AllowUnredactedSecretsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
+	}
+	config.options.allow_unredacted_secrets = DBConfig().options.allow_unredacted_secrets;
+}
+
+Value AllowUnredactedSecretsSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.allow_unredacted_secrets);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Object Cache
 //===--------------------------------------------------------------------===//
 void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
