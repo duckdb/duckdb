@@ -413,8 +413,6 @@ private:
 	TaskExecutionResult AggregateDistinct();
 
 private:
-	shared_ptr<Event> event;
-
 	const PhysicalUngroupedAggregate &op;
 	UngroupedAggregateGlobalSinkState &gstate;
 
