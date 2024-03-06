@@ -86,6 +86,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
