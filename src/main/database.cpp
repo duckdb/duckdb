@@ -54,10 +54,8 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
-	// destroy the task scheduler so all in-process tasks are killed
-	scheduler.reset();
 	// destroy all attached databases
-	GetDatabaseManager().ResetDatabases();
+	GetDatabaseManager().ResetDatabases(scheduler);
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
