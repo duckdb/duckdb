@@ -32,6 +32,7 @@ source_files = [
         'extension/json/serialize_json.cpp',
         'extension/json/json_array_tail.cpp',
         'extension/json/json_array_append.cpp',
+        'extension/json/json_array_prepend.cpp',
         'extension/json/json_object_add.cpp',
     ]
 ]

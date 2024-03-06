@@ -164,6 +164,36 @@ public:
 		    });
 	}
 
+	//! Two-argument JSON manipulation function
+	template <class T>
+	static void BinaryMutExecuteFlip(
+	    DataChunk &args, ExpressionState &state, Vector &result,
+	    std::function<yyjson_mut_val *(yyjson_mut_val *, yyjson_mut_doc *, T, yyjson_alc *, Vector &)> fun) {
+		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+		auto alc = lstate.json_allocator.GetYYAlc();
+
+		auto &inputs_left = args.data[0];
+		auto &inputs_right = args.data[1];
+
+		BinaryExecutor::Execute<T, string_t, string_t>(
+		    inputs_left, inputs_right, result, args.size(), [&](T left, string_t right) {
+			    // Convert String to immutable yyjson document
+			    auto rdoc = JSONCommon::ReadDocument(right, JSONCommon::READ_FLAG, alc);
+
+			    // Convert immutable document into mutable document
+			    auto mut_rdoc = yyjson_doc_mut_copy(rdoc, alc);
+
+			    // Compute mutable value
+			    auto new_val = fun(mut_rdoc->root, mut_rdoc, left, alc, result);
+
+			    // Convert mutable value back to immutable document
+			    rdoc = yyjson_mut_val_imut_copy(new_val, alc);
+
+			    // Convert immutable yyjson document back into string
+			    return JSONCommon::WriteVal<yyjson_val>(rdoc->root, alc);
+		    });
+	}
+
 	//! Three-argument JSON manipulation function
 	template <class T1, class T2>
 	static void TernaryMutExecute(
