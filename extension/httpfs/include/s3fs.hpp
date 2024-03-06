@@ -179,12 +179,6 @@ public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 
-	// Global limits to write buffers
-	mutex buffers_available_lock;
-	std::condition_variable buffers_available_cv;
-	uint16_t buffers_in_use = 0;
-	uint16_t threads_waiting_for_memory = 0;
-
 	BufferManager &buffer_manager;
 	string GetName() const override;
 
