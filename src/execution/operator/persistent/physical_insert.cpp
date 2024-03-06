@@ -494,8 +494,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 		gstate.table.GetStorage().LocalMerge(context.client, *lstate.local_collection);
+		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
 
 	return SinkCombineResultType::FINISHED;
