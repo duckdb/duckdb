@@ -1,7 +1,7 @@
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -167,6 +167,14 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
+void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, const string &metadata) {
+	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
+	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	target_file->Write((void *)metadata.data(), metadata.size());
+	target_file->Close();
+	target_file.reset();
+}
+
 string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DBConfig> db_config, const string &repository,
                                              const string &version) {
 	string versioned_path;
@@ -202,6 +210,30 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 	return url;
 }
 
+static void WriteExtensionFiles(FileSystem &fs, const string &temp_path, const string &local_extension_path,
+                                void *in_buffer, idx_t file_size, bool force_install, const string &installed_from) {
+	// Write files
+	WriteExtensionFileToDisk(fs, temp_path, in_buffer, file_size);
+
+	if (fs.FileExists(local_extension_path) && force_install) {
+		fs.RemoveFile(local_extension_path);
+	}
+	fs.MoveFile(temp_path, local_extension_path);
+
+	// Write metadata
+	auto metadata_tmp_path = temp_path + ".info";
+	auto metadata_file_path = local_extension_path + ".info";
+
+	// Metadata is written as a very simple file containing the origin of the installed file
+	WriteExtensionMetadataFileToDisk(fs, metadata_tmp_path, installed_from);
+
+	if (fs.FileExists(metadata_file_path) && force_install) {
+		fs.RemoveFile(metadata_file_path);
+	}
+
+	fs.MoveFile(metadata_tmp_path, metadata_file_path);
+}
+
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
                                                const string &extension, bool force_install, const string &repository,
                                                const string &version) {
@@ -228,12 +260,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 		if (fs.FileExists(extension)) {
 			idx_t file_size;
 			auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
-			WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
-			if (fs.FileExists(local_extension_path) && force_install) {
-				fs.RemoveFile(local_extension_path);
-			}
-			fs.MoveFile(temp_path, local_extension_path);
+			WriteExtensionFiles(fs, temp_path, local_extension_path, in_buffer.get(), file_size, force_install, extension);
 			return;
 		} else if (!is_http_url) {
 			throw IOException("Failed to read extension from \"%s\": no such file", extension);
@@ -273,12 +301,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
 		read_handle->Read(test_data.get(), read_handle->GetFileSize());
-		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
-
-		if (fs.FileExists(local_extension_path) && force_install) {
-			fs.RemoveFile(local_extension_path);
-		}
-		fs.MoveFile(temp_path, local_extension_path);
+		WriteExtensionFiles(fs, temp_path, local_extension_path, (void *)test_data.get(), read_handle->GetFileSize(), force_install, file);
 		return;
 	}
 
@@ -311,12 +334,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, FileSystem &fs,
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
-	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
-
-	if (fs.FileExists(local_extension_path) && force_install) {
-		fs.RemoveFile(local_extension_path);
-	}
-	fs.MoveFile(temp_path, local_extension_path);
+	WriteExtensionFiles(fs, temp_path, local_extension_path, (void *)decompressed_body.data(), decompressed_body.size(), force_install, url);
 #endif
 #endif
 }

@@ -213,6 +213,95 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
+// TODO: this function should either:
+//        - check if the extension has actually been updated in the remote
+//	      - check the version before updating, then recheck after and only return it in the result if it changed
+static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, const string &full_extension_path, const string &extension_name) {
+	ExtensionUpdateResult result;
+	result.extension_name = extension_name;
+	result.updated = false;
+
+	// Extension exists, check for .info file
+	const string info_file_path = full_extension_path + ".info";
+	if (!fs.FileExists(info_file_path)) {
+		return result;
+	}
+
+	// Read metadata file into buffer
+	auto handle = fs.OpenFile(info_file_path, FileFlags::FILE_FLAGS_READ);
+	auto buffer = make_unsafe_uniq_array<char>(handle->GetFileSize());
+	fs.Read(*handle, buffer.get(), handle->GetFileSize());
+	auto extension_raw_metadata = string(buffer.get(), handle->GetFileSize());
+
+	// Try parsing the metadata for the install url
+	auto lines = StringUtil::Split(extension_raw_metadata, "\n");
+
+	// If the metadata files contains the origin of the extension, we force install the extension from there
+	if (!lines.empty()) {
+		// We force install the full url found in this file, throwing
+		try {
+			ExtensionHelper::InstallExtension(config, fs, lines[0], true);
+		} catch (std::exception &e) {
+			ErrorData error(e);
+			error.Throw("Extension updating failed when trying to install '" + extension_name +
+						"', original error: ");
+		}
+
+		// TODO set prev and installed version;
+		result.updated = true;
+		return result;
+	}
+
+	return result;
+}
+
+vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
+	auto fs = FileSystem::CreateLocal();
+	return ExtensionHelper::UpdateExtensions(DBConfig::GetConfig(context), *fs);
+}
+
+vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DBConfig &config, FileSystem &fs) {
+	vector<ExtensionUpdateResult> result;
+
+#ifndef WASM_LOADABLE_EXTENSIONS
+	// scan the install directory for installed extensions
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
+		if (!StringUtil::EndsWith(path, ".duckdb_extension")) {
+			return;
+		}
+
+		auto extension_file_name = StringUtil::GetFileName(path);
+		auto extension_name = StringUtil::Split(extension_file_name, ".")[0];
+
+		result.push_back(update_extension(config, fs, fs.JoinPath(ext_directory, path), extension_name));
+	});
+#endif
+
+	return result;
+}
+
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
+	auto fs = FileSystem::CreateLocal();
+	return ExtensionHelper::UpdateExtension(DBConfig::GetConfig(context), *fs, extension_name);
+}
+
+ExtensionUpdateResult ExtensionHelper::UpdateExtension(DBConfig &config, FileSystem &fs, const string &extension_name) {
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+
+	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
+
+	if (!fs.FileExists(full_extension_path)) {
+		ExtensionUpdateResult result;
+		result.extension_name = extension_name;
+		result.updated = false;
+		return result;
+	}
+
+	return update_extension(config, fs, full_extension_path, extension_name);
+}
+
+
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
 	return ExtensionHelper::AutoLoadExtension(*context.db, extension_name);
 }

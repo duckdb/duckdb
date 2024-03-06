@@ -36,6 +36,15 @@ struct ExtensionInitResult {
 	void *lib_hdl;
 };
 
+struct ExtensionUpdateResult {
+	string extension_name;
+	bool updated;
+
+	string extension_version;
+	string prev_version;
+	string installed_version;
+};
+
 class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db);
@@ -57,6 +66,14 @@ public:
 
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+
+	//! Update all extensions, return a vector of extension names that were updated;
+	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
+	static vector<ExtensionUpdateResult> UpdateExtensions(DBConfig &config, FileSystem &fs);
+
+	//! Update a specific extension
+	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
+	static ExtensionUpdateResult UpdateExtension(DBConfig &config, FileSystem &fs, const string &extension_name);
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);

@@ -3,9 +3,10 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -192,6 +193,41 @@ string PragmaUserAgent(ClientContext &context, const FunctionParameters &paramet
 	return "SELECT * FROM pragma_user_agent()";
 }
 
+string PragmaUpdateExtension(ClientContext &context, const FunctionParameters &parameters) {
+
+	auto extension_name = parameters.values[0].ToString();
+
+	auto update_result = ExtensionHelper::UpdateExtension(context, extension_name);
+
+	string updated = (update_result.updated ? "1::BOOL" : "0::BOOL");
+
+	return "SELECT " + updated + " as updated";
+}
+
+string PragmaUpdateExtensions(ClientContext &context, const FunctionParameters &parameters) {
+	auto updated_extensions = ExtensionHelper::UpdateExtensions(context);
+
+	// No extensions updated, early out with simple query
+	if (updated_extensions.empty()) {
+		return "SELECT extension_name, 0::BOOLEAN as updated FROM duckdb_extensions()";
+	}
+
+	vector<string> names;
+	for (const auto& result : updated_extensions) {
+		names.push_back(result.extension_name);
+	}
+
+	string updated_joined_list = "'" + StringUtil::Join(names, "','") + "'";
+
+	auto result_query =
+	    "SELECT extension_name, 1::BOOLEAN as updated FROM duckdb_extensions() where installed and extension_name in (" +
+	    updated_joined_list + ") ";
+	result_query +=
+	    "UNION ALL SELECT extension_name, 0::BOOLEAN as updated FROM duckdb_extensions() where installed and extension_name not in (" +
+	    updated_joined_list + ")";
+	return result_query;
+}
+
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("table_info", PragmaTableInfo, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaCall("storage_info", PragmaStorageInfo, {LogicalType::VARCHAR}));
@@ -211,6 +247,8 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	    PragmaFunction::PragmaCall("copy_database", PragmaCopyDatabase, {LogicalType::VARCHAR, LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("user_agent", PragmaUserAgent));
+	set.AddFunction(PragmaFunction::PragmaStatement("update_extensions", PragmaUpdateExtensions));
+	set.AddFunction(PragmaFunction::PragmaCall("update_extension", PragmaUpdateExtension, {LogicalType::VARCHAR}));
 }
 
 } // namespace duckdb

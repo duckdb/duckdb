@@ -15,6 +15,7 @@ struct ExtensionInformation {
 	bool loaded = false;
 	bool installed = false;
 	string file_path;
+	string installed_from;
 	string description;
 	vector<Value> aliases;
 };
@@ -46,6 +47,9 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
+	names.emplace_back("installed_from");
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -86,12 +90,31 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		info.name = fs.ExtractBaseName(path);
 		info.loaded = false;
 		info.file_path = fs.JoinPath(ext_directory, path);
+
+		// Check the info file for its installation source
+		auto info_file_path = fs.JoinPath(ext_directory, path + ".info");
+		if (fs.FileExists(info_file_path)) {
+			// Read metadata file into buffer
+			auto handle = fs.OpenFile(info_file_path, FileFlags::FILE_FLAGS_READ);
+			auto buffer = make_unsafe_uniq_array<char>(handle->GetFileSize());
+			fs.Read(*handle, buffer.get(), handle->GetFileSize());
+			auto extension_raw_metadata = string(buffer.get(), handle->GetFileSize());
+
+			// Try parsing the metadata for the install url
+			auto lines = StringUtil::Split(extension_raw_metadata, "\n");
+
+			if (!lines.empty()) {
+				info.installed_from = lines[0];
+			}
+		}
+
 		auto entry = installed_extensions.find(info.name);
 		if (entry == installed_extensions.end()) {
 			installed_extensions[info.name] = std::move(info);
 		} else {
 			if (!entry->second.loaded) {
 				entry->second.file_path = info.file_path;
+				entry->second.installed_from = info.installed_from;
 			}
 			entry->second.installed = true;
 		}
@@ -143,6 +166,8 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		output.SetValue(4, count, Value(entry.description));
 		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
+		// installed_from LogicalType::VARCHAR
+		output.SetValue(6, count, Value(entry.installed_from));
 
 		data.offset++;
 		count++;
