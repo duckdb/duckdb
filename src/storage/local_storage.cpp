@@ -202,6 +202,9 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		});
 		error.Throw();
 	}
+	if (append_to_table) {
+		table.FinalizeAppend(transaction, append_state);
+	}
 }
 
 OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {

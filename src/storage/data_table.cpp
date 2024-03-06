@@ -760,6 +760,10 @@ void DataTable::Append(DataChunk &chunk, TableAppendState &state) {
 	row_groups->Append(chunk, state);
 }
 
+void DataTable::FinalizeAppend(DuckTransaction &transaction, TableAppendState &state) {
+	row_groups->FinalizeAppend(transaction, state);
+}
+
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
 	if (count == 0) {
 		return;

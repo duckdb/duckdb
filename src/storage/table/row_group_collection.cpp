@@ -320,10 +320,6 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
 	state.remaining = append_count;
 	state.transaction = transaction;
-	if (state.remaining > 0) {
-		state.start_row_group->AppendVersionInfo(transaction, state.remaining);
-		total_rows += state.remaining;
-	}
 }
 
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
@@ -336,9 +332,9 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	chunk.Verify();
 
 	bool new_row_group = false;
-	idx_t append_count = chunk.size();
+	idx_t total_append_count = chunk.size();
 	idx_t remaining = chunk.size();
-	state.total_append_count += append_count;
+	state.total_append_count += total_append_count;
 	while (true) {
 		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
@@ -375,15 +371,12 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			// set up the append state for this row_group
 			auto last_row_group = row_groups->GetLastSegment(l);
 			last_row_group->InitializeAppend(state.row_group_append_state);
-			if (state.remaining > 0) {
-				last_row_group->AppendVersionInfo(state.transaction, state.remaining);
-			}
 			continue;
 		} else {
 			break;
 		}
 	}
-	state.current_row += append_count;
+	state.current_row += row_t(total_append_count);
 	auto stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		stats.GetStats(col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
