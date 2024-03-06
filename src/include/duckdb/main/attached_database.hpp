@@ -61,6 +61,7 @@ public:
 	bool IsInitialDatabase() const;
 	void SetInitialDatabase();
 
+	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
