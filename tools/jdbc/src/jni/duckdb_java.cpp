@@ -4,6 +4,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
@@ -618,9 +619,10 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 		}
 	}
 
-	Value result;
-	bool stream_results =
-	    stmt_ref->stmt->context->TryGetCurrentSetting(JDBC_STREAM_RESULTS, result) ? result.GetValue<bool>() : false;
+	SettingLookupResult lookup_result;
+	bool stream_results = stmt_ref->stmt->context->TryGetCurrentSetting(JDBC_STREAM_RESULTS, lookup_result)
+	                          ? lookup_result.GetSetting().GetValue<bool>()
+	                          : false;
 
 	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, stream_results);
 	if (res_ref->res->HasError()) {
