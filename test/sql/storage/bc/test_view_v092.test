@@ -2,6 +2,7 @@
 # description: Test reading database with views
 # group: [bc]
 
+# we cannot read/open a file with a different block size
 require block_size 262144
 
 load data/storage/views_092.db readonly
