@@ -7,9 +7,10 @@
 
 namespace duckdb {
 
-SQLRETURN PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
+string SetupStmt(duckdb::OdbcHandleStmt *hstmt, SQLCHAR *statement_text, SQLINTEGER text_length);
+SQLRETURN FinalizeStmt(duckdb::OdbcHandleStmt *hstmt);
 
-SQLRETURN BatchExecuteStmt(SQLHSTMT statement_handle);
+SQLRETURN BatchExecuteStmt(duckdb::OdbcHandleStmt *hstmt);
 SQLRETURN SingleExecuteStmt(OdbcHandleStmt *hstmt);
 
 SQLRETURN FetchStmtResult(duckdb::OdbcHandleStmt *hstmt, SQLSMALLINT fetch_orientation = SQL_FETCH_NEXT,

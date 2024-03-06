@@ -43,13 +43,7 @@ using duckdb::Timestamp;
 using duckdb::timestamp_t;
 using duckdb::vector;
 
-SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
-	OdbcHandleStmt *hstmt = nullptr;
-	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
-	if (ret != SQL_SUCCESS) {
-		return ret;
-	}
-
+string duckdb::SetupStmt(duckdb::OdbcHandleStmt *hstmt, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	if (hstmt->stmt) {
 		hstmt->stmt.reset();
 	}
@@ -59,9 +53,10 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 	}
 
 	hstmt->odbc_fetcher->ClearChunks();
+	return OdbcUtils::ReadString(statement_text, text_length);
+}
 
-	auto query = OdbcUtils::ReadString(statement_text, text_length);
-	hstmt->stmt = hstmt->dbc->conn->Prepare(query);
+SQLRETURN duckdb::FinalizeStmt(duckdb::OdbcHandleStmt *hstmt) {
 	if (hstmt->stmt->data && !hstmt->stmt->GetStatementProperties().bound_all_parameters) {
 		return (SetDiagnosticRecord(hstmt, SQL_ERROR, "PrepareStmt", "Not all parameters are bound",
 		                            SQLStateType::ST_42000, hstmt->dbc->GetDataSourceName()));
@@ -82,13 +77,8 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 
 //! Execute stmt in a batch manner while there is a parameter set to process,
 //! the stmt is executed multiple times when there is a bound array of parameters in INSERT and UPDATE statements
-SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
-	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
-	if (ret != SQL_SUCCESS) {
-		return ret;
-	}
-
+SQLRETURN duckdb::BatchExecuteStmt(duckdb::OdbcHandleStmt *hstmt) {
+	SQLRETURN ret = SQL_SUCCESS;
 	do {
 		ret = SingleExecuteStmt(hstmt);
 	} while (ret == SQL_STILL_EXECUTING);
@@ -831,12 +821,26 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 }
 
 SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
-	auto prepare_status = duckdb::PrepareStmt(statement_handle, statement_text, text_length);
-	if (prepare_status != SQL_SUCCESS) {
-		return SQL_ERROR;
+	duckdb::OdbcHandleStmt *hstmt = nullptr;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
-	return duckdb::BatchExecuteStmt(statement_handle);
+	auto query = SetupStmt(hstmt, statement_text, text_length);
+	auto statements = hstmt->dbc->conn->ExtractStatements(query);
+	for (auto &statement : statements) {
+        hstmt->stmt = hstmt->dbc->conn->Prepare(std::move(statement));
+        if (!hstmt->stmt->success) {
+            return FinalizeStmt(hstmt);
+        }
+		ret = duckdb::BatchExecuteStmt(hstmt);
+		if (!SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+    }
+
+	return ret;
 }
 
 SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
