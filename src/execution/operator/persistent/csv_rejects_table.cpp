@@ -25,7 +25,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 
 	// Create CSV_ERROR_TYPE ENUM
 	string enum_name = "CSV_ERROR_TYPE";
-	Vector order_errors(LogicalType::VARCHAR, 5);
+	Vector order_errors(LogicalType::VARCHAR, 6);
 	order_errors.SetValue(0, "CAST");
 	order_errors.SetValue(1, "MISSING COLUMNS");
 	order_errors.SetValue(2, "TOO MANY COLUMNS");

@@ -12,4 +12,7 @@ query IIIIIII rowsort
 SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
 FROM csv_rejects_table;
 ----
-
+test/sql/copy/csv/data/test/invalid_utf_big.csv	3001	2	"col3"	INVALID UNICODE	valid,invalid_??_part,valid	54000
+test/sql/copy/csv/data/test/invalid_utf_big.csv	3012	2	"col3"	INVALID UNICODE	valid,valid,invalid_??_part	54208
+test/sql/copy/csv/data/test/invalid_utf_big.csv	3023	2	"col3"	INVALID UNICODE	valid,invalid_??_part,valid	54416
+test/sql/copy/csv/data/test/invalid_utf_big.csv	3034	2	"col3"	INVALID UNICODE	valid,valid,invalid_??_part	54624
