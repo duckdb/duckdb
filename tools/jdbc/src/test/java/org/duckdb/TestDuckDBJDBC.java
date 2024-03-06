@@ -557,7 +557,7 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnCount(), 1);
             assertEquals(meta.getColumnName(1), "struct");
             assertEquals(meta.getColumnTypeName(1), "STRUCT(i INTEGER, j VARCHAR)");
-            assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(meta.getColumnType(1), Types.STRUCT);
         }
     }
 
