@@ -471,7 +471,7 @@ class SQLLogicParser:
             if token_name in self.FOREACH_COLLECTIONS:
                 result.extend(self.FOREACH_COLLECTIONS[token_name])
             else:
-                result.append(token_name)
+                result.append(param)
 
         foreach_tokens = []
         for value in raw_values:

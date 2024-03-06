@@ -343,7 +343,8 @@ class SQLLogicRunner:
         root = duckdb.__build_dir__
         path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
         # Serialize it as a POSIX compliant path
-        db.execute(f"LOAD '{path}'")
+        query = f"LOAD '{path}'"
+        db.execute(query)
 
     def check_require(self, statement: Require) -> RequireResult:
         not_an_extension = [
@@ -380,7 +381,6 @@ class SQLLogicRunner:
 
         if not 'autoload_known_extensions' in self.config:
             try:
-                print("EXTENSION", param)
                 self.load_extension(self.con, param)
                 self.extensions.add(param)
             except:
@@ -671,7 +671,6 @@ class SQLLogicContext:
         conn = self.runner.get_connection(query.connection_name)
         sql_query = '\n'.join(query.lines)
         sql_query = self.replace_keywords(sql_query)
-        print(sql_query)
 
         expected_result = query.expected_result
         assert expected_result.type == ExpectedResult.Type.SUCCES
@@ -709,7 +708,6 @@ class SQLLogicContext:
                     transformed_query = (
                         f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
                     )
-                    # print(transformed_query)
                     stringified_rel = conn.query(transformed_query)
                 except Exception as e:
                     self.fail(f"Could not select from the ValueRelation: {str(e)}")
@@ -824,14 +822,12 @@ class SQLLogicContext:
         conn = self.runner.get_connection(statement.connection_name)
         sql_query = '\n'.join(statement.lines)
         sql_query = self.replace_keywords(sql_query)
-        print(sql_query)
 
         expected_result = statement.expected_result
         try:
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
-                print(result)
                 self.runner.fail(f"Query unexpectedly succeeded")
             if expected_result.type != ExpectedResult.Type.UNKNOWN:
                 assert expected_result.lines == None

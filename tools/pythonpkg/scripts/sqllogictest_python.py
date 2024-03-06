@@ -69,6 +69,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/copy/csv/zstd_crash.test',  # <-- Python client is always loaded with Parquet available
                 'test/sql/error/extension_function_error.test',  # <-- Python client is always loaded with TPCH available
                 'test/sql/types/timestamp/test_timestamp_tz.test',  # <-- Python client is always loaded wih ICU available - making the TIMESTAMPTZ::DATE cast pass
+                'test/sql/secrets/create_secret_s3_serialization.test',  # <-- 'allow_unredacted_secrets' can not be set through SQL
             ]
         )
         # TODO: get this from the `duckdb` package
