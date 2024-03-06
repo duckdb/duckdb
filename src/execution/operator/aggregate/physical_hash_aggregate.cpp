@@ -489,7 +489,6 @@ public:
 private:
 	ClientContext &context;
 	Pipeline &pipeline;
-	shared_ptr<Event> event;
 
 	const PhysicalHashAggregate &op;
 	HashAggregateGlobalSinkState &gstate;

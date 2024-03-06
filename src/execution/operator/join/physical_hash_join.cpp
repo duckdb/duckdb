@@ -300,7 +300,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	HashJoinGlobalSinkState &sink;
 	idx_t chunk_idx_from;
 	idx_t chunk_idx_to;
