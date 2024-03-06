@@ -12,6 +12,7 @@
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_cte_scan.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 
 namespace duckdb {
 
@@ -447,8 +448,26 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		auto &limit = plan->Cast<LogicalLimit>();
-		if (limit.limit || limit.offset) {
-			throw ParserException("Non-constant limit or offset not supported in correlated subquery");
+		switch (limit.limit_val.Type()) {
+		case LimitNodeType::CONSTANT_PERCENTAGE:
+		case LimitNodeType::EXPRESSION_PERCENTAGE:
+			// NOTE: limit percent could be supported in a manner similar to the LIMIT above
+			// but instead of filtering by an exact number of rows, the limit should be expressed as
+			// COUNT computed over the partition multiplied by the percentage
+			throw ParserException("Limit percent operator not supported in correlated subquery");
+		case LimitNodeType::EXPRESSION_VALUE:
+			throw ParserException("Non-constant limit not supported in correlated subquery");
+		default:
+			break;
+		}
+		switch (limit.offset_val.Type()) {
+		case LimitNodeType::EXPRESSION_VALUE:
+			throw ParserException("Non-constant offset not supported in correlated subquery");
+		case LimitNodeType::CONSTANT_PERCENTAGE:
+		case LimitNodeType::EXPRESSION_PERCENTAGE:
+			throw InternalException("Percentage offset in FlattenDependentJoin");
+		default:
+			break;
 		}
 		auto rownum_alias = "limit_rownum";
 		unique_ptr<LogicalOperator> child;
@@ -495,19 +514,34 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto row_num_ref =
 		    make_uniq<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT, ColumnBinding(window_index, 0));
 
-		int64_t upper_bound_limit = NumericLimits<int64_t>::Maximum();
-		TryAddOperator::Operation(limit.offset_val, limit.limit_val, upper_bound_limit);
-		auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
-		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
-		                                                 std::move(upper_bound));
+		if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+			auto upper_bound_limit = NumericLimits<int64_t>::Maximum();
+			auto limit_val = int64_t(limit.limit_val.GetConstantValue());
+			if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+				// both offset and limit specified - upper bound is offset + limit
+				auto offset_val = int64_t(limit.offset_val.GetConstantValue());
+				TryAddOperator::Operation(limit_val, offset_val, upper_bound_limit);
+			} else {
+				// no offset - upper bound is only the limit
+				upper_bound_limit = limit_val;
+			}
+			auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
+			condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                                                 row_num_ref->Copy(), std::move(upper_bound));
+		}
 		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
-		if (limit.offset_val > 0) {
-			auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(limit.offset_val));
+		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+			auto offset_val = int64_t(limit.offset_val.GetConstantValue());
+			auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(offset_val));
 			auto lower_comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
 			                                                       row_num_ref->Copy(), std::move(lower_bound));
-			auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower_comp),
-			                                                  std::move(condition));
-			condition = std::move(conj);
+			if (condition) {
+				auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                  std::move(lower_comp), std::move(condition));
+				condition = std::move(conj);
+			} else {
+				condition = std::move(lower_comp);
+			}
 		}
 		filter->expressions.push_back(std::move(condition));
 		filter->children.push_back(std::move(window));
@@ -516,12 +550,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			filter->projection_map.push_back(i);
 		}
 		return std::move(filter);
-	}
-	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
-		// NOTE: limit percent could be supported in a manner similar to the LIMIT above
-		// but instead of filtering by an exact number of rows, the limit should be expressed as
-		// COUNT computed over the partition multiplied by the percentage
-		throw ParserException("Limit percent operator not supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = plan->Cast<LogicalWindow>();

@@ -79,7 +79,7 @@ public:
 			offset_data[offset_idx] = last_offset;
 
 			for (idx_t k = 0; k < list_length; k++) {
-				child_sel.push_back(data[source_idx].offset + k);
+				child_sel.push_back(UnsafeNumericCast<sel_t>(data[source_idx].offset + k));
 			}
 		}
 	}

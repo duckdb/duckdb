@@ -1,7 +1,8 @@
-#include "include/parameter_descriptor.hpp"
-#include "odbc_utils.hpp"
+#include "parameter_descriptor.hpp"
+
 #include "duckdb/common/types/decimal.hpp"
 #include "handle_functions.hpp"
+#include "odbc_utils.hpp"
 
 using duckdb::Decimal;
 using duckdb::OdbcHandleDesc;

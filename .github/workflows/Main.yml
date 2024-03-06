@@ -41,6 +41,8 @@ jobs:
  linux-debug:
     name: Linux Debug
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    outputs:
+      git_describe: ${{ steps.describe_step.outputs.git_describe }}
     runs-on: ubuntu-20.04
     env:
       CC: gcc-10
@@ -52,6 +54,9 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - id: describe_step
+      run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install
       shell: bash
@@ -66,6 +71,10 @@ jobs:
     - name: Build
       shell: bash
       run:  make debug
+
+    - name: Output version info
+      shell: bash
+      run: ./build/debug/duckdb -c "PRAGMA version;"
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -85,6 +94,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
@@ -101,8 +111,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
 
     - name: Install
       shell: bash
@@ -118,6 +126,10 @@ jobs:
       shell: bash
       run: make reldebug
 
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
+
     - name: Test
       shell: bash
       run: build/reldebug/test/unittest --force-storage
@@ -128,6 +140,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
@@ -143,8 +156,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
 
     - name: Install
       shell: bash
@@ -160,6 +171,10 @@ jobs:
       shell: bash
       run: make reldebug
 
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
+
     - name: Test
       shell: bash
       run: build/reldebug/test/unittest --force-reload --force-storage
@@ -170,6 +185,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       DISABLE_SANITIZER: 1
@@ -178,8 +194,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
 
     - name: Install
       shell: bash
@@ -194,6 +208,10 @@ jobs:
     - name: Build
       shell: bash
       run: make debug
+
+    - name: Output version info
+      shell: bash
+      run: ./build/debug/duckdb -c "PRAGMA version;"
 
     - name: Test
       shell: bash
@@ -240,7 +258,7 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.7'
+        python-version: '3.12'
 
     - name: Dependencies
       shell: bash

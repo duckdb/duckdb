@@ -32,7 +32,8 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 		return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 	}
 
-	int32_t mask = PGPointerCast<duckdb_libpgquery::PGAConst>(node.typmods->head->data.ptr_value)->val.val.ival;
+	int32_t mask = NumericCast<int32_t>(
+	    PGPointerCast<duckdb_libpgquery::PGAConst>(node.typmods->head->data.ptr_value)->val.val.ival);
 	// these seemingly random constants are from datetime.hpp
 	// they are copied here to avoid having to include this header
 	// the bitshift is from the function INTERVAL_MASK in the parser

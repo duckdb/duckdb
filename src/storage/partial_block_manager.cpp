@@ -139,7 +139,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 		if (!e.second) {
 			throw InternalException("Empty partially filled block found");
 		}
-		auto used_space = Storage::BLOCK_SIZE - e.first;
+		auto used_space = NumericCast<uint32_t>(Storage::BLOCK_SIZE - e.first);
 		if (HasBlockAllocation(used_space)) {
 			// we can merge this block into an existing block - merge them
 			// merge blocks

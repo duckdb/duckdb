@@ -140,8 +140,11 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
-	DefineMethod({"array_type", "list_type"}, m, &DuckDBPyConnection::ArrayType,
-	             "Create an array type object of 'type'", py::arg("type").none(false));
+
+	m.def("array_type", &DuckDBPyConnection::ArrayType, "Create an array type object of 'type'",
+	      py::arg("type").none(false), py::arg("size").none(false));
+	m.def("list_type", &DuckDBPyConnection::ListType, "Create a list type object of 'type'",
+	      py::arg("type").none(false));
 	m.def("union_type", &DuckDBPyConnection::UnionType, "Create a union type object from 'members'",
 	      py::arg("members").none(false))
 	    .def("string_type", &DuckDBPyConnection::StringType, "Create a string type with an optional collation",
@@ -1571,7 +1574,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	config.AddExtensionOption("pandas_analyze_sample",
 	                          "The maximum number of rows to sample when analyzing a pandas object column.",
 	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
-	config_dict["duckdb_api"] = Value("python");
+	if (!DuckDBPyConnection::IsJupyter()) {
+		config_dict["duckdb_api"] = Value("python");
+	} else {
+		config_dict["duckdb_api"] = Value("python jupyter");
+	}
 	config.SetOptionsByName(config_dict);
 
 	auto res = FetchOrCreateInstance(database, config);

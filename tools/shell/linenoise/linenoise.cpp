@@ -1116,6 +1116,10 @@ int Linenoise::Edit() {
 		if (c == TAB && completionCallback != NULL) {
 			if (has_more_data) {
 				// if there is more data, this tab character was added as part of copy-pasting data
+				// instead insert some spaces
+				if (EditInsertMulti("    ")) {
+					return -1;
+				}
 				continue;
 			}
 			c = CompleteLine(current_sequence);
