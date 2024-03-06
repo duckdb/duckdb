@@ -1,4 +1,4 @@
-# name: test/sql/storage/concurrent_table_insertion.test
+# name: test/sql/storage/concurrent_table_insertion.test_slow
 # description: Test concurrent table insertions
 # group: [storage]
 

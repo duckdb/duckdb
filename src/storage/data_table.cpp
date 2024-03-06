@@ -747,12 +747,12 @@ void DataTable::AppendLock(TableAppendState &state) {
 	state.current_row = state.row_start;
 }
 
-void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState &state, idx_t append_count) {
+void DataTable::InitializeAppend(DuckTransaction &transaction, TableAppendState &state) {
 	// obtain the append lock for this table
 	if (!state.append_lock) {
 		throw InternalException("DataTable::AppendLock should be called before DataTable::InitializeAppend");
 	}
-	row_groups->InitializeAppend(transaction, state, append_count);
+	row_groups->InitializeAppend(transaction, state);
 }
 
 void DataTable::Append(DataChunk &chunk, TableAppendState &state) {

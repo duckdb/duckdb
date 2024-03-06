@@ -288,11 +288,10 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 // Append
 //===--------------------------------------------------------------------===//
 TableAppendState::TableAppendState()
-    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0), remaining(0) {
+    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0) {
 }
 
 TableAppendState::~TableAppendState() {
-	D_ASSERT(Exception::UncaughtException() || remaining == 0);
 }
 
 bool RowGroupCollection::IsEmpty() const {
@@ -304,7 +303,7 @@ bool RowGroupCollection::IsEmpty(SegmentLock &l) const {
 	return row_groups->IsEmpty(l);
 }
 
-void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count) {
+void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state) {
 	state.row_start = total_rows;
 	state.current_row = state.row_start;
 	state.total_append_count = 0;
@@ -318,13 +317,12 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	state.start_row_group = row_groups->GetLastSegment(l);
 	D_ASSERT(this->row_start + total_rows == state.start_row_group->start + state.start_row_group->count);
 	state.start_row_group->InitializeAppend(state.row_group_append_state);
-	state.remaining = append_count;
 	state.transaction = transaction;
 }
 
 void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	TransactionData tdata(0, 0);
-	InitializeAppend(tdata, state, 0);
+	InitializeAppend(tdata, state);
 }
 
 bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
@@ -351,9 +349,6 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			}
 		}
 		remaining -= append_count;
-		if (state.remaining > 0) {
-			state.remaining -= append_count;
-		}
 		if (remaining > 0) {
 			// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one
 			// row_group)

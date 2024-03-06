@@ -128,7 +128,7 @@ public:
 	//! Fetches an append lock
 	void AppendLock(TableAppendState &state);
 	//! Begin appending structs to this table, obtaining necessary locks, etc
-	void InitializeAppend(DuckTransaction &transaction, TableAppendState &state, idx_t append_count);
+	void InitializeAppend(DuckTransaction &transaction, TableAppendState &state);
 	//! Append a chunk to the table using the AppendState obtained from InitializeAppend
 	void Append(DataChunk &chunk, TableAppendState &state);
 	//! Finalize an append
