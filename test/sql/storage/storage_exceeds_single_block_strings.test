@@ -1,0 +1,65 @@
+# name: test/sql/storage/storage_exceeds_single_block_strings.test
+# description: Test storing strings that exceed a single block
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/exceed_single_block_types.db
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('a'), ('bb'), ('ccc'), ('dddd'), ('eeeee')
+
+loop i 0 14
+
+statement ok
+INSERT INTO test FROM test
+
+endloop
+
+query II
+SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a
+----
+a	16384
+bb	16384
+ccc	16384
+dddd	16384
+eeeee	16384
+
+restart
+
+query II
+SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a
+----
+a	16384
+bb	16384
+ccc	16384
+dddd	16384
+eeeee	16384
+
+# now perform an update of the database
+
+query I
+SELECT count(a) FROM test WHERE a='a'
+----
+16384
+
+query I
+UPDATE test SET a='aaa' WHERE a='a'
+----
+16384
+
+restart
+
+query II
+SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a
+----
+aaa	16384
+bb	16384
+ccc	16384
+dddd	16384
+eeeee	16384

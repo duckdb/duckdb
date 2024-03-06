@@ -87,6 +87,22 @@ public:
 	static string GetExtensionName(const string &extension);
 	static bool IsFullPath(const string &extension);
 
+	//! Lookup a name + type in an ExtensionFunctionEntry list
+	template <size_t N>
+	static vector<pair<string, CatalogType>>
+	FindExtensionInFunctionEntries(const string &name, const ExtensionFunctionEntry (&entries)[N]) {
+		auto lcase = StringUtil::Lower(name);
+
+		vector<pair<string, CatalogType>> result;
+		for (idx_t i = 0; i < N; i++) {
+			auto &element = entries[i];
+			if (element.name == lcase) {
+				result.push_back(make_pair(element.extension, element.type));
+			}
+		}
+		return result;
+	}
+
 	//! Lookup a name in an ExtensionEntry list
 	template <idx_t N>
 	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {

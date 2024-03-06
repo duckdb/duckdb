@@ -111,7 +111,7 @@ interval_parse_number:
 				return false;
 			}
 			// finished the number, parse it from the string
-			string_t nr_string(str + start_pos, pos - start_pos);
+			string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
 			number = Cast::Operation<string_t, int64_t>(nr_string);
 			fraction = 0;
 			if (c == '.') {

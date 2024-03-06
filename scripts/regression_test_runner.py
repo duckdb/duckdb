@@ -5,10 +5,19 @@ from io import StringIO
 import csv
 import statistics
 import math
+import functools
+import shutil
+
+print = functools.partial(print, flush=True)
 
 
 # Geometric mean of an array of numbers
 def geomean(xs):
+    if len(xs) == 0:
+        return 'EMPTY'
+    for entry in xs:
+        if isinstance(entry, str):
+            return entry
     return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
 
@@ -60,11 +69,17 @@ def run_benchmark(runner, benchmark):
     benchmark_args = [runner, benchmark]
     if threads is not None:
         benchmark_args += ["--threads=%d" % (threads,)]
-    proc = subprocess.Popen(benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out = proc.stdout.read().decode('utf8')
-    err = proc.stderr.read().decode('utf8')
-    proc.wait()
-    if proc.returncode != 0:
+    timeout_seconds = 600
+    try:
+        proc = subprocess.run(benchmark_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_seconds)
+        out = proc.stdout.decode('utf8')
+        err = proc.stderr.decode('utf8')
+        returncode = proc.returncode
+    except subprocess.TimeoutExpired:
+        print("Failed to run benchmark " + benchmark)
+        print(f"Aborted due to exceeding the limit of {timeout_seconds} seconds")
+        return 'Failed to run benchmark ' + benchmark
+    if returncode != 0:
         print("Failed to run benchmark " + benchmark)
         print(
             '''====================================================
@@ -186,8 +201,12 @@ for res in other_results:
 time_a = geomean(complete_timings[old_runner])
 time_b = geomean(complete_timings[new_runner])
 
+
 print("")
-if time_a > time_b * 1.01:
+if isinstance(time_a, str) or isinstance(time_b, str):
+    print(f"Old: {time_a}")
+    print(f"New: {time_b}")
+elif time_a > time_b * 1.01:
     print(f"Old timing geometric mean: {time_a}")
     print(f"New timing geometric mean: {time_b}, roughly {int((time_a - time_b) * 100.0 / time_a)}% faster")
 elif time_b > time_a * 1.01:
@@ -197,4 +216,7 @@ else:
     print(f"Old timing geometric mean: {time_a}")
     print(f"New timing geometric mean: {time_b}")
 
+# nuke cached benchmark data between runs
+if os.path.isdir("duckdb_benchmark_data"):
+    shutil.rmtree('duckdb_benchmark_data')
 exit(exit_code)

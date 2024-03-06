@@ -831,7 +831,7 @@ void Vector::Flatten(idx_t count) {
 		}
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
-		if (is_null) {
+		if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
 			validity.SetAllInvalid(count);
@@ -889,15 +889,20 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto &child = ArrayVector::GetEntry(*this);
+			auto &original_child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
-
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 			auto &new_child = flattened_buffer->GetChild();
 
-			// Make sure to initialize a validity mask for the new child vector with the correct size
-			if (!child.validity.AllValid()) {
-				new_child.validity.Initialize(array_size * count);
+			// Fast path: The array is a constant null
+			if (is_null) {
+				// Invalidate the parent array
+				validity.SetAllInvalid(count);
+				// Also invalidate the new child array
+				new_child.validity.SetAllInvalid(count * array_size);
+				// Attach the flattened buffer and return
+				auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+				return;
 			}
 
 			// Now we need to "unpack" the child vector.
@@ -909,7 +914,8 @@ void Vector::Flatten(idx_t count) {
 			//                          | 2 |
 			// 							 ...
 
-			child.Flatten(count * array_size);
+			auto child_vec = make_uniq<Vector>(original_child);
+			child_vec->Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
@@ -917,7 +923,7 @@ void Vector::Flatten(idx_t count) {
 				for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
 					auto position = array_idx * array_size + elem_idx;
 					// Broadcast the validity
-					if (FlatVector::IsNull(child, elem_idx)) {
+					if (FlatVector::IsNull(*child_vec, elem_idx)) {
 						FlatVector::SetNull(new_child, position, true);
 					}
 					sel.set_index(position, elem_idx);
@@ -925,7 +931,7 @@ void Vector::Flatten(idx_t count) {
 			}
 
 			// Copy over the data to the new buffer
-			VectorOperations::Copy(child, new_child, sel, count * array_size, 0, 0);
+			VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
 
 		} break;
@@ -1067,6 +1073,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	auxiliary.reset();
 }
 
+// FIXME: This should ideally be const
 void Vector::Serialize(Serializer &serializer, idx_t count) {
 	auto &logical_type = GetType();
 
@@ -1137,9 +1144,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			Flatten(count);
-			auto &child = ArrayVector::GetEntry(*this);
-			auto array_size = ArrayType::GetSize(type);
+			Vector serialized_vector(*this);
+			serialized_vector.Flatten(count);
+
+			auto &child = ArrayVector::GetEntry(serialized_vector);
+			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
 			serializer.WriteObject(104, "child", [&](Serializer &object) { child.Serialize(object, child_size); });
@@ -1691,19 +1700,19 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 // StringVector
 //===--------------------------------------------------------------------===//
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddString(vector, string_t(data, len));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddStringOrBlob(vector, string_t(data, len));
+	return StringVector::AddStringOrBlob(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data) {
-	return StringVector::AddString(vector, string_t(data, strlen(data)));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(strlen(data))));
 }
 
 string_t StringVector::AddString(Vector &vector, const string &data) {
-	return StringVector::AddString(vector, string_t(data.c_str(), data.size()));
+	return StringVector::AddString(vector, string_t(data.c_str(), UnsafeNumericCast<uint32_t>(data.size())));
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
@@ -1737,7 +1746,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (len <= string_t::INLINE_LENGTH) {
-		return string_t(len);
+		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
@@ -1784,7 +1793,7 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 // FSSTVector
 //===--------------------------------------------------------------------===//
 string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
-	return FSSTVector::AddCompressedString(vector, string_t(data, len));
+	return FSSTVector::AddCompressedString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
@@ -1889,59 +1898,75 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 }
 
 MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
+
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	UnifiedVectorFormat map_vdata;
 
-	map.ToUnifiedFormat(count, map_vdata);
-	auto &map_validity = map_vdata.validity;
+	// unify the MAP vector, which is a physical LIST vector
+	UnifiedVectorFormat map_data;
+	map.ToUnifiedFormat(count, map_data);
+	auto map_entries = UnifiedVectorFormat::GetDataNoConst<list_entry_t>(map_data);
+	auto maps_length = ListVector::GetListSize(map);
 
-	auto list_data = ListVector::GetData(map);
+	// unify the child vector containing the keys
 	auto &keys = MapVector::GetKeys(map);
-	UnifiedVectorFormat key_vdata;
-	keys.ToUnifiedFormat(count, key_vdata);
-	auto &key_validity = key_vdata.validity;
+	UnifiedVectorFormat key_data;
+	keys.ToUnifiedFormat(maps_length, key_data);
 
-	for (idx_t row = 0; row < count; row++) {
-		auto mapped_row = sel.get_index(row);
-		auto map_idx = map_vdata.sel->get_index(mapped_row);
-		// map is allowed to be NULL
-		if (!map_validity.RowIsValid(map_idx)) {
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+
+		auto mapped_row = sel.get_index(row_idx);
+		auto map_idx = map_data.sel->get_index(mapped_row);
+
+		if (!map_data.validity.RowIsValid(map_idx)) {
 			continue;
 		}
+
 		value_set_t unique_keys;
-		for (idx_t i = 0; i < list_data[map_idx].length; i++) {
-			auto index = list_data[map_idx].offset + i;
-			index = key_vdata.sel->get_index(index);
-			if (!key_validity.RowIsValid(index)) {
+		auto length = map_entries[map_idx].length;
+		auto offset = map_entries[map_idx].offset;
+
+		for (idx_t child_idx = 0; child_idx < length; child_idx++) {
+			auto key_idx = key_data.sel->get_index(offset + child_idx);
+
+			if (!key_data.validity.RowIsValid(key_idx)) {
 				return MapInvalidReason::NULL_KEY;
 			}
-			auto value = keys.GetValue(index);
-			auto result = unique_keys.insert(value);
-			if (!result.second) {
+
+			auto value = keys.GetValue(key_idx);
+			auto unique = unique_keys.insert(value).second;
+			if (!unique) {
 				return MapInvalidReason::DUPLICATE_KEY;
 			}
 		}
 	}
+
 	return MapInvalidReason::VALID;
 }
 
 void MapVector::MapConversionVerify(Vector &vector, idx_t count) {
-	auto valid_check = MapVector::CheckMapValidity(vector, count);
-	switch (valid_check) {
+	auto reason = MapVector::CheckMapValidity(vector, count);
+	EvalMapInvalidReason(reason);
+}
+
+void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
+	switch (reason) {
 	case MapInvalidReason::VALID:
-		break;
-	case MapInvalidReason::DUPLICATE_KEY: {
-		throw InvalidInputException("Map keys have to be unique");
-	}
-	case MapInvalidReason::NULL_KEY: {
-		throw InvalidInputException("Map keys can not be NULL");
-	}
-	case MapInvalidReason::NULL_KEY_LIST: {
-		throw InvalidInputException("The list of map keys is not allowed to be NULL");
-	}
-	default: {
+		return;
+	case MapInvalidReason::DUPLICATE_KEY:
+		throw InvalidInputException("Map keys must be unique.");
+	case MapInvalidReason::NULL_KEY:
+		throw InvalidInputException("Map keys can not be NULL.");
+	case MapInvalidReason::NULL_KEY_LIST:
+		throw InvalidInputException("The list of map keys must not be NULL.");
+	case MapInvalidReason::NULL_VALUE_LIST:
+		throw InvalidInputException("The list of map values must not be NULL.");
+	case MapInvalidReason::NOT_ALIGNED:
+		throw InvalidInputException("The map key list does not align with the map value list.");
+	case MapInvalidReason::INVALID_PARAMS:
+		throw InvalidInputException("Invalid map argument(s). Valid map arguments are a list of key-value pairs (MAP "
+		                            "{'key1': 'val1', ...}), two lists (MAP ([1, 2], [10, 11])), or no arguments.");
+	default:
 		throw InternalException("MapInvalidReason not implemented");
-	}
 	}
 }
 

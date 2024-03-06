@@ -41,13 +41,30 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 	} else if (format == "g") {
 		return make_uniq<ArrowType>(LogicalType::DOUBLE);
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
-		std::string parameters = format.substr(format.find(':'));
-		uint8_t width = std::stoi(parameters.substr(1, parameters.find(',')));
-		uint8_t scale = std::stoi(parameters.substr(parameters.find(',') + 1));
-		if (width > 38) {
+		auto extra_info = StringUtil::Split(format, ':');
+		if (extra_info.size() != 2) {
+			throw InvalidInputException(
+			    "Decimal format of Arrow object is incomplete, it is missing the scale and width. Current format: %s",
+			    format);
+		}
+		auto parameters = StringUtil::Split(extra_info[1], ",");
+		// Parameters must always be 2 or 3 values (i.e., width, scale and an optional bit-width)
+		if (parameters.size() != 2 && parameters.size() != 3) {
+			throw InvalidInputException(
+			    "Decimal format of Arrow object is incomplete, it is missing the scale or width. Current format: %s",
+			    format);
+		}
+		uint64_t width = std::stoull(parameters[0]);
+		uint64_t scale = std::stoull(parameters[1]);
+		uint64_t bitwidth = 128;
+		if (parameters.size() == 3) {
+			// We have a bit-width defined
+			bitwidth = std::stoull(parameters[2]);
+		}
+		if (width > 38 || bitwidth > 128) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
-		return make_uniq<ArrowType>(LogicalType::DECIMAL(width, scale));
+		return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)));
 	} else if (format == "u") {
 		return make_uniq<ArrowType>(LogicalType::VARCHAR, ArrowVariableSizeType::NORMAL);
 	} else if (format == "U") {
@@ -102,7 +119,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
 		auto child_type = ArrowTableFunction::GetArrowLogicalType(*schema.children[0]);
-		auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), fixed_size);
+		auto list_type = make_uniq<ArrowType>(LogicalType::ARRAY(child_type->GetDuckType(), fixed_size), fixed_size);
 		list_type->AddChild(std::move(child_type));
 		return list_type;
 	} else if (format == "+s") {

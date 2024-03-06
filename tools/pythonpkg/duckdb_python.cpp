@@ -96,9 +96,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("type"), py::arg("values"), py::arg("connection") = py::none())
 	    .def("decimal_type", &PyConnectionWrapper::DecimalType, "Create a decimal type with 'width' and 'scale'",
 	         py::arg("width"), py::arg("scale"), py::arg("connection") = py::none());
-	DefineMethod({"array_type", "list_type"}, m, &PyConnectionWrapper::ArrayType,
-	             "Create an array type object of 'type'", py::arg("type").none(false),
-	             py::arg("connection") = py::none());
+	m.def("array_type", &PyConnectionWrapper::ArrayType, "Create an array type object of 'type'",
+	      py::arg("type").none(false), py::arg("size").none(false), py::arg("connection") = py::none());
+	m.def("list_type", &PyConnectionWrapper::ListType, "Create a list type object of 'type'",
+	      py::arg("type").none(false), py::arg("connection") = py::none());
 	m.def("map_type", &PyConnectionWrapper::MapType, "Create a map type object from 'key_type' and 'value_type'",
 	      py::arg("key").none(false), py::arg("value").none(false), py::arg("connection") = py::none())
 	    .def("execute", &PyConnectionWrapper::Execute,

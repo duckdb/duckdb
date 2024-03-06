@@ -133,5 +133,12 @@
         "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
         "type": "scalar_function_set",
         "aliases": ["list_dot_product", "<#>"]
+    },
+    {
+        "name": "unpivot_list",
+        "parameters": "any,...",
+        "description": "Identical to list_value, but generated as part of unpivot for better error messages",
+        "example": "unpivot_list(4, 5, 6)",
+        "type": "scalar_function"
     }
 ]

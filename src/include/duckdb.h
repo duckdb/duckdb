@@ -123,6 +123,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_STRUCT = 25,
 	// map type, only useful as logical type
 	DUCKDB_TYPE_MAP = 26,
+	// duckdb_array, only useful as logical type
+	DUCKDB_TYPE_ARRAY = 33,
 	// duckdb_hugeint
 	DUCKDB_TYPE_UUID = 27,
 	// union type, only useful as logical type
@@ -228,7 +230,7 @@ typedef struct {
 	uint64_t bits;
 } duckdb_time_tz;
 typedef struct {
-	duckdb_time time;
+	duckdb_time_struct time;
 	int32_t offset;
 } duckdb_time_tz_struct;
 
@@ -1627,6 +1629,16 @@ Creates a list value from a type and an array of values of length `value_count`
 DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
+Creates a array value from a type and an array of values of length `value_count`
+
+* type: The type of the array
+* values: The values for the array
+* value_count: The number of values in the array
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
+
+/*!
 Obtains a string representation of the given value.
 The result must be destroyed with `duckdb_free`.
 
@@ -1675,6 +1687,16 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 * returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
+
+/*!
+Creates a array type from its child type.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* type: The child type of array type to create.
+* array_size: The number of elements in the array.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type, idx_t array_size);
 
 /*!
 Creates a map type from its key type and value type.
@@ -1797,6 +1819,24 @@ The result must be freed with `duckdb_destroy_logical_type`.
 * returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
+
+/*!
+Retrieves the child type of the given array type.
+
+The result must be freed with `duckdb_destroy_logical_type`.
+
+* type: The logical type object
+* returns: The child type of the array type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_API duckdb_logical_type duckdb_array_type_child_type(duckdb_logical_type type);
+
+/*!
+Retrieves the array size of the given array type.
+
+* type: The logical type object
+* returns: The fixed number of elements the values of this array type can store.
+*/
+DUCKDB_API idx_t duckdb_array_type_array_size(duckdb_logical_type type);
 
 /*!
 Retrieves the key type of the given map type.
@@ -2016,7 +2056,7 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
 
 * vector: The vector to alter
 * index: The row position in the vector to assign the string to
@@ -2072,6 +2112,17 @@ The resulting vector is valid as long as the parent vector is valid.
 * returns: The child vector
 */
 DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index);
+
+/*!
+Retrieves the child vector of a array vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+The resulting vector has the size of the parent vector multiplied by the array size.
+
+* vector: The vector
+* returns: The child vector
+*/
+DUCKDB_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

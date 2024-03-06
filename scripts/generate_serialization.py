@@ -103,6 +103,7 @@ move_list = [
     'LogicalType',
     'ColumnDefinition',
     'BaseStatistics',
+    'BoundLimitNode',
 ]
 
 reference_list = ['ClientContext', 'bound_parameter_map_t']

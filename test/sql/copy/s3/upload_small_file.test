@@ -60,7 +60,7 @@ SELECT * FROM "s3://test-bucket/multipart/web_page.parquet" LIMIT 10;
 
 # CSV file
 statement ok
-COPY web_page TO 's3://test-bucket/multipart/web_page.csv' WITH (HEADER 1);
+COPY web_page TO 's3://test-bucket/multipart/web_page.csv';
 
 query IIIIIIIIIIIIII
 SELECT * FROM "s3://test-bucket/multipart/web_page.csv" LIMIT 10;

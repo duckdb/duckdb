@@ -155,24 +155,6 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 }
 
 //===--------------------------------------------------------------------===//
-// SetColumnCommentInfo
-//===--------------------------------------------------------------------===//
-SetColumnCommentInfo::SetColumnCommentInfo() : AlterTableInfo(AlterTableType::SET_COLUMN_COMMENT) {
-}
-
-SetColumnCommentInfo::SetColumnCommentInfo(AlterEntryData data, string column_name, Value comment_value)
-    : AlterTableInfo(AlterTableType::SET_COLUMN_COMMENT, std::move(data)), column_name(std::move(column_name)),
-      comment(std::move(comment_value)) {
-}
-
-SetColumnCommentInfo::~SetColumnCommentInfo() {
-}
-
-unique_ptr<AlterInfo> SetColumnCommentInfo::Copy() const {
-	return make_uniq_base<AlterInfo, SetColumnCommentInfo>(GetAlterEntryData(), column_name, comment);
-}
-
-//===--------------------------------------------------------------------===//
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
 SetDefaultInfo::SetDefaultInfo() : AlterTableInfo(AlterTableType::SET_DEFAULT) {
