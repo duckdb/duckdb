@@ -2,7 +2,7 @@ import sys
 import os
 import glob
 import json
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Generator
 import duckdb
 from enum import Enum
 import time
@@ -50,6 +50,7 @@ from enum import Enum, auto
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 
 
+# This is pretty much just a VM
 class SQLLogicTestExecutor(SQLLogicRunner):
     def __init__(self):
         super().__init__()
@@ -67,6 +68,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/json/table/read_json_objects.test',  # <-- Python client is always loaded with JSON available
                 'test/sql/copy/csv/zstd_crash.test',  # <-- Python client is always loaded with Parquet available
                 'test/sql/error/extension_function_error.test',  # <-- Python client is always loaded with TPCH available
+                'test/sql/types/timestamp/test_timestamp_tz.test',  # <-- Python client is always loaded wih ICU available - making the TIMESTAMPTZ::DATE cast pass
             ]
         )
         # TODO: get this from the `duckdb` package
@@ -111,17 +113,17 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             os.makedirs(test_directory)
         return test_directory
 
-    def test_delete_file(self, path):
-        try:
-            if os.path.exists(path):
-                os.remove(path)
-        except Exception:
-            pass
-
     def delete_database(self, path):
+        def test_delete_file(path):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+
         # FIXME: support custom test directory
-        self.test_delete_file(path)
-        self.test_delete_file(path + ".wal")
+        test_delete_file(path)
+        test_delete_file(path + ".wal")
 
     def reconnect(self):
         self.con = self.db.cursor()
@@ -146,7 +148,19 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.reset()
         self.test = test
         self.original_sqlite_test = self.test.is_sqlite_test()
-        context = SQLLogicContext(self, test.statements, 1)
+
+        # Top level keywords
+        keywords = {
+            '__TEST_DIR__': self.get_test_directory(),
+            '__WORKING_DIRECTORY__': os.getcwd(),
+            '__BUILD_DIRECTORY__': duckdb.__build_dir__,
+        }
+
+        def update_value(keywords: Dict[str, str]) -> Generator[Any, Any, Any]:
+            # Yield once to represent one iteration, do not touch the keywords
+            yield None
+
+        context = SQLLogicContext(self, test.statements, keywords, update_value)
         unsupported = self.get_unsupported_statements(context, test)
         if unsupported != []:
             error = f'Test {test.path} skipped because the following statement types are not supported: '

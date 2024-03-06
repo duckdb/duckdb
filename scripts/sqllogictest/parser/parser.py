@@ -245,6 +245,14 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_SKIP_IF: self.decorator_skipif,
             TokenType.SQLLOGIC_ONLY_IF: self.decorator_onlyif,
         }
+        self.FOREACH_COLLECTIONS = {
+            "<compression>": ["none", "uncompressed", "rle", "bitpacking", "dictionary", "fsst", "alp", "alprd"],
+            "<alltypes>": ["bool", "interval", "varchar"],
+            "<numeric>": ["float", "double"],
+            "<integral>": ["tinyint", "smallint", "integer", "bigint", "hugeint"],
+            "<signed>": ["tinyint", "smallint", "integer", "bigint", "hugeint"],
+            "<unsigned>": ["utinyint", "usmallint", "uinteger", "ubigint", "uhugeint"],
+        }
 
     def peek(self):
         return self.peek_no_strip().strip()
@@ -455,7 +463,21 @@ class SQLLogicParser:
         is_parallel = header.type == TokenType.SQLLOGIC_CONCURRENT_FOREACH
         statement = Foreach(header, self.current_line + 1, is_parallel)
         statement.set_name(header.parameters[0])
-        statement.set_values(header.parameters[1:])
+        raw_values = header.parameters[1:]
+
+        def add_tokens(result, param):
+            token_name = param.lower().strip()
+
+            if token_name in self.FOREACH_COLLECTIONS:
+                result.extend(self.FOREACH_COLLECTIONS[token_name])
+            else:
+                result.append(token_name)
+
+        foreach_tokens = []
+        for value in raw_values:
+            add_tokens(foreach_tokens, value)
+
+        statement.set_values(foreach_tokens)
         return statement
 
     def statement_endloop(self, header: Token) -> Optional[BaseStatement]:

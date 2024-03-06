@@ -25,7 +25,7 @@ from .statement import (
 
 from .expected_result import ExpectedResult
 from .parser import SQLLogicTest
-from typing import Optional, Any, Tuple, List, Dict, Set
+from typing import Optional, Any, Tuple, List, Dict, Set, Generator
 from .logger import SQLLogicTestLogger
 import duckdb
 import os
@@ -33,8 +33,6 @@ import math
 import time
 
 import re
-from duckdb.typing import DuckDBPyType
-import decimal
 from functools import cmp_to_key
 from enum import Enum
 
@@ -600,31 +598,24 @@ class SQLLogicRunner:
 
 
 class SQLLogicContext:
-    __slots__ = [
-        'iterator',
-        'runner',
-        'iterations',
-        'STATEMENTS',
-        'statements',
-    ]
+    __slots__ = ['iterator', 'runner', 'generator', 'STATEMENTS', 'statements', 'keywords']
 
     def reset(self):
         self.iterator = 0
 
     def replace_keywords(self, input: str):
-        # Replace environment variables in the SQL
-        for name, value in self.runner.environment_variables.items():
-            input = input.replace(f"${{{name}}}", value)
-
-        input = input.replace("__TEST_DIR__", self.runner.get_test_directory())
-        input = input.replace("__WORKING_DIRECTORY__", os.getcwd())
-        input = input.replace("__BUILD_DIRECTORY__", duckdb.__build_dir__)
+        # Apply a replacement for every registered keyword
+        for key, value in self.keywords.items():
+            input = input.replace(key, value)
         return input
 
-    def __init__(self, runner: SQLLogicRunner, statements: List[BaseStatement], iterations: int):
+    def __init__(
+        self, runner: SQLLogicRunner, statements: List[BaseStatement], keywords: Dict[str, str], iteration_generator
+    ):
         self.statements = statements
         self.runner = runner
-        self.iterations = iterations
+        self.generator: Generator[Any] = iteration_generator
+        self.keywords = keywords
         self.STATEMENTS = {
             Query: self.execute_query,
             Statement: self.execute_statement,
@@ -640,6 +631,9 @@ class SQLLogicContext:
             Restart: self.execute_restart,
             HashThreshold: self.execute_hash_threshold,
             Set: self.execute_set,
+            Loop: self.execute_loop,
+            Foreach: self.execute_foreach,
+            Endloop: None,  # <-- should never be encountered outside of Loop/Foreach
         }
 
     def in_loop(self) -> bool:
@@ -837,6 +831,7 @@ class SQLLogicContext:
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
+                print(result)
                 self.runner.fail(f"Query unexpectedly succeeded")
             if expected_result.type != ExpectedResult.Type.UNKNOWN:
                 assert expected_result.lines == None
@@ -864,7 +859,69 @@ class SQLLogicContext:
             self.runner.skipped = True
 
     def execute_require_env(self, statement: BaseStatement):
+        # TODO: support
+        # TODO: add to 'keywords'
         self.runner.skipped = True
+
+    def get_loop_statements(self):
+        saved_iterator = self.iterator
+        # Loop until EndLoop is found
+        statement = None
+        depth = 0
+        while self.iterator < len(self.statements):
+            statement = self.next_statement()
+            if statement.__class__ in [Foreach, Loop]:
+                depth += 1
+            if statement.__class__ == Endloop:
+                if depth == 0:
+                    break
+                depth -= 1
+        if not statement or statement.__class__ != Endloop:
+            raise Exception("no corresponding 'endloop' found before the end of the file!")
+        statements = self.statements[saved_iterator : self.iterator - 1]
+        return statements
+
+    def execute_loop(self, loop: Loop):
+        if loop.parallel:
+            self.runner.skiptest("PARALLEL LOOP NOT SUPPORTED")
+        statements = self.get_loop_statements()
+        new_keywords = self.keywords
+
+        # Every iteration the 'value' of the loop key needs to change
+        def update_value(keywords: Dict[str, str]) -> Generator[Any, Any, Any]:
+            loop_key = f'${{{loop.name}}}'
+            for val in range(loop.start, loop.end):
+                keywords[loop_key] = str(val)
+                yield None
+            keywords.pop(loop_key)
+
+        loop_context = SQLLogicContext(self.runner, statements, new_keywords, update_value)
+        loop_context.execute()
+
+    def execute_foreach(self, foreach: Foreach):
+        if foreach.parallel:
+            self.runner.skiptest("PARALLEL FOREACH NOT SUPPORTED")
+        statements = self.get_loop_statements()
+        new_keywords = self.keywords
+
+        # Every iteration the 'value' of the loop key needs to change
+        def update_value(keywords: Dict[str, str]) -> Generator[Any, Any, Any]:
+            loop_keys = [f'${{{name}}}' for name in foreach.name.split(',')]
+
+            for val in foreach.values:
+                if len(loop_keys) != 1:
+                    values = val.split(',')
+                else:
+                    values = [val]
+                assert len(values) == len(loop_keys)
+                for i, key in enumerate(loop_keys):
+                    keywords[key] = str(values[i])
+                yield None
+            for key in loop_keys:
+                keywords.pop(key)
+
+        loop_context = SQLLogicContext(self.runner, statements, new_keywords, update_value)
+        loop_context.execute()
 
     def next_statement(self):
         if self.iterator >= len(self.statements):
@@ -874,7 +931,7 @@ class SQLLogicContext:
         return statement
 
     def execute(self):
-        for _ in range(self.iterations):
+        for _ in self.generator(self.keywords):
             self.reset()
             while self.iterator < len(self.statements):
                 statement = self.next_statement()
