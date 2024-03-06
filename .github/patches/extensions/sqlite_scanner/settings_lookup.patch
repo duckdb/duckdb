@@ -1,0 +1,34 @@
+diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
+index 34ff3de..b8c9147 100644
+--- a/src/sqlite_scanner.cpp
++++ b/src/sqlite_scanner.cpp
+@@ -58,9 +58,9 @@ static unique_ptr<FunctionData> SqliteBind(ClientContext &context, TableFunction
+ 	vector<unique_ptr<Constraint>> constraints;
+ 
+ 	result->all_varchar = false;
+-	Value sqlite_all_varchar;
+-	if (context.TryGetCurrentSetting("sqlite_all_varchar", sqlite_all_varchar)) {
+-		result->all_varchar = BooleanValue::Get(sqlite_all_varchar);
++	SettingLookupResult lookup_result;
++	if (context.TryGetCurrentSetting("sqlite_all_varchar", lookup_result)) {
++		result->all_varchar = BooleanValue::Get(lookup_result.GetSetting());
+ 	}
+ 	db.GetTableInfo(result->table_name, columns, constraints, result->all_varchar);
+ 	for (auto &column : columns.Logical()) {
+diff --git a/src/storage/sqlite_transaction.cpp b/src/storage/sqlite_transaction.cpp
+index 3e7172e..cadde61 100644
+--- a/src/storage/sqlite_transaction.cpp
++++ b/src/storage/sqlite_transaction.cpp
+@@ -60,9 +60,9 @@ optional_ptr<CatalogEntry> SQLiteTransaction::GetCatalogEntry(const string &entr
+ 	case CatalogType::TABLE_ENTRY: {
+ 		CreateTableInfo info(sqlite_catalog.GetMainSchema(), entry_name);
+ 		bool all_varchar = false;
+-		Value sqlite_all_varchar;
+-		if (context.lock()->TryGetCurrentSetting("sqlite_all_varchar", sqlite_all_varchar)) {
+-			all_varchar = BooleanValue::Get(sqlite_all_varchar);
++		SettingLookupResult lookup_result;
++		if (context.lock()->TryGetCurrentSetting("sqlite_all_varchar", lookup_result)) {
++			all_varchar = BooleanValue::Get(lookup_result.GetSetting());
+ 		}
+ 		db->GetTableInfo(entry_name, info.columns, info.constraints, all_varchar);
+ 		D_ASSERT(!info.columns.empty());

@@ -1,0 +1,105 @@
+diff --git a/src/azure_extension.cpp b/src/azure_extension.cpp
+index b450197..26f5c95 100644
+--- a/src/azure_extension.cpp
++++ b/src/azure_extension.cpp
+@@ -94,43 +94,37 @@ static AzureAuthentication ParseAzureAuthSettings(FileOpener *opener, const stri
+ 		}
+ 	}
+ 
+-	Value connection_string_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_storage_connection_string", connection_string_val)) {
+-		auth.connection_string = connection_string_val.ToString();
++	SettingLookupResult lookup_result;
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_storage_connection_string", lookup_result)) {
++		auth.connection_string = lookup_result.GetSetting().ToString();
+ 	}
+ 
+-	Value account_name_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_account_name", account_name_val)) {
+-		auth.account_name = account_name_val.ToString();
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_account_name", lookup_result)) {
++		auth.account_name = lookup_result.GetSetting().ToString();
+ 	}
+ 
+-	Value endpoint_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_endpoint", endpoint_val)) {
+-		auth.endpoint = endpoint_val.ToString();
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_endpoint", lookup_result)) {
++		auth.endpoint = lookup_result.GetSetting().ToString();
+ 	}
+ 
+ 	if (!auth.account_name.empty()) {
+ 		string credential_chain;
+-		Value credential_chain_val;
+-		if (FileOpener::TryGetCurrentSetting(opener, "azure_credential_chain", credential_chain_val)) {
+-			auth.credential_chain = credential_chain_val.ToString();
++		if (FileOpener::TryGetCurrentSetting(opener, "azure_credential_chain", lookup_result)) {
++			auth.credential_chain = lookup_result.GetSetting().ToString();
+ 		}
+ 	}
+ 
+ 	// Load proxy options
+-	Value http_proxy;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_http_proxy", http_proxy)) {
+-		auth.proxy_options.http_proxy = http_proxy.ToString();
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_http_proxy", lookup_result)) {
++		auth.proxy_options.http_proxy = lookup_result.GetSetting().ToString();
+ 	}
+ 
+-	Value http_proxy_user_name;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_proxy_user_name", http_proxy_user_name)) {
+-		auth.proxy_options.user_name = http_proxy_user_name.ToString();
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_proxy_user_name", lookup_result)) {
++		auth.proxy_options.user_name = lookup_result.GetSetting().ToString();
+ 	}
+ 
+-	Value http_proxy_password;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_proxy_password", http_proxy_password)) {
+-		auth.proxy_options.password = http_proxy_password.ToString();
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_proxy_password", lookup_result)) {
++		auth.proxy_options.password = lookup_result.GetSetting().ToString();
+ 	}
+ 
+ 	return auth;
+@@ -139,19 +133,17 @@ static AzureAuthentication ParseAzureAuthSettings(FileOpener *opener, const stri
+ static AzureReadOptions ParseAzureReadOptions(FileOpener *opener) {
+ 	AzureReadOptions options;
+ 
+-	Value concurrency_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_transfer_concurrency", concurrency_val)) {
+-		options.transfer_concurrency = concurrency_val.GetValue<int32_t>();
++	SettingLookupResult lookup_result;
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_transfer_concurrency", lookup_result)) {
++		options.transfer_concurrency = lookup_result.GetSetting().GetValue<int32_t>();
+ 	}
+ 
+-	Value chunk_size_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_transfer_chunk_size", chunk_size_val)) {
+-		options.transfer_chunk_size = chunk_size_val.GetValue<int64_t>();
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_transfer_chunk_size", lookup_result)) {
++		options.transfer_chunk_size = lookup_result.GetSetting().GetValue<int64_t>();
+ 	}
+ 
+-	Value buffer_size_val;
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_buffer_size", buffer_size_val)) {
+-		options.buffer_size = buffer_size_val.GetValue<idx_t>();
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_read_buffer_size", lookup_result)) {
++		options.buffer_size = lookup_result.GetSetting().GetValue<idx_t>();
+ 	}
+ 
+ 	return options;
+@@ -330,11 +322,11 @@ unique_ptr<FileHandle> AzureStorageFileSystem::OpenFile(const string &path, uint
+                                                         FileCompressionType compression, FileOpener *opener) {
+ 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
+ 
+-	Value value;
+ 	bool enable_http_stats = false;
+ 	auto context = FileOpener::TryGetClientContext(opener);
+-	if (FileOpener::TryGetCurrentSetting(opener, "azure_http_stats", value)) {
+-		enable_http_stats = value.GetValue<bool>();
++	SettingLookupResult lookup_result;
++	if (FileOpener::TryGetCurrentSetting(opener, "azure_http_stats", lookup_result)) {
++		enable_http_stats = lookup_result.GetSetting().GetValue<bool>();
+ 	}
+ 
+ 	if (context && enable_http_stats) {

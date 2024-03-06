@@ -1,0 +1,89 @@
+diff --git a/duckdb b/duckdb
+index 0e78476..20b1486 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 0e784765f6f87bd1ce9034afcce1e7f89fcd8777
++Subproject commit 20b1486d1192f9fbd2328d1122b5afe5f1747fce
+diff --git a/src/postgres_scanner.cpp b/src/postgres_scanner.cpp
+index 9fca096..dda1be7 100644
+--- a/src/postgres_scanner.cpp
++++ b/src/postgres_scanner.cpp
+@@ -99,9 +99,9 @@ static void PostgresGetSnapshot(PostgresVersion version, const PostgresBindData
+ 
+ void PostgresScanFunction::PrepareBind(PostgresVersion version, ClientContext &context, PostgresBindData &bind_data,
+                                        idx_t approx_num_pages) {
+-	Value pages_per_task;
+-	if (context.TryGetCurrentSetting("pg_pages_per_task", pages_per_task)) {
+-		bind_data.pages_per_task = UBigIntValue::Get(pages_per_task);
++	SettingLookupResult lookup_result;
++	if (context.TryGetCurrentSetting("pg_pages_per_task", lookup_result)) {
++		bind_data.pages_per_task = UBigIntValue::Get(lookup_result.GetSetting());
+ 		if (bind_data.pages_per_task == 0) {
+ 			bind_data.pages_per_task = PostgresBindData::DEFAULT_PAGES_PER_TASK;
+ 		}
+diff --git a/src/postgres_utils.cpp b/src/postgres_utils.cpp
+index 8e9e0a9..1e0bba9 100644
+--- a/src/postgres_utils.cpp
++++ b/src/postgres_utils.cpp
+@@ -82,9 +82,9 @@ LogicalType PostgresUtils::TypeToLogicalType(optional_ptr<PostgresTransaction> t
+ 			if (!context) {
+ 				throw InternalException("Context is destroyed!?");
+ 			}
+-			Value array_as_varchar;
+-			if (context->TryGetCurrentSetting("pg_array_as_varchar", array_as_varchar)) {
+-				if (BooleanValue::Get(array_as_varchar)) {
++			SettingLookupResult lookup_result;
++			if (context->TryGetCurrentSetting("pg_array_as_varchar", lookup_result)) {
++				if (BooleanValue::Get(lookup_result.GetSetting())) {
+ 					postgres_type.info = PostgresTypeAnnotation::CAST_TO_VARCHAR;
+ 					return LogicalType::VARCHAR;
+ 				}
+diff --git a/src/storage/postgres_catalog.cpp b/src/storage/postgres_catalog.cpp
+index 4e43a18..e39a86d 100644
+--- a/src/storage/postgres_catalog.cpp
++++ b/src/storage/postgres_catalog.cpp
+@@ -11,10 +11,10 @@ namespace duckdb {
+ 
+ PostgresCatalog::PostgresCatalog(AttachedDatabase &db_p, const string &path, AccessMode access_mode)
+     : Catalog(db_p), path(path), access_mode(access_mode), schemas(*this), connection_pool(*this) {
+-	Value connection_limit;
+ 	auto &db_instance = db_p.GetDatabase();
+-	if (db_instance.TryGetCurrentSetting("pg_connection_limit", connection_limit)) {
+-		connection_pool.SetMaximumConnections(UBigIntValue::Get(connection_limit));
++	SettingLookupResult lookup_result;
++	if (db_instance.TryGetCurrentSetting("pg_connection_limit", lookup_result)) {
++		connection_pool.SetMaximumConnections(UBigIntValue::Get(lookup_result.GetSetting()));
+ 	}
+ 
+ 	auto connection = connection_pool.GetConnection();
+diff --git a/src/storage/postgres_table_entry.cpp b/src/storage/postgres_table_entry.cpp
+index d791678..3e75877 100644
+--- a/src/storage/postgres_table_entry.cpp
++++ b/src/storage/postgres_table_entry.cpp
+@@ -54,9 +54,9 @@ TableFunction PostgresTableEntry::GetScanFunction(ClientContext &context, unique
+ 
+ 	bind_data = std::move(result);
+ 	auto function = PostgresScanFunction();
+-	Value filter_pushdown;
+-	if (context.TryGetCurrentSetting("pg_experimental_filter_pushdown", filter_pushdown)) {
+-		function.filter_pushdown = BooleanValue::Get(filter_pushdown);
++	SettingLookupResult lookup_result;
++	if (context.TryGetCurrentSetting("pg_experimental_filter_pushdown", lookup_result)) {
++		function.filter_pushdown = BooleanValue::Get(lookup_result.GetSetting());
+ 	}
+ 	return function;
+ }
+@@ -105,9 +105,9 @@ static bool CopyRequiresText(const LogicalType &type, const PostgresType &pg_typ
+ }
+ 
+ PostgresCopyFormat PostgresTableEntry::GetCopyFormat(ClientContext &context) {
+-	Value use_binary_copy;
+-	if (context.TryGetCurrentSetting("pg_use_binary_copy", use_binary_copy)) {
+-		if (!BooleanValue::Get(use_binary_copy)) {
++	SettingLookupResult lookup_result;
++	if (context.TryGetCurrentSetting("pg_use_binary_copy", lookup_result)) {
++		if (!BooleanValue::Get(lookup_result.GetSetting())) {
+ 			return PostgresCopyFormat::TEXT;
+ 		}
+ 	}
