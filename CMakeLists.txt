@@ -799,15 +799,16 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   add_custom_target(
     ${TARGET_NAME}_metadated ALL
     COMMAND
-    echo 'my1platform\\x00' > duckdb_platform_file
-    COMMAND
     echo 'duckdb12_version\\x00' > duckdb_version_file
     COMMAND
     echo 'extension123_version\\x00' > extension_version_file
     COMMAND
-    ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> duckdb_platform_file duckdb_version_file extension_version_file
+    ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
     )
   add_dependencies(${TARGET_NAME}_metadated ${TARGET_NAME})
+  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+    add_dependencies(duckdb_local_extension_repo ${TARGET_NAME}_metadated)
+  endif()
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)
