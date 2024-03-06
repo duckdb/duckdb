@@ -16,7 +16,7 @@
 namespace duckdb {
 
 PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
-    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(std::move(event_p)) {
+    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
 }
 
 bool PipelineTask::TaskBlockedOnResult() const {

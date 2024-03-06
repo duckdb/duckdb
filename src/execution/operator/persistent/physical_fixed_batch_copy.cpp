@@ -9,6 +9,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -212,7 +213,7 @@ class ProcessRemainingBatchesTask : public ExecutorTask {
 public:
 	ProcessRemainingBatchesTask(Executor &executor, shared_ptr<Event> event_p, FixedBatchCopyGlobalState &state_p,
 	                            ClientContext &context, const PhysicalFixedBatchCopy &op)
-	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p), context(context) {
+	    : ExecutorTask(executor, std::move(event_p)), op(op), gstate(state_p), context(context) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -224,7 +225,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	const PhysicalFixedBatchCopy &op;
 	FixedBatchCopyGlobalState &gstate;
 	ClientContext &context;
