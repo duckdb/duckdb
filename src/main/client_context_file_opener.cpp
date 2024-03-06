@@ -5,12 +5,12 @@
 
 namespace duckdb {
 
-bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, Value &result) {
+bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, SettingLookupResult &result) {
 	return context.TryGetCurrentSetting(key, result);
 }
 
 // LCOV_EXCL_START
-bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &) {
+bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, SettingLookupResult &result, FileOpenerInfo &) {
 	return context.TryGetCurrentSetting(key, result);
 }
 
@@ -21,21 +21,22 @@ ClientContext *FileOpener::TryGetClientContext(FileOpener *opener) {
 	return opener->TryGetClientContext();
 }
 
-bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result) {
+bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, SettingLookupResult &result) {
 	if (!opener) {
 		return false;
 	}
 	return opener->TryGetCurrentSetting(key, result);
 }
 
-bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result, FileOpenerInfo &info) {
+bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, SettingLookupResult &result,
+                                      FileOpenerInfo &info) {
 	if (!opener) {
 		return false;
 	}
 	return opener->TryGetCurrentSetting(key, result, info);
 }
 
-bool FileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) {
+bool FileOpener::TryGetCurrentSetting(const string &key, SettingLookupResult &result, FileOpenerInfo &info) {
 	return this->TryGetCurrentSetting(key, result);
 }
 // LCOV_EXCL_STOP

@@ -210,40 +210,40 @@ unique_ptr<S3AuthParams> S3AuthParams::ReadFromStoredCredentials(FileOpener *ope
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	S3AuthParams result;
-	Value value;
+	SettingLookupResult lookup_result;
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", value, info)) {
-		result.region = value.ToString();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_region", lookup_result, info)) {
+		result.region = lookup_result.GetSetting().ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", value, info)) {
-		result.access_key_id = value.ToString();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_access_key_id", lookup_result, info)) {
+		result.access_key_id = lookup_result.GetSetting().ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", value, info)) {
-		result.secret_access_key = value.ToString();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_secret_access_key", lookup_result, info)) {
+		result.secret_access_key = lookup_result.GetSetting().ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", value, info)) {
-		result.session_token = value.ToString();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_session_token", lookup_result, info)) {
+		result.session_token = lookup_result.GetSetting().ToString();
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", value, info)) {
-		if (value.ToString().empty()) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_endpoint", lookup_result, info)) {
+		if (lookup_result.GetSetting().ToString().empty()) {
 			if (StringUtil::StartsWith(info.file_path, "gcs://") || StringUtil::StartsWith(info.file_path, "gs://")) {
 				result.endpoint = "storage.googleapis.com";
 			} else {
 				result.endpoint = "s3.amazonaws.com";
 			}
 		} else {
-			result.endpoint = value.ToString();
+			result.endpoint = lookup_result.GetSetting().ToString();
 		}
 	} else {
 		result.endpoint = "s3.amazonaws.com";
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", value, info)) {
-		auto val_str = value.ToString();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_style", lookup_result, info)) {
+		auto val_str = lookup_result.GetSetting().ToString();
 		if (!(val_str == "vhost" || val_str != "path" || !val_str.empty())) {
 			throw std::runtime_error(
 			    "Incorrect setting found for s3_url_style, allowed values are: 'path' and 'vhost'");
@@ -253,14 +253,14 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 		result.url_style = "vhost";
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", value, info)) {
-		result.use_ssl = value.GetValue<bool>();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_use_ssl", lookup_result, info)) {
+		result.use_ssl = lookup_result.GetSetting().GetValue<bool>();
 	} else {
 		result.use_ssl = true;
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", value, info)) {
-		result.s3_url_compatibility_mode = value.GetValue<bool>();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_url_compatibility_mode", lookup_result, info)) {
+		result.s3_url_compatibility_mode = lookup_result.GetSetting().GetValue<bool>();
 	} else {
 		result.s3_url_compatibility_mode = true;
 	}
@@ -325,22 +325,22 @@ S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	uint64_t uploader_max_filesize;
 	uint64_t max_parts_per_file;
 	uint64_t max_upload_threads;
-	Value value;
+	SettingLookupResult lookup_result;
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_filesize", value)) {
-		uploader_max_filesize = DBConfig::ParseMemoryLimit(value.GetValue<string>());
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_filesize", lookup_result)) {
+		uploader_max_filesize = DBConfig::ParseMemoryLimit(lookup_result.GetSetting().GetValue<string>());
 	} else {
 		uploader_max_filesize = S3ConfigParams::DEFAULT_MAX_FILESIZE;
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_parts_per_file", value)) {
-		max_parts_per_file = value.GetValue<uint64_t>();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_parts_per_file", lookup_result)) {
+		max_parts_per_file = lookup_result.GetSetting().GetValue<uint64_t>();
 	} else {
 		max_parts_per_file = S3ConfigParams::DEFAULT_MAX_PARTS_PER_FILE; // AWS Default
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_thread_limit", value)) {
-		max_upload_threads = value.GetValue<uint64_t>();
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_thread_limit", lookup_result)) {
+		max_upload_threads = lookup_result.GetSetting().GetValue<uint64_t>();
 	} else {
 		max_upload_threads = S3ConfigParams::DEFAULT_MAX_UPLOAD_THREADS;
 	}

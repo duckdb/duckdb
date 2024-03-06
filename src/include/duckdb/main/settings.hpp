@@ -18,6 +18,40 @@ struct DBConfig;
 
 const string GetDefaultUserAgent();
 
+enum class SettingScope : uint8_t { GLOBAL, LOCAL, INVALID };
+
+struct SettingLookupResult {
+public:
+	SettingLookupResult() {
+	}
+
+public:
+	bool Success() const {
+		return success;
+	}
+
+public:
+	Value &GetSetting() {
+		D_ASSERT(success);
+		return result;
+	}
+	SettingScope GetScope() {
+		D_ASSERT(success);
+		return scope;
+	}
+	void SetSetting(Value value, SettingScope scope) {
+		D_ASSERT(!scope.empty());
+		result = std::move(value);
+		this->scope = scope;
+		success = true;
+	}
+
+private:
+	Value result;
+	SettingScope scope = SettingScope::INVALID;
+	bool success = false;
+};
+
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
 	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";

@@ -5436,6 +5436,34 @@ SetType EnumUtil::FromString<SetType>(const char *value) {
 }
 
 template<>
+const char* EnumUtil::ToChars<SettingScope>(SettingScope value) {
+	switch(value) {
+	case SettingScope::GLOBAL:
+		return "GLOBAL";
+	case SettingScope::LOCAL:
+		return "LOCAL";
+	case SettingScope::INVALID:
+		return "INVALID";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
+	if (StringUtil::Equals(value, "GLOBAL")) {
+		return SettingScope::GLOBAL;
+	}
+	if (StringUtil::Equals(value, "LOCAL")) {
+		return SettingScope::LOCAL;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return SettingScope::INVALID;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value) {
 	switch(value) {
 	case ShowType::SUMMARY:

@@ -252,10 +252,11 @@ string FileSystem::ExtractBaseName(const string &path) {
 string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
-		Value result;
+		SettingLookupResult result;
 		if (opener->TryGetCurrentSetting("home_directory", result)) {
-			if (!result.IsNull() && !result.ToString().empty()) {
-				return result.ToString();
+			auto &val = result.GetSetting();
+			if (!val.IsNull() && !val.ToString().empty()) {
+				return val.ToString();
 			}
 		}
 	}

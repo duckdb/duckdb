@@ -456,9 +456,9 @@ void ParquetReader::InitializeSchema() {
 }
 
 ParquetOptions::ParquetOptions(ClientContext &context) {
-	Value binary_as_string_val;
-	if (context.TryGetCurrentSetting("binary_as_string", binary_as_string_val)) {
-		binary_as_string = binary_as_string_val.GetValue<bool>();
+	SettingLookupResult lookup_result;
+	if (context.TryGetCurrentSetting("binary_as_string", lookup_result)) {
+		binary_as_string = lookup_result.GetSetting().GetValue<bool>();
 	}
 }
 

@@ -1121,8 +1121,9 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 	if (FileExists(path) || IsPipe(path)) {
 		result.push_back(path);
 	} else if (!absolute_path) {
-		Value value;
-		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
+		SettingLookupResult lookup_result;
+		if (opener && opener->TryGetCurrentSetting("file_search_path", lookup_result)) {
+			auto &value = lookup_result.GetSetting();
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
@@ -1190,8 +1191,9 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		previous_directories.push_back(splits[0]);
 	} else {
 		// If file_search_path is set, use those paths as the first glob elements
-		Value value;
-		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
+		SettingLookupResult result;
+		if (opener && opener->TryGetCurrentSetting("file_search_path", result)) {
+			auto &value = result.GetSetting();
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
