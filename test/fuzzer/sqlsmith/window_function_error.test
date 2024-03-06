@@ -1,0 +1,14 @@
+# name: test/fuzzer/sqlsmith/window_function_error.test
+# description: Correctly handle errors in window expressions
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT 'thisisastring42' AS r_name;
+
+statement error
+SELECT max(CAST(from_hex(CAST(ref_0.r_name AS VARCHAR)) AS BLOB)) OVER (ORDER BY ref_0.r_name) AS c5,
+FROM tbl AS ref_0
+----

@@ -571,12 +571,12 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		for (auto &merger : mergers) {
 			final_collections.push_back(merger->Flush(writer));
 		}
-		storage.FinalizeOptimisticWriter(context, writer);
 
 		// finally, merge the row groups into the local storage
 		for (auto &collection : final_collections) {
 			storage.LocalMerge(context, *collection);
 		}
+		storage.FinalizeOptimisticWriter(context, writer);
 	} else {
 		// we are writing a small amount of data to disk
 		// append directly to transaction local storage

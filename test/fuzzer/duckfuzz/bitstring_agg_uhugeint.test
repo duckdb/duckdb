@@ -1,0 +1,16 @@
+# name: test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test
+# description: Coverage for narrow DECIMAL ordering argument
+# group: [duckfuzz]
+
+statement ok
+create table all_types as select hugeint, uhugeint from test_all_types();
+
+statement error
+SELECT bitstring_agg(uhugeint) FROM all_types;
+----
+Out of Range Error
+
+statement error
+SELECT bitstring_agg(hugeint) FROM all_types;
+----
+Out of Range Error

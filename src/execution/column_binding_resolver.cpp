@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-ColumnBindingResolver::ColumnBindingResolver() {
+ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only) {
 }
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
@@ -152,6 +152,10 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
+			if (verify_only) {
+				// in verification mode
+				return nullptr;
+			}
 			return make_uniq<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
 	}
@@ -197,6 +201,8 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
 #ifdef DEBUG
+	ColumnBindingResolver resolver(true);
+	resolver.VisitOperator(op);
 	VerifyInternal(op);
 #endif
 }
