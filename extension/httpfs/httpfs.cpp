@@ -1,9 +1,9 @@
 #include "httpfs.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/http_state.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
@@ -36,6 +36,8 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
+	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
+	std::string ca_cert_file = "";
 
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -56,8 +58,16 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", value)) {
 		keep_alive = value.GetValue<bool>();
 	}
+	if (FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", value)) {
+		enable_server_cert_verification = value.GetValue<bool>();
+	}
+	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", value)) {
+		ca_cert_file = value.ToString();
+	}
 
-	return {timeout, retries, retry_wait_ms, retry_backoff, force_download, keep_alive};
+	return {
+	    timeout,     retries, retry_wait_ms, retry_backoff, force_download, keep_alive, enable_server_cert_verification,
+	    ca_cert_file};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -188,7 +198,10 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	auto client = make_uniq<duckdb_httplib_openssl::Client>(proto_host_port);
 	client->set_follow_location(true);
 	client->set_keep_alive(http_params.keep_alive);
-	client->enable_server_certificate_verification(false);
+	if (!http_params.ca_cert_file.empty()) {
+		client->set_ca_cert_path(http_params.ca_cert_file.c_str());
+	}
+	client->enable_server_certificate_verification(http_params.enable_server_cert_verification);
 	client->set_write_timeout(http_params.timeout);
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);

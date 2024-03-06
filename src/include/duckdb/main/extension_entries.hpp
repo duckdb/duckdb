@@ -216,19 +216,21 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
 }; // END_OF_EXTENSION_FUNCTIONS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
-    {"azure_storage_connection_string", "azure"},
-    {"azure_read_transfer_chunk_size", "azure"},
-    {"azure_endpoint", "azure"},
-    {"azure_credential_chain", "azure"},
-    {"azure_read_buffer_size", "azure"},
     {"azure_account_name", "azure"},
-    {"azure_read_transfer_concurrency", "azure"},
-    {"azure_proxy_user_name", "azure"},
+    {"azure_credential_chain", "azure"},
+    {"azure_endpoint", "azure"},
     {"azure_http_proxy", "azure"},
-    {"azure_proxy_password", "azure"},
     {"azure_http_stats", "azure"},
+    {"azure_proxy_password", "azure"},
+    {"azure_proxy_user_name", "azure"},
+    {"azure_read_buffer_size", "azure"},
+    {"azure_read_transfer_chunk_size", "azure"},
+    {"azure_read_transfer_concurrency", "azure"},
+    {"azure_storage_connection_string", "azure"},
     {"binary_as_string", "parquet"},
+    {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
+    {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
     {"http_keep_alive", "httpfs"},
     {"http_retries", "httpfs"},
@@ -327,9 +329,8 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/config", "azure"},      {"azure/credential_chain", "azure"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "azure", "arrow", "aws", "autocomplete", "excel", "fts", "httpfs",
-    // "inet",
-    // "icu",
-    "json", "parquet", "sqlsmith", "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "aws", "azure", "autocomplete", "excel",          "fts",      "httpfs",           "inet",
+    "icu", "json",  "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner", "tpcds",
+    "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

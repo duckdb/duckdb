@@ -2,6 +2,8 @@
 # description: Test reading database with views
 # group: [bc]
 
+require block_size 262144
+
 load data/storage/views_092.db readonly
 
 statement ok

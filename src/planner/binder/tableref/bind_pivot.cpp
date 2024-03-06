@@ -80,16 +80,16 @@ static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<uni
 			auto &columnref = entry->Cast<ColumnRefExpression>();
 			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
 				// not handled - add to grouping set
-				subquery->groups.group_expressions.push_back(
-				    make_uniq<ConstantExpression>(Value::INTEGER(subquery->select_list.size() + 1)));
+				subquery->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
+				    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery->select_list.size() + 1))));
 				subquery->select_list.push_back(make_uniq<ColumnRefExpression>(columnref.GetColumnName()));
 			}
 		}
 	} else {
 		// if rows are specified only the columns mentioned in rows are added as groups
 		for (auto &row : ref.groups) {
-			subquery->groups.group_expressions.push_back(
-			    make_uniq<ConstantExpression>(Value::INTEGER(subquery->select_list.size() + 1)));
+			subquery->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
+			    Value::INTEGER(UnsafeNumericCast<uint32_t>(subquery->select_list.size() + 1))));
 			subquery->select_list.push_back(make_uniq<ColumnRefExpression>(row));
 		}
 	}
@@ -165,8 +165,8 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 				pivot_expr->alias = "__internal_pivot_ref" + std::to_string(++pivot_count);
 			}
 			auto pivot_alias = pivot_expr->alias;
-			subquery_stage1->groups.group_expressions.push_back(
-			    make_uniq<ConstantExpression>(Value::INTEGER(subquery_stage1->select_list.size() + 1)));
+			subquery_stage1->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
+			    Value::INTEGER(UnsafeNumericCast<uint32_t>(subquery_stage1->select_list.size() + 1))));
 			subquery_stage1->select_list.push_back(std::move(pivot_expr));
 			pivot_expr = make_uniq<ColumnRefExpression>(std::move(pivot_alias));
 		}
@@ -202,8 +202,8 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 
 	// add all of the groups
 	for (idx_t gr = 0; gr < bind_state.internal_group_names.size(); gr++) {
-		subquery_stage2->groups.group_expressions.push_back(
-		    make_uniq<ConstantExpression>(Value::INTEGER(subquery_stage2->select_list.size() + 1)));
+		subquery_stage2->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
+		    Value::INTEGER(UnsafeNumericCast<uint32_t>(subquery_stage2->select_list.size() + 1))));
 		auto group_reference = make_uniq<ColumnRefExpression>(bind_state.internal_group_names[gr]);
 		group_reference->alias = bind_state.internal_group_names[gr];
 		subquery_stage2->select_list.push_back(std::move(group_reference));

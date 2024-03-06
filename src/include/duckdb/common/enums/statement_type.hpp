@@ -65,6 +65,8 @@ struct StatementProperties {
 	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
+	//! The set of databases this statement will read from
+	unordered_set<string> read_databases;
 	//! The set of databases this statement will modify
 	unordered_set<string> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the

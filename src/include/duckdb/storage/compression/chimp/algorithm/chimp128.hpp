@@ -257,7 +257,7 @@ public:
 		case ChimpConstants::Flags::VALUE_IDENTICAL: {
 			//! Value is identical to previous value
 			auto index = state.input.template ReadValue<uint8_t, 7>();
-			result = state.ring_buffer.Value(index);
+			result = UnsafeNumericCast<CHIMP_TYPE>(state.ring_buffer.Value(index));
 			break;
 		}
 		case ChimpConstants::Flags::TRAILING_EXCEEDS_THRESHOLD: {

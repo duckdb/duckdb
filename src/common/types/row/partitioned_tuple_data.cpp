@@ -217,7 +217,7 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 		// This needs to be initialized, even if we go the short path here
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto index = append_sel.get_index(i);
-			state.reverse_partition_sel[index] = i;
+			state.reverse_partition_sel[index] = NumericCast<sel_t>(i);
 		}
 		return;
 	}
@@ -237,8 +237,8 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 		const auto index = append_sel.get_index(i);
 		const auto &partition_index = partition_indices[index];
 		auto &partition_offset = partition_entries[partition_index].offset;
-		reverse_partition_sel[index] = partition_offset;
-		partition_sel[partition_offset++] = index;
+		reverse_partition_sel[index] = UnsafeNumericCast<sel_t>(partition_offset);
+		partition_sel[partition_offset++] = UnsafeNumericCast<sel_t>(index);
 	}
 }
 

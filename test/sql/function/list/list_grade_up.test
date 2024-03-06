@@ -301,3 +301,20 @@ CREATE TABLE health (a VARCHAR[]);
 
 statement ok
 INSERT INTO health SELECT list_grade_up(string_to_array(s, ',')) AS a FROM stage;
+
+
+# Make sure it works for arrays too
+query I
+SELECT array_grade_up(array_value(4,5,3), 'ASC')
+----
+[3, 1, 2]
+
+query I
+SELECT array_grade_up(array_value(4,5,3), 'DESC');
+----
+[2, 1, 3]
+
+query I
+SELECT array_grade_up(NULL::INT[3]);
+----
+NULL
