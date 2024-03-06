@@ -111,6 +111,10 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 }
 
 void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size, bool allocate) {
+	if (ignore_current_row) {
+		cur_col_id++;
+		return;
+	}
 	if (cur_col_id >= number_of_columns) {
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
@@ -118,12 +122,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			error = !IsValueNull(null_str_ptr, value_ptr, size);
 		}
 		if (error) {
-			HandleOverLimitRows();
+			ignore_current_row = true;
 		}
-	}
-	if (ignore_current_row) {
 		return;
 	}
+
 	if (projecting_columns) {
 		if (!projected_columns[cur_col_id]) {
 			cur_col_id++;
@@ -332,10 +335,6 @@ void StringValueResult::HandleOverLimitRows() {
 	    CSVError::IncorrectColumnAmountError(state_machine.options, cur_col_id + 1, lines_per_batch, borked_line,
 	                                         current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 	error_handler.Error(csv_error);
-	// If we get here we need to remove the last line
-	cur_col_id = 0;
-	chunk_col_id = 0;
-	ignore_current_row = true;
 }
 
 void StringValueResult::QuotedNewLine(StringValueResult &result) {
@@ -405,6 +404,9 @@ bool StringValueResult::AddRowInternal() {
 	current_line_position.begin = current_line_position.end;
 	current_line_position.end = current_line_start;
 	if (ignore_current_row) {
+		if (cur_col_id >= number_of_columns) {
+			HandleOverLimitRows();
+		}
 		cur_col_id = 0;
 		chunk_col_id = 0;
 		// An error occurred on this row, we are ignoring it and resetting our control flag

@@ -4,7 +4,6 @@
 
 require skip_reload
 
-
 statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/incorrect_columns/few_columns.csv',
@@ -20,3 +19,22 @@ data/csv/rejects/incorrect_columns/few_columns.csv	1814	3	"d"	MISSING COLUMNS	1,
 data/csv/rejects/incorrect_columns/few_columns.csv	1823	1	"b"	MISSING COLUMNS	1	14574
 data/csv/rejects/incorrect_columns/few_columns.csv	2378	1	"b"	MISSING COLUMNS	1	19008
 data/csv/rejects/incorrect_columns/few_columns.csv	2762	2	"c"	MISSING COLUMNS	1,2	22074
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/incorrect_columns/many_columns.csv',
+    columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, auto_detect=false, header = 1);
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+data/csv/rejects/incorrect_columns/many_columns.csv	1096	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	8760
+data/csv/rejects/incorrect_columns/many_columns.csv	1159	6	NULL	TOO MANY COLUMNS	1,2,3,4,5,6	9268
+data/csv/rejects/incorrect_columns/many_columns.csv	1206	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	9648
+data/csv/rejects/incorrect_columns/many_columns.csv	2769	5	NULL	TOO MANY COLUMNS	1,2,3,4,5	22154
