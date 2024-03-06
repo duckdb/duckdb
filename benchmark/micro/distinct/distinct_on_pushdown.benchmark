@@ -1,6 +1,6 @@
-# name: benchmark/micro/distinct/distinct_on.benchmark
+# name: benchmark/micro/distinct/distinct_on_pushdown.benchmark
 # description: pushdown columns using distinct on.
-# group: [filter]
+# group: [distinct]
 
 name Distinct on pushdown
 group micro
