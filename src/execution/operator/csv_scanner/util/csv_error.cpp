@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+
 #include <sstream>
 
 namespace duckdb {
@@ -160,8 +161,12 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	      << std::endl;
 	// What were the options
 	error << options.ToString();
-	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, actual_columns, csv_row, error_info,
-	                byte_position);
+	if (actual_columns > options.dialect_options.num_cols) {
+		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info,
+		                byte_position);
+	} else {
+		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, byte_position);
+	}
 }
 
 bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
@@ -171,7 +176,8 @@ bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
 	switch (error.type) {
 	case CSVErrorType::CAST_ERROR:
 	case CSVErrorType::UNTERMINATED_QUOTES:
-	case CSVErrorType::INCORRECT_COLUMN_AMOUNT:
+	case CSVErrorType::TOO_FEW_COLUMNS:
+	case CSVErrorType::TOO_MANY_COLUMNS:
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
 	case CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE:
 		return true;

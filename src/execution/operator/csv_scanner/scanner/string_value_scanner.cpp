@@ -308,7 +308,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 }
 
 void StringValueResult::HandleOverLimitRows() {
-	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
+	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read + 1);
 	bool first_nl;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 	auto csv_error =
@@ -446,7 +446,7 @@ bool StringValueResult::AddRowInternal() {
 			// If we are not null-padding this is an error
 			bool first_nl;
 			auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
-			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
+			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read + 1);
 			auto csv_error = CSVError::IncorrectColumnAmountError(
 			    state_machine.options, cur_col_id, lines_per_batch, borked_line,
 			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl));

@@ -39,11 +39,12 @@ public:
 enum CSVErrorType : uint8_t {
 	CAST_ERROR = 0,                // If when casting a value from string to the column type fails
 	COLUMN_NAME_TYPE_MISMATCH = 1, // If there is a mismatch between Column Names and Types
-	INCORRECT_COLUMN_AMOUNT = 2,   // If the CSV is missing a column
-	UNTERMINATED_QUOTES = 3,       // If a quote is not terminated
-	SNIFFING = 4,          // If something went wrong during sniffing and was not possible to find suitable candidates
-	MAXIMUM_LINE_SIZE = 5, // Maximum line size was exceeded by a line in the CSV File
-	NULLPADDED_QUOTED_NEW_VALUE = 6, // If the null_padding option is set, and we have quoted new values in parallel
+	TOO_FEW_COLUMNS = 2,           // If the CSV has too few columns
+	TOO_MANY_COLUMNS = 3,          // If the CSV has too many  column
+	UNTERMINATED_QUOTES = 4,       // If a quote is not terminated
+	SNIFFING = 5,          // If something went wrong during sniffing and was not possible to find suitable candidates
+	MAXIMUM_LINE_SIZE = 6, // Maximum line size was exceeded by a line in the CSV File
+	NULLPADDED_QUOTED_NEW_VALUE = 7, // If the null_padding option is set, and we have quoted new values in parallel
 
 };
 
@@ -69,7 +70,7 @@ public:
 	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
 	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line
-	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
+	static CSVError IncorrectColumnAmountError(const CSVReaderOptions &state_machine, idx_t actual_columns,
 	                                           LinesPerBoundary error_info, string &csv_row, idx_t byte_position);
 	idx_t GetBoundaryIndex() {
 		return error_info.boundary_idx;

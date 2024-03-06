@@ -137,6 +137,36 @@ void CSVGlobalState::DecrementThread() {
 	}
 }
 
+bool IsCSVErrorAcceptedReject(CSVErrorType type) {
+	switch (type) {
+	case CSVErrorType::CAST_ERROR:
+	case CSVErrorType::TOO_MANY_COLUMNS:
+	case CSVErrorType::TOO_FEW_COLUMNS:
+	case CSVErrorType::MAXIMUM_LINE_SIZE:
+	case CSVErrorType::UNTERMINATED_QUOTES:
+		return true;
+	default:
+		return false;
+	}
+}
+
+string CSVErrorTypeToEnum(CSVErrorType type) {
+	switch (type) {
+	case CSVErrorType::CAST_ERROR:
+		return "CAST";
+	case CSVErrorType::TOO_FEW_COLUMNS:
+		return "MISSING COLUMNS";
+	case CSVErrorType::TOO_MANY_COLUMNS:
+		return "TOO MANY COLUMNS";
+	case CSVErrorType::MAXIMUM_LINE_SIZE:
+		return "LINE SIZE OVER MAXIMUM";
+	case CSVErrorType::UNTERMINATED_QUOTES:
+		return "UNQUOTED VALUE";
+	default:
+		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
+	}
+}
+
 void CSVGlobalState::FillRejectsTable() {
 	auto &options = bind_data.options;
 
@@ -152,7 +182,7 @@ void CSVGlobalState::FillRejectsTable() {
 			auto &errors = file->error_handler->errors;
 			for (auto &error_vector : errors) {
 				for (auto &error : error_vector.second) {
-					if (error.type != CSVErrorType::CAST_ERROR) {
+					if (!IsCSVErrorAcceptedReject(error.type)) {
 						// For now, we only will use it for casting errors
 						continue;
 					}
@@ -177,8 +207,8 @@ void CSVGlobalState::FillRejectsTable() {
 						appender.Append(col_idx);
 						// 5. Column Name (If Applicable)
 						appender.Append(string_t("\"" + col_name + "\""));
-						// 6. Error Type (ENUM?)
-						appender.Append(string_t("CAST"));
+						// 6. Error Type
+						appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
 						// 7. Original CSV Line
 						appender.Append(string_t(error.csv_row));
 						// 8. Full Error Message
