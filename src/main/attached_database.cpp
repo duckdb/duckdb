@@ -105,11 +105,19 @@ bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
+bool AttachedDatabase::NameIsReserved(const string &name) {
+	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG;
+}
+
 string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
 	if (dbpath.empty() || dbpath == IN_MEMORY_PATH) {
 		return "memory";
 	}
-	return fs.ExtractBaseName(dbpath);
+	auto name = fs.ExtractBaseName(dbpath);
+	if (NameIsReserved(name)) {
+		name += "_db";
+	}
+	return name;
 }
 
 void AttachedDatabase::Initialize() {
