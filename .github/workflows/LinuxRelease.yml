@@ -289,13 +289,14 @@ jobs:
       shell: bash
       env:
         DISABLE_BUILTIN_EXTENSIONS: 1
+        LOCAL_EXTENSION_REPO: build/release/repository_other
       run: |
         make
 
     - uses: actions/download-artifact@v3
       with:
         name: linux-extensions-64
-        path: /tmp
+        path: build/release/repository
 
     - name: Check if extension_entries.hpp is up to date
       shell: bash
@@ -303,7 +304,26 @@ jobs:
         EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
       run: |
         make extension_configuration
-        python scripts/generate_extensions_function.py --validate
+        python scripts/generate_extensions_function.py
+        pip install "black>=24"
+        pip install cmake-format
+        make format-fix
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: extension_entries.hpp
+        path: |
+          src/include/duckdb/main/extension_entries.hpp
+
+    - name: Check for any difference
+      run: |
+        git diff --exit-code src/include/duckdb/main/extension_entries.hpp && echo "No differences found"
+
+    - name: Explainer
+      if: failure()
+      run: |
+        echo "There are differences in src/include/duckdb/main/extension_entries.hpp"
+        echo "Check the uploaded extension_entries.hpp (in the workflow Summary), and check that in instead of src/include/duckdb/main/extension_entries.hpp"
 
  symbol-leakage:
     name: Symbol Leakage

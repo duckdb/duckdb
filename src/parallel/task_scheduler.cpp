@@ -231,7 +231,7 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 int32_t TaskScheduler::NumberOfThreads() {
 	lock_guard<mutex> t(thread_lock);
 	auto &config = DBConfig::GetConfig(db);
-	return threads.size() + config.options.external_threads;
+	return NumericCast<int32_t>(threads.size() + config.options.external_threads);
 }
 
 void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
@@ -248,7 +248,7 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 		    "DuckDB was compiled without threads! Setting total_threads != external_threads is not allowed.");
 	}
 #endif
-	thread_count = total_threads - external_threads;
+	thread_count = NumericCast<int32_t>(total_threads - external_threads);
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {

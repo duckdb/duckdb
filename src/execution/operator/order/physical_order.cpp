@@ -4,7 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -112,7 +112,7 @@ SinkCombineResultType PhysicalOrder::Combine(ExecutionContext &context, Operator
 class PhysicalOrderMergeTask : public ExecutorTask {
 public:
 	PhysicalOrderMergeTask(shared_ptr<Event> event_p, ClientContext &context, OrderGlobalSinkState &state)
-	    : ExecutorTask(context), event(std::move(event_p)), context(context), state(state) {
+	    : ExecutorTask(context, std::move(event_p)), context(context), state(state) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -125,7 +125,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	ClientContext &context;
 	OrderGlobalSinkState &state;
 };

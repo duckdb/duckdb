@@ -440,12 +440,12 @@ private:
 	std::vector<Weight> cumulative_;
 
 	// return mean of i-th centroid
-	inline Value mean(int i) const noexcept {
+	inline Value mean(size_t i) const noexcept {
 		return processed_[i].mean();
 	}
 
 	// return weight of i-th centroid
-	inline Weight weight(int i) const noexcept {
+	inline Weight weight(size_t i) const noexcept {
 		return processed_[i].weight();
 	}
 
@@ -568,7 +568,7 @@ private:
 		updateCumulative();
 	}
 
-	inline int checkWeights() {
+	inline size_t checkWeights() {
 		return checkWeights(processed_, processedWeight_);
 	}
 

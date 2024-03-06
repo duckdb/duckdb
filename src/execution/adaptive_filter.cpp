@@ -57,7 +57,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			prev_mean = runtime_sum / iteration_count;
 
 			// get swap index and swap likeliness
-			std::uniform_int_distribution<int> distribution(1, right_random_border); // a <= i <= b
+			std::uniform_int_distribution<int> distribution(1, NumericCast<int>(right_random_border)); // a <= i <= b
 			idx_t random_number = distribution(generator) - 1;
 
 			swap_idx = random_number / 100;                    // index to be swapped
