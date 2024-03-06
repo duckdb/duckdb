@@ -3,10 +3,6 @@
 
 require skip_reload
 
-# FIXME: https://github.com/duckdb/duckdb/issues/7755
-require vector_size 2048
-
-
 query III rowsort
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad.csv',

@@ -3,9 +3,6 @@
 
 require skip_reload
 
-# FIXME: https://github.com/duckdb/duckdb/issues/7755
-require vector_size 2048
-
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
 query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(

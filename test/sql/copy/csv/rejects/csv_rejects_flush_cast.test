@@ -2,11 +2,6 @@
 # description: Test that Flush Cast functions properly for the rejects tables
 # group: [rejects]
 
-require skip_reload
-
-# FIXME: https://github.com/duckdb/duckdb/issues/7755
-require vector_size 2048
-
 query III
 SELECT typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
     'data/csv/error/flush_cast.csv',
