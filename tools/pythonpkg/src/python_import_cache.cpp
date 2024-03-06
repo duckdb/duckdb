@@ -10,6 +10,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 py::handle PythonImportCacheItem::operator()(bool load) {
+	if (IsLoaded()) {
+		return object;
+	}
 	stack<reference<PythonImportCacheItem>> hierarchy;
 
 	optional_ptr<PythonImportCacheItem> item = this;
@@ -24,7 +27,7 @@ bool PythonImportCacheItem::LoadSucceeded() const {
 	return load_succeeded;
 }
 
-bool PythonImportCacheItem::IsLoaded() const {
+inline bool PythonImportCacheItem::IsLoaded() const {
 	return object.ptr() != nullptr;
 }
 
