@@ -3,30 +3,24 @@
 # group: [function]
 
 statement ok
-CREATE MACRO recurse(x) AS 42;
-
-statement ok
-CREATE OR REPLACE MACRO recurse(x) AS (CASE WHEN recurse(x) IS NULL THEN 0 ELSE recurse(x) END);
+CREATE MACRO "sum"(x) AS (CASE WHEN sum(x) IS NULL THEN 0 ELSE sum(x) END);
 
 statement error
-SELECT recurse(1);
+SELECT sum(1);
 ----
 Binder Error: Maximum recursion depth exceeded
 
 statement error
-SELECT recurse(1) WHERE 42=0
+SELECT sum(1) WHERE 42=0
 ----
 Binder Error: Maximum recursion depth exceeded
 
 statement ok
-DROP MACRO recurse
-
-statement ok
-CREATE SCHEMA my;
+DROP MACRO sum
 
 # recursive macro with explicit qualification
 statement ok
-CREATE MACRO my.sum(x) AS (CASE WHEN sum(x) IS NULL THEN 0 ELSE sum(x) END);
+CREATE MACRO "sum"(x) AS (CASE WHEN system.main.sum(x) IS NULL THEN 0 ELSE system.main.sum(x) END);
 
 query I
 SELECT sum(1);
@@ -34,14 +28,9 @@ SELECT sum(1);
 1
 
 query I
-SELECT sum(1) IS NULL WHERE 42=0
+SELECT sum(1) WHERE 42=0
 ----
-true
-
-query I
-SELECT my.sum(1) IS NULL WHERE 42=0
-----
-false
+0
 
 # evil test case by Mark
 statement ok

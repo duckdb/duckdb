@@ -369,14 +369,7 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 	return result;
 }
 
-static bool IsFunction(CatalogType type) {
-	return (type == CatalogType::SCALAR_FUNCTION_ENTRY) || (type == CatalogType::SCALAR_FUNCTION_ENTRY) ||
-	       (type == CatalogType::AGGREGATE_FUNCTION_ENTRY) || (type == CatalogType::PRAGMA_FUNCTION_ENTRY) ||
-	       (type == CatalogType::COPY_FUNCTION_ENTRY);
-}
-
-vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema,
-                                             bool function_lookup = false) {
+vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = *context.client_data->catalog_search_path;
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
@@ -401,23 +394,6 @@ vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const strin
 	} else {
 		// specific catalog and schema provided
 		entries.emplace_back(catalog, schema);
-	}
-	if (function_lookup) {
-		// discourage overloading of standard SQL functions by prioritizing the system catalog
-		vector<CatalogSearchEntry> reordered_entries;
-		reordered_entries.reserve(entries.size());
-		bool default_system_catalog_present = false;
-		reordered_entries.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA); // put it first
-		for (auto &entry : entries) {
-			if (entry.catalog == SYSTEM_CATALOG && entry.schema == DEFAULT_SCHEMA) {
-				default_system_catalog_present = true;
-			} else {
-				reordered_entries.emplace_back(entry);
-			}
-		}
-		if (default_system_catalog_present) {
-			return reordered_entries;
-		}
 	}
 	return entries;
 }
@@ -683,7 +659,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType t
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
-		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA, IsFunction(type));
+		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
@@ -752,7 +728,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, vector<Catalo
 CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType type, const string &catalog,
                                            const string &schema, const string &name, OnEntryNotFound if_not_found,
                                            QueryErrorContext error_context) {
-	auto entries = GetCatalogEntries(context, catalog, schema, IsFunction(type));
+	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
