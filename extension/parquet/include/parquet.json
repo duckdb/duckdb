@@ -80,6 +80,11 @@
         "type": "shared_ptr<ParquetEncryptionConfig>",
         "default": "nullptr"
       }
+      {
+        "id": 105,
+        "name": "force_direct_io",
+        "type": "bool"
+      },
     ],
     "pointer_type": "none"
   },

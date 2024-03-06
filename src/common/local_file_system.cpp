@@ -365,7 +365,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 			}
 		}
 	}
-	return make_uniq<UnixFileHandle>(*this, path, fd, !!(open_flags & O_DIRECT));
+	return make_uniq<UnixFileHandle>(*this, path, fd, !!(flags & FileFlags::FILE_FLAGS_DIRECT_IO));
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -395,7 +395,7 @@ int64_t aligned_read(FileHandle &file_handle, void* read_buffer, int64_t nr_byte
 	bool is_read = (location == NO_LOCATION);
 	uint64_t read_address = 0, position = 0, bytes = 0;
 	if (handle.direct_io) {
-		read_address = (uint64_t)read_address;
+		read_address = (uint64_t)read_buffer;
 		bytes = nr_bytes;
 		position = is_read ? file_handle.SeekPosition() : location;
 	}
@@ -431,6 +431,9 @@ int64_t aligned_read(FileHandle &file_handle, void* read_buffer, int64_t nr_byte
 			ret = 0; // no bytes beyond the skip point
 		} else {
 			ret -= go_back;
+			if (ret > nr_bytes) {
+				ret = nr_bytes;
+			}
 			memcpy(read_buffer, buf + go_back, ret);
 		}
 	}
