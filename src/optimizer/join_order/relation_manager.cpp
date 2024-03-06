@@ -41,10 +41,20 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 		}
 		aggr_op = aggr_op->children[0].get();
 	}
-	auto table_indexes = aggr_op->GetTableIndex();
-	for (auto &index : table_indexes) {
-		D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
-		relation_mapping[index] = relation_id;
+
+	if (aggr_op->type == LogicalOperatorType::LOGICAL_WINDOW) {
+		auto window_bindings = aggr_op->GetColumnBindings();
+		for (auto &binding : window_bindings) {
+			if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
+				relation_mapping[binding.table_index] = relation_id;
+			}
+		}
+	} else {
+		auto table_indexes = aggr_op->GetTableIndex();
+		for (auto &index : table_indexes) {
+			D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
+			relation_mapping[index] = relation_id;
+		}
 	}
 	relations.push_back(std::move(relation));
 }
