@@ -61,8 +61,6 @@ string StatementTypeToString(StatementType type) {
 		return "DETACH";
 	case StatementType::MULTI_STATEMENT:
 		return "MULTI";
-	case StatementType::MATERIALIZED_CTE_STATEMENT:
-		return "WITH";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

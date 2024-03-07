@@ -244,8 +244,6 @@ duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
 		return DUCKDB_STATEMENT_TYPE_DETACH;
 	case duckdb::StatementType::MULTI_STATEMENT:
 		return DUCKDB_STATEMENT_TYPE_MULTI;
-	case duckdb::StatementType::MATERIALIZED_CTE_STATEMENT:
-		return DUCKDB_STATEMENT_TYPE_MATERIALIZED_CTE;
 	default:
 		return DUCKDB_STATEMENT_TYPE_INVALID;
 	}

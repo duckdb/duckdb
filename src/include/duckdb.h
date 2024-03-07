@@ -182,7 +182,6 @@ typedef enum {
 	DUCKDB_STATEMENT_TYPE_ATTACH = 25,
 	DUCKDB_STATEMENT_TYPE_DETACH = 26,
 	DUCKDB_STATEMENT_TYPE_MULTI = 27,
-	DUCKDB_STATEMENT_TYPE_MATERIALIZED_CTE = 28,
 } duckdb_statement_type;
 
 //===--------------------------------------------------------------------===//

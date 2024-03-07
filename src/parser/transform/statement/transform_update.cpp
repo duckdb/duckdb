@@ -17,13 +17,12 @@ unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery:
 	return result;
 }
 
-unique_ptr<SQLStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt) {
+unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt) {
 	auto result = make_uniq<UpdateStatement>();
 	vector<unique_ptr<CTENode>> materialized_ctes;
-	CommonTableExpressionMap cte_map;
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), cte_map, materialized_ctes);
-		result->cte_map = cte_map.Copy();
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
+		             materialized_ctes);
 	}
 
 	result->table = TransformRangeVar(*stmt.relation);

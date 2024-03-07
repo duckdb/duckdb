@@ -1,16 +1,14 @@
 #include "duckdb/parser/statement/delete_statement.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> Transformer::TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt) {
+unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt) {
 	auto result = make_uniq<DeleteStatement>();
 	vector<unique_ptr<CTENode>> materialized_ctes;
-	CommonTableExpressionMap cte_map;
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), cte_map, materialized_ctes);
-		result->cte_map = cte_map.Copy();
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
+		             materialized_ctes);
 	}
 
 	result->condition = TransformExpression(stmt.whereClause);

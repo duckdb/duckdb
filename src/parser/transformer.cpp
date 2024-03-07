@@ -236,25 +236,6 @@ unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode
 	return root;
 }
 
-unique_ptr<SQLStatement> Transformer::TransformMaterializedCTEStatement(unique_ptr<SQLStatement> root,
-                                                                        vector<unique_ptr<CTENode>> &materialized_ctes,
-                                                                        CommonTableExpressionMap &cte_map) {
-	while (!materialized_ctes.empty()) {
-		unique_ptr<CTENode> node_result;
-		node_result = std::move(materialized_ctes.back());
-		unique_ptr<MaterializedCTEStatement> stmt_result = make_uniq<MaterializedCTEStatement>();
-		stmt_result->ctename = node_result->ctename;
-		stmt_result->query = std::move(node_result->query);
-		stmt_result->aliases = node_result->aliases;
-		stmt_result->cte_map = cte_map.Copy();
-		stmt_result->child = std::move(root);
-		root = std::move(stmt_result);
-		materialized_ctes.pop_back();
-	}
-
-	return root;
-}
-
 void Transformer::SetQueryLocation(ParsedExpression &expr, int query_location) {
 	if (query_location < 0) {
 		return;

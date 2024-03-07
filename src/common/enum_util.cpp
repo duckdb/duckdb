@@ -5720,8 +5720,6 @@ const char* EnumUtil::ToChars<StatementType>(StatementType value) {
 		return "MULTI_STATEMENT";
 	case StatementType::COPY_DATABASE_STATEMENT:
 		return "COPY_DATABASE_STATEMENT";
-	case StatementType::MATERIALIZED_CTE_STATEMENT:
-		return "MATERIALIZED_CTE_STATEMENT";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5815,9 +5813,6 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "COPY_DATABASE_STATEMENT")) {
 		return StatementType::COPY_DATABASE_STATEMENT;
-	}
-	if (StringUtil::Equals(value, "MATERIALIZED_CTE_STATEMENT")) {
-		return StatementType::MATERIALIZED_CTE_STATEMENT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

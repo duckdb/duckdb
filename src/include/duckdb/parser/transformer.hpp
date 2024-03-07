@@ -155,9 +155,9 @@ private:
 	//! Transform a Postgres duckdb_libpgquery::T_PGTransactionStmt node into a TransactionStatement
 	unique_ptr<TransactionStatement> TransformTransaction(duckdb_libpgquery::PGTransactionStmt &stmt);
 	//! Transform a Postgres T_DeleteStatement node into a DeleteStatement
-	unique_ptr<SQLStatement> TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt);
+	unique_ptr<DeleteStatement> TransformDelete(duckdb_libpgquery::PGDeleteStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGUpdateStmt node into a UpdateStatement
-	unique_ptr<SQLStatement> TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt);
+	unique_ptr<UpdateStatement> TransformUpdate(duckdb_libpgquery::PGUpdateStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGPragmaStmt node into a PragmaStatement
 	unique_ptr<SQLStatement> TransformPragma(duckdb_libpgquery::PGPragmaStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGExportStmt node into a ExportStatement
@@ -290,9 +290,6 @@ private:
 	                  vector<unique_ptr<CTENode>> &materialized_ctes);
 	static unique_ptr<QueryNode> TransformMaterializedCTE(unique_ptr<QueryNode> root,
 	                                                      vector<unique_ptr<CTENode>> &materialized_ctes);
-	static unique_ptr<SQLStatement> TransformMaterializedCTEStatement(unique_ptr<SQLStatement> root,
-	                                                                  vector<unique_ptr<CTENode>> &materialized_ctes,
-	                                                                  CommonTableExpressionMap &cte_map);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr &node,
 	                                                  CommonTableExpressionInfo &info);
 
