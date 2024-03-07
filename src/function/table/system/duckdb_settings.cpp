@@ -50,27 +50,30 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		auto option = DBConfig::GetOptionByIndex(i);
 		D_ASSERT(option);
 		DuckDBSettingValue value;
+		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
 		value.value = option->get_setting(context).ToString();
 		value.description = option->description;
 		value.input_type = EnumUtil::ToString(option->parameter_type);
-		value.scope = option->set_global ? "GLOBAL" : "LOCAL";
+		value.scope = EnumUtil::ToString(scope);
 
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.extension_parameters) {
 		SettingLookupResult lookup_result;
 		string setting_str_val;
+		auto scope = SettingScope::GLOBAL;
 		if (context.TryGetCurrentSetting(ext_param.first, lookup_result)) {
 			auto &setting_val = lookup_result.GetSetting();
 			setting_str_val = setting_val.ToString();
+			scope = lookup_result.GetScope();
 		}
 		DuckDBSettingValue value;
 		value.name = ext_param.first;
 		value.value = std::move(setting_str_val);
 		value.description = ext_param.second.description;
 		value.input_type = ext_param.second.type.ToString();
-		value.scope = EnumUtil::ToString(lookup_result.GetScope());
+		value.scope = EnumUtil::ToString(scope);
 
 		result->settings.push_back(std::move(value));
 	}

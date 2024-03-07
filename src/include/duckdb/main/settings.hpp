@@ -39,10 +39,10 @@ public:
 		D_ASSERT(success);
 		return scope;
 	}
-	void SetSetting(Value value, SettingScope scope) {
-		D_ASSERT(!scope.empty());
+	void SetSetting(Value value, SettingScope scope_p) {
+		D_ASSERT(scope_p != SettingScope::INVALID);
 		result = std::move(value);
-		this->scope = scope;
+		scope = scope_p;
 		success = true;
 	}
 
