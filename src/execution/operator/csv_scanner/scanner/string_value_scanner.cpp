@@ -122,7 +122,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			error = !IsValueNull(null_str_ptr, value_ptr, size);
 		}
 		if (error) {
-			current_error = {CSVErrorType::TOO_MANY_COLUMNS};
+			current_error = {CSVErrorType::TOO_MANY_COLUMNS, cur_col_id};
 		}
 		return;
 	}
@@ -222,10 +222,10 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			bool force_error = !state_machine.options.ignore_errors && sniffing;
 			// Invalid unicode, we must error
 			if (force_error) {
-				HandleUnicodeError(force_error);
+				HandleUnicodeError(cur_col_id, force_error);
 			}
 			// If we got here, we are ingoring errors, hence we must ignore this line.
-			current_error = {CSVErrorType::INVALID_UNICODE};
+			current_error = {CSVErrorType::INVALID_UNICODE, cur_col_id};
 			break;
 		}
 		if (allocate) {
@@ -327,17 +327,17 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	result.last_position = buffer_pos + 1;
 }
 
-void StringValueResult::HandleOverLimitRows() {
+void StringValueResult::HandleOverLimitRows(idx_t col_idx) {
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	bool first_nl;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 	auto csv_error =
-	    CSVError::IncorrectColumnAmountError(state_machine.options, cur_col_id + 1, lines_per_batch, borked_line,
+	    CSVError::IncorrectColumnAmountError(state_machine.options, col_idx, lines_per_batch, borked_line,
 	                                         current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 	error_handler.Error(csv_error);
 }
 
-void StringValueResult::HandleUnicodeError(bool force_error) {
+void StringValueResult::HandleUnicodeError(idx_t col_idx, bool force_error) {
 	bool first_nl;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 	// sanitize borked line
@@ -346,17 +346,17 @@ void StringValueResult::HandleUnicodeError(bool force_error) {
 	Utf8Proc::MakeValid(&char_array[0], char_array.size());
 	borked_line = {char_array.begin(), char_array.end() - 1};
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
-	auto csv_error = CSVError::InvalidUTF8(state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
+	auto csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
 	                                       current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 	error_handler.Error(csv_error, force_error);
 }
 
-void StringValueResult::HandleUnterminatedQuotes(bool force_error) {
+void StringValueResult::HandleUnterminatedQuotes(idx_t col_idx, bool force_error) {
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	bool first_nl;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 	auto csv_error =
-	    CSVError::UnterminatedQuotesError(state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
+	    CSVError::UnterminatedQuotesError(state_machine.options, col_idx, lines_per_batch, borked_line,
 	                                      current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 	error_handler.Error(csv_error, force_error);
 }
@@ -365,13 +365,13 @@ bool StringValueResult::HandleError() {
 	if (current_error.is_set) {
 		switch (current_error.type) {
 		case CSVErrorType::TOO_MANY_COLUMNS:
-			HandleOverLimitRows();
+			HandleOverLimitRows(current_error.col_idx);
 			break;
 		case CSVErrorType::INVALID_UNICODE:
-			HandleUnicodeError();
+			HandleUnicodeError(current_error.col_idx);
 			break;
 		case CSVErrorType::UNTERMINATED_QUOTES:
-			HandleUnterminatedQuotes();
+			HandleUnterminatedQuotes(current_error.col_idx);
 			break;
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
@@ -556,9 +556,9 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	bool force_error = !result.state_machine.options.ignore_errors && result.sniffing;
 	// Invalid unicode, we must error
 	if (force_error) {
-		result.HandleUnicodeError(force_error);
+		result.HandleUnicodeError(result.cur_col_id, force_error);
 	}
-	result.current_error = {CSVErrorType::UNTERMINATED_QUOTES};
+	result.current_error = {CSVErrorType::UNTERMINATED_QUOTES, result.cur_col_id};
 }
 
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {

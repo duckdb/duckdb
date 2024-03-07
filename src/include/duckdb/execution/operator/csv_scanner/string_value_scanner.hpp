@@ -65,12 +65,13 @@ public:
 class CurrentError {
 public:
 	CurrentError() : is_set(false) {};
-	CurrentError(CSVErrorType type) : is_set(true), type(type) {};
+	CurrentError(CSVErrorType type, idx_t col_idx_p) : is_set(true), type(type), col_idx(col_idx_p) {};
 	void Reset() {
 		is_set = false;
 	}
 	bool is_set;
 	CSVErrorType type;
+	idx_t col_idx;
 	friend bool operator==(const CurrentError &error, CSVErrorType other) {
 		return error.is_set && error.type == other;
 	}
@@ -153,9 +154,9 @@ public:
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
 
-	void HandleOverLimitRows();
-	void HandleUnicodeError(bool force_error = false);
-	void HandleUnterminatedQuotes(bool force_error = false);
+	void HandleOverLimitRows(idx_t col_idx);
+	void HandleUnicodeError(idx_t col_idx, bool force_error = false);
+	void HandleUnterminatedQuotes(idx_t col_idx, bool force_error = false);
 	bool HandleError();
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
