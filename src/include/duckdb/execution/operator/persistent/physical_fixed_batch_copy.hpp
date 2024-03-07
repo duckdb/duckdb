@@ -69,5 +69,6 @@ public:
 	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const;
 	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const;
 	SinkFinalizeType FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const;
+	void AddLocalBatch(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
 };
 } // namespace duckdb
