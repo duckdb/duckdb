@@ -2,9 +2,6 @@
 # description: Test optimistic write with a cyclic scan
 # group: [optimistic_write]
 
-# FIXME: member access does not point to an object of type 'BlockManager'
-require block_size 262144
-
 load __TEST_DIR__/optimistic_write_cyclic_dictionary.db
 
 statement ok
