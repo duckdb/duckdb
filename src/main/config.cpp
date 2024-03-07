@@ -262,9 +262,9 @@ void DBConfig::SetDefaultMaxMemory() {
 
 void DBConfig::SetDefaultMaxSwapSpace() {
 	auto memory_limit = options.maximum_memory;
-	if (!TryMultiplyOperator::Operation(memory_limit, static_cast<idx_t>(2), options.maximum_swap_space)) {
-		// Can't default to 2x memory: fall back to 5GB instead
-		options.maximum_swap_space = ParseMemoryLimit("5GB");
+	if (!TryMultiplyOperator::Operation(memory_limit, static_cast<idx_t>(5), options.maximum_swap_space)) {
+		// Can't default to 5x memory: fall back to same limit as memory instead
+		options.maximum_swap_space = memory_limit;
 	}
 }
 
