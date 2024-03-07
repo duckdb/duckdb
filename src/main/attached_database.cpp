@@ -66,31 +66,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 }
 
 AttachedDatabase::~AttachedDatabase() {
-	D_ASSERT(catalog);
-
-	if (!IsSystem() && !catalog->InMemory()) {
-		db.GetDatabaseManager().EraseDatabasePath(catalog->GetDBPath());
-	}
-
-	if (Exception::UncaughtException()) {
-		return;
-	}
-	if (!storage) {
-		return;
-	}
-
-	// shutting down: attempt to checkpoint the database
-	// but only if we are not cleaning up as part of an exception unwind
-	try {
-		if (!storage->InMemory()) {
-			auto &config = DBConfig::GetConfig(db);
-			if (!config.options.checkpoint_on_shutdown) {
-				return;
-			}
-			storage->CreateCheckpoint(true);
-		}
-	} catch (...) {
-	}
+	Close();
 }
 
 bool AttachedDatabase::IsSystem() const {
@@ -156,6 +132,38 @@ bool AttachedDatabase::IsInitialDatabase() const {
 
 void AttachedDatabase::SetInitialDatabase() {
 	is_initial_database = true;
+}
+
+void AttachedDatabase::Close() {
+	D_ASSERT(catalog);
+	if (is_closed) {
+		return;
+	}
+	is_closed = true;
+
+	if (!IsSystem() && !catalog->InMemory()) {
+		db.GetDatabaseManager().EraseDatabasePath(catalog->GetDBPath());
+	}
+
+	if (Exception::UncaughtException()) {
+		return;
+	}
+	if (!storage) {
+		return;
+	}
+
+	// shutting down: attempt to checkpoint the database
+	// but only if we are not cleaning up as part of an exception unwind
+	try {
+		if (!storage->InMemory()) {
+			auto &config = DBConfig::GetConfig(db);
+			if (!config.options.checkpoint_on_shutdown) {
+				return;
+			}
+			storage->CreateCheckpoint(true);
+		}
+	} catch (...) {
+	}
 }
 
 } // namespace duckdb

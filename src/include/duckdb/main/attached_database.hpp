@@ -44,6 +44,7 @@ public:
 	~AttachedDatabase() override;
 
 	void Initialize();
+	void Close();
 
 	Catalog &ParentCatalog() override;
 	StorageManager &GetStorageManager();
@@ -72,6 +73,7 @@ private:
 	AttachedDatabaseType type;
 	optional_ptr<Catalog> parent_catalog;
 	bool is_initial_database = false;
+	bool is_closed = false;
 };
 
 } // namespace duckdb
