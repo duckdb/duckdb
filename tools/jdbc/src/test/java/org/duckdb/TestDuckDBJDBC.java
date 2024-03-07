@@ -1760,8 +1760,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1781,8 +1781,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "b");
         assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
         assertEquals(rs.getString(4), "VIEW");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a view");
+        assertEquals(rs.getObject(5), "a view");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1807,8 +1807,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1867,6 +1867,7 @@ public class TestDuckDBJDBC {
         assertNull(rs.getObject(7));
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
+        assertEquals(rs.getString("REMARKS"), "a column");
 
         rs.close();
 
