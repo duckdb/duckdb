@@ -4,6 +4,9 @@
 
 require skip_reload
 
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
 statement ok
 SELECT * FROM read_csv(
     'data/csv/rejects/incorrect_columns/few_columns.csv',

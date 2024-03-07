@@ -2,6 +2,11 @@
 # description: Test that Flush Cast functions properly for the rejects tables
 # group: [rejects]
 
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
 query III
 SELECT typeof(first(a)), typeof(first(b)), COUNT(*) FROM read_csv(
     'data/csv/error/flush_cast.csv',

@@ -341,10 +341,10 @@ void StringValueResult::HandleUnicodeError(bool force_error) {
 	bool first_nl;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 	// sanitize borked line
-	std::vector<char> charArray(borked_line.begin(), borked_line.end());
-	charArray.push_back('\0'); // Null-terminate the character array
-	Utf8Proc::MakeValid(&charArray[0], charArray.size());
-	borked_line = {charArray.begin(), charArray.end() - 1};
+	std::vector<char> char_array(borked_line.begin(), borked_line.end());
+	char_array.push_back('\0'); // Null-terminate the character array
+	Utf8Proc::MakeValid(&char_array[0], char_array.size());
+	borked_line = {char_array.begin(), char_array.end() - 1};
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	auto csv_error = CSVError::InvalidUTF8(state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
 	                                       current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
@@ -426,7 +426,7 @@ bool StringValueResult::AddRowInternal() {
 			HandleUnicodeError();
 			break;
 		default:
-			InvalidInputException("CSV Error not allowed when inserting row");
+			throw InvalidInputException("CSV Error not allowed when inserting row");
 		}
 		cur_col_id = 0;
 		chunk_col_id = 0;

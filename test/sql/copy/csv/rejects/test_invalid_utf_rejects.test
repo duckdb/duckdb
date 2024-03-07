@@ -4,6 +4,9 @@
 
 require skip_reload
 
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
 statement ok
 from read_csv('test/sql/copy/csv/data/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'},
  auto_detect=false, rejects_table='csv_rejects_table', header = 0, delim = ',', ignore_errors=true)

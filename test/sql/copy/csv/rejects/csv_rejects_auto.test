@@ -3,6 +3,9 @@
 
 require skip_reload
 
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
 query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
