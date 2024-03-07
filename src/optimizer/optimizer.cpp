@@ -177,10 +177,17 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		column_lifetime.VisitOperator(*plan);
 	});
 
+//	plan->Print();
 	// Once we know the column lifetime, we have more information regarding
 	// what relations should be the build side/probe side.
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
-		BuildProbeSideOptimizer build_probe_side_optimizer(context);
+		vector<ColumnBinding> updating_columns;
+		if (plan->type == LogicalOperatorType::LOGICAL_UPDATE) {
+			auto &child = plan->children[0];
+			updating_columns = child->GetColumnBindings();
+			auto a = "cool man";
+		}
+		BuildProbeSideOptimizer build_probe_side_optimizer(context, updating_columns);
 		build_probe_side_optimizer.VisitOperator(*plan);
 	});
 

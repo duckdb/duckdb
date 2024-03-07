@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context) : context(context) {
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, vector<ColumnBinding> preferred_on_probe_side) : context(context), preferred_on_probe_side(preferred_on_probe_side) {
+
 }
 
 static void FlipChildren(LogicalOperator &op) {
@@ -28,44 +29,6 @@ static void FlipChildren(LogicalOperator &op) {
 	}
 }
 
-BuildSize BuildProbeSideOptimizer::GetBuildSide(LogicalOperator &op) {
-	BuildSize ret;
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		auto &left_child = op.children[0];
-		auto &right_child = op.children[1];
-
-		auto left_column_count = left_child->GetColumnBindings();
-		auto right_column_count = right_child->GetColumnBindings();
-
-		// resolve operator types to determine how big the build side is going to be
-		op.ResolveOperatorTypes();
-		auto left_column_types = left_child->types;
-		auto right_column_types = right_child->types;
-
-		idx_t left_build_side = 0;
-		for (auto &type : left_column_types) {
-			left_build_side += GetTypeIdSize(type.InternalType());
-		}
-		idx_t right_build_side = 0;
-		for (auto &type : right_column_types) {
-			right_build_side += GetTypeIdSize(type.InternalType());
-		}
-		// Don't multiply by cardinalities, the only important metric is the size of the row
-		// in the hash table
-		ret.left_side = left_build_side;
-		ret.right_side = right_build_side;
-		return ret;
-	}
-	default:
-		break;
-	}
-	return ret;
-}
-
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t cardinality_ratio) {
 	auto &left_child = op.children[0];
 	auto &right_child = op.children[1];
@@ -74,17 +37,31 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	auto rhs_cardinality = right_child->has_estimated_cardinality ? right_child->estimated_cardinality
 	                                                              : right_child->EstimateCardinality(context);
 
-	auto build_sizes = GetBuildSide(op);
-
-	// special math.
-	auto left_side_metric = lhs_cardinality * cardinality_ratio * build_sizes.left_side;
-	auto right_side_metric = rhs_cardinality * build_sizes.right_side;
-	// if the right side has a larger possible build size, build on the left.
-	if (right_side_metric > left_side_metric) {
-		FlipChildren(op);
+	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
+		return;
 	}
-	// last option is both stats say don't flip. So we return.
-	return;
+	if (rhs_cardinality == lhs_cardinality * cardinality_ratio) {
+		// inspect final bindings, we prefer them on the probe side
+		auto bindings_left = left_child->GetColumnBindings();
+		idx_t bindings_in_left = 0;
+		for (auto &p_binding : preferred_on_probe_side) {
+			if (std::find(bindings_left.begin(), bindings_left.end(), p_binding) != bindings_left.end()) {
+				bindings_in_left+= 1;
+			}
+		}
+		auto bindings_right = right_child->GetColumnBindings();
+		idx_t bindings_in_right = 0;
+		for (auto &p_binding : preferred_on_probe_side) {
+			if (std::find(bindings_right.begin(), bindings_right.end(), p_binding) != bindings_right.end()) {
+				bindings_in_right+= 1;
+			}
+		}
+		if (bindings_in_right > bindings_in_left) {
+			FlipChildren(op);
+		}
+		return;
+	}
+	FlipChildren(op);
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
