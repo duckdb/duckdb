@@ -723,7 +723,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         str.append(", table_schema AS 'TABLE_SCHEM'").append(lineSeparator());
         str.append(", table_name AS 'TABLE_NAME'").append(lineSeparator());
         str.append(", table_type AS 'TABLE_TYPE'").append(lineSeparator());
-        str.append(", NULL::VARCHAR AS 'REMARKS'").append(lineSeparator());
+        str.append(", TABLE_COMMENT AS 'REMARKS'").append(lineSeparator());
         str.append(", NULL::VARCHAR AS 'TYPE_CAT'").append(lineSeparator());
         str.append(", NULL::VARCHAR AS 'TYPE_SCHEM'").append(lineSeparator());
         str.append(", NULL::VARCHAR AS 'TYPE_NAME'").append(lineSeparator());
