@@ -194,38 +194,11 @@ string PragmaUserAgent(ClientContext &context, const FunctionParameters &paramet
 }
 
 string PragmaUpdateExtension(ClientContext &context, const FunctionParameters &parameters) {
-
-	auto extension_name = parameters.values[0].ToString();
-
-	auto update_result = ExtensionHelper::UpdateExtension(context, extension_name);
-
-	string updated = (update_result.updated ? "1::BOOL" : "0::BOOL");
-
-	return "SELECT " + updated + " as updated";
+	return "SELECT * FROM duckdb_extension_update('" + parameters.values[0].ToString() + "')";
 }
 
 string PragmaUpdateExtensions(ClientContext &context, const FunctionParameters &parameters) {
-	auto updated_extensions = ExtensionHelper::UpdateExtensions(context);
-
-	// No extensions updated, early out with simple query
-	if (updated_extensions.empty()) {
-		return "SELECT extension_name, 0::BOOLEAN as updated FROM duckdb_extensions()";
-	}
-
-	vector<string> names;
-	for (const auto& result : updated_extensions) {
-		names.push_back(result.extension_name);
-	}
-
-	string updated_joined_list = "'" + StringUtil::Join(names, "','") + "'";
-
-	auto result_query =
-	    "SELECT extension_name, 1::BOOLEAN as updated FROM duckdb_extensions() where installed and extension_name in (" +
-	    updated_joined_list + ") ";
-	result_query +=
-	    "UNION ALL SELECT extension_name, 0::BOOLEAN as updated FROM duckdb_extensions() where installed and extension_name not in (" +
-	    updated_joined_list + ")";
-	return result_query;
+	return "SELECT * FROM duckdb_extensions_update()";
 }
 
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {

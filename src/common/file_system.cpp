@@ -402,6 +402,10 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
+FileSystem &FileSystem::GetSubsystem(const string &fpath) {
+	return *this;
+}
+
 static string LookupExtensionForPattern(const string &pattern) {
 	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
 		if (StringUtil::StartsWith(pattern, entry.name)) {

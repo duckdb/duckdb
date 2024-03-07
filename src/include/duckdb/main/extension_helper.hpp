@@ -38,6 +38,7 @@ struct ExtensionInitResult {
 
 struct ExtensionUpdateResult {
 	string extension_name;
+	string repository;
 	bool updated;
 
 	string extension_version;
@@ -47,6 +48,9 @@ struct ExtensionUpdateResult {
 
 class ExtensionHelper {
 public:
+	static constexpr const char *DEFAULT_REPOSITORY = "http://extensions.duckdb.org";
+	static constexpr const char *NIGHTLY_REPOSITORY = "http://nightly-extensions.duckdb.org";
+
 	static void LoadAllExtensions(DuckDB &db);
 
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
@@ -70,7 +74,6 @@ public:
 	//! Update all extensions, return a vector of extension names that were updated;
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
 	static vector<ExtensionUpdateResult> UpdateExtensions(DBConfig &config, FileSystem &fs);
-
 	//! Update a specific extension
 	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
 	static ExtensionUpdateResult UpdateExtension(DBConfig &config, FileSystem &fs, const string &extension_name);
@@ -99,6 +102,9 @@ public:
 
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
+
+	// Returns the user-readable name of a repository URL
+	static string GetRepositoryName(const string &repository_base_url);
 
 	//! Apply any known extension aliases, return the lowercase name
 	static string ApplyExtensionAlias(const string &extension_name);
@@ -163,6 +169,9 @@ public:
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 
+	static bool IsRelease(const string &version_tag);
+	static bool CreateSuggestions(const string &extension_name, string &message);
+
 private:
 	static void InstallExtensionInternal(DBConfig &config, FileSystem &fs, const string &local_path,
 	                                     const string &extension, bool force_install, const string &repository,
@@ -175,8 +184,6 @@ private:
 	                           string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
-	static bool IsRelease(const string &version_tag);
-	static bool CreateSuggestions(const string &extension_name, string &message);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

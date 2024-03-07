@@ -1,4 +1,7 @@
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -216,7 +219,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 // TODO: this function should either:
 //        - check if the extension has actually been updated in the remote
 //	      - check the version before updating, then recheck after and only return it in the result if it changed
-static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, const string &full_extension_path, const string &extension_name) {
+static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, const string &full_extension_path,
+                                              const string &extension_name) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
 	result.updated = false;
@@ -228,28 +232,30 @@ static ExtensionUpdateResult update_extension(DBConfig &config, FileSystem &fs, 
 	}
 
 	// Read metadata file into buffer
-	auto handle = fs.OpenFile(info_file_path, FileFlags::FILE_FLAGS_READ);
-	auto buffer = make_unsafe_uniq_array<char>(handle->GetFileSize());
-	fs.Read(*handle, buffer.get(), handle->GetFileSize());
-	auto extension_raw_metadata = string(buffer.get(), handle->GetFileSize());
+	auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
+	if (!file_reader.Finished()) {
+		BinaryDeserializer deserializer(file_reader);
+		deserializer.Begin();
+		auto extension_install_info = ExtensionInstallInfo::Deserialize(deserializer);
+		deserializer.End();
 
-	// Try parsing the metadata for the install url
-	auto lines = StringUtil::Split(extension_raw_metadata, "\n");
+		if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
+			result.repository = extension_install_info->repository;
+			D_ASSERT(StringUtil::StartsWith(extension_install_info->full_path, result.repository));
 
-	// If the metadata files contains the origin of the extension, we force install the extension from there
-	if (!lines.empty()) {
-		// We force install the full url found in this file, throwing
-		try {
-			ExtensionHelper::InstallExtension(config, fs, lines[0], true);
-		} catch (std::exception &e) {
-			ErrorData error(e);
-			error.Throw("Extension updating failed when trying to install '" + extension_name +
-						"', original error: ");
+			// We force install the full url found in this file, throwing
+			try {
+				ExtensionHelper::InstallExtension(config, fs, extension_name, true, result.repository);
+			} catch (std::exception &e) {
+				ErrorData error(e);
+				error.Throw("Extension updating failed when trying to install '" + extension_name +
+				            "', original error: ");
+			}
+
+			// TODO set prev and installed version;
+			result.updated = true;
+			return result;
 		}
-
-		// TODO set prev and installed version;
-		result.updated = true;
-		return result;
 	}
 
 	return result;
@@ -300,7 +306,6 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(DBConfig &config, FileSys
 
 	return update_extension(config, fs, full_extension_path, extension_name);
 }
-
 
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
 	return ExtensionHelper::AutoLoadExtension(*context.db, extension_name);

@@ -84,6 +84,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -2207,6 +2208,34 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOUND_LAMBDA_REF")) {
 		return ExpressionType::BOUND_LAMBDA_REF;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<ExtensionInstallMode>(ExtensionInstallMode value) {
+	switch(value) {
+	case ExtensionInstallMode::REPOSITORY:
+		return "REPOSITORY";
+	case ExtensionInstallMode::LOCAL_FILE:
+		return "LOCAL_FILE";
+	case ExtensionInstallMode::CUSTOM_PATH:
+		return "CUSTOM_PATH";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *value) {
+	if (StringUtil::Equals(value, "REPOSITORY")) {
+		return ExtensionInstallMode::REPOSITORY;
+	}
+	if (StringUtil::Equals(value, "LOCAL_FILE")) {
+		return ExtensionInstallMode::LOCAL_FILE;
+	}
+	if (StringUtil::Equals(value, "CUSTOM_PATH")) {
+		return ExtensionInstallMode::CUSTOM_PATH;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

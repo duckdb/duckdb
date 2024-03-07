@@ -29,6 +29,10 @@ struct PragmaMetadataInfo {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct PragmaUpdateExtensions {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct PragmaVersion {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

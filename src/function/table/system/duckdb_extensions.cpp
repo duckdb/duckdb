@@ -8,6 +8,10 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/main/extension_install_info.hpp"
+
 namespace duckdb {
 
 struct ExtensionInformation {
@@ -15,7 +19,8 @@ struct ExtensionInformation {
 	bool loaded = false;
 	bool installed = false;
 	string file_path;
-	string installed_from;
+	string install_mode;
+	string install_source;
 	string description;
 	vector<Value> aliases;
 };
@@ -48,7 +53,10 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 	names.emplace_back("aliases");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
-	names.emplace_back("installed_from");
+	names.emplace_back("install_mode");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("install_source");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
@@ -93,18 +101,21 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 
 		// Check the info file for its installation source
 		auto info_file_path = fs.JoinPath(ext_directory, path + ".info");
+
 		if (fs.FileExists(info_file_path)) {
-			// Read metadata file into buffer
-			auto handle = fs.OpenFile(info_file_path, FileFlags::FILE_FLAGS_READ);
-			auto buffer = make_unsafe_uniq_array<char>(handle->GetFileSize());
-			fs.Read(*handle, buffer.get(), handle->GetFileSize());
-			auto extension_raw_metadata = string(buffer.get(), handle->GetFileSize());
+			auto file_reader = BufferedFileReader(fs, info_file_path.c_str());
+			if (!file_reader.Finished()) {
+				BinaryDeserializer deserializer(file_reader);
+				deserializer.Begin();
+				auto extension_install_info = ExtensionInstallInfo::Deserialize(deserializer);
+				deserializer.End();
 
-			// Try parsing the metadata for the install url
-			auto lines = StringUtil::Split(extension_raw_metadata, "\n");
-
-			if (!lines.empty()) {
-				info.installed_from = lines[0];
+				info.install_mode = EnumUtil::ToString(extension_install_info->mode);
+				if (extension_install_info->mode == ExtensionInstallMode::REPOSITORY) {
+					info.install_source = extension_install_info->repository;
+				} else {
+					info.install_source = extension_install_info->full_path;
+				}
 			}
 		}
 
@@ -114,7 +125,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		} else {
 			if (!entry->second.loaded) {
 				entry->second.file_path = info.file_path;
-				entry->second.installed_from = info.installed_from;
+				entry->second.install_source = info.install_source;
+				entry->second.install_mode = info.install_mode;
 			}
 			entry->second.installed = true;
 		}
@@ -166,8 +178,10 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		output.SetValue(4, count, Value(entry.description));
 		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
 		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
-		// installed_from LogicalType::VARCHAR
-		output.SetValue(6, count, Value(entry.installed_from));
+		// installed_mode LogicalType::VARCHAR
+		output.SetValue(6, count, Value(entry.install_mode));
+		// installed_source LogicalType::VARCHAR
+		output.SetValue(7, count, Value(entry.install_source));
 
 		data.offset++;
 		count++;

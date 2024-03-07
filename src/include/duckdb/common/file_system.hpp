@@ -225,6 +225,9 @@ public:
 	//! Whether or not a sub-system can handle a specific file path
 	DUCKDB_API virtual bool CanHandleFile(const string &fpath);
 
+	//! Returns a reference to the subsystem that this filesystem will use to open a specific filepath
+	DUCKDB_API virtual FileSystem &GetSubsystem(const string &fpath);
+
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	DUCKDB_API virtual void Seek(FileHandle &handle, idx_t location);
 	//! Reset a file to the beginning (equivalent to Seek(handle, 0) for simple files)
