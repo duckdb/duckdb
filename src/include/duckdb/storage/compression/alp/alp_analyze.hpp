@@ -115,7 +115,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 			T value = data[idx];
 			//! We resolve null values with a predicated comparison
 			bool is_null = !vdata.validity.RowIsValid(idx);
-			current_vector_null_positions[nulls_idx] = i;
+			current_vector_null_positions[nulls_idx] = UnsafeNumericCast<uint16_t>(i);
 			nulls_idx += is_null;
 			current_vector_values[i] = value;
 		}

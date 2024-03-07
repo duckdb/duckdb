@@ -10,6 +10,7 @@
 
 #include "duckdb.h"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #ifdef DEBUG
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
@@ -91,7 +92,8 @@ public:
 public:
 #ifdef DEBUG
 	uint8_t ExtractValue(uint32_t value, uint8_t index) {
-		return (value & LeadingZeroBufferConstants::MASKS[index]) >> LeadingZeroBufferConstants::SHIFTS[index];
+		return NumericCast<uint8_t>((value & LeadingZeroBufferConstants::MASKS[index]) >>
+		                            LeadingZeroBufferConstants::SHIFTS[index]);
 	}
 #endif
 
@@ -140,8 +142,8 @@ public:
 		const auto buffer_idx = BlockIndex();
 		auto const temp = Load<uint32_t>(buffer + buffer_idx);
 
-		const uint8_t result =
-		    (temp & LeadingZeroBufferConstants::MASKS[counter & 7]) >> LeadingZeroBufferConstants::SHIFTS[counter & 7];
+		const uint8_t result = UnsafeNumericCast<uint8_t>((temp & LeadingZeroBufferConstants::MASKS[counter & 7]) >>
+		                                                  LeadingZeroBufferConstants::SHIFTS[counter & 7]);
 		counter++;
 		return result;
 	}

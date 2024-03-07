@@ -150,19 +150,19 @@ void BinarySerializer::WriteValue(double value) {
 }
 
 void BinarySerializer::WriteValue(const string &value) {
-	uint32_t len = value.length();
+	auto len = NumericCast<uint32_t>(value.length());
 	VarIntEncode(len);
 	WriteData(value.c_str(), len);
 }
 
 void BinarySerializer::WriteValue(const string_t value) {
-	uint32_t len = value.GetSize();
+	auto len = NumericCast<uint32_t>(value.GetSize());
 	VarIntEncode(len);
 	WriteData(value.GetDataUnsafe(), len);
 }
 
 void BinarySerializer::WriteValue(const char *value) {
-	uint32_t len = strlen(value);
+	auto len = NumericCast<uint32_t>(strlen(value));
 	VarIntEncode(len);
 	WriteData(value, len);
 }

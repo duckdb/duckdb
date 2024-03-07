@@ -73,7 +73,7 @@ duckdb_value duckdb_create_struct_value(duckdb_logical_type type, duckdb_value *
 	}
 	duckdb::Value *struct_value = new duckdb::Value;
 	try {
-		*struct_value = duckdb::Value::STRUCT(ltype, unwrapped_values);
+		*struct_value = duckdb::Value::STRUCT(ltype, std::move(unwrapped_values));
 	} catch (...) {
 		delete struct_value;
 		return nullptr;
@@ -96,7 +96,7 @@ duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *va
 	}
 	duckdb::Value *list_value = new duckdb::Value;
 	try {
-		*list_value = duckdb::Value::LIST(ltype, unwrapped_values);
+		*list_value = duckdb::Value::LIST(ltype, std::move(unwrapped_values));
 	} catch (...) {
 		delete list_value;
 		return nullptr;
@@ -123,7 +123,7 @@ duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *v
 	}
 	duckdb::Value *array_value = new duckdb::Value;
 	try {
-		*array_value = duckdb::Value::ARRAY(ltype, unwrapped_values);
+		*array_value = duckdb::Value::ARRAY(ltype, std::move(unwrapped_values));
 	} catch (...) {
 		delete array_value;
 		return nullptr;

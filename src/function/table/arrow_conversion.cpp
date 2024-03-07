@@ -29,7 +29,7 @@ static void ShiftRight(unsigned char *ar, int size, int shift) {
 	while (shift--) {
 		for (int i = size - 1; i >= 0; --i) {
 			int next = (ar[i] & 1) ? 0x80 : 0;
-			ar[i] = carry | (ar[i] >> 1);
+			ar[i] = UnsafeNumericCast<unsigned char>(carry | (ar[i] >> 1));
 			carry = next;
 		}
 	}
@@ -73,7 +73,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, const ArrowSc
 			//! need to re-align nullmask
 			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
 			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes + 1);
-			ShiftRight(temp_nullmask.data(), n_bitmask_bytes + 1,
+			ShiftRight(temp_nullmask.data(), NumericCast<int>(n_bitmask_bytes + 1),
 			           bit_offset % 8); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), data_ptr_cast(temp_nullmask.data()), n_bitmask_bytes);
 		}
@@ -332,7 +332,7 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 		if (str_len > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
 			throw ConversionException("DuckDB does not support Strings over 4GB");
 		} // LCOV_EXCL_STOP
-		strings[row_idx] = string_t(cptr, str_len);
+		strings[row_idx] = string_t(cptr, UnsafeNumericCast<uint32_t>(str_len));
 	}
 }
 
@@ -709,7 +709,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 			               GetEffectiveOffset(array, parent_offset, scan_state, nested_offset);
 			auto tgt_ptr = FlatVector::GetData<date_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
-				tgt_ptr[row] = date_t(int64_t(src_ptr[row]) / static_cast<int64_t>(1000 * 60 * 60 * 24));
+				tgt_ptr[row] = date_t(
+				    UnsafeNumericCast<int32_t>(int64_t(src_ptr[row]) / static_cast<int64_t>(1000 * 60 * 60 * 24)));
 			}
 			break;
 		}

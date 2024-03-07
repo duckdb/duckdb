@@ -831,7 +831,7 @@ void Vector::Flatten(idx_t count) {
 		}
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
-		if (is_null) {
+		if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
 			validity.SetAllInvalid(count);
@@ -891,13 +891,18 @@ void Vector::Flatten(idx_t count) {
 		case PhysicalType::ARRAY: {
 			auto &original_child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
-
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 			auto &new_child = flattened_buffer->GetChild();
 
-			// Make sure to initialize a validity mask for the new child vector with the correct size
-			if (!original_child.validity.AllValid()) {
-				new_child.validity.Initialize(array_size * count);
+			// Fast path: The array is a constant null
+			if (is_null) {
+				// Invalidate the parent array
+				validity.SetAllInvalid(count);
+				// Also invalidate the new child array
+				new_child.validity.SetAllInvalid(count * array_size);
+				// Attach the flattened buffer and return
+				auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+				return;
 			}
 
 			// Now we need to "unpack" the child vector.
@@ -1139,9 +1144,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			Flatten(count);
-			auto &child = ArrayVector::GetEntry(*this);
-			auto array_size = ArrayType::GetSize(type);
+			Vector serialized_vector(*this);
+			serialized_vector.Flatten(count);
+
+			auto &child = ArrayVector::GetEntry(serialized_vector);
+			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
 			serializer.WriteObject(104, "child", [&](Serializer &object) { child.Serialize(object, child_size); });
@@ -1693,19 +1700,19 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 // StringVector
 //===--------------------------------------------------------------------===//
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddString(vector, string_t(data, len));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddStringOrBlob(vector, string_t(data, len));
+	return StringVector::AddStringOrBlob(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data) {
-	return StringVector::AddString(vector, string_t(data, strlen(data)));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(strlen(data))));
 }
 
 string_t StringVector::AddString(Vector &vector, const string &data) {
-	return StringVector::AddString(vector, string_t(data.c_str(), data.size()));
+	return StringVector::AddString(vector, string_t(data.c_str(), UnsafeNumericCast<uint32_t>(data.size())));
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
@@ -1739,7 +1746,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (len <= string_t::INLINE_LENGTH) {
-		return string_t(len);
+		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
@@ -1786,7 +1793,7 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 // FSSTVector
 //===--------------------------------------------------------------------===//
 string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
-	return FSSTVector::AddCompressedString(vector, string_t(data, len));
+	return FSSTVector::AddCompressedString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
