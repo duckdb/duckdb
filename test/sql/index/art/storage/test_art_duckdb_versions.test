@@ -8,6 +8,8 @@ require 64bit
 # cannot read a database with a different block size
 require block_size 262144
 
+require vector_size 2048
+
 # SQL to create index_0-9-1.db
 
 # CREATE TABLE pk_tbl (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE);

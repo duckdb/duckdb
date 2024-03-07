@@ -1,4 +1,5 @@
 #include "duckdb/core_functions/scalar/date_functions.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -13,8 +14,8 @@ namespace duckdb {
 struct MakeDateOperator {
 	template <typename YYYY, typename MM, typename DD, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(YYYY yyyy, MM mm, DD dd) {
-		return Date::FromDate(UnsafeNumericCast<int32_t>(yyyy), UnsafeNumericCast<int32_t>(mm),
-		                      UnsafeNumericCast<int32_t>(dd));
+		return Date::FromDate(Cast::Operation<YYYY, int32_t>(yyyy), Cast::Operation<MM, int32_t>(mm),
+		                      Cast::Operation<DD, int32_t>(dd));
 	}
 };
 
@@ -32,8 +33,8 @@ static void ExecuteMakeDate(DataChunk &input, ExpressionState &state, Vector &re
 template <typename T>
 static date_t FromDateCast(T year, T month, T day) {
 	date_t result;
-	if (!Date::TryFromDate(UnsafeNumericCast<int32_t>(year), UnsafeNumericCast<int32_t>(month),
-	                       UnsafeNumericCast<int32_t>(day), result)) {
+	if (!Date::TryFromDate(Cast::Operation<T, int32_t>(year), Cast::Operation<T, int32_t>(month),
+	                       Cast::Operation<T, int32_t>(day), result)) {
 		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
 	}
 	return result;
@@ -58,9 +59,15 @@ struct MakeTimeOperator {
 	template <typename HH, typename MM, typename SS, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(HH hh, MM mm, SS ss) {
 
-		auto hh_32 = UnsafeNumericCast<int32_t>(hh);
-		auto mm_32 = UnsafeNumericCast<int32_t>(mm);
-		auto ss_32 = UnsafeNumericCast<int32_t>(ss);
+		auto hh_32 = Cast::Operation<HH, int32_t>(hh);
+		auto mm_32 = Cast::Operation<MM, int32_t>(mm);
+		// Have to check this separately because safe casting of DOUBLE => INT32 can round.
+		int32_t ss_32 = 0;
+		if (ss < 0 || ss > Interval::SECS_PER_MINUTE) {
+			ss_32 = Cast::Operation<SS, int32_t>(ss);
+		} else {
+			ss_32 = UnsafeNumericCast<int32_t>(ss);
+		}
 		auto micros = UnsafeNumericCast<int32_t>(std::round((ss - ss_32) * Interval::MICROS_PER_SEC));
 
 		if (!Time::IsValidTime(hh_32, mm_32, ss_32, micros)) {

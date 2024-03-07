@@ -532,7 +532,7 @@ select
 	l_orderkey, 
 	sum(l_extendedprice) over(partition by l_partkey order by l_orderkey desc),
 from lineitem 
-order by l_partkey, l_orderkey
+order by l_partkey, l_orderkey, l_extendedprice desc
 ----
 29733.00	1	2883	607274.00
 1802.00	1	5121	577541.00
@@ -598,7 +598,7 @@ select
 	sum(l_extendedprice) over(partition by l_partkey order by l_orderkey),
 	sum(l_extendedprice) over(partition by l_partkey order by l_orderkey desc),
 from lineitem 
-order by l_partkey, l_orderkey
+order by l_partkey, l_orderkey, l_extendedprice desc
 ----
 29733.00	1	2883	607274.00	29733.00	607274.00
 1802.00	1	5121	607274.00	31535.00	577541.00
@@ -667,7 +667,7 @@ select
 	sum(l_extendedprice) over(order by l_partkey, l_orderkey),
 	sum(l_extendedprice) over(partition by l_partkey order by l_orderkey desc),
 from lineitem 
-order by l_partkey, l_orderkey
+order by l_partkey, l_orderkey, l_extendedprice desc
 ----
 29733.00	1	2883	1314442.00	607274.00	29733.00	607274.00
 1802.00	1	5121	1314442.00	607274.00	31535.00	577541.00

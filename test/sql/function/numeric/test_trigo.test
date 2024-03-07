@@ -450,3 +450,12 @@ NULL
 24
 785
 
+statement error
+select asin(-2);
+----
+Invalid Input Error: ASIN is undefined outside [-1,1]
+
+statement error
+select acos(-2);
+----
+Invalid Input Error: ACOS is undefined outside [-1,1]
