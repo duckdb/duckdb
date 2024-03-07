@@ -40,7 +40,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 	if (rhs_cardinality < lhs_cardinality * cardinality_ratio) {
 		return;
 	}
-	if (rhs_cardinality == lhs_cardinality * cardinality_ratio) {
+	if (rhs_cardinality == lhs_cardinality * cardinality_ratio && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child->GetColumnBindings();
 		idx_t bindings_in_left = 0;

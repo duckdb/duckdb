@@ -26,6 +26,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -151,6 +152,23 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// Once we know the column lifetime, we have more information regarding
+	// what relations should be the build side/probe side.
+	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
+		vector<ColumnBinding> updating_columns;
+		if (plan->type == LogicalOperatorType::LOGICAL_UPDATE) {
+			auto child = plan->children[0].get();
+			D_ASSERT(child->type == LogicalOperatorType::LOGICAL_PROJECTION);
+			while (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+				D_ASSERT(child->children.size() == 1);
+				child = child->children[0].get();
+			}
+			updating_columns = child->GetColumnBindings();
+		}
+		BuildProbeSideOptimizer build_probe_side_optimizer(context, updating_columns);
+		build_probe_side_optimizer.VisitOperator(*plan);
+	});
+
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
@@ -175,20 +193,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
 		column_lifetime.VisitOperator(*plan);
-	});
-
-//	plan->Print();
-	// Once we know the column lifetime, we have more information regarding
-	// what relations should be the build side/probe side.
-	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
-		vector<ColumnBinding> updating_columns;
-		if (plan->type == LogicalOperatorType::LOGICAL_UPDATE) {
-			auto &child = plan->children[0];
-			updating_columns = child->GetColumnBindings();
-			auto a = "cool man";
-		}
-		BuildProbeSideOptimizer build_probe_side_optimizer(context, updating_columns);
-		build_probe_side_optimizer.VisitOperator(*plan);
 	});
 
 	// compress data based on statistics for materializing operators
