@@ -71,6 +71,9 @@ public:
 	}
 	bool is_set;
 	CSVErrorType type;
+	friend bool operator==(const CurrentError &error, CSVErrorType other) {
+		return error.is_set && error.type == other;
+	}
 };
 
 class StringValueResult : public ScannerResult {
@@ -152,6 +155,8 @@ public:
 
 	void HandleOverLimitRows();
 	void HandleUnicodeError(bool force_error = false);
+	void HandleUnterminatedQuotes(bool force_error = false);
+	bool HandleError();
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 

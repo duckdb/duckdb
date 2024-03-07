@@ -351,6 +351,40 @@ void StringValueResult::HandleUnicodeError(bool force_error) {
 	error_handler.Error(csv_error, force_error);
 }
 
+void StringValueResult::HandleUnterminatedQuotes(bool force_error) {
+	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
+	bool first_nl;
+	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
+	auto csv_error =
+	    CSVError::UnterminatedQuotesError(state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
+	                                      current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
+	error_handler.Error(csv_error, force_error);
+}
+
+bool StringValueResult::HandleError() {
+	if (current_error.is_set) {
+		switch (current_error.type) {
+		case CSVErrorType::TOO_MANY_COLUMNS:
+			HandleOverLimitRows();
+			break;
+		case CSVErrorType::INVALID_UNICODE:
+			HandleUnicodeError();
+			break;
+		case CSVErrorType::UNTERMINATED_QUOTES:
+			HandleUnterminatedQuotes();
+			break;
+		default:
+			throw InvalidInputException("CSV Error not allowed when inserting row");
+		}
+		cur_col_id = 0;
+		chunk_col_id = 0;
+		// An error occurred on this row, we are ignoring it and resetting our control flag
+		current_error.Reset();
+		return true;
+	}
+	return false;
+}
+
 void StringValueResult::QuotedNewLine(StringValueResult &result) {
 	result.quoted_new_line = true;
 }
@@ -360,7 +394,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() {
 	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line && iterator.done) {
 		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel and it's the
 		// last row of this thread.
-		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows + 1);
+		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch);
 		error_handler.Error(csv_error);
 	}
@@ -417,21 +451,7 @@ bool StringValueResult::AddRowInternal() {
 		                            current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 		error_handler.Error(csv_error);
 	}
-	if (current_error.is_set) {
-		switch (current_error.type) {
-		case CSVErrorType::TOO_MANY_COLUMNS:
-			HandleOverLimitRows();
-			break;
-		case CSVErrorType::INVALID_UNICODE:
-			HandleUnicodeError();
-			break;
-		default:
-			throw InvalidInputException("CSV Error not allowed when inserting row");
-		}
-		cur_col_id = 0;
-		chunk_col_id = 0;
-		// An error occurred on this row, we are ignoring it and resetting our control flag
-		current_error.Reset();
+	if (HandleError()) {
 		return false;
 	}
 	if (!cast_errors.empty()) {
@@ -533,15 +553,12 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 }
 
 void StringValueResult::InvalidState(StringValueResult &result) {
-	// FIXME: How do we recover from an invalid state? Can we restart the state machine and jump to the next row?
-	LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.number_of_rows);
-	bool first_nl;
-	auto borked_line = result.current_line_position.ReconstructCurrentLine(first_nl, result.buffer_handles);
-
-	auto csv_error = CSVError::UnterminatedQuotesError(
-	    result.state_machine.options, result.cur_col_id, lines_per_batch, borked_line,
-	    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl));
-	result.error_handler.Error(csv_error);
+	bool force_error = !result.state_machine.options.ignore_errors && result.sniffing;
+	// Invalid unicode, we must error
+	if (force_error) {
+		result.HandleUnicodeError(force_error);
+	}
+	result.current_error = {CSVErrorType::UNTERMINATED_QUOTES};
 }
 
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
@@ -1205,7 +1222,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
 	if (iterator.IsBoundarySet()) {
-		iterator.done = true;
+		if (!(result.current_error == CSVErrorType::UNTERMINATED_QUOTES)) {
+			iterator.done = true;
+		}
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
 		if (!cur_buffer_handle) {
@@ -1221,6 +1240,8 @@ void StringValueScanner::FinalizeChunkProcess() {
 			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 				MoveToNextBuffer();
 			}
+		} else {
+			result.HandleError();
 		}
 	} else {
 		// 2) If a boundary is not set

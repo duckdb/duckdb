@@ -1,0 +1,31 @@
+# name: test/sql/copy/csv/rejects/csv_unquoted_rejects.test
+# description: Tests rejects tables on max line size parameter
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+query II
+SELECT * FROM read_csv(
+    'data/csv/rejects/unquoted/basic.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, auto_detect=false, header = 1, quote = '"', escape = '"');
+----
+bla	1
+bla	2
+bla	3
+bla	1
+bla	2
+bla	3
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+data/csv/rejects/unquoted/basic.csv	5	1	"b"	UNQUOTED VALUE	"blaaaaaaaaaaaaaa"bla,4	28
+
+statement ok
+DROP TABLE csv_rejects_table;
