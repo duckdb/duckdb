@@ -12,7 +12,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
 	// first recursively visit the materialized CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.query);
-	D_ASSERT(statement.child);
 
 	return BindCTE(statement);
 }
