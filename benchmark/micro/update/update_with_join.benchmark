@@ -14,7 +14,6 @@ ids as (
 )
 insert into t(ts_start, ts_stop, id)
   select d.x, null, i.y from dates d, ids i;
-select count(*) from t;
 
 
 run
