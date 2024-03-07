@@ -556,13 +556,12 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 // Custom Profiling Settings
 //===--------------------------------------------------------------------===//
 
-static unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction>
-FillTreeNodeSettings(unordered_map<string, string> &json) {
-	unordered_set<TreeNodeSettingsType, TreeNodeSettingsTypeHashFunction> metrics;
+static SettingsSet FillTreeNodeSettings(unordered_map<string, string> &json) {
+	SettingsSet metrics;
 
 	string invalid_settings;
 	for (auto &entry : json) {
-		auto setting = EnumUtil::FromString<TreeNodeSettingsType>(StringUtil::Upper(entry.first));
+		auto setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
 		if (StringUtil::Lower(entry.second) == "true") {
 			metrics.insert(setting);
 		}
@@ -577,7 +576,7 @@ FillTreeNodeSettings(unordered_map<string, string> &json) {
 void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto input_str = input.ToString();
-	duckdb::unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
+	unique_ptr<duckdb::FileSystem> fs = duckdb::FileSystem::CreateLocal();
 	if (!fs->FileExists(input_str)) {
 		throw IOException("Could not locate the file containing the custom profiler settings: \"%s\"", input_str);
 	}
@@ -605,22 +604,19 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 		throw IOException("Could not parse the custom profiler settings file: \"%s\"", input_str);
 	}
 
-	auto metrics = FillTreeNodeSettings(json);
-	config.profiler_settings.SetMetrics(metrics);
-	config.profiler_settings.ResetValues();
+	config.profiler_settings = FillTreeNodeSettings(json);
 }
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_settings.ResetMetrics();
-	config.profiler_settings.ResetValues();
+	config.profiler_settings = default_settings;
 }
 
 Value CustomProfilingSettings::GetSetting(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	string profiling_settings_str;
-	for (auto &entry : config.profiler_settings.GetMetrics()) {
+	for (auto &entry : config.profiler_settings) {
 		if (!profiling_settings_str.empty()) {
 			profiling_settings_str += ", ";
 		}

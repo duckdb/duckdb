@@ -9,19 +9,20 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
-#include "duckdb/common/reference_map.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/profiling_info.hpp"
+
 #include <stack>
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/deque.hpp"
-#include "duckdb/main/tree_node_settings.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -84,8 +85,8 @@ struct ExpressionExecutorInfo {
 	int id;
 };
 
-struct OperatorInformation {
-	explicit OperatorInformation() {
+struct OperatorInfo {
+	explicit OperatorInfo() : time(0), elements(0) {
 	}
 
 	double time;
@@ -93,36 +94,49 @@ struct OperatorInformation {
 	string name;
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
+
+	void addTime(double n_time) {
+        this->time += n_time;
+    }
+
+	void addElements(idx_t n_elements) {
+        this->elements += n_elements;
+    }
 };
 
 //! The OperatorProfiler measures timings of individual operators
+//! This class exists once for all operators and collects `OperatorInfo` for each operator
 class OperatorProfiler {
 	friend class QueryProfiler;
 
 public:
-	DUCKDB_API explicit OperatorProfiler(bool enabled_p, TreeNodeSettings settings_p);
+	DUCKDB_API explicit OperatorProfiler(ClientContext &context);
 
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
+
+	//! Adds the timings gathered in the OperatorProfiler (tree) to the QueryProfiler (tree)
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor, const string &name,
 	                      int id);
+	DUCKDB_API OperatorInfo &GetOperatorInfo(const PhysicalOperator &phys_op);
+
+	static bool SettingEnabled(const MetricsType setting) {
+		return SettingSetFunctions::Enabled(default_settings, setting);
+	}
 
 	~OperatorProfiler() {
 	}
 
 private:
-	void AddTiming(const PhysicalOperator &op, double time, idx_t elements, bool timing_enabled,
-	               bool cardinality_enabled);
-
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	TreeNodeSettings settings;
+	SettingsSet settings;
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to recorded timings
-	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
+	reference_map_t<const PhysicalOperator, OperatorInfo> timings;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
@@ -131,13 +145,20 @@ public:
 	DUCKDB_API QueryProfiler(ClientContext &context);
 
 public:
+	// Recursive tree that mirrors the operator tree
 	struct TreeNode {
 		PhysicalOperatorType type;
 		string name;
-		TreeNodeSettings settings;
+		ProfilingInfo settings;
 		vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
+	};
+
+	// Holds the top level query info
+	struct QueryInfo {
+		string query;
+		ProfilingInfo settings;
 	};
 
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
@@ -146,7 +167,7 @@ public:
 	using TreeMap = reference_map_t<const PhysicalOperator, reference<TreeNode>>;
 
 private:
-	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, idx_t depth = 0);
+	unique_ptr<QueryProfiler::TreeNode> CreateTree(const PhysicalOperator &root, SettingsSet settings, idx_t depth = 0);
 	void Render(const TreeNode &node, std::ostream &str) const;
 
 public:
@@ -179,6 +200,7 @@ public:
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
 	DUCKDB_API string ToString() const;
 
+	static string JSONSanitize(const string &text);
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 
@@ -201,6 +223,10 @@ private:
 
 	//! The root of the query tree
 	unique_ptr<TreeNode> root;
+
+    //! The query info
+    unique_ptr<QueryInfo> query_info;
+
 	//! The query string
 	string query;
 	//! The timer used to time the execution time of the entire query
@@ -233,7 +259,5 @@ private:
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
 	void ReadAndSetCustomProfilerSettings(const string &settings_path);
 };
-
-string JSONSanitize(const string &text);
 
 } // namespace duckdb

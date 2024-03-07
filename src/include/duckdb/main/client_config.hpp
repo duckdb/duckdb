@@ -14,7 +14,7 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/main/tree_node_settings.hpp"
+#include "duckdb/main/profiling_info.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -38,7 +38,7 @@ struct ClientConfig {
 	string profiler_save_location;
 	//! The custom settings for the profiler
 	//! (empty = use the default settings)
-	TreeNodeSettings profiler_settings;
+	SettingsSet profiler_settings;
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
