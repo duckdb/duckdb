@@ -7,8 +7,8 @@
 
 namespace duckdb {
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, vector<ColumnBinding> preferred_on_probe_side) : context(context), preferred_on_probe_side(preferred_on_probe_side) {
-
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, vector<ColumnBinding> preferred_on_probe_side)
+    : context(context), preferred_on_probe_side(preferred_on_probe_side) {
 }
 
 static void FlipChildren(LogicalOperator &op) {
@@ -46,14 +46,14 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op, idx_t car
 		idx_t bindings_in_left = 0;
 		for (auto &p_binding : preferred_on_probe_side) {
 			if (std::find(bindings_left.begin(), bindings_left.end(), p_binding) != bindings_left.end()) {
-				bindings_in_left+= 1;
+				bindings_in_left += 1;
 			}
 		}
 		auto bindings_right = right_child->GetColumnBindings();
 		idx_t bindings_in_right = 0;
 		for (auto &p_binding : preferred_on_probe_side) {
 			if (std::find(bindings_right.begin(), bindings_right.end(), p_binding) != bindings_right.end()) {
-				bindings_in_right+= 1;
+				bindings_in_right += 1;
 			}
 		}
 		if (bindings_in_right > bindings_in_left) {
