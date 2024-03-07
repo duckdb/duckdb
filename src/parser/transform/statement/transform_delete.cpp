@@ -30,10 +30,7 @@ unique_ptr<SQLStatement> Transformer::TransformDelete(duckdb_libpgquery::PGDelet
 		TransformExpressionList(*stmt.returningList, result->returning_list);
 	}
 
-	// Handle materialized CTEs
-	auto cte_result = Transformer::TransformMaterializedCTEStatement(std::move(result), materialized_ctes, cte_map);
-
-	return cte_result;
+	return result;
 }
 
 } // namespace duckdb
