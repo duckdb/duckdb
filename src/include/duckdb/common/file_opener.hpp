@@ -28,13 +28,13 @@ public:
 	}
 	virtual ~FileOpener() {};
 
-	virtual bool TryGetCurrentSetting(const string &key, SettingLookupResult &result, FileOpenerInfo &info);
-	virtual bool TryGetCurrentSetting(const string &key, SettingLookupResult &result) = 0;
+	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info);
+	virtual SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) = 0;
 	virtual ClientContext *TryGetClientContext() = 0;
 
 	DUCKDB_API static ClientContext *TryGetClientContext(FileOpener *opener);
-	DUCKDB_API static bool TryGetCurrentSetting(FileOpener *opener, const string &key, SettingLookupResult &result);
-	DUCKDB_API static bool TryGetCurrentSetting(FileOpener *opener, const string &key, SettingLookupResult &result,
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result);
+	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result,
 	                                            FileOpenerInfo &info);
 };
 

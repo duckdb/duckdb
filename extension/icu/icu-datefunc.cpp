@@ -20,13 +20,14 @@ ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_se
 }
 
 ICUDateFunc::BindData::BindData(ClientContext &context) {
-	SettingLookupResult lookup_result;
-	if (context.TryGetCurrentSetting("TimeZone", lookup_result)) {
-		tz_setting = lookup_result.GetSetting().ToString();
+	Value tz_value;
+	if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
+		tz_setting = tz_value.ToString();
 	}
 
-	if (context.TryGetCurrentSetting("Calendar", lookup_result)) {
-		cal_setting = lookup_result.GetSetting().ToString();
+	Value cal_value;
+	if (context.TryGetCurrentSetting("Calendar", cal_value)) {
+		cal_setting = cal_value.ToString();
 	} else {
 		cal_setting = "gregorian";
 	}

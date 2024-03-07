@@ -60,11 +60,11 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.extension_parameters) {
-		SettingLookupResult lookup_result;
+		Value setting_val;
 		string setting_str_val;
 		auto scope = SettingScope::GLOBAL;
-		if (context.TryGetCurrentSetting(ext_param.first, lookup_result)) {
-			auto &setting_val = lookup_result.GetSetting();
+		auto lookup_result = context.TryGetCurrentSetting(ext_param.first, setting_val);
+		if (lookup_result) {
 			setting_str_val = setting_val.ToString();
 			scope = lookup_result.GetScope();
 		}

@@ -21,15 +21,16 @@ struct ICUTableRange {
 		}
 
 		explicit BindData(ClientContext &context) {
-			SettingLookupResult lookup_result;
-			if (context.TryGetCurrentSetting("TimeZone", lookup_result)) {
-				tz_setting = lookup_result.GetSetting().ToString();
+			Value tz_value;
+			if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
+				tz_setting = tz_value.ToString();
 			}
 			auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_setting)));
 
 			string cal_id("@calendar=");
-			if (context.TryGetCurrentSetting("Calendar", lookup_result)) {
-				cal_setting = lookup_result.GetSetting().ToString();
+			Value cal_value;
+			if (context.TryGetCurrentSetting("Calendar", cal_value)) {
+				cal_setting = cal_value.ToString();
 				cal_id += cal_setting;
 			} else {
 				cal_id += "gregorian";

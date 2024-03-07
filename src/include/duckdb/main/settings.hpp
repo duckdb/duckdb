@@ -22,34 +22,25 @@ enum class SettingScope : uint8_t { GLOBAL, LOCAL, INVALID };
 
 struct SettingLookupResult {
 public:
-	SettingLookupResult() {
+	SettingLookupResult() : scope(SettingScope::INVALID) {
+	}
+	SettingLookupResult(SettingScope scope) : scope(scope) {
+		D_ASSERT(scope != SettingScope::INVALID);
 	}
 
 public:
-	bool Success() const {
-		return success;
+	operator bool() {
+		return scope != SettingScope::INVALID;
 	}
 
 public:
-	Value &GetSetting() {
-		D_ASSERT(success);
-		return result;
-	}
 	SettingScope GetScope() {
-		D_ASSERT(success);
+		D_ASSERT(scope != SettingScope::INVALID);
 		return scope;
-	}
-	void SetSetting(Value value, SettingScope scope_p) {
-		D_ASSERT(scope_p != SettingScope::INVALID);
-		result = std::move(value);
-		scope = scope_p;
-		success = true;
 	}
 
 private:
-	Value result;
 	SettingScope scope = SettingScope::INVALID;
-	bool success = false;
 };
 
 struct AccessModeSetting {

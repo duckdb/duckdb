@@ -38,31 +38,31 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	std::string ca_cert_file = "";
-	SettingLookupResult lookup_result;
 
-	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", lookup_result)) {
-		timeout = lookup_result.GetSetting().GetValue<uint64_t>();
+	Value value;
+	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
+		timeout = value.GetValue<uint64_t>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "force_download", lookup_result)) {
-		force_download = lookup_result.GetSetting().GetValue<bool>();
+	if (FileOpener::TryGetCurrentSetting(opener, "force_download", value)) {
+		force_download = value.GetValue<bool>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", lookup_result)) {
-		retries = lookup_result.GetSetting().GetValue<uint64_t>();
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", value)) {
+		retries = value.GetValue<uint64_t>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", lookup_result)) {
-		retry_wait_ms = lookup_result.GetSetting().GetValue<uint64_t>();
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", value)) {
+		retry_wait_ms = value.GetValue<uint64_t>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", lookup_result)) {
-		retry_backoff = lookup_result.GetSetting().GetValue<float>();
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
+		retry_backoff = value.GetValue<float>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", lookup_result)) {
-		keep_alive = lookup_result.GetSetting().GetValue<bool>();
+	if (FileOpener::TryGetCurrentSetting(opener, "http_keep_alive", value)) {
+		keep_alive = value.GetValue<bool>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", lookup_result)) {
-		enable_server_cert_verification = lookup_result.GetSetting().GetValue<bool>();
+	if (FileOpener::TryGetCurrentSetting(opener, "enable_server_cert_verification", value)) {
+		enable_server_cert_verification = value.GetValue<bool>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", lookup_result)) {
-		ca_cert_file = lookup_result.GetSetting().ToString();
+	if (FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", value)) {
+		ca_cert_file = value.ToString();
 	}
 
 	return {

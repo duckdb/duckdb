@@ -54,7 +54,7 @@ public:
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
-	DUCKDB_API bool TryGetCurrentSetting(const string &key, SettingLookupResult &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
 	                                                    const string &type, AccessMode access_mode);

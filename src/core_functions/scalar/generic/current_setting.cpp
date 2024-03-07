@@ -49,14 +49,13 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	}
 
 	auto key = StringUtil::Lower(key_str);
-	SettingLookupResult result;
-	if (!context.TryGetCurrentSetting(key, result)) {
+	Value val;
+	if (!context.TryGetCurrentSetting(key, val)) {
 		Catalog::AutoloadExtensionByConfigName(context, key);
 		// If autoloader didn't throw, the config is now available
-		context.TryGetCurrentSetting(key, result);
+		context.TryGetCurrentSetting(key, val);
 	}
 
-	auto &val = result.GetSetting();
 	bound_function.return_type = val.type();
 	return make_uniq<CurrentSettingBindData>(val);
 }

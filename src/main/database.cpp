@@ -395,7 +395,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, SettingLookupResult &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;
@@ -403,10 +403,10 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, SettingLooku
 	auto global_value = global_config_map.find(key);
 	bool found_global_value = global_value != global_config_map.end();
 	if (!found_global_value) {
-		return false;
+		return SettingLookupResult();
 	}
-	result.SetSetting(global_value->second, SettingScope::GLOBAL);
-	return true;
+	result = global_value->second;
+	return SettingLookupResult(SettingScope::GLOBAL);
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

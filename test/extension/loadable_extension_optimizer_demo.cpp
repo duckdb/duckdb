@@ -75,7 +75,7 @@ public:
 		}
 		// rpc
 
-		SettingLookupResult host, port;
+		Value host, port;
 		if (!context.TryGetCurrentSetting("waggle_location_host", host) ||
 		    !context.TryGetCurrentSetting("waggle_location_port", port)) {
 			throw InvalidInputException("Need the parameters damnit");
@@ -91,9 +91,9 @@ public:
 		bzero(&servaddr, sizeof(servaddr));
 		// assign IP, PORT
 		servaddr.sin_family = AF_INET;
-		auto host_string = host.GetSetting().ToString();
+		auto host_string = host.ToString();
 		servaddr.sin_addr.s_addr = inet_addr(host_string.c_str());
-		servaddr.sin_port = htons(port.GetSetting().GetValue<int32_t>());
+		servaddr.sin_port = htons(port.GetValue<int32_t>());
 
 		// connect the client socket to server socket
 		if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) != 0) {
