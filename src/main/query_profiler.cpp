@@ -352,7 +352,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 				continue;
 			}
 			auto info_id = info->id;
-			if (int32_t(tree_node.executors_info.size()) <= info_id) {
+			if (tree_node.executors_info.size() <= info_id) {
 				tree_node.executors_info.resize(info_id + 1);
 			}
 			tree_node.executors_info[info_id] = std::move(info);

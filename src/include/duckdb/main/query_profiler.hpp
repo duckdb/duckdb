@@ -82,7 +82,7 @@ struct ExpressionExecutorInfo {
 	//! A vector which contain the pointer to all ExpressionRootInfo
 	vector<unique_ptr<ExpressionRootInfo>> roots;
 	//! Id, it will be used as index for executors_info vector
-	int id;
+	idx_t id;
 };
 
 struct OperatorInfo {
