@@ -79,11 +79,11 @@ public:
 				    NumericLimits<int32_t>::Maximum(), last_offset);
 			}
 			offset_data[offset_idx] = last_offset;
-			size_data[offset_idx] = list_length;
+			size_data[offset_idx] = UnsafeNumericCast<BUFTYPE>(list_length);
 			last_offset += list_length;
 
 			for (idx_t k = 0; k < list_length; k++) {
-				child_sel.push_back(data[source_idx].offset + k);
+				child_sel.push_back(UnsafeNumericCast<sel_t>(data[source_idx].offset + k));
 			}
 		}
 	}
