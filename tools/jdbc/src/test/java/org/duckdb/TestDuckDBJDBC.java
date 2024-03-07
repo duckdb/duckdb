@@ -1726,6 +1726,10 @@ public class TestDuckDBJDBC {
         Statement stmt = conn.createStatement();
         stmt.execute("CREATE TABLE a (i INTEGER)");
         stmt.execute("CREATE VIEW b AS SELECT i::STRING AS j FROM a");
+        stmt.execute("COMMENT ON TABLE a IS 'a table'");
+        stmt.execute("COMMENT ON COLUMN a.i IS 'a column'");
+        stmt.execute("COMMENT ON VIEW b IS 'a view'");
+        stmt.execute("COMMENT ON COLUMN b.j IS 'a column'");
 
         DatabaseMetaData md = conn.getMetaData();
         ResultSet rs;
@@ -1830,6 +1834,7 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString("TABLE_NAME"), "a");
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("COLUMN_NAME"), "i");
+        assertEquals(rs.getString("REMARKS"), "a column");
         assertEquals(rs.getString(4), "i");
         assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
         assertEquals(rs.getInt(5), Types.INTEGER);
@@ -1908,7 +1913,7 @@ public class TestDuckDBJDBC {
                 rs.next();
 
                 assertEquals(rs.getString("TYPE_NAME"), "TIME WITH TIME ZONE");
-                assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
+                assertEquals(rs.getInt("DATA_TYPE"), Types.TIME_WITH_TIMEZONE);
             }
 
             s.execute(
