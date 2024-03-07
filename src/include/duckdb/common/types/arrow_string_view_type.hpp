@@ -6,7 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "duckdb/common/operator/numeric_cast.hpp"
+
 #pragma once
+
+namespace duckdb {
 
 union arrow_string_view_t {
 	arrow_string_view_t() {
@@ -14,19 +18,20 @@ union arrow_string_view_t {
 
 	//! Constructor for inlined arrow string views
 	arrow_string_view_t(int32_t length, const char *data) {
-		D_ASSERT(length <= max_inlined_bytes);
+		D_ASSERT(length <= MAX_INLINED_BYTES);
 		inlined.length = length;
 		memcpy(inlined.data, data, length);
-		if (length < max_inlined_bytes) {
+		if (length < MAX_INLINED_BYTES) {
 			// have to 0 pad
-			uint8_t remaining_bytes = max_inlined_bytes - length;
+			uint8_t remaining_bytes = MAX_INLINED_BYTES - NumericCast<uint8_t>(length);
+
 			memset(&inlined.data[length], '0', remaining_bytes);
 		}
 	}
 
 	//! Constructor for non-inlined arrow string views
 	arrow_string_view_t(int32_t length, const char *data, int32_t buffer_idx, int32_t offset) {
-		D_ASSERT(length > max_inlined_bytes);
+		D_ASSERT(length > MAX_INLINED_BYTES);
 		ref.length = length;
 		memcpy(ref.prefix, data, 4);
 		ref.buffer_index = buffer_idx;
@@ -50,7 +55,7 @@ union arrow_string_view_t {
 		return inlined.length;
 	}
 	bool IsInline() const {
-		return Length() <= max_inlined_bytes;
+		return Length() <= MAX_INLINED_BYTES;
 	}
 
 	const char *GetInlineData() const {
@@ -64,5 +69,7 @@ union arrow_string_view_t {
 		D_ASSERT(!IsInline());
 		return ref.offset;
 	}
-	static constexpr uint8_t max_inlined_bytes = 12;
+	static constexpr uint8_t MAX_INLINED_BYTES = 12;
 };
+
+} // namespace duckdb
