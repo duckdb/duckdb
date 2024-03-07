@@ -61,6 +61,7 @@ public:
 	}
 
 public:
+	void AddLocalBatch(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
 	void AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
 	                     unique_ptr<FixedRawBatchData> collection) const;
 	void RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
@@ -69,6 +70,5 @@ public:
 	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const;
 	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const;
 	SinkFinalizeType FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const;
-	void AddLocalBatch(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
 };
 } // namespace duckdb
