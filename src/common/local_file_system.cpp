@@ -417,7 +417,7 @@ int64_t aligned_read(FileHandle &file_handle, void* read_buffer, int64_t nr_byte
 	bytes += go_back + 511;
 	bytes &= ~((uint64_t) 511);
 
-	// get a buffer that is aligned on 512 bytes, and that is at least 1024 bytes long
+	// get a buffer that is aligned on 512 bytes
 	char* tmp = (char*) malloc(bytes+512);
 	if (tmp == NULL) {
 		return -1;
