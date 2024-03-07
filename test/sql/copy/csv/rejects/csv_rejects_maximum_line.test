@@ -1,0 +1,86 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_maximum_line.test
+# description: Tests rejects tables on max line size parameter
+# group: [rejects]
+
+require skip_reload
+
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+require notwindows
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/max_10.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, auto_detect=false, header = 1, max_line_size=10);
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+data/csv/rejects/maximum_line/max_10.csv	5	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	22
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Test with buffer sizes
+
+loop buffer_size 22 27
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/max_10.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, auto_detect=false, header = 1, max_line_size=10, buffer_size=${buffer_size});
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+data/csv/rejects/maximum_line/max_10.csv	5	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	22
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+endloop
+
+# Test over vector size file
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/over_vector.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, auto_detect=false, header = 1, max_line_size=20);
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+data/csv/rejects/maximum_line/over_vector.csv	2282	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	13684
+data/csv/rejects/maximum_line/over_vector.csv	2591	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	15557
+data/csv/rejects/maximum_line/over_vector.csv	2923	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	17568
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Read Multiple Files
+
+statement ok
+SELECT * FROM read_csv(
+    'data/csv/rejects/maximum_line/*.csv',
+    columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, auto_detect=false, header = 1, max_line_size=10);
+
+query IIIIIII rowsort
+SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
+FROM csv_rejects_table;
+----
+data/csv/rejects/maximum_line/max_10.csv	5	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	22
+data/csv/rejects/maximum_line/over_vector.csv	2282	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	13684
+data/csv/rejects/maximum_line/over_vector.csv	2591	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	15557
+data/csv/rejects/maximum_line/over_vector.csv	2923	0	"a"	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	17568
+
+statement ok
+DROP TABLE csv_rejects_table;

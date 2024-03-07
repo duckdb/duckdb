@@ -406,17 +406,17 @@ bool StringValueResult::AddRowInternal() {
 	if (store_line_size) {
 		error_handler.NewMaxLineSize(current_line_size);
 	}
+	current_line_position.begin = current_line_position.end;
+	current_line_position.end = current_line_start;
 	if (current_line_size > state_machine.options.maximum_line_size) {
 		bool first_nl;
 		auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
-		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), number_of_rows);
+		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error =
 		    CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch, borked_line,
 		                            current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 		error_handler.Error(csv_error);
 	}
-	current_line_position.begin = current_line_position.end;
-	current_line_position.end = current_line_start;
 	if (current_error.is_set) {
 		switch (current_error.type) {
 		case CSVErrorType::TOO_MANY_COLUMNS:
