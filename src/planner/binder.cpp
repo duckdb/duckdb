@@ -76,6 +76,7 @@ unique_ptr<BoundCTENode> Binder::BindMaterializedCTE(CommonTableExpressionMap &c
 			auto mat_cte = make_uniq<CTENode>();
 			mat_cte->ctename = cte.first;
 			mat_cte->query = cte_entry->query->node->Copy();
+			mat_cte->aliases = cte_entry->aliases;
 			materialized_ctes.push_back(std::move(mat_cte));
 		}
 	}
@@ -116,6 +117,15 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 		}
 
 		bound_statement = tail->child_binder->Bind(statement.template Cast<T>());
+
+		tail->types = bound_statement.types;
+		tail->names = bound_statement.names;
+
+		for (auto &c : tail->query_binder->correlated_columns) {
+			tail->child_binder->AddCorrelatedColumn(c);
+		}
+
+		MoveCorrelatedExpressions(*tail->child_binder);
 
 		// extract operator below root operation
 		auto plan = std::move(bound_statement.plan->children[0]);
