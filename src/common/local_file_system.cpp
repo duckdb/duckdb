@@ -402,12 +402,6 @@ int64_t aligned_read(FileHandle &file_handle, void* read_buffer, int64_t nr_byte
 	if (((position | read_address | bytes) & 511) == 0) { // no need for alignment
 		return is_read ? read(handle.fd, read_buffer, nr_bytes) : pread(handle.fd, read_buffer, nr_bytes, location);
 	}
-	// get a buffer that is aligned on 512 bytes
-	char* tmp = (char*) malloc(nr_bytes + 1024);
-	if (tmp == NULL) {
-		return -1;
-	}
-	char* buf = (char*) ((((uint64_t) tmp) + 511) & ~((uint64_t) 511));
 
 	// go back in the file to a location that is aligned
 	uint64_t go_back = position & 511;
@@ -423,9 +417,16 @@ int64_t aligned_read(FileHandle &file_handle, void* read_buffer, int64_t nr_byte
 	bytes += go_back + 511;
 	bytes &= ~((uint64_t) 511);
 
+	// get a buffer that is aligned on 512 bytes, and that is at least 1024 bytes long
+	char* tmp = (char*) malloc(bytes+512);
+	if (tmp == NULL) {
+		return -1;
+	}
+	char* buf = (char*) ((((uint64_t) tmp) + 511) & ~((uint64_t) 511));
+
+
 	// finally, do the aligned read
 	auto ret = is_read ? read(handle.fd, buf, bytes) : pread(handle.fd, buf, bytes, position);
-
 	if (ret != -1) {
 		if (ret <= (ssize_t) go_back) {
 			ret = 0; // no bytes beyond the skip point
