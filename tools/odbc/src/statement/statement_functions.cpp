@@ -43,7 +43,7 @@ using duckdb::Timestamp;
 using duckdb::timestamp_t;
 using duckdb::vector;
 
-string duckdb::SetupStmt(duckdb::OdbcHandleStmt *hstmt, SQLCHAR *statement_text, SQLINTEGER text_length) {
+string duckdb::GetQueryAsString(duckdb::OdbcHandleStmt *hstmt, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	if (hstmt->stmt) {
 		hstmt->stmt.reset();
 	}
@@ -829,14 +829,14 @@ SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_t
 
 	bool success_with_info = false;
 	// Set up the statement and extract the query
-	auto query = SetupStmt(hstmt, statement_text, text_length);
+	auto query = GetQueryAsString(hstmt, statement_text, text_length);
 
 	// Extract the statements from the query
 	vector<unique_ptr<SQLStatement>> statements;
 	try {
 		statements = hstmt->dbc->conn->ExtractStatements(query);
 	} catch (std::exception &ex) {
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "ExecDirectStmt", ex.what(), SQLStateType::ST_42000,
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLExecDirect", ex.what(), SQLStateType::ST_42000,
 		                                   hstmt->dbc->GetDataSourceName());
 	}
 

@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-string SetupStmt(duckdb::OdbcHandleStmt *hstmt, SQLCHAR *statement_text, SQLINTEGER text_length);
+string GetQueryAsString(duckdb::OdbcHandleStmt *hstmt, SQLCHAR *statement_text, SQLINTEGER text_length);
 SQLRETURN FinalizeStmt(duckdb::OdbcHandleStmt *hstmt);
 
 SQLRETURN BatchExecuteStmt(duckdb::OdbcHandleStmt *hstmt);

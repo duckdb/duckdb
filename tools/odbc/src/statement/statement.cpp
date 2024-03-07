@@ -334,7 +334,7 @@ SQLRETURN SQL_API SQLPrepare(SQLHSTMT statement_handle, SQLCHAR *statement_text,
 		return ret;
 	}
 
-	auto query = SetupStmt(hstmt, statement_text, text_length);
+	auto query = GetQueryAsString(hstmt, statement_text, text_length);
 	hstmt->stmt = hstmt->dbc->conn->Prepare(query);
 
 	return FinalizeStmt(hstmt);
