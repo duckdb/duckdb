@@ -554,7 +554,6 @@ void PhysicalFixedBatchCopy::AddLocalBatch(ClientContext &context, GlobalSinkSta
 SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
                                                     OperatorSinkNextBatchInput &input) const {
 	auto &lstate = input.local_state;
-	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
