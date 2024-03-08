@@ -87,9 +87,24 @@ CreatePropertyGraphStmt:
 				n->name = $4;
 				n->vertex_tables = $9?lappend($9,$8):list_make1($8);
 				n->edge_tables = $11;
+				n->onconflict = PG_ERROR_ON_CONFLICT;
 				$$ = (PGNode *)n;
 			}
 		;
+		|
+		CREATE_P OR REPLACE PROPERTY GRAPH qualified_name
+        		VertexOrNode TABLES '(' VertexTableDefinition VertexTableDefinitionList ')'
+        		EdgeTablesClauseOptional
+        			{
+        				PGCreatePropertyGraphStmt *n = makeNode(PGCreatePropertyGraphStmt);
+        				n->name = $6;
+        				n->vertex_tables = $11?lappend($11,$10):list_make1($10);
+        				n->edge_tables = $13;
+        				n->onconflict = PG_REPLACE_ON_CONFLICT;
+        				$$ = (PGNode *)n;
+        			}
+        		;
+
 
 VertexTableDefinitionList:
 		',' VertexTableDefinition 
