@@ -11,7 +11,9 @@ namespace duckdb {
 static bool TypeIsNested(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
 		return true;
 	default:
@@ -53,7 +55,63 @@ static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
 
 //@return Whether the two logicaltypes are compatible
 static bool CheckTypeCompatibility(const LogicalType &left, const LogicalType &right) {
-	return SameTypeRealm(left.id(), right.id());
+	if (!SameTypeRealm(left.id(), right.id())) {
+		return false;
+	}
+	if (!TypeIsNested(left.id()) || !TypeIsNested(right.id())) {
+		return true;
+	}
+	if (left.id() != right.id()) {
+		return true;
+	}
+	switch (left.id()) {
+	case LogicalTypeId::LIST: {
+		if (!CheckTypeCompatibility(ListType::GetChildType(left), ListType::GetChildType(right))) {
+			return false;
+		}
+	}
+	case LogicalTypeId::ARRAY: {
+		if (!CheckTypeCompatibility(ArrayType::GetChildType(left), ArrayType::GetChildType(right))) {
+			return false;
+		}
+	}
+	case LogicalTypeId::STRUCT: {
+		if (StructType::GetChildCount(left) != StructType::GetChildCount(right)) {
+			return false;
+		}
+		for (idx_t i = 0; i < StructType::GetChildCount(left); i++) {
+			auto &left_child = StructType::GetChildType(left, i);
+			auto &right_child = StructType::GetChildType(right, i);
+			if (!CheckTypeCompatibility(left_child, right_child)) {
+				return false;
+			}
+		}
+	}
+	case LogicalTypeId::UNION: {
+		if (UnionType::GetMemberCount(left) != UnionType::GetMemberCount(right)) {
+			return false;
+		}
+		for (idx_t i = 0; i < UnionType::GetMemberCount(left); i++) {
+			auto &left_member = UnionType::GetMemberType(left, i);
+			auto &right_member = UnionType::GetMemberType(right, i);
+			if (!CheckTypeCompatibility(left_member, right_member)) {
+				return false;
+			}
+		}
+	}
+	case LogicalTypeId::MAP: {
+		if (!CheckTypeCompatibility(MapType::KeyType(left), MapType::KeyType(right))) {
+			return false;
+		}
+		if (!CheckTypeCompatibility(MapType::ValueType(left), MapType::ValueType(right))) {
+			return false;
+		}
+	}
+	default: {
+		return true;
+	}
+	}
+	return true;
 }
 
 static bool IsStructColumnValid(const LogicalType &left, const LogicalType &right) {
