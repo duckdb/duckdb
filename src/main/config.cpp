@@ -276,7 +276,9 @@ void DBConfig::SetDefaultMaxSwapSpace(optional_ptr<DatabaseInstance> db) {
 	}
 	// Use the available disk space if temp directory is set
 	auto disk_space = FileSystem::GetAvailableDiskSpace(options.temporary_directory);
-	options.maximum_swap_space.SetDefault(disk_space);
+	// Only use 90% of the available disk space
+	auto default_value = disk_space == DConstants::INVALID_INDEX ? 0 : static_cast<double>(disk_space) * 0.9;
+	options.maximum_swap_space.SetDefault(default_value);
 }
 
 void DBConfig::CheckLock(const string &name) {
