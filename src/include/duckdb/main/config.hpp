@@ -149,7 +149,7 @@ struct DBConfigOptions {
 	string autoinstall_extension_repo = "";
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
-	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default 5x 'maximum_memory'
+	//! The maximum size of the 'temp_directory' folder when set (in bytes)
 	NumericSetting maximum_swap_space = NumericSetting();
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
 	idx_t maximum_threads = (idx_t)-1;
