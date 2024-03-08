@@ -7,15 +7,15 @@ require skip_reload
 # So there are no guarantees about the value of 'max_temp_directory_size'
 # (if .tmp exists, it's set to the available disk space | if it doesn't exist, it'll stay at 0 bytes)
 
+# So we set it explicitly to empty, to have guarantees
 statement ok
 set temp_directory='';
 
 statement ok
 PRAGMA memory_limit='2MB'
 
-# --- Set by default to 0 when temp_directory is not set ---
+# --- Set by default to 0 when temp_directory is empty ---
 
-# If 'temp_directory' is not set, this defaults to 0
 query I
 select current_setting('max_temp_directory_size')
 ----

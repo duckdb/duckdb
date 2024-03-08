@@ -6,6 +6,12 @@ require skip_reload
 # Create a persistent database
 load __TEST_DIR__/max_swap_space.db
 
+# Default temp_directory for a persistent database is <db_name>.tmp
+query I
+select current_setting('temp_directory').split('/')[-1]
+----
+max_swap_space.db.tmp
+
 ## If 'temp_directory' is not set, this defaults to 0
 #query I
 #select current_setting('max_temp_directory_size')
