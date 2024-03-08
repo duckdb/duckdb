@@ -33,7 +33,7 @@ script_dir="$(dirname "$(readlink -f "$0")")"
 # calculate SHA256 hash of extension binary
 cat $ext > $ext.append
 
-(( command -v truncate && truncate -s -256 $ext.append )) || ((command -v gtruncate && gtruncate -s -256 $ext.append )) || exit 1
+( command -v truncate && truncate -s -256 $ext.append ) || ( command -v gtruncate && gtruncate -s -256 $ext.append ) || exit 1
 
 # (Optionally) Sign binary
 if [ "$DUCKDB_EXTENSION_SIGNING_PK" != "" ]; then
