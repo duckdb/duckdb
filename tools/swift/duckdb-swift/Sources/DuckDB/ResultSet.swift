@@ -102,7 +102,7 @@ public struct ResultSet: Sendable {
     storage.columnLogicalType(at: index)
   }
   
-  func element(forColumn columnIndex: DBInt, at index: DBInt) -> Vector.Element? {
+  func element(forColumn columnIndex: DBInt, at index: DBInt) -> Vector.Element {
     var chunkIndex = DBInt.zero
     var chunkRowOffset = DBInt.zero
     while chunkIndex < chunkCount {
@@ -118,7 +118,7 @@ public struct ResultSet: Sendable {
         chunkRowOffset += chunkCount
       }
     }
-    return nil
+    preconditionFailure("item out of bounds")
   }
 }
 

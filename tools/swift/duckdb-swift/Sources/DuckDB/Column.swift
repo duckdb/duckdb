@@ -441,8 +441,7 @@ extension Column: RandomAccessCollection {
   }
   
   public subscript(position: DBInt) -> DataType? {
-    guard let element = result.element(forColumn: columnIndex, at: position) else { return nil }
-    return try? unwrap(element)
+    try? unwrap(result.element(forColumn: columnIndex, at: position))
   }
   
   public var startIndex: DBInt { 0 }
