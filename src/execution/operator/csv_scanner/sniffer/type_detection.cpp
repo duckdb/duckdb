@@ -125,6 +125,11 @@ void CSVSniffer::InitializeDateAndTimeStampDetection(CSVStateMachine &candidate,
 	auto &format_candidate = format_candidates[sql_type.id()];
 	if (!format_candidate.initialized) {
 		format_candidate.initialized = true;
+		// if user set a format, we add that as well
+		auto user_format = options.dialect_options.date_format.find(sql_type.id());
+		if (user_format->second.IsSetByUser()) {
+			format_candidate.format.emplace_back(user_format->second.GetValue().format_specifier);
+		}
 		// order by preference
 		auto entry = format_template_candidates.find(sql_type.id());
 		if (entry != format_template_candidates.end()) {
