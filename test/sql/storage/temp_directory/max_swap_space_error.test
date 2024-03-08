@@ -9,8 +9,7 @@ set temp_directory='__TEST_DIR__/max_swap_space_reached'
 
 # Ensure the temp_directory is used
 statement ok
-PRAGMA memory_limit='2MB'
-
+PRAGMA memory_limit='1024KiB'
 
 # 0 blocks
 statement ok
@@ -20,6 +19,11 @@ statement error
 CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
 failed to offload data block of size 256.0 KiB (0 bytes/0 bytes used)
+
+query I
+select "size" from duckdb_temporary_files()
+----
+0
 
 # 1 block max
 statement ok
@@ -34,3 +38,33 @@ statement error
 CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
 ----
 failed to offload data block of size 256.0 KiB (256.0 KiB/256.0 KiB used)
+
+query I
+select "size" from duckdb_temporary_files()
+----
+
+# 6 blocks
+statement ok
+set max_temp_directory_size='1536KiB'
+
+statement ok
+pragma threads=2;
+
+statement ok
+set preserve_insertion_order=true;
+
+# This is 1600000 bytes of BIGINT data, which is roughly 6.1 blocks
+# Because our memory limit is set at 1MiB (4 blocks) this works
+statement ok
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(200000);
+
+# When we increase the size to 2400000 bytes of BIGINT data (9.1 blocks) this errors
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(300000);
+----
+failed to offload data block of size 256.0 KiB (1.5 MiB/1.5 MiB used)
+
+query I
+select "size" from duckdb_temporary_files()
+----
+1572864
