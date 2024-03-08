@@ -321,13 +321,12 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.SetOptionByName("duckdb_api", "cpp");
 	}
 
-	if (new_config.options.temporary_directory.empty() && database_path) {
+	if (new_config.options.temporary_directory.empty()) {
 		// no directory specified: use default temp path
-		config.options.temporary_directory = string(database_path) + ".tmp";
-
-		// special treatment for in-memory mode
 		if (IsInMemoryDatabase(database_path)) {
 			config.options.temporary_directory = ".tmp";
+		} else {
+			config.options.temporary_directory = string(database_path) + ".tmp";
 		}
 	}
 
