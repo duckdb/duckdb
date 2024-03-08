@@ -3,7 +3,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
-//#include <iostream>
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
