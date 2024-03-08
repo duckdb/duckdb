@@ -260,12 +260,23 @@ void DBConfig::SetDefaultMaxMemory() {
 	}
 }
 
-void DBConfig::SetDefaultMaxSwapSpace() {
-	auto memory_limit = options.maximum_memory;
-	if (!TryMultiplyOperator::Operation(memory_limit, static_cast<idx_t>(5), options.maximum_swap_space)) {
-		// Can't default to 5x memory: fall back to same limit as memory instead
-		options.maximum_swap_space = memory_limit;
+void DBConfig::SetDefaultMaxSwapSpace(optional_ptr<DatabaseInstance> db) {
+	options.maximum_swap_space.SetDefault(0);
+	if (options.temporary_directory.empty()) {
+		return;
 	}
+	if (!db) {
+		return;
+	}
+	auto &fs = FileSystem::GetFileSystem(*db);
+	if (!fs.DirectoryExists(options.temporary_directory)) {
+		// Directory doesnt exist yet, we will look up the disk space once we have created the directory
+		// FIXME: do we want to proactively create the directory instead ???
+		return;
+	}
+	// Use the available disk space if temp directory is set
+	auto disk_space = FileSystem::GetAvailableDiskSpace(options.temporary_directory);
+	options.maximum_swap_space.SetDefault(disk_space);
 }
 
 void DBConfig::CheckLock(const string &name) {

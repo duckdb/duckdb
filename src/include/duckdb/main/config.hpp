@@ -61,6 +61,37 @@ typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
 typedef void (*reset_local_function_t)(ClientContext &context);
 typedef Value (*get_setting_function_t)(ClientContext &context);
 
+struct NumericSetting {
+public:
+	NumericSetting() : value(0), set_by_user(false) {
+	}
+
+public:
+	NumericSetting &operator=(idx_t val) = delete;
+
+public:
+	operator idx_t() {
+		return value;
+	}
+
+public:
+	bool ExplicitlySet() const {
+		return set_by_user;
+	}
+	void SetDefault(idx_t val) {
+		value = val;
+		set_by_user = false;
+	}
+	void SetExplicit(idx_t val) {
+		value = val;
+		set_by_user = true;
+	}
+
+private:
+	idx_t value;
+	bool set_by_user;
+};
+
 struct ConfigurationOption {
 	const char *name;
 	const char *description;
@@ -119,7 +150,7 @@ struct DBConfigOptions {
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default 5x 'maximum_memory'
-	idx_t maximum_swap_space = (idx_t)-1;
+	NumericSetting maximum_swap_space = NumericSetting();
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
 	idx_t maximum_threads = (idx_t)-1;
 	//! The number of external threads that work on DuckDB tasks. Default: 1.
@@ -278,7 +309,7 @@ public:
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	void SetDefaultMaxMemory();
-	void SetDefaultMaxSwapSpace();
+	void SetDefaultMaxSwapSpace(optional_ptr<DatabaseInstance> db);
 
 	OrderType ResolveOrder(OrderType order_type) const;
 	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;

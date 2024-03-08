@@ -186,6 +186,8 @@ public:
 	DUCKDB_API virtual string ExpandPath(const string &path);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
 	DUCKDB_API static idx_t GetAvailableMemory();
+	//! Returns the space available on the disk. Returns DConstants::INVALID_INDEX if the information was not available.
+	DUCKDB_API static idx_t GetAvailableDiskSpace(const string &path);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
 	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)

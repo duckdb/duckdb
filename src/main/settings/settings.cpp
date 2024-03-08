@@ -952,11 +952,11 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 // Maximum Temp Directory Size
 //===--------------------------------------------------------------------===//
 void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
+	config.options.maximum_swap_space.SetExplicit(DBConfig::ParseMemoryLimit(input.ToString()));
 }
 
 void MaximumTempDirectorySize::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.SetDefaultMaxSwapSpace();
+	config.SetDefaultMaxSwapSpace(db);
 }
 
 Value MaximumTempDirectorySize::GetSetting(ClientContext &context) {
@@ -1229,6 +1229,12 @@ Value SecretDirectorySetting::GetSetting(ClientContext &context) {
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.temporary_directory = input.ToString();
 	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
+	if (!config.options.temporary_directory.empty()) {
+		// Maximum swap space isn't set explicitly, initialize to default
+		if (!config.options.maximum_swap_space.ExplicitlySet()) {
+			config.SetDefaultMaxSwapSpace(db);
+		}
+	}
 	if (db) {
 		auto &buffer_manager = BufferManager::GetBufferManager(*db);
 		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);

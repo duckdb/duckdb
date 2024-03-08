@@ -12,6 +12,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/windows_util.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -21,6 +22,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -96,6 +98,23 @@ idx_t FileSystem::GetAvailableMemory() {
 		return DConstants::INVALID_INDEX;
 	}
 	return max_memory;
+}
+
+idx_t FileSystem::GetAvailableDiskSpace(const string &path) {
+	struct statvfs vfs;
+
+	if (statvfs(path.c_str(), &vfs) == -1) {
+		return DConstants::INVALID_INDEX;
+	}
+	auto block_size = vfs.f_frsize;
+	// These are the blocks available for creating new files or extending existing ones
+	auto available_blocks = vfs.f_bavail;
+	idx_t available_disk_space = DConstants::INVALID_INDEX;
+	if (!TryMultiplyOperator::Operation(static_cast<idx_t>(block_size), static_cast<idx_t>(available_blocks),
+	                                    available_disk_space)) {
+		return DConstants::INVALID_INDEX;
+	}
+	return available_disk_space;
 }
 
 string FileSystem::GetWorkingDirectory() {
@@ -196,6 +215,18 @@ idx_t FileSystem::GetAvailableMemory() {
 		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+idx_t FileSystem::GetAvailableDiskSpace(const string &path) {
+	ULARGE_INTEGER available_bytes, total_bytes, free_bytes;
+
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	if (!GetDiskFreeSpaceExW(unicode_path.c_str(), &available_bytes, &total_bytes, &free_bytes)) {
+		return DConstants::INVALID_INDEX;
+	}
+	(void)total_bytes;
+	(void)free_bytes;
+	return NumericCast<idx_t>(available_bytes.QuadPart);
 }
 
 string FileSystem::GetWorkingDirectory() {

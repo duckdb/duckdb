@@ -194,8 +194,13 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		if (!fs.DirectoryExists(temp_directory)) {
+			auto &config = DBConfig::GetConfig(db);
 			fs.CreateDirectory(temp_directory);
 			created_directory = true;
+			// Maximum swap space isn't set explicitly, initialize to default
+			if (!config.options.maximum_swap_space.ExplicitlySet()) {
+				config.SetDefaultMaxSwapSpace(&db);
+			}
 		}
 	}
 }
