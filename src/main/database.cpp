@@ -296,6 +296,24 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 	return Allocator::Get(db.GetDatabase());
 }
 
+static bool IsInMemoryDatabase(const char *database_path) {
+	if (!database_path) {
+		// Entirely empty
+		return true;
+	}
+	if (strlen(database_path) == 0) {
+		// '' empty string
+		return true;
+	}
+	constexpr const char *IN_MEMORY_PATH_PREFIX = ":memory:";
+	const idx_t PREFIX_LENGTH = strlen(IN_MEMORY_PATH_PREFIX);
+	if (strncmp(database_path, IN_MEMORY_PATH_PREFIX, PREFIX_LENGTH) == 0) {
+		// Starts with :memory:, i.e ':memory:named_conn' is valid
+		return true;
+	}
+	return false;
+}
+
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
 
@@ -308,7 +326,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.options.temporary_directory = string(database_path) + ".tmp";
 
 		// special treatment for in-memory mode
-		if (strcmp(database_path, IN_MEMORY_PATH) == 0) {
+		if (IsInMemoryDatabase(database_path)) {
 			config.options.temporary_directory = ".tmp";
 		}
 	}
