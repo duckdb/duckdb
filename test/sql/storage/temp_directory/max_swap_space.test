@@ -1,5 +1,5 @@
-# name: test/sql/storage/max_swap_space.test
-# group: [storage]
+# name: test/sql/storage/temp_directory/max_swap_space.test
+# group: [temp_directory]
 
 require skip_reload
 
@@ -106,6 +106,3 @@ CREATE TABLE t2 AS SELECT * FROM range(1000000);
 query I
 select current_setting('max_temp_directory_size') a where a == '0 bytes'
 ----
-
-## TODO: test that the explicitly set value by the user does not get overridden when 'temp_directory' is set to a directory that doesn't exist yet
-# when the 'temp_directory' is created by us - the explicitly set value should not be overridden
