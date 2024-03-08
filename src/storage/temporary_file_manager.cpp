@@ -52,7 +52,7 @@ bool BlockIndexManager::RemoveIndex(idx_t index) {
 	if (max_index_in_use < max_index) {
 		// max index in use is lower than the max_index
 		// reduce the max_index
-		max_index = indexes_in_use.empty() ? 0 : max_index_in_use + 1;
+		max_index = max_index_in_use;
 		if (file_size_monitor) {
 			file_size_monitor->Decrease(old_max - max_index);
 		}

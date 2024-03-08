@@ -185,27 +185,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config_ptr = user_config;
 	}
 
-	if (config_ptr->options.duckdb_api.empty()) {
-		config_ptr->SetOptionByName("duckdb_api", "cpp");
-	}
-
-	if (config_ptr->options.temporary_directory.empty() && database_path) {
-		// no directory specified: use default temp path
-		config_ptr->options.temporary_directory = string(database_path) + ".tmp";
-
-		// special treatment for in-memory mode
-		if (strcmp(database_path, IN_MEMORY_PATH) == 0) {
-			config_ptr->options.temporary_directory = ".tmp";
-		}
-	}
-
-	if (database_path) {
-		config_ptr->options.database_path = database_path;
-	} else {
-		config_ptr->options.database_path.clear();
-	}
-
-	Configure(*config_ptr);
+	Configure(*config_ptr, database_path);
 
 	if (user_config && !user_config->options.use_temporary_directory) {
 		// temporary directories explicitly disabled
@@ -316,8 +296,29 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 	return Allocator::Get(db.GetDatabase());
 }
 
-void DatabaseInstance::Configure(DBConfig &new_config) {
+void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
+
+	if (new_config.options.duckdb_api.empty()) {
+		config.SetOptionByName("duckdb_api", "cpp");
+	}
+
+	if (new_config.options.temporary_directory.empty() && database_path) {
+		// no directory specified: use default temp path
+		config.options.temporary_directory = string(database_path) + ".tmp";
+
+		// special treatment for in-memory mode
+		if (strcmp(database_path, IN_MEMORY_PATH) == 0) {
+			config.options.temporary_directory = ".tmp";
+		}
+	}
+
+	if (database_path) {
+		config.options.database_path = database_path;
+	} else {
+		config.options.database_path.clear();
+	}
+
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
