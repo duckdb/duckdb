@@ -64,7 +64,7 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = block_size;
+	data.capacity = NumericCast<uint32_t>(block_size);
 	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, block_size, false, &data.handle);
 	blocks.push_back(std::move(data));
 	allocated_size += block_size;
@@ -81,7 +81,7 @@ void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	D_ASSERT(type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = allocation_amount;
+	data.capacity = NumericCast<uint32_t>(allocation_amount);
 	data.handle = nullptr;
 	blocks.push_back(std::move(data));
 	allocated_size += allocation_amount;
@@ -112,7 +112,7 @@ void ColumnDataAllocator::AllocateBuffer(idx_t size, uint32_t &block_id, uint32_
 	}
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);
-	block_id = blocks.size() - 1;
+	block_id = NumericCast<uint32_t>(blocks.size() - 1);
 	if (chunk_state && chunk_state->handles.find(block_id) == chunk_state->handles.end()) {
 		// not guaranteed to be pinned already by this thread (if shared allocator)
 		chunk_state->handles[block_id] = alloc.buffer_manager->Pin(blocks[block_id].handle);
@@ -188,8 +188,8 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	auto strings = FlatVector::GetData<string_t>(result);
 
 	// find first non-inlined string
-	uint32_t i = v_offset;
-	const uint32_t end = v_offset + count;
+	auto i = NumericCast<uint32_t>(v_offset);
+	const uint32_t end = NumericCast<uint32_t>(v_offset + count);
 	for (; i < end; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
@@ -239,7 +239,7 @@ void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, Chun
 	do {
 		found_handle = false;
 		for (auto it = state.handles.begin(); it != state.handles.end(); it++) {
-			if (chunk.block_ids.find(it->first) != chunk.block_ids.end()) {
+			if (chunk.block_ids.find(NumericCast<uint32_t>(it->first)) != chunk.block_ids.end()) {
 				// still required: do not release
 				continue;
 			}

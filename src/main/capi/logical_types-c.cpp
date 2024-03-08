@@ -191,7 +191,7 @@ uint32_t duckdb_enum_dictionary_size(duckdb_logical_type type) {
 		return 0;
 	}
 	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
-	return duckdb::EnumType::GetSize(ltype);
+	return duckdb::NumericCast<uint32_t>(duckdb::EnumType::GetSize(ltype));
 }
 
 char *duckdb_enum_dictionary_value(duckdb_logical_type type, idx_t index) {

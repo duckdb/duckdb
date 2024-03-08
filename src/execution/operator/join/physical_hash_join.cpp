@@ -10,6 +10,7 @@
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -288,7 +289,7 @@ class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
 	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p)
-	    : ExecutorTask(context), event(std::move(event_p)), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
+	    : ExecutorTask(context, std::move(event_p)), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
 	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p) {
 	}
 
@@ -299,7 +300,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	HashJoinGlobalSinkState &sink;
 	idx_t chunk_idx_from;
 	idx_t chunk_idx_to;
@@ -374,7 +374,7 @@ class HashJoinRepartitionTask : public ExecutorTask {
 public:
 	HashJoinRepartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
 	                        JoinHashTable &local_ht)
-	    : ExecutorTask(context), event(std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
+	    : ExecutorTask(context, std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -384,8 +384,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
-
 	JoinHashTable &global_ht;
 	JoinHashTable &local_ht;
 };

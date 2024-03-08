@@ -1,6 +1,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include "miniz.hpp"
 #include "miniz_wrapper.hpp"
@@ -224,9 +225,9 @@ void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t 
 		idx_t output_remaining = (sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start;
 
 		mz_stream_ptr->next_in = reinterpret_cast<const unsigned char *>(uncompressed_data);
-		mz_stream_ptr->avail_in = remaining;
+		mz_stream_ptr->avail_in = NumericCast<unsigned int>(remaining);
 		mz_stream_ptr->next_out = sd.out_buff_start;
-		mz_stream_ptr->avail_out = output_remaining;
+		mz_stream_ptr->avail_out = NumericCast<unsigned int>(output_remaining);
 
 		auto res = mz_deflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 		if (res != duckdb_miniz::MZ_OK) {
@@ -252,7 +253,7 @@ void MiniZStreamWrapper::FlushStream() {
 	while (true) {
 		auto output_remaining = (sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start;
 		mz_stream_ptr->next_out = sd.out_buff_start;
-		mz_stream_ptr->avail_out = output_remaining;
+		mz_stream_ptr->avail_out = NumericCast<unsigned int>(output_remaining);
 
 		auto res = mz_deflate(mz_stream_ptr.get(), duckdb_miniz::MZ_FINISH);
 		sd.out_buff_start += (output_remaining - mz_stream_ptr->avail_out);
@@ -355,7 +356,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 
 	auto bytes_remaining = in.size() - (body_ptr - in.data());
 	mz_stream_ptr->next_in = const_uchar_ptr_cast(body_ptr);
-	mz_stream_ptr->avail_in = bytes_remaining;
+	mz_stream_ptr->avail_in = NumericCast<unsigned int>(bytes_remaining);
 
 	unsigned char decompress_buffer[BUFSIZ];
 	string decompressed;

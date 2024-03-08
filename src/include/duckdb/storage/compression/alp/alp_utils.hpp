@@ -37,7 +37,8 @@ public:
 public:
 	static AlpSamplingParameters GetSamplingParameters(idx_t current_vector_n_values) {
 
-		uint32_t n_lookup_values = MinValue(current_vector_n_values, (idx_t)AlpConstants::ALP_VECTOR_SIZE);
+		auto n_lookup_values =
+		    NumericCast<uint32_t>(MinValue(current_vector_n_values, (idx_t)AlpConstants::ALP_VECTOR_SIZE));
 		//! We sample equidistant values within a vector; to do this we jump a fixed number of values
 		uint32_t n_sampled_increments =
 		    MaxValue(1, (int32_t)std::ceil((double)n_lookup_values / AlpConstants::SAMPLES_PER_VECTOR));
