@@ -35,7 +35,7 @@ public:
 	DUCKDB_API static ClientContext *TryGetClientContext(FileOpener *opener);
 	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result);
 	DUCKDB_API static SettingLookupResult TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result,
-	                                            FileOpenerInfo &info);
+	                                                           FileOpenerInfo &info);
 };
 
 } // namespace duckdb

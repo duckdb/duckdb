@@ -29,7 +29,7 @@ SettingLookupResult FileOpener::TryGetCurrentSetting(FileOpener *opener, const s
 }
 
 SettingLookupResult FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result,
-                                      FileOpenerInfo &info) {
+                                                     FileOpenerInfo &info) {
 	if (!opener) {
 		return SettingLookupResult();
 	}
