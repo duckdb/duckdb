@@ -43,6 +43,7 @@ benchmark/micro/cast/cast_int32_int64.benchmark
 benchmark/micro/cast/cast_int_string.benchmark
 benchmark/micro/cast/cast_struct_string.benchmark
 benchmark/micro/cast/cast_string_struct.benchmark
+benchmark/micro/cast/cast_constant_string_to_enum.benchmark
 benchmark/micro/cast/strftime.benchmark
 benchmark/micro/cast/strptime.benchmark
 benchmark/micro/cast/cast_huge_string_hugeint.benchmark
