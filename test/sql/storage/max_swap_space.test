@@ -18,12 +18,15 @@ select current_setting('max_temp_directory_size')
 0 bytes
 
 # Set the max size explicitly
-
 statement ok
 set max_temp_directory_size='15gb'
 
-# Then reset it, default should be 0 again
+# Should not be 0 anymore
+query I
+select current_setting('max_temp_directory_size') a where a == '0 bytes'
+----
 
+# Then reset it, default should be 0 again
 statement ok
 reset max_temp_directory_size;
 
@@ -38,11 +41,6 @@ statement ok
 set temp_directory = '__TEST_DIR__';
 
 # '__TEST_DIR__' is guaranteed to exist, we can get the disk space
-query I
-select current_setting('max_temp_directory_size') a where a == '0 bytes'
-----
-
-# So the reported max size should not be 0 bytes
 query I
 select current_setting('max_temp_directory_size') a where a == '0 bytes'
 ----
@@ -88,6 +86,7 @@ select current_setting('max_temp_directory_size')
 
 # --- Set to the available disk space when we create the (previously non-existant) 'temp_directory'
 
+# Reset it so it's no longer set explicitly
 statement ok
 reset max_temp_directory_size;
 

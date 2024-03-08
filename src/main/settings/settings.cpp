@@ -952,6 +952,8 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 // Maximum Temp Directory Size
 //===--------------------------------------------------------------------===//
 void MaximumTempDirectorySize::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	// FIXME: should this not use 'SetExplicit' when the value is 0?
+	// So it acts as RESET instead when 0 is passed?
 	config.options.maximum_swap_space.SetExplicit(DBConfig::ParseMemoryLimit(input.ToString()));
 }
 
