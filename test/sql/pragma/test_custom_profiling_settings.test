@@ -2,8 +2,19 @@
 # description: Test PRAGMA custom_profiling_settings
 # group: [pragma]
 
+require json
+
 statement ok
-PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/test.json'
+CREATE TABLE custom_settings (CPU_TIME TEXT, EXTRA_INFO TEXT, OPERATOR_CARDINALITY TEXT, OPERATOR_TIMING TEXT);
+
+statement ok
+INSERT INTO custom_settings VALUES ('true', 'true', 'true', 'true');
+
+statement ok
+COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
+
+statement ok
+PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
 
 query I rowsort
 SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
@@ -22,6 +33,92 @@ PRAGMA profiling_output = 'test/sql/pragma/output.json';
 statement ok
 select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
 
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+
+statement ok
+SELECT cpu_time, extra_info, operator_cardinality, operator_timing FROM metrics_output;
+
+# change the cpu time to false and re-run the query
+statement ok
+UPDATE custom_settings SET CPU_TIME = 'false';
+
+statement ok
+COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
+
+statement ok
+PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
+
+query I rowsort
+SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
+----
+EXTRA_INFO
+OPERATOR_CARDINALITY
+OPERATOR_TIMING
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = 'test/sql/pragma/output.json';
+
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+
+statement error
+select cpu_time from metrics_output;
+----
+Referenced column "cpu_time" not found in FROM clause!
+
+# Remove time from the settings file but add back the cpu time
+statement ok
+UPDATE custom_settings SET CPU_TIME = 'true', OPERATOR_TIMING = 'false';
+
+statement ok
+COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
+
+statement ok
+PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
+
+query I rowsort
+SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
+----
+CPU_TIME
+EXTRA_INFO
+OPERATOR_CARDINALITY
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = 'test/sql/pragma/output.json';
+
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+
+# Even though operator timing is set to false, it still should have been collected so that CPU timing can be calculated
+query I
+SELECT 
+CASE 
+    WHEN cpu_time > 0 THEN 'true'
+    ELSE 'false'
+END
+FROM metrics_output;
+----
+true
+
+statement error
+SELECT operator_timing FROM metrics_output;
+----
+Referenced column "operator_timing" not found in FROM clause!
+
+# Error cases
 statement error
 PRAGMA custom_profiling_settings='hello_I_am_a_file_that_does_not_exist.json'
 ----
@@ -32,3 +129,22 @@ PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/pragma_d
 ----
 The custom profiler settings file must be a JSON file
 
+statement error
+PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/test.json'
+----
+Could not parse the custom profiler settings file
+
+# add an invalid setting to the file
+statement ok
+ALTER TABLE custom_settings ADD COLUMN INVALID_SETTING TEXT;
+
+statement ok
+UPDATE custom_settings SET INVALID_SETTING = 'true';
+
+statement ok
+COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
+
+statement error
+PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
+----
+Invalid custom profiler settings: "INVALID_SETTING"

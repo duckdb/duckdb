@@ -561,7 +561,16 @@ static SettingsSet FillTreeNodeSettings(unordered_map<string, string> &json) {
 
 	string invalid_settings;
 	for (auto &entry : json) {
-		auto setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+		MetricsType setting;
+		try {
+			setting = EnumUtil::FromString<MetricsType>(StringUtil::Upper(entry.first));
+		} catch (std::exception &ex) {
+			if (!invalid_settings.empty()) {
+				invalid_settings += ", ";
+			}
+			invalid_settings += entry.first;
+			continue;
+		}
 		if (StringUtil::Lower(entry.second) == "true") {
 			metrics.insert(setting);
 		}
@@ -599,9 +608,11 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 	file->Close();
 
 	// parse the file content
-	auto json = StringUtil::ParseJSONMap(file_content);
-	if (json.empty()) {
-		throw IOException("Could not parse the custom profiler settings file: \"%s\"", input_str);
+	unordered_map<string, string> json;
+	try {
+		json = StringUtil::ParseJSONMap(file_content);
+	} catch (std::exception &ex) {
+		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\"", input_str);
 	}
 
 	config.profiler_settings = FillTreeNodeSettings(json);

@@ -96,12 +96,12 @@ struct OperatorInfo {
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 
 	void addTime(double n_time) {
-        this->time += n_time;
-    }
+		this->time += n_time;
+	}
 
 	void addElements(idx_t n_elements) {
-        this->elements += n_elements;
-    }
+		this->elements += n_elements;
+	}
 };
 
 //! The OperatorProfiler measures timings of individual operators
@@ -224,8 +224,8 @@ private:
 	//! The root of the query tree
 	unique_ptr<TreeNode> root;
 
-    //! The query info
-    unique_ptr<QueryInfo> query_info;
+	//! The query info
+	unique_ptr<QueryInfo> query_info;
 
 	//! The query string
 	string query;

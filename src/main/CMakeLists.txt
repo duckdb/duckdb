@@ -39,7 +39,7 @@ add_library_unity(
   query_profiler.cpp
   query_result.cpp
   stream_query_result.cpp
-        profiling_info.cpp
+  profiling_info.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main>

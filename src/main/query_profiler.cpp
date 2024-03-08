@@ -287,7 +287,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	bool cardinality_enabled = SettingEnabled(MetricsType::OPERATOR_CARDINALITY);
 	if (timing_enabled || cardinality_enabled) {
 		// get the operator info for the current element
-        auto &curr_operator_info = GetOperatorInfo(*active_operator);
+		auto &curr_operator_info = GetOperatorInfo(*active_operator);
 
 		// finish timing for the current element
 		if (timing_enabled) {
@@ -305,7 +305,7 @@ OperatorInfo &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op)
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		return entry->second;
-    } else {
+	} else {
 		// add new entry
 		timings[phys_op] = OperatorInfo();
 		return timings[phys_op];

@@ -24,8 +24,8 @@ void ProfilingInfo::ResetMetrics() {
 
 bool ProfilingInfo::Enabled(const MetricsType setting) const {
 	if (settings.find(setting) != settings.end()) {
-        return true;
-    }
+		return true;
+	}
 	if (setting == MetricsType::OPERATOR_TIMING && Enabled(MetricsType::CPU_TIME)) {
 		return true;
 	}

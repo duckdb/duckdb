@@ -4,8 +4,7 @@
 
 namespace duckdb {
 
-ThreadContext::ThreadContext(ClientContext &context)
-    : profiler(context) {
+ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 }
 
 } // namespace duckdb

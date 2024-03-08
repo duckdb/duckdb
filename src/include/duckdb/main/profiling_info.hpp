@@ -30,14 +30,14 @@ typedef unordered_set<MetricsType, MetricsTypeHashFunction> SettingsSet;
 
 struct SettingSetFunctions {
 	static bool Enabled(const SettingsSet &settings, const MetricsType setting) {
-        if (settings.find(setting) != settings.end()) {
-            return true;
-        }
-        if (setting == MetricsType::OPERATOR_TIMING && Enabled(settings, MetricsType::CPU_TIME)) {
-            return true;
-        }
-        return false;
-    }
+		if (settings.find(setting) != settings.end()) {
+			return true;
+		}
+		if (setting == MetricsType::OPERATOR_TIMING && Enabled(settings, MetricsType::CPU_TIME)) {
+			return true;
+		}
+		return false;
+	}
 };
 
 const SettingsSet default_settings = {
@@ -53,7 +53,8 @@ struct Metrics {
 	idx_t operator_cardinality;
 	double operator_timing;
 
-	Metrics() : cpu_time(0), operator_cardinality(0), operator_timing(0) {}
+	Metrics() : cpu_time(0), operator_cardinality(0), operator_timing(0) {
+	}
 };
 
 class ProfilingInfo {
@@ -64,7 +65,8 @@ public:
 
 public:
 	ProfilingInfo() = default;
-	ProfilingInfo(SettingsSet &n_settings) : settings(n_settings) {}
+	ProfilingInfo(SettingsSet &n_settings) : settings(n_settings) {
+	}
 	ProfilingInfo(ProfilingInfo &) = default;
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
