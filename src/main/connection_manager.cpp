@@ -1,5 +1,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 
 namespace duckdb {
 
@@ -8,11 +10,17 @@ ConnectionManager::ConnectionManager() : is_locking(false) {
 
 void ConnectionManager::AddConnection(ClientContext &context) {
 	lock_guard<mutex> lock(connections_lock);
+	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
+		callback->OnConnectionOpened(context);
+	}
 	connections.insert(make_pair(&context, weak_ptr<ClientContext>(context.shared_from_this())));
 }
 
 void ConnectionManager::RemoveConnection(ClientContext &context) {
 	lock_guard<mutex> lock(connections_lock);
+	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
+		callback->OnConnectionClosed(context);
+	}
 	connections.erase(&context);
 }
 
