@@ -62,7 +62,7 @@ EXPLAIN SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL;
 physical_plan	<!REGEX>:.*Filters:.*
 
 query I
-SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL;
+SELECT * FROM test_structs WHERE i.a = 2 OR i.a IS NULL ORDER BY 1 DESC NULLS FIRST;
 ----
 NULL
 {'a': NULL, 'b': NULL}

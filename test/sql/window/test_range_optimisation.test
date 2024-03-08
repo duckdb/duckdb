@@ -33,7 +33,7 @@ WINDOW win_3d AS (
 	PARTITION BY "city" 
 	ORDER BY requested_date ASC 
 	RANGE BETWEEN INTERVAL 3 DAYS PRECEDING AND INTERVAL 1 DAYS PRECEDING) 
-ORDER BY "requested_date", "city"
+ORDER BY "requested_date", "city", "id"
 ----
 5	2023-01-01	San Francisco	1210	NULL
 10	2023-01-01	San Francisco	856	NULL

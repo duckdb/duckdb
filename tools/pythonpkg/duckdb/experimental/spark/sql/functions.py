@@ -386,3 +386,37 @@ def transform(
     +--------------+
     """
     raise NotImplementedError
+
+
+def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
+    """
+    Concatenates multiple input string columns together into a single string column,
+    using the given separator.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    sep : str
+        words separator.
+    cols : :class:`~pyspark.sql.Column` or str
+        list of columns to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        string of concatenated words.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd','123')], ['s', 'd'])
+    >>> df.select(concat_ws('-', df.s, df.d).alias('s')).collect()
+    [Row(s='abcd-123')]
+    """
+    cols = [_to_column(expr) for expr in cols]
+    return _invoke_function(
+        "concat_ws", ConstantExpression(sep), *cols
+    )
