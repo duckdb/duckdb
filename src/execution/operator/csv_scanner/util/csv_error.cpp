@@ -157,11 +157,11 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
                                               LinesPerBoundary error_info, string &csv_row, idx_t byte_position) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
-	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns
+	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1
 	      << std::endl;
 	// What were the options
 	error << options.ToString();
-	if (actual_columns > options.dialect_options.num_cols) {
+	if (actual_columns >= options.dialect_options.num_cols) {
 		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info,
 		                byte_position);
 	} else {

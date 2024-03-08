@@ -24,10 +24,10 @@ query IIIIII rowsort
 SELECT regexp_replace(file, '\\', '/', 'g'), column_idx, column_name, error_type, csv_line, byte_position
 FROM csv_rejects_table;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	0	"column0"	CAST	B, A	10875
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	0	"column0"	CAST	C, A	20875
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	0	"column0"	CAST	B, A	18395
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	0	"column0"	CAST	C, A	28395
+test/sql/copy/csv/data/error/mismatch/big_bad.csv	1	"column0"	CAST	B, A	10875
+test/sql/copy/csv/data/error/mismatch/big_bad.csv	1	"column0"	CAST	C, A	20875
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	1	"column0"	CAST	B, A	18395
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	1	"column0"	CAST	C, A	28395
 
 query I
 SELECT error_message

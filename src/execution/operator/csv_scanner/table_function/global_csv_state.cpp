@@ -197,11 +197,6 @@ void CSVGlobalState::FillRejectsTable() {
 						rejects->count++;
 						auto row_line = file->error_handler->GetLine(error.error_info);
 						auto col_idx = error.column_idx;
-						string col_name;
-						if (error.type != CSVErrorType::TOO_MANY_COLUMNS) {
-							// Too many columns does not have a name, all other errors have
-							col_name = bind_data.return_names[col_idx];
-						}
 						// Add the row to the rejects table
 						appender.BeginRow();
 						// 1. File Path
@@ -211,12 +206,18 @@ void CSVGlobalState::FillRejectsTable() {
 						// 3. Byte Position where error occurred
 						appender.Append(error.byte_position);
 						// 4. Column Index
-						appender.Append(col_idx);
+						appender.Append(col_idx + 1);
 						// 5. Column Name (If Applicable)
-						if (col_name.empty()) {
+						switch (error.type) {
+						case CSVErrorType::TOO_MANY_COLUMNS:
 							appender.Append(Value());
-						} else {
-							appender.Append(string_t("\"" + col_name + "\""));
+							break;
+						case CSVErrorType::TOO_FEW_COLUMNS:
+							D_ASSERT(bind_data.return_names.size() > col_idx + 1);
+							appender.Append(string_t("\"" + bind_data.return_names[col_idx + 1] + "\""));
+							break;
+						default:
+							appender.Append(string_t("\"" + bind_data.return_names[col_idx] + "\""));
 						}
 						// 6. Error Type
 						appender.Append(string_t(CSVErrorTypeToEnum(error.type)));

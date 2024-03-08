@@ -23,8 +23,8 @@ query IIIIIII rowsort
 SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
 FROM csv_rejects_table order by all;
 ----
-data/csv/error/flush_cast.csv	2813	0	"a"	CAST	c, bla	44971
-data/csv/error/flush_cast.csv	439	0	"a"	CAST	B, bla	6996
+data/csv/error/flush_cast.csv	2813	1	"a"	CAST	c, bla	44971
+data/csv/error/flush_cast.csv	439	1	"a"	CAST	B, bla	6996
 
 query I
 SELECT error_message

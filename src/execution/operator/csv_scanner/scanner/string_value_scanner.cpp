@@ -365,7 +365,7 @@ bool StringValueResult::HandleError() {
 	if (current_error.is_set) {
 		switch (current_error.type) {
 		case CSVErrorType::TOO_MANY_COLUMNS:
-			HandleOverLimitRows(current_error.col_idx);
+			HandleOverLimitRows(cur_col_id);
 			break;
 		case CSVErrorType::INVALID_UNICODE:
 			HandleUnicodeError(current_error.col_idx);
@@ -510,7 +510,7 @@ bool StringValueResult::AddRowInternal() {
 			auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 			auto csv_error = CSVError::IncorrectColumnAmountError(
-			    state_machine.options, cur_col_id, lines_per_batch, borked_line,
+			    state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
 			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 			error_handler.Error(csv_error);
 			// If we are here we ignore_errors, so we delete this line

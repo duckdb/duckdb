@@ -20,32 +20,32 @@ query IIIIIII rowsort
 SELECT regexp_replace(file, '\\', '/', 'g'), line, column_idx, column_name, error_type, csv_line, byte_position
 FROM csv_rejects_table;
 ----
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	2176	0	"column0"	CAST	B, A	10875
-test/sql/copy/csv/data/error/mismatch/big_bad.csv	4176	0	"column0"	CAST	C, A	20875
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3680	0	"column0"	CAST	B, A	18395
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	5680	0	"column0"	CAST	C, A	28395
+test/sql/copy/csv/data/error/mismatch/big_bad.csv	2176	1	"column0"	CAST	B, A	10875
+test/sql/copy/csv/data/error/mismatch/big_bad.csv	4176	1	"column0"	CAST	C, A	20875
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3680	1	"column0"	CAST	B, A	18395
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	5680	1	"column0"	CAST	C, A	28395
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=2176 and column_idx=0;
+FROM csv_rejects_table where line=2176 and column_idx=1;
 ----
 <REGEX>:.*Could not convert string "B" to 'BIGINT'.*
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=4176 and column_idx=0;
+FROM csv_rejects_table where line=4176 and column_idx=1;
 ----
 <REGEX>:.*Could not convert string "C" to 'BIGINT'.*
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=3680 and column_idx=0;
+FROM csv_rejects_table where line=3680 and column_idx=1;
 ----
 <REGEX>:.*Could not convert string "B" to 'BIGINT'.*
 
 query I
 SELECT error_message
-FROM csv_rejects_table where line=5680 and column_idx=0;
+FROM csv_rejects_table where line=5680 and column_idx=1;
 ----
 <REGEX>:.*Could not convert string "C" to 'BIGINT'.*
 
