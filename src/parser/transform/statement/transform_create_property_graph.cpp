@@ -136,7 +136,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 	case_insensitive_map_t<string> table_alias_map;
 	auto property_graph_name = TransformQualifiedName(*stmt.name);
 	info->property_graph_name = property_graph_name.name;
-
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 	D_ASSERT(stmt.vertex_tables);
 	for (auto &vertex_table = stmt.vertex_tables->head; vertex_table != nullptr; vertex_table = lnext(vertex_table)) {
 		auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(vertex_table->data.ptr_value);

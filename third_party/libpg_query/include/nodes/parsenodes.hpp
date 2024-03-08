@@ -2178,6 +2178,7 @@ typedef struct PGCreatePropertyGraphStmt {
     PGRangeVar *name;
     PGList *vertex_tables;
     PGList *edge_tables;
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreatePropertyGraphStmt;
 
 typedef struct PGPropertyGraphTable {
