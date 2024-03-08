@@ -54,6 +54,10 @@ struct CSVStates {
 		return states[1] == CSVState::CARRIAGE_RETURN;
 	}
 
+	inline bool IsInvalid() {
+		return states[1] == CSVState::INVALID;
+	}
+
 	inline bool IsQuoted() {
 		return states[0] == CSVState::QUOTED;
 	}

@@ -926,6 +926,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 		if (states.IsEscaped()) {
 			result.escaped = true;
 		}
+		if (states.IsInvalid()) {
+			result.InvalidState(result);
+		}
 		j++;
 	}
 	if (overbuffer_string.empty() &&
@@ -954,6 +957,9 @@ void StringValueScanner::ProcessOverbufferValue() {
 		}
 		if (states.IsEscaped()) {
 			result.escaped = true;
+		}
+		if (states.IsInvalid()) {
+			result.InvalidState(result);
 		}
 		j++;
 	}
