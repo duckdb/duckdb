@@ -450,6 +450,7 @@ bool StringValueResult::AddRowInternal() {
 		    CSVError::LineSizeError(state_machine.options, current_line_size, lines_per_batch, borked_line,
 		                            current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
 		error_handler.Error(csv_error);
+		number_of_rows--;
 	}
 	if (HandleError()) {
 		return false;
