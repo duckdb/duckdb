@@ -449,7 +449,6 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 }
 
 void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
-
 	if (write_buffer->idx == 0) {
 		return;
 	}
@@ -472,6 +471,11 @@ void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuff
 
 	{
 		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		// check if there are upload threads available
+		if (file_handle.uploads_in_progress >= file_handle.config_params.max_upload_threads) {
+			// there are not - wait for one to become available
+			file_handle.uploads_in_progress_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress < file_handle.config_params.max_upload_threads; });
+		}
 		file_handle.uploads_in_progress++;
 	}
 
