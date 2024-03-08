@@ -33,6 +33,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_array_tail.cpp
     json_functions/json_array_append.cpp
     json_functions/json_array_prepend.cpp
+    json_functions/json_array_insert.cpp
     json_functions/json_object_add.cpp
     ${YYJSON_OBJECT_FILES})
 
