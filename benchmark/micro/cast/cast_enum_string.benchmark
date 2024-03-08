@@ -16,6 +16,6 @@ select count(*) FROM integers WHERE enum_val = integer_val;
 
 
 # constant string value should cast to enum now.
-run
-select count(*) FROM integers WHERE enum_val='1';
+# run
+# select count(*) FROM integers WHERE enum_val='1';
 
