@@ -80,10 +80,10 @@ bool BlockIndexManager::HasFreeBlocks() {
 idx_t BlockIndexManager::GetNewBlockIndexInternal() {
 	if (free_indexes.empty()) {
 		auto new_index = max_index;
-		max_index++;
 		if (file_size_monitor) {
 			file_size_monitor->Increase(1);
 		}
+		max_index++;
 		return new_index;
 	}
 	auto entry = free_indexes.begin();
@@ -316,17 +316,17 @@ void TemporaryFileManager::IncreaseSizeOnDisk(idx_t bytes) {
 	auto max_swap_space = config.options.maximum_swap_space;
 
 	auto current_size_on_disk = size_on_disk.load();
-	size_on_disk += bytes;
-	if (size_on_disk.load() > max_swap_space) {
+	if (current_size_on_disk + bytes > max_swap_space) {
 		auto used = StringUtil::BytesToHumanReadableString(current_size_on_disk);
 		auto max = StringUtil::BytesToHumanReadableString(max_swap_space);
 		auto data_size = StringUtil::BytesToHumanReadableString(bytes);
 		throw OutOfMemoryException(R"(failed to offload data block of size %s (%s/%s used).
 This limit was set by the 'max_temp_directory_size' setting.
-This defaults to twice the size of 'max_memory'.
+By default, this setting utilizes the available disk space on the drive where the 'temp_directory' is located.
 You can adjust this setting, by using (for example) PRAGMA max_temp_directory_size='10GiB')",
 		                           data_size, used, max);
 	}
+	size_on_disk += bytes;
 }
 
 void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {

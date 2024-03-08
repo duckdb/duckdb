@@ -1,0 +1,36 @@
+# name: test/sql/storage/temp_directory/max_swap_space_error.test
+# group: [temp_directory]
+
+require skip_reload
+
+# Set a temp_directory to offload data
+statement ok
+set temp_directory='__TEST_DIR__/max_swap_space_reached'
+
+# Ensure the temp_directory is used
+statement ok
+PRAGMA memory_limit='2MB'
+
+
+# 0 blocks
+statement ok
+set max_temp_directory_size='0KiB'
+
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+----
+failed to offload data block of size 256.0 KiB (0 bytes/0 bytes used)
+
+# 1 block max
+statement ok
+set max_temp_directory_size='256KiB'
+
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+----
+failed to offload data block of size 256.0 KiB (256.0 KiB/256.0 KiB used)
+
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(1000000);
+----
+failed to offload data block of size 256.0 KiB (256.0 KiB/256.0 KiB used)
