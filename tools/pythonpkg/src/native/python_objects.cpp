@@ -470,8 +470,17 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		Timestamp::Convert(timestamp, date, time);
 		Date::Convert(date, year, month, day);
 		Time::Convert(time, hour, min, sec, micros);
-		auto py_timestamp =
-		    py::reinterpret_steal<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
+		py::object py_timestamp;
+		try {
+			auto python_conversion = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros);
+			if (!python_conversion) {
+				throw py::error_already_set();
+			}
+			py_timestamp = py::reinterpret_steal<py::object>(python_conversion);
+		} catch (py::error_already_set &e) {
+			// Failed to convert, fall back to str
+			return py::str(val.ToString());
+		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
 			// We have to add the timezone info
 			auto tz_utc = import_cache.pytz.timezone()("UTC");
@@ -486,7 +495,15 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		int32_t hour, min, sec, microsec;
 		auto time = val.GetValueUnsafe<dtime_t>();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
-		return py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
+		try {
+			auto pytime = PyTime_FromTime(hour, min, sec, microsec);
+			if (!pytime) {
+				throw py::error_already_set();
+			}
+			return py::reinterpret_steal<py::object>(pytime);
+		} catch (py::error_already_set &e) {
+			return py::str(val.ToString());
+		}
 	}
 	case LogicalTypeId::DATE: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
@@ -499,7 +516,15 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 			return py::reinterpret_borrow<py::object>(import_cache.datetime.date.min());
 		}
 		duckdb::Date::Convert(date, year, month, day);
-		return py::reinterpret_steal<py::object>(PyDate_FromDate(year, month, day));
+		try {
+			auto pydate = PyDate_FromDate(year, month, day);
+			if (!pydate) {
+				throw py::error_already_set();
+			}
+			return py::reinterpret_steal<py::object>(pydate);
+		} catch (py::error_already_set &e) {
+			return py::str(val.ToString());
+		}
 	}
 	case LogicalTypeId::LIST: {
 		auto &list_values = ListValue::GetChildren(val);

@@ -746,22 +746,16 @@ class SQLLogicContext:
         # if context.is_parallel:
         #    raise RuntimeError("Cannot restart database in parallel")
 
-        old_settings = self.runner.con.execute("select name, value from duckdb_settings()").df()
+        old_settings = self.runner.con.execute(
+            "select name, value from duckdb_settings() where scope='LOCAL' and value != 'NULL'"
+        ).fetchall()
         existing_search_path = self.runner.con.execute("select current_setting('search_path')").fetchone()[0]
 
         self.runner.load_database(self.runner.dbpath)
-        non_default_settings = self.runner.con.query(
-            """
-            select
-                name,
-                other_value
-            from duckdb_settings() join old_settings t(other_name, other_value) ON (name = other_name) WHERE value != other_value
-        """
-        ).fetchall()
-
-        for setting in non_default_settings:
+        for setting in old_settings:
             name, value = setting
-            self.runner.con.execute(f"set {name}='{value}'")
+            query = f"set {name}='{value}'"
+            self.runner.con.execute(query)
 
         self.runner.con.begin()
         self.runner.con.execute(f"set search_path = '{existing_search_path}'")
@@ -826,6 +820,7 @@ class SQLLogicContext:
 
         expected_result = statement.expected_result
         try:
+            print(sql_query)
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
@@ -935,6 +930,7 @@ class SQLLogicContext:
                 if self.runner.skip_active() and statement.__class__ != Unskip:
                     # Keep skipping until Unskip is found
                     continue
+                print("Executing:", statement.__class__.__name__, "line:", statement.get_query_line())
                 method = self.STATEMENTS.get(statement.__class__)
                 if not method:
                     raise Exception(f"Not supported: {statement.__class__.__name__}")
