@@ -49,6 +49,14 @@ from enum import Enum, auto
 
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 
+### TODO
+# - Clean up the 'error_message', 'error_line', etc.. structure, probably move it into a class
+#   then we can streamline the parallel/non-parallel SQLLogicContext uses
+# - Properly register skipped tests / errored tests
+# - Clean up the exception handling
+#   'except:' and 'except as Exception:' are much too broad, these should be narrowed
+# - Split up the logic, ideally a good portion of this should be language-agnostic
+#   so we can reuse much of this to build a codegen solution for other languages
 
 # This is pretty much just a VM
 class SQLLogicTestExecutor(SQLLogicRunner):
