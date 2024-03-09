@@ -31,6 +31,7 @@ import duckdb
 import os
 import math
 import time
+import threading
 
 import re
 from functools import cmp_to_key
@@ -241,18 +242,96 @@ class ExecuteResult:
         self.type = type
 
 
+class SQLLogicConnectionPool:
+    __slots__ = [
+        'connection',
+        'cursors',
+    ]
+
+    def __init__(self, con: duckdb.DuckDBPyConnection):
+        assert con
+        self.cursors = {}
+        self.connection = con
+
+    def __del__(self):
+        # Named cursors, for named connections
+        self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
+        # Unnamed cursor, the default 'connection' used
+        self.connection: Optional[duckdb.DuckDBPyConnection] = None
+
+    def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
+        """
+        Either fetch the 'self.connection' object if name is None
+        Or get-or-create the cursor identified by name
+        """
+        assert self.connection
+        if name is None:
+            return self.connection
+
+        if name not in self.cursors:
+            # TODO: do we need to run any set up on a new named connection ??
+            self.cursors[name] = self.connection.cursor()
+        return self.cursors[name]
+
+
+class SQLLogicDatabase:
+    __slots__ = ['path', 'database', 'config']
+
+    def __init__(self, path: str, extensions: List[str], additional_config: Optional[Dict[str, str]] = None):
+        """
+        Connection Hierarchy:
+
+        database
+        └── connection
+            └── cursor1
+            └── cursor2
+            └── cursor3
+
+        'connection' is a cursor of 'database'.
+        Every entry of 'cursors' is a cursor created from 'connection'.
+
+        This is important to understand how ClientConfig settings affect each cursor.
+        """
+        self.reset()
+        if additional_config:
+            self.config.update(additional_config)
+        self.path = path
+
+        # Now re-open the current database
+        read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
+        self.database = duckdb.connect(path, read_only, self.config)
+
+        # Load any previously loaded extensions again
+        for extension in extensions:
+            self.load_extension(self.connection, extension)
+
+    def reset(self):
+        self.database: Optional[duckdb.DuckDBPyConnection] = None
+        self.config: Dict[str, Any] = {
+            'allow_unsigned_extensions': True,
+            'allow_unredacted_secrets': True,
+        }
+        self.path = ''
+
+    def load_extension(self, extension: str):
+        root = duckdb.__build_dir__
+        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
+        # Serialize it as a POSIX compliant path
+        query = f"LOAD '{path}'"
+        self.database.execute(query)
+
+    def connect(self) -> SQLLogicConnectionPool:
+        return SQLLogicConnectionPool(self.database.cursor())
+
+
 class SQLLogicRunner:
     __slots__ = [
         'skipped',
         'error',
         'skip_level',
-        'dbpath',
         'loaded_databases',
-        'db',
-        'config',
+        'database',
         'extensions',
-        'con',
-        'cursors',
         'environment_variables',
         'test',
         'hash_threshold',
@@ -273,18 +352,11 @@ class SQLLogicRunner:
         self.error: Optional[str] = None
         self.skip_level: int = 0
 
-        self.dbpath = ''
+        # The set of databases that have been loaded by this runner at any point
+        # Used for cleanup
         self.loaded_databases: Set[str] = set()
-        self.db: Optional[duckdb.DuckDBPyConnection] = None
-        self.config: Dict[str, Any] = {
-            'allow_unsigned_extensions': True,
-            'allow_unredacted_secrets': True,
-        }
+        self.database: Optional[SQLLogicDatabase] = None
         self.extensions: set = set()
-
-        self.con: Optional[duckdb.DuckDBPyConnection] = None
-        self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
-
         self.environment_variables: Dict[str, str] = {}
         self.test: Optional[SQLLogicTest] = None
 
@@ -340,75 +412,6 @@ class SQLLogicRunner:
 
     def is_required(self, param):
         return param in self.required_requires
-
-    def load_extension(self, db: duckdb.DuckDBPyConnection, extension: str):
-        root = duckdb.__build_dir__
-        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
-        # Serialize it as a POSIX compliant path
-        query = f"LOAD '{path}'"
-        db.execute(query)
-
-    def check_require(self, statement: Require) -> RequireResult:
-        not_an_extension = [
-            "notmingw",
-            "mingw",
-            "notwindows",
-            "windows",
-            "longdouble",
-            "64bit",
-            "noforcestorage",
-            "nothreadsan",
-            "strinline",
-            "vector_size",
-            "exact_vector_size",
-            "block_size",
-            "skip_reload",
-            "noalternativeverify",
-        ]
-        param = statement.header.parameters[0].lower()
-        if param in not_an_extension:
-            return RequireResult.MISSING
-
-        if param == "no_extension_autoloading":
-            if 'autoload_known_extensions' in self.config:
-                # If autoloading is on, we skip this test
-                return RequireResult.MISSING
-            return RequireResult.PRESENT
-
-        excluded_from_autoloading = True
-        for ext in self.AUTOLOADABLE_EXTENSIONS:
-            if ext == param:
-                excluded_from_autoloading = False
-                break
-
-        if not 'autoload_known_extensions' in self.config:
-            try:
-                self.load_extension(self.con, param)
-                self.extensions.add(param)
-            except:
-                return RequireResult.MISSING
-        elif excluded_from_autoloading:
-            return RequireResult.MISSING
-
-        return RequireResult.PRESENT
-
-    def load_database(self, dbpath):
-        self.dbpath = dbpath
-
-        # Restart the database with the specified db path
-        self.db = None
-        self.con = None
-        self.cursors = {}
-
-        # Now re-open the current database
-        read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
-        self.db = duckdb.connect(dbpath, read_only, self.config)
-        self.loaded_databases.add(dbpath)
-        self.reconnect()
-
-        # Load any previously loaded extensions again
-        for extension in self.extensions:
-            self.load_extension(self.db, extension)
 
     def check_query_result(self, context, query: Query, result: QueryResult) -> None:
         expected_column_count = query.expected_result.get_expected_column_count()
@@ -604,10 +607,13 @@ class SQLLogicRunner:
 
 
 class SQLLogicContext:
-    __slots__ = ['iterator', 'runner', 'generator', 'STATEMENTS', 'statements', 'keywords', 'is_loop']
+    __slots__ = ['iterator', 'runner', 'generator', 'STATEMENTS', 'pool', 'statements', 'keywords', 'is_loop']
 
     def reset(self):
         self.iterator = 0
+
+    def __del__(self):
+        self.pool = None
 
     def replace_keywords(self, input: str):
         # Apply a replacement for every registered keyword
@@ -616,13 +622,20 @@ class SQLLogicContext:
         return input
 
     def __init__(
-        self, runner: SQLLogicRunner, statements: List[BaseStatement], keywords: Dict[str, str], iteration_generator
+        self,
+        pool: SQLLogicConnectionPool,
+        runner: SQLLogicRunner,
+        statements: List[BaseStatement],
+        keywords: Dict[str, str],
+        iteration_generator,
     ):
         self.statements = statements
         self.runner = runner
         self.is_loop = True
         self.generator: Generator[Any] = iteration_generator
         self.keywords = keywords
+        self.pool: Optional[SQLLogicConnectionPool] = pool
+        self.initialize_connection(self.pool.get_connection())
         self.STATEMENTS = {
             Query: self.execute_query,
             Statement: self.execute_statement,
@@ -657,6 +670,27 @@ class SQLLogicContext:
     def in_loop(self) -> bool:
         return self.is_loop
 
+    def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
+        return self.pool.get_connection(name)
+
+    def initialize_connection(self, con):
+        if self.runner.test.is_sqlite_test():
+            con.execute("SET integer_division=true")
+        try:
+            con.execute("SET timezone='UTC'")
+        except duckdb.Error:
+            pass
+        # Check for alternative verify
+        # if DUCKDB_ALTERNATIVE_VERIFY:
+        #    con.query("SET pivot_filter_threshold=0")
+        # if enable_verification:
+        #    con.enable_query_verification()
+        # Set the local extension repo for autoinstalling extensions
+        env_var = os.getenv("LOCAL_EXTENSION_REPO")
+        if env_var:
+            con.execute("SET autoload_known_extensions=True")
+            con.execute(f"SET autoinstall_extension_repository='{env_var}'")
+
     def execute_load(self, load: Load):
         if self.in_loop():
             self.runner.fail("load cannot be called in a loop")
@@ -673,19 +707,22 @@ class SQLLogicContext:
             dbpath = ""
 
         # set up the config file
+        additional_config = {}
         if readonly:
-            self.runner.config['temp_directory'] = False
-            self.runner.config['access_mode'] = 'read_only'
+            additional_config['temp_directory'] = False
+            additional_config['access_mode'] = 'read_only'
         else:
-            self.runner.config['temp_directory'] = True
-            self.runner.config['access_mode'] = 'automatic'
+            additional_config['temp_directory'] = True
+            additional_config['access_mode'] = 'automatic'
 
-        # now create the database file
-        self.runner.load_database(dbpath)
+        self.pool = None
+        self.runner.database = None
+        self.runner.database = SQLLogicDatabase(dbpath, self.runner.extensions, additional_config)
+        self.pool = self.runner.database.connect()
 
     def execute_query(self, query: Query):
         assert isinstance(query, Query)
-        conn = self.runner.get_connection(query.connection_name)
+        conn = self.get_connection(query.connection_name)
         sql_query = '\n'.join(query.lines)
         sql_query = self.replace_keywords(sql_query)
 
@@ -762,12 +799,18 @@ class SQLLogicContext:
         # if context.is_parallel:
         #    raise RuntimeError("Cannot restart database in parallel")
 
-        old_settings = self.runner.con.execute(
+        con = self.pool.get_connection()
+        old_settings = con.execute(
             "select name, value from duckdb_settings() where value != 'NULL' and value != ''"
         ).fetchall()
-        existing_search_path = self.runner.con.execute("select current_setting('search_path')").fetchone()[0]
+        existing_search_path = con.execute("select current_setting('search_path')").fetchone()[0]
 
-        self.runner.load_database(self.runner.dbpath)
+        path = self.runner.database.path
+        self.pool = None
+        self.runner.database = None
+        self.runner.database = SQLLogicDatabase(path, self.runner.extensions)
+        self.pool = self.runner.database.connect()
+        con = self.pool.get_connection()
         for setting in old_settings:
             name, value = setting
             if name in [
@@ -783,12 +826,11 @@ class SQLLogicContext:
                 # FIXME: 'profiling_mode' becomes "standard" when requested, but that's not actually the default setting
                 continue
             query = f"set {name}='{value}'"
-            print(query)
-            self.runner.con.execute(query)
+            con.execute(query)
 
-        self.runner.con.begin()
-        self.runner.con.execute(f"set search_path = '{existing_search_path}'")
-        self.runner.con.commit()
+        con.begin()
+        con.execute(f"set search_path = '{existing_search_path}'")
+        con.commit()
 
     def execute_set(self, statement: Set):
         option = statement.header.parameters[0]
@@ -806,7 +848,10 @@ class SQLLogicContext:
     def execute_reconnect(self, statement: Reconnect):
         # if self.is_parallel:
         #   raise Error(...)
-        self.runner.reconnect()
+        self.pool = None
+        self.pool = self.runner.database.connect()
+        con = self.pool.get_connection()
+        self.initialize_connection(con)
 
     def execute_sleep(self, statement: Sleep):
         def calculate_sleep_time(duration: float, unit: SleepUnit) -> float:
@@ -843,7 +888,7 @@ class SQLLogicContext:
 
     def execute_statement(self, statement: Statement):
         assert isinstance(statement, Statement)
-        conn = self.runner.get_connection(statement.connection_name)
+        conn = self.get_connection(statement.connection_name)
         sql_query = '\n'.join(statement.lines)
         sql_query = self.replace_keywords(sql_query)
 
@@ -869,8 +914,53 @@ class SQLLogicContext:
                     f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
                 )
 
+    def check_require(self, statement: Require) -> RequireResult:
+        not_an_extension = [
+            "notmingw",
+            "mingw",
+            "notwindows",
+            "windows",
+            "longdouble",
+            "64bit",
+            "noforcestorage",
+            "nothreadsan",
+            "strinline",
+            "vector_size",
+            "exact_vector_size",
+            "block_size",
+            "skip_reload",
+            "noalternativeverify",
+        ]
+        param = statement.header.parameters[0].lower()
+        if param in not_an_extension:
+            return RequireResult.MISSING
+
+        if param == "no_extension_autoloading":
+            if 'autoload_known_extensions' in self.runner.database.config:
+                # If autoloading is on, we skip this test
+                return RequireResult.MISSING
+            return RequireResult.PRESENT
+
+        excluded_from_autoloading = True
+        for ext in self.runner.AUTOLOADABLE_EXTENSIONS:
+            if ext == param:
+                excluded_from_autoloading = False
+                break
+
+        if not 'autoload_known_extensions' in self.runner.database.config:
+            try:
+                con = self.pool.get_connection()
+                self.runner.load_extension(con, param)
+                self.runner.extensions.add(param)
+            except:
+                return RequireResult.MISSING
+        elif excluded_from_autoloading:
+            return RequireResult.MISSING
+
+        return RequireResult.PRESENT
+
     def execute_require(self, statement: Require):
-        require_result = self.runner.check_require(statement)
+        require_result = self.check_require(statement)
         if require_result == RequireResult.MISSING:
             param = statement.header.parameters[0].lower()
             if self.runner.is_required(param):
@@ -884,6 +974,8 @@ class SQLLogicContext:
         if self.in_loop():
             # FIXME: we can just remove the keyword at the end of the loop
             # I think we should support this
+            # ... actually the way we set up keywords here, this is already the behavior
+            # inside the python sqllogic runner, since contexts are created and destroyed at loop start and end
             self.runner.fail(f"require-env can not be called in a loop")
         if res is None:
             self.runner.fail(f"require-env {key} failed, not set")
@@ -915,18 +1007,63 @@ class SQLLogicContext:
         if loop.parallel:
             self.runner.skiptest("PARALLEL LOOP NOT SUPPORTED")
         statements = self.get_loop_statements()
-        new_keywords = self.keywords
 
-        # Every iteration the 'value' of the loop key needs to change
-        def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
-            key = loop.name
+        if not loop.parallel:
+            # Every iteration the 'value' of the loop key needs to change
+            def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+                key = loop.name
+                for val in range(loop.start, loop.end):
+                    context.add_keyword(key, val)
+                    yield None
+                    context.remove_keyword(key)
+
+            loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
+            loop_context.execute()
+        else:
+
+            def execute_parallel(context: SQLLogicContext):
+                try:
+                    context.execute()
+
+                except Exception as ex:
+                    context.error_message = f"Failure at {context.error_file}:{context.error_line}: {str(ex)}"
+                    context.success = False
+
+                except:
+                    context.error_message = (
+                        f"Failure at {context.error_file}:{context.error_line}: Unknown error message"
+                    )
+                    context.success = False
+
+            # parallel loop: launch threads
+            contexts = []
             for val in range(loop.start, loop.end):
-                context.add_keyword(key, val)
-                yield None
-                context.remove_keyword(key)
 
-        loop_context = SQLLogicContext(self.runner, statements, new_keywords, update_value)
-        loop_context.execute()
+                def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+                    # Every iteration of the parallel loop gets one iteration
+                    context.add_keyword(loop.name, val)
+                    yield None
+                    context.remove_keyword(loop.name)
+
+                new_pool = self.runner.database.connect()
+                contexts.append(SQLLogicContext(new_pool, self.runner, statements, self.keywords.copy(), update_value))
+
+            threads = []
+            for context in contexts:
+                t = threading.Thread(target=execute_parallel, args=(context,))
+                threads.append(t)
+                t.start()
+
+            for thread in threads:
+                thread.join()
+
+            for context in contexts:
+                if not context.success:
+                    if context.error_message:
+                        self.runner.fail(context.error_message)
+                    else:
+                        assert False
+                        # self.runner.fail(context.error_file, context.error_line, 0)
 
     def execute_foreach(self, foreach: Foreach):
         if foreach.parallel:
@@ -950,7 +1087,7 @@ class SQLLogicContext:
                 for key in loop_keys:
                     context.remove_keyword(key)
 
-        loop_context = SQLLogicContext(self.runner, statements, new_keywords, update_value)
+        loop_context = SQLLogicContext(self.pool, self.runner, statements, new_keywords, update_value)
         loop_context.execute()
 
     def next_statement(self):

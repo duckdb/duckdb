@@ -7,6 +7,7 @@ import duckdb
 from enum import Enum
 import time
 import shutil
+import gc
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
@@ -38,11 +39,10 @@ from sqllogictest import (
 
 from sqllogictest.result import (
     SQLLogicRunner,
+    SQLLogicDatabase,
     SQLLogicContext,
-    RequireResult,
     ExecuteResult,
     SkipException,
-    QueryResult,
 )
 
 from enum import Enum, auto
@@ -103,14 +103,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         ]
         return unsupported_statements
 
-    def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
-        if not name:
-            return self.con
-
-        if name not in self.cursors:
-            self.cursors[name] = self.con.cursor()
-        return self.cursors[name]
-
     def get_test_directory(self) -> str:
         test_directory = TEST_DIRECTORY_PATH
         if not os.path.exists(test_directory):
@@ -129,26 +121,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         test_delete_file(path)
         test_delete_file(path + ".wal")
 
-    def reconnect(self):
-        self.con = self.db.cursor()
-        if self.test.is_sqlite_test():
-            self.con.execute("SET integer_division=true")
-        if 'icu' in self.extensions:
-            self.con.query("SET timezone='UTC'")
-        # Check for alternative verify
-        # if DUCKDB_ALTERNATIVE_VERIFY:
-        #    con.query("SET pivot_filter_threshold=0")
-        # if enable_verification:
-        #    con.enable_query_verification()
-        # Set the local extension repo for autoinstalling extensions
-        env_var = os.getenv("LOCAL_EXTENSION_REPO")
-        if env_var:
-            self.con.execute("SET autoload_known_extensions=True")
-            self.con.execute(f"SET autoinstall_extension_repository='{env_var}'")
-
-    # TODO: this does not support parallel execution
-    # We likely need to add another method inbetween that takes a list of statements to execute
-    # This method should be defined on a SQLLogicContext, to support parallelism
     def execute_test(self, test: SQLLogicTest) -> ExecuteResult:
         self.reset()
         self.test = test
@@ -165,9 +137,11 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # Yield once to represent one iteration, do not touch the keywords
             yield None
 
-        context = SQLLogicContext(self, test.statements, keywords, update_value)
+        self.database = SQLLogicDatabase(':memory:', list())
+        context = SQLLogicContext(self.database.connect(), self, test.statements, keywords, update_value)
         # The outer context is not a loop!
         context.is_loop = False
+
         unsupported = self.get_unsupported_statements(context, test)
         if unsupported != []:
             error = f'Test {test.path} skipped because the following statement types are not supported: '
@@ -175,8 +149,18 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             error += str(list([x.__name__ for x in types]))
             raise Exception(error)
 
-        self.load_database(self.dbpath)
-        return context.execute()
+        res = context.execute()
+
+        self.database.reset()
+        # Clean up any databases that we created
+        for loaded_path in self.loaded_databases:
+            if not loaded_path:
+                continue
+            # Only delete database files that were created during the tests
+            if not loaded_path.startswith(self.get_test_directory()):
+                continue
+            os.remove(loaded_path)
+        return res
 
 
 import argparse
@@ -213,18 +197,20 @@ def main():
 
     total_tests = len(file_paths)
     for i, file_path in enumerate(file_paths):
-        print(f'[{i}/{total_tests}] {file_path}')
         if file_path in executor.SKIPPED_TESTS:
-            print(file_path)
             continue
         if test_directory:
             file_path = os.path.join(test_directory, file_path)
         test = sql_parser.parse(file_path)
         if i < start_offset:
             continue
+        print(f'[{i}/{total_tests}] {file_path}')
         if not test:
             print(f'Failed to parse {file_path}')
             exit(1)
+        # This is necessary to clean up databases/connections
+        # So previously created databases are not still cached in the instance_cache
+        gc.collect()
         try:
             result = executor.execute_test(test)
         except SkipException as e:
