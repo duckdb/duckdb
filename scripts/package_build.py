@@ -181,7 +181,7 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
     sys.path = original_path
 
 
-def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb', short_paths = False):
+def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb', short_paths=False):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
