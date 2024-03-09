@@ -420,3 +420,430 @@ def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
     return _invoke_function(
         "concat_ws", ConstantExpression(sep), *cols
     )
+
+
+def lower(col: "ColumnOrName") -> Column:
+    """
+    Converts a string expression to lower case.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        lower case values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
+    >>> df.select(lower("value")).show()
+    +------------+
+    |lower(value)|
+    +------------+
+    |       spark|
+    |     pyspark|
+    |  pandas api|
+    +------------+
+    """
+    return _invoke_function_over_columns("lower", col)
+
+
+def ceil(col: "ColumnOrName") -> Column:
+    """
+    Computes the ceiling of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(ceil(lit(-0.1))).show()
+    +----------+
+    |CEIL(-0.1)|
+    +----------+
+    |         0|
+    +----------+
+    """
+    return _invoke_function_over_columns("ceil", col)
+
+
+def ceiling(col: "ColumnOrName") -> Column:
+    return ceil(col)
+
+
+def floor(col: "ColumnOrName") -> Column:
+    """
+    Computes the floor of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column to find floor for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        nearest integer that is less than or equal to given value.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(floor(lit(2.5))).show()
+    +----------+
+    |FLOOR(2.5)|
+    +----------+
+    |         2|
+    +----------+
+    """
+    return _invoke_function_over_columns("floor", col)
+
+
+def abs(col: "ColumnOrName") -> Column:
+    """
+    Computes the absolute value.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(abs(lit(-1))).show()
+    +-------+
+    |abs(-1)|
+    +-------+
+    |      1|
+    +-------+
+    """
+    return _invoke_function_over_columns("abs", col)
+
+
+def isnan(col: "ColumnOrName") -> Column:
+    """An expression that returns true if the column is NaN.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        True if value is NaN and False otherwise.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(1.0, float('nan')), (float('nan'), 2.0)], ("a", "b"))
+    >>> df.select("a", "b", isnan("a").alias("r1"), isnan(df.b).alias("r2")).show()
+    +---+---+-----+-----+
+    |  a|  b|   r1|   r2|
+    +---+---+-----+-----+
+    |1.0|NaN|false| true|
+    |NaN|2.0| true|false|
+    +---+---+-----+-----+
+    """
+    return _invoke_function_over_columns("isnan", col)
+
+
+def isnull(col: "ColumnOrName") -> Column:
+    """An expression that returns true if the column is null.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        True if value is null and False otherwise.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
+    >>> df.select("a", "b", isnull("a").alias("r1"), isnull(df.b).alias("r2")).show()
+    +----+----+-----+-----+
+    |   a|   b|   r1|   r2|
+    +----+----+-----+-----+
+    |   1|NULL|false| true|
+    |NULL|   2| true|false|
+    +----+----+-----+-----+
+    """
+    return _invoke_function_over_columns("isnull", col)
+
+
+def sqrt(col: "ColumnOrName") -> Column:
+    """
+    Computes the square root of the specified float value.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(sqrt(lit(4))).show()
+    +-------+
+    |SQRT(4)|
+    +-------+
+    |    2.0|
+    +-------+
+    """
+    return _invoke_function_over_columns("sqrt", col)
+
+
+def greatest(*cols: "ColumnOrName") -> Column:
+    """
+    Returns the greatest value of the list of column names, skipping null values.
+    This function takes at least 2 parameters. It will return null if all parameters are null.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        columns to check for gratest value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        gratest value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(1, 4, 3)], ['a', 'b', 'c'])
+    >>> df.select(greatest(df.a, df.b, df.c).alias("greatest")).collect()
+    [Row(greatest=4)]
+    """
+
+    if len(cols) < 2:
+        raise ValueError("greatest should take at least 2 columns")
+
+    cols = [_to_column(expr) for expr in cols]
+    return _invoke_function("greatest", *cols)
+
+
+def least(*cols: "ColumnOrName") -> Column:
+    """
+    Returns the least value of the list of column names, skipping null values.
+    This function takes at least 2 parameters. It will return null if all parameters are null.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        column names or columns to be compared
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        least value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(1, 4, 3)], ['a', 'b', 'c'])
+    >>> df.select(least(df.a, df.b, df.c).alias("least")).collect()
+    [Row(least=1)]
+    """
+    if len(cols) < 2:
+        raise ValueError("least should take at least 2 columns")
+
+    cols = [_to_column(expr) for expr in cols]
+    return _invoke_function("least", *cols)
+
+
+def trim(col: "ColumnOrName") -> Column:
+    """
+    Trim the spaces from left end for the specified string value.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        left trimmed values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["   Spark", "Spark  ", " Spark"], "STRING")
+    >>> df.select(ltrim("value").alias("r")).withColumn("length", length("r")).show()
+    +-------+------+
+    |      r|length|
+    +-------+------+
+    |  Spark|     5|
+    |Spark  |     7|
+    |  Spark|     5|
+    +-------+------+
+    """
+    return _invoke_function_over_columns("trim", col)
+
+
+def rtrim(col: "ColumnOrName") -> Column:
+    """
+    Trim the spaces from right end for the specified string value.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        right trimmed values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["   Spark", "Spark  ", " Spark"], "STRING")
+    >>> df.select(rtrim("value").alias("r")).withColumn("length", length("r")).show()
+    +--------+------+
+    |       r|length|
+    +--------+------+
+    |   Spark|     8|
+    |   Spark|     5|
+    |   Spark|     6|
+    +--------+------+
+    """
+    return _invoke_function_over_columns("rtrim", col)
+
+
+def ltrim(col: "ColumnOrName") -> Column:
+    """
+    Trim the spaces from left end for the specified string value.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        left trimmed values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["   Spark", "Spark  ", " Spark"], "STRING")
+    >>> df.select(ltrim("value").alias("r")).withColumn("length", length("r")).show()
+    +-------+------+
+    |      r|length|
+    +-------+------+
+    |  Spark|     5|
+    |Spark  |     7|
+    |  Spark|     5|
+    +-------+------+
+    """
+    return _invoke_function_over_columns("ltrim", col)
+
+
+def length(col: "ColumnOrName") -> Column:
+    """Computes the character length of string data or number of bytes of binary data.
+    The length of character data includes the trailing spaces. The length of binary data
+    includes binary zeros.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        length of the value.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([('ABC ',)], ['a']).select(length('a').alias('length')).collect()
+    [Row(length=4)]
+    """
+    return _invoke_function_over_columns("length", col)
