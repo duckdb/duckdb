@@ -71,7 +71,7 @@ void ArgMinMaxStateBase::AssignValue(string_t &target, string_t new_value) {
 		auto ptr = new char[len];
 		memcpy(ptr, new_value.GetData(), len);
 
-		target = string_t(ptr, len);
+		target = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 	}
 }
 
@@ -191,7 +191,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 		}
 		state.arg_null = arg_null;
 		if (!arg_null) {
-			sel_t selv = idx;
+			sel_t selv = UnsafeNumericCast<sel_t>(idx);
 			SelectionVector sel(&selv);
 			VectorOperations::Copy(arg, *state.arg, sel, 1, 0, 0);
 		}

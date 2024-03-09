@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector_size.hpp"
 
@@ -83,7 +84,7 @@ public:
 	}
 
 	inline void set_index(idx_t idx, idx_t loc) {
-		sel_vector[idx] = loc;
+		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
 	inline void swap(idx_t i, idx_t j) {
 		sel_t tmp = sel_vector[i];

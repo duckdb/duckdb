@@ -557,7 +557,7 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnCount(), 1);
             assertEquals(meta.getColumnName(1), "struct");
             assertEquals(meta.getColumnTypeName(1), "STRUCT(i INTEGER, j VARCHAR)");
-            assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(meta.getColumnType(1), Types.STRUCT);
         }
     }
 
@@ -1726,6 +1726,10 @@ public class TestDuckDBJDBC {
         Statement stmt = conn.createStatement();
         stmt.execute("CREATE TABLE a (i INTEGER)");
         stmt.execute("CREATE VIEW b AS SELECT i::STRING AS j FROM a");
+        stmt.execute("COMMENT ON TABLE a IS 'a table'");
+        stmt.execute("COMMENT ON COLUMN a.i IS 'a column'");
+        stmt.execute("COMMENT ON VIEW b IS 'a view'");
+        stmt.execute("COMMENT ON COLUMN b.j IS 'a column'");
 
         DatabaseMetaData md = conn.getMetaData();
         ResultSet rs;
@@ -1756,8 +1760,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1777,8 +1781,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "b");
         assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
         assertEquals(rs.getString(4), "VIEW");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a view");
+        assertEquals(rs.getObject(5), "a view");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1803,8 +1807,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1830,6 +1834,7 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString("TABLE_NAME"), "a");
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("COLUMN_NAME"), "i");
+        assertEquals(rs.getString("REMARKS"), "a column");
         assertEquals(rs.getString(4), "i");
         assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
         assertEquals(rs.getInt(5), Types.INTEGER);
@@ -1862,6 +1867,7 @@ public class TestDuckDBJDBC {
         assertNull(rs.getObject(7));
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
+        assertEquals(rs.getString("REMARKS"), "a column");
 
         rs.close();
 
@@ -1908,7 +1914,7 @@ public class TestDuckDBJDBC {
                 rs.next();
 
                 assertEquals(rs.getString("TYPE_NAME"), "TIME WITH TIME ZONE");
-                assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
+                assertEquals(rs.getInt("DATA_TYPE"), Types.TIME_WITH_TIMEZONE);
             }
 
             s.execute(

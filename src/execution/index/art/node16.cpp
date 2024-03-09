@@ -1,7 +1,7 @@
 #include "duckdb/execution/index/art/node16.hpp"
-
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -51,7 +51,7 @@ Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		D_ASSERT(n16.count <= Node::NODE_16_CAPACITY);
 		if (n48.child_index[i] != Node::EMPTY_MARKER) {
-			n16.key[n16.count] = i;
+			n16.key[n16.count] = UnsafeNumericCast<uint8_t>(i);
 			n16.children[n16.count] = n48.children[n48.child_index[i]];
 			n16.count++;
 		}

@@ -1,0 +1,27 @@
+# name: test/optimizer/joins/joins_with_correlated_subqueries.test
+# description: issue duckdblabs/duckdb-internal #840
+# group: [joins]
+
+statement ok
+CREATE TABLE df (x NUMERIC, y NUMERIC);
+
+statement ok
+INSERT INTO df VALUES (0, 2), (1, NULL), (2, 4), (3, 5), (4, NULL);
+
+statement ok
+SELECT
+  x,
+  COALESCE(
+	  y,
+	  (
+		  SELECT 
+			  prev.y + ( (next.y - prev.y) * (parent.x - prev.x) / (next.x - prev.x) )
+		  FROM
+			  ( SELECT x, y FROM df WHERE x <= parent.x and y is not null ORDER BY x DESC LIMIT 1 ) AS prev
+		  CROSS JOIN
+			  ( SELECT x, y FROM df WHERE x >= parent.x and y is not null ORDER BY x ASC LIMIT 1 ) AS next
+	  )
+  ) AS y
+FROM
+  df parent;
+

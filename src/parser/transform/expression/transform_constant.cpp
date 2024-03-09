@@ -21,9 +21,9 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 		string_t str_val(val.val.str);
 		bool try_cast_as_integer = true;
 		bool try_cast_as_decimal = true;
-		int decimal_position = -1;
-		int num_underscores = 0;
-		int num_integer_underscores = 0;
+		optional_idx decimal_position = optional_idx::Invalid();
+		idx_t num_underscores = 0;
+		idx_t num_integer_underscores = 0;
 		for (idx_t i = 0; i < str_val.GetSize(); i++) {
 			if (val.val.str[i] == '.') {
 				// decimal point: cast as either decimal or double
@@ -37,7 +37,7 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 			}
 			if (val.val.str[i] == '_') {
 				num_underscores++;
-				if (decimal_position < 0) {
+				if (!decimal_position.IsValid()) {
 					num_integer_underscores++;
 				}
 			}
@@ -57,11 +57,11 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 			}
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
-		if (try_cast_as_decimal && decimal_position >= 0 &&
+		if (try_cast_as_decimal && decimal_position.IsValid() &&
 		    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 			// figure out the width/scale based on the decimal position
-			auto width = uint8_t(str_val.GetSize() - 1 - num_underscores);
-			auto scale = uint8_t(width - decimal_position + num_integer_underscores);
+			auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
+			auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
 			if (val.val.str[0] == '-') {
 				width--;
 			}

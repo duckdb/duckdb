@@ -193,7 +193,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 					// Find an empty entry
 					auto entry_idx = ApplyBitMask(hash);
 					D_ASSERT(entry_idx == hash % capacity);
-					while (entries[entry_idx].IsOccupied() > 0) {
+					while (entries[entry_idx].IsOccupied()) {
 						entry_idx++;
 						if (entry_idx >= capacity) {
 							entry_idx = 0;

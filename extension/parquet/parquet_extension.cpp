@@ -389,10 +389,15 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-				// we need to check if the metadata cache entries are current
-				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
-					// missing or invalid metadata entry in cache, no usable stats overall
+				if (!fs.IsRemoteFile(file_name)) {
+					auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+					// we need to check if the metadata cache entries are current
+					if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
+						// missing or invalid metadata entry in cache, no usable stats overall
+						return nullptr;
+					}
+				} else {
+					// for remote files we just avoid reading stats entirely
 					return nullptr;
 				}
 				ParquetReader reader(context, bind_data.parquet_options, metadata);

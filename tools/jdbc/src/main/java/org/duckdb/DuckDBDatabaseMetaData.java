@@ -11,6 +11,10 @@ import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Statement;
+import java.sql.Types;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static java.lang.System.lineSeparator;
 
@@ -719,7 +723,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
         str.append(", table_schema AS 'TABLE_SCHEM'").append(lineSeparator());
         str.append(", table_name AS 'TABLE_NAME'").append(lineSeparator());
         str.append(", table_type AS 'TABLE_TYPE'").append(lineSeparator());
-        str.append(", NULL::VARCHAR AS 'REMARKS'").append(lineSeparator());
+        str.append(", TABLE_COMMENT AS 'REMARKS'").append(lineSeparator());
         str.append(", NULL::VARCHAR AS 'TYPE_CAT'").append(lineSeparator());
         str.append(", NULL::VARCHAR AS 'TYPE_SCHEM'").append(lineSeparator());
         str.append(", NULL::VARCHAR AS 'TYPE_NAME'").append(lineSeparator());
@@ -816,28 +820,36 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
             columnNamePattern = "%";
         }
 
-        // need to figure out the java types for the sql types :/
-        StringBuilder values_str = new StringBuilder(256);
-        values_str.append("VALUES(NULL::STRING, NULL::INTEGER)");
-        try (Statement gunky_statement = conn.createStatement();
-             // TODO this could get slow with many many columns and we really only need the
-             // types :/
-             ResultSet rs = gunky_statement.executeQuery(
-                 "SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type")) {
-            while (rs.next()) {
-                values_str.append(", ('")
-                    .append(rs.getString(1))
-                    .append("', ")
-                    .append(
-                        DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1))))
-                    .append(")");
-            }
-        }
-
-        PreparedStatement ps = conn.prepareStatement(
-            "SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', column_name as 'COLUMN_NAME', type_id AS 'DATA_TYPE', c.data_type AS 'TYPE_NAME', NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', numeric_precision AS 'DECIMAL_DIGITS', 10 AS 'NUM_PREC_RADIX', CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', NULL as 'REMARKS', column_default AS 'COLUMN_DEF', NULL AS 'SQL_DATA_TYPE', NULL AS 'SQL_DATETIME_SUB', character_octet_length AS 'CHAR_OCTET_LENGTH', ordinal_position AS 'ORDINAL_POSITION', is_nullable AS 'IS_NULLABLE', NULL AS 'SCOPE_CATALOG', NULL AS 'SCOPE_SCHEMA', NULL AS 'SCOPE_TABLE', NULL AS 'SOURCE_DATA_TYPE', '' AS 'IS_AUTOINCREMENT', '' AS 'IS_GENERATEDCOLUMN'  FROM information_schema.columns c JOIN (" +
-            values_str +
-            ") t(type_name, type_id) ON c.data_type = t.type_name WHERE table_catalog LIKE ? AND table_schema LIKE ? AND table_name LIKE ? AND column_name LIKE ? ORDER BY \"TABLE_CAT\",\"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"");
+        PreparedStatement ps =
+            conn.prepareStatement("SELECT "
+                                  + "table_catalog AS 'TABLE_CAT', "
+                                  + "table_schema AS 'TABLE_SCHEM', "
+                                  + "table_name AS 'TABLE_NAME', "
+                                  + "column_name as 'COLUMN_NAME', " + makeDataMap("c.data_type", "DATA_TYPE") + ", "
+                                  + "c.data_type AS 'TYPE_NAME', "
+                                  + "NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', "
+                                  + "numeric_precision AS 'DECIMAL_DIGITS', "
+                                  + "10 AS 'NUM_PREC_RADIX', "
+                                  + "CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', "
+                                  + "COLUMN_COMMENT as 'REMARKS', "
+                                  + "column_default AS 'COLUMN_DEF', "
+                                  + "NULL AS 'SQL_DATA_TYPE', "
+                                  + "NULL AS 'SQL_DATETIME_SUB', "
+                                  + "NULL AS 'CHAR_OCTET_LENGTH', "
+                                  + "ordinal_position AS 'ORDINAL_POSITION', "
+                                  + "is_nullable AS 'IS_NULLABLE', "
+                                  + "NULL AS 'SCOPE_CATALOG', "
+                                  + "NULL AS 'SCOPE_SCHEMA', "
+                                  + "NULL AS 'SCOPE_TABLE', "
+                                  + "NULL AS 'SOURCE_DATA_TYPE', "
+                                  + "'' AS 'IS_AUTOINCREMENT', "
+                                  + "'' AS 'IS_GENERATEDCOLUMN' "
+                                  + "FROM information_schema.columns c "
+                                  + "WHERE table_catalog LIKE ? AND "
+                                  + "table_schema LIKE ? AND "
+                                  + "table_name LIKE ? AND "
+                                  + "column_name LIKE ? "
+                                  + "ORDER BY \"TABLE_CAT\",\"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"");
         ps.setString(1, catalogPattern);
         ps.setString(2, schemaPattern);
         ps.setString(3, tableNamePattern);
@@ -1209,5 +1221,33 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
     @Override
     public boolean generatedKeyAlwaysReturned() throws SQLException {
         throw new SQLFeatureNotSupportedException("generatedKeyAlwaysReturned");
+    }
+
+    static String dataMap;
+    static {
+        dataMap = makeCase(
+            Arrays.stream(DuckDBColumnType.values())
+                .collect(Collectors.toMap(ty -> ty.name().replace("_", " "), DuckDBResultSetMetaData::type_to_int)));
+    }
+
+    private static <T> String makeCase(Map<String, T> values) {
+        return values.entrySet()
+            .stream()
+            .map(ty -> {
+                T value = ty.getValue();
+                return String.format("WHEN '%s' THEN %s ", ty.getKey(),
+                                     value instanceof String ? String.format("'%s'", value) : value);
+            })
+            .collect(Collectors.joining());
+    }
+
+    /**
+     * @param srcColumnName
+     * @param destColumnName
+     * @return
+     * @see DuckDBResultSetMetaData#type_to_int(DuckDBColumnType)
+     */
+    private static String makeDataMap(String srcColumnName, String destColumnName) {
+        return String.format("CASE %s %s ELSE %d END as %s", srcColumnName, dataMap, Types.JAVA_OBJECT, destColumnName);
     }
 }

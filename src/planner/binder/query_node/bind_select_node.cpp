@@ -132,7 +132,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			    distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
 			if (distinct.distinct_on_targets.empty()) {
 				for (idx_t i = 0; i < result.names.size(); i++) {
-					distinct.distinct_on_targets.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1 + i)));
+					distinct.distinct_on_targets.push_back(
+					    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(1 + i))));
 				}
 			}
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
@@ -161,8 +162,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 
 					vector<OrderByNode> new_orders;
 					for (idx_t i = 0; i < order_binder.MaxCount(); i++) {
-						new_orders.emplace_back(order_type, null_order,
-						                        make_uniq<ConstantExpression>(Value::INTEGER(i + 1)));
+						new_orders.emplace_back(
+						    order_type, null_order,
+						    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1))));
 					}
 					order.orders = std::move(new_orders);
 				}
