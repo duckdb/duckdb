@@ -83,6 +83,3 @@ class TestStringFunctions(object):
             Row(rtrimmed=" firstRowFirstColumn"),
             Row(rtrimmed=" 2ndRowFirstColumn"),
         ]
-
-
-    

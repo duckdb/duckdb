@@ -4,6 +4,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from duckdb.experimental.spark.sql.types import Row
 from duckdb.experimental.spark.sql import functions as F
 
+
 class TestNumericFunctions(object):
     def test_greatest(self, spark):
         data = [
@@ -56,7 +57,7 @@ class TestNumericFunctions(object):
             Row(floor_value=1),
             Row(floor_value=2),
         ]
-    
+
     def test_abs(self, spark):
         data = [
             (1.1,),
@@ -82,7 +83,3 @@ class TestNumericFunctions(object):
             Row(sqrt_value=2.0),
             Row(sqrt_value=3.0),
         ]
-
-    
-
-    
