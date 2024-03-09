@@ -48,10 +48,38 @@
 #endif
 
 #if defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
+
 #include <windows.h>
 #include <bcrypt.h>
 #include <intsafe.h>
 
+#if defined(__MINGW32__)
+// MINGW
+int mbedtls_platform_entropy_poll( void *data, unsigned char *output, size_t len,
+                           size_t *olen )
+{
+    HCRYPTPROV provider;
+    ((void) data);
+    *olen = 0;
+
+    if( CryptAcquireContext( &provider, NULL, NULL,
+                              PROV_RSA_FULL, CRYPT_VERIFYCONTEXT ) == FALSE )
+    {
+        return( MBEDTLS_ERR_ENTROPY_SOURCE_FAILED );
+    }
+
+    if( CryptGenRandom( provider, (DWORD) len, output ) == FALSE )
+    {
+        CryptReleaseContext( provider, 0 );
+        return( MBEDTLS_ERR_ENTROPY_SOURCE_FAILED );
+    }
+
+    CryptReleaseContext( provider, 0 );
+    *olen = len;
+
+    return( 0 );
+}
+#else
 int mbedtls_platform_entropy_poll(void *data, unsigned char *output, size_t len,
                                   size_t *olen)
 {
@@ -78,6 +106,7 @@ int mbedtls_platform_entropy_poll(void *data, unsigned char *output, size_t len,
 
     return 0;
 }
+#endif
 #else /* _WIN32 && !EFIX64 && !EFI32 */
 
 /*

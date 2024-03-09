@@ -31,7 +31,10 @@ endif()
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 
 if(MSVC OR MINGW)
-  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr bcrypt)
+  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr)
+endif()
+if(MSVC)
+  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} bcrypt)
 endif()
 
 if(MSVC)
