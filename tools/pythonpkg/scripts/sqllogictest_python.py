@@ -133,7 +133,8 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.con = self.db.cursor()
         if self.test.is_sqlite_test():
             self.con.execute("SET integer_division=true")
-        self.con.query("SET timezone='UTC'")
+        if 'icu' in self.extensions:
+            self.con.query("SET timezone='UTC'")
         # Check for alternative verify
         # if DUCKDB_ALTERNATIVE_VERIFY:
         #    con.query("SET pivot_filter_threshold=0")
@@ -184,16 +185,23 @@ def main():
     executor = SQLLogicTestExecutor()
 
     arg_parser = argparse.ArgumentParser(description='Execute SQL logic tests.')
-    arg_parser.add_argument('--file-path', '-f', type=str, help='Path to the test file')
+    arg_parser.add_argument('--file-path', type=str, help='Path to the test file')
+    arg_parser.add_argument('--file-list', type=str, help='Path to the file containing a list of tests to run')
     arg_parser.add_argument('--start-offset', '-s', type=int, help='Start offset for the tests', default=0)
     args = arg_parser.parse_args()
 
     if os.path.exists(TEST_DIRECTORY_PATH):
         shutil.rmtree(TEST_DIRECTORY_PATH)
 
+    test_directory = None
     if args.file_path:
+        if args.file_list:
+            raise Exception("Can not provide both a file-path and a file-list")
         file_paths = [args.file_path]
-        test_directory = ''
+    elif args.file_list:
+        if args.file_path:
+            raise Exception("Can not provide both a file-path and a file-list")
+        file_paths = open(args.file_list).read().split()
     else:
         test_directory = os.path.join(script_path, '..', '..', '..')
         file_paths = glob.iglob(test_directory + '/test/**/*.test', recursive=True)
@@ -207,7 +215,8 @@ def main():
         if file_path in executor.SKIPPED_TESTS:
             print(file_path)
             continue
-        file_path = os.path.join(test_directory, file_path)
+        if test_directory:
+            file_path = os.path.join(test_directory, file_path)
         test = sql_parser.parse(file_path)
         if i < start_offset:
             continue
