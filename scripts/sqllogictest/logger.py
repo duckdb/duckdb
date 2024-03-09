@@ -6,8 +6,9 @@ from .statement import Query, Statement
 
 
 class SQLLogicTestLogger:
-    def __init__(self, command: Union[Query, Statement], file_name: str):
+    def __init__(self, context, command: Union[Query, Statement], file_name: str):
         self.file_name = file_name
+        self.context = context
         self.query_line = command.query_line
         self.sql_query = '\n'.join(command.lines)
 
@@ -43,14 +44,16 @@ class SQLLogicTestLogger:
         query = self.sql_query.strip()
         if not query.endswith(";"):
             query += ";"
+        query = self.context.replace_keywords(query)
         print(query)
 
     def print_sql_formatted(self):
         print(termcolor.colored("SQL Query", attrs=['bold']))
-        tokens = tokenize(self.sql_query)
+        query = self.context.replace_keywords(self.sql_query)
+        tokens = tokenize(query)
         for i, token in enumerate(tokens):
-            next_token_start = tokens[i + 1].start if i + 1 < len(tokens) else len(self.sql_query)
-            token_text = self.sql_query[token.start : next_token_start]
+            next_token_start = tokens[i + 1].start if i + 1 < len(tokens) else len(query)
+            token_text = query[token.start : next_token_start]
             # Apply highlighting based on token type
             if token.type in [token_type.identifier, token_type.numeric_const, token_type.string_const]:
                 print(termcolor.colored(token_text, 'yellow'), end="")

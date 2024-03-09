@@ -24,6 +24,8 @@ datetime.timedelta
 datetime.datetime
 datetime.datetime.min
 datetime.datetime.max
+datetime.datetime.combine
+datetime.timezone
 
 import decimal
 

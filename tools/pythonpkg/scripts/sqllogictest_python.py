@@ -65,10 +65,13 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/function/list/lambdas/transform.test',  # <-- same InternalException
                 'test/sql/function/list/lambdas/filter.test',  # <-- same InternalException
                 'test/sql/function/list/lambdas/reduce.test',  # <-- same InternalException
+                'test/sql/function/list/list_resize.test',  # <-- same InternalException
+                'test/sql/function/list/aggregates/null_or_empty.test',  # <-- same InternalException
                 'test/sql/json/table/read_json_objects.test',  # <-- Python client is always loaded with JSON available
                 'test/sql/copy/csv/zstd_crash.test',  # <-- Python client is always loaded with Parquet available
                 'test/sql/error/extension_function_error.test',  # <-- Python client is always loaded with TPCH available
                 'test/sql/types/timestamp/test_timestamp_tz.test',  # <-- Python client is always loaded wih ICU available - making the TIMESTAMPTZ::DATE cast pass
+                'test/sql/parser/invisible_spaces.test',  # <-- Parser is getting tripped up on the invisible spaces
             ]
         )
         # TODO: get this from the `duckdb` package

@@ -221,11 +221,7 @@ dtime_t PyTime::ToDuckTime() {
 Value PyTime::ToDuckValue() {
 	auto duckdb_time = this->ToDuckTime();
 	if (!py::none().is(this->timezone_obj)) {
-		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone_obj);
-		// 'Add' requires a date_t for overflows
-		date_t ignored_date;
-		utc_offset = Interval::Invert(utc_offset);
-		duckdb_time = Interval::Add(duckdb_time, utc_offset, ignored_date);
+		return Value::TIMETZ(dtime_tz_t(duckdb_time, 0));
 	}
 	return Value::TIME(duckdb_time);
 }
@@ -489,6 +485,31 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 			return timestamp_utc.attr("astimezone")(tz_info);
 		}
 		return py_timestamp;
+	}
+	case LogicalTypeId::TIME_TZ: {
+		D_ASSERT(type.InternalType() == PhysicalType::INT64);
+		int32_t hour, min, sec, microsec;
+		auto time_tz = val.GetValueUnsafe<dtime_tz_t>();
+		auto time = time_tz.time();
+		auto offset = time_tz.offset();
+		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		py::object py_time;
+		try {
+			auto python_conversion = PyTime_FromTime(hour, min, sec, microsec);
+			if (!python_conversion) {
+				throw py::error_already_set();
+			}
+			py_time = py::reinterpret_steal<py::object>(python_conversion);
+		} catch (py::error_already_set &e) {
+			// Failed to convert, fall back to str
+			return py::str(val.ToString());
+		}
+		// We have to add the timezone info
+		auto timedelta = import_cache.datetime.timedelta()(py::arg("seconds") = offset);
+		auto timezone_offset = import_cache.datetime.timezone()(timedelta);
+		auto tmp_datetime = import_cache.datetime.datetime.min();
+		auto tmp_datetime_with_tz = import_cache.datetime.datetime.combine()(tmp_datetime, py_time, timezone_offset);
+		return tmp_datetime_with_tz.attr("timetz")();
 	}
 	case LogicalTypeId::TIME: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);

@@ -409,14 +409,14 @@ class SQLLogicRunner:
         for extension in self.extensions:
             self.load_extension(self.db, extension)
 
-    def check_query_result(self, query: Query, result: QueryResult) -> None:
+    def check_query_result(self, context, query: Query, result: QueryResult) -> None:
         expected_column_count = query.expected_result.get_expected_column_count()
         values = query.expected_result.lines
         sort_style = query.get_sortstyle()
         query_label = query.get_label()
         query_has_label = query_label != None
 
-        logger = SQLLogicTestLogger(query, self.test.path)
+        logger = SQLLogicTestLogger(context, query, self.test.path)
 
         # If the result has an error, log it
         if result.has_error():
@@ -469,7 +469,7 @@ class SQLLogicRunner:
 
         comparison_values = []
         if len(values) == 1 and result_is_file(values[0]):
-            fname = self.loop_replacement(values[0], context.running_loops)
+            fname = context.replace_keywords(values[0])
             csv_error = ""
             comparison_values = load_result_from_file(fname, result.names, expected_column_count, csv_error)
             if csv_error:
@@ -731,7 +731,7 @@ class SQLLogicContext:
             print(e)
             query_result = QueryResult([], [], e)
 
-        self.runner.check_query_result(query, query_result)
+        self.runner.check_query_result(self, query, query_result)
 
     def execute_skip(self, statement: Skip):
         self.runner.skip()
@@ -747,7 +747,7 @@ class SQLLogicContext:
         #    raise RuntimeError("Cannot restart database in parallel")
 
         old_settings = self.runner.con.execute(
-            "select name, value from duckdb_settings() where scope='LOCAL' and value != 'NULL'"
+            "select name, value from duckdb_settings() where scope='LOCAL' and value != 'NULL' and value != ''"
         ).fetchall()
         existing_search_path = self.runner.con.execute("select current_setting('search_path')").fetchone()[0]
 
@@ -755,6 +755,7 @@ class SQLLogicContext:
         for setting in old_settings:
             name, value = setting
             query = f"set {name}='{value}'"
+            print(query)
             self.runner.con.execute(query)
 
         self.runner.con.begin()
@@ -820,7 +821,6 @@ class SQLLogicContext:
 
         expected_result = statement.expected_result
         try:
-            print(sql_query)
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
