@@ -607,7 +607,20 @@ class SQLLogicRunner:
 
 
 class SQLLogicContext:
-    __slots__ = ['iterator', 'runner', 'generator', 'STATEMENTS', 'pool', 'statements', 'keywords', 'is_loop']
+    __slots__ = [
+        'iterator',
+        'runner',
+        'generator',
+        'STATEMENTS',
+        'pool',
+        'statements',
+        'keywords',
+        'success',
+        'error_file',
+        'error_line',
+        'error_message',
+        'is_loop',
+    ]
 
     def reset(self):
         self.iterator = 0
@@ -634,6 +647,10 @@ class SQLLogicContext:
         self.is_loop = True
         self.generator: Generator[Any] = iteration_generator
         self.keywords = keywords
+        self.success = True
+        self.error_message = None
+        self.error_file = None
+        self.error_line = None
         self.pool: Optional[SQLLogicConnectionPool] = pool
         self.initialize_connection(self.pool.get_connection())
         self.STATEMENTS = {
@@ -1003,9 +1020,26 @@ class SQLLogicContext:
         statements = self.statements[saved_iterator : self.iterator - 1]
         return statements
 
+    def execute_parallel(self, context: "SQLLogicContext", key, value):
+        try:
+            # For some reason the lambda wouldn't capture the 'value' when created outside of 'execute_parallel'
+            def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+                context.add_keyword(key, value)
+                yield None
+                context.remove_keyword(key)
+
+            context.generator = update_value
+            context.execute()
+
+        except Exception as ex:
+            context.error_message = f"Failure at {context.error_file}:{context.error_line}: {str(ex)}"
+            context.success = False
+
+        except:
+            context.error_message = f"Failure at {context.error_file}:{context.error_line}: Unknown error message"
+            context.success = False
+
     def execute_loop(self, loop: Loop):
-        if loop.parallel:
-            self.runner.skiptest("PARALLEL LOOP NOT SUPPORTED")
         statements = self.get_loop_statements()
 
         if not loop.parallel:
@@ -1020,44 +1054,28 @@ class SQLLogicContext:
             loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
             loop_context.execute()
         else:
-
-            def execute_parallel(context: SQLLogicContext):
-                try:
-                    context.execute()
-
-                except Exception as ex:
-                    context.error_message = f"Failure at {context.error_file}:{context.error_line}: {str(ex)}"
-                    context.success = False
-
-                except:
-                    context.error_message = (
-                        f"Failure at {context.error_file}:{context.error_line}: Unknown error message"
-                    )
-                    context.success = False
-
             # parallel loop: launch threads
-            contexts = []
+            contexts: Dict[Tuple[str, int], Any] = {}
             for val in range(loop.start, loop.end):
-
-                def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
-                    # Every iteration of the parallel loop gets one iteration
-                    context.add_keyword(loop.name, val)
-                    yield None
-                    context.remove_keyword(loop.name)
-
-                new_pool = self.runner.database.connect()
-                contexts.append(SQLLogicContext(new_pool, self.runner, statements, self.keywords.copy(), update_value))
+                contexts[(loop.name, val)] = SQLLogicContext(
+                    self.runner.database.connect(),
+                    self.runner,
+                    statements,
+                    self.keywords.copy(),
+                    None,  # generator, can't be created yet
+                )
 
             threads = []
-            for context in contexts:
-                t = threading.Thread(target=execute_parallel, args=(context,))
+            for keyval, context in contexts.items():
+                key, value = keyval
+                t = threading.Thread(target=self.execute_parallel, args=(context, key, value))
                 threads.append(t)
                 t.start()
 
             for thread in threads:
                 thread.join()
 
-            for context in contexts:
+            for _, context in contexts.items():
                 if not context.success:
                     if context.error_message:
                         self.runner.fail(context.error_message)
@@ -1066,29 +1084,71 @@ class SQLLogicContext:
                         # self.runner.fail(context.error_file, context.error_line, 0)
 
     def execute_foreach(self, foreach: Foreach):
-        if foreach.parallel:
-            self.runner.skiptest("PARALLEL FOREACH NOT SUPPORTED")
         statements = self.get_loop_statements()
-        new_keywords = self.keywords
 
-        # Every iteration the 'value' of the loop key needs to change
-        def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+        if not foreach.parallel:
+            # Every iteration the 'value' of the loop key needs to change
+            def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+                loop_keys = foreach.name.split(',')
+
+                for val in foreach.values:
+                    if len(loop_keys) != 1:
+                        values = val.split(',')
+                    else:
+                        values = [val]
+                    assert len(values) == len(loop_keys)
+                    for i, key in enumerate(loop_keys):
+                        context.add_keyword(key, values[i])
+                    yield None
+                    for key in loop_keys:
+                        context.remove_keyword(key)
+
+            loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
+            loop_context.execute()
+        else:
+            # parallel loop: launch threads
+            contexts: List[Tuple[str, int, Any]] = []
             loop_keys = foreach.name.split(',')
-
             for val in foreach.values:
                 if len(loop_keys) != 1:
                     values = val.split(',')
                 else:
                     values = [val]
+
                 assert len(values) == len(loop_keys)
                 for i, key in enumerate(loop_keys):
-                    context.add_keyword(key, values[i])
-                yield None
-                for key in loop_keys:
-                    context.remove_keyword(key)
+                    contexts.append(
+                        (
+                            foreach.name,
+                            values[i],
+                            SQLLogicContext(
+                                self.runner.database.connect(),
+                                self.runner,
+                                statements,
+                                self.keywords.copy(),
+                                None,  # generator, can't be created yet
+                            ),
+                        )
+                    )
 
-        loop_context = SQLLogicContext(self.pool, self.runner, statements, new_keywords, update_value)
-        loop_context.execute()
+            threads = []
+            for x in contexts:
+                key, value, context = x
+                t = threading.Thread(target=self.execute_parallel, args=(context, key, value))
+                threads.append(t)
+                t.start()
+
+            for thread in threads:
+                thread.join()
+
+            for x in contexts:
+                _, _, context = x
+                if not context.success:
+                    if context.error_message:
+                        self.runner.fail(context.error_message)
+                    else:
+                        assert False
+                        # self.runner.fail(context.error_file, context.error_line, 0)
 
     def next_statement(self):
         if self.iterator >= len(self.statements):
