@@ -747,13 +747,25 @@ class SQLLogicContext:
         #    raise RuntimeError("Cannot restart database in parallel")
 
         old_settings = self.runner.con.execute(
-            "select name, value from duckdb_settings() where scope='LOCAL' and value != 'NULL' and value != ''"
+            "select name, value from duckdb_settings() where value != 'NULL' and value != ''"
         ).fetchall()
         existing_search_path = self.runner.con.execute("select current_setting('search_path')").fetchone()[0]
 
         self.runner.load_database(self.runner.dbpath)
         for setting in old_settings:
             name, value = setting
+            if name in [
+                'access_mode',
+                'enable_external_access',
+                'allow_unsigned_extensions',
+                'allow_unredacted_secrets',
+                'duckdb_api',
+            ]:
+                # Can not be set after initialization
+                continue
+            if name in ['profiling_mode', 'enable_profiling']:
+                # FIXME: 'profiling_mode' becomes "standard" when requested, but that's not actually the default setting
+                continue
             query = f"set {name}='{value}'"
             print(query)
             self.runner.con.execute(query)

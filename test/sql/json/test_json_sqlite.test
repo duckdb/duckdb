@@ -19,13 +19,17 @@ VALUES('true'),('false'),('null'),('123'),('-234'),('34.5e+6'),
      ('[]'),('{}'),('[true,false,null,123,-234,34.5e+6,{},[]]'),
      ('{"a":true,"b":{"c":false}}');
 
-query T
+query I
 SELECT count(*) FROM j1 WHERE json_type(x) IN ('OBJECT','ARRAY');
+----
+4
+
+query I
   SELECT x FROM j1
    WHERE json_extract(x,'$')<>x
      AND json_type(x) IN ('OBJECT','ARRAY');
 ----
-4
+[true,false,null,123,-234,34.5e+6,{},[]]
 
 statement ok
 CREATE TABLE j2(id INTEGER PRIMARY KEY, json VARCHAR, src VARCHAR);

@@ -60,10 +60,15 @@ statement ok
 select compression from pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1;
 
 query I
+select current_setting('force_compression') ILIKE '${compression}'
+----
+true
+
+query I
 SELECT
-	lower(compression)='uncompressed' or
+	compression ILIKE 'uncompressed' or
 	(
-		lower(compression)='dictionary' and '${compression}'='dictionary'
+		compression ILIKE 'dictionary' and '${compression}'='dictionary'
 	)
 	FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
