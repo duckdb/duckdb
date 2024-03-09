@@ -38,4 +38,8 @@
 #undef RemoveDirectory
 #endif
 
+#ifdef UUID
+#undef UUID
+#endif
+
 #endif

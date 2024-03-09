@@ -146,7 +146,7 @@ struct BitStringBitwiseOperation : public BitwiseOperation {
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
 
-			state.value = string_t(ptr, len);
+			state.value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 

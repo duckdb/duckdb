@@ -8,12 +8,23 @@
 namespace duckdb {
 
 struct StandardCharacterReader {
+	static void NextCharacter(const char *sdata, idx_t slen, idx_t &sidx) {
+		sidx++;
+		while (sidx < slen && !LengthFun::IsCharacter(sdata[sidx])) {
+			sidx++;
+		}
+	}
+
 	static char Operation(const char *data, idx_t pos) {
 		return data[pos];
 	}
 };
 
 struct ASCIILCaseReader {
+	static void NextCharacter(const char *sdata, idx_t slen, idx_t &sidx) {
+		sidx++;
+	}
+
 	static char Operation(const char *data, idx_t pos) {
 		return (char)LowerFun::ascii_to_lower_map[(uint8_t)data[pos]];
 	}
@@ -36,7 +47,7 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 			}
 			sidx++;
 		} else if (pchar == UNDERSCORE) {
-			sidx++;
+			READER::NextCharacter(sdata, slen, sidx);
 		} else if (pchar == PERCENTAGE) {
 			pidx++;
 			while (pidx < plen && pdata[pidx] == PERCENTAGE) {
@@ -398,8 +409,8 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
 	auto pat_ldata = make_unsafe_uniq_array<char>(pat_llength);
 	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
-	string_t str_lcase(str_ldata.get(), str_llength);
-	string_t pat_lcase(pat_ldata.get(), pat_llength);
+	string_t str_lcase(str_ldata.get(), UnsafeNumericCast<uint32_t>(str_llength));
+	string_t pat_lcase(pat_ldata.get(), UnsafeNumericCast<uint32_t>(pat_llength));
 	return LikeOperatorFunction(str_lcase, pat_lcase, escape);
 }
 

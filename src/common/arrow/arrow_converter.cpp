@@ -226,6 +226,23 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		break;
 	}
+	case LogicalTypeId::ARRAY: {
+		auto array_size = ArrayType::GetSize(type);
+		auto &child_type = ArrayType::GetChildType(type);
+		auto format = "+w:" + to_string(array_size);
+		root_holder.owned_type_names.push_back(AddName(format));
+		child.format = root_holder.owned_type_names.back().get();
+
+		child.n_children = 1;
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0], root_holder);
+		child.children = &root_holder.nested_children_ptr.back()[0];
+		SetArrowFormat(root_holder, **child.children, child_type, options);
+		break;
+	}
 	case LogicalTypeId::MAP: {
 		SetArrowMapFormat(root_holder, child, type, options);
 		break;

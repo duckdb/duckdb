@@ -1,0 +1,26 @@
+# name: test/fuzzer/duckfuzz/bitstring_agg_minmax.test
+# description: Coverage for narrow DECIMAL ordering argument
+# group: [duckfuzz]
+
+statement error
+select bitstring_agg(4741, 1706, -128);
+----
+Invalid explicit bitstring range
+
+statement error
+select bitstring_agg(4741, 1706, 1706);
+----
+Value 4741 is outside of provided min and max range (1706 <-> 1706)
+
+statement ok
+select bitstring_agg(1706, 1706, 1706);
+
+statement error
+select bitstring_agg(4741::hugeint, 1706::hugeint, -128::hugeint);
+----
+Invalid explicit bitstring range
+
+statement error
+select bitstring_agg(4741::uhugeint, 1706::uhugeint, 40::uhugeint);
+----
+Invalid explicit bitstring range

@@ -509,7 +509,7 @@ size_t WindowNaiveState::Hash(idx_t rid) {
 	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
 	leaves.Reference(inputs);
 
-	sel_t s = rid;
+	auto s = UnsafeNumericCast<sel_t>(rid);
 	SelectionVector sel(&s);
 	leaves.Slice(sel, 1);
 	leaves.Hash(hashes);
@@ -520,10 +520,10 @@ size_t WindowNaiveState::Hash(idx_t rid) {
 bool WindowNaiveState::KeyEqual(const idx_t &lhs, const idx_t &rhs) {
 	auto &inputs = const_cast<DataChunk &>(gstate.GetInputs());
 
-	sel_t l = lhs;
+	auto l = UnsafeNumericCast<sel_t>(lhs);
 	SelectionVector lsel(&l);
 
-	sel_t r = rhs;
+	auto r = UnsafeNumericCast<sel_t>(rhs);
 	SelectionVector rsel(&r);
 
 	sel_t f = 0;
@@ -565,7 +565,7 @@ void WindowNaiveState::Evaluate(const DataChunk &bounds, Vector &result, idx_t c
 				}
 
 				pdata[flush_count] = agg_state;
-				update_sel[flush_count++] = f;
+				update_sel[flush_count++] = UnsafeNumericCast<sel_t>(f);
 				if (flush_count >= STANDARD_VECTOR_SIZE) {
 					FlushStates();
 				}
@@ -616,7 +616,7 @@ void WindowSegmentTree::Finalize(const FrameStats &stats) {
 }
 
 WindowSegmentTree::~WindowSegmentTree() {
-	if (!aggr.function.destructor) {
+	if (!aggr.function.destructor || !gstate) {
 		// nothing to destroy
 		return;
 	}
@@ -1333,7 +1333,7 @@ WindowDistinctAggregator::DistinctSortTree::DistinctSortTree(ZippedElements &&pr
 				if (prev_idx < i + 1) {
 					updates[nupdate] = curr_state;
 					//	input_idx
-					sel[nupdate] = std::get<1>(zipped_level[j]);
+					sel[nupdate] = UnsafeNumericCast<sel_t>(std::get<1>(zipped_level[j]));
 					++nupdate;
 				}
 

@@ -1,6 +1,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -23,7 +24,7 @@ bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, 
 				result_data[i] = HandleVectorCastError::Operation<T>(
 				    CastExceptionText<string_t, T>(source_data[source_idx]), result_mask, i, vector_cast_data);
 			} else {
-				result_data[i] = pos;
+				result_data[i] = UnsafeNumericCast<T>(pos);
 			}
 		} else {
 			result_mask.SetInvalid(i);
@@ -221,9 +222,9 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type STRUCT";
 			for (auto &child_mask : child_masks) {
-				child_mask.get().SetInvalid(idx); // some values may have already been found and set valid
+				child_mask.get().SetInvalid(i); // some values may have already been found and set valid
 			}
-			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, vector_cast_data);
+			HandleVectorCastError::Operation<string_t>(text, result_mask, i, vector_cast_data);
 		}
 	}
 

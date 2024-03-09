@@ -26,12 +26,12 @@
 namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
-    : SegmentBase<RowGroup>(start, count), collection(collection) {
+    : SegmentBase<RowGroup>(start, count), collection(collection), allocation_size(0) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection) {
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection), allocation_size(0) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -184,12 +184,17 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	state.vector_index = vector_offset;
 	state.max_row_group_row =
 	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
+	auto row_number = start + vector_offset * STANDARD_VECTOR_SIZE;
+	if (state.max_row_group_row == 0) {
+		// exceeded row groups to scan
+		return false;
+	}
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
-			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
+			column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;
@@ -660,16 +665,19 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
                         row_t row_id, DataChunk &result, idx_t result_idx) {
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto column = column_ids[col_idx];
+		auto &result_vector = result.data[col_idx];
+		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			D_ASSERT(result.data[col_idx].GetType().InternalType() == PhysicalType::INT64);
-			result.data[col_idx].SetVectorType(VectorType::FLAT_VECTOR);
-			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
+			D_ASSERT(result_vector.GetType().InternalType() == PhysicalType::INT64);
+			result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+			auto data = FlatVector::GetData<row_t>(result_vector);
 			data[result_idx] = row_id;
 		} else {
 			// regular column: fetch data from the base column
 			auto &col_data = GetColumn(column);
-			col_data.FetchRow(transaction, state, row_id, result.data[col_idx], result_idx);
+			col_data.FetchRow(transaction, state, row_id, result_vector, result_idx);
 		}
 	}
 }
@@ -717,7 +725,9 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 	D_ASSERT(chunk.ColumnCount() == GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
+		auto prev_allocation_size = col_data.GetAllocationSize();
 		col_data.Append(state.states[i], chunk.data[i], append_count);
+		allocation_size += col_data.GetAllocationSize() - prev_allocation_size;
 	}
 	state.offset_in_row_group += append_count;
 }

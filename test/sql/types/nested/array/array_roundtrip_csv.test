@@ -11,7 +11,7 @@ statement ok
 CREATE OR REPLACE TABLE arrays2 (a INTEGER[3])
 
 statement ok
-COPY (SELECT [range, range + 1, range + 2] a FROM range(3)) TO '__TEST_DIR__/arrays_csv_test.csv' WITH (HEADER false)
+COPY (SELECT [range, range + 1, range + 2] a FROM range(3)) TO '__TEST_DIR__/arrays_csv_test.csv'
 
 statement ok
 COPY arrays2 FROM '__TEST_DIR__/arrays_csv_test.csv'

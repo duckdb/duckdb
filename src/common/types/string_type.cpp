@@ -17,7 +17,7 @@ void string_t::Verify() const {
 #endif
 
 	// verify that the prefix contains the first four characters of the string
-	for (idx_t i = 0; i < MinValue<uint32_t>(PREFIX_LENGTH, GetSize()); i++) {
+	for (idx_t i = 0; i < MinValue<idx_t>(PREFIX_LENGTH, GetSize()); i++) {
 		D_ASSERT(GetPrefix()[i] == dataptr[i]);
 	}
 	// verify that for strings with length <= INLINE_LENGTH, the rest of the string is zero
