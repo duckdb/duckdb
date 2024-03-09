@@ -244,6 +244,8 @@ enum class SetScope : uint8_t;
 
 enum class SetType : uint8_t;
 
+enum class SettingScope : uint8_t;
+
 enum class ShowType : uint8_t;
 
 enum class SimplifiedTokenType : uint8_t;
@@ -628,6 +630,9 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value);
 
 template<>
 const char* EnumUtil::ToChars<SetType>(SetType value);
+
+template<>
+const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
@@ -1046,6 +1051,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value);
 
 template<>
 SetType EnumUtil::FromString<SetType>(const char *value);
+
+template<>
+SettingScope EnumUtil::FromString<SettingScope>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);

@@ -1135,13 +1135,13 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
 	// first check the built-in settings
 	auto &db_config = DBConfig::GetConfig(*this);
 	auto option = db_config.GetOptionByName(key);
 	if (option) {
 		result = option->get_setting(*this);
-		return true;
+		return SettingLookupResult(SettingScope::LOCAL);
 	}
 
 	// check the client session values
@@ -1151,7 +1151,7 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 	bool found_session_value = session_value != session_config_map.end();
 	if (found_session_value) {
 		result = session_value->second;
-		return true;
+		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// finally check the global session values
 	return db->TryGetCurrentSetting(key, result);
