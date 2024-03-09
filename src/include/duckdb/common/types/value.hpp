@@ -38,6 +38,8 @@ public:
 	DUCKDB_API explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
 	DUCKDB_API Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
+	//! Create a BOOLEAN value
+	explicit DUCKDB_API Value(bool val);
 	//! Create a BIGINT value
 	DUCKDB_API Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value

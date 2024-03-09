@@ -65,7 +65,8 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 // Allow Persistent Secrets
 //===--------------------------------------------------------------------===//
 void AllowPersistentSecrets::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.secret_manager->SetEnablePersistentSecrets(input.GetValue<bool>());
+	auto value = input.DefaultCastAs(LogicalType::BOOLEAN);
+	config.secret_manager->SetEnablePersistentSecrets(value.GetValue<bool>());
 }
 
 void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -74,7 +75,7 @@ void AllowPersistentSecrets::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 
 Value AllowPersistentSecrets::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return config.secret_manager->PersistentSecretsEnabled();
+	return Value::BOOLEAN(config.secret_manager->PersistentSecretsEnabled());
 }
 
 //===--------------------------------------------------------------------===//

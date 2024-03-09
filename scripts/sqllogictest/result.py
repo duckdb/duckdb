@@ -149,17 +149,18 @@ def result_is_file(result: str):
     return result.startswith('<FILE>:')
 
 
-def load_result_from_file(fname, names):
+def load_result_from_file(fname, result: QueryResult):
     con = duckdb.connect()
     con.execute(f"PRAGMA threads={os.cpu_count()}")
+    column_count = result.column_count()
 
     fname = fname.replace("<FILE>:", "")
 
     struct_definition = "STRUCT_PACK("
-    for i in range(len(names)):
+    for i in range(column_count):
         if i > 0:
             struct_definition += ", "
-        struct_definition += f"{names[i]} := VARCHAR"
+        struct_definition += f"c{i} := VARCHAR"
     struct_definition += ")"
 
     csv_result = con.execute(
@@ -470,10 +471,14 @@ class SQLLogicRunner:
         comparison_values = []
         if len(values) == 1 and result_is_file(values[0]):
             fname = context.replace_keywords(values[0])
-            csv_error = ""
-            comparison_values = load_result_from_file(fname, result.names, expected_column_count, csv_error)
-            if csv_error:
-                logger.print_error_header(csv_error)
+            try:
+                comparison_values = load_result_from_file(fname, result)
+                # FIXME this is kind of dumb
+                # We concatenate it with tabs just so we can split it again later
+                for x in range(len(comparison_values)):
+                    comparison_values[x] = "\t".join(list(comparison_values[x]))
+            except duckdb.Error as e:
+                logger.print_error_header(str(e))
                 self.fail_query(query)
         else:
             comparison_values = values
