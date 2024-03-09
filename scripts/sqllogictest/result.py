@@ -604,7 +604,7 @@ class SQLLogicRunner:
 
 
 class SQLLogicContext:
-    __slots__ = ['iterator', 'runner', 'generator', 'STATEMENTS', 'statements', 'keywords']
+    __slots__ = ['iterator', 'runner', 'generator', 'STATEMENTS', 'statements', 'keywords', 'is_loop']
 
     def reset(self):
         self.iterator = 0
@@ -620,6 +620,7 @@ class SQLLogicContext:
     ):
         self.statements = statements
         self.runner = runner
+        self.is_loop = True
         self.generator: Generator[Any] = iteration_generator
         self.keywords = keywords
         self.STATEMENTS = {
@@ -642,9 +643,19 @@ class SQLLogicContext:
             Endloop: None,  # <-- should never be encountered outside of Loop/Foreach
         }
 
+    def add_keyword(self, key, value):
+        # Make sure that loop names can't silently collide
+        key = f'${{{key}}}'
+        assert key not in self.keywords
+        self.keywords[key] = str(value)
+
+    def remove_keyword(self, key):
+        key = f'${{{key}}}'
+        assert key in self.keywords
+        self.keywords.pop(key)
+
     def in_loop(self) -> bool:
-        # FIXME: support loops
-        return False
+        return self.is_loop
 
     def execute_load(self, load: Load):
         if self.in_loop():
@@ -867,10 +878,20 @@ class SQLLogicContext:
                 self.runner.fail("require {}: FAILED".format(param))
             self.runner.skipped = True
 
-    def execute_require_env(self, statement: BaseStatement):
-        # TODO: support
-        # TODO: add to 'keywords'
-        self.runner.skipped = True
+    def execute_require_env(self, statement: RequireEnv):
+        key = statement.header.parameters[0]
+        res = os.getenv(key)
+        if self.in_loop():
+            # FIXME: we can just remove the keyword at the end of the loop
+            # I think we should support this
+            self.runner.fail(f"require-env can not be called in a loop")
+        if res is None:
+            self.runner.fail(f"require-env {key} failed, not set")
+        if len(statement.header.parameters) != 1:
+            expected = statement.header.parameters[1]
+            if res != expected:
+                self.runner.fail(f"require-env {key} failed, expected '{expected}', but found '{res}'")
+        self.add_keyword(key, res)
 
     def get_loop_statements(self):
         saved_iterator = self.iterator
@@ -897,12 +918,12 @@ class SQLLogicContext:
         new_keywords = self.keywords
 
         # Every iteration the 'value' of the loop key needs to change
-        def update_value(keywords: Dict[str, str]) -> Generator[Any, Any, Any]:
-            loop_key = f'${{{loop.name}}}'
+        def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+            key = loop.name
             for val in range(loop.start, loop.end):
-                keywords[loop_key] = str(val)
+                context.add_keyword(key, val)
                 yield None
-            keywords.pop(loop_key)
+                context.remove_keyword(key)
 
         loop_context = SQLLogicContext(self.runner, statements, new_keywords, update_value)
         loop_context.execute()
@@ -914,8 +935,8 @@ class SQLLogicContext:
         new_keywords = self.keywords
 
         # Every iteration the 'value' of the loop key needs to change
-        def update_value(keywords: Dict[str, str]) -> Generator[Any, Any, Any]:
-            loop_keys = [f'${{{name}}}' for name in foreach.name.split(',')]
+        def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+            loop_keys = foreach.name.split(',')
 
             for val in foreach.values:
                 if len(loop_keys) != 1:
@@ -924,10 +945,10 @@ class SQLLogicContext:
                     values = [val]
                 assert len(values) == len(loop_keys)
                 for i, key in enumerate(loop_keys):
-                    keywords[key] = str(values[i])
+                    context.add_keyword(key, values[i])
                 yield None
-            for key in loop_keys:
-                keywords.pop(key)
+                for key in loop_keys:
+                    context.remove_keyword(key)
 
         loop_context = SQLLogicContext(self.runner, statements, new_keywords, update_value)
         loop_context.execute()
@@ -940,7 +961,7 @@ class SQLLogicContext:
         return statement
 
     def execute(self):
-        for _ in self.generator(self.keywords):
+        for _ in self.generator(self):
             self.reset()
             while self.iterator < len(self.statements):
                 statement = self.next_statement()

@@ -161,11 +161,13 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             '__BUILD_DIRECTORY__': duckdb.__build_dir__,
         }
 
-        def update_value(keywords: Dict[str, str]) -> Generator[Any, Any, Any]:
+        def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
             # Yield once to represent one iteration, do not touch the keywords
             yield None
 
         context = SQLLogicContext(self, test.statements, keywords, update_value)
+        # The outer context is not a loop!
+        context.is_loop = False
         unsupported = self.get_unsupported_statements(context, test)
         if unsupported != []:
             error = f'Test {test.path} skipped because the following statement types are not supported: '
