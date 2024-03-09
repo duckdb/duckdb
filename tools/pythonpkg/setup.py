@@ -194,7 +194,7 @@ for ext in extensions:
 
 define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
-linker_args = toolchain_args
+linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
     linker_args.extend(['rstrtmgr.lib', 'bcrypt.lib'])
 
