@@ -58,10 +58,6 @@ const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
 }
 
-const char *DuckDB::BuildDirectory() {
-	return DUCKDB_BUILD_DIRECTORY;
-}
-
 string DuckDB::Platform() {
 	return DuckDBPlatform();
 }

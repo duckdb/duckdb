@@ -82,6 +82,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # "spatial",
             # TODO: table function isnt always autoloaded so test fails
         ]
+        self.skip_log = []
 
     def get_test_directory(self) -> str:
         test_directory = TEST_DIRECTORY_PATH
@@ -107,11 +108,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.original_sqlite_test = self.test.is_sqlite_test()
 
         # Top level keywords
-        keywords = {
-            '__TEST_DIR__': self.get_test_directory(),
-            '__WORKING_DIRECTORY__': os.getcwd(),
-            '__BUILD_DIRECTORY__': duckdb.__build_dir__,
-        }
+        keywords = {'__TEST_DIR__': self.get_test_directory(), '__WORKING_DIRECTORY__': os.getcwd()}
 
         def update_value(_: SQLLogicContext) -> Generator[Any, Any, Any]:
             # Yield once to represent one iteration, do not touch the keywords
@@ -126,7 +123,10 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             context.verify_statements()
             res = context.execute()
         except TestException as e:
+            print(str(e.message))
             res = e.handle_result()
+            if res.type == ExecuteResult.Type.SKIPPED:
+                self.skip_log.append(str(e.message))
 
         self.database.reset()
 
@@ -198,6 +198,10 @@ def main():
         if result.type == ExecuteResult.Type.ERROR:
             print("ERROR")
             exit(1)
+    if len(executor.skip_log) != 0:
+        for item in executor.skip_log:
+            print(item)
+        executor.skip_log.clear()
 
 
 if __name__ == '__main__':

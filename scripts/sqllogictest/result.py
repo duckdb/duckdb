@@ -25,7 +25,9 @@ from .statement import (
 )
 
 from .expected_result import ExpectedResult
-from typing import Optional, Any, Tuple, List, Dict, Set, Generator
+from typing import Optional, Any, Tuple, List, Dict, Generator
+import typing
+
 from .logger import SQLLogicTestLogger
 import duckdb
 import os
@@ -74,9 +76,9 @@ class TestException(Exception):
     __slots__ = ['data', 'message', 'result']
 
     def __init__(self, data: SQLLogicStatementData, message: str, result: ExecuteResult):
-        super().__init__(f'{str(data)} {message}')
+        self.message = f'{str(data)} {message}'
+        super().__init__(self.message)
         self.data = data
-        self.message = message
         self.result = result
 
     def handle_result(self) -> ExecuteResult:
@@ -387,7 +389,9 @@ class SQLLogicDatabase:
         self.path = ''
 
     def load_extension(self, extension: str):
-        root = duckdb.__build_dir__
+        # Unreachable
+        assert False
+        # root = duckdb.__build_dir__
         path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
         # Serialize it as a POSIX compliant path
         query = f"LOAD '{path}'"
@@ -583,7 +587,7 @@ class SQLLogicRunner:
 
         # The set of databases that have been loaded by this runner at any point
         # Used for cleanup
-        self.loaded_databases: Set[str] = set()
+        self.loaded_databases: typing.Set[str] = set()
         self.database: Optional[SQLLogicDatabase] = None
         self.extensions: set = set()
         self.environment_variables: Dict[str, str] = {}
@@ -650,6 +654,8 @@ class SQLLogicContext:
 
     def replace_keywords(self, input: str):
         # Apply a replacement for every registered keyword
+        if '__BUILD_DIRECTORY__' in input:
+            self.skiptest("Test contains __BUILD_DIRECTORY__ which isnt supported")
         for key, value in self.keywords.items():
             input = input.replace(key, value)
         return input
@@ -974,6 +980,7 @@ class SQLLogicContext:
         param = statement.header.parameters[0].lower()
         if param in not_an_extension:
             return RequireResult.MISSING
+        return RequireResult.MISSING
 
         if param == "no_extension_autoloading":
             if 'autoload_known_extensions' in self.runner.database.config:
@@ -1171,13 +1178,12 @@ class SQLLogicContext:
 
     def verify_statements(self) -> None:
         unsupported_statements = [
-            statement for statement in self.statements if statement.__class__ not in self.STATEMENTS
+            statement for statement in self.statements if statement.__class__ not in self.STATEMENTS.keys()
         ]
         if unsupported_statements == []:
             return
-        error = f'skipped because the following statement types are not supported: '
         types = set([x.__class__ for x in unsupported_statements])
-        error += str(list([x.__name__ for x in types]))
+        error = f'skipped because the following statement types are not supported: {str(list([x for x in types]))}'
         self.skiptest(error)
 
     def execute(self):
@@ -1186,7 +1192,7 @@ class SQLLogicContext:
                 self.reset()
                 while self.iterator < len(self.statements):
                     statement = self.next_statement()
-                    self.current_statement = statement
+                    self.current_statement = SQLLogicStatementData(self.runner.test, statement)
                     if self.runner.skip_active() and statement.__class__ != Unskip:
                         # Keep skipping until Unskip is found
                         continue
@@ -1195,5 +1201,5 @@ class SQLLogicContext:
                         self.skiptest("Not supported by the runner")
                     method(statement)
         except TestException as e:
-            return e.handle_result()
+            raise (e)
         return ExecuteResult(ExecuteResult.Type.SUCCESS)
