@@ -4,7 +4,7 @@ from typing import Optional, List
 
 class ExpectedResult:
     class Type(Enum):
-        SUCCES = (auto(),)
+        SUCCESS = (auto(),)
         ERROR = (auto(),)
         UNKNOWN = auto()
 

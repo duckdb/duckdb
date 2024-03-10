@@ -263,7 +263,7 @@ class SQLLogicParser:
 
     def get_expected_result(self, statement_type: str) -> ExpectedResult:
         type_map = {
-            'ok': ExpectedResult.Type.SUCCES,
+            'ok': ExpectedResult.Type.SUCCESS,
             'error': ExpectedResult.Type.ERROR,
             'maybe': ExpectedResult.Type.UNKNOWN,
         }
@@ -301,7 +301,7 @@ class SQLLogicParser:
 
         expected_lines: Optional[List[str]] = self.extract_expected_lines()
         match expected_result.type:
-            case ExpectedResult.Type.SUCCES:
+            case ExpectedResult.Type.SUCCESS:
                 if expected_lines != None:
                     if len(expected_lines) != 0:
                         self.fail(

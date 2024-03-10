@@ -94,7 +94,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             try:
                 if os.path.exists(path):
                     os.remove(path)
-            except Exception:
+            except FileNotFoundError:
                 pass
 
         # FIXME: support custom test directory
@@ -189,19 +189,15 @@ def main():
         # This is necessary to clean up databases/connections
         # So previously created databases are not still cached in the instance_cache
         gc.collect()
-        try:
-            result = executor.execute_test(test)
-        except SkipException as e:
-            print(e)
-            continue
-        except Exception as e:
-            print(e)
-            if 'skipped because the following statement types are not supported' in str(e):
-                continue
-            raise e
-        print(result.type.name)
+        result = executor.execute_test(test)
+        if result.type == ExecuteResult.Type.SUCCESS:
+            print("SUCCESS")
         if result.type == ExecuteResult.Type.SKIPPED:
+            print("SKIPPED")
             continue
+        if result.type == ExecuteResult.Type.ERROR:
+            print("ERROR")
+            exit(1)
 
 
 if __name__ == '__main__':

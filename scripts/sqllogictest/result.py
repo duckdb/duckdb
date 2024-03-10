@@ -47,7 +47,7 @@ class RequireResult(Enum):
 
 class ExecuteResult:
     class Type(Enum):
-        SUCCES = 0
+        SUCCESS = 0
         ERROR = 1
         SKIPPED = 2
 
@@ -120,6 +120,199 @@ class QueryResult:
 
     def get_error(self) -> Optional[Exception]:
         return self.error
+
+    def check(self, context, query: Query) -> None:
+        expected_column_count = query.expected_result.get_expected_column_count()
+        values = query.expected_result.lines
+        sort_style = query.get_sortstyle()
+        query_label = query.get_label()
+        query_has_label = query_label != None
+        runner = context.runner
+
+        logger = SQLLogicTestLogger(context, query, runner.test.path)
+
+        # If the result has an error, log it
+        if self.has_error():
+            logger.unexpected_failure(self)
+            if runner.skip_error_message(self.get_error()):
+                runner.finished_processing_file = True
+                return
+            context.fail(self.get_error())
+
+        row_count = self.row_count()
+        column_count = self.column_count()
+        total_value_count = row_count * column_count
+
+        if len(values) == 1 and result_is_hash(values[0]):
+            compare_hash = True
+            is_hash = True
+        else:
+            compare_hash = query_has_label or (runner.hash_threshold > 0 and total_value_count > runner.hash_threshold)
+            is_hash = False
+
+        result_values_string = duck_db_convert_result(self, runner.original_sqlite_test)
+
+        if runner.output_result_mode:
+            logger.output_result(self, result_values_string)
+
+        if sort_style == SortStyle.ROW_SORT:
+            ncols = self.column_count()
+            nrows = int(total_value_count / ncols)
+            rows = [result_values_string[i * ncols : (i + 1) * ncols] for i in range(nrows)]
+
+            # Define the comparison function
+            def compare_rows(a, b):
+                for col_idx, val in enumerate(a):
+                    a_val = val
+                    b_val = b[col_idx]
+                    if a_val != b_val:
+                        return -1 if a_val < b_val else 1
+                return 0
+
+            # Sort the individual rows based on element comparison
+            sorted_rows = sorted(rows, key=cmp_to_key(compare_rows))
+            rows = sorted_rows
+
+            for row_idx, row in enumerate(rows):
+                for col_idx, val in enumerate(row):
+                    result_values_string[row_idx * ncols + col_idx] = val
+        elif sort_style == SortStyle.VALUE_SORT:
+            result_values_string.sort()
+
+        comparison_values = []
+        if len(values) == 1 and result_is_file(values[0]):
+            fname = context.replace_keywords(values[0])
+            try:
+                comparison_values = load_result_from_file(fname, self)
+                # FIXME this is kind of dumb
+                # We concatenate it with tabs just so we can split it again later
+                for x in range(len(comparison_values)):
+                    comparison_values[x] = "\t".join(list(comparison_values[x]))
+            except duckdb.Error as e:
+                logger.print_error_header(str(e))
+                context.fail(f"Failed to load result from {fname}")
+        else:
+            comparison_values = values
+
+        hash_value = ""
+        if runner.output_hash_mode or compare_hash:
+            hash_context = md5()
+            for val in result_values_string:
+                hash_context.update(str(val).encode())
+                hash_context.update("\n".encode())
+            digest = hash_context.hexdigest()
+            hash_value = f"{total_value_count} values hashing to {digest}"
+            if runner.output_hash_mode:
+                logger.output_hash(hash_value)
+                return
+
+        if not compare_hash:
+            original_expected_columns = expected_column_count
+            column_count_mismatch = False
+
+            if expected_column_count != self.column_count():
+                expected_column_count = self.column_count()
+                column_count_mismatch = True
+
+            expected_rows = len(comparison_values) / expected_column_count
+            row_wise = expected_column_count > 1 and len(comparison_values) == self.row_count()
+
+            if not row_wise:
+                all_tabs = all("\t" in val for val in comparison_values)
+                row_wise = all_tabs
+
+            if row_wise:
+                expected_rows = len(comparison_values)
+                row_wise = True
+            elif len(comparison_values) % expected_column_count != 0:
+                if column_count_mismatch:
+                    logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                else:
+                    logger.not_cleanly_divisible(expected_column_count, len(comparison_values))
+                # FIXME: the logger should just create the strings to send to self.fail()/self.skip()
+                context.fail("")
+
+            if expected_rows != self.row_count():
+                if column_count_mismatch:
+                    logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                else:
+                    logger.wrong_row_count(
+                        expected_rows, result_values_string, comparison_values, expected_column_count, row_wise
+                    )
+                context.fail("")
+
+            if row_wise:
+                current_row = 0
+                for i, val in enumerate(comparison_values):
+                    splits = [x for x in val.split("\t") if x != '']
+                    if len(splits) != expected_column_count:
+                        if column_count_mismatch:
+                            logger.column_count_mismatch(self, query.values, original_expected_columns, row_wise)
+                        logger.split_mismatch(i + 1, expected_column_count, len(splits))
+                        context.fail("")
+                    for c, split_val in enumerate(splits):
+                        lvalue_str = result_values_string[current_row * expected_column_count + c]
+                        rvalue_str = split_val
+                        success = compare_values(self, lvalue_str, split_val, c)
+                        if not success:
+                            logger.print_error_header("Wrong result in query!")
+                            logger.print_line_sep()
+                            logger.print_sql()
+                            logger.print_line_sep()
+                            print(f"Mismatch on row {current_row + 1}, column {c + 1}")
+                            print(f"{lvalue_str} <> {rvalue_str}")
+                            logger.print_line_sep()
+                            logger.print_result_error(result_values_string, values, expected_column_count, row_wise)
+                            context.fail("")
+                        # Increment the assertion counter
+                        assert success
+                    current_row += 1
+            else:
+                current_row, current_column = 0, 0
+                for i, val in enumerate(comparison_values):
+                    lvalue_str = result_values_string[current_row * expected_column_count + current_column]
+                    rvalue_str = val
+                    success = compare_values(self, lvalue_str, rvalue_str, current_column)
+                    if not success:
+                        logger.print_error_header("Wrong result in query!")
+                        logger.print_line_sep()
+                        logger.print_sql()
+                        logger.print_line_sep()
+                        print(f"Mismatch on row {current_row + 1}, column {current_column + 1}")
+                        print(f"{lvalue_str} <> {rvalue_str}")
+                        logger.print_line_sep()
+                        logger.print_result_error(result_values_string, values, expected_column_count, row_wise)
+                        context.fail("")
+                    # Increment the assertion counter
+                    assert success
+
+                    current_column += 1
+                    if current_column == expected_column_count:
+                        current_row += 1
+                        current_column = 0
+
+            if column_count_mismatch:
+                logger.column_count_mismatch_correct_result(original_expected_columns, expected_column_count, self)
+                context.fail("")
+        else:
+            hash_compare_error = False
+            if query_has_label:
+                entry = runner.hash_label_map.get(query_label)
+                if entry is None:
+                    runner.hash_label_map[query_label] = hash_value
+                    runner.result_label_map[query_label] = self
+                else:
+                    hash_compare_error = entry != hash_value
+
+            if is_hash:
+                hash_compare_error = values[0] != hash_value
+
+            if hash_compare_error:
+                expected_result = self.result_label_map.get(query_label)
+                logger.wrong_result_hash(expected_result, self)
+                self.fail_query(query)
+
+            assert not hash_compare_error
 
 
 class SQLLogicConnectionPool:
@@ -434,198 +627,6 @@ class SQLLogicRunner:
     def is_required(self, param):
         return param in self.required_requires
 
-    def check_query_result(self, context, query: Query, result: QueryResult) -> None:
-        expected_column_count = query.expected_result.get_expected_column_count()
-        values = query.expected_result.lines
-        sort_style = query.get_sortstyle()
-        query_label = query.get_label()
-        query_has_label = query_label != None
-
-        logger = SQLLogicTestLogger(context, query, self.test.path)
-
-        # If the result has an error, log it
-        if result.has_error():
-            logger.unexpected_failure(result)
-            if self.skip_error_message(result.get_error()):
-                self.finished_processing_file = True
-                return
-            print(result.get_error())
-            self.fail_query(query)
-
-        row_count = result.row_count()
-        column_count = result.column_count()
-        total_value_count = row_count * column_count
-
-        if len(values) == 1 and result_is_hash(values[0]):
-            compare_hash = True
-            is_hash = True
-        else:
-            compare_hash = query_has_label or (self.hash_threshold > 0 and total_value_count > self.hash_threshold)
-            is_hash = False
-
-        result_values_string = duck_db_convert_result(result, self.original_sqlite_test)
-
-        if self.output_result_mode:
-            logger.output_result(result, result_values_string)
-
-        if sort_style == SortStyle.ROW_SORT:
-            ncols = result.column_count()
-            nrows = int(total_value_count / ncols)
-            rows = [result_values_string[i * ncols : (i + 1) * ncols] for i in range(nrows)]
-
-            # Define the comparison function
-            def compare_rows(a, b):
-                for col_idx, val in enumerate(a):
-                    a_val = val
-                    b_val = b[col_idx]
-                    if a_val != b_val:
-                        return -1 if a_val < b_val else 1
-                return 0
-
-            # Sort the individual rows based on element comparison
-            sorted_rows = sorted(rows, key=cmp_to_key(compare_rows))
-            rows = sorted_rows
-
-            for row_idx, row in enumerate(rows):
-                for col_idx, val in enumerate(row):
-                    result_values_string[row_idx * ncols + col_idx] = val
-        elif sort_style == SortStyle.VALUE_SORT:
-            result_values_string.sort()
-
-        comparison_values = []
-        if len(values) == 1 and result_is_file(values[0]):
-            fname = context.replace_keywords(values[0])
-            try:
-                comparison_values = load_result_from_file(fname, result)
-                # FIXME this is kind of dumb
-                # We concatenate it with tabs just so we can split it again later
-                for x in range(len(comparison_values)):
-                    comparison_values[x] = "\t".join(list(comparison_values[x]))
-            except duckdb.Error as e:
-                logger.print_error_header(str(e))
-                self.fail_query(query)
-        else:
-            comparison_values = values
-
-        hash_value = ""
-        if self.output_hash_mode or compare_hash:
-            hash_context = md5()
-            for val in result_values_string:
-                hash_context.update(str(val).encode())
-                hash_context.update("\n".encode())
-            digest = hash_context.hexdigest()
-            hash_value = f"{total_value_count} values hashing to {digest}"
-            if self.output_hash_mode:
-                logger.output_hash(hash_value)
-                return
-
-        if not compare_hash:
-            original_expected_columns = expected_column_count
-            column_count_mismatch = False
-
-            if expected_column_count != result.column_count():
-                expected_column_count = result.column_count()
-                column_count_mismatch = True
-
-            expected_rows = len(comparison_values) / expected_column_count
-            row_wise = expected_column_count > 1 and len(comparison_values) == result.row_count()
-
-            if not row_wise:
-                all_tabs = all("\t" in val for val in comparison_values)
-                row_wise = all_tabs
-
-            if row_wise:
-                expected_rows = len(comparison_values)
-                row_wise = True
-            elif len(comparison_values) % expected_column_count != 0:
-                if column_count_mismatch:
-                    logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
-                else:
-                    logger.not_cleanly_divisible(expected_column_count, len(comparison_values))
-                self.fail_query(query)
-
-            if expected_rows != result.row_count():
-                if column_count_mismatch:
-                    logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
-                else:
-                    logger.wrong_row_count(
-                        expected_rows, result_values_string, comparison_values, expected_column_count, row_wise
-                    )
-                self.fail_query(query)
-
-            if row_wise:
-                current_row = 0
-                for i, val in enumerate(comparison_values):
-                    splits = [x for x in val.split("\t") if x != '']
-                    if len(splits) != expected_column_count:
-                        if column_count_mismatch:
-                            logger.column_count_mismatch(result, query.values, original_expected_columns, row_wise)
-                        logger.split_mismatch(i + 1, expected_column_count, len(splits))
-                        self.fail_query(query)
-                    for c, split_val in enumerate(splits):
-                        lvalue_str = result_values_string[current_row * expected_column_count + c]
-                        rvalue_str = split_val
-                        success = compare_values(result, lvalue_str, split_val, c)
-                        if not success:
-                            logger.print_error_header("Wrong result in query!")
-                            logger.print_line_sep()
-                            logger.print_sql()
-                            logger.print_line_sep()
-                            print(f"Mismatch on row {current_row + 1}, column {c + 1}")
-                            print(f"{lvalue_str} <> {rvalue_str}")
-                            logger.print_line_sep()
-                            logger.print_result_error(result_values_string, values, expected_column_count, row_wise)
-                            self.fail_query(query)
-                        # Increment the assertion counter
-                        assert success
-                    current_row += 1
-            else:
-                current_row, current_column = 0, 0
-                for i, val in enumerate(comparison_values):
-                    lvalue_str = result_values_string[current_row * expected_column_count + current_column]
-                    rvalue_str = val
-                    success = compare_values(result, lvalue_str, rvalue_str, current_column)
-                    if not success:
-                        logger.print_error_header("Wrong result in query!")
-                        logger.print_line_sep()
-                        logger.print_sql()
-                        logger.print_line_sep()
-                        print(f"Mismatch on row {current_row + 1}, column {current_column + 1}")
-                        print(f"{lvalue_str} <> {rvalue_str}")
-                        logger.print_line_sep()
-                        logger.print_result_error(result_values_string, values, expected_column_count, row_wise)
-                        self.fail_query(query)
-                    # Increment the assertion counter
-                    assert success
-
-                    current_column += 1
-                    if current_column == expected_column_count:
-                        current_row += 1
-                        current_column = 0
-
-            if column_count_mismatch:
-                logger.column_count_mismatch_correct_result(original_expected_columns, expected_column_count, result)
-                self.fail_query(query)
-        else:
-            hash_compare_error = False
-            if query_has_label:
-                entry = self.hash_label_map.get(query_label)
-                if entry is None:
-                    self.hash_label_map[query_label] = hash_value
-                    self.result_label_map[query_label] = result
-                else:
-                    hash_compare_error = entry != hash_value
-
-            if is_hash:
-                hash_compare_error = values[0] != hash_value
-
-            if hash_compare_error:
-                expected_result = self.result_label_map.get(query_label)
-                logger.wrong_result_hash(expected_result, result)
-                self.fail_query(query)
-
-            assert not hash_compare_error
-
 
 class SQLLogicContext:
     __slots__ = [
@@ -769,7 +770,7 @@ class SQLLogicContext:
         sql_query = self.replace_keywords(sql_query)
 
         expected_result = query.expected_result
-        assert expected_result.type == ExpectedResult.Type.SUCCES
+        assert expected_result.type == ExpectedResult.Type.SUCCESS
 
         try:
             statements = conn.extract_statements(sql_query)
@@ -805,7 +806,7 @@ class SQLLogicContext:
                         f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
                     )
                     stringified_rel = conn.query(transformed_query)
-                except Exception as e:
+                except duckdb.Error as e:
                     self.fail(f"Could not select from the ValueRelation: {str(e)}")
                 result = stringified_rel.fetchall()
                 query_result = QueryResult(result, original_types)
@@ -823,7 +824,7 @@ class SQLLogicContext:
             print(e)
             query_result = QueryResult([], [], e)
 
-        self.runner.check_query_result(self, query, query_result)
+        query_result.check(self, query)
 
     def execute_skip(self, statement: Skip):
         self.runner.skip()
@@ -940,7 +941,7 @@ class SQLLogicContext:
             if expected_result.type != ExpectedResult.Type.UNKNOWN:
                 assert expected_result.lines == None
         except duckdb.Error as e:
-            if expected_result.type == ExpectedResult.Type.SUCCES:
+            if expected_result.type == ExpectedResult.Type.SUCCESS:
                 self.fail(f"Query unexpectedly failed: {str(e)}")
             if expected_result.lines == None:
                 return
@@ -1180,16 +1181,19 @@ class SQLLogicContext:
         self.skiptest(error)
 
     def execute(self):
-        for _ in self.generator(self):
-            self.reset()
-            while self.iterator < len(self.statements):
-                statement = self.next_statement()
-                self.current_statement = statement
-                if self.runner.skip_active() and statement.__class__ != Unskip:
-                    # Keep skipping until Unskip is found
-                    continue
-                method = self.STATEMENTS.get(statement.__class__)
-                if not method:
-                    self.skiptest("Not supported by the runner")
-                method(statement)
-        return ExecuteResult(ExecuteResult.Type.SUCCES)
+        try:
+            for _ in self.generator(self):
+                self.reset()
+                while self.iterator < len(self.statements):
+                    statement = self.next_statement()
+                    self.current_statement = statement
+                    if self.runner.skip_active() and statement.__class__ != Unskip:
+                        # Keep skipping until Unskip is found
+                        continue
+                    method = self.STATEMENTS.get(statement.__class__)
+                    if not method:
+                        self.skiptest("Not supported by the runner")
+                    method(statement)
+        except TestException as e:
+            return e.handle_result()
+        return ExecuteResult(ExecuteResult.Type.SUCCESS)
