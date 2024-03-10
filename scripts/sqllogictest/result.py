@@ -1,6 +1,7 @@
 from hashlib import md5
 
 from .base_statement import BaseStatement
+from .test import SQLLogicTest
 from .statement import (
     Statement,
     Require,
@@ -24,7 +25,6 @@ from .statement import (
 )
 
 from .expected_result import ExpectedResult
-from .parser import SQLLogicTest
 from typing import Optional, Any, Tuple, List, Dict, Set, Generator
 from .logger import SQLLogicTestLogger
 import duckdb
@@ -36,6 +36,64 @@ import threading
 import re
 from functools import cmp_to_key
 from enum import Enum
+
+### Helper structs
+
+
+class RequireResult(Enum):
+    MISSING = 0
+    PRESENT = 1
+
+
+class ExecuteResult:
+    class Type(Enum):
+        SUCCES = 0
+        ERROR = 1
+        SKIPPED = 2
+
+    def __init__(self, type: "ExecuteResult.Type"):
+        self.type = type
+
+
+### Exceptions
+
+
+class SQLLogicStatementData:
+    # Context information about a statement
+    def __init__(self, test: SQLLogicTest, statement: BaseStatement):
+        self.test = test
+        self.statement = statement
+
+    def __str__(self) -> str:
+        return f'{self.test.path}:{self.statement.get_query_line()}'
+
+    __repr__ = __str__
+
+
+class TestException(Exception):
+    __slots__ = ['data', 'message', 'result']
+
+    def __init__(self, data: SQLLogicStatementData, message: str, result: ExecuteResult):
+        super().__init__(f'{str(data)} {message}')
+        self.data = data
+        self.message = message
+        self.result = result
+
+    def handle_result(self) -> ExecuteResult:
+        return self.result
+
+
+class SkipException(TestException):
+    def __init__(self, data: SQLLogicStatementData, message: str):
+        super().__init__(data, message, ExecuteResult(ExecuteResult.Type.SKIPPED))
+
+
+class FailException(TestException):
+    def __init__(self, data: SQLLogicStatementData, message: str):
+        super().__init__(data, message, ExecuteResult(ExecuteResult.Type.ERROR))
+
+
+### Result primitive
 
 
 class QueryResult:
@@ -62,6 +120,88 @@ class QueryResult:
 
     def get_error(self) -> Optional[Exception]:
         return self.error
+
+
+class SQLLogicConnectionPool:
+    __slots__ = [
+        'connection',
+        'cursors',
+    ]
+
+    def __init__(self, con: duckdb.DuckDBPyConnection):
+        assert con
+        self.cursors = {}
+        self.connection = con
+
+    def __del__(self):
+        # Named cursors, for named connections
+        self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
+        # Unnamed cursor, the default 'connection' used
+        self.connection: Optional[duckdb.DuckDBPyConnection] = None
+
+    def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
+        """
+        Either fetch the 'self.connection' object if name is None
+        Or get-or-create the cursor identified by name
+        """
+        assert self.connection
+        if name is None:
+            return self.connection
+
+        if name not in self.cursors:
+            # TODO: do we need to run any set up on a new named connection ??
+            self.cursors[name] = self.connection.cursor()
+        return self.cursors[name]
+
+
+class SQLLogicDatabase:
+    __slots__ = ['path', 'database', 'config']
+
+    def __init__(self, path: str, extensions: List[str], additional_config: Optional[Dict[str, str]] = None):
+        """
+        Connection Hierarchy:
+
+        database
+        └── connection
+            └── cursor1
+            └── cursor2
+            └── cursor3
+
+        'connection' is a cursor of 'database'.
+        Every entry of 'cursors' is a cursor created from 'connection'.
+
+        This is important to understand how ClientConfig settings affect each cursor.
+        """
+        self.reset()
+        if additional_config:
+            self.config.update(additional_config)
+        self.path = path
+
+        # Now re-open the current database
+        read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
+        self.database = duckdb.connect(path, read_only, self.config)
+
+        # Load any previously loaded extensions again
+        for extension in extensions:
+            self.load_extension(extension)
+
+    def reset(self):
+        self.database: Optional[duckdb.DuckDBPyConnection] = None
+        self.config: Dict[str, Any] = {
+            'allow_unsigned_extensions': True,
+            'allow_unredacted_secrets': True,
+        }
+        self.path = ''
+
+    def load_extension(self, extension: str):
+        root = duckdb.__build_dir__
+        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
+        # Serialize it as a POSIX compliant path
+        query = f"LOAD '{path}'"
+        self.database.execute(query)
+
+    def connect(self) -> SQLLogicConnectionPool:
+        return SQLLogicConnectionPool(self.database.cursor())
 
 
 def compare_values(result: QueryResult, actual_str, expected_str, current_column):
@@ -222,108 +362,6 @@ def duck_db_convert_result(result: QueryResult, is_sqlite_test: bool) -> List[st
     return out_result
 
 
-class RequireResult(Enum):
-    MISSING = 0
-    PRESENT = 1
-
-
-class SkipException(Exception):
-    def __init__(self, reason: str):
-        super().__init__(reason)
-
-
-class ExecuteResult:
-    class Type(Enum):
-        SUCCES = 0
-        ERROR = 1
-        SKIPPED = 2
-
-    def __init__(self, type: "ExecuteResult.Type"):
-        self.type = type
-
-
-class SQLLogicConnectionPool:
-    __slots__ = [
-        'connection',
-        'cursors',
-    ]
-
-    def __init__(self, con: duckdb.DuckDBPyConnection):
-        assert con
-        self.cursors = {}
-        self.connection = con
-
-    def __del__(self):
-        # Named cursors, for named connections
-        self.cursors: Dict[str, duckdb.DuckDBPyConnection] = {}
-        # Unnamed cursor, the default 'connection' used
-        self.connection: Optional[duckdb.DuckDBPyConnection] = None
-
-    def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
-        """
-        Either fetch the 'self.connection' object if name is None
-        Or get-or-create the cursor identified by name
-        """
-        assert self.connection
-        if name is None:
-            return self.connection
-
-        if name not in self.cursors:
-            # TODO: do we need to run any set up on a new named connection ??
-            self.cursors[name] = self.connection.cursor()
-        return self.cursors[name]
-
-
-class SQLLogicDatabase:
-    __slots__ = ['path', 'database', 'config']
-
-    def __init__(self, path: str, extensions: List[str], additional_config: Optional[Dict[str, str]] = None):
-        """
-        Connection Hierarchy:
-
-        database
-        └── connection
-            └── cursor1
-            └── cursor2
-            └── cursor3
-
-        'connection' is a cursor of 'database'.
-        Every entry of 'cursors' is a cursor created from 'connection'.
-
-        This is important to understand how ClientConfig settings affect each cursor.
-        """
-        self.reset()
-        if additional_config:
-            self.config.update(additional_config)
-        self.path = path
-
-        # Now re-open the current database
-        read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
-        self.database = duckdb.connect(path, read_only, self.config)
-
-        # Load any previously loaded extensions again
-        for extension in extensions:
-            self.load_extension(self.connection, extension)
-
-    def reset(self):
-        self.database: Optional[duckdb.DuckDBPyConnection] = None
-        self.config: Dict[str, Any] = {
-            'allow_unsigned_extensions': True,
-            'allow_unredacted_secrets': True,
-        }
-        self.path = ''
-
-    def load_extension(self, extension: str):
-        root = duckdb.__build_dir__
-        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
-        # Serialize it as a POSIX compliant path
-        query = f"LOAD '{path}'"
-        self.database.execute(query)
-
-    def connect(self) -> SQLLogicConnectionPool:
-        return SQLLogicConnectionPool(self.database.cursor())
-
-
 class SQLLogicRunner:
     __slots__ = [
         'skipped',
@@ -348,8 +386,6 @@ class SQLLogicRunner:
     ]
 
     def reset(self):
-        self.skipped = False
-        self.error: Optional[str] = None
         self.skip_level: int = 0
 
         # The set of databases that have been loaded by this runner at any point
@@ -386,23 +422,8 @@ class SQLLogicRunner:
     def __init__(self):
         self.reset()
 
-    def fail_query(self, query: Query):
-        # if context.is_parallel:
-        #    self.finished_processing_file = True
-        #    context.error_file = file_name
-        #    context.error_line = query_line
-        # else:
-        #    fail_line(file_name, query_line, 0)
-        self.fail(f'Failed: {self.test.path}:{query.get_query_line()}')
-
-    def fail(self, message):
-        raise Exception(message)
-
     def skip(self):
         self.skip_level += 1
-
-    def skiptest(self, message: str):
-        raise SkipException(message)
 
     def unskip(self):
         self.skip_level -= 1
@@ -614,11 +635,9 @@ class SQLLogicContext:
         'STATEMENTS',
         'pool',
         'statements',
+        'current_statement',
         'keywords',
-        'success',
-        'error_file',
-        'error_line',
-        'error_message',
+        'error',
         'is_loop',
     ]
 
@@ -645,12 +664,10 @@ class SQLLogicContext:
         self.statements = statements
         self.runner = runner
         self.is_loop = True
+        self.error: Optional[TestException] = None
         self.generator: Generator[Any] = iteration_generator
         self.keywords = keywords
-        self.success = True
-        self.error_message = None
-        self.error_file = None
-        self.error_line = None
+        self.current_statement: Optional[SQLLogicStatementData] = None
         self.pool: Optional[SQLLogicConnectionPool] = pool
         self.initialize_connection(self.pool.get_connection())
         self.STATEMENTS = {
@@ -684,6 +701,14 @@ class SQLLogicContext:
         assert key in self.keywords
         self.keywords.pop(key)
 
+    def fail(self, message):
+        self.error = FailException(self.current_statement, message)
+        raise self.error
+
+    def skiptest(self, message: str):
+        self.error = SkipException(self.current_statement, message)
+        raise self.error
+
     def in_loop(self) -> bool:
         return self.is_loop
 
@@ -710,7 +735,7 @@ class SQLLogicContext:
 
     def execute_load(self, load: Load):
         if self.in_loop():
-            self.runner.fail("load cannot be called in a loop")
+            self.fail("load cannot be called in a loop")
 
         readonly = load.readonly
 
@@ -750,7 +775,7 @@ class SQLLogicContext:
             statements = conn.extract_statements(sql_query)
             statement = statements[-1]
             if 'pivot' in sql_query and len(statements) != 1:
-                self.runner.skiptest("Can not deal properly with a PIVOT statement")
+                self.skiptest("Can not deal properly with a PIVOT statement")
 
             def is_query_result(sql_query, statement) -> bool:
                 if duckdb.ExpectedResultType.QUERY_RESULT not in statement.expected_result_type:
@@ -794,10 +819,7 @@ class SQLLogicContext:
                 query_result = QueryResult(result, [])
             if expected_result.lines == None:
                 return
-        except SkipException as e:
-            self.runner.skipped = True
-            return
-        except Exception as e:
+        except duckdb.Error as e:
             print(e)
             query_result = QueryResult([], [], e)
 
@@ -810,7 +832,7 @@ class SQLLogicContext:
         self.runner.unskip()
 
     def execute_halt(self, statement: Halt):
-        self.runner.skiptest("HALT was encountered in file")
+        self.skiptest("HALT was encountered in file")
 
     def execute_restart(self, statement: Restart):
         # if context.is_parallel:
@@ -914,12 +936,12 @@ class SQLLogicContext:
             conn.execute(sql_query)
             result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
-                self.runner.fail(f"Query unexpectedly succeeded")
+                self.fail(f"Query unexpectedly succeeded")
             if expected_result.type != ExpectedResult.Type.UNKNOWN:
                 assert expected_result.lines == None
         except duckdb.Error as e:
             if expected_result.type == ExpectedResult.Type.SUCCES:
-                self.runner.fail(f"Query unexpectedly failed: {str(e)}")
+                self.fail(f"Query unexpectedly failed: {str(e)}")
             if expected_result.lines == None:
                 return
             expected = '\n'.join(expected_result.lines)
@@ -927,7 +949,7 @@ class SQLLogicContext:
             if expected.startswith('Dependency Error: '):
                 expected = expected.split('Dependency Error: ')[1]
             if expected not in str(e):
-                self.runner.fail(
+                self.fail(
                     f"Query failed, but did not produce the right error: {expected}\nInstead it produced: {str(e)}"
                 )
 
@@ -966,10 +988,9 @@ class SQLLogicContext:
 
         if not 'autoload_known_extensions' in self.runner.database.config:
             try:
-                con = self.pool.get_connection()
-                self.runner.load_extension(con, param)
+                self.runner.database.load_extension(param)
                 self.runner.extensions.add(param)
-            except:
+            except duckdb.Error:
                 return RequireResult.MISSING
         elif excluded_from_autoloading:
             return RequireResult.MISSING
@@ -978,12 +999,13 @@ class SQLLogicContext:
 
     def execute_require(self, statement: Require):
         require_result = self.check_require(statement)
-        if require_result == RequireResult.MISSING:
-            param = statement.header.parameters[0].lower()
-            if self.runner.is_required(param):
-                # This extension / setting was explicitly required
-                self.runner.fail("require {}: FAILED".format(param))
-            self.runner.skipped = True
+        if require_result != RequireResult.MISSING:
+            return
+        param = statement.header.parameters[0].lower()
+        if self.runner.is_required(param):
+            # This extension / setting was explicitly required
+            self.fail("require {}: FAILED".format(param))
+        self.skiptest(f"require {param}: Missing")
 
     def execute_require_env(self, statement: RequireEnv):
         key = statement.header.parameters[0]
@@ -993,13 +1015,13 @@ class SQLLogicContext:
             # I think we should support this
             # ... actually the way we set up keywords here, this is already the behavior
             # inside the python sqllogic runner, since contexts are created and destroyed at loop start and end
-            self.runner.fail(f"require-env can not be called in a loop")
+            self.fail(f"require-env can not be called in a loop")
         if res is None:
-            self.runner.fail(f"require-env {key} failed, not set")
+            self.fail(f"require-env {key} failed, not set")
         if len(statement.header.parameters) != 1:
             expected = statement.header.parameters[1]
             if res != expected:
-                self.runner.fail(f"require-env {key} failed, expected '{expected}', but found '{res}'")
+                self.fail(f"require-env {key} failed, expected '{expected}', but found '{res}'")
         self.add_keyword(key, res)
 
     def get_loop_statements(self):
@@ -1030,14 +1052,8 @@ class SQLLogicContext:
 
             context.generator = update_value
             context.execute()
-
-        except Exception as ex:
-            context.error_message = f"Failure at {context.error_file}:{context.error_line}: {str(ex)}"
-            context.success = False
-
-        except:
-            context.error_message = f"Failure at {context.error_file}:{context.error_line}: Unknown error message"
-            context.success = False
+        except TestException:
+            assert context.error is not None
 
     def execute_loop(self, loop: Loop):
         statements = self.get_loop_statements()
@@ -1076,12 +1092,10 @@ class SQLLogicContext:
                 thread.join()
 
             for _, context in contexts.items():
-                if not context.success:
-                    if context.error_message:
-                        self.runner.fail(context.error_message)
-                    else:
-                        assert False
-                        # self.runner.fail(context.error_file, context.error_line, 0)
+                if context.error is not None:
+                    # Propagate the exception
+                    self.error = context.error
+                    raise self.error
 
     def execute_foreach(self, foreach: Foreach):
         statements = self.get_loop_statements()
@@ -1143,12 +1157,9 @@ class SQLLogicContext:
 
             for x in contexts:
                 _, _, context = x
-                if not context.success:
-                    if context.error_message:
-                        self.runner.fail(context.error_message)
-                    else:
-                        assert False
-                        # self.runner.fail(context.error_file, context.error_line, 0)
+                if context.error is not None:
+                    self.error = context.error
+                    raise self.error
 
     def next_statement(self):
         if self.iterator >= len(self.statements):
@@ -1157,20 +1168,28 @@ class SQLLogicContext:
         self.iterator += 1
         return statement
 
+    def verify_statements(self) -> None:
+        unsupported_statements = [
+            statement for statement in self.statements if statement.__class__ not in self.STATEMENTS
+        ]
+        if unsupported_statements == []:
+            return
+        error = f'skipped because the following statement types are not supported: '
+        types = set([x.__class__ for x in unsupported_statements])
+        error += str(list([x.__name__ for x in types]))
+        self.skiptest(error)
+
     def execute(self):
         for _ in self.generator(self):
             self.reset()
             while self.iterator < len(self.statements):
                 statement = self.next_statement()
+                self.current_statement = statement
                 if self.runner.skip_active() and statement.__class__ != Unskip:
                     # Keep skipping until Unskip is found
                     continue
-                print("Executing:", statement.__class__.__name__, "line:", statement.get_query_line())
                 method = self.STATEMENTS.get(statement.__class__)
                 if not method:
-                    raise Exception(f"Not supported: {statement.__class__.__name__}")
+                    self.skiptest("Not supported by the runner")
                 method(statement)
-                if self.runner.skipped:
-                    self.runner.skipped = False
-                    return ExecuteResult(ExecuteResult.Type.SKIPPED)
         return ExecuteResult(ExecuteResult.Type.SUCCES)

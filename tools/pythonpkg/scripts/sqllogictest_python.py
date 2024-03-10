@@ -1,11 +1,8 @@
 import sys
 import os
 import glob
-import json
-from typing import Optional, List, Dict, Any, Generator
+from typing import Any, Generator
 import duckdb
-from enum import Enum
-import time
 import shutil
 import gc
 
@@ -13,39 +10,17 @@ script_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
 from sqllogictest import (
     SQLLogicParser,
-    SQLLogicEncoder,
     SQLLogicTest,
-    BaseStatement,
-    Statement,
-    Require,
-    Mode,
-    Halt,
-    Set,
-    Load,
-    Query,
-    HashThreshold,
-    Loop,
-    Foreach,
-    Endloop,
-    RequireEnv,
-    Restart,
-    Reconnect,
-    Sleep,
-    SleepUnit,
-    Skip,
-    Unskip,
-    ExpectedResult,
 )
 
 from sqllogictest.result import (
+    TestException,
     SQLLogicRunner,
     SQLLogicDatabase,
     SQLLogicContext,
     ExecuteResult,
     SkipException,
 )
-
-from enum import Enum, auto
 
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 
@@ -108,12 +83,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # TODO: table function isnt always autoloaded so test fails
         ]
 
-    def get_unsupported_statements(self, context: SQLLogicContext, test: SQLLogicTest) -> List[BaseStatement]:
-        unsupported_statements = [
-            statement for statement in test.statements if statement.__class__ not in context.STATEMENTS
-        ]
-        return unsupported_statements
-
     def get_test_directory(self) -> str:
         test_directory = TEST_DIRECTORY_PATH
         if not os.path.exists(test_directory):
@@ -144,7 +113,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             '__BUILD_DIRECTORY__': duckdb.__build_dir__,
         }
 
-        def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
+        def update_value(_: SQLLogicContext) -> Generator[Any, Any, Any]:
             # Yield once to represent one iteration, do not touch the keywords
             yield None
 
@@ -153,16 +122,14 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         # The outer context is not a loop!
         context.is_loop = False
 
-        unsupported = self.get_unsupported_statements(context, test)
-        if unsupported != []:
-            error = f'Test {test.path} skipped because the following statement types are not supported: '
-            types = set([x.__class__ for x in unsupported])
-            error += str(list([x.__name__ for x in types]))
-            raise Exception(error)
-
-        res = context.execute()
+        try:
+            context.verify_statements()
+            res = context.execute()
+        except TestException as e:
+            res = e.handle_result()
 
         self.database.reset()
+
         # Clean up any databases that we created
         for loaded_path in self.loaded_databases:
             if not loaded_path:

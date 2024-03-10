@@ -1,5 +1,6 @@
 from .token import TokenType, Token
 from .base_statement import BaseStatement
+from .test import SQLLogicTest
 from .base_decorator import BaseDecorator
 from .statement import (
     Statement,
@@ -23,12 +24,13 @@ from .statement import (
 )
 from .decorator import SkipIf, OnlyIf
 from .expected_result import ExpectedResult
-from .parser import SQLLogicParser, SQLLogicEncoder, SQLLogicTest
+from .parser import SQLLogicParser, SQLLogicEncoder
 
 all = [
     TokenType,
     Token,
     BaseStatement,
+    SQLLogicTest,
     BaseDecorator,
     Statement,
     ExpectedResult,

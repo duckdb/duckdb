@@ -34,6 +34,7 @@ from ..decorator import SkipIf, OnlyIf
 
 from ..base_decorator import BaseDecorator
 from ..base_statement import BaseStatement
+from ..test import SQLLogicTest
 
 
 def create_formatted_list(items) -> str:
@@ -51,18 +52,6 @@ def create_formatted_list(items) -> str:
 
 def is_space(char: str):
     return char == ' ' or char == '\t' or char == '\n' or char == '\v' or char == '\f' or char == '\r'
-
-
-class SQLLogicTest:
-    def __init__(self, path):
-        self.path = path
-        self.statements = []
-
-    def add_statement(self, statement: BaseStatement):
-        self.statements.append(statement)
-
-    def is_sqlite_test(self):
-        return 'test/sqlite/select' in self.path or 'third_party/sqllogictest' in self.path
 
 
 ### -------- JSON ENCODER ----------
