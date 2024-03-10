@@ -11,6 +11,11 @@ PRAGMA verify_parallelism
 statement ok
 SET threads=4
 
+foreach batched true false
+
+statement ok
+SET preserve_insertion_order=${batched}
+
 statement error
 SELECT * FROM read_csv('data/csv/missing_column.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
 ----
@@ -134,3 +139,9 @@ statement error
 SELECT * FROM read_csv('data/csv/error/timestamp.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': timestamp, 'h2': varchar}, header=True)
 ----
 line 3002
+
+endloop
+
+mode unskip
+
+endloop

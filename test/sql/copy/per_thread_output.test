@@ -31,10 +31,10 @@ data_3.parquet
 
 # CSV also works
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output_csv' (FORMAT CSV, HEADER TRUE, PER_THREAD_OUTPUT TRUE);
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output_csv' (FORMAT CSV,  PER_THREAD_OUTPUT TRUE);
 
 query I
-SELECT COUNT(*) FROM read_csv('__TEST_DIR__/per_thread_output_csv/*.csv', columns={'col_a': 'INT', 'col_b' : 'INT'}, header=True);
+SELECT COUNT(*) FROM read_csv('__TEST_DIR__/per_thread_output_csv/*.csv', columns={'col_a': 'INT', 'col_b' : 'INT'});
 ----
 10000
 

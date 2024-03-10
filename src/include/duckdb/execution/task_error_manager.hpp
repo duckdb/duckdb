@@ -21,6 +21,17 @@ public:
 		this->exceptions.push_back(std::move(error));
 	}
 
+	ErrorData GetError() {
+		lock_guard<mutex> elock(error_lock);
+		D_ASSERT(!exceptions.empty());
+
+		// FIXME: Should we try to get the biggest priority error?
+		// In case the first exception is a StandardException but a regular Exception or a FatalException occurred
+		// Maybe we should throw the more critical exception instead, as that changes behavior.
+		auto &entry = exceptions[0];
+		return entry;
+	}
+
 	bool HasError() {
 		lock_guard<mutex> elock(error_lock);
 		return !exceptions.empty();

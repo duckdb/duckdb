@@ -12,6 +12,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -34,7 +35,7 @@ public:
 
 public:
 	static unique_ptr<BufferManager> CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config);
-	virtual BufferHandle Allocate(idx_t block_size, bool can_destroy = true,
+	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
 	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
@@ -48,6 +49,7 @@ public:
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	virtual DUCKDB_API void ReserveMemory(idx_t size);
 	virtual DUCKDB_API void FreeReservedMemory(idx_t size);
+	virtual vector<MemoryInformation> GetMemoryUsageInfo() const = 0;
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	virtual void SetLimit(idx_t limit = (idx_t)-1);
@@ -78,8 +80,8 @@ public:
 protected:
 	virtual void PurgeQueue() = 0;
 	virtual void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
-	virtual void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer);
-	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer);
+	virtual void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer);
+	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id, unique_ptr<FileBuffer> buffer);
 	virtual void DeleteTemporaryFile(block_id_t id);
 };
 

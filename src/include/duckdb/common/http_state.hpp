@@ -13,6 +13,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/main/client_context_state.hpp"
 
 namespace duckdb {
 
@@ -98,7 +99,7 @@ public:
 	atomic<idx_t> total_bytes_sent {0};
 
 	//! Called by the ClientContext when the current query ends
-	void QueryEnd() override {
+	void QueryEnd(ClientContext &context) override {
 		Reset();
 	}
 

@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -17,8 +18,8 @@ duckdb_date_struct duckdb_from_date(duckdb_date date) {
 
 	duckdb_date_struct result;
 	result.year = year;
-	result.month = month;
-	result.day = day;
+	result.month = duckdb::UnsafeNumericCast<int8_t>(month);
+	result.day = duckdb::UnsafeNumericCast<int8_t>(day);
 	return result;
 }
 
@@ -37,18 +38,23 @@ duckdb_time_struct duckdb_from_time(duckdb_time time) {
 	Time::Convert(dtime_t(time.micros), hour, minute, second, micros);
 
 	duckdb_time_struct result;
-	result.hour = hour;
-	result.min = minute;
-	result.sec = second;
+	result.hour = duckdb::UnsafeNumericCast<int8_t>(hour);
+	result.min = duckdb::UnsafeNumericCast<int8_t>(minute);
+	result.sec = duckdb::UnsafeNumericCast<int8_t>(second);
 	result.micros = micros;
 	return result;
 }
 
 duckdb_time_tz_struct duckdb_from_time_tz(duckdb_time_tz input) {
-	duckdb::dtime_tz_t time(input.bits);
 	duckdb_time_tz_struct result;
-	result.time.micros = time.time().micros;
-	result.offset = time.offset();
+	duckdb_time time;
+
+	duckdb::dtime_tz_t time_tz(input.bits);
+
+	time.micros = time_tz.time().micros;
+
+	result.time = duckdb_from_time(time);
+	result.offset = time_tz.offset();
 	return result;
 }
 

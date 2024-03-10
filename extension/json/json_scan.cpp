@@ -569,6 +569,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			if (file_done) {
 				lock_guard<mutex> guard(gstate.lock);
 				TryIncrementFileIndex(gstate);
+				lock_guard<mutex> reader_guard(current_reader->lock);
 				current_reader->GetFileHandle().Close();
 			}
 

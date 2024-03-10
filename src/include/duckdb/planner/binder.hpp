@@ -49,6 +49,9 @@ struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
+struct BoundLimitNode;
+struct PivotColumnEntry;
+struct UnpivotEntry;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
 
@@ -105,6 +108,8 @@ public:
 	optional_ptr<DummyBinding> macro_binding;
 	//! The intermediate lambda bindings to bind nested lambdas (if any)
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
+
+	unordered_map<idx_t, LogicalOperator *> recursive_ctes;
 
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
@@ -201,10 +206,12 @@ private:
 	unordered_set<string> table_names;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
+	//! Unnamed subquery index
+	idx_t unnamed_subquery_index = 1;
 
 private:
 	//! Get the root binder (binder with no parent)
-	Binder *GetRootBinder();
+	Binder &GetRootBinder();
 	//! Determine the depth of the binder
 	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
@@ -212,9 +219,8 @@ private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
-	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
-	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
-	                                     Value &delimiter_value);
+	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
+	                              bool is_offset);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -269,6 +275,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
+	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
@@ -283,6 +290,8 @@ private:
 	                                   vector<unique_ptr<ParsedExpression>> all_columns,
 	                                   unique_ptr<ParsedExpression> &where_clause);
 	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
+	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
+	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,

@@ -40,6 +40,9 @@ public:
 
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
+	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
+	                                                          idx_t position, idx_t size,
+	                                                          unique_ptr<FileBuffer> reusable_buffer);
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed
 	//! This buffer can be small (smaller than BLOCK_SIZE)
 	//! Unpin and pin are nops on this block of memory
@@ -50,7 +53,7 @@ public:
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	DUCKDB_API BufferHandle Allocate(idx_t block_size, bool can_destroy = true,
+	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
 	                                 shared_ptr<BlockHandle> *block = nullptr) final override;
 
 	//! Reallocate an in-memory buffer that is pinned.
@@ -62,6 +65,9 @@ public:
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	void SetLimit(idx_t limit = (idx_t)-1) final override;
+
+	//! Returns informaton about memory usage
+	vector<MemoryInformation> GetMemoryUsageInfo() const override;
 
 	//! Returns a list of all temporary files
 	vector<TemporaryFileInformation> GetTemporaryFiles() final override;
@@ -89,23 +95,15 @@ public:
 protected:
 	//! Helper
 	template <typename... ARGS>
-	TempBufferPoolReservation EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer, ARGS...);
+	TempBufferPoolReservation EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
+	                                             ARGS...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
 	//! it can be reloaded. The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	//! This needs to be private to prevent creating blocks without ever pinning them:
 	//! blocks that are never pinned are never added to the eviction queue
-	shared_ptr<BlockHandle> RegisterMemory(idx_t block_size, bool can_destroy);
-
-	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
-	//! (i.e. not enough blocks could be evicted)
-	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
-	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
-	//! Returns a pair. result.first indicates if eviction was successful. result.second contains the
-	//! reservation handle, which can be moved to the BlockHandle that will own the reservation.
-	BufferPool::EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-	                                       unique_ptr<FileBuffer> *buffer = nullptr);
+	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy);
 
 	//! Garbage collect eviction queue
 	void PurgeQueue() final override;
@@ -114,9 +112,10 @@ protected:
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final override;
 
 	//! Write a temporary buffer to disk
-	void WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) final override;
+	void WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) final override;
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer = nullptr) final override;
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(MemoryTag tag, block_id_t id,
+	                                           unique_ptr<FileBuffer> buffer = nullptr) final override;
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
@@ -154,6 +153,8 @@ protected:
 	Allocator buffer_allocator;
 	//! Block manager for temp data
 	unique_ptr<BlockManager> temp_block_manager;
+	//! Temporary evicted memory data per tag
+	atomic<idx_t> evicted_data_per_tag[MEMORY_TAG_COUNT];
 };
 
 } // namespace duckdb

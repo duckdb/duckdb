@@ -33,12 +33,20 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::StringType(const string &collation
 	return conn->StringType(collation);
 }
 
-shared_ptr<DuckDBPyType> PyConnectionWrapper::ArrayType(const shared_ptr<DuckDBPyType> &type,
+shared_ptr<DuckDBPyType> PyConnectionWrapper::ArrayType(const shared_ptr<DuckDBPyType> &type, idx_t size,
                                                         shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->ArrayType(type);
+	return conn->ArrayType(type, size);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::ListType(const shared_ptr<DuckDBPyType> &type,
+                                                       shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ListType(type);
 }
 
 shared_ptr<DuckDBPyType> PyConnectionWrapper::MapType(const shared_ptr<DuckDBPyType> &key,

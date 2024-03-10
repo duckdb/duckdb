@@ -16,6 +16,11 @@ SELECT d::DATE FROM range(DATE '1992-01-01', DATE '1992-10-01', INTERVAL (1) MON
 1992-08-01
 1992-09-01
 
+# range is exclusive
+query I
+SELECT * FROM range(date '1992-01-01', date '1992-01-01', interval '1' month);
+----
+
 # generate_series is inclusive
 query I
 SELECT d::DATE FROM generate_series(DATE '1992-01-01', DATE '1992-10-01', INTERVAL (1) MONTH) tbl(d)
@@ -47,6 +52,16 @@ SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-01-01 12:00
 1992-01-01 09:00:00
 1992-01-01 10:00:00
 1992-01-01 11:00:00
+
+# range is exclusive
+query I
+SELECT * FROM range(timestamp '1992-01-01 00:00:00', timestamp '1992-01-01 00:00:00', interval '1' month);
+----
+
+query I
+SELECT * FROM range(timestamp '1992-01-01 00:00:00', timestamp '1992-01-01 00:00:01', interval '1' month);
+----
+1992-01-01 00:00:00
 
 # negative interval
 query I

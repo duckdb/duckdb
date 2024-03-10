@@ -118,6 +118,10 @@ TEST_CASE("Test adding a custom secret storage", "[secret][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=true;"));
 
+	// Set custom secret path to prevent interference with other tests
+	auto secret_dir = TestCreatePath("custom_secret_storage_cpp_1");
+	REQUIRE_NO_FAIL(con.Query("set secret_directory='" + secret_dir + "'"));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE SECRET s1 IN TEST_STORAGE (TYPE S3, SCOPE 's3://foo')"));
 	REQUIRE_NO_FAIL(con.Query("CREATE PERSISTENT SECRET s2 IN test_storage (TYPE S3, SCOPE 's3://')"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY SECRET s2 (TYPE S3, SCOPE 's3://')"));
@@ -187,6 +191,10 @@ TEST_CASE("Test tie-break behaviour for custom secret storage", "[secret][.]") {
 	TestSecretLog log2;
 
 	REQUIRE_NO_FAIL(con.Query("set allow_persistent_secrets=true;"));
+
+	// Set custom secret path to prevent interference with other tests
+	auto secret_dir = TestCreatePath("custom_secret_storage_cpp_2");
+	REQUIRE_NO_FAIL(con.Query("set secret_directory='" + secret_dir + "'"));
 
 	// Register custom secret storage
 	auto &secret_manager = duckdb::SecretManager::Get(*db.instance);

@@ -101,6 +101,9 @@ void SQLLogicTestRunner::Reconnect() {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	con->Query("SET pivot_filter_threshold=0");
 #endif
+	auto &client_config = ClientConfig::GetConfig(*con->context);
+	client_config.enable_progress_bar = true;
+	client_config.print_progress_bar = false;
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -204,6 +207,168 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		collection = true;
 	}
 	return collection;
+}
+
+RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vector<string> &params) {
+	if (params.size() < 1) {
+		parser.Fail("require requires a single parameter");
+	}
+	// require command
+	string param = StringUtil::Lower(params[0]);
+	// os specific stuff
+	if (param == "notmingw") {
+#ifdef __MINGW32__
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "mingw") {
+#ifndef __MINGW32__
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "notwindows") {
+#ifdef _WIN32
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "windows") {
+#ifndef _WIN32
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "longdouble") {
+#if LDBL_MANT_DIG < 54
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "64bit") {
+		if (sizeof(void *) != 8) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "noforcestorage") {
+		if (TestForceStorage()) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "nothreadsan") {
+#ifdef DUCKDB_THREAD_SANITIZER
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "strinline") {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "vector_size") {
+		if (params.size() != 2) {
+			parser.Fail("require vector_size requires a parameter");
+		}
+		// require a specific vector size
+		auto required_vector_size = std::stoi(params[1]);
+		if (STANDARD_VECTOR_SIZE < required_vector_size) {
+			// vector size is too low for this test: skip it
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "exact_vector_size") {
+		if (params.size() != 2) {
+			parser.Fail("require exact_vector_size requires a parameter");
+		}
+		// require an exact vector size
+		auto required_vector_size = std::stoi(params[1]);
+		if (STANDARD_VECTOR_SIZE != required_vector_size) {
+			// vector size does not match the required vector size: skip it
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "block_size") {
+		if (params.size() != 2) {
+			parser.Fail("require block_size requires a parameter");
+		}
+		// require a specific block size
+		auto required_block_size = std::stoi(params[1]);
+		if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
+			// block size does not match the required block size: skip it
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "skip_reload") {
+		skip_reload = true;
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "noalternativeverify") {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_extension_autoloading") {
+		if (config->options.autoload_known_extensions) {
+			// If autoloading is on, we skip this test
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	bool excluded_from_autoloading = true;
+	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
+		if (ext == param) {
+			excluded_from_autoloading = false;
+			break;
+		}
+	}
+
+	if (!config->options.autoload_known_extensions) {
+		auto result = ExtensionHelper::LoadExtension(*db, param);
+		if (result == ExtensionLoadResult::LOADED_EXTENSION) {
+			// add the extension to the list of loaded extensions
+			extensions.insert(param);
+		} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+			parser.Fail("unknown extension type: %s", params[0]);
+		} else if (result == ExtensionLoadResult::NOT_LOADED) {
+			// extension known but not build: skip this test
+			return RequireResult::MISSING;
+		}
+	} else if (excluded_from_autoloading) {
+		return RequireResult::MISSING;
+	}
+	return RequireResult::PRESENT;
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
@@ -473,111 +638,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_ENDLOOP) {
 			EndLoop();
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE) {
-			if (token.parameters.size() < 1) {
-				parser.Fail("require requires a single parameter");
-			}
-			// require command
-			string param = StringUtil::Lower(token.parameters[0]);
-			// os specific stuff
-			if (param == "notmingw") {
-#ifdef __MINGW32__
+			auto require_result = CheckRequire(parser, token.parameters);
+			if (require_result == RequireResult::MISSING) {
+				auto &param = token.parameters[0];
+				if (IsRequired(param)) {
+					// This extension / setting was explicitly required
+					parser.Fail(StringUtil::Format("require %s: FAILED", param));
+				}
+				SKIP_TEST("require " + token.parameters[0]);
 				return;
-#endif
-			} else if (param == "mingw") {
-#ifndef __MINGW32__
-				return;
-#endif
-			} else if (param == "notwindows") {
-#ifdef _WIN32
-				return;
-#endif
-			} else if (param == "windows") {
-#ifndef _WIN32
-				return;
-#endif
-			} else if (param == "longdouble") {
-#if LDBL_MANT_DIG < 54
-				return;
-#endif
-			} else if (param == "64bit") {
-				if (sizeof(void *) != 8) {
-					return;
-				}
-			} else if (param == "noforcestorage") {
-				if (TestForceStorage()) {
-					return;
-				}
-			} else if (param == "nothreadsan") {
-#ifdef DUCKDB_THREAD_SANITIZER
-				return;
-#endif
-			} else if (param == "strinline") {
-#ifdef DUCKDB_DEBUG_NO_INLINE
-				return;
-#endif
-			} else if (param == "vector_size") {
-				if (token.parameters.size() != 2) {
-					parser.Fail("require vector_size requires a parameter");
-				}
-				// require a specific vector size
-				auto required_vector_size = std::stoi(token.parameters[1]);
-				if (STANDARD_VECTOR_SIZE < required_vector_size) {
-					// vector size is too low for this test: skip it
-					return;
-				}
-			} else if (param == "exact_vector_size") {
-				if (token.parameters.size() != 2) {
-					parser.Fail("require exact_vector_size requires a parameter");
-				}
-				// require an exact vector size
-				auto required_vector_size = std::stoi(token.parameters[1]);
-				if (STANDARD_VECTOR_SIZE != required_vector_size) {
-					// vector size does not match the required vector size: skip it
-					return;
-				}
-			} else if (param == "block_size") {
-				if (token.parameters.size() != 2) {
-					parser.Fail("require block_size requires a parameter");
-				}
-				// require a specific block size
-				auto required_block_size = std::stoi(token.parameters[1]);
-				if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
-					// block size does not match the required block size: skip it
-					return;
-				}
-			} else if (param == "skip_reload") {
-				skip_reload = true;
-			} else if (param == "noalternativeverify") {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-				return;
-#endif
-			} else if (param == "no_extension_autoloading") {
-				if (config->options.autoload_known_extensions) {
-					return;
-				}
-			} else {
-				bool excluded_from_autoloading = true;
-				for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
-					if (ext == param) {
-						excluded_from_autoloading = false;
-						break;
-					}
-				}
-
-				if (!config->options.autoload_known_extensions) {
-					auto result = ExtensionHelper::LoadExtension(*db, param);
-					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
-						// add the extension to the list of loaded extensions
-						extensions.insert(param);
-					} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-						parser.Fail("unknown extension type: %s", token.parameters[0]);
-					} else if (result == ExtensionLoadResult::NOT_LOADED) {
-						// extension known but not build: skip this test
-						return;
-					}
-				} else if (excluded_from_autoloading) {
-					return;
-				}
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {
@@ -592,6 +661,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto env_actual = std::getenv(env_var.c_str());
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
+				SKIP_TEST("require-env " + token.parameters[0]);
 				return;
 			}
 
@@ -600,6 +670,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto env_value = token.parameters[1];
 				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
 					// It's not, check the test
+					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
 			}

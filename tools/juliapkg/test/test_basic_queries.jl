@@ -72,20 +72,65 @@ SELECT '🦆🍞🦆'
     DBInterface.close!(con)
 end
 
-@testset "DBInterface.execute errors" begin
+@testset "DBInterface.execute - parser error" begin
     con = DBInterface.connect(DuckDB.DB)
 
     # parser error
     @test_throws DuckDB.QueryException DBInterface.execute(con, "SELEC")
 
+    DBInterface.close!(con)
+end
+
+@testset "DBInterface.execute - binder error" begin
+    con = DBInterface.connect(DuckDB.DB)
+
     # binder error
     @test_throws DuckDB.QueryException DBInterface.execute(con, "SELECT * FROM this_table_does_not_exist")
+
+    DBInterface.close!(con)
+end
+
+@testset "DBInterface.execute - runtime error" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    res = DBInterface.execute(con, "select current_setting('threads')")
+    df = DataFrame(res)
+    print(df)
 
     # run-time error
     @test_throws DuckDB.QueryException DBInterface.execute(
         con,
         "SELECT i::int FROM (SELECT '42' UNION ALL SELECT 'hello') tbl(i)"
     )
+
+    DBInterface.close!(con)
+end
+
+# test a PIVOT query that generates multiple prepared statements and will fail with execute
+@testset "Test DBInterface.query" begin
+    db = DuckDB.DB()
+    con = DuckDB.connect(db)
+    DuckDB.execute(con, "CREATE TABLE Cities (Country VARCHAR, Name VARCHAR, Year INT, Population INT);")
+    DuckDB.execute(con, "INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005)")
+    DuckDB.execute(con, "INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065)")
+    results = DuckDB.query(con, "PIVOT Cities ON Year USING first(Population);")
+
+    # iterator
+    for row in Tables.rows(results)
+        @test row[:Name] == "Amsterdam"
+        @test row[4] == 1065
+    end
+
+    # convert to DataFrame
+    df = DataFrame(results)
+    @test names(df) == ["Country", "Name", "2000", "2010"]
+    @test size(df, 1) == 1
+    @test df[1, :Country] == "NL"
+    @test df[1, :Name] == "Amsterdam"
+    @test df[1, "2000"] == 1005
+    @test df[1, 4] == 1065
+
+    @test DataFrame(DuckDB.query(db, "select 'a'; select 2;"))[1, 1] == "a"
 
     DBInterface.close!(con)
 end

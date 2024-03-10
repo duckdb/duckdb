@@ -83,9 +83,25 @@ static jclass J_UUID;
 static jmethodID J_UUID_getMostSignificantBits;
 static jmethodID J_UUID_getLeastSignificantBits;
 
+static jclass J_DuckDBDate;
+static jmethodID J_DuckDBDate_getDaysSinceEpoch;
+
 void ThrowJNI(JNIEnv *env, const char *message) {
 	D_ASSERT(J_SQLException);
 	env->ThrowNew(J_SQLException, message);
+}
+
+static duckdb::vector<jclass> toFree;
+
+static jclass GetClassRef(JNIEnv *env, const string &name) {
+	jclass tmpLocalRef;
+	tmpLocalRef = env->FindClass(name.c_str());
+	D_ASSERT(tmpLocalRef);
+	jclass globalRef = (jclass)env->NewGlobalRef(tmpLocalRef);
+	D_ASSERT(globalRef);
+	toFree.emplace_back(globalRef);
+	env->DeleteLocalRef(tmpLocalRef);
+	return globalRef;
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -146,6 +162,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBTimestampTZ");
 	J_TimestampTZ = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
+
+	J_DuckDBDate = GetClassRef(env, "org/duckdb/DuckDBDate");
+	J_DuckDBDate_getDaysSinceEpoch = env->GetMethodID(J_DuckDBDate, "getDaysSinceEpoch", "()J");
+	D_ASSERT(J_DuckDBDate_getDaysSinceEpoch);
+
 	tmpLocalRef = env->FindClass("java/math/BigDecimal");
 	J_Decimal = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
@@ -255,6 +276,10 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	env->DeleteGlobalRef(J_DuckResultSetMeta);
 	env->DeleteGlobalRef(J_DuckVector);
 	env->DeleteGlobalRef(J_ByteBuffer);
+
+	for (auto &clazz : toFree) {
+		env->DeleteGlobalRef(clazz);
+	}
 }
 
 static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
@@ -382,7 +407,7 @@ jobject _duckdb_jdbc_startup(JNIEnv *env, jclass, jbyteArray database_j, jboolea
 			config.SetOptionByName(key_str, Value(value_str));
 		} catch (const std::exception &e) {
 			ErrorData error(e);
-			throw CatalogException("Failed to set configuration option \"%s\"", key_str, error.RawMessage());
+			throw CatalogException("Failed to set configuration option \"%s\", error: %s", key_str, error.RawMessage());
 		}
 	}
 	bool cache_instance = database != ":memory:" && !database.empty();
@@ -560,6 +585,10 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 				duckdb_params.push_back(
 				    Value::TIMESTAMPTZ((timestamp_t)env->CallLongMethod(param, J_TimestampTZ_getMicrosEpoch)));
 				continue;
+			} else if (env->IsInstanceOf(param, J_DuckDBDate)) {
+				duckdb_params.push_back(
+				    Value::DATE((date_t)env->CallLongMethod(param, J_DuckDBDate_getDaysSinceEpoch)));
+
 			} else if (env->IsInstanceOf(param, J_Timestamp)) {
 				duckdb_params.push_back(
 				    Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
@@ -815,7 +844,15 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::DOUBLE:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 		break;
+	case LogicalTypeId::DATE:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(date_t));
+		break;
+	case LogicalTypeId::TIME:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_t));
+		break;
 	case LogicalTypeId::TIME_TZ:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_tz_t));
+		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
@@ -871,6 +908,27 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::UUID:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 		break;
+	case LogicalTypeId::ARRAY: {
+		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
+		auto &array_vector = ArrayVector::GetEntry(vec);
+		auto total_size = row_count * ArrayType::GetSize(vec.GetType());
+		auto j_vec = ProcessVector(env, conn_ref, array_vector, total_size);
+
+		auto limit = ArrayType::GetSize(vec.GetType());
+
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			if (FlatVector::IsNull(vec, row_idx)) {
+				continue;
+			}
+
+			auto offset = row_idx * limit;
+
+			auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
+
+			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+		}
+		break;
+	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);

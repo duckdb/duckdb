@@ -107,6 +107,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		}
 		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 #endif
+	} else {
+		filename = fs.ExpandPath(filename);
 	}
 	if (!fs.FileExists(filename)) {
 		string message;

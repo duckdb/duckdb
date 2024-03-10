@@ -1,9 +1,7 @@
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine.hpp"
-#include "duckdb/execution/operator/csv_scanner/state_machine/csv_state_machine_cache.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
 
 namespace duckdb {
-
-const string CSVStateMachineCache::STATE_KEY = "CSV_STATE_MACHINE_CACHE";
 
 void InitializeTransitionArray(StateMachine &transition_array, const CSVState cur_state, const CSVState state) {
 	for (uint32_t i = 0; i < StateMachine::NUM_TRANSITIONS; i++) {
@@ -165,6 +163,33 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_quoted[escape] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\n')] = false;
 	transition_array.skip_quoted[static_cast<uint8_t>('\r')] = false;
+
+	transition_array.delimiter = delimiter;
+	transition_array.new_line = static_cast<uint8_t>('\n');
+	transition_array.carriage_return = static_cast<uint8_t>('\r');
+	transition_array.quote = quote;
+	transition_array.escape = escape;
+
+	// Shift and OR to replicate across all bytes
+	transition_array.delimiter |= transition_array.delimiter << 8;
+	transition_array.delimiter |= transition_array.delimiter << 16;
+	transition_array.delimiter |= transition_array.delimiter << 32;
+
+	transition_array.new_line |= transition_array.new_line << 8;
+	transition_array.new_line |= transition_array.new_line << 16;
+	transition_array.new_line |= transition_array.new_line << 32;
+
+	transition_array.carriage_return |= transition_array.carriage_return << 8;
+	transition_array.carriage_return |= transition_array.carriage_return << 16;
+	transition_array.carriage_return |= transition_array.carriage_return << 32;
+
+	transition_array.quote |= transition_array.quote << 8;
+	transition_array.quote |= transition_array.quote << 16;
+	transition_array.quote |= transition_array.quote << 32;
+
+	transition_array.escape |= transition_array.escape << 8;
+	transition_array.escape |= transition_array.escape << 16;
+	transition_array.escape |= transition_array.escape << 32;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
@@ -195,7 +220,7 @@ const StateMachine &CSVStateMachineCache::Get(const CSVStateMachineOptions &stat
 CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
 
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return *cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::STATE_KEY);
+	return *cache.GetOrCreate<CSVStateMachineCache>(CSVStateMachineCache::ObjectType());
 }
 
 } // namespace duckdb

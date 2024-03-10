@@ -27,6 +27,7 @@ public:
 	virtual ~Task() {
 	}
 
+public:
 	//! Execute the task in the specified execution mode
 	//! If mode is PROCESS_ALL, Execute should always finish processing and return TASK_FINISHED
 	//! If mode is PROCESS_PARTIAL, Execute can return TASK_NOT_FINISHED, in which case Execute will be called again
@@ -45,24 +46,10 @@ public:
 	virtual void Reschedule() {
 		throw InternalException("Cannot reschedule task of base Task class");
 	}
-};
 
-//! Execute a task within an executor, including exception handling
-//! This should be used within queries
-class ExecutorTask : public Task {
-public:
-	ExecutorTask(Executor &executor);
-	ExecutorTask(ClientContext &context);
-	virtual ~ExecutorTask();
-
-	void Deschedule() override;
-	void Reschedule() override;
-
-	Executor &executor;
-
-public:
-	virtual TaskExecutionResult ExecuteTask(TaskExecutionMode mode) = 0;
-	TaskExecutionResult Execute(TaskExecutionMode mode) override;
+	virtual bool TaskBlockedOnResult() const {
+		return false;
+	}
 };
 
 } // namespace duckdb

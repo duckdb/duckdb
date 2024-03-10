@@ -193,7 +193,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 					// Find an empty entry
 					auto entry_idx = ApplyBitMask(hash);
 					D_ASSERT(entry_idx == hash % capacity);
-					while (entries[entry_idx].IsOccupied() > 0) {
+					while (entries[entry_idx].IsOccupied()) {
 						entry_idx++;
 						if (entry_idx >= capacity) {
 							entry_idx = 0;
@@ -482,7 +482,7 @@ struct FlushMoveState {
 	bool Scan() {
 		if (collection.Scan(scan_state, groups)) {
 			collection.Gather(scan_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
-			                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector());
+			                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector(), nullptr);
 			return true;
 		}
 

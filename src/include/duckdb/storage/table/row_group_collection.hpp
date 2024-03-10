@@ -69,8 +69,9 @@ public:
 
 	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
 	void InitializeAppend(TableAppendState &state);
-	//! Initialize an append with a known number of rows. FinalizeAppend should not be called after appending is done.
-	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
+	//! Initialize an append with a variable number of rows. FinalizeAppend should not be called after appending is
+	//! done.
+	void InitializeAppend(TransactionData transaction, TableAppendState &state);
 	//! Appends to the row group collection. Returns true if a new row group has been created to append to
 	bool Append(DataChunk &chunk, TableAppendState &state);
 	//! FinalizeAppend flushes an append with a variable number of rows.
@@ -119,6 +120,10 @@ public:
 		return *info;
 	}
 
+	idx_t GetAllocationSize() const {
+		return allocation_size;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
@@ -136,6 +141,8 @@ private:
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
+	//! Allocation size, only tracked for appends
+	idx_t allocation_size;
 };
 
 } // namespace duckdb

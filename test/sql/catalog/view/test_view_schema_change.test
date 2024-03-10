@@ -54,10 +54,11 @@ DROP TABLE t1
 statement ok
 CREATE TABLE t1(k INTEGER)
 
-# this is fine: types still match, and the original names will be applied as alias!
-query I
-SELECT i FROM v1
+# names returned by the view have changed
+statement error
+SELECT * FROM v1
 ----
+Binder Error: Contents of view were altered: names don't match!
 
 statement ok
 DROP TABLE t1
@@ -71,7 +72,6 @@ SELECT * FROM v1
 ----
 
 # Changing the types of the table that the view references also makes the view unusable
-
 statement ok
 ALTER TABLE t1 ALTER i TYPE VARCHAR;
 
@@ -79,3 +79,20 @@ statement error
 select * from v1;
 ----
 Binder Error: Contents of view were altered: types don't match!
+
+# reverting the types fixes the issue
+statement ok
+ALTER TABLE t1 ALTER i TYPE INTEGER
+
+query I
+SELECT * FROM v1
+----
+
+# changing the column names makes the view unusable again
+statement ok
+ALTER TABLE t1 RENAME i TO j
+
+statement error
+SELECT * FROM v1
+----
+Binder Error: Contents of view were altered: names don't match!

@@ -15,54 +15,54 @@
 
 namespace duckdb {
 
-class PipelineTask : public ExecutorTask {
-	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
+PipelineTask::PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
+    : ExecutorTask(pipeline_p.executor, std::move(event_p)), pipeline(pipeline_p) {
+}
 
-public:
-	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
-	    : ExecutorTask(pipeline_p.executor), pipeline(pipeline_p), event(std::move(event_p)) {
+bool PipelineTask::TaskBlockedOnResult() const {
+	// If this returns true, it means the pipeline this task belongs to has a cached chunk
+	// that was the result of the Sink method returning BLOCKED
+	return pipeline_executor->RemainingSinkChunk();
+}
+
+const PipelineExecutor &PipelineTask::GetPipelineExecutor() const {
+	return *pipeline_executor;
+}
+
+TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
+	if (!pipeline_executor) {
+		pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
 	}
 
-	Pipeline &pipeline;
-	shared_ptr<Event> event;
-	unique_ptr<PipelineExecutor> pipeline_executor;
+	pipeline_executor->SetTaskForInterrupts(shared_from_this());
 
-public:
-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		if (!pipeline_executor) {
-			pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
+	if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
+		auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
+
+		switch (res) {
+		case PipelineExecuteResult::NOT_FINISHED:
+			return TaskExecutionResult::TASK_NOT_FINISHED;
+		case PipelineExecuteResult::INTERRUPTED:
+			return TaskExecutionResult::TASK_BLOCKED;
+		case PipelineExecuteResult::FINISHED:
+			break;
 		}
-
-		pipeline_executor->SetTaskForInterrupts(shared_from_this());
-
-		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-			auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
-
-			switch (res) {
-			case PipelineExecuteResult::NOT_FINISHED:
-				return TaskExecutionResult::TASK_NOT_FINISHED;
-			case PipelineExecuteResult::INTERRUPTED:
-				return TaskExecutionResult::TASK_BLOCKED;
-			case PipelineExecuteResult::FINISHED:
-				break;
-			}
-		} else {
-			auto res = pipeline_executor->Execute();
-			switch (res) {
-			case PipelineExecuteResult::NOT_FINISHED:
-				throw InternalException("Execute without limit should not return NOT_FINISHED");
-			case PipelineExecuteResult::INTERRUPTED:
-				return TaskExecutionResult::TASK_BLOCKED;
-			case PipelineExecuteResult::FINISHED:
-				break;
-			}
+	} else {
+		auto res = pipeline_executor->Execute();
+		switch (res) {
+		case PipelineExecuteResult::NOT_FINISHED:
+			throw InternalException("Execute without limit should not return NOT_FINISHED");
+		case PipelineExecuteResult::INTERRUPTED:
+			return TaskExecutionResult::TASK_BLOCKED;
+		case PipelineExecuteResult::FINISHED:
+			break;
 		}
-
-		event->FinishTask();
-		pipeline_executor.reset();
-		return TaskExecutionResult::TASK_FINISHED;
 	}
-};
+
+	event->FinishTask();
+	pipeline_executor.reset();
+	return TaskExecutionResult::TASK_FINISHED;
+}
 
 Pipeline::Pipeline(Executor &executor_p)
     : executor(executor_p), ready(false), initialized(false), source(nullptr), sink(nullptr) {
@@ -111,6 +111,17 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 		}
 	}
 	idx_t max_threads = source_state->MaxThreads();
+	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
+	idx_t active_threads = scheduler.NumberOfThreads();
+	if (max_threads > active_threads) {
+		max_threads = active_threads;
+	}
+	if (sink && sink->sink_state) {
+		max_threads = sink->sink_state->MaxThreads(max_threads);
+	}
+	if (max_threads > active_threads) {
+		max_threads = active_threads;
+	}
 	return LaunchScanTasks(event, max_threads);
 }
 
@@ -155,11 +166,6 @@ void Pipeline::Schedule(shared_ptr<Event> &event) {
 
 bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	// split the scan up into parts and schedule the parts
-	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	idx_t active_threads = scheduler.NumberOfThreads();
-	if (max_threads > active_threads) {
-		max_threads = active_threads;
-	}
 	if (max_threads <= 1) {
 		// too small to parallelize
 		return false;

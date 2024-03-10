@@ -16,7 +16,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/path_like.hpp"
-#include "duckdb/execution/operator/csv_scanner/options/csv_reader_options.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 #include "duckdb_python/pybind11/registered_py_object.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -52,6 +52,7 @@ public:
 public:
 	explicit DuckDBPyConnection() {
 	}
+	~DuckDBPyConnection();
 
 public:
 	static void Initialize(py::handle &m);
@@ -89,7 +90,8 @@ public:
 	shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key_type,
 	                                 const shared_ptr<DuckDBPyType> &value_type);
 	shared_ptr<DuckDBPyType> StructType(const py::object &fields);
-	shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type);
+	shared_ptr<DuckDBPyType> ListType(const shared_ptr<DuckDBPyType> &type);
+	shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type, idx_t size);
 	shared_ptr<DuckDBPyType> UnionType(const py::object &members);
 	shared_ptr<DuckDBPyType> EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
 	                                  const py::list &values_p);

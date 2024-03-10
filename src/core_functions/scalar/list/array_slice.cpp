@@ -40,7 +40,7 @@ unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 }
 
 template <typename INDEX_TYPE>
-static int CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
+static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
 	if (step < 0) {
 		step = abs(step);
 	}
@@ -48,7 +48,7 @@ static int CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool sv
 		throw InvalidInputException("Slice step cannot be zero");
 	}
 	if (step == 1) {
-		return end - begin;
+		return NumericCast<int>(end - begin);
 	} else if (static_cast<idx_t>(step) >= (end - begin)) {
 		return 1;
 	}
@@ -191,7 +191,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 		clamp_result = ClampSlice(str, begin, end);
 	}
 
-	auto sel_length = 0;
+	idx_t sel_length = 0;
 	bool sel_valid = false;
 	if (step_vector && step_valid && str_valid && begin_valid && end_valid && step != 1 && end - begin > 0) {
 		sel_length = CalculateSliceLength(begin, end, step, step_valid);
@@ -210,6 +210,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 
 	if (sel_valid) {
 		result_child_vector->Slice(sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -265,7 +266,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			clamp_result = ClampSlice(sliced, begin, end);
 		}
 
-		auto length = 0;
+		idx_t length = 0;
 		if (end - begin > 0) {
 			length = CalculateSliceLength(begin, end, step, step_valid);
 		}
@@ -286,6 +287,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
+		result_child_vector->Flatten(sel_length);
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -318,10 +320,13 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data.size() == 3 || args.data.size() == 4);
 	auto count = args.size();
 
-	Vector &list_or_str_vector = args.data[0];
+	Vector &list_or_str_vector = result;
+	// this ensures that we do not change the input chunk
+	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
+
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		auto &result_validity = FlatVector::Validity(result);
-		result_validity.SetInvalid(0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 
@@ -346,7 +351,6 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		    list_or_str_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			list_or_str_vector.Flatten(count);
 		}
-		ListVector::ReferenceEntry(result, list_or_str_vector);
 		ExecuteSlice<list_entry_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
 		                                    begin_is_empty, end_is_empty);
 		break;

@@ -16,5 +16,8 @@ ATTACH 'data/storage/vector_size_512.db' (TYPE DUCKDB, READONLY)
 ----
 Cannot read database file
 
+require 64bit
+# Otherwise Linux 32bit CI fails with No more data remaining in MetadataReader
+
 statement ok
 ATTACH 'data/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);

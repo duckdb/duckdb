@@ -58,7 +58,7 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 		} else {
 			// we need to execute and then fill in the desired tuples in the result
 			Execute(*case_check.then_expr, then_state, current_true_sel, tcount, intermediate_result);
-			FillSwitch(intermediate_result, result, *current_true_sel, tcount);
+			FillSwitch(intermediate_result, result, *current_true_sel, NumericCast<sel_t>(tcount));
 		}
 		// continue with the false tuples
 		current_sel = current_false_sel;
@@ -79,7 +79,7 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 
 			D_ASSERT(current_sel);
 			Execute(*expr.else_expr, else_state, current_sel, current_count, intermediate_result);
-			FillSwitch(intermediate_result, result, *current_sel, current_count);
+			FillSwitch(intermediate_result, result, *current_sel, NumericCast<sel_t>(current_count));
 		}
 	}
 	if (sel) {

@@ -17,8 +17,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTENode &node) {
 	                                              std::move(cte_query), std::move(cte_child));
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_dependent_joins =
-	    node.child_binder->has_unplanned_dependent_joins || node.query_binder->has_unplanned_dependent_joins;
+	has_unplanned_dependent_joins = has_unplanned_dependent_joins || node.child_binder->has_unplanned_dependent_joins ||
+	                                node.query_binder->has_unplanned_dependent_joins;
 
 	return VisitQueryNode(node, std::move(root));
 }

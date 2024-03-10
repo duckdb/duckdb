@@ -1,0 +1,16 @@
+# name: test/sql/aggregate/aggregates/aggregate_limit.test_slow
+# description: Test running a limit over a big aggregate
+# group: [aggregates]
+
+statement ok
+SET threads=8
+
+statement ok
+CREATE TABLE big_tbl AS SELECT i, concat('thisisalongstring', i) as str FROM range(10000000) t(i);
+
+loop i 0 10
+
+statement ok
+SELECT i, str, COUNT(*) FROM big_tbl GROUP BY ALL LIMIT 10
+
+endloop

@@ -560,7 +560,7 @@ BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
 
 	while (true) {
 		try {
-			duckdb_buffer = buffer_manager.Allocate(part_size);
+			duckdb_buffer = buffer_manager.Allocate(MemoryTag::EXTENSION, part_size);
 
 			if (set_waiting_for_memory) {
 				threads_waiting_for_memory--;

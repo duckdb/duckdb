@@ -90,7 +90,10 @@ static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
 	vector<AutoCompleteCandidate> result;
 	for (auto &kw : keywords) {
 		auto score = 0;
-		if (kw == "FROM" || kw == "SELECT" || kw == "DELETE" || kw == "INSERT" || kw == "UPDATE") {
+		if (kw == "SELECT") {
+			score = 2;
+		}
+		if (kw == "FROM" || kw == "DELETE" || kw == "INSERT" || kw == "UPDATE") {
 			score = 1;
 		}
 		result.emplace_back(kw + " ", score);
@@ -361,8 +364,8 @@ standard_suggestion:
 		D_ASSERT(false);
 		throw NotImplementedException("last_pos out of range");
 	}
-	if (std::all_of(last_word.begin(), last_word.end(), ::isdigit)) {
-		// Numbers are OK
+	if (!last_word.empty() && std::all_of(last_word.begin(), last_word.end(), ::isdigit)) {
+		// avoid giving auto-complete suggestion for digits
 		suggestions.clear();
 	}
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);

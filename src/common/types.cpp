@@ -8,6 +8,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -569,6 +570,10 @@ bool LogicalType::IsValid() const {
 	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
 }
 
+bool LogicalType::Contains(LogicalTypeId type_id) const {
+	return Contains([&](const LogicalType &type) { return type.id() == type_id; });
+}
+
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
@@ -668,7 +673,7 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
 	if (other_width > effective_width) {
-		auto new_width = other_width + scale;
+		auto new_width = NumericCast<uint8_t>(other_width + scale);
 		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
 		if (new_width > DecimalType::MaxWidth()) {
 			new_width = DecimalType::MaxWidth();
@@ -820,13 +825,14 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		// using the max of these of the two types gives us the new decimal size
 		auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
 		auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-		auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
+		auto extra_width =
+		    MaxValue<uint8_t>(NumericCast<uint8_t>(extra_width_left), NumericCast<uint8_t>(extra_width_right));
 		auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-		auto width = extra_width + scale;
+		auto width = NumericCast<uint8_t>(extra_width + scale);
 		if (width > DecimalType::MaxWidth()) {
 			// if the resulting decimal does not fit, we truncate the scale
 			width = DecimalType::MaxWidth();
-			scale = width - extra_width;
+			scale = NumericCast<uint8_t>(width - extra_width);
 		}
 		result = LogicalType::DECIMAL(width, scale);
 		return true;
@@ -1053,9 +1059,39 @@ LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalTyp
 
 void LogicalType::Verify() const {
 #ifdef DEBUG
-	if (id_ == LogicalTypeId::DECIMAL) {
+	switch (id_) {
+	case LogicalTypeId::DECIMAL:
 		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
 		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		break;
+	case LogicalTypeId::STRUCT: {
+		// verify child types
+		case_insensitive_set_t child_names;
+		bool all_empty = true;
+		for (auto &entry : StructType::GetChildTypes(*this)) {
+			if (entry.first.empty()) {
+				D_ASSERT(all_empty);
+			} else {
+				// check for duplicate struct names
+				all_empty = false;
+				auto existing_entry = child_names.find(entry.first);
+				D_ASSERT(existing_entry == child_names.end());
+				child_names.insert(entry.first);
+			}
+			entry.second.Verify();
+		}
+		break;
+	}
+	case LogicalTypeId::LIST:
+		ListType::GetChildType(*this).Verify();
+		break;
+	case LogicalTypeId::MAP: {
+		MapType::KeyType(*this).Verify();
+		MapType::ValueType(*this).Verify();
+		break;
+	}
+	default:
+		break;
 	}
 #endif
 }
@@ -1134,7 +1170,7 @@ uint8_t DecimalType::MaxWidth() {
 	return DecimalWidth<hugeint_t>::max;
 }
 
-LogicalType LogicalType::DECIMAL(int width, int scale) {
+LogicalType LogicalType::DECIMAL(uint8_t width, uint8_t scale) {
 	D_ASSERT(width >= scale);
 	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
 	return LogicalType(LogicalTypeId::DECIMAL, std::move(type_info));
@@ -1442,6 +1478,37 @@ bool ArrayType::IsAnySize(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().size == 0;
+}
+
+LogicalType ArrayType::ConvertToList(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::ARRAY: {
+		return LogicalType::LIST(ConvertToList(ArrayType::GetChildType(type)));
+	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ConvertToList(ListType::GetChildType(type)));
+	case LogicalTypeId::STRUCT: {
+		auto children = StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			child.second = ConvertToList(child.second);
+		}
+		return LogicalType::STRUCT(children);
+	}
+	case LogicalTypeId::MAP: {
+		auto key_type = ConvertToList(MapType::KeyType(type));
+		auto value_type = ConvertToList(MapType::ValueType(type));
+		return LogicalType::MAP(key_type, value_type);
+	}
+	case LogicalTypeId::UNION: {
+		auto children = UnionType::CopyMemberTypes(type);
+		for (auto &child : children) {
+			child.second = ConvertToList(child.second);
+		}
+		return LogicalType::UNION(children);
+	}
+	default:
+		return type;
+	}
 }
 
 LogicalType LogicalType::ARRAY(const LogicalType &child, idx_t size) {

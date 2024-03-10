@@ -20,13 +20,13 @@ insert into test_str values('abc'), ('def');
 statement ok
 insert into test_int values(1), (2);
 
-query I
+query I rowsort
 select l.* from test_str l anti join test_str_del r on l.k = r.pk;
 ----
 abc
 def
 
-query I
+query I rowsort
 select l.* from test_int l anti join test_int_del r on l.k = r.pk;
 ----
 1
@@ -35,7 +35,7 @@ select l.* from test_int l anti join test_int_del r on l.k = r.pk;
 statement ok
 insert into test_int VALUES (NULL);
 
-query I
+query I rowsort
 select l.* from test_int l anti join test_int_del r on l.k is not distinct from r.pk;
 ----
 1
@@ -46,7 +46,7 @@ statement ok
 insert into test_int_del VALUES (NULL);
 
 # NULL is now not distinct from null
-query I
+query I rowsort
 select l.* from test_int l anti join test_int_del r on l.k is not distinct from r.pk;
 ----
 1

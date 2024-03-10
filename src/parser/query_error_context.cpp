@@ -23,7 +23,21 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	idx_t start_pos = 0;
 	idx_t line_number = 1;
 	for (idx_t i = 0; i < error_location; i++) {
-		if (StringUtil::CharacterIsNewline(query[i])) {
+		bool is_newline = false;
+		switch (query[i]) {
+		case '\r':
+			if (i + 1 >= error_location || query[i + 1] != '\n') {
+				// not \r\n
+				is_newline = true;
+			}
+			break;
+		case '\n':
+			is_newline = true;
+			break;
+		default:
+			break;
+		}
+		if (is_newline) {
 			line_number++;
 			start_pos = i + 1;
 		}

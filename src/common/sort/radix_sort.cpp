@@ -248,7 +248,8 @@ void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const i
 	} else if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
 		RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
 	} else {
-		auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
+		auto temp_block = buffer_manager.Allocate(MemoryTag::ORDER_BY,
+		                                          MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
 		auto preallocated_array = make_unsafe_uniq_array<idx_t>(sorting_size * SortConstants::MSD_RADIX_LOCATIONS);
 		RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
 		             preallocated_array.get(), false);

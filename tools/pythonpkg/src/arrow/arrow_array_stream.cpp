@@ -180,15 +180,20 @@ string ConvertTimestampUnit(ArrowDateTimeType unit) {
 }
 
 int64_t ConvertTimestampTZValue(int64_t base_value, ArrowDateTimeType datetime_type) {
+	auto input = timestamp_t(base_value);
+	if (!Timestamp::IsFinite(input)) {
+		return base_value;
+	}
+
 	switch (datetime_type) {
 	case ArrowDateTimeType::MICROSECONDS:
-		return Timestamp::GetEpochMicroSeconds(timestamp_t(base_value));
+		return Timestamp::GetEpochMicroSeconds(input);
 	case ArrowDateTimeType::MILLISECONDS:
-		return Timestamp::GetEpochMs(timestamp_t(base_value));
+		return Timestamp::GetEpochMs(input);
 	case ArrowDateTimeType::NANOSECONDS:
-		return Timestamp::GetEpochNanoSeconds(timestamp_t(base_value));
+		return Timestamp::GetEpochNanoSeconds(input);
 	case ArrowDateTimeType::SECONDS:
-		return Timestamp::GetEpochSeconds(timestamp_t(base_value));
+		return Timestamp::GetEpochSeconds(input);
 	default:
 		throw NotImplementedException("DatetimeType not recognized in ConvertTimestampTZValue");
 	}

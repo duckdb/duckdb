@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/csv_scanner/buffer_manager/csv_buffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -31,7 +31,14 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
 	last_buffer = file_handle.FinishedReading();
 }
 
-shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number_p) {
+shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number_p,
+                                      bool &has_seaked) {
+	if (has_seaked) {
+		// This means that at some point a reload was done, and we are currently on the incorrect position in our file
+		// handle
+		file_handle.Seek(global_csv_start + actual_buffer_size);
+		has_seaked = false;
+	}
 	auto next_csv_buffer = make_shared<CSVBuffer>(file_handle, context, buffer_size,
 	                                              global_csv_start + actual_buffer_size, file_number_p, buffer_idx + 1);
 	if (next_csv_buffer->GetBufferSize() == 0) {
@@ -44,7 +51,8 @@ shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_s
 void CSVBuffer::AllocateBuffer(idx_t buffer_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	bool can_destroy = can_seek;
-	handle = buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size), can_destroy, &block);
+	handle = buffer_manager.Allocate(MemoryTag::CSV_READER, MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size),
+	                                 can_destroy, &block);
 }
 
 idx_t CSVBuffer::GetBufferSize() {
@@ -57,15 +65,16 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 	file_handle.Read(handle.Ptr(), actual_buffer_size);
 }
 
-unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
+shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	if (can_seek && block->IsUnloaded()) {
 		// We have to reload it from disk
 		block = nullptr;
 		Reload(file_handle);
+		has_seeked = true;
 	}
-	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, last_buffer, file_number,
-	                                  buffer_idx);
+	return make_shared<CSVBufferHandle>(buffer_manager.Pin(block), actual_buffer_size, last_buffer, file_number,
+	                                    buffer_idx);
 }
 
 void CSVBuffer::Unpin() {

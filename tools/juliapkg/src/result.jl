@@ -92,7 +92,13 @@ end
 function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
     time_tz = duckdb_from_time_tz(val)
     # TODO: how to preserve the offset?
-    return Dates.Time(Dates.Nanosecond(time_tz.micros * 1000))
+    return Dates.Time(
+        time_tz.time.hour,
+        time_tz.time.min,
+        time_tz.time.sec,
+        time_tz.time.micros ÷ 1000,
+        time_tz.time.micros % 1000
+    )
 end
 
 function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
@@ -634,17 +640,17 @@ function _close_pending_result(pending::PendingQueryResult)
     return
 end
 
-function fetch_error(stmt::Stmt, error_ptr)
+function fetch_error(sql::AbstractString, error_ptr)
     if error_ptr == C_NULL
-        return string("Execute of query \"", stmt.sql, "\" failed: unknown error")
+        return string("Execute of query \"", sql, "\" failed: unknown error")
     else
-        return string("Execute of query \"", stmt.sql, "\" failed: ", unsafe_string(error_ptr))
+        return string("Execute of query \"", sql, "\" failed: ", unsafe_string(error_ptr))
     end
 end
 
 function get_error(stmt::Stmt, pending::PendingQueryResult)
     error_ptr = duckdb_pending_error(pending.handle)
-    error_message = fetch_error(stmt, error_ptr)
+    error_message = fetch_error(stmt.sql, error_ptr)
     _close_pending_result(pending)
     return error_message
 end
@@ -657,6 +663,11 @@ function pending_execute_tasks(pending::PendingQueryResult)::Bool
         ret = duckdb_pending_execute_task(pending.handle)
     end
     return ret != DUCKDB_PENDING_ERROR
+end
+
+function pending_execute_check_state(pending::PendingQueryResult)::duckdb_pending_state
+    ret = duckdb_pending_execute_check_state(pending.handle)
+    return ret
 end
 
 # execute background tasks in a loop, until task execution is finished
@@ -708,7 +719,7 @@ function execute_singlethreaded(pending::PendingQueryResult)::Bool
     return success
 end
 
-function execute_multithreaded(stmt::Stmt)
+function execute_multithreaded(stmt::Stmt, pending::PendingQueryResult)
     # if multi-threading is enabled, launch background tasks
     task_state = duckdb_create_task_state(stmt.con.db.handle)
 
@@ -720,6 +731,10 @@ function execute_multithreaded(stmt::Stmt)
 
     # When we have additional worker threads, don't execute using the main thread
     while duckdb_execution_is_finished(stmt.con.handle) == false
+        ret = pending_execute_check_state(pending)
+        if ret == DUCKDB_PENDING_RESULT_READY || ret == DUCKDB_PENDING_ERROR
+            break
+        end
         Base.yield()
         GC.safepoint()
     end
@@ -746,14 +761,14 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
             throw(QueryException(get_error(stmt, pending)))
         end
     else
-        execute_multithreaded(stmt)
+        execute_multithreaded(stmt, pending)
     end
 
     handle = Ref{duckdb_result}()
     ret = duckdb_execute_pending(pending.handle, handle)
     if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
-        error_message = fetch_error(stmt, error_ptr)
+        error_message = fetch_error(stmt.sql, error_ptr)
         duckdb_destroy_result(handle)
         throw(QueryException(error_message))
     end
@@ -848,3 +863,21 @@ DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)
 
 Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.columntable(result))
+
+"""
+Executes a SQL query within a connection and returns the full (materialized) result. 
+
+The query function is able to run queries with multiple statements, unlike `DBInterface.execute`(@ref) which is only able to prepare a single statement.
+"""
+function query(con::DuckDB.Connection, sql::AbstractString)
+    handle = Ref{duckdb_result}()
+    ret = duckdb_query(con.handle, sql, handle)
+    if ret != DuckDBSuccess
+        error_ptr = duckdb_result_error(handle)
+        error_message = fetch_error(sql, error_ptr)
+        duckdb_destroy_result(handle)
+        throw(QueryException(error_message))
+    end
+    return QueryResult(handle)
+end
+query(db::DuckDB.DB, sql::AbstractString) = query(db.main_connection, sql)

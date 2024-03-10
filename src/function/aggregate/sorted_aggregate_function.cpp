@@ -1,3 +1,4 @@
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
@@ -102,8 +103,8 @@ struct SortedAggregateState {
 	using LinkedChunkFunctions = vector<ListSegmentFunctions>;
 
 	//! Capacities of the various levels of buffering
-	static const idx_t LIST_CAPACITY = 16;
 	static const idx_t CHUNK_CAPACITY = STANDARD_VECTOR_SIZE;
+	static const idx_t LIST_CAPACITY = MinValue<idx_t>(16, CHUNK_CAPACITY);
 
 	SortedAggregateState() : count(0), nsel(0), offset(0) {
 	}
@@ -519,7 +520,7 @@ struct SortedAggregateFunction {
 				order_state->sel.Initialize(sel_data.data() + order_state->offset);
 				start += order_state->nsel;
 			}
-			sel_data[order_state->offset++] = sidx;
+			sel_data[order_state->offset++] = UnsafeNumericCast<sel_t>(sidx);
 		}
 
 		// Append nonempty slices to the arguments
@@ -603,7 +604,7 @@ struct SortedAggregateFunction {
 			if (unsorted_count < order_bind.threshold) {
 				auto state = sdata[finalized];
 				prefixed.Reset();
-				prefixed.data[0].Reference(Value::USMALLINT(finalized));
+				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
 				state->Finalize(order_bind, prefixed, *local_sort);
 				unsorted_count += state_unprocessed[finalized];
 
@@ -714,29 +715,12 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 		// not a sorted aggregate: return
 		return;
 	}
+	// Remove unnecessary ORDER BY clauses and return if nothing remains
 	if (context.config.enable_optimizer) {
-		// for each ORDER BY - check if it is actually necessary
-		// expressions that are in the groups do not need to be ORDERED BY
-		// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
-		// similarly, we only need to ORDER BY each aggregate once
-		expression_set_t seen_expressions;
-		for (auto &target : groups) {
-			seen_expressions.insert(*target);
-		}
-		vector<BoundOrderByNode> new_order_nodes;
-		for (auto &order_node : expr.order_bys->orders) {
-			if (seen_expressions.find(*order_node.expression) != seen_expressions.end()) {
-				// we do not need to order by this node
-				continue;
-			}
-			seen_expressions.insert(*order_node.expression);
-			new_order_nodes.push_back(std::move(order_node));
-		}
-		if (new_order_nodes.empty()) {
+		if (expr.order_bys->Simplify(groups)) {
 			expr.order_bys.reset();
 			return;
 		}
-		expr.order_bys->orders = std::move(new_order_nodes);
 	}
 	auto &bound_function = expr.function;
 	auto &children = expr.children;

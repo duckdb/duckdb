@@ -7,7 +7,7 @@ CREATE TABLE no_quote(a VARCHAR, b VARCHAR);
 
 # empty quote
 query I
-COPY no_quote FROM 'test/sql/copy/csv/data/no_quote.csv' (HEADER 1, QUOTE '', ESCAPE '', DELIM '|',  AUTO_DETECT 0);
+COPY no_quote FROM 'test/sql/copy/csv/data/no_quote.csv' ( QUOTE '', ESCAPE '', DELIM '|');
 ----
 3
 
@@ -20,7 +20,7 @@ h'ow do you	do"
 
 # empty quote in read_csv function
 query TT
-SELECT * FROM read_csv('test/sql/copy/csv/data/no_quote.csv', auto_detect=1, header=1, quote='');
+SELECT * FROM read_csv('test/sql/copy/csv/data/no_quote.csv', auto_detect=1, quote='');
 ----
 "hello	world
 h'ow do you	do"

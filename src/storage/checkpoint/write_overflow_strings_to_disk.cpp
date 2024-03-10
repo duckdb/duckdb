@@ -40,26 +40,26 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
                                              block_id_t &result_block, int32_t &result_offset) {
 	auto &buffer_manager = block_manager.buffer_manager;
 	if (!handle.IsValid()) {
-		handle = buffer_manager.Allocate(Storage::BLOCK_SIZE);
+		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, Storage::BLOCK_SIZE);
 	}
 	// first write the length of the string
 	if (block_id == INVALID_BLOCK || offset + 2 * sizeof(uint32_t) >= STRING_SPACE) {
 		AllocateNewBlock(state, block_manager.GetFreeBlockId());
 	}
 	result_block = block_id;
-	result_offset = offset;
+	result_offset = UnsafeNumericCast<int32_t>(offset);
 
 	// write the length field
 	auto data_ptr = handle.Ptr();
 	auto string_length = string.GetSize();
-	Store<uint32_t>(string_length, data_ptr + offset);
+	Store<uint32_t>(UnsafeNumericCast<uint32_t>(string_length), data_ptr + offset);
 	offset += sizeof(uint32_t);
 
 	// now write the remainder of the string
 	auto strptr = string.GetData();
-	uint32_t remaining = string_length;
+	auto remaining = UnsafeNumericCast<uint32_t>(string_length);
 	while (remaining > 0) {
-		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);
+		uint32_t to_write = MinValue<uint32_t>(remaining, UnsafeNumericCast<uint32_t>(STRING_SPACE - offset));
 		if (to_write > 0) {
 			memcpy(data_ptr + offset, strptr, to_write);
 

@@ -113,7 +113,7 @@ template <class T>
 string Bit::NumericToBit(T numeric) {
 	auto bit_len = sizeof(T) + 1;
 	auto buffer = make_unsafe_uniq_array<char>(bit_len);
-	string_t output_str(buffer.get(), bit_len);
+	string_t output_str(buffer.get(), UnsafeNumericCast<uint32_t>(bit_len));
 	Bit::NumericToBit(numeric, output_str);
 	return output_str.GetString();
 }

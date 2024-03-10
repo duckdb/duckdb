@@ -61,6 +61,14 @@ DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
 
+DuckDBPyConnection::~DuckDBPyConnection() {
+	py::gil_scoped_release gil;
+	// Release any structures that do not need to hold the GIL here
+	database.reset();
+	connection.reset();
+	temporary_views.clear();
+}
+
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
 	auto main_module = py::module_::import("__main__");
@@ -102,7 +110,7 @@ bool DuckDBPyConnection::IsJupyter() {
 py::object ArrowTableFromDataframe(const py::object &df) {
 	try {
 		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
-	} catch (py::error_already_set &e) {
+	} catch (py::error_already_set &) {
 		// We don't fetch the original Python exception because it can cause a segfault
 		// The cause of this is not known yet, for now we just side-step the issue.
 		throw InvalidInputException(
@@ -132,8 +140,11 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
-	DefineMethod({"array_type", "list_type"}, m, &DuckDBPyConnection::ArrayType,
-	             "Create an array type object of 'type'", py::arg("type").none(false));
+
+	m.def("array_type", &DuckDBPyConnection::ArrayType, "Create an array type object of 'type'",
+	      py::arg("type").none(false), py::arg("size").none(false));
+	m.def("list_type", &DuckDBPyConnection::ListType, "Create a list type object of 'type'",
+	      py::arg("type").none(false));
 	m.def("union_type", &DuckDBPyConnection::UnionType, "Create a union type object from 'members'",
 	      py::arg("members").none(false))
 	    .def("string_type", &DuckDBPyConnection::StringType, "Create a string type with an optional collation",
@@ -379,8 +390,16 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const string &que
 	return shared_from_this();
 }
 
+static std::function<bool(PendingExecutionResult)> FinishedCondition(PendingQueryResult &pending_query) {
+	if (pending_query.AllowStreamResult()) {
+		return PendingQueryResult::IsFinishedOrBlocked;
+	}
+	return PendingQueryResult::IsFinished;
+}
+
 unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
+	auto is_finished = FinishedCondition(pending_query);
 	do {
 		execution_result = pending_query.ExecuteTask();
 		{
@@ -389,7 +408,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 				throw std::runtime_error("Query interrupted");
 			}
 		}
-	} while (!PendingQueryResult::IsFinished(execution_result));
+	} while (!is_finished(execution_result));
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
@@ -611,6 +630,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		RegisterArrowObject(arrow_object, name);
 	} else if (DuckDBPyRelation::IsRelation(python_object)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
+		if (!pyrel->CanBeRegisteredBy(*connection)) {
+			throw InvalidInputException(
+			    "The relation you are attempting to register was not made from this connection");
+		}
 		pyrel->CreateView(name, true);
 	} else {
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
@@ -982,7 +1005,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	}
 	try {
 		return make_uniq<DuckDBPyRelation>(connection->Table(qualified_name.schema, qualified_name.name));
-	} catch (const CatalogException &e) {
+	} catch (const CatalogException &) {
 		// CatalogException will be of the type '... is not a table'
 		// Not a table in the database, make a query relation that can perform replacement scans
 		return RunQuery(StringUtil::Format("from %s", KeywordHelper::WriteOptionallyQuoted(tname)), tname);
@@ -1561,7 +1584,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	config.AddExtensionOption("pandas_analyze_sample",
 	                          "The maximum number of rows to sample when analyzing a pandas object column.",
 	                          LogicalType::UBIGINT, Value::UBIGINT(1000));
-	config_dict["duckdb_api"] = Value("python");
+	if (!DuckDBPyConnection::IsJupyter()) {
+		config_dict["duckdb_api"] = Value("python");
+	} else {
+		config_dict["duckdb_api"] = Value("python jupyter");
+	}
 	config.SetOptionsByName(config_dict);
 
 	auto res = FetchOrCreateInstance(database, config);

@@ -72,58 +72,6 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	DeleteDatabase(storage_database);
 }
 
-TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager size", "[storage][.]") {
-	duckdb::unique_ptr<MaterializedQueryResult> result;
-	auto storage_database = TestCreatePath("storage_test");
-	auto config = GetTestConfig();
-
-	// maximum memory is 10MB
-	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
-	config->options.maximum_memory = 10000000;
-	config->options.maximum_threads = 1;
-
-	// create a table of size 10 times the buffer pool size
-	uint64_t size = 0, size_a, sum_a, sum_b;
-	uint64_t table_size = 100000000 / sizeof(int32_t);
-	// make sure the database does not exist
-	DeleteDatabase(storage_database);
-	{
-		// create a database and insert the big string
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 10), (2, 20), (3, 30), (NULL, NULL)"));
-		size_a = 3;
-		sum_a = 1 + 2 + 3;
-		sum_b = 10 + 20 + 30;
-		for (size = 4; size < table_size; size *= 2) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
-			size_a *= 2;
-			sum_a *= 2;
-			sum_b *= 2;
-		}
-
-		// check the aggregate statistics of the table
-		result = con.Query("SELECT COUNT(*), COUNT(a), SUM(a), SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(size)}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(size_a)}));
-		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(sum_a)}));
-		REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(sum_b)}));
-	}
-	for (idx_t i = 0; i < 2; i++) {
-		// reload the table and checkpoint, still with a 10MB limit
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-
-		result = con.Query("SELECT COUNT(*), COUNT(a), SUM(a), SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(size)}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(size_a)}));
-		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(sum_a)}));
-		REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(sum_b)}));
-	}
-	DeleteDatabase(storage_database);
-}
-
 TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory database", "[storage][.]") {
 	duckdb::unique_ptr<MaterializedQueryResult> result;
 
@@ -205,7 +153,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 
 	idx_t requested_size = Storage::BLOCK_SIZE;
 	shared_ptr<BlockHandle> block;
-	auto handle = buffer_manager.Allocate(requested_size, false, &block);
+	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
 	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 	for (; requested_size < limit; requested_size *= 2) {
 		// increase size
@@ -249,7 +197,7 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 
 	idx_t requested_size = 424242;
 	shared_ptr<BlockHandle> block;
-	auto pin = buffer_manager.Allocate(requested_size, false, &block);
+	auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
 	CHECK(buffer_manager.GetUsedMemory() >= requested_size + Storage::BLOCK_HEADER_SIZE);
 
 	pin.Destroy();
@@ -280,7 +228,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	blocks.reserve(block_count);
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, Storage::BLOCK_SIZE, false, &blocks.back());
 		// used memory should increment by exactly one block at a time, up to 10
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * Storage::BLOCK_ALLOC_SIZE);
 	}
@@ -301,7 +249,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", alloc_size * pin_count)));
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(block_size, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false, &blocks.back());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
@@ -314,7 +262,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	// again, the same but incrementing block_size by 1 for every block (has same alloc_size)
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(block_size, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false, &blocks.back());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size++;
@@ -331,7 +279,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	block_size = 424242;
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
-		buffer_manager.Allocate(block_size, false, &blocks.back());
+		buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false, &blocks.back());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment block_size
 		block_size--;

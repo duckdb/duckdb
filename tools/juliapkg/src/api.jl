@@ -160,35 +160,35 @@ function duckdb_destroy_config(config)
     return ccall((:duckdb_destroy_config, libduckdb), Cvoid, (Ref{duckdb_config},), config)
 end
 
-# #=
-# //===--------------------------------------------------------------------===//
-# // Query Execution
-# //===--------------------------------------------------------------------===//
-# =#
-#
-# """
-# 	duckdb_query(connection,query,out_result)
-# Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.
-# If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
-# `duckdb_result_error`.
-# Note that after running `duckdb_query`, `duckdb_destroy_result` must be called on the result object even if the
-# query fails, otherwise the error stored within the result will not be freed correctly.
-# * `connection`: The connection to perform the query in.
-# * `query`: The SQL query to run.
-# * `out_result`: The query result.
-# * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-# """
-# function duckdb_query(connection, query, out_result)
-#     return ccall(
-#         (:duckdb_query, libduckdb),
-#         Int32,
-#         (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Cvoid}),
-#         connection[],
-#         query,
-#         out_result,
-#     )
-# end
-#
+#=
+//===--------------------------------------------------------------------===//
+// Query Execution
+//===--------------------------------------------------------------------===//
+=#
+
+"""
+	duckdb_query(connection,query,out_result)
+Executes a SQL query within a connection and stores the full (materialized) result in the out_result pointer.
+If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling
+`duckdb_result_error`.
+Note that after running `duckdb_query`, `duckdb_destroy_result` must be called on the result object even if the
+query fails, otherwise the error stored within the result will not be freed correctly.
+* `connection`: The connection to perform the query in.
+* `query`: The SQL query to run.
+* `out_result`: The query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_query(connection, query, out_result)
+    return ccall(
+        (:duckdb_query, libduckdb),
+        duckdb_state,
+        (duckdb_connection, Ptr{UInt8}, Ref{duckdb_result}),
+        connection,
+        query,
+        out_result
+    )
+end
+
 """
 	duckdb_destroy_result(result)
 Closes the result and de-allocates all memory allocated for that connection.
@@ -1333,6 +1333,28 @@ function duckdb_pending_prepared_streaming(prepared_statement, out_pending)
         (duckdb_prepared_statement, Ref{duckdb_pending_result}),
         prepared_statement,
         out_pending
+    )
+end
+
+"""
+Checks the state of the execution, returning it.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+* pending_result: The pending result to check the state of.
+* returns: The state of the pending result.
+"""
+function duckdb_pending_execute_check_state(pending_result)
+    return ccall(
+        (:duckdb_pending_execute_check_state, libduckdb),
+        duckdb_pending_state,
+        (duckdb_pending_result,),
+        pending_result
     )
 end
 
@@ -2676,7 +2698,7 @@ Append a duckdb_time value to the appender.
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 """
 function duckdb_append_time(appender, value)
-    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """
@@ -2684,7 +2706,7 @@ Append a duckdb_timestamp value to the appender.
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
 """
 function duckdb_append_timestamp(appender, value)
-    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+    return ccall((:duckdb_append_timestamp, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
 end
 
 """

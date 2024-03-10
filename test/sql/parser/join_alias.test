@@ -1,0 +1,42 @@
+# name: test/sql/parser/join_alias.test
+# description: Fix #10685: JOIN clause can be aliased, but alias cannot be referenced
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+query II rowsort
+select t.*
+from (
+  (values (1), (2)) as t1 (a)
+  cross join
+  (values (3), (4)) as t2 (b)
+) as t
+----
+1	3
+1	4
+2	3
+2	4
+
+# column alias
+query II rowsort
+select x, y
+from (
+  (values (1), (2)) as t1 (a)
+  cross join
+  (values (3), (4)) as t2 (b)
+) as t(x, y)
+----
+1	3
+1	4
+2	3
+2	4
+
+statement error
+from (
+  (values (1), (2)) as t1 (a)
+  cross join
+  (values (3), (4)) as t2 (b)
+) as t(x, y, z)
+----
+has 2 columns available but 3 columns specified

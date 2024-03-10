@@ -51,14 +51,12 @@ public:
 	//! This should only be called once per PipelineExecutor.
 	PipelineExecuteResult PushFinalize();
 
-	//! Initializes a chunk with the types that will flow out of ExecutePull
+	bool RemainingSinkChunk() const;
+
+	//! Initializes a chunk with the types that will flow out of the chunk
 	void InitializeChunk(DataChunk &chunk);
 	//! Execute a pipeline without a sink, and retrieve a single DataChunk
 	//! Returns an empty chunk when finished.
-	void ExecutePull(DataChunk &result);
-	//! Called after depleting the source using ExecutePull
-	//! This flushes profiler states
-	void PullFinalize();
 
 	//! Registers the task in the interrupt_state to allow Source/Sink operators to block the task
 	void SetTaskForInterrupts(weak_ptr<Task> current_task);
