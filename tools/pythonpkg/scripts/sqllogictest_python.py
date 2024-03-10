@@ -57,6 +57,9 @@ TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 #   'except:' and 'except as Exception:' are much too broad, these should be narrowed
 # - Split up the logic, ideally a good portion of this should be language-agnostic
 #   so we can reuse much of this to build a codegen solution for other languages
+# - Properly implement the rest of the 'require' statement
+#   currently we skip on every require that is not an extension
+
 
 # This is pretty much just a VM
 class SQLLogicTestExecutor(SQLLogicRunner):
@@ -207,15 +210,15 @@ def main():
     for i, file_path in enumerate(file_paths):
         if file_path in executor.SKIPPED_TESTS:
             continue
+        if i < start_offset:
+            continue
         if test_directory:
             file_path = os.path.join(test_directory, file_path)
         test = sql_parser.parse(file_path)
-        if i < start_offset:
-            continue
-        print(f'[{i}/{total_tests}] {file_path}')
         if not test:
             print(f'Failed to parse {file_path}')
             exit(1)
+        print(f'[{i}/{total_tests}] {file_path}')
         # This is necessary to clean up databases/connections
         # So previously created databases are not still cached in the instance_cache
         gc.collect()
