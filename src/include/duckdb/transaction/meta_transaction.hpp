@@ -59,7 +59,7 @@ public:
 		return modified_database;
 	}
 	const vector<reference<AttachedDatabase>> &OpenedTransactions() const {
-		return all_transactions
+		return all_transactions;
 	}
 
 private:
