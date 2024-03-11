@@ -374,7 +374,6 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 				auto info = s.second->OnPlanningError(*this, *statement, error);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 					rebind = true;
-					break;
 				}
 			}
 			if (!rebind) {
