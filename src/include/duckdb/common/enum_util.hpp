@@ -170,6 +170,8 @@ enum class MapInvalidReason : uint8_t;
 
 enum class MemoryTag : uint8_t;
 
+enum class MetricsType : uint8_t;
+
 enum class NType : uint8_t;
 
 enum class NewLineIdentifier : uint8_t;
@@ -285,8 +287,6 @@ enum class TaskExecutionResult : uint8_t;
 enum class TimestampCastResult : uint8_t;
 
 enum class TransactionType : uint8_t;
-
-enum class MetricsType : uint8_t;
 
 enum class TupleDataPinProperties : uint8_t;
 
@@ -521,6 +521,9 @@ template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value);
 
 template<>
+const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+
+template<>
 const char* EnumUtil::ToChars<NType>(NType value);
 
 template<>
@@ -693,9 +696,6 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
-
-template<>
-const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
 
 template<>
 const char* EnumUtil::ToChars<TupleDataPinProperties>(TupleDataPinProperties value);
@@ -942,6 +942,9 @@ template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value);
 
 template<>
+MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+
+template<>
 NType EnumUtil::FromString<NType>(const char *value);
 
 template<>
@@ -1114,9 +1117,6 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value);
-
-template<>
-MetricsType EnumUtil::FromString<MetricsType>(const char *value);
 
 template<>
 TupleDataPinProperties EnumUtil::FromString<TupleDataPinProperties>(const char *value);
