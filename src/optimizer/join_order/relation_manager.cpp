@@ -334,7 +334,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					filter_set.insert(*expression);
 					unordered_set<idx_t> bindings;
 					ExtractBindings(*expression, bindings);
-					if (bindings.size() == 0) {
+					if (bindings.empty()) {
 						// the filter is on a column that is not in our relational map. (example: limit_rownum)
 						// in this case we do not create a FilterInfo for it. (duckdb-internal/#1493)s
 						leftover_expressions.push_back(std::move(expression));
