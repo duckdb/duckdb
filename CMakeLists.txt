@@ -699,7 +699,7 @@ if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TID
   endif()
 endif()
 
-function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY EXTENSION_VERSION PARAMETERS)
   set(TARGET_NAME ${NAME}_loadable_extension)
   if (LOCAL_EXTENSION_REPO)
     add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
@@ -709,6 +709,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   # remove name
   list(REMOVE_AT FILES 0)
   # remove output_directory
+  list(REMOVE_AT FILES 0)
+  # remove extension_version
   list(REMOVE_AT FILES 0)
   # remove parameters
   list(REMOVE_AT FILES 0)
@@ -796,6 +798,20 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
       COMMAND emcc $<TARGET_FILE:${TARGET_NAME}>.lib -o $<TARGET_FILE:${TARGET_NAME}> -sSIDE_MODULE=1 -O3
       )
   endif()
+  add_custom_command(
+    TARGET ${TARGET_NAME}
+    POST_BUILD
+    COMMAND
+    printf "${DUCKDB_NORMALIZED_VERSION}" > duckdb_version_file
+    COMMAND
+    printf "${EXTENSION_VERSION}" > extension_version_file
+    COMMAND
+    bash ${CMAKE_SOURCE_DIR}/scripts/append_metadata.sh $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/duckdb_platform_out duckdb_version_file extension_version_file
+    )
+  add_dependencies(${TARGET_NAME} duckdb_platform)
+  if (NOT EXTENSION_CONFIG_BUILD AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_TIDY)
+    add_dependencies(duckdb_local_extension_repo ${TARGET_NAME})
+  endif()
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)
@@ -803,8 +819,9 @@ function(build_loadable_extension NAME PARAMETERS)
   set(FILES ${ARGV})
   list(REMOVE_AT FILES 0)
   list(REMOVE_AT FILES 0)
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
-  build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
+  build_loadable_extension_directory(${NAME} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG}" "${PARAMETERS}" ${FILES})
 endfunction()
 
 function(build_static_extension NAME PARAMETERS)
@@ -859,6 +876,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${PATH} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH ${TEST_PATH} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "in-tree" PARENT_SCOPE)
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
@@ -920,6 +938,7 @@ function(duckdb_extension_load NAME)
       error("Git URL specified but no valid git commit was found for ${NAME} extension")
     endif()
     register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}" "${duckdb_extension_load_SUBMODULES}")
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG "${duckdb_extension_load_GIT_TAG}" PARENT_SCOPE)
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
     message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
@@ -947,6 +966,7 @@ function(duckdb_extension_load NAME)
     # Local extension, default path
     message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extensions'")
     register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/test/sql")
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_GIT_TAG} PARENT_SCOPE)
   endif()
 
   # Propagate variables set by register_extension
@@ -1153,6 +1173,8 @@ if(BUILD_PYTHON)
   add_extension_dependencies(duckdb_python)
 endif()
 
+
+
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
 
@@ -1171,7 +1193,7 @@ else()
   add_custom_target(
           duckdb_platform ALL
 	  COMMAND
-	  echo "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
+	  printf "${DUCKDB_EXPLICIT_PLATFORM}" > duckdb_platform_out
           )
 endif()
 

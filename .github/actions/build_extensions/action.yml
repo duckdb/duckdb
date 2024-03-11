@@ -196,6 +196,7 @@ runs:
         ENABLE_EXTENSION_AUTOINSTALL: 1
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
       run: |
         cd  ${{ inputs.build_dir}}
         rm -rf duckdb_unittest_tempdir/*

@@ -31,6 +31,7 @@ struct ExtensionAlias {
 struct ExtensionInitResult {
 	string filename;
 	string filebase;
+	string extension_version;
 
 	void *lib_hdl;
 };
