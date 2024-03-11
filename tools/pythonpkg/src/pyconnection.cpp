@@ -1286,9 +1286,11 @@ void DuckDBPyConnection::Close() {
 	result = nullptr;
 	connection = nullptr;
 	database = nullptr;
+	temporary_views.clear();
 	for (auto &cur : cursors) {
 		cur->Close();
 	}
+	registered_functions.clear();
 	cursors.clear();
 }
 
