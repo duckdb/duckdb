@@ -91,6 +91,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
 
+	// rewrite the in clause so the t1.a IN ('one_val') can be rewritten to t1.a = 'one_val'
+	// and pushed down into scans
+	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
+		InClauseRewriter ic_rewriter(context, *this);
+		plan = ic_rewriter.Rewrite(std::move(plan));
+	});
+
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
 		FilterPullup filter_pullup;
@@ -106,11 +113,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::REGEX_RANGE, [&]() {
 		RegexRangeFilter regex_opt;
 		plan = regex_opt.Rewrite(std::move(plan));
-	});
-
-	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter ic_rewriter(context, *this);
-		plan = ic_rewriter.Rewrite(std::move(plan));
 	});
 
 	// removes any redundant DelimGets/DelimJoins
