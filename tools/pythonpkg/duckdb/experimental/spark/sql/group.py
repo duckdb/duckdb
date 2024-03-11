@@ -16,12 +16,13 @@
 #
 
 from ..exception import ContributionsAcceptedError
-from typing import Callable, List, Optional, TYPE_CHECKING, overload, Dict, Union, cast, Tuple
+from typing import Callable, TYPE_CHECKING, overload, Dict, Union
 
 from .column import Column
 from .session import SparkSession
 from .dataframe import DataFrame
 from .functions import _to_column
+from ._typing import ColumnOrName
 
 if TYPE_CHECKING:
     from ._typing import LiteralType

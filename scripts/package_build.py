@@ -181,7 +181,7 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
     sys.path = original_path
 
 
-def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb'):
+def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb', short_paths=False):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
 
@@ -289,7 +289,7 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
         return False
 
     def generate_unity_build(entries, unity_name, linenumbers):
-        ub_file = os.path.join(target_dir, f'ub_{unity_name}.cpp')
+        ub_file = os.path.join(target_dir, unity_name)
         with open_utf8(ub_file, 'w+') as f:
             for entry in entries:
                 if linenumbers:
@@ -326,11 +326,18 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
                             key=lambda x: scores[os.path.basename(x)] if os.path.basename(x) in scores else 99999
                         )
             if not unity_build:
-                new_source_files += [os.path.join(folder_name, file) for file in current_files]
+                if short_paths:
+                    # replace source files with "__"
+                    for file in current_files:
+                        unity_filename = os.path.basename(file)
+                        new_source_files.append(generate_unity_build([file], unity_filename, linenumbers))
+                else:
+                    # directly use the source files
+                    new_source_files += [os.path.join(folder_name, file) for file in current_files]
             else:
-                new_source_files.append(
-                    generate_unity_build(current_files, dirname.replace(os.path.sep, '_'), linenumbers)
-                )
+                unity_base = dirname.replace(os.path.sep, '_')
+                unity_name = f'ub_{unity_base}.cpp'
+                new_source_files.append(generate_unity_build(current_files, unity_name, linenumbers))
         return new_source_files
 
     original_sources = source_list

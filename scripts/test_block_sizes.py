@@ -52,6 +52,5 @@ replace_in_file(
 )
 
 execute_system_command('rm -rf build')
-execute_system_command('make relassert')
-execute_system_command('build/relassert/test/unittest')
-execute_system_command('build/relassert/test/unittest "test/sql/storage/*"')
+execute_system_command('make release')
+execute_system_command('build/release/test/unittest')

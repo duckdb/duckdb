@@ -25,6 +25,7 @@ class CatalogSet;
 class ClientContext;
 class DatabaseInstance;
 struct AttachOptions;
+class TaskScheduler;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
 class DatabaseManager {
@@ -68,7 +69,7 @@ public:
 	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
-	void ResetDatabases();
+	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
 
 	transaction_t GetNewQueryNumber() {
 		return current_query_number++;

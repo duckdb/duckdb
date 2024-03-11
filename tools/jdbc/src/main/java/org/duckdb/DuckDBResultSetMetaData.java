@@ -95,7 +95,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         return column_names[column - 1];
     }
 
-    public static int type_to_int(DuckDBColumnType type) throws SQLException {
+    public static int type_to_int(DuckDBColumnType type) {
         switch (type) {
         case BOOLEAN:
             return Types.BOOLEAN;
@@ -129,6 +129,12 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return Types.TIMESTAMP;
         case TIMESTAMP_WITH_TIME_ZONE:
             return Types.TIMESTAMP_WITH_TIMEZONE;
+        case TIME_WITH_TIME_ZONE:
+            return Types.TIME_WITH_TIMEZONE;
+        case STRUCT:
+            return Types.STRUCT;
+        case BIT:
+            return Types.BIT;
         case BLOB:
             return Types.BLOB;
         default:
