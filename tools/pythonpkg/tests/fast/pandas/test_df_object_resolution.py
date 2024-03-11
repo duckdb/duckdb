@@ -330,6 +330,31 @@ class TestResolveObjectColumns(object):
             converted_col = duckdb_cursor.sql("select * from x").df()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_structs_of_different_sizes(self, pandas, duckdb_cursor):
+        # This list has both a STRUCT(v1) and a STRUCT(v1, v2) member
+        # Those can't be combined
+        df = pandas.DataFrame(
+            data={
+                "col": [
+                    [
+                        {
+                            "key": "value",
+                        }
+                    ],
+                    [
+                        {
+                            "key": "value",
+                            "key1": "value",
+                        }
+                    ],
+                ]
+            }
+        )
+        res = duckdb_cursor.query("select typeof(col) from df").fetchall()
+        # So we fall back to converting them as VARCHAR instead
+        assert res == [('VARCHAR',),('VARCHAR',)]
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_struct_key_conversion(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
