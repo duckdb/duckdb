@@ -120,8 +120,6 @@ struct DBConfigOptions {
 	idx_t maximum_memory = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
 	idx_t maximum_threads = (idx_t)-1;
-	//! The current threads running (this includes all thread types)
-	idx_t current_thread_count = (idx_t)-1;
 	//! The number of external threads that work on DuckDB tasks. Default: 1.
 	//! Must be smaller or equal to maximum_threads.
 	idx_t external_threads = 1;

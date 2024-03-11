@@ -337,7 +337,6 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.options.maximum_threads == (idx_t)-1) {
 		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	}
-	config.options.current_thread_count = 1;
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
