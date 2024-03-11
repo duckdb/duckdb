@@ -594,6 +594,7 @@ class SQLLogicRunner:
         'always_fail_error_messages',
         'original_sqlite_test',
         'build_directory',
+        'skip_reload',  # <-- used for 'force_reload' and 'force_storage', unused for now
     ]
 
     def reset(self):
@@ -659,6 +660,7 @@ class SQLLogicContext:
         'keywords',
         'error',
         'is_loop',
+        'is_parallel',
         'build_directory',
     ]
 
@@ -694,6 +696,7 @@ class SQLLogicContext:
         self.statements = statements
         self.runner = runner
         self.is_loop = True
+        self.is_parallel = False
         self.error: Optional[TestException] = None
         self.generator: Generator[Any] = iteration_generator
         self.keywords = keywords
@@ -789,7 +792,7 @@ class SQLLogicContext:
 
         self.pool = None
         self.runner.database = None
-        self.runner.database = SQLLogicDatabase(dbpath, self.runner, additional_config)
+        self.runner.database = SQLLogicDatabase(dbpath, self, additional_config)
         self.pool = self.runner.database.connect()
 
     def execute_query(self, query: Query):
@@ -865,8 +868,8 @@ class SQLLogicContext:
         self.skiptest("HALT was encountered in file")
 
     def execute_restart(self, statement: Restart):
-        # if context.is_parallel:
-        #    raise RuntimeError("Cannot restart database in parallel")
+        if self.is_parallel:
+            self.fail("Cannot restart database in parallel")
 
         con = self.pool.get_connection()
         old_settings = con.execute(
@@ -877,7 +880,7 @@ class SQLLogicContext:
         path = self.runner.database.path
         self.pool = None
         self.runner.database = None
-        self.runner.database = SQLLogicDatabase(path, self.runner)
+        self.runner.database = SQLLogicDatabase(path, self)
         self.pool = self.runner.database.connect()
         con = self.pool.get_connection()
         for setting in old_settings:
@@ -1002,6 +1005,17 @@ class SQLLogicContext:
         ]
         param = statement.header.parameters[0].lower()
         if param in not_an_extension:
+            if param == 'vector_size':
+                required_vector_size = int(statement.header.parameters[1])
+                if duckdb.__standard_vector_size__ < required_vector_size:
+                    return RequireResult.MISSING
+                return RequireResult.PRESENT
+            if param == 'exact_vector_size':
+                required_vector_size = int(statement.header.parameters[1])
+                return duckdb.__standard_vector_size == required_vector_size
+            if param == 'skip_reload':
+                self.runner.skip_reload = True
+                return RequireResult.PRESENT
             return RequireResult.MISSING
 
         # Already loaded
@@ -1081,6 +1095,7 @@ class SQLLogicContext:
         return statements
 
     def execute_parallel(self, context: "SQLLogicContext", key, value):
+        context.is_parallel = True
         try:
             # For some reason the lambda won't capture the 'value' when created outside of 'execute_parallel'
             def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
