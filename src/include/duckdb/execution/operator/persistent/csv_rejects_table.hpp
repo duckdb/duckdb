@@ -16,7 +16,7 @@ class CSVRejectsTable : public ObjectCacheEntry {
 public:
 	CSVRejectsTable(string name) : name(name), count(0) {
 		if (name.empty()) {
-			scan_table = "reject_scan";
+			scan_table = "reject_scans";
 			errors_table = "reject_errors";
 		} else {
 			scan_table = name + "_scan";

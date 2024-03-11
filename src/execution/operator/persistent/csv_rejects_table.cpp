@@ -75,8 +75,6 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 		info->columns.AddColumn(ColumnDefinition("timestamp_format", LogicalType::VARCHAR));
 		// 12. CSV read function with all the options used
 		info->columns.AddColumn(ColumnDefinition("user_arguments", LogicalType::VARCHAR));
-		// 13. CSV read function with all the options used
-		info->columns.AddColumn(ColumnDefinition("prompt", LogicalType::VARCHAR));
 		catalog.CreateTable(context, std::move(info));
 	}
 	{

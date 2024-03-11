@@ -170,6 +170,65 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 	}
 }
 
+void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t file_idx, CSVFileScan &file) {
+	CSVReaderOptions &options = file.options;
+	// Add the row to the rejects table
+	scan_appender.BeginRow();
+	// 1. Scan Idx
+	scan_appender.Append(scan_idx);
+	// 2. File Idx
+	scan_appender.Append(file_idx);
+	// 3. File Path
+	scan_appender.Append(string_t(file.file_path));
+	// 4. Delimiter
+	scan_appender.Append(string_t(options.dialect_options.state_machine_options.delimiter.FormatValue()));
+	// 5. Quote
+	scan_appender.Append(string_t(options.dialect_options.state_machine_options.quote.FormatValue()));
+	// 6. Escape
+	scan_appender.Append(string_t(options.dialect_options.state_machine_options.escape.FormatValue()));
+	// 7. NewLine Delimiter
+	scan_appender.Append(string_t(options.NewLineIdentifierToString()));
+	// 8. Skip Rows
+	scan_appender.Append(Value::UINTEGER(NumericCast<uint32_t>(options.dialect_options.skip_rows.GetValue())));
+	// 9. Has Header
+	scan_appender.Append(Value::BOOLEAN(options.dialect_options.header.GetValue()));
+	// 10. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
+	std::ostringstream columns;
+	columns << "{";
+	for (idx_t i = 0; i < file.types.size(); i++) {
+		columns << "'" << file.names[i] << "': '" << file.types[i].ToString() << "'";
+		if (i != file.types.size() - 1) {
+			columns << ",";
+		}
+	}
+	columns << "}";
+	scan_appender.Append(string_t(columns.str()));
+	// 11. Date Format
+	auto date_format = options.dialect_options.date_format[LogicalType::DATE].GetValue();
+	if (!date_format.Empty()) {
+		scan_appender.Append(string_t(date_format.format_specifier));
+	} else {
+		scan_appender.Append(Value());
+	}
+
+	// 12. Timestamp Format
+	auto timestamp_format = options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue();
+	if (!timestamp_format.Empty()) {
+		scan_appender.Append(string_t(timestamp_format.format_specifier));
+	} else {
+		scan_appender.Append(Value());
+	}
+
+	// 13. The Extra User Arguments
+	if (options.user_defined_parameters.empty()) {
+		scan_appender.Append(Value());
+	} else {
+		scan_appender.Append(string_t(options.user_defined_parameters));
+	}
+	// Finish the row to the rejects table
+	scan_appender.EndRow();
+}
+
 void CSVGlobalState::FillRejectsTable() {
 	auto &options = bind_data.options;
 
@@ -181,8 +240,8 @@ void CSVGlobalState::FillRejectsTable() {
 		auto &scans_table = rejects->GetScansTable(context);
 		InternalAppender errors_appender(context, errors_table);
 		InternalAppender scans_appender(context, scans_table);
-		idx_t scan_id = context.transaction.GetActiveQuery();
-		idx_t file_id = 0;
+		idx_t scan_idx = context.transaction.GetActiveQuery();
+		idx_t file_idx = 0;
 		for (auto &file : file_scans) {
 			auto file_name = file->file_path;
 			auto &errors = file->error_handler->errors;
@@ -190,7 +249,6 @@ void CSVGlobalState::FillRejectsTable() {
 			for (auto &error_vector : errors) {
 				for (auto &error : error_vector.second) {
 					if (!IsCSVErrorAcceptedReject(error.type)) {
-						// For now, we only will use it for casting errors
 						continue;
 					}
 					// short circuit if we already have too many rejects
@@ -204,9 +262,9 @@ void CSVGlobalState::FillRejectsTable() {
 						// Add the row to the rejects table
 						errors_appender.BeginRow();
 						// 1. Scan Id
-						errors_appender.Append(scan_id);
+						errors_appender.Append(scan_idx);
 						// 2. File Id
-						errors_appender.Append(file_id);
+						errors_appender.Append(file_idx);
 						// 3. Row Line
 						errors_appender.Append(row_line);
 						// 4. Byte Position where error occurred
@@ -233,10 +291,16 @@ void CSVGlobalState::FillRejectsTable() {
 						errors_appender.Append(string_t(error.error_message));
 						errors_appender.EndRow();
 					}
-					errors_appender.Close();
 				}
 			}
+			if (rejects->count != 0) {
+				rejects->count = 0;
+				FillScanErrorTable(scans_appender, scan_idx, file_idx, *file);
+			}
+			file_idx++;
 		}
+		errors_appender.Close();
+		scans_appender.Close();
 	}
 }
 

@@ -157,5 +157,16 @@ struct CSVReaderOptions {
 	                         vector<string> &names);
 
 	string ToString() const;
+
+	string NewLineIdentifierToString() {
+		switch (dialect_options.state_machine_options.new_line.GetValue()) {
+		case NewLineIdentifier::SINGLE:
+			return "\\n";
+		case NewLineIdentifier::CARRY_ON:
+			return "\\r\\n";
+		default:
+			return "";
+		}
+	}
 };
 } // namespace duckdb
