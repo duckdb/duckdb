@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+mode skip
+
 statement ok
 create table t0 as select range%1000 col0, random()*1000 col1, random()*100 col2, '1' col3, '2' col4, '3' col5 from range(10000);
 

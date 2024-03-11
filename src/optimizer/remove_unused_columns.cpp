@@ -179,10 +179,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 			}
 		}
-		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
-		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
