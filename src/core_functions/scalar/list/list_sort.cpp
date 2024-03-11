@@ -305,6 +305,8 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 	order = config.ResolveOrder(order);
 	null_order = config.ResolveNullOrder(order, null_order);
 
+	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = LogicalType::LIST(LogicalTypeId::BIGINT);
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);

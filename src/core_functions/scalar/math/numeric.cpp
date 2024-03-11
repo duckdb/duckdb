@@ -1115,6 +1115,9 @@ ScalarFunction Atan2Fun::GetFunction() {
 struct ACos {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
+		if (input < -1 || input > 1) {
+			throw InvalidInputException("ACOS is undefined outside [-1,1]");
+		}
 		return (double)std::acos(input);
 	}
 };

@@ -12,6 +12,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 
 #include <thread>
 
@@ -90,7 +91,7 @@ public:
 
 public:
 	RangeJoinMergeTask(shared_ptr<Event> event_p, ClientContext &context, GlobalSortedTable &table)
-	    : ExecutorTask(context), event(std::move(event_p)), context(context), table(table) {
+	    : ExecutorTask(context, std::move(event_p)), context(context), table(table) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -104,7 +105,6 @@ public:
 	}
 
 private:
-	shared_ptr<Event> event;
 	ClientContext &context;
 	GlobalSortedTable &table;
 };

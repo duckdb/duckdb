@@ -230,7 +230,7 @@ typedef struct {
 	uint64_t bits;
 } duckdb_time_tz;
 typedef struct {
-	duckdb_time time;
+	duckdb_time_struct time;
 	int32_t offset;
 } duckdb_time_tz_struct;
 
