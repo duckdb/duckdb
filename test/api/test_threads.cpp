@@ -20,8 +20,10 @@ void change_thread_counts(duckdb::DuckDB &db) {
 	}
 }
 
-// Should take between 0.2 and 0.5 seconds
-TEST_CASE("Dead lock", "[dead_lock]") {
+// NumberOfThreads acquired the same lock as RelaunchThreads
+// NumberOfThreads is waiting for the lock
+// RelaunchThreads is waiting on the thread to finish, while holding the lock
+TEST_CASE("Test deadlock issue between NumberOfThreads and RelaunchThreads", "[api]") {
 	duckdb::DuckDB db(nullptr);
 
 	int thread_count = 10;
