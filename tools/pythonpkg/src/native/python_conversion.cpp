@@ -69,8 +69,9 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 	auto struct_keys = TransformStructKeys(dict.keys, dict.len, target_type);
 
 	bool struct_target = target_type.id() == LogicalTypeId::STRUCT;
-	if (struct_target) {
-		D_ASSERT(dict.len == StructType::GetChildCount(target_type));
+	if (struct_target && dict.len != StructType::GetChildCount(target_type)) {
+		throw InvalidInputException("We could not convert the object %s to the desired target type (%s)",
+		                            dict.ToString(), target_type.ToString());
 	}
 
 	child_list_t<Value> struct_values;

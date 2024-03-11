@@ -352,7 +352,17 @@ class TestResolveObjectColumns(object):
         )
         res = duckdb_cursor.query("select typeof(col) from df").fetchall()
         # So we fall back to converting them as VARCHAR instead
-        assert res == [('VARCHAR',),('VARCHAR',)]
+        assert res == [('VARCHAR',), ('VARCHAR',)]
+
+        malformed_struct = duckdb.Value({"v1": 1, "v2": 2}, duckdb.struct_type({'v1': int}))
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match=re.escape(
+                "We could not convert the object {'v1': 1, 'v2': 2} to the desired target type (STRUCT(v1 BIGINT))"
+            ),
+        ):
+            res = duckdb_cursor.execute("select $1", [malformed_struct])
+            print(res)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_struct_key_conversion(self, pandas, duckdb_cursor):
