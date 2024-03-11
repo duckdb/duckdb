@@ -72,10 +72,14 @@ class CSVCast {
 		D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 		bool all_converted = true;
 		idx_t cur_line = 0;
+		auto &validity_mask = FlatVector::Validity(result_vector);
 		UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 			T result;
 			if (!OP::Operation(options, input, result, *parameters.error_message)) {
-				line_error = cur_line;
+				if (all_converted) {
+					line_error = cur_line;
+				}
+				validity_mask.SetInvalid(cur_line);
 				all_converted = false;
 			}
 			cur_line++;

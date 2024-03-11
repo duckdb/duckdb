@@ -1,0 +1,47 @@
+# name: test/sql/copy/csv/test_csv_mixed_casts.test
+# description: Try mixed casts that have unique CSVCast implementations
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# Try Date
+query II
+FROM read_csv(
+    'data/csv/mixed_dates.csv',
+    auto_detect = false,
+    header = true,
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DATE',
+    },
+    dateformat = '%m/%d/%Y',
+    ignore_errors = true
+);
+----
+3	2024-03-10
+
+# Try Timestamp
+query II
+FROM read_csv(
+    'data/csv/mixed_timestamps.csv',
+    auto_detect = false,
+    header = true,
+     columns = {
+      'A': 'INTEGER',
+      'B': 'TIMESTAMP',
+    },
+    timestampformat = '%m/%d/%Y %H:%M:%S',
+    ignore_errors = true
+);
+----
+3	2024-03-10 01:25:58
+
+# Try Float
+
+# Try Double
+
+# Try Decimal
+
+
+
