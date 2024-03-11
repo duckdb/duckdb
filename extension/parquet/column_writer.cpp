@@ -1752,10 +1752,14 @@ void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 
 idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
 	// returns a consecutive child list that fully flattens and repeats all required elements
+	auto &validity = FlatVector::Validity(list);
 	auto list_entries = FlatVector::GetData<list_entry_t>(list);
 	bool is_consecutive = true;
 	idx_t total_length = 0;
 	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
 		if (list_entries[c].offset != total_length) {
 			is_consecutive = false;
 		}
@@ -1768,6 +1772,9 @@ idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t 
 	SelectionVector sel(total_length);
 	idx_t index = 0;
 	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
 		for (idx_t k = 0; k < list_entries[c].length; k++) {
 			sel.set_index(index++, list_entries[c].offset + k);
 		}
