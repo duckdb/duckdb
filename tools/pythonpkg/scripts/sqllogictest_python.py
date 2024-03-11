@@ -1,7 +1,7 @@
 import sys
 import os
 import glob
-from typing import Any, Generator
+from typing import Any, Generator, Optional
 import duckdb
 import shutil
 import gc
@@ -38,8 +38,8 @@ TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 
 # This is pretty much just a VM
 class SQLLogicTestExecutor(SQLLogicRunner):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, build_directory: Optional[str] = None):
+        super().__init__(build_directory)
         self.SKIPPED_TESTS = set(
             [
                 'test/sql/types/map/map_empty.test',
@@ -114,7 +114,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             # Yield once to represent one iteration, do not touch the keywords
             yield None
 
-        self.database = SQLLogicDatabase(':memory:', list())
+        self.database = SQLLogicDatabase(':memory:', None)
         context = SQLLogicContext(self.database.connect(), self, test.statements, keywords, update_value)
         # The outer context is not a loop!
         context.is_loop = False
@@ -146,14 +146,17 @@ import argparse
 
 def main():
     sql_parser = SQLLogicParser()
-    executor = SQLLogicTestExecutor()
 
     arg_parser = argparse.ArgumentParser(description='Execute SQL logic tests.')
     arg_parser.add_argument('--file-path', type=str, help='Path to the test file')
     arg_parser.add_argument('--file-list', type=str, help='Path to the file containing a list of tests to run')
     arg_parser.add_argument('--start-offset', '-s', type=int, help='Start offset for the tests', default=0)
+    arg_parser.add_argument(
+        '--build-dir', type=str, help='Path to the build directory, used for loading extensions', default=0
+    )
     args = arg_parser.parse_args()
 
+    executor = SQLLogicTestExecutor(args.build_dir)
     if os.path.exists(TEST_DIRECTORY_PATH):
         shutil.rmtree(TEST_DIRECTORY_PATH)
 

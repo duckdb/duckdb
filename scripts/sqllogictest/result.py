@@ -59,6 +59,15 @@ class ExecuteResult:
 
 ### Exceptions
 
+BUILTIN_EXTENSIONS = [
+    'json',
+    'fts',
+    'tpcds',
+    'tpch',
+    'parquet',
+    'icu',
+]
+
 
 class SQLLogicStatementData:
     # Context information about a statement
@@ -352,7 +361,9 @@ class SQLLogicConnectionPool:
 class SQLLogicDatabase:
     __slots__ = ['path', 'database', 'config']
 
-    def __init__(self, path: str, extensions: List[str], additional_config: Optional[Dict[str, str]] = None):
+    def __init__(
+        self, path: str, context: Optional["SQLLogicContext"] = None, additional_config: Optional[Dict[str, str]] = None
+    ):
         """
         Connection Hierarchy:
 
@@ -377,8 +388,9 @@ class SQLLogicDatabase:
         self.database = duckdb.connect(path, read_only, self.config)
 
         # Load any previously loaded extensions again
-        for extension in extensions:
-            self.load_extension(extension)
+        if context:
+            for extension in context.runner.extensions:
+                self.load_extension(context, extension)
 
     def reset(self):
         self.database: Optional[duckdb.DuckDBPyConnection] = None
@@ -388,13 +400,14 @@ class SQLLogicDatabase:
         }
         self.path = ''
 
-    def load_extension(self, extension: str):
-        # Unreachable
-        assert False
-        # root = duckdb.__build_dir__
-        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
+    def load_extension(self, context: "SQLLogicContext", extension: str):
+        if extension in BUILTIN_EXTENSIONS:
+            # No need to load
+            return
+        path = context.get_extension_path(extension)
         # Serialize it as a POSIX compliant path
         query = f"LOAD '{path}'"
+        print(query)
         self.database.execute(query)
 
     def connect(self) -> SQLLogicConnectionPool:
@@ -580,6 +593,7 @@ class SQLLogicRunner:
         'ignore_error_messages',
         'always_fail_error_messages',
         'original_sqlite_test',
+        'build_directory',
     ]
 
     def reset(self):
@@ -589,7 +603,7 @@ class SQLLogicRunner:
         # Used for cleanup
         self.loaded_databases: typing.Set[str] = set()
         self.database: Optional[SQLLogicDatabase] = None
-        self.extensions: set = set()
+        self.extensions = set(BUILTIN_EXTENSIONS)
         self.environment_variables: Dict[str, str] = {}
         self.test: Optional[SQLLogicTest] = None
 
@@ -616,8 +630,9 @@ class SQLLogicRunner:
                 return True
         return False
 
-    def __init__(self):
+    def __init__(self, build_directory: Optional[str] = None):
         self.reset()
+        self.build_directory = build_directory
 
     def skip(self):
         self.skip_level += 1
@@ -644,6 +659,7 @@ class SQLLogicContext:
         'keywords',
         'error',
         'is_loop',
+        'build_directory',
     ]
 
     def reset(self):
@@ -659,6 +675,13 @@ class SQLLogicContext:
         for key, value in self.keywords.items():
             input = input.replace(key, value)
         return input
+
+    def get_extension_path(self, extension: str):
+        if self.runner.build_directory is None:
+            self.skiptest("Tried to load an extension, but --build-dir was not set!")
+        root = self.runner.build_directory
+        path = os.path.join(root, "extension", extension, f"{extension}.duckdb_extension")
+        return path
 
     def __init__(
         self,
@@ -766,7 +789,7 @@ class SQLLogicContext:
 
         self.pool = None
         self.runner.database = None
-        self.runner.database = SQLLogicDatabase(dbpath, self.runner.extensions, additional_config)
+        self.runner.database = SQLLogicDatabase(dbpath, self.runner, additional_config)
         self.pool = self.runner.database.connect()
 
     def execute_query(self, query: Query):
@@ -854,7 +877,7 @@ class SQLLogicContext:
         path = self.runner.database.path
         self.pool = None
         self.runner.database = None
-        self.runner.database = SQLLogicDatabase(path, self.runner.extensions)
+        self.runner.database = SQLLogicDatabase(path, self.runner)
         self.pool = self.runner.database.connect()
         con = self.pool.get_connection()
         for setting in old_settings:
@@ -980,10 +1003,17 @@ class SQLLogicContext:
         param = statement.header.parameters[0].lower()
         if param in not_an_extension:
             return RequireResult.MISSING
-        return RequireResult.MISSING
 
+        # Already loaded
+        if param in self.runner.extensions:
+            return RequireResult.PRESENT
+
+        connection = self.pool.get_connection()
+        autoload_known_extensions = connection.execute(
+            "select value::BOOLEAN from duckdb_settings() where name == 'autoload_known_extensions'"
+        ).fetchone()[0]
         if param == "no_extension_autoloading":
-            if 'autoload_known_extensions' in self.runner.database.config:
+            if autoload_known_extensions:
                 # If autoloading is on, we skip this test
                 return RequireResult.MISSING
             return RequireResult.PRESENT
@@ -994,9 +1024,9 @@ class SQLLogicContext:
                 excluded_from_autoloading = False
                 break
 
-        if not 'autoload_known_extensions' in self.runner.database.config:
+        if autoload_known_extensions == False:
             try:
-                self.runner.database.load_extension(param)
+                self.runner.database.load_extension(self, param)
                 self.runner.extensions.add(param)
             except duckdb.Error:
                 return RequireResult.MISSING
@@ -1052,7 +1082,7 @@ class SQLLogicContext:
 
     def execute_parallel(self, context: "SQLLogicContext", key, value):
         try:
-            # For some reason the lambda wouldn't capture the 'value' when created outside of 'execute_parallel'
+            # For some reason the lambda won't capture the 'value' when created outside of 'execute_parallel'
             def update_value(context: SQLLogicContext) -> Generator[Any, Any, Any]:
                 context.add_keyword(key, value)
                 yield None
