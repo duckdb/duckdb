@@ -26,7 +26,6 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "iostream"
 
 namespace duckdb {
 
