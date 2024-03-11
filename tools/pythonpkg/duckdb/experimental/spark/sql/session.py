@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple, Any, Union, Iterable, TYPE_CHECKING
+from typing import Optional, List, Any, Union, Iterable, TYPE_CHECKING
 import uuid
 
 if TYPE_CHECKING:
@@ -54,9 +54,8 @@ class SparkSession:
     def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame"]) -> DataFrame:
         try:
             import pandas
-
             has_pandas = True
-        except:
+        except ImportError:
             has_pandas = False
         if has_pandas and isinstance(data, pandas.DataFrame):
             unique_name = f'pyspark_pandas_df_{uuid.uuid1()}'
@@ -155,7 +154,7 @@ class SparkSession:
             import pandas
 
             has_pandas = True
-        except:
+        except ImportError:
             has_pandas = False
         # Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
         # Then check if 'data' is None or []

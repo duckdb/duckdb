@@ -844,7 +844,15 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::DOUBLE:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 		break;
+	case LogicalTypeId::DATE:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(date_t));
+		break;
+	case LogicalTypeId::TIME:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_t));
+		break;
 	case LogicalTypeId::TIME_TZ:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(dtime_tz_t));
+		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP:
