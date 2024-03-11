@@ -34,26 +34,10 @@ void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
 
-	LogicalOperator *aggr_op = &op;
-	while (aggr_op->type != op_type) {
-		if (aggr_op->children.empty()) {
-			throw InternalException("Parent of Aggregate/window operation by does not have window/window op as child.");
-		}
-		aggr_op = aggr_op->children[0].get();
-	}
-
-	if (aggr_op->type == LogicalOperatorType::LOGICAL_WINDOW) {
-		auto window_bindings = aggr_op->GetColumnBindings();
-		for (auto &binding : window_bindings) {
-			if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
-				relation_mapping[binding.table_index] = relation_id;
-			}
-		}
-	} else {
-		auto table_indexes = aggr_op->GetTableIndex();
-		for (auto &index : table_indexes) {
-			D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
-			relation_mapping[index] = relation_id;
+	auto op_bindings = op.GetColumnBindings();
+	for (auto &binding : op_bindings) {
+		if (relation_mapping.find(binding.table_index) == relation_mapping.end()) {
+			relation_mapping[binding.table_index] = relation_id;
 		}
 	}
 	relations.push_back(std::move(relation));
@@ -146,7 +130,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);
 			}
-			filter_operators.push_back(*op);
 		}
 		op = op->children[0].get();
 	}
