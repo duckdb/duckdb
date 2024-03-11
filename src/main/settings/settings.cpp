@@ -620,7 +620,7 @@ void CustomProfilingSettings::SetLocal(ClientContext &context, const Value &inpu
 
 void CustomProfilingSettings::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_settings = ProfilingInfo::DefaultSettings();
+	config.profiler_settings = default_settings;
 }
 
 Value CustomProfilingSettings::GetSetting(ClientContext &context) {

@@ -40,6 +40,13 @@ struct SettingSetFunctions {
 	}
 };
 
+const SettingsSet default_settings = {
+    MetricsType::CPU_TIME,
+    MetricsType::EXTRA_INFO,
+    MetricsType::OPERATOR_CARDINALITY,
+    MetricsType::OPERATOR_TIMING,
+};
+
 struct Metrics {
 	double cpu_time;
 	string extra_info;
@@ -53,7 +60,7 @@ struct Metrics {
 class ProfilingInfo {
 public:
 	// map of metrics with their values; only enabled metrics are present in the map
-	SettingsSet settings;
+	SettingsSet settings = default_settings;
 	Metrics metrics;
 
 public:
@@ -68,7 +75,6 @@ public:
 	void SetSettings(SettingsSet &n_settings);
 	// get the metrics map
 	SettingsSet &GetSettings();
-	static SettingsSet DefaultSettings();
 
 public:
 	// reset the metrics to default
