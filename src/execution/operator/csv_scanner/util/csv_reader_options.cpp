@@ -189,7 +189,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "ignore_errors") {
-		ignore_errors = ParseBoolean(value, loption);
+		ignore_errors.Set(ParseBoolean(value, loption));
 	} else if (loption == "buffer_size") {
 		buffer_size = ParseInteger(value, loption);
 		if (buffer_size == 0) {
@@ -206,13 +206,8 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		parallel = ParseBoolean(value, loption);
 	} else if (loption == "allow_quoted_nulls") {
 		allow_quoted_nulls = ParseBoolean(value, loption);
-	} else if (loption == "rejects_table") {
-		// skip, handled in SetRejectsOptions
-		auto table_name = ParseString(value, loption);
-		if (table_name.empty()) {
-			throw BinderException("REJECTS_TABLE option cannot be empty");
-		}
-		rejects_table_name = table_name;
+	} else if (loption == "store_rejects") {
+		store_rejects = ParseBoolean(value, loption);
 	} else if (loption == "rejects_limit") {
 		int64_t limit = ParseInteger(value, loption);
 		if (limit < 0) {
@@ -323,7 +318,7 @@ string CSVReaderOptions::ToString() const {
 	// sample_size
 	error += "sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) + "\n  ";
 	// ignore_errors
-	error += "ignore_errors=" + std::to_string(ignore_errors) + "\n  ";
+	error += "ignore_errors=" + ignore_errors.FormatValue() + "\n  ";
 	// all_varchar
 	error += "all_varchar=" + std::to_string(all_varchar) + "\n";
 

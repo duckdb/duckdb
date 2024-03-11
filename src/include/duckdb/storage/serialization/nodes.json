@@ -537,7 +537,7 @@
     "members": [
       {"id": 100,
         "name": "ignore_errors",
-        "type": "bool"
+        "type": "CSVOption<bool>"
       },
       {"id": 101,
         "name": "buffer_sample_size",
@@ -604,8 +604,8 @@
         "type": "vector<bool>"
       },
       {"id": 117,
-        "name": "rejects_table_name",
-        "type": "string"
+        "name": "store_rejects",
+        "type": "bool"
       },
       {"id": 118,
         "name": "rejects_limit",

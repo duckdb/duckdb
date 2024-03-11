@@ -118,7 +118,7 @@ CSVOption<T> CSVOption<T>::Deserialize(Deserializer &deserializer) {
 }
 
 void CSVReaderOptions::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<bool>(100, "ignore_errors", ignore_errors);
+	serializer.WriteProperty<CSVOption<bool>>(100, "ignore_errors", ignore_errors);
 	serializer.WritePropertyWithDefault<idx_t>(101, "buffer_sample_size", buffer_sample_size);
 	serializer.WritePropertyWithDefault<string>(102, "null_str", null_str);
 	serializer.WriteProperty<FileCompressionType>(103, "compression", compression);
@@ -135,7 +135,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(114, "buffer_size", buffer_size);
 	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
-	serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", rejects_table_name);
+	serializer.WritePropertyWithDefault<bool>(117, "store_rejects", store_rejects);
 	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
 	serializer.WriteProperty<CSVOption<char>>(119, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
 	serializer.WriteProperty<CSVOption<char>>(120, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
@@ -151,7 +151,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	CSVReaderOptions result;
-	deserializer.ReadPropertyWithDefault<bool>(100, "ignore_errors", result.ignore_errors);
+	deserializer.ReadProperty<CSVOption<bool>>(100, "ignore_errors", result.ignore_errors);
 	deserializer.ReadPropertyWithDefault<idx_t>(101, "buffer_sample_size", result.buffer_sample_size);
 	deserializer.ReadPropertyWithDefault<string>(102, "null_str", result.null_str);
 	deserializer.ReadProperty<FileCompressionType>(103, "compression", result.compression);
@@ -168,7 +168,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<idx_t>(114, "buffer_size", result.buffer_size);
 	deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote", result.force_quote);
-	deserializer.ReadPropertyWithDefault<string>(117, "rejects_table_name", result.rejects_table_name);
+	deserializer.ReadPropertyWithDefault<bool>(117, "store_rejects", result.store_rejects);
 	deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit", result.rejects_limit);
 	deserializer.ReadProperty<CSVOption<char>>(119, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
 	deserializer.ReadProperty<CSVOption<char>>(120, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);

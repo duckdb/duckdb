@@ -53,19 +53,18 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
 
 	// Validate rejects_table options
-	if (!options.rejects_table_name.empty()) {
-		if (!options.ignore_errors) {
+	if (options.store_rejects) {
+		if (!options.ignore_errors.GetValue() && options.ignore_errors.IsSetByUser()) {
 			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
 		}
+		// Ensure we set ignore errors to true automagically
+		options.ignore_errors.Set(true, false);
 		if (options.file_options.union_by_name) {
 			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
 		}
 	}
-
-	if (options.rejects_limit != 0) {
-		if (options.rejects_table_name.empty()) {
-			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-		}
+	if (options.rejects_limit != 0 && !options.store_rejects) {
+		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 	}
 
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
@@ -146,9 +145,8 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
 
 	// Create the temporary rejects table
-	auto rejects_table = bind_data.options.rejects_table_name;
-	if (!rejects_table.empty()) {
-		CSVRejectsTable::GetOrCreate(context, rejects_table)->InitializeTable(context, bind_data);
+	if (bind_data.options.store_rejects) {
+		CSVRejectsTable::GetOrCreate(context)->InitializeTable(context, bind_data);
 	}
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
@@ -228,7 +226,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
+	table_function.named_parameters["store_rejects"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;

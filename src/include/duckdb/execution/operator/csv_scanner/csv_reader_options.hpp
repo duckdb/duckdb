@@ -40,9 +40,9 @@ struct CSVReaderOptions {
 	//! See struct above.
 	DialectOptions dialect_options;
 	//! Whether or not we should ignore InvalidInput errors
-	bool ignore_errors = false;
-	//! Rejects table name
-	string rejects_table_name;
+	CSVOption<bool> ignore_errors = false;
+	//! Whether we store CSV Errors or not
+	bool store_rejects = false;
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
 	//! Number of samples to buffer

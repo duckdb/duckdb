@@ -9,14 +9,14 @@ namespace duckdb {
 
 TableCatalogEntry &CSVRejectsTable::GetTable(ClientContext &context) {
 	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, name);
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, "reject_scans");
 	return table_entry;
 }
 
-shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &name) {
-	auto key = "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(name);
+shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context) {
+	auto key = "CSV_REJECTS_TABLE_CACHE_ENTRY";
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return cache.GetOrCreate<CSVRejectsTable>(key, name);
+	return cache.GetOrCreate<CSVRejectsTable>(key);
 }
 
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
@@ -38,27 +38,61 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	type_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateType(context, *type_info);
 
-	// Create Rejects Table
-	auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, name);
-	info->temporary = true;
-	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	// 1. File Path
-	info->columns.AddColumn(ColumnDefinition("file", LogicalType::VARCHAR));
-	// 2. Row Line
-	info->columns.AddColumn(ColumnDefinition("line", LogicalType::UBIGINT));
-	// 3. Byte Position where error occurred
-	info->columns.AddColumn(ColumnDefinition("byte_position", LogicalType::UBIGINT));
-	// 4. Column Index (If Applicable)
-	info->columns.AddColumn(ColumnDefinition("column_idx", LogicalType::UBIGINT));
-	// 5. Column Name (If Applicable)
-	info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
-	// 6. Error Type
-	info->columns.AddColumn(ColumnDefinition("error_type", enum_type));
-	// 7. Original CSV Line
-	info->columns.AddColumn(ColumnDefinition("csv_line", LogicalType::VARCHAR));
-	// 8. Full Error Message
-	info->columns.AddColumn(ColumnDefinition("error_message", LogicalType::VARCHAR));
-	catalog.CreateTable(context, std::move(info));
+	// Create Rejects Scans Table
+	{
+		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, "reject_scans");
+		info->temporary = true;
+		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		// 0. Scan ID
+		info->columns.AddColumn(ColumnDefinition("scan_id", LogicalType::UBIGINT));
+		// 1. File Path
+		info->columns.AddColumn(ColumnDefinition("file_path", LogicalType::VARCHAR));
+		// 2. Delimiter
+		info->columns.AddColumn(ColumnDefinition("delimiter", LogicalType::VARCHAR));
+		// 3. Quote
+		info->columns.AddColumn(ColumnDefinition("quote", LogicalType::VARCHAR));
+		// 4. Escape
+		info->columns.AddColumn(ColumnDefinition("escape", LogicalType::VARCHAR));
+		// 5. NewLine Delimiter
+		info->columns.AddColumn(ColumnDefinition("newline_delimiter", LogicalType::VARCHAR));
+		// 6. Skip Rows
+		info->columns.AddColumn(ColumnDefinition("skip_rows", LogicalType::UINTEGER));
+		// 7. Has Header
+		info->columns.AddColumn(ColumnDefinition("has_header", LogicalType::BOOLEAN));
+		// 8. List<Struct<Column-Name:Types>>
+		info->columns.AddColumn(ColumnDefinition("columns", LogicalType::VARCHAR));
+		// 9. Date Format
+		info->columns.AddColumn(ColumnDefinition("date_format", LogicalType::VARCHAR));
+		// 10. Timestamp Format
+		info->columns.AddColumn(ColumnDefinition("timestamp_format", LogicalType::VARCHAR));
+		// 11. CSV read function with all the options used
+		info->columns.AddColumn(ColumnDefinition("user_arguments", LogicalType::VARCHAR));
+		// 12. CSV read function with all the options used
+		info->columns.AddColumn(ColumnDefinition("prompt", LogicalType::VARCHAR));
+		catalog.CreateTable(context, std::move(info));
+	}
+	{
+		// Create Rejects Error Table
+		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, "reject_errors");
+		info->temporary = true;
+		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		// 1. Row Line
+		info->columns.AddColumn(ColumnDefinition("line", LogicalType::UBIGINT));
+		// 2. Byte Position where error occurred
+		info->columns.AddColumn(ColumnDefinition("byte_position", LogicalType::UBIGINT));
+		// 3. Column Index (If Applicable)
+		info->columns.AddColumn(ColumnDefinition("column_idx", LogicalType::UBIGINT));
+		// 4. Column Name (If Applicable)
+		info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
+		// 5. Error Type
+		info->columns.AddColumn(ColumnDefinition("error_type", enum_type));
+		// 6. Original CSV Line
+		info->columns.AddColumn(ColumnDefinition("csv_line", LogicalType::VARCHAR));
+		// 7. Full Error Message
+		info->columns.AddColumn(ColumnDefinition("error_message", LogicalType::VARCHAR));
+		catalog.CreateTable(context, std::move(info));
+	}
+
 	count = 0;
 }
 

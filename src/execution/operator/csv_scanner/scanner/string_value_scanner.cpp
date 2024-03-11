@@ -17,7 +17,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p)
     : ScannerResult(states, state_machine),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
-      null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors),
+      null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
       null_str_ptr(state_machine.options.null_str.c_str()), null_str_size(state_machine.options.null_str.size()),
       result_size(result_size_p), error_handler(error_hander_p), iterator(iterator_p),
       store_line_size(store_line_size_p), csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
@@ -219,7 +219,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		// By default we add a string
 		// We only evaluate if a string is utf8 valid, if it's actually a varchar
 		if (parse_types[chunk_col_id].second && !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
-			bool force_error = !state_machine.options.ignore_errors && sniffing;
+			bool force_error = !state_machine.options.ignore_errors.GetValue() && sniffing;
 			// Invalid unicode, we must error
 			if (force_error) {
 				HandleUnicodeError(cur_col_id, force_error);
@@ -554,7 +554,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 }
 
 void StringValueResult::InvalidState(StringValueResult &result) {
-	bool force_error = !result.state_machine.options.ignore_errors && result.sniffing;
+	bool force_error = !result.state_machine.options.ignore_errors.GetValue() && result.sniffing;
 	// Invalid unicode, we must error
 	if (force_error) {
 		result.HandleUnicodeError(result.cur_col_id, force_error);
@@ -721,7 +721,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			{
 				vector<Value> row;
 
-				if (state_machine->options.ignore_errors) {
+				if (state_machine->options.ignore_errors.GetValue()) {
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
 					}
@@ -739,7 +739,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
-			D_ASSERT(state_machine->options.ignore_errors);
+			D_ASSERT(state_machine->options.ignore_errors.GetValue());
 			// We are ignoring errors. We must continue but ignoring borked rows
 			for (; line_error < parse_chunk.size(); line_error++) {
 				if (!inserted_column_data.validity.RowIsValid(line_error) &&
@@ -1184,7 +1184,7 @@ void StringValueScanner::SetStart() {
 			if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size ||
 			    scan_finder->iterator.GetBufferIdx() >= iterator.GetBufferIdx()) {
 				// Propagate any errors
-				if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors) {
+				if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors.GetValue()) {
 					for (auto &error_vector : scan_finder->error_handler->errors) {
 						for (auto &error : error_vector.second) {
 							error_handler->Error(error);
@@ -1202,7 +1202,7 @@ void StringValueScanner::SetStart() {
 		}
 	} while (!line_found);
 	// Propagate any errors
-	if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors) {
+	if (!scan_finder->error_handler->errors.empty() && state_machine->options.ignore_errors.GetValue()) {
 		for (auto &error_vector : scan_finder->error_handler->errors) {
 			for (auto &error : error_vector.second) {
 				error_handler->Error(error);

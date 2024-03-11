@@ -14,14 +14,14 @@ class ClientContext;
 
 class CSVRejectsTable : public ObjectCacheEntry {
 public:
-	CSVRejectsTable(string name) : name(name), count(0) {
+	CSVRejectsTable() : count(0) {
 	}
 	~CSVRejectsTable() override = default;
 	mutex write_lock;
-	string name;
+
 	idx_t count;
 
-	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context, const string &name);
+	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context);
 
 	void InitializeTable(ClientContext &context, const ReadCSVData &options);
 	TableCatalogEntry &GetTable(ClientContext &context);

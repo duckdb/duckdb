@@ -19,9 +19,9 @@ void CSVErrorHandler::ThrowError(CSVError csv_error) {
 	if (PrintLineNumber(csv_error)) {
 		error << "CSV Error on Line: " << GetLine(csv_error.error_info) << std::endl;
 	}
-	if (csv_error.error_message_with_options.empty()){
+	if (csv_error.error_message_with_options.empty()) {
 		error << csv_error.error_message;
-	} else{
+	} else {
 		error << csv_error.error_message_with_options;
 	}
 	switch (csv_error.type) {
@@ -153,7 +153,8 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
                                            LinesPerBoundary error_info, string &csv_row, idx_t byte_position) {
 	std::ostringstream error;
 	error << "Value with unterminated quote found.";
-	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, current_column, csv_row, error_info, byte_position, options);
+	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, current_column, csv_row, error_info, byte_position,
+	                options);
 }
 
 CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
@@ -162,10 +163,11 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
-		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info,
-		                byte_position, options);
+		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, byte_position,
+		                options);
 	} else {
-		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, byte_position, options);
+		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, byte_position,
+		                options);
 	}
 }
 
@@ -174,7 +176,8 @@ CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_co
 	std::ostringstream error;
 	// How many columns were expected and how many were found
 	error << "Invalid unicode (byte sequence mismatch) detected.";
-	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, current_column, csv_row, error_info, byte_position, options);
+	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, current_column, csv_row, error_info, byte_position,
+	                options);
 }
 
 bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
