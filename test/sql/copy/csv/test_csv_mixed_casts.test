@@ -116,10 +116,24 @@ FROM read_csv(
     ignore_errors = true
 );
 ----
+1	5.500
 2	5.500
 3	5.000
-4	0.005
 5	5.500
 
-
+statement error
+FROM read_csv(
+    'data/csv/mixed_decimal.csv',
+    auto_detect = false,
+    header = true,
+    delim = '|',
+    decimal_separator = ';',
+     columns = {
+      'A': 'INTEGER',
+      'B': 'DECIMAL',
+    },
+    ignore_errors = true
+);
+----
+Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','
 

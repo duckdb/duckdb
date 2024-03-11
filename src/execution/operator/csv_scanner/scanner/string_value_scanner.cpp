@@ -606,8 +606,10 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				    CSVCast::TryCastFloatingVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
 				                                                 parse_chunk.size(), parameters, type, line_error);
 			} else if (state_machine->options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
-				success = CSVCast::TryCastDecimalVectorCommaSeparated(
-				    state_machine->options, parse_vector, result_vector, parse_chunk.size(), parameters, type);
+				success =
+				    CSVCast::TryCastDecimalVectorCommaSeparated(state_machine->options, parse_vector, result_vector,
+				                                                parse_chunk.size(), parameters, type, line_error);
+
 			} else {
 				// target type is not varchar: perform a cast
 				success = VectorOperations::TryCast(buffer_manager->context, parse_vector, result_vector,
