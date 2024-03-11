@@ -13,9 +13,18 @@ SettingsSet &ProfilingInfo::GetSettings() {
 	return settings;
 }
 
+SettingsSet ProfilingInfo::DefaultSettings() {
+	return {
+	    MetricsType::CPU_TIME,
+	    MetricsType::EXTRA_INFO,
+	    MetricsType::OPERATOR_CARDINALITY,
+	    MetricsType::OPERATOR_TIMING,
+	};
+}
+
 void ProfilingInfo::ResetSettings() {
 	settings.clear();
-	settings = default_settings;
+	settings = DefaultSettings();
 }
 
 void ProfilingInfo::ResetMetrics() {

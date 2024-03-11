@@ -526,8 +526,8 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 }
 
 // Print a row
-static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
-                     int sample_counter, int tuple_counter, const string &extra_info, int depth) {
+static void PrintRow(std::ostream &ss, const string &annotation, idx_t id, const string &name, double time,
+                     int sample_counter, int tuple_counter, const string &extra_info, idx_t depth) {
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"annotation\": \"" + QueryProfiler::JSONSanitize(annotation) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"id\": " + to_string(id) + ",\n";
@@ -545,7 +545,7 @@ static void PrintRow(std::ostream &ss, const string &annotation, int id, const s
 	ss << string(depth * 3, ' ') << " },\n";
 }
 
-static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, idx_t &fun_id, int depth) {
+static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, idx_t &fun_id, idx_t depth) {
 	if (info.hasfunction) {
 		double time = info.sample_tuples_count == 0 ? 0 : int(info.function_time) / double(info.sample_tuples_count);
 		PrintRow(ss, "Function", fun_id++, info.function_name, time, NumericCast<int>(info.sample_tuples_count),

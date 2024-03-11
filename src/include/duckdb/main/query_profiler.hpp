@@ -121,7 +121,7 @@ public:
 	DUCKDB_API OperatorInfo &GetOperatorInfo(const PhysicalOperator &phys_op);
 
 	static bool SettingEnabled(const MetricsType setting) {
-		return SettingSetFunctions::Enabled(default_settings, setting);
+		return SettingSetFunctions::Enabled(ProfilingInfo::DefaultSettings(), setting);
 	}
 
 	~OperatorProfiler() {
