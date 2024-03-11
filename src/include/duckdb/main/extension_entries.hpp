@@ -38,6 +38,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"excel_text", "excel", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"family", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_substrait", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
