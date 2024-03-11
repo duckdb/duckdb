@@ -20,12 +20,20 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.
 statement ok
 SELECT cpu_time, extra_info, operator_cardinality, operator_timing FROM metrics_output;
 
-# Set the custom settings
+query I rowsort
+SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
+----
+CPU_TIME
+EXTRA_INFO
+OPERATOR_CARDINALITY
+OPERATOR_TIMING
+
+# Turn off all settings
 statement ok
-CREATE TABLE custom_settings (CPU_TIME TEXT, EXTRA_INFO TEXT, OPERATOR_CARDINALITY TEXT, OPERATOR_TIMING TEXT);
+CREATE TABLE custom_settings (CPU_TIME TEXT);
 
 statement ok
-INSERT INTO custom_settings VALUES ('true', 'true', 'true', 'true');
+INSERT INTO custom_settings VALUES ('false');
 
 statement ok
 COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
@@ -34,12 +42,9 @@ statement ok
 PRAGMA custom_profiling_settings='__WORKING_DIRECTORY__/test/sql/pragma/settings.json'
 
 query I rowsort
-SELECT unnest(string_split(current_setting('custom_profiling_settings'), ', '));
+SELECT string_split(current_setting('custom_profiling_settings'), ', ');
 ----
-CPU_TIME
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_TIMING
+[]
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -53,12 +58,38 @@ select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
 
-statement ok
-SELECT cpu_time, extra_info, operator_cardinality, operator_timing FROM metrics_output;
+statement error
+SELECT cpu_time FROM metrics_output;
+----
+Referenced column "cpu_time" not found in FROM clause!
 
-# change the cpu time to false and re-run the query
+statement error
+SELECT extra_info FROM metrics_output;
+----
+Referenced column "extra_info" not found in FROM clause!
+
+statement error
+SELECT operator_cardinality FROM metrics_output;
+----
+Referenced column "operator_cardinality" not found in FROM clause!
+
+statement error
+SELECT operator_timing FROM metrics_output;
+----
+Referenced column "operator_timing" not found in FROM clause!
+
+# change the cpu time to false and the rest to true and re-run the query
 statement ok
-UPDATE custom_settings SET CPU_TIME = 'false';
+ALTER TABLE custom_settings ADD COLUMN EXTRA_INFO TEXT
+
+statement ok
+ALTER TABLE custom_settings ADD COLUMN OPERATOR_CARDINALITY TEXT
+
+statement ok
+ALTER TABLE custom_settings ADD COLUMN OPERATOR_TIMING TEXT;
+
+statement ok
+UPDATE custom_settings SET CPU_TIME = 'false', EXTRA_INFO = 'true', OPERATOR_CARDINALITY = 'true', OPERATOR_TIMING = 'true'
 
 statement ok
 COPY custom_settings TO '__WORKING_DIRECTORY__/test/sql/pragma/settings.json';
@@ -89,6 +120,9 @@ statement error
 select cpu_time from metrics_output;
 ----
 Referenced column "cpu_time" not found in FROM clause!
+
+statement ok
+SELECT extra_info, operator_cardinality, operator_timing FROM metrics_output;
 
 # Remove time from the settings file but add back the cpu time
 statement ok
