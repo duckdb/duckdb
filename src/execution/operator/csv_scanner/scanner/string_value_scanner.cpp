@@ -55,7 +55,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				parse_types[i] = {type.id(), true};
 				logical_types.emplace_back(type);
 			} else {
-				parse_types[i] = {LogicalTypeId::VARCHAR, type.id() == LogicalTypeId::VARCHAR};
+				parse_types[i] = {LogicalTypeId::VARCHAR, type.id() == LogicalTypeId::VARCHAR || type.IsNested()};
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
