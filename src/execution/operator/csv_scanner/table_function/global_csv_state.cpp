@@ -278,10 +278,10 @@ void CSVGlobalState::FillRejectsTable() {
 							break;
 						case CSVErrorType::TOO_FEW_COLUMNS:
 							D_ASSERT(bind_data.return_names.size() > col_idx + 1);
-							errors_appender.Append(string_t("\"" + bind_data.return_names[col_idx + 1] + "\""));
+							errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
 							break;
 						default:
-							errors_appender.Append(string_t("\"" + bind_data.return_names[col_idx] + "\""));
+							errors_appender.Append(string_t(bind_data.return_names[col_idx]));
 						}
 						// 7. Error Type
 						errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));

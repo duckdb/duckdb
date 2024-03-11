@@ -11,8 +11,7 @@ query IIIII
 SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), MAX(len(column1)) FROM read_csv_auto(
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=1,
-    store_rejects=true,
-    ignore_errors=true);
+    store_rejects=true);
 ----
 BIGINT	VARCHAR	11044	11044	2
 
@@ -21,14 +20,14 @@ query IIIIIIIIIIIII
 SELECT *
 FROM reject_scans order by all;
 ----
-3	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	ignore_errors=true, store_rejects=true, sample_size=1
-3	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	ignore_errors=true, store_rejects=true, sample_size=1
+3	0	test/sql/copy/csv/data/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	store_rejects=true, sample_size=1
+3	1	test/sql/copy/csv/data/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	store_rejects=true, sample_size=1
 
 query IIIIIIIII
 SELECT *
 FROM reject_errors order by all;
 ----
-3	0	2176	10875	1	"column0"	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-3	0	4176	20875	1	"column0"	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-3	1	3680	18395	1	"column0"	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-3	1	5680	28395	1	"column0"	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+3	0	2176	10875	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+3	0	4176	20875	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+3	1	3680	18395	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+3	1	5680	28395	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
