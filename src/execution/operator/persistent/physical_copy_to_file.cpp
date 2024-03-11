@@ -7,10 +7,41 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include <algorithm>
 
 namespace duckdb {
+
+struct PartitionWriteInfo {
+	unique_ptr<GlobalFunctionData> global_state;
+};
+
+struct VectorOfValuesHashFunction {
+	uint64_t operator()(const vector<Value> &values) const {
+		hash_t result = 0;
+		for (auto &val : values) {
+			result ^= val.Hash();
+		}
+		return result;
+	}
+};
+
+struct VectorOfValuesEquality {
+	bool operator()(const vector<Value> &a, const vector<Value> &b) const {
+		if (a.size() != b.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < a.size(); i++) {
+			if (ValueOperations::DistinctFrom(a[i], b[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+template <class T>
+using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
 
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
@@ -25,7 +56,108 @@ public:
 
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
+
+	static void CreateDir(const string &dir_path, FileSystem &fs) {
+		if (!fs.DirectoryExists(dir_path)) {
+			fs.CreateDirectory(dir_path);
+		}
+	}
+
+	static void CreateDirectories(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+	                              string path, FileSystem &fs) {
+		CreateDir(path, fs);
+
+		for (idx_t i = 0; i < cols.size(); i++) {
+			const auto &partition_col_name = names[cols[i]];
+			const auto &partition_value = values[i];
+			string p_dir = partition_col_name + "=" + partition_value.ToString();
+			path = fs.JoinPath(path, p_dir);
+			CreateDir(path, fs);
+		}
+	}
+
+	void CreatePartitionDirectories(ClientContext &context, const PhysicalCopyToFile &op) {
+		auto &fs = FileSystem::GetFileSystem(context);
+
+		auto trimmed_path = op.GetTrimmedPath(context);
+
+		auto l = lock.GetExclusiveLock();
+		lock_guard<mutex> global_lock_on_partition_state(partition_state->lock);
+		const auto &global_partitions = partition_state->partitions;
+		// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
+
+		for (idx_t i = created_directories; i < global_partitions.size(); i++) {
+			CreateDirectories(op.partition_columns, op.names, global_partitions[i]->first.values, trimmed_path, fs);
+		}
+		created_directories = global_partitions.size();
+	}
+
+	static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
+	                           string path, FileSystem &fs) {
+		for (idx_t i = 0; i < cols.size(); i++) {
+			const auto &partition_col_name = names[cols[i]];
+			const auto &partition_value = values[i];
+			string p_dir = partition_col_name + "=" + partition_value.ToString();
+			path = fs.JoinPath(path, p_dir);
+		}
+		return path;
+	}
+
+	void FinalizePartition(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
+		if (!info.global_state) {
+			// already finalized
+			return;
+		}
+		// finalize the partition
+		op.function.copy_to_finalize(context, *op.bind_data, *info.global_state);
+		info.global_state.reset();
+	}
+
+	void FinalizePartitions(ClientContext &context, const PhysicalCopyToFile &op) {
+		// finalize any remaining partitions
+		for (auto &entry : active_partitioned_writes) {
+			FinalizePartition(context, op, *entry.second);
+		}
+	}
+
+	PartitionWriteInfo &GetPartitionWriteInfo(ExecutionContext &context, const PhysicalCopyToFile &op,
+	                                          const vector<Value> &values) {
+		auto l = lock.GetExclusiveLock();
+		// check if we have already started writing this partition
+		auto entry = active_partitioned_writes.find(values);
+		if (entry != active_partitioned_writes.end()) {
+			// we have - continue writing in this partition
+			return *entry->second;
+		}
+		auto &fs = FileSystem::GetFileSystem(context.client);
+		// Create a writer for the current file
+		auto trimmed_path = op.GetTrimmedPath(context.client);
+		string hive_path = GetDirectory(op.partition_columns, op.names, values, trimmed_path, fs);
+		string full_path(op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, 0));
+		if (fs.FileExists(full_path) && !op.overwrite_or_ignore) {
+			throw IOException("failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing",
+			                  full_path);
+		}
+		// initialize writes
+		auto info = make_uniq<PartitionWriteInfo>();
+		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
+		auto &result = *info;
+		// store in active write map
+		active_partitioned_writes.insert(make_pair(values, std::move(info)));
+		return result;
+	}
+
+private:
+	//! The active writes per partition (for partitioned write)
+	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_partitioned_writes;
 };
+
+string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
+	auto &fs = FileSystem::GetFileSystem(context);
+	string trimmed_path = file_path;
+	StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
+	return trimmed_path;
+}
 
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
@@ -40,6 +172,63 @@ public:
 	unique_ptr<PartitionedColumnDataAppendState> part_buffer_append_state;
 
 	idx_t writer_offset;
+	idx_t append_count = 0;
+
+	void InitializeAppendState(ClientContext &context, const PhysicalCopyToFile &op,
+	                           CopyToFunctionGlobalState &gstate) {
+		part_buffer = make_uniq<HivePartitionedColumnData>(context, op.expected_types, op.partition_columns,
+		                                                   gstate.partition_state);
+		part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
+		part_buffer->InitializeAppendState(*part_buffer_append_state);
+		append_count = 0;
+	}
+
+	void AppendToPartition(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g,
+	                       DataChunk &chunk) {
+		if (!part_buffer) {
+			// re-initialize the append
+			InitializeAppendState(context.client, op, g);
+		}
+		part_buffer->Append(*part_buffer_append_state, chunk);
+		append_count += chunk.size();
+		if (append_count >= ClientConfig::GetConfig(context.client).partitioned_write_flush_threshold) {
+			// flush all cached partitions
+			FlushPartitions(context, op, g);
+		}
+	}
+
+	void ResetAppendState() {
+		part_buffer_append_state.reset();
+		part_buffer.reset();
+		append_count = 0;
+	}
+
+	void FlushPartitions(ExecutionContext &context, const PhysicalCopyToFile &op, CopyToFunctionGlobalState &g) {
+		if (!part_buffer) {
+			return;
+		}
+		part_buffer->FlushAppendState(*part_buffer_append_state);
+		auto &partitions = part_buffer->GetPartitions();
+		auto partition_key_map = part_buffer->GetReverseMap();
+
+		// ensure all partition directories are created before we start writing
+		g.CreatePartitionDirectories(context.client, op);
+
+		for (idx_t i = 0; i < partitions.size(); i++) {
+			// get the partition write info for this buffer
+			auto &info = g.GetPartitionWriteInfo(context, op, partition_key_map[i]->values);
+
+			auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
+			// push the chunks into the write state
+			for (auto &chunk : partitions[i]->Chunks()) {
+				op.function.copy_to_sink(context, *op.bind_data, *info.global_state, *local_copy_state, chunk);
+			}
+			op.function.copy_to_combine(context, *op.bind_data, *info.global_state, *local_copy_state);
+			local_copy_state.reset();
+			partitions[i].reset();
+		}
+		ResetAppendState();
+	}
 };
 
 unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context,
@@ -60,10 +249,7 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 
 		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
 		state->writer_offset = g.last_file_offset++;
-		state->part_buffer =
-		    make_uniq<HivePartitionedColumnData>(context.client, expected_types, partition_columns, g.partition_state);
-		state->part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
-		state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
+		state->InitializeAppendState(context.client, *this, g);
 		return std::move(state);
 	}
 	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
@@ -139,7 +325,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
-		l.part_buffer->Append(*l.part_buffer_append_state, chunk);
+		l.AppendToPartition(context, *this, g, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
@@ -179,79 +365,13 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-static void CreateDir(const string &dir_path, FileSystem &fs) {
-	if (!fs.DirectoryExists(dir_path)) {
-		fs.CreateDirectory(dir_path);
-	}
-}
-
-static void CreateDirectories(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-                              string path, FileSystem &fs) {
-	CreateDir(path, fs);
-
-	for (idx_t i = 0; i < cols.size(); i++) {
-		const auto &partition_col_name = names[cols[i]];
-		const auto &partition_value = values[i];
-		string p_dir = partition_col_name + "=" + partition_value.ToString();
-		path = fs.JoinPath(path, p_dir);
-		CreateDir(path, fs);
-	}
-}
-
-static string GetDirectory(const vector<idx_t> &cols, const vector<string> &names, const vector<Value> &values,
-                           string path, FileSystem &fs) {
-	for (idx_t i = 0; i < cols.size(); i++) {
-		const auto &partition_col_name = names[cols[i]];
-		const auto &partition_value = values[i];
-		string p_dir = partition_col_name + "=" + partition_value.ToString();
-		path = fs.JoinPath(path, p_dir);
-	}
-	return path;
-}
-
 SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
-		auto &fs = FileSystem::GetFileSystem(context.client);
-		l.part_buffer->FlushAppendState(*l.part_buffer_append_state);
-		auto &partitions = l.part_buffer->GetPartitions();
-		auto partition_key_map = l.part_buffer->GetReverseMap();
-
-		string trimmed_path = file_path;
-		StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
-		{
-			// create directories
-			auto lock = g.lock.GetExclusiveLock();
-			lock_guard<mutex> global_lock_on_partition_state(g.partition_state->lock);
-			const auto &global_partitions = g.partition_state->partitions;
-			// global_partitions have partitions added only at the back, so it's fine to only traverse the last part
-
-			for (idx_t i = g.created_directories; i < global_partitions.size(); i++) {
-				CreateDirectories(partition_columns, names, global_partitions[i]->first.values, trimmed_path, fs);
-			}
-			g.created_directories = global_partitions.size();
-		}
-
-		for (idx_t i = 0; i < partitions.size(); i++) {
-			string hive_path = GetDirectory(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
-			string full_path(filename_pattern.CreateFilename(fs, hive_path, file_extension, l.writer_offset));
-			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
-				throw IOException(
-				    "failed to create %s, file exists! Enable OVERWRITE_OR_IGNORE option to force writing", full_path);
-			}
-			// Create a writer for the current file
-			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, full_path);
-			auto fun_data_local = function.copy_to_initialize_local(context, *bind_data);
-
-			for (auto &chunk : partitions[i]->Chunks()) {
-				function.copy_to_sink(context, *bind_data, *fun_data_global, *fun_data_local, chunk);
-			}
-
-			function.copy_to_combine(context, *bind_data, *fun_data_global, *fun_data_local);
-			function.copy_to_finalize(context.client, *bind_data, *fun_data_global);
-		}
+		// flush all remaining partitions
+		l.FlushPartitions(context, *this, g);
 	} else if (function.copy_to_combine) {
 		if (per_thread_output) {
 			// For PER_THREAD_OUTPUT, we can combine/finalize immediately
@@ -272,7 +392,12 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
-	if (per_thread_output || partition_output) {
+	if (partition_output) {
+		// finalize any outstanding partitions
+		gstate.FinalizePartitions(context, *this);
+		return SinkFinalizeType::READY;
+	}
+	if (per_thread_output) {
 		// already happened in combine
 		return SinkFinalizeType::READY;
 	}
