@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/test_limit_spinlock.test
+# name: test/sql/copy/csv/test_limit_spinlock.test_slow
 # description: Test that we can read file that was causing spinlock issues when used with the limit operator
 # group: [csv]
 
