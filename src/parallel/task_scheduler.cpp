@@ -229,9 +229,8 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 #endif
 
 int32_t TaskScheduler::NumberOfThreads() {
-	lock_guard<mutex> t(thread_lock);
 	auto &config = DBConfig::GetConfig(db);
-	return NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	return NumericCast<int32_t>(config.options.current_thread_count);
 }
 
 void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
@@ -274,8 +273,10 @@ void TaskScheduler::RelaunchThreads() {
 
 void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
+	auto &config = DBConfig::GetConfig(db);
 	idx_t new_thread_count = n;
 	if (threads.size() == new_thread_count) {
+		config.options.current_thread_count = threads.size() + config.options.external_threads;
 		return;
 	}
 	if (threads.size() > new_thread_count) {
@@ -305,6 +306,7 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 			markers.push_back(std::move(marker));
 		}
 	}
+	config.options.current_thread_count = threads.size() + config.options.external_threads;
 #endif
 }
 
