@@ -245,6 +245,24 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
 	}
 }
 
+bool DBConfig::IsInMemoryDatabase(const char *database_path) {
+	if (!database_path) {
+		// Entirely empty
+		return true;
+	}
+	if (strlen(database_path) == 0) {
+		// '' empty string
+		return true;
+	}
+	constexpr const char *IN_MEMORY_PATH_PREFIX = ":memory:";
+	const idx_t PREFIX_LENGTH = strlen(IN_MEMORY_PATH_PREFIX);
+	if (strncmp(database_path, IN_MEMORY_PATH_PREFIX, PREFIX_LENGTH) == 0) {
+		// Starts with :memory:, i.e ':memory:named_conn' is valid
+		return true;
+	}
+	return false;
+}
+
 CastFunctionSet &DBConfig::GetCastFunctions() {
 	return *cast_functions;
 }
@@ -257,6 +275,14 @@ void DBConfig::SetDefaultMaxMemory() {
 	auto memory = FileSystem::GetAvailableMemory();
 	if (memory != DConstants::INVALID_INDEX) {
 		options.maximum_memory = memory * 8 / 10;
+	}
+}
+
+void DBConfig::SetDefaultTempDirectory() {
+	if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
+		options.temporary_directory = ".tmp";
+	} else {
+		options.temporary_directory = options.database_path + ".tmp";
 	}
 }
 
