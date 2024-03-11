@@ -45,6 +45,11 @@ on:
         required: false
         type: boolean
         default: true
+      # Patch file to patch the extension's sources before building
+      patch:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   generate_matrix:
@@ -60,6 +65,11 @@ jobs:
         with:
           fetch-depth: 0
           submodules: 'true'
+
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
 
       - name: Checkout DuckDB to version
         run: |
@@ -137,6 +147,11 @@ jobs:
           fetch-depth: 0
           submodules: 'true'
 
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
+
       - name: Checkout DuckDB to version
         run: |
           cd duckdb
@@ -203,6 +218,11 @@ jobs:
         with:
           fetch-depth: 0
           submodules: 'true'
+
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
 
       - name: Install Ninja
         run: |
@@ -274,6 +294,11 @@ jobs:
           fetch-depth: 0
           submodules: 'true'
 
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -335,6 +360,11 @@ jobs:
         with:
           fetch-depth: 0
           submodules: 'true'
+
+      - if: ${{ inputs.patch != '' }}
+        run: |
+          patch -p1 < ${{ inputs.patch }}
+        shell: bash
 
       - name: Checkout DuckDB to version
         run: |

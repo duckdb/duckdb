@@ -36,6 +36,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 
 optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
                                                                const AttachOptions &options) {
+	if (AttachedDatabase::NameIsReserved(info.name)) {
+		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
+	}
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
@@ -204,7 +207,13 @@ vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext 
 	return result;
 }
 
-void DatabaseManager::ResetDatabases() {
+void DatabaseManager::ResetDatabases(unique_ptr<TaskScheduler> &scheduler) {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan([&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	for (auto &database : result) {
+		database.get().Close();
+	}
+	scheduler.reset();
 	databases.reset();
 }
 
