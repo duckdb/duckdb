@@ -390,6 +390,17 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 	return result.substr(open_tag_pos, close_tag_pos - open_tag_pos);
 }
 
+void S3FileSystem::NotifyUploadsInProgress(S3FileHandle &file_handle) {
+	{
+		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
+		file_handle.uploads_in_progress--;
+	}
+	// Note that there are 2 cv's because otherwise we might deadlock when the final flushing thread is notified while
+	// another thread is still waiting for an upload thread
+	file_handle.uploads_in_progress_cv.notify_one();
+	file_handle.final_flush_cv.notify_one();
+}
+
 void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 
@@ -420,11 +431,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 			file_handle.upload_exception = std::current_exception();
 		}
 
-		{
-			unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-			file_handle.uploads_in_progress--;
-		}
-		file_handle.uploads_in_progress_cv.notify_one();
+		NotifyUploadsInProgress(file_handle);
 
 		return;
 	}
@@ -440,12 +447,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 	// Free up space for another thread to acquire an S3WriteBuffer
 	write_buffer.reset();
 
-	// Signal a thread has finished
-	{
-		unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-		file_handle.uploads_in_progress--;
-	}
-	file_handle.uploads_in_progress_cv.notify_one();
+	NotifyUploadsInProgress(file_handle);
 }
 
 void S3FileSystem::FlushBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
@@ -504,7 +506,7 @@ void S3FileSystem::FlushAllBuffers(S3FileHandle &file_handle) {
 		}
 	}
 	unique_lock<mutex> lck(file_handle.uploads_in_progress_lock);
-	file_handle.uploads_in_progress_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress == 0; });
+	file_handle.final_flush_cv.wait(lck, [&file_handle] { return file_handle.uploads_in_progress == 0; });
 
 	file_handle.RethrowIOError();
 }
