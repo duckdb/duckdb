@@ -127,7 +127,6 @@ CREATE MACRO my.string_split(a,b) AS a + b
 
 # overloaded scalar functions without explicit qualification use system definition
 statement error
-query I
 SELECT string_split(1, 2)
 ----
 
