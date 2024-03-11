@@ -33,7 +33,8 @@ public:
 	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context, const string &name);
 
 	void InitializeTable(ClientContext &context, const ReadCSVData &options);
-	TableCatalogEntry &GetTable(ClientContext &context);
+	TableCatalogEntry &GetErrorsTable(ClientContext &context);
+	TableCatalogEntry &GetScansTable(ClientContext &context);
 
 public:
 	static string ObjectType() {

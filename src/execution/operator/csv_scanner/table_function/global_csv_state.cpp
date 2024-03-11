@@ -177,11 +177,16 @@ void CSVGlobalState::FillRejectsTable() {
 		auto limit = options.rejects_limit;
 		auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
 		lock_guard<mutex> lock(rejects->write_lock);
-		auto &table = rejects->GetTable(context);
-		InternalAppender appender(context, table);
+		auto &errors_table = rejects->GetErrorsTable(context);
+		auto &scans_table = rejects->GetScansTable(context);
+		InternalAppender errors_appender(context, errors_table);
+		InternalAppender scans_appender(context, scans_table);
+		idx_t scan_id = context.transaction.GetActiveQuery();
+		idx_t file_id = 0;
 		for (auto &file : file_scans) {
 			auto file_name = file->file_path;
 			auto &errors = file->error_handler->errors;
+			// We first insert the file into the file scans table
 			for (auto &error_vector : errors) {
 				for (auto &error : error_vector.second) {
 					if (!IsCSVErrorAcceptedReject(error.type)) {
@@ -197,36 +202,38 @@ void CSVGlobalState::FillRejectsTable() {
 						auto row_line = file->error_handler->GetLine(error.error_info);
 						auto col_idx = error.column_idx;
 						// Add the row to the rejects table
-						appender.BeginRow();
-						// 1. File Path
-						appender.Append(string_t(file_name));
-						// 2. Row Line
-						appender.Append(row_line);
-						// 3. Byte Position where error occurred
-						appender.Append(error.byte_position);
-						// 4. Column Index
-						appender.Append(col_idx + 1);
-						// 5. Column Name (If Applicable)
+						errors_appender.BeginRow();
+						// 1. Scan Id
+						errors_appender.Append(scan_id);
+						// 2. File Id
+						errors_appender.Append(file_id);
+						// 3. Row Line
+						errors_appender.Append(row_line);
+						// 4. Byte Position where error occurred
+						errors_appender.Append(error.byte_position);
+						// 5. Column Index
+						errors_appender.Append(col_idx + 1);
+						// 6. Column Name (If Applicable)
 						switch (error.type) {
 						case CSVErrorType::TOO_MANY_COLUMNS:
-							appender.Append(Value());
+							errors_appender.Append(Value());
 							break;
 						case CSVErrorType::TOO_FEW_COLUMNS:
 							D_ASSERT(bind_data.return_names.size() > col_idx + 1);
-							appender.Append(string_t("\"" + bind_data.return_names[col_idx + 1] + "\""));
+							errors_appender.Append(string_t("\"" + bind_data.return_names[col_idx + 1] + "\""));
 							break;
 						default:
-							appender.Append(string_t("\"" + bind_data.return_names[col_idx] + "\""));
+							errors_appender.Append(string_t("\"" + bind_data.return_names[col_idx] + "\""));
 						}
-						// 6. Error Type
-						appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
-						// 7. Original CSV Line
-						appender.Append(string_t(error.csv_row));
-						// 8. Full Error Message
-						appender.Append(string_t(error.error_message));
-						appender.EndRow();
+						// 7. Error Type
+						errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
+						// 8. Original CSV Line
+						errors_appender.Append(string_t(error.csv_row));
+						// 9. Full Error Message
+						errors_appender.Append(string_t(error.error_message));
+						errors_appender.EndRow();
 					}
-					appender.Close();
+					errors_appender.Close();
 				}
 			}
 		}

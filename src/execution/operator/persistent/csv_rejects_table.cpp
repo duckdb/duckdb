@@ -7,9 +7,15 @@
 
 namespace duckdb {
 
-TableCatalogEntry &CSVRejectsTable::GetTable(ClientContext &context) {
+TableCatalogEntry &CSVRejectsTable::GetErrorsTable(ClientContext &context) {
 	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
 	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
+	return table_entry;
+}
+
+TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
+	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
 	return table_entry;
 }
 
@@ -45,29 +51,31 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 		// 0. Scan ID
 		info->columns.AddColumn(ColumnDefinition("scan_id", LogicalType::UBIGINT));
-		// 1. File Path
+		// 1. File ID (within the scan)
+		info->columns.AddColumn(ColumnDefinition("file_id", LogicalType::UBIGINT));
+		// 2. File Path
 		info->columns.AddColumn(ColumnDefinition("file_path", LogicalType::VARCHAR));
-		// 2. Delimiter
+		// 3. Delimiter
 		info->columns.AddColumn(ColumnDefinition("delimiter", LogicalType::VARCHAR));
-		// 3. Quote
+		// 4. Quote
 		info->columns.AddColumn(ColumnDefinition("quote", LogicalType::VARCHAR));
-		// 4. Escape
+		// 5. Escape
 		info->columns.AddColumn(ColumnDefinition("escape", LogicalType::VARCHAR));
-		// 5. NewLine Delimiter
+		// 6. NewLine Delimiter
 		info->columns.AddColumn(ColumnDefinition("newline_delimiter", LogicalType::VARCHAR));
-		// 6. Skip Rows
+		// 7. Skip Rows
 		info->columns.AddColumn(ColumnDefinition("skip_rows", LogicalType::UINTEGER));
-		// 7. Has Header
+		// 8. Has Header
 		info->columns.AddColumn(ColumnDefinition("has_header", LogicalType::BOOLEAN));
-		// 8. List<Struct<Column-Name:Types>>
+		// 9. List<Struct<Column-Name:Types>>
 		info->columns.AddColumn(ColumnDefinition("columns", LogicalType::VARCHAR));
-		// 9. Date Format
+		// 10. Date Format
 		info->columns.AddColumn(ColumnDefinition("date_format", LogicalType::VARCHAR));
-		// 10. Timestamp Format
+		// 11. Timestamp Format
 		info->columns.AddColumn(ColumnDefinition("timestamp_format", LogicalType::VARCHAR));
-		// 11. CSV read function with all the options used
-		info->columns.AddColumn(ColumnDefinition("user_arguments", LogicalType::VARCHAR));
 		// 12. CSV read function with all the options used
+		info->columns.AddColumn(ColumnDefinition("user_arguments", LogicalType::VARCHAR));
+		// 13. CSV read function with all the options used
 		info->columns.AddColumn(ColumnDefinition("prompt", LogicalType::VARCHAR));
 		catalog.CreateTable(context, std::move(info));
 	}
@@ -76,19 +84,23 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-		// 1. Row Line
+		// 0. Scan ID
+		info->columns.AddColumn(ColumnDefinition("scan_id", LogicalType::UBIGINT));
+		// 1. File ID (within the scan)
+		info->columns.AddColumn(ColumnDefinition("file_id", LogicalType::UBIGINT));
+		// 2. Row Line
 		info->columns.AddColumn(ColumnDefinition("line", LogicalType::UBIGINT));
-		// 2. Byte Position where error occurred
+		// 3. Byte Position where error occurred
 		info->columns.AddColumn(ColumnDefinition("byte_position", LogicalType::UBIGINT));
-		// 3. Column Index (If Applicable)
+		// 4. Column Index (If Applicable)
 		info->columns.AddColumn(ColumnDefinition("column_idx", LogicalType::UBIGINT));
-		// 4. Column Name (If Applicable)
+		// 5. Column Name (If Applicable)
 		info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
-		// 5. Error Type
+		// 6. Error Type
 		info->columns.AddColumn(ColumnDefinition("error_type", enum_type));
-		// 6. Original CSV Line
+		// 7. Original CSV Line
 		info->columns.AddColumn(ColumnDefinition("csv_line", LogicalType::VARCHAR));
-		// 7. Full Error Message
+		// 8. Full Error Message
 		info->columns.AddColumn(ColumnDefinition("error_message", LogicalType::VARCHAR));
 		catalog.CreateTable(context, std::move(info));
 	}
