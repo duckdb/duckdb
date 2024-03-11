@@ -130,6 +130,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);
 			}
+			filter_operators.push_back(*op);
 		}
 		op = op->children[0].get();
 	}
@@ -279,8 +280,9 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 			// operator during plan reconstruction
 			return true;
 		}
-		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		bindings.insert(relation_mapping[colref.binding.table_index]);
+		if (relation_mapping.find(colref.binding.table_index) != relation_mapping.end()) {
+			bindings.insert(relation_mapping[colref.binding.table_index]);
+		}
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
 		// bound expression
@@ -326,17 +328,24 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			}
 			join.conditions.clear();
 		} else {
+			vector<unique_ptr<Expression>> leftover_expressions;
 			for (auto &expression : f_op.expressions) {
 				if (filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
 					unordered_set<idx_t> bindings;
 					ExtractBindings(*expression, bindings);
+					if (bindings.size() == 0) {
+						// the filter is on a column that is not in our relational map. (example: limit_rownum)
+						// in this case we do not create a FilterInfo for it. (duckdb-internal/#1493)s
+						leftover_expressions.push_back(std::move(expression));
+						continue;
+					}
 					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}
-			f_op.expressions.clear();
+			f_op.expressions = std::move(leftover_expressions);
 		}
 	}
 
