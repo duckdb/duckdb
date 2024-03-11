@@ -135,7 +135,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(114, "buffer_size", buffer_size);
 	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
-	serializer.WritePropertyWithDefault<bool>(117, "store_rejects", store_rejects);
+	serializer.WriteProperty<CSVOption<bool>>(117, "store_rejects", store_rejects);
 	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
 	serializer.WriteProperty<CSVOption<char>>(119, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
 	serializer.WriteProperty<CSVOption<char>>(120, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
@@ -147,6 +147,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(126, "dialect_options.date_format", dialect_options.date_format);
 	serializer.WritePropertyWithDefault<string>(127, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
 	serializer.WritePropertyWithDefault<bool>(128, "parallel", parallel);
+	serializer.WritePropertyWithDefault<string>(129, "rejects_table_name", rejects_table_name);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -168,7 +169,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<idx_t>(114, "buffer_size", result.buffer_size);
 	deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote", result.force_quote);
-	deserializer.ReadPropertyWithDefault<bool>(117, "store_rejects", result.store_rejects);
+	deserializer.ReadProperty<CSVOption<bool>>(117, "store_rejects", result.store_rejects);
 	deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit", result.rejects_limit);
 	deserializer.ReadProperty<CSVOption<char>>(119, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
 	deserializer.ReadProperty<CSVOption<char>>(120, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);
@@ -180,6 +181,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(126, "dialect_options.date_format", result.dialect_options.date_format);
 	deserializer.ReadPropertyWithDefault<string>(127, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
 	deserializer.ReadPropertyWithDefault<bool>(128, "parallel", result.parallel);
+	deserializer.ReadPropertyWithDefault<string>(129, "rejects_table_name", result.rejects_table_name);
 	return result;
 }
 

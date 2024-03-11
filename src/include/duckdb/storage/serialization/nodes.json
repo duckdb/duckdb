@@ -605,7 +605,7 @@
       },
       {"id": 117,
         "name": "store_rejects",
-        "type": "bool"
+        "type": "CSVOption<bool>"
       },
       {"id": 118,
         "name": "rejects_limit",
@@ -650,6 +650,10 @@
       {"id": 128,
         "name": "parallel",
         "type": "bool"
+      },
+      {"id": 129,
+        "name": "rejects_table_name",
+        "type": "string"
       }
     ],
     "pointer_type": "none"

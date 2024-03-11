@@ -173,9 +173,9 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 void CSVGlobalState::FillRejectsTable() {
 	auto &options = bind_data.options;
 
-	if (options.store_rejects) {
+	if (options.store_rejects.GetValue()) {
 		auto limit = options.rejects_limit;
-		auto rejects = CSVRejectsTable::GetOrCreate(context);
+		auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
 		lock_guard<mutex> lock(rejects->write_lock);
 		auto &table = rejects->GetTable(context);
 		InternalAppender appender(context, table);

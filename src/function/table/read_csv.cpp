@@ -51,11 +51,18 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
-
+	if (!options.rejects_table_name.empty() && !options.store_rejects.GetValue() &&
+	    options.store_rejects.IsSetByUser()) {
+		throw BinderException(
+		    "rejects_table_name option is only supported when store_rejects is not manually set to false");
+	}
+	// Ensure we set ignore errors to true automagically
+	options.store_rejects.Set(true, false);
 	// Validate rejects_table options
-	if (options.store_rejects) {
+	if (options.store_rejects.GetValue()) {
 		if (!options.ignore_errors.GetValue() && options.ignore_errors.IsSetByUser()) {
-			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
+			throw BinderException(
+			    "STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false");
 		}
 		// Ensure we set ignore errors to true automagically
 		options.ignore_errors.Set(true, false);
@@ -63,7 +70,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
 		}
 	}
-	if (options.rejects_limit != 0 && !options.store_rejects) {
+	if (options.rejects_limit != 0 && !options.store_rejects.GetValue()) {
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 	}
 
@@ -145,8 +152,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
 
 	// Create the temporary rejects table
-	if (bind_data.options.store_rejects) {
-		CSVRejectsTable::GetOrCreate(context)->InitializeTable(context, bind_data);
+	if (bind_data.options.store_rejects.GetValue()) {
+		CSVRejectsTable::GetOrCreate(context, bind_data.options.rejects_table_name)
+		    ->InitializeTable(context, bind_data);
 	}
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
@@ -227,6 +235,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["store_rejects"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;

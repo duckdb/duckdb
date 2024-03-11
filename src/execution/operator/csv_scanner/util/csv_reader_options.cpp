@@ -208,6 +208,13 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else if (loption == "store_rejects") {
 		store_rejects = ParseBoolean(value, loption);
+	} else if (loption == "rejects_table") {
+		// skip, handled in SetRejectsOptions
+		auto table_name = ParseString(value, loption);
+		if (table_name.empty()) {
+			throw BinderException("REJECTS_TABLE option cannot be empty");
+		}
+		rejects_table_name = table_name;
 	} else if (loption == "rejects_limit") {
 		int64_t limit = ParseInteger(value, loption);
 		if (limit < 0) {

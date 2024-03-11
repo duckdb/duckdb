@@ -9,14 +9,14 @@ namespace duckdb {
 
 TableCatalogEntry &CSVRejectsTable::GetTable(ClientContext &context) {
 	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, "reject_scans");
+	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
 	return table_entry;
 }
 
-shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context) {
-	auto key = "CSV_REJECTS_TABLE_CACHE_ENTRY";
+shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &name) {
+	auto key = "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(name);
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return cache.GetOrCreate<CSVRejectsTable>(key);
+	return cache.GetOrCreate<CSVRejectsTable>(key, name);
 }
 
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
@@ -40,7 +40,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 
 	// Create Rejects Scans Table
 	{
-		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, "reject_scans");
+		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 		// 0. Scan ID
@@ -73,7 +73,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	}
 	{
 		// Create Rejects Error Table
-		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, "reject_errors");
+		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
 		info->temporary = true;
 		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 		// 1. Row Line
