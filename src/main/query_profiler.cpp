@@ -581,7 +581,8 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, idx
 				                  ? 0
 				                  : double(expr_timer->time) / double(expr_timer->sample_tuples_count);
 				PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name, time,
-				         NumericCast<int>(expr_timer->sample_tuples_count), NumericCast<int>(expr_timer->tuples_count), expr_timer->extra_info, depth + 1);
+				         NumericCast<int>(expr_timer->sample_tuples_count), NumericCast<int>(expr_timer->tuples_count),
+				         expr_timer->extra_info, depth + 1);
 				// Extract all functions inside the tree
 				ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
 			}

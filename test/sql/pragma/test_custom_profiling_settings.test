@@ -4,6 +4,23 @@
 
 require json
 
+# Check that the default settings are as expected
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = 'test/sql/pragma/output.json';
+
+statement ok
+select unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) as names order by random();
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM 'test/sql/pragma/output.json';
+
+statement ok
+SELECT cpu_time, extra_info, operator_cardinality, operator_timing FROM metrics_output;
+
+# Set the custom settings
 statement ok
 CREATE TABLE custom_settings (CPU_TIME TEXT, EXTRA_INFO TEXT, OPERATOR_CARDINALITY TEXT, OPERATOR_TIMING TEXT);
 
