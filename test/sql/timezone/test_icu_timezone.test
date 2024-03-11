@@ -17,10 +17,10 @@ SET TimeZone = 'Europe/Duck';
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
-query IIII
+query IIIII
 SELECT * FROM duckdb_settings() WHERE name = 'TimeZone';
 ----
-TimeZone	America/Los_Angeles	The current time zone	VARCHAR
+TimeZone	America/Los_Angeles	The current time zone	VARCHAR	LOCAL
 
 #
 # AT TIME ZONE
