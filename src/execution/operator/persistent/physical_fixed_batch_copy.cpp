@@ -195,6 +195,10 @@ SinkCombineResultType PhysicalFixedBatchCopy::Combine(ExecutionContext &context,
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
 	gstate.rows_copied += state.rows_copied;
+
+	// add any final remaining local batches
+	AddLocalBatch(context.client, gstate, state);
+
 	if (!gstate.any_finished) {
 		// signal that this thread is finished processing batches and that we should move on to Finalize
 		lock_guard<mutex> l(gstate.lock);
@@ -519,33 +523,45 @@ void PhysicalFixedBatchCopy::ExecuteTasks(ClientContext &context, GlobalSinkStat
 //===--------------------------------------------------------------------===//
 // Next Batch
 //===--------------------------------------------------------------------===//
+void PhysicalFixedBatchCopy::AddLocalBatch(ClientContext &context, GlobalSinkState &gstate_p,
+                                           LocalSinkState &lstate) const {
+	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
+	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+	auto &memory_manager = gstate.memory_manager;
+	if (!state.collection || state.collection->Count() == 0) {
+		return;
+	}
+	// we finished processing this batch
+	// start flushing data
+	auto min_batch_index = state.partition_info.min_batch_index.GetIndex();
+	// push the raw batch data into the set of unprocessed batches
+	auto raw_batch = make_uniq<FixedRawBatchData>(state.local_memory_usage, std::move(state.collection));
+	AddRawBatchData(context, gstate, state.batch_index.GetIndex(), std::move(raw_batch));
+	// attempt to repartition to our desired batch size
+	RepartitionBatches(context, gstate, min_batch_index);
+	// unblock tasks so they can help process batches (if any are blocked)
+	auto any_unblocked = memory_manager.UnblockTasks();
+	// if any threads were unblocked they can pick up execution of the tasks
+	// otherwise we will execute a task and flush here
+	if (!any_unblocked) {
+		//! Execute a single repartition task
+		ExecuteTask(context, gstate);
+		//! Flush batch data to disk (if any is ready)
+		FlushBatchData(context, gstate, memory_manager.GetMinimumBatchIndex());
+	}
+}
+
 SinkNextBatchType PhysicalFixedBatchCopy::NextBatch(ExecutionContext &context,
                                                     OperatorSinkNextBatchInput &input) const {
 	auto &lstate = input.local_state;
-	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
 	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
-	if (state.collection && state.collection->Count() > 0) {
-		// we finished processing this batch
-		// start flushing data
-		auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
-		// push the raw batch data into the set of unprocessed batches
-		auto raw_batch = make_uniq<FixedRawBatchData>(state.local_memory_usage, std::move(state.collection));
-		AddRawBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(raw_batch));
-		// attempt to repartition to our desired batch size
-		RepartitionBatches(context.client, gstate_p, min_batch_index);
-		// unblock tasks so they can help process batches (if any are blocked)
-		auto any_unblocked = memory_manager.UnblockTasks();
-		// if any threads were unblocked they can pick up execution of the tasks
-		// otherwise we will execute a task and flush here
-		if (!any_unblocked) {
-			//! Execute a single repartition task
-			ExecuteTask(context.client, gstate);
-			//! Flush batch data to disk (if any is ready)
-			FlushBatchData(context.client, gstate, memory_manager.GetMinimumBatchIndex());
-		}
-	}
+
+	// add the previously finished batch (if any) to the state
+	AddLocalBatch(context.client, gstate, state);
+
+	// update the minimum batch index
 	memory_manager.UpdateMinBatchIndex(state.partition_info.min_batch_index.GetIndex());
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 

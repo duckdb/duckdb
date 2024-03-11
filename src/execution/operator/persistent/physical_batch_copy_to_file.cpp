@@ -93,6 +93,7 @@ SinkCombineResultType PhysicalBatchCopyToFile::Combine(ExecutionContext &context
                                                        OperatorSinkCombineInput &input) const {
 	auto &state = input.local_state.Cast<BatchCopyToLocalState>();
 	auto &gstate = input.global_state.Cast<BatchCopyToGlobalState>();
+	AddLocalBatch(context.client, gstate, state);
 	gstate.rows_copied += state.rows_copied;
 
 	return SinkCombineResultType::FINISHED;
@@ -175,18 +176,26 @@ void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 // Next Batch
 //===--------------------------------------------------------------------===//
+void PhysicalBatchCopyToFile::AddLocalBatch(ClientContext &context, GlobalSinkState &gstate,
+                                            LocalSinkState &state_p) const {
+	auto &state = state_p.Cast<BatchCopyToLocalState>();
+	if (!state.collection || state.collection->Count() == 0) {
+		return;
+	}
+	// we finished processing this batch
+	// start flushing data
+	auto min_batch_index = state.partition_info.min_batch_index.GetIndex();
+	PrepareBatchData(context, gstate, state.batch_index.GetIndex(), std::move(state.collection));
+	FlushBatchData(context, gstate, min_batch_index);
+}
+
 SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
                                                      OperatorSinkNextBatchInput &input) const {
 	auto &lstate = input.local_state;
 	auto &gstate_p = input.global_state;
 	auto &state = lstate.Cast<BatchCopyToLocalState>();
-	if (state.collection && state.collection->Count() > 0) {
-		// we finished processing this batch
-		// start flushing data
-		auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
-		PrepareBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
-		FlushBatchData(context.client, gstate_p, min_batch_index);
-	}
+
+	AddLocalBatch(context.client, gstate_p, state);
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 
 	state.InitializeCollection(context.client, *this);

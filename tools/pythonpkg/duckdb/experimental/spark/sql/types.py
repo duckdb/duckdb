@@ -13,13 +13,13 @@ from typing import (
     TypeVar,
     ClassVar,
     Iterator,
-    TYPE_CHECKING,
 )
 from builtins import tuple
 import datetime
 import calendar
 import time
 import math
+import re
 
 import duckdb
 from duckdb.typing import DuckDBPyType
@@ -1079,7 +1079,6 @@ _all_complex_types: Dict[str, Type[Union[ArrayType, MapType, StructType]]] = dic
     (v.typeName(), v) for v in _complex_types
 )
 
-import re
 
 _FIXED_DECIMAL = re.compile(r"decimal\(\s*(\d+)\s*,\s*(-?\d+)\s*\)")
 _INTERVAL_DAYTIME = re.compile(r"interval (day|hour|minute|second)( to (day|hour|minute|second))?")

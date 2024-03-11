@@ -47,7 +47,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	atomic<idx_t> chunk_count;
-	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
 
@@ -389,10 +388,15 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-				// we need to check if the metadata cache entries are current
-				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
-					// missing or invalid metadata entry in cache, no usable stats overall
+				if (!fs.IsRemoteFile(file_name)) {
+					auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+					// we need to check if the metadata cache entries are current
+					if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
+						// missing or invalid metadata entry in cache, no usable stats overall
+						return nullptr;
+					}
+				} else {
+					// for remote files we just avoid reading stats entirely
 					return nullptr;
 				}
 				ParquetReader reader(context, bind_data.parquet_options, metadata);
@@ -484,15 +488,16 @@ public:
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		auto &gstate = global_state->Cast<ParquetReadGlobalState>();
 		if (bind_data.files.empty()) {
 			return 100.0;
 		}
 		if (bind_data.initial_file_cardinality == 0) {
-			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
+			return (100.0 * (gstate.file_index + 1)) / bind_data.files.size();
 		}
-		auto percentage = std::min(
+		auto percentage = MinValue<double>(
 		    100.0, (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality));
-		return (percentage + 100.0 * bind_data.cur_file) / bind_data.files.size();
+		return (percentage + 100.0 * gstate.file_index) / bind_data.files.size();
 	}
 
 	static unique_ptr<LocalTableFunctionState>
