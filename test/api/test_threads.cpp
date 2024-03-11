@@ -29,6 +29,7 @@ TEST_CASE("Test deadlock issue between NumberOfThreads and RelaunchThreads", "[a
 	int thread_count = 10;
 	std::vector<std::thread> threads(thread_count);
 
+	// This query will hit NumberOfThreads because it uses the RadixPartitionedHashtable
 	for (int i = 0; i < thread_count; ++i) {
 		auto query = make_uniq<string>(R"(
 			WITH dataset AS (
@@ -45,7 +46,8 @@ TEST_CASE("Test deadlock issue between NumberOfThreads and RelaunchThreads", "[a
 		threads[i] = std::thread(run_query_multiple_times, std::move(query), make_uniq<Connection>(db));
 	}
 
-	// ISSUE: To see how long it takes without a deadlock, comment out the following line
+	// Fire off queries that change the thread count,
+	// causing us to relaunch the worker threads on every subsequent query.
 	change_thread_counts(db);
 
 	for (int i = 0; i < thread_count; ++i) {
