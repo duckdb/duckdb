@@ -9,7 +9,8 @@ namespace duckdb {
 void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data[1].GetType().id() == LogicalTypeId::UBIGINT);
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		FlatVector::SetNull(result, 0, true);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
