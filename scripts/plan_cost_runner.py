@@ -156,8 +156,8 @@ def print_diffs(diffs):
 
 def main():
     old, new, benchmark_dir = parse_args()
-    # init_db(old, OLD_DB_NAME, benchmark_dir)
-    # init_db(new, NEW_DB_NAME, benchmark_dir)
+    init_db(old, OLD_DB_NAME, benchmark_dir)
+    init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
@@ -192,8 +192,8 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    # os.remove(OLD_DB_NAME)
-    # os.remove(NEW_DB_NAME)
+    os.remove(OLD_DB_NAME)
+    os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
