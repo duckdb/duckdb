@@ -139,35 +139,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		expr.verification_stats->Verify(vector, count);
 	}
 #ifdef DUCKDB_VERIFY_DICTIONARY_VECTOR
-	if (vector.GetVectorType() == VectorType::FLAT_VECTOR) {
-		// convert vector to dictionary vector
-		// first create an inverted vector of twice the size with NULL values every other value
-		// i.e. [1, 2, 3] is converted into [NULL, 3, NULL, 2, NULL, 1]
-		idx_t verify_count = count * 2;
-		SelectionVector inverted_sel(verify_count);
-		idx_t offset = 0;
-		for (idx_t i = 0; i < count; i++) {
-			idx_t current_index = count - i - 1;
-			inverted_sel.set_index(offset++, current_index);
-			inverted_sel.set_index(offset++, current_index);
-		}
-		Vector inverted_vector(vector, inverted_sel, verify_count);
-		inverted_vector.Flatten(verify_count);
-		// now insert the NULL values at every other position
-		for (idx_t i = 0; i < count; i++) {
-			FlatVector::SetNull(inverted_vector, i * 2, true);
-		}
-		// construct the selection vector pointing towards the original values
-		// we start at the back, (verify_count - 1) and move backwards
-		SelectionVector original_sel(count);
-		offset = 0;
-		for (idx_t i = 0; i < count; i++) {
-			original_sel.set_index(offset++, verify_count - 1 - i * 2);
-		}
-		// now slice the inverted vector with the inverted selection vector
-		vector.Slice(inverted_vector, original_sel, count);
-		vector.Verify(count);
-	}
+	Vector::DebugTransformToDictionary(vector, count);
 #endif
 }
 

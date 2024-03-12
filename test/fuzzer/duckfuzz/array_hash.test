@@ -1,6 +1,9 @@
 # name: test/fuzzer/duckfuzz/array_hash.test
 # group: [duckfuzz]
 
+statement ok
+PRAGMA enable_verification
+
 # Duckfuzz Issue #1434
 # Caused by not calculating the correct number of child elements when hashing a constant array vector.
 statement ok

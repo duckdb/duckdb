@@ -1568,6 +1568,40 @@ void Vector::Verify(idx_t count) {
 	Verify(*this, *flat_sel, count);
 }
 
+void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+		// only supported for flat vectors currently
+		return;
+	}
+	// convert vector to dictionary vector
+	// first create an inverted vector of twice the size with NULL values every other value
+	// i.e. [1, 2, 3] is converted into [NULL, 3, NULL, 2, NULL, 1]
+	idx_t verify_count = count * 2;
+	SelectionVector inverted_sel(verify_count);
+	idx_t offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		idx_t current_index = count - i - 1;
+		inverted_sel.set_index(offset++, current_index);
+		inverted_sel.set_index(offset++, current_index);
+	}
+	Vector inverted_vector(vector, inverted_sel, verify_count);
+	inverted_vector.Flatten(verify_count);
+	// now insert the NULL values at every other position
+	for (idx_t i = 0; i < count; i++) {
+		FlatVector::SetNull(inverted_vector, i * 2, true);
+	}
+	// construct the selection vector pointing towards the original values
+	// we start at the back, (verify_count - 1) and move backwards
+	SelectionVector original_sel(count);
+	offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		original_sel.set_index(offset++, verify_count - 1 - i * 2);
+	}
+	// now slice the inverted vector with the inverted selection vector
+	vector.Slice(inverted_vector, original_sel, count);
+	vector.Verify(count);
+}
+
 //===--------------------------------------------------------------------===//
 // FlatVector
 //===--------------------------------------------------------------------===//
@@ -1676,7 +1710,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
 
-		if (!vdata.validity.RowIsValid(position)) {
+		auto array_index = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(array_index)) {
 			// list is null: create null value
 			Value null_value(source_type);
 			vector.Reference(null_value);
@@ -1692,7 +1727,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto array_size = ArrayType::GetSize(source_type);
 		SelectionVector sel(array_size);
 		for (idx_t i = 0; i < array_size; i++) {
-			sel.set_index(i, array_size * position + i);
+			sel.set_index(i, array_size * array_index + i);
 		}
 		target_child.Slice(sel, array_size);
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much
