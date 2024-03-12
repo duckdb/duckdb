@@ -63,6 +63,12 @@ class PlanCost:
         self.probe_side += other.probe_side
         return self
 
+    def __gt__(self, other):
+        return self.total > other.total
+
+    def __lt__(self, other):
+        return self.total > other.total
+
 
 def op_inspect(op):
     cost = PlanCost()
@@ -176,9 +182,9 @@ def main():
         old_cost = query_plan_cost(old, OLD_DB_NAME, query)
         new_cost = query_plan_cost(new, NEW_DB_NAME, query)
 
-        if cardinality_is_higher(old_cost, new_cost):
+        if old_cost > new_cost:
             improvements.append((query_name, old_cost, new_cost))
-        elif cardinality_is_higher(new_cost, old_cost):
+        elif new_cost > old_cost:
             regressions.append((query_name, old_cost, new_cost))
 
     exit_code = 0

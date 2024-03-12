@@ -19,7 +19,7 @@ INSERT INTO right_table select 41, range as b from range(100);
 query II
 EXPLAIN ANALYZE SELECT * FROM left_table ANTI JOIN right_table ON left_table.a = right_table.a;
 ----
-analyzed_plan	<REGEX>:.*RIGHT_ANTI.*
+analyzed_plan	<REplaGEX>:.*RIGHT_ANTI.*
 
 # still flips with filter
 query II
