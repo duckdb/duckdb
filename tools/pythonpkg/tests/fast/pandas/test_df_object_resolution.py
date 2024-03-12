@@ -352,7 +352,7 @@ class TestResolveObjectColumns(object):
         )
         res = duckdb_cursor.query("select typeof(col) from df").fetchall()
         # So we fall back to converting them as VARCHAR instead
-        assert res == [('VARCHAR',), ('VARCHAR',)]
+        assert res == [('MAP(VARCHAR, VARCHAR)[]',), ('MAP(VARCHAR, VARCHAR)[]',)]
 
         malformed_struct = duckdb.Value({"v1": 1, "v2": 2}, duckdb.struct_type({'v1': int}))
         with pytest.raises(
