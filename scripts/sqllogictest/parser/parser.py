@@ -300,22 +300,21 @@ class SQLLogicParser:
         statement.add_lines(statement_text)
 
         expected_lines: Optional[List[str]] = self.extract_expected_lines()
-        match expected_result.type:
-            case ExpectedResult.Type.SUCCESS:
-                if expected_lines != None:
-                    if len(expected_lines) != 0:
-                        self.fail(
-                            "Failed to parse statement: only statement error can have an expected error message, not statement ok"
-                        )
-                    expected_result.add_lines(expected_lines)
-            case ExpectedResult.Type.ERROR | ExpectedResult.Type.UNKNOWN:
-                if expected_lines != None:
-                    expected_result.add_lines(expected_lines)
-                elif not self.current_test.is_sqlite_test():
-                    print(statement)
-                    self.fail('Failed to parse statement: statement error needs to have an expected error message')
-            case _:
-                self.fail(f"Unexpected ExpectedResult Type: {expected_result.type.name}")
+        if expected_result.type == ExpectedResult.Type.SUCCESS:
+            if expected_lines != None:
+                if len(expected_lines) != 0:
+                    self.fail(
+                        "Failed to parse statement: only statement error can have an expected error message, not statement ok"
+                    )
+                expected_result.add_lines(expected_lines)
+        elif expected_result.type == ExpectedResult.Type.ERROR or expected_result.type == ExpectedResult.Type.UNKNOWN:
+            if expected_lines != None:
+                expected_result.add_lines(expected_lines)
+            elif not self.current_test.is_sqlite_test():
+                print(statement)
+                self.fail('Failed to parse statement: statement error needs to have an expected error message')
+        else:
+            self.fail(f"Unexpected ExpectedResult Type: {expected_result.type.name}")
 
         statement.expected_result = expected_result
         if len(header.parameters) >= 2:

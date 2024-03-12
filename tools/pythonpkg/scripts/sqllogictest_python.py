@@ -43,6 +43,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         self.SKIPPED_TESTS = set(
             [
                 'test/sql/types/map/map_empty.test',
+                'test/extension/wrong_function_type.test',  # <-- JSON is always loaded
                 'test/sql/types/nested/list/test_list_slice_step.test',  # <-- skipping because it causes an InternalException currently
                 'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
                 'test/sql/cast/cast_error_location.test',  # <-- python exception doesn't contain error location yet

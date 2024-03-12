@@ -1067,13 +1067,13 @@ class SQLLogicContext:
             # I think we should support this
             # ... actually the way we set up keywords here, this is already the behavior
             # inside the python sqllogic runner, since contexts are created and destroyed at loop start and end
-            self.fail(f"require-env can not be called in a loop")
+            self.skiptest(f"require-env can not be called in a loop")
         if res is None:
-            self.fail(f"require-env {key} failed, not set")
+            self.skiptest(f"require-env {key} failed, not set")
         if len(statement.header.parameters) != 1:
             expected = statement.header.parameters[1]
             if res != expected:
-                self.fail(f"require-env {key} failed, expected '{expected}', but found '{res}'")
+                self.skiptest(f"require-env {key} failed, expected '{expected}', but found '{res}'")
         self.add_keyword(key, res)
 
     def get_loop_statements(self):
