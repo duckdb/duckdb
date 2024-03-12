@@ -31,17 +31,25 @@ UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
 }
 
 UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept {
+	bool refers_to_self = other.sel == &other.owned_sel;
 	std::swap(sel, other.sel);
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	if (refers_to_self) {
+		sel = &owned_sel;
+	}
 }
 
 UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other) noexcept {
+	bool refers_to_self = other.sel == &other.owned_sel;
 	std::swap(sel, other.sel);
 	std::swap(data, other.data);
 	std::swap(validity, other.validity);
 	std::swap(owned_sel, other.owned_sel);
+	if (refers_to_self) {
+		sel = &owned_sel;
+	}
 	return *this;
 }
 
