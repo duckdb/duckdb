@@ -19,5 +19,10 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 query II
 explain select * from '__TEST_DIR__/t1.parquet' where a in ('400');
 ----
-logical_opt	<REGEX>:.*PARQUET_SCAN.*a=400.*
+logical_opt	<!REGEX>:.*FILTER.*PARQUET_SCAN.*
+
+query II
+explain select * from '__TEST_DIR__/t1.parquet' where a in ('400');
+----
+logical_opt	<REGEX>:.*PARQUET_SCAN.*Filters.*
 
