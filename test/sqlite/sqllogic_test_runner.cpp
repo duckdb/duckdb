@@ -344,7 +344,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #else
 		return RequireResult::PRESENT;
 #endif
-
 	}
 
 	if (param == "no_extension_autoloading") {

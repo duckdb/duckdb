@@ -154,7 +154,7 @@ void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
 		// for non-flat vectors slice using a selection vector instead
 		idx_t count = end - offset;
 		SelectionVector sel(count);
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			sel.set_index(i, offset + i);
 		}
 		Slice(other, sel, count);
