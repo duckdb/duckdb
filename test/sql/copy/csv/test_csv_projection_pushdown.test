@@ -115,3 +115,39 @@ SELECT COUNT(*) FROM ${lineitem}
 
 endloop
 
+# Test Projection over multiple buffers
+query I
+select count(*) from read_csv('data/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
+----
+27
+
+query III
+select d,b,a from read_csv('data/csv/projection_buffer.csv', quote = '"', escape = '"',  buffer_size=35)
+----
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"
+d"	b"	a"

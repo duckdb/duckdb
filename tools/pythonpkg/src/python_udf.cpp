@@ -144,7 +144,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			try {
 				python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
 				    single_array, py::arg("names") = single_name);
-			} catch (py::error_already_set &ex) {
+			} catch (py::error_already_set &) {
 				throw InvalidInputException("Could not convert the result into an Arrow Table");
 			}
 		}

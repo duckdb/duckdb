@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Calendar;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 class DuckDBVector {
     // Constant to construct BigDecimals from hugeint_t
@@ -125,13 +126,31 @@ class DuckDBVector {
         }
     }
 
-    LocalTime getLocalTime(int idx) throws SQLException {
+    LocalTime getLocalTime(int idx) {
+        if (check_and_null(idx)) {
+            return null;
+        }
+
+        if (isType(DuckDBColumnType.TIME)) {
+            long microseconds = getbuf(idx, 8).getLong();
+            long nanoseconds = TimeUnit.MICROSECONDS.toNanos(microseconds);
+            return LocalTime.ofNanoOfDay(nanoseconds);
+        }
+
         String lazyString = getLazyString(idx);
 
         return lazyString == null ? null : LocalTime.parse(lazyString);
     }
 
-    LocalDate getLocalDate(int idx) throws SQLException {
+    LocalDate getLocalDate(int idx) {
+        if (check_and_null(idx)) {
+            return null;
+        }
+
+        if (isType(DuckDBColumnType.DATE)) {
+            return LocalDate.ofEpochDay(getbuf(idx, 4).getInt());
+        }
+
         String lazyString = getLazyString(idx);
 
         if ("infinity".equals(lazyString))
@@ -277,7 +296,11 @@ class DuckDBVector {
         if (check_and_null(idx)) {
             return null;
         }
-        // TODO: load from native format
+
+        if (isType(DuckDBColumnType.DATE)) {
+            return Date.valueOf(this.getLocalDate(idx));
+        }
+
         String string_value = getLazyString(idx);
         if (string_value == null) {
             return null;
@@ -297,11 +320,15 @@ class DuckDBVector {
     }
 
     Time getTime(int idx) {
-        // TODO: load from native format
-        String string_value = getLazyString(idx);
-        if (string_value == null) {
+        if (check_and_null(idx)) {
             return null;
         }
+
+        if (isType(DuckDBColumnType.TIME)) {
+            return Time.valueOf(getLocalTime(idx));
+        }
+
+        String string_value = getLazyString(idx);
         try {
             return Time.valueOf(string_value);
         } catch (Exception e) {

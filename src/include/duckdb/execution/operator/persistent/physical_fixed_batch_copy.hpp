@@ -61,6 +61,7 @@ public:
 	}
 
 public:
+	void AddLocalBatch(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
 	void AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
 	                     unique_ptr<FixedRawBatchData> collection) const;
 	void RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,

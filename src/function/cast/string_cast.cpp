@@ -170,8 +170,25 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	auto &result_child = ListVector::GetEntry(result);
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-	return cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
-	       vector_cast_data.all_converted;
+	bool all_converted =
+	    cast_data.child_cast_info.function(varchar_vector, result_child, total_list_size, child_parameters) &&
+	    vector_cast_data.all_converted;
+	if (!all_converted && parameters.nullify_parent) {
+		UnifiedVectorFormat inserted_column_data;
+		result_child.ToUnifiedFormat(total_list_size, inserted_column_data);
+		UnifiedVectorFormat parse_column_data;
+		varchar_vector.ToUnifiedFormat(total_list_size, parse_column_data);
+		// Something went wrong in the conversion, we need to nullify the parent
+		for (idx_t i = 0; i < count; i++) {
+			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
+				if (!inserted_column_data.validity.RowIsValid(j) && parse_column_data.validity.RowIsValid(j)) {
+					result_mask.SetInvalid(i);
+					break;
+				}
+			}
+		}
+	}
+	return all_converted;
 }
 
 static LogicalType InitVarcharStructType(const LogicalType &target) {

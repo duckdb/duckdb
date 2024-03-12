@@ -1,4 +1,3 @@
-import typing
 from duckdb.typing import DuckDBPyType
 from typing import List, Tuple, cast
 from .types import (
