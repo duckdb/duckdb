@@ -7,6 +7,7 @@ group aggregate
 
 load
 CREATE TABLE integers AS SELECT i % 5 AS i, i % 25 as j FROM range(0, 10000000) tbl(i);
+set threads=1;
 
 run
 SELECT SUM(distinct i), COUNT(distinct i), AVG(distinct i), PRODUCT(distinct i) FROM integers group by j
