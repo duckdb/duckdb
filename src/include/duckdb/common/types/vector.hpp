@@ -20,6 +20,14 @@
 namespace duckdb {
 
 struct UnifiedVectorFormat {
+	DUCKDB_API UnifiedVectorFormat();
+	// disable copy constructors
+	UnifiedVectorFormat(const UnifiedVectorFormat &other) = delete;
+	UnifiedVectorFormat &operator=(const UnifiedVectorFormat &) = delete;
+	//! enable move constructors
+	DUCKDB_API UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept;
+	DUCKDB_API UnifiedVectorFormat &operator=(UnifiedVectorFormat &&) noexcept;
+
 	const SelectionVector *sel;
 	data_ptr_t data;
 	ValidityMask validity;

@@ -27,6 +27,24 @@
 
 namespace duckdb {
 
+UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
+}
+
+UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept {
+	std::swap(sel, other.sel);
+	std::swap(data, other.data);
+	std::swap(validity, other.validity);
+	std::swap(owned_sel, other.owned_sel);
+}
+
+UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other) noexcept {
+	std::swap(sel, other.sel);
+	std::swap(data, other.data);
+	std::swap(validity, other.validity);
+	std::swap(owned_sel, other.owned_sel);
+	return *this;
+}
+
 Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
@@ -986,7 +1004,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		break;
 	case VectorType::FSST_VECTOR: {
 		// create a new flat vector of this type
-		Vector other(GetType());
+		Vector other(GetType(), count);
 		// copy the data of this vector to the other vector, removing compression and selection vector in the process
 		VectorOperations::Copy(*this, other, sel, count, 0, 0);
 		// create a reference to the data in the other vector
