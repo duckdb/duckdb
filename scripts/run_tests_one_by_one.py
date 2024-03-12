@@ -100,7 +100,7 @@ def parse_assertions(stdout):
 
 for test_number, test_case in enumerate(test_cases):
     if not profile:
-        print(f"[{test_number}/{test_count}]: {test_case}", end="")
+        print(f"[{test_number}/{test_count}]: {test_case}", end="", flush=True)
     start = time.time()
     try:
         res = subprocess.run(
