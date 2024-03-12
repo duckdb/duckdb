@@ -45,6 +45,7 @@ ipywidgets.FloatProgress
 import numpy
 
 numpy.core.multiarray
+numpy.ma.masked
 numpy.ndarray
 numpy.datetime64
 numpy.generic

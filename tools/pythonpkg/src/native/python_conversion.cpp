@@ -439,6 +439,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
+	} else if (ele.is(import_cache.numpy.ma.masked())) {
+		return PythonObjectType::None;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {

@@ -255,6 +255,10 @@ private:
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
 
+	shared_ptr<PreparedStatementData>
+	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	                                optional_ptr<case_insensitive_map_t<Value>> values);
+
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;

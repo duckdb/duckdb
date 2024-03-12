@@ -28,10 +28,12 @@ public:
 	const ClientProperties &client_properties;
 	Vector &input;
 
+	idx_t source_offset;
 	idx_t target_offset;
 	data_ptr_t target_data;
 	bool *target_mask;
 	idx_t count;
+	idx_t source_size;
 	PhysicalType physical_type = PhysicalType::INVALID;
 	bool pandas = false;
 };
@@ -48,8 +50,9 @@ struct ArrayWrapper {
 public:
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
-	void Append(idx_t current_offset, Vector &input, idx_t count);
-	py::object ToArray(idx_t count) const;
+	void Append(idx_t current_offset, Vector &input, idx_t source_size, idx_t source_offset = 0,
+	            idx_t count = DConstants::INVALID_INDEX);
+	py::object ToArray() const;
 };
 
 } // namespace duckdb

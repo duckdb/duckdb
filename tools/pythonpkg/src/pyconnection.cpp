@@ -111,7 +111,7 @@ bool DuckDBPyConnection::IsJupyter() {
 py::object ArrowTableFromDataframe(const py::object &df) {
 	try {
 		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
-	} catch (py::error_already_set &e) {
+	} catch (py::error_already_set &) {
 		// We don't fetch the original Python exception because it can cause a segfault
 		// The cause of this is not known yet, for now we just side-step the issue.
 		throw InvalidInputException(
@@ -1048,7 +1048,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	}
 	try {
 		return make_uniq<DuckDBPyRelation>(connection->Table(qualified_name.schema, qualified_name.name));
-	} catch (const CatalogException &e) {
+	} catch (const CatalogException &) {
 		// CatalogException will be of the type '... is not a table'
 		// Not a table in the database, make a query relation that can perform replacement scans
 		auto sql_query = StringUtil::Format("from %s", KeywordHelper::WriteOptionallyQuoted(tname));
@@ -1286,9 +1286,11 @@ void DuckDBPyConnection::Close() {
 	result = nullptr;
 	connection = nullptr;
 	database = nullptr;
+	temporary_views.clear();
 	for (auto &cur : cursors) {
 		cur->Close();
 	}
+	registered_functions.clear();
 	cursors.clear();
 }
 

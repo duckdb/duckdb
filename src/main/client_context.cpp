@@ -292,8 +292,9 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 }
 
 shared_ptr<PreparedStatementData>
-ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                       optional_ptr<case_insensitive_map_t<Value>> values) {
+ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
+                                               unique_ptr<SQLStatement> statement,
+                                               optional_ptr<case_insensitive_map_t<Value>> values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
@@ -348,6 +349,40 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 #endif
 	result->plan = std::move(physical_plan);
 	return result;
+}
+
+shared_ptr<PreparedStatementData>
+ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+                                       optional_ptr<case_insensitive_map_t<Value>> values) {
+	// check if any client context state could request a rebind
+	bool can_request_rebind = false;
+	for (auto const &s : registered_state) {
+		if (s.second->CanRequestRebind()) {
+			can_request_rebind = true;
+			break;
+		}
+	}
+	if (can_request_rebind) {
+		// if any registered state can request a rebind we do the binding on a copy first
+		try {
+			return CreatePreparedStatementInternal(lock, query, statement->Copy(), values);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			// check if any registered client context state wants to try a rebind
+			bool rebind = false;
+			for (auto const &s : registered_state) {
+				auto info = s.second->OnPlanningError(*this, *statement, error);
+				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+					rebind = true;
+				}
+			}
+			if (!rebind) {
+				throw;
+			}
+		}
+	}
+	// an extension wants to do a rebind - do it once
+	return CreatePreparedStatementInternal(lock, query, std::move(statement), values);
 }
 
 QueryProgress ClientContext::GetQueryProgress() {
@@ -446,7 +481,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 				invalidate_transaction = true;
 			} else {
 				// Interrupted by an exception caused in a worker thread
-				auto error = executor.GetError();
+				error = executor.GetError();
 				invalidate_transaction = Exception::InvalidatesTransaction(error.Type());
 				result.SetError(error);
 			}

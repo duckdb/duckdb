@@ -221,7 +221,8 @@ dtime_t PyTime::ToDuckTime() {
 Value PyTime::ToDuckValue() {
 	auto duckdb_time = this->ToDuckTime();
 	if (!py::none().is(this->timezone_obj)) {
-		return Value::TIMETZ(dtime_tz_t(duckdb_time, 0));
+		auto seconds = PyTimezone::GetUTCOffsetSeconds(this->timezone_obj);
+		return Value::TIMETZ(dtime_tz_t(duckdb_time, seconds));
 	}
 	return Value::TIME(duckdb_time);
 }
@@ -251,6 +252,20 @@ interval_t PyTimezone::GetUTCOffset(py::handle &tzone_obj) {
 	auto res = tzone_obj.attr("utcoffset")(py::none());
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
+}
+
+int32_t PyTimezone::GetUTCOffsetSeconds(py::handle &tzone_obj) {
+	auto res = tzone_obj.attr("utcoffset")(py::none());
+	auto timedelta = PyTimeDelta(res);
+	if (timedelta.days != 0) {
+		throw InvalidInputException(
+		    "Failed to convert 'tzinfo' object, utcoffset returned an invalid timedelta (days)");
+	}
+	if (timedelta.microseconds != 0) {
+		throw InvalidInputException(
+		    "Failed to convert 'tzinfo' object, utcoffset returned an invalid timedelta (microseconds)");
+	}
+	return timedelta.seconds;
 }
 
 PyDateTime::PyDateTime(py::handle &obj) : obj(obj) {
