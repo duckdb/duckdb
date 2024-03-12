@@ -138,6 +138,20 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
+	// #ifndef VERIFY_DICTIONARY_VECTOR
+	if (vector.GetVectorType() == VectorType::FLAT_VECTOR) {
+		// convert vector to dictionary vector
+		// first create an inverted vector, i.e. [1, 2, 3] is converted into [3, 2, 1]
+		SelectionVector inverted_sel(count);
+		for (idx_t i = 0; i < count; i++) {
+			inverted_sel.set_index(i, count - i - 1);
+		}
+		Vector inverted_vector(vector, inverted_sel, count);
+		inverted_vector.Flatten(count);
+		// now slice the inverted vector with the inverted selection vector
+		vector.Slice(inverted_vector, inverted_sel, count);
+	}
+	// #endif
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,

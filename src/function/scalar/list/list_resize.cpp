@@ -46,6 +46,7 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
 		default_vector = &args.data[2];
+		default_vector->Flatten(count);
 		default_vector->ToUnifiedFormat(count, default_data);
 		default_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
