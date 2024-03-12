@@ -234,7 +234,8 @@ void CSVGlobalState::FillRejectsTable() {
 
 	if (options.store_rejects.GetValue()) {
 		auto limit = options.rejects_limit;
-		auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
+		auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_scan_name.GetValue(),
+		                                            options.rejects_table_name.GetValue());
 		lock_guard<mutex> lock(rejects->write_lock);
 		auto &errors_table = rejects->GetErrorsTable(context);
 		auto &scans_table = rejects->GetScansTable(context);

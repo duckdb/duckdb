@@ -14,14 +14,8 @@ class ClientContext;
 
 class CSVRejectsTable : public ObjectCacheEntry {
 public:
-	CSVRejectsTable(string name) : name(name), count(0) {
-		if (name.empty()) {
-			scan_table = "reject_scans";
-			errors_table = "reject_errors";
-		} else {
-			scan_table = name + "_scan";
-			errors_table = name;
-		}
+	CSVRejectsTable(string rejects_scan, string rejects_error)
+	    : count(0), scan_table(rejects_scan), errors_table(rejects_error) {
 	}
 	~CSVRejectsTable() override = default;
 	mutex write_lock;
@@ -30,7 +24,8 @@ public:
 	string scan_table;
 	string errors_table;
 
-	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context, const string &name);
+	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context, const string &rejects_scan,
+	                                               const string &rejects_error);
 
 	void InitializeTable(ClientContext &context, const ReadCSVData &options);
 	TableCatalogEntry &GetErrorsTable(ClientContext &context);

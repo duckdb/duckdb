@@ -147,7 +147,8 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(126, "dialect_options.date_format", dialect_options.date_format);
 	serializer.WritePropertyWithDefault<string>(127, "sniffer_user_mismatch_error", sniffer_user_mismatch_error);
 	serializer.WritePropertyWithDefault<bool>(128, "parallel", parallel);
-	serializer.WritePropertyWithDefault<string>(129, "rejects_table_name", rejects_table_name);
+	serializer.WriteProperty<CSVOption<string>>(129, "rejects_table_name", rejects_table_name);
+	serializer.WriteProperty<CSVOption<string>>(130, "rejects_scan_name", rejects_scan_name);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -181,7 +182,8 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<map<LogicalTypeId, CSVOption<StrpTimeFormat>>>(126, "dialect_options.date_format", result.dialect_options.date_format);
 	deserializer.ReadPropertyWithDefault<string>(127, "sniffer_user_mismatch_error", result.sniffer_user_mismatch_error);
 	deserializer.ReadPropertyWithDefault<bool>(128, "parallel", result.parallel);
-	deserializer.ReadPropertyWithDefault<string>(129, "rejects_table_name", result.rejects_table_name);
+	deserializer.ReadProperty<CSVOption<string>>(129, "rejects_table_name", result.rejects_table_name);
+	deserializer.ReadProperty<CSVOption<string>>(130, "rejects_scan_name", result.rejects_scan_name);
 	return result;
 }
 

@@ -653,7 +653,11 @@
       },
       {"id": 129,
         "name": "rejects_table_name",
-        "type": "string"
+        "type": "CSVOption<string>"
+      },
+      {"id": 130,
+        "name": "rejects_scan_name",
+        "type": "CSVOption<string>"
       }
     ],
     "pointer_type": "none"

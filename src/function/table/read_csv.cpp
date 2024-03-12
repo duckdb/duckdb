@@ -51,13 +51,20 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
-	if (!options.rejects_table_name.empty() && !options.store_rejects.GetValue() &&
+	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
 	    options.store_rejects.IsSetByUser()) {
 		throw BinderException(
 		    "rejects_table_name option is only supported when store_rejects is not manually set to false");
 	}
-	// Ensure we set ignore errors to true automagically
-	options.store_rejects.Set(true, false);
+	if (options.rejects_scan_name.IsSetByUser() && !options.store_rejects.GetValue() &&
+	    options.store_rejects.IsSetByUser()) {
+		throw BinderException(
+		    "rejects_scan_name option is only supported when store_rejects is not manually set to false");
+	}
+	if (options.rejects_scan_name.IsSetByUser() || options.rejects_table_name.IsSetByUser()) {
+		// Ensure we set store_rejects to true automagically
+		options.store_rejects.Set(true, false);
+	}
 	// Validate rejects_table options
 	if (options.store_rejects.GetValue()) {
 		if (!options.ignore_errors.GetValue() && options.ignore_errors.IsSetByUser()) {
@@ -153,7 +160,8 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 
 	// Create the temporary rejects table
 	if (bind_data.options.store_rejects.GetValue()) {
-		CSVRejectsTable::GetOrCreate(context, bind_data.options.rejects_table_name)
+		CSVRejectsTable::GetOrCreate(context, bind_data.options.rejects_scan_name.GetValue(),
+		                             bind_data.options.rejects_table_name.GetValue())
 		    ->InitializeTable(context, bind_data);
 	}
 	if (bind_data.files.empty()) {
@@ -236,6 +244,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["store_rejects"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
+	table_function.named_parameters["rejects_scan"] = LogicalType::VARCHAR;
 	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;

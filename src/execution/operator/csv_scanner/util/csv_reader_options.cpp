@@ -214,7 +214,14 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		if (table_name.empty()) {
 			throw BinderException("REJECTS_TABLE option cannot be empty");
 		}
-		rejects_table_name = table_name;
+		rejects_table_name.Set(table_name);
+	} else if (loption == "rejects_scan") {
+		// skip, handled in SetRejectsOptions
+		auto table_name = ParseString(value, loption);
+		if (table_name.empty()) {
+			throw BinderException("rejects_scan option cannot be empty");
+		}
+		rejects_scan_name.Set(table_name);
 	} else if (loption == "rejects_limit") {
 		int64_t limit = ParseInteger(value, loption);
 		if (limit < 0) {

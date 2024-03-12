@@ -19,10 +19,12 @@ TableCatalogEntry &CSVRejectsTable::GetScansTable(ClientContext &context) {
 	return table_entry;
 }
 
-shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &name) {
-	auto key = "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(name);
+shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &rejects_scan,
+                                                         const string &rejects_error) {
+	auto key =
+	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return cache.GetOrCreate<CSVRejectsTable>(key, name);
+	return cache.GetOrCreate<CSVRejectsTable>(key, rejects_scan, rejects_error);
 }
 
 void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
