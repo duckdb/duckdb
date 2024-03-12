@@ -34,9 +34,8 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
-optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info, const AttachOptions &options) {
-	auto &db_type = options.access_mode;
-	auto &access_mode = options.db_type;
+optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
+                                                               const AttachOptions &options) {
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}

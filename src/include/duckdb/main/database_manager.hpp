@@ -24,8 +24,8 @@ class Catalog;
 class CatalogSet;
 class ClientContext;
 class DatabaseInstance;
-struct AttachOptions;
 class TaskScheduler;
+struct AttachOptions;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
 class DatabaseManager {

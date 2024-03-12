@@ -11,6 +11,13 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::UnionType(const py::object &member
 	return conn->UnionType(members);
 }
 
+py::list PyConnectionWrapper::ExtractStatements(const string &query, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ExtractStatements(query);
+}
+
 shared_ptr<DuckDBPyType> PyConnectionWrapper::EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
                                                        const py::list &values, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
@@ -73,7 +80,7 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::Type(const string &type_str, share
 	return conn->Type(type_str);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const string &query, py::object params,
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const py::object &query, py::object params,
                                                                 shared_ptr<DuckDBPyConnection> conn) {
 	return conn->ExecuteMany(query, params);
 }
@@ -100,7 +107,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AggregateDF(const PandasDataFr
 	return conn->FromDF(df)->Aggregate(expr, groups);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const string &query, py::object params, bool many,
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const py::object &query, py::object params, bool many,
                                                             shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Execute(query, params, many);
 }
@@ -326,7 +333,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Values(py::object values, shar
 	return conn->Values(std::move(values));
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, const string &alias,
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const py::object &query, const string &alias,
                                                            shared_ptr<DuckDBPyConnection> conn) {
 	return conn->RunQuery(query, alias);
 }
