@@ -77,7 +77,7 @@ class CSVCast {
 	template <class OP, class T>
 	static bool TemplatedTryCastDateVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options,
 	                                       Vector &input_vector, Vector &result_vector, idx_t count,
-	                                       CastParameters &parameters, idx_t &line_error) {
+	                                       CastParameters &parameters, idx_t &line_error, bool nullify_error) {
 		D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 		bool all_converted = true;
 		idx_t cur_line = 0;
@@ -88,7 +88,9 @@ class CSVCast {
 				if (all_converted) {
 					line_error = cur_line;
 				}
-				validity_mask.SetInvalid(cur_line);
+				if (nullify_error) {
+					validity_mask.SetInvalid(cur_line);
+				}
 				all_converted = false;
 			}
 			cur_line++;
@@ -99,16 +101,17 @@ class CSVCast {
 
 public:
 	static bool TryCastDateVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options, Vector &input_vector,
-	                              Vector &result_vector, idx_t count, CastParameters &parameters, idx_t &line_error) {
+	                              Vector &result_vector, idx_t count, CastParameters &parameters, idx_t &line_error,
+	                              bool nullify_error = false) {
 		return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
-		                                                               parameters, line_error);
+		                                                               parameters, line_error, nullify_error);
 	}
 	static bool TryCastTimestampVector(const map<LogicalTypeId, CSVOption<StrpTimeFormat>> &options,
 	                                   Vector &input_vector, Vector &result_vector, idx_t count,
-	                                   CastParameters &parameters) {
+	                                   CastParameters &parameters, bool nullify_error = false) {
 		idx_t line_error;
-		return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
-		                                                                         count, parameters, line_error);
+		return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(
+		    options, input_vector, result_vector, count, parameters, line_error, nullify_error);
 	}
 	static bool TryCastFloatingVectorCommaSeparated(const CSVReaderOptions &options, Vector &input_vector,
 	                                                Vector &result_vector, idx_t count, CastParameters &parameters,
