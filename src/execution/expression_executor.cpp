@@ -138,6 +138,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
+#ifdef DUCKDB_VERIFY_DICTIONARY_VECTOR
 	if (vector.GetVectorType() == VectorType::FLAT_VECTOR) {
 		// convert vector to dictionary vector
 		// first create an inverted vector of twice the size with NULL values every other value
@@ -167,6 +168,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		vector.Slice(inverted_vector, original_sel, count);
 		vector.Verify(count);
 	}
+#endif
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,
