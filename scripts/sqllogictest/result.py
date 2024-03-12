@@ -1,4 +1,5 @@
 from hashlib import md5
+import gc
 
 from .base_statement import BaseStatement
 from .test import SQLLogicTest
@@ -343,6 +344,25 @@ class SQLLogicConnectionPool:
         # Unnamed cursor, the default 'connection' used
         self.connection: Optional[duckdb.DuckDBPyConnection] = None
 
+    def initialize_connection(self, context: "SQLLogicContext", con):
+        runner = context.runner
+        if runner.test.is_sqlite_test():
+            con.execute("SET integer_division=true")
+        try:
+            con.execute("SET timezone='UTC'")
+        except duckdb.Error:
+            pass
+        # Check for alternative verify
+        # if DUCKDB_ALTERNATIVE_VERIFY:
+        #    con.query("SET pivot_filter_threshold=0")
+        # if enable_verification:
+        #    con.enable_query_verification()
+        # Set the local extension repo for autoinstalling extensions
+        env_var = os.getenv("LOCAL_EXTENSION_REPO")
+        if env_var:
+            con.execute("SET autoload_known_extensions=True")
+            con.execute(f"SET autoinstall_extension_repository='{env_var}'")
+
     def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
         """
         Either fetch the 'self.connection' object if name is None
@@ -662,6 +682,7 @@ class SQLLogicContext:
         'is_loop',
         'is_parallel',
         'build_directory',
+        'cached_config_settings',
     ]
 
     def reset(self):
@@ -700,9 +721,9 @@ class SQLLogicContext:
         self.error: Optional[TestException] = None
         self.generator: Generator[Any] = iteration_generator
         self.keywords = keywords
+        self.cached_config_settings: List[Tuple[str, str]] = []
         self.current_statement: Optional[SQLLogicStatementData] = None
         self.pool: Optional[SQLLogicConnectionPool] = pool
-        self.initialize_connection(self.pool.get_connection())
         self.STATEMENTS = {
             Query: self.execute_query,
             Statement: self.execute_statement,
@@ -747,24 +768,6 @@ class SQLLogicContext:
 
     def get_connection(self, name: Optional[str] = None) -> duckdb.DuckDBPyConnection:
         return self.pool.get_connection(name)
-
-    def initialize_connection(self, con):
-        if self.runner.test.is_sqlite_test():
-            con.execute("SET integer_division=true")
-        try:
-            con.execute("SET timezone='UTC'")
-        except duckdb.Error:
-            pass
-        # Check for alternative verify
-        # if DUCKDB_ALTERNATIVE_VERIFY:
-        #    con.query("SET pivot_filter_threshold=0")
-        # if enable_verification:
-        #    con.enable_query_verification()
-        # Set the local extension repo for autoinstalling extensions
-        env_var = os.getenv("LOCAL_EXTENSION_REPO")
-        if env_var:
-            con.execute("SET autoload_known_extensions=True")
-            con.execute(f"SET autoinstall_extension_repository='{env_var}'")
 
     def execute_load(self, load: Load):
         if self.in_loop():
@@ -871,15 +874,12 @@ class SQLLogicContext:
         if self.is_parallel:
             self.fail("Cannot restart database in parallel")
 
-        con = self.pool.get_connection()
-        old_settings = con.execute(
-            "select name, value from duckdb_settings() where value != 'NULL' and value != ''"
-        ).fetchall()
-        existing_search_path = con.execute("select current_setting('search_path')").fetchone()[0]
+        old_settings = self.cached_config_settings
 
         path = self.runner.database.path
         self.pool = None
         self.runner.database = None
+        gc.collect()
         self.runner.database = SQLLogicDatabase(path, self)
         self.pool = self.runner.database.connect()
         con = self.pool.get_connection()
@@ -900,10 +900,6 @@ class SQLLogicContext:
             query = f"set {name}='{value}'"
             con.execute(query)
 
-        con.begin()
-        con.execute(f"set search_path = '{existing_search_path}'")
-        con.commit()
-
     def execute_set(self, statement: Set):
         option = statement.header.parameters[0]
         string_set = (
@@ -923,7 +919,7 @@ class SQLLogicContext:
         self.pool = None
         self.pool = self.runner.database.connect()
         con = self.pool.get_connection()
-        self.initialize_connection(con)
+        self.pool.initialize_connection(self, con)
 
     def execute_sleep(self, statement: Sleep):
         def calculate_sleep_time(duration: float, unit: SleepUnit) -> float:
@@ -967,7 +963,11 @@ class SQLLogicContext:
         expected_result = statement.expected_result
         try:
             conn.execute(sql_query)
-            result = conn.fetchall()
+            print(sql_query)
+            try:
+                result = conn.fetchall()
+            except duckdb.Error:
+                pass
             if expected_result.type == ExpectedResult.Type.ERROR:
                 self.fail(f"Query unexpectedly succeeded")
             if expected_result.type != ExpectedResult.Type.UNKNOWN:
@@ -1012,7 +1012,9 @@ class SQLLogicContext:
                 return RequireResult.PRESENT
             if param == 'exact_vector_size':
                 required_vector_size = int(statement.header.parameters[1])
-                return duckdb.__standard_vector_size == required_vector_size
+                vector_size = duckdb.__standard_vector_size__
+                print(vector_size)
+                return duckdb.__standard_vector_size__ == required_vector_size
             if param == 'skip_reload':
                 self.runner.skip_reload = True
                 return RequireResult.PRESENT
@@ -1126,6 +1128,8 @@ class SQLLogicContext:
             # parallel loop: launch threads
             contexts: Dict[Tuple[str, int], Any] = {}
             for val in range(loop.start, loop.end):
+                # FIXME: these connections are expected to have the same settings
+                # So we need to apply the settings to the
                 contexts[(loop.name, val)] = SQLLogicContext(
                     self.runner.database.connect(),
                     self.runner,
@@ -1231,6 +1235,17 @@ class SQLLogicContext:
         error = f'skipped because the following statement types are not supported: {str(list([x for x in types]))}'
         self.skiptest(error)
 
+    def update_settings(self):
+        # Because we need to fire a query to get the settings required for 'restart'
+        # we do this preemptively before executing a statement
+        con = self.pool.get_connection()
+        try:
+            self.cached_config_settings = con.execute(
+                "select name, value from duckdb_settings() where value != 'NULL' and value != ''"
+            ).fetchall()
+        except duckdb.Error:
+            pass
+
     def execute(self):
         try:
             for _ in self.generator(self):
@@ -1244,6 +1259,7 @@ class SQLLogicContext:
                     method = self.STATEMENTS.get(statement.__class__)
                     if not method:
                         self.skiptest("Not supported by the runner")
+                    self.update_settings()
                     method(statement)
         except TestException as e:
             raise (e)

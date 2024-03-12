@@ -116,7 +116,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             yield None
 
         self.database = SQLLogicDatabase(':memory:', None)
-        context = SQLLogicContext(self.database.connect(), self, test.statements, keywords, update_value)
+        pool = self.database.connect()
+        context = SQLLogicContext(pool, self, test.statements, keywords, update_value)
+        pool.initialize_connection(context, pool.get_connection())
         # The outer context is not a loop!
         context.is_loop = False
 
