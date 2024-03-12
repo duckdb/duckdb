@@ -11,7 +11,7 @@ public:
 	PyConnectionWrapper() = delete;
 
 public:
-	static shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list(),
+	static shared_ptr<DuckDBPyConnection> ExecuteMany(const py::object &query, py::object params = py::list(),
 	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> DistinctDF(const PandasDataFrame &df,
@@ -27,7 +27,7 @@ public:
 	                                                const string &groups = "",
 	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(),
+	static shared_ptr<DuckDBPyConnection> Execute(const py::object &query, py::object params = py::list(),
 	                                              bool many = false, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection>
@@ -39,6 +39,8 @@ public:
 
 	static shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name,
 	                                                    shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static py::list ExtractStatements(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type, idx_t size,
 	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -67,7 +69,7 @@ public:
 
 	static void LoadExtension(const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation",
+	static unique_ptr<DuckDBPyRelation> RunQuery(const py::object &query, const string &alias = "query_relation",
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> Table(const string &tname, shared_ptr<DuckDBPyConnection> conn = nullptr);

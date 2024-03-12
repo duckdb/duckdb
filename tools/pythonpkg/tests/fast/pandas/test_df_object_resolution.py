@@ -403,9 +403,9 @@ class TestResolveObjectColumns(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_list_value_upgrade(self, pandas, duckdb_cursor):
         x = pandas.DataFrame([{'0': [['5'], [34], [-245]]}])
-        duckdb_col = duckdb_cursor.sql("select [['5'], ['34'], ['-245']] as '0'").df()
+        duckdb_rel = duckdb_cursor.sql("select [['5'], ['34'], ['-245']] as '0'")
+        duckdb_col = duckdb_rel.df()
         converted_col = duckdb_cursor.sql("select * from x").df()
-        duckdb_cursor.sql("drop view if exists tbl")
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
