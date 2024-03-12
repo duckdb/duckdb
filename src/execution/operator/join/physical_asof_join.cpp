@@ -238,6 +238,7 @@ bool AsOfLocalState::Sink(DataChunk &input) {
 	//	Compute the join keys
 	lhs_keys.Reset();
 	lhs_executor.Execute(input, lhs_keys);
+	lhs_keys.Flatten();
 
 	//	Combine the NULLs
 	const auto count = input.size();
