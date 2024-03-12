@@ -104,7 +104,7 @@ SecretMatch CatalogSetSecretStorage::LookupSecret(const string &path, const stri
 
 	const std::function<void(CatalogEntry &)> callback = [&](CatalogEntry &entry) {
 		auto &cast_entry = entry.Cast<SecretCatalogEntry>();
-		if (StringUtil::CIEquals(cast_entry.secret->secret->GetType(),type)) {
+		if (StringUtil::CIEquals(cast_entry.secret->secret->GetType(), type)) {
 			best_match = SelectBestMatch(*cast_entry.secret, path, best_match);
 		}
 	};
