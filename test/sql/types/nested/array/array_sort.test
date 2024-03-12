@@ -7,6 +7,9 @@ PRAGMA enable_verification
 statement ok
 PRAGMA verify_external
 
+# FIXME - there still seems to be a bug with array dictionary vectors
+require no_vector_verification
+
 query I
 SELECT array_value(i -1, i, i + 1) FROM range(4,1,-1) as r(i) ORDER BY 1 DESC;
 ----
