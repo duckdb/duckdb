@@ -53,13 +53,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	options.FromNamedParameters(input.named_parameters, context, return_types, names);
 	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
 	    options.store_rejects.IsSetByUser()) {
-		throw BinderException(
-		    "rejects_table_name option is only supported when store_rejects is not manually set to false");
+		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
 	}
 	if (options.rejects_scan_name.IsSetByUser() && !options.store_rejects.GetValue() &&
 	    options.store_rejects.IsSetByUser()) {
-		throw BinderException(
-		    "rejects_scan_name option is only supported when store_rejects is not manually set to false");
+		throw BinderException("REJECTS_SCAN option is only supported when store_rejects is not manually set to false");
 	}
 	if (options.rejects_scan_name.IsSetByUser() || options.rejects_table_name.IsSetByUser()) {
 		// Ensure we set store_rejects to true automagically

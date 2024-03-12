@@ -207,7 +207,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	} else if (loption == "allow_quoted_nulls") {
 		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else if (loption == "store_rejects") {
-		store_rejects = ParseBoolean(value, loption);
+		store_rejects.Set(ParseBoolean(value, loption));
 	} else if (loption == "rejects_table") {
 		// skip, handled in SetRejectsOptions
 		auto table_name = ParseString(value, loption);

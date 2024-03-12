@@ -758,6 +758,17 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, co
 	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
 }
 
+bool Catalog::EntryExists(ClientContext &context, const string &schema, const string &name) {
+	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
+	for (auto entry_type : entry_types) {
+		auto result = GetEntry(context, entry_type, schema, name, OnEntryNotFound::RETURN_NULL);
+		if (result) {
+			return true;
+		}
+	}
+	return false;
+}
+
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
                                              const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {

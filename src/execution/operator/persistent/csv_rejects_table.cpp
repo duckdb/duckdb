@@ -24,6 +24,20 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	auto key =
 	    "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(rejects_scan) + "_" + StringUtil::Upper(rejects_error);
 	auto &cache = ObjectCache::GetObjectCache(context);
+	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	bool rejects_scan_exist = catalog.EntryExists(context, DEFAULT_SCHEMA, rejects_scan);
+	bool rejects_error_exist = catalog.EntryExists(context, DEFAULT_SCHEMA, rejects_error);
+	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(key)) {
+		std::ostringstream error;
+		if (rejects_scan_exist) {
+			error << "Reject Scan Table name \"" << rejects_scan << "\" is already in use. ";
+		}
+		if (rejects_error_exist) {
+			error << "Reject Error Table name \"" << rejects_error << "\" is already in use. ";
+		}
+		error << "Either drop the used name(s), or give other name options in the CSV Reader function.\n";
+		throw BinderException(error.str());
+	}
 	return cache.GetOrCreate<CSVRejectsTable>(key, rejects_scan, rejects_error);
 }
 
@@ -50,7 +64,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	{
 		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, scan_table);
 		info->temporary = true;
-		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID
 		info->columns.AddColumn(ColumnDefinition("scan_id", LogicalType::UBIGINT));
 		// 1. File ID (within the scan)
@@ -83,7 +97,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 		// Create Rejects Error Table
 		auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, errors_table);
 		info->temporary = true;
-		info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		// 0. Scan ID
 		info->columns.AddColumn(ColumnDefinition("scan_id", LogicalType::UBIGINT));
 		// 1. File ID (within the scan)
