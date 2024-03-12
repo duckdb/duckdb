@@ -85,6 +85,21 @@ void BaseCSVData::Finalize() {
 	}
 }
 
+string TransformNewLine(string new_line) {
+	if (new_line == "\r" || new_line == "\n" || new_line == "\r\n") {
+		return new_line;
+	}
+	if (new_line == "\\r") {
+		return "\r";
+	} else if (new_line == "\\n") {
+		return "\n";
+	} else if (new_line == "\\r\\n") {
+		return "\r\n";
+	} else {
+		throw BinderException("Newline format %s not accepted as a newline delimiter for CSV files", new_line);
+	}
+}
+
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
                                              const vector<string> &names, const vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(input.info.file_path, sql_types, names);
@@ -110,7 +125,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	bind_data->requires_quotes[bind_data->options.dialect_options.state_machine_options.quote.GetValue()] = true;
 
 	if (!bind_data->options.write_newline.empty()) {
-		bind_data->newline = bind_data->options.write_newline;
+		bind_data->newline = TransformNewLine(bind_data->options.write_newline);
 	}
 	return std::move(bind_data);
 }
