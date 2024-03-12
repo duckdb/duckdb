@@ -138,7 +138,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
-#ifndef DUCKDB_VERIFY_DICTIONARY_VECTOR
+#ifdef DUCKDB_VERIFY_DICTIONARY_VECTOR
 	if (vector.GetVectorType() == VectorType::FLAT_VECTOR) {
 		// convert vector to dictionary vector
 		// first create an inverted vector, i.e. [1, 2, 3] is converted into [3, 2, 1]

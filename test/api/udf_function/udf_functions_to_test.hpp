@@ -513,7 +513,8 @@ struct UDFSum {
 			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, count);
 			break;
 		}
-		case VectorType::FLAT_VECTOR: {
+		default: {
+			inputs[0].Flatten(count);
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto &mask = FlatVector::Validity(inputs[0]);
 			if (!mask.AllValid()) {
@@ -530,9 +531,6 @@ struct UDFSum {
 				}
 			}
 			break;
-		}
-		default: {
-			throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
 		}
 		}
 	}
