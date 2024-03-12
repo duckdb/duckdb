@@ -95,11 +95,11 @@ struct OperatorInfo {
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 
-	void addTime(double n_time) {
+	void AddTime(double n_time) {
 		this->time += n_time;
 	}
 
-	void addElements(idx_t n_elements) {
+	void AddElements(idx_t n_elements) {
 		this->elements += n_elements;
 	}
 };
@@ -130,7 +130,7 @@ public:
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	SettingsSet settings;
+	ProfilerSettings settings;
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
@@ -149,7 +149,7 @@ public:
 	struct TreeNode {
 		PhysicalOperatorType type;
 		string name;
-		ProfilingInfo settings;
+		ProfilingInfo profiling_info;
 		vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
@@ -167,7 +167,7 @@ public:
 	using TreeMap = reference_map_t<const PhysicalOperator, reference<TreeNode>>;
 
 private:
-	unique_ptr<QueryProfiler::TreeNode> CreateTree(const PhysicalOperator &root, SettingsSet settings, idx_t depth = 0);
+	unique_ptr<TreeNode> CreateTree(const PhysicalOperator &root, ProfilerSettings settings, idx_t depth = 0);
 	void Render(const TreeNode &node, std::ostream &str) const;
 
 public:

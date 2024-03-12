@@ -499,16 +499,16 @@ string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	string extra_info;
-	if (op.settings.Enabled(MetricsType::EXTRA_INFO)) {
-		extra_info = op.settings.metrics.extra_info;
+	if (op.profiling_info.Enabled(MetricsType::EXTRA_INFO)) {
+		extra_info = op.profiling_info.metrics.extra_info;
 	}
 	auto result = TreeRenderer::CreateRenderNode(op.name, extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
-	if (op.settings.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-		result->extra_text += "\n" + to_string(op.settings.metrics.operator_cardinality);
+	if (op.profiling_info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
+		result->extra_text += "\n" + to_string(op.profiling_info.metrics.operator_cardinality);
 	}
-	if (op.settings.Enabled(MetricsType::OPERATOR_TIMING)) {
-		result->extra_text += "\n(" + StringUtil::Format("%.2f", op.settings.metrics.operator_timing) + "s)";
+	if (op.profiling_info.Enabled(MetricsType::OPERATOR_TIMING)) {
+		result->extra_text += "\n(" + StringUtil::Format("%.2f", op.profiling_info.metrics.operator_timing) + "s)";
 	}
 	if (config.detailed) {
 		for (auto &info : op.executors_info) {

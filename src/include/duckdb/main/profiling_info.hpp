@@ -26,10 +26,10 @@ struct MetricsTypeHashFunction {
 	}
 };
 
-typedef unordered_set<MetricsType, MetricsTypeHashFunction> SettingsSet;
+typedef unordered_set<MetricsType, MetricsTypeHashFunction> ProfilerSettings;
 
 struct SettingSetFunctions {
-	static bool Enabled(const SettingsSet &settings, const MetricsType setting) {
+	static bool Enabled(const ProfilerSettings &settings, const MetricsType setting) {
 		if (settings.find(setting) != settings.end()) {
 			return true;
 		}
@@ -52,23 +52,23 @@ struct Metrics {
 
 class ProfilingInfo {
 public:
-	// map of metrics with their values; only enabled metrics are present in the map
-	SettingsSet settings;
+	// set of metrics with their values; only enabled metrics are present in the set
+	ProfilerSettings settings;
 	Metrics metrics;
 
 public:
 	ProfilingInfo() = default;
-	ProfilingInfo(SettingsSet &n_settings) : settings(n_settings) {
+	ProfilingInfo(ProfilerSettings &n_settings) : settings(n_settings) {
 	}
 	ProfilingInfo(ProfilingInfo &) = default;
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
 public:
-	// set the metrics map
-	void SetSettings(SettingsSet &n_settings);
-	// get the metrics map
-	SettingsSet &GetSettings();
-	static SettingsSet DefaultSettings();
+	// set the metrics set
+	void SetSettings(ProfilerSettings const &n_settings);
+	// get the metrics set
+	const ProfilerSettings &GetSettings();
+	static ProfilerSettings DefaultSettings();
 
 public:
 	// reset the metrics to default

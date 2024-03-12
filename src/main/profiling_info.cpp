@@ -5,15 +5,15 @@
 
 namespace duckdb {
 
-void ProfilingInfo::SetSettings(SettingsSet &n_settings) {
+void ProfilingInfo::SetSettings(ProfilerSettings const &n_settings) {
 	this->settings = n_settings;
 }
 
-SettingsSet &ProfilingInfo::GetSettings() {
+const ProfilerSettings &ProfilingInfo::GetSettings() {
 	return settings;
 }
 
-SettingsSet ProfilingInfo::DefaultSettings() {
+ProfilerSettings ProfilingInfo::DefaultSettings() {
 	return {
 	    MetricsType::CPU_TIME,
 	    MetricsType::EXTRA_INFO,

@@ -38,7 +38,7 @@ struct ClientConfig {
 	string profiler_save_location;
 	//! The custom settings for the profiler
 	//! (empty = use the default settings)
-	SettingsSet profiler_settings = ProfilingInfo::DefaultSettings();
+	ProfilerSettings profiler_settings = ProfilingInfo::DefaultSettings();
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
