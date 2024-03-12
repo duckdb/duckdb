@@ -204,7 +204,6 @@ benchmark/micro/window/window_mad_variable_100.benchmark
 benchmark/micro/window/window_median_fixed_100.benchmark
 benchmark/micro/window/window_median_variable_100.benchmark
 benchmark/micro/window/window_mode_fixed_100.benchmark
-benchmark/micro/window/window_mode_variable_100.benchmark
 benchmark/micro/window/window_partition.benchmark
 benchmark/micro/window/window_streamed_sum.benchmark
 benchmark/micro/window/window_sum.benchmark
