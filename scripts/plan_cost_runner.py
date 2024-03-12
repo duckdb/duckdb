@@ -78,9 +78,7 @@ class PlanCost:
         return not (self > other)
 
     def __eq__(self, other):
-        return self.total == other.total and \
-            self.build_side == other.build_side and \
-            self.probe_side == other.probe_side
+        return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
 def op_inspect(op):
