@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-PhysicalVerifyVector::PhysicalVerifyVector(unique_ptr<PhysicalOperator> child) :
-	PhysicalOperator(PhysicalOperatorType::VERIFY_VECTOR, child->types, child->estimated_cardinality) {
+PhysicalVerifyVector::PhysicalVerifyVector(unique_ptr<PhysicalOperator> child)
+    : PhysicalOperator(PhysicalOperatorType::VERIFY_VECTOR, child->types, child->estimated_cardinality) {
 	children.push_back(std::move(child));
 }
 
@@ -21,7 +21,7 @@ OperatorResultType VerifyEmitConstantVectors(DataChunk &input, DataChunk &chunk,
 	D_ASSERT(state.const_idx < input.size());
 
 	// emit constant vectors at the current index
-	for(idx_t c = 0; c < chunk.ColumnCount(); c++) {
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		ConstantVector::Reference(chunk.data[c], input.data[c], state.const_idx, 1);
 	}
 	chunk.SetCardinality(1);
@@ -36,7 +36,7 @@ OperatorResultType VerifyEmitConstantVectors(DataChunk &input, DataChunk &chunk,
 
 OperatorResultType VerifyEmitDictionaryVectors(DataChunk &input, DataChunk &chunk, OperatorState &state) {
 	chunk.Reference(input);
-	for(idx_t c = 0; c < chunk.ColumnCount(); c++) {
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
 		Vector::DebugTransformToDictionary(chunk.data[c], chunk.size());
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
@@ -47,8 +47,8 @@ unique_ptr<OperatorState> PhysicalVerifyVector::GetOperatorState(ExecutionContex
 }
 
 OperatorResultType PhysicalVerifyVector::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-						   GlobalOperatorState &gstate, OperatorState &state) const {
+                                                 GlobalOperatorState &gstate, OperatorState &state) const {
 	return VerifyEmitConstantVectors(input, chunk, state);
 }
 
-}
+} // namespace duckdb
