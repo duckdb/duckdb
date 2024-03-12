@@ -223,11 +223,6 @@ select count(*) from '__TEST_DIR__/test_en.csv'
 ----
 5000
 
-statement error
-COPY test TO '__TEST_DIR__/test_n.csv' (new_line  'bla');
-----
-Newline format bla not accepted as a newline delimiter for CSV files
-
 # use a different delimiter
 # create new table
 statement ok

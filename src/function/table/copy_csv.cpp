@@ -12,7 +12,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-
+#include <regex>
 #include <limits>
 
 namespace duckdb {
@@ -86,18 +86,9 @@ void BaseCSVData::Finalize() {
 }
 
 string TransformNewLine(string new_line) {
-	if (new_line == "\r" || new_line == "\n" || new_line == "\r\n") {
-		return new_line;
-	}
-	if (new_line == "\\r") {
-		return "\r";
-	} else if (new_line == "\\n") {
-		return "\n";
-	} else if (new_line == "\\r\\n") {
-		return "\r\n";
-	} else {
-		throw BinderException("Newline format %s not accepted as a newline delimiter for CSV files", new_line);
-	}
+	new_line = regex_replace(new_line, std::regex("\\\\r"), "\r");
+	new_line = regex_replace(new_line, std::regex("\\\\n"), "\n");
+	return new_line;
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
