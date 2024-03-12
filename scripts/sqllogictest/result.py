@@ -963,11 +963,7 @@ class SQLLogicContext:
         expected_result = statement.expected_result
         try:
             conn.execute(sql_query)
-            print(sql_query)
-            try:
-                result = conn.fetchall()
-            except duckdb.Error:
-                pass
+            result = conn.fetchall()
             if expected_result.type == ExpectedResult.Type.ERROR:
                 self.fail(f"Query unexpectedly succeeded")
             if expected_result.type != ExpectedResult.Type.UNKNOWN:
