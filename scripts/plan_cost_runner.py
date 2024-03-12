@@ -78,9 +78,7 @@ class PlanCost:
         return not (self > other)
 
     def __eq__(self, other):
-        return self.total == other.total and \
-            self.build_side == other.build_side and \
-            self.probe_side == other.probe_side
+        return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
 def op_inspect(op):
@@ -156,8 +154,8 @@ def print_diffs(diffs):
 
 def main():
     old, new, benchmark_dir = parse_args()
-    # init_db(old, OLD_DB_NAME, benchmark_dir)
-    # init_db(new, NEW_DB_NAME, benchmark_dir)
+    init_db(old, OLD_DB_NAME, benchmark_dir)
+    init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
@@ -192,8 +190,8 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    # os.remove(OLD_DB_NAME)
-    # os.remove(NEW_DB_NAME)
+    os.remove(OLD_DB_NAME)
+    os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
