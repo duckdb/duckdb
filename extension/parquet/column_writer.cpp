@@ -1750,6 +1750,40 @@ void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 	child_writer->FinalizeAnalyze(*state.child_state);
 }
 
+idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
+	// returns a consecutive child list that fully flattens and repeats all required elements
+	auto &validity = FlatVector::Validity(list);
+	auto list_entries = FlatVector::GetData<list_entry_t>(list);
+	bool is_consecutive = true;
+	idx_t total_length = 0;
+	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
+		if (list_entries[c].offset != total_length) {
+			is_consecutive = false;
+		}
+		total_length += list_entries[c].length;
+	}
+	if (is_consecutive) {
+		// already consecutive - leave it as-is
+		return total_length;
+	}
+	SelectionVector sel(total_length);
+	idx_t index = 0;
+	for (idx_t c = offset; c < offset + count; c++) {
+		if (!validity.RowIsValid(c)) {
+			continue;
+		}
+		for (idx_t k = 0; k < list_entries[c].length; k++) {
+			sel.set_index(index++, list_entries[c].offset + k);
+		}
+	}
+	result.Slice(sel, total_length);
+	result.Flatten(total_length);
+	return total_length;
+}
+
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
@@ -1803,7 +1837,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	child_writer->Prepare(*state.child_state, &state_p, child_list, child_length);
 }
 
@@ -1817,7 +1851,7 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
-	auto child_length = ListVector::GetConsecutiveChildList(vector, child_list, 0, count);
+	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	child_writer->Write(*state.child_state, child_list, child_length);
 }
 
