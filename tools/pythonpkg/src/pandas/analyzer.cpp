@@ -8,35 +8,24 @@
 
 namespace duckdb {
 
-static bool TypeIsNested(LogicalTypeId id) {
-	switch (id) {
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::UNION:
-	case LogicalTypeId::LIST:
-	case LogicalTypeId::ARRAY:
-	case LogicalTypeId::MAP:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
-	if (a == b) {
+static bool SameTypeRealm(const LogicalType &a, const LogicalType &b) {
+	auto a_id = a.id();
+	auto b_id = b.id();
+	if (a_id == b_id) {
 		return true;
 	}
-	if (a > b) {
+	if (a_id > b_id) {
 		return SameTypeRealm(b, a);
 	}
-	D_ASSERT(a < b);
+	D_ASSERT(a_id < b_id);
 
 	// anything ANY and under can transform to anything
-	if (a <= LogicalTypeId::ANY) {
+	if (a_id <= LogicalTypeId::ANY) {
 		return true;
 	}
 
-	auto a_is_nested = TypeIsNested(a);
-	auto b_is_nested = TypeIsNested(b);
+	auto a_is_nested = a.IsNested();
+	auto b_is_nested = b.IsNested();
 	// Both a and b are not nested
 	if (!a_is_nested && !b_is_nested) {
 		return true;
@@ -47,9 +36,9 @@ static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
 	}
 
 	// From this point on, left and right are both nested
-	D_ASSERT(a != b);
+	D_ASSERT(a_id != b_id);
 	// STRUCT -> LIST is not possible
-	if (b == LogicalTypeId::LIST || a == LogicalTypeId::LIST) {
+	if (b_id == LogicalTypeId::LIST || a_id == LogicalTypeId::LIST) {
 		return false;
 	}
 	return true;
@@ -58,10 +47,10 @@ static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
 static bool UpgradeType(LogicalType &left, const LogicalType &right);
 
 static bool CheckTypeCompatibility(const LogicalType &left, const LogicalType &right) {
-	if (!SameTypeRealm(left.id(), right.id())) {
+	if (!SameTypeRealm(left, right)) {
 		return false;
 	}
-	if (!TypeIsNested(left.id()) || !TypeIsNested(right.id())) {
+	if (!left.IsNested() || !right.IsNested()) {
 		return true;
 	}
 
