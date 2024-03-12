@@ -114,10 +114,6 @@ static bool CombineStructTypes(LogicalType &result, const LogicalType &input) {
 static bool SatisfiesMapConstraints(const LogicalType &left, const LogicalType &right, LogicalType &map_value_type) {
 	D_ASSERT(left.id() == LogicalTypeId::STRUCT && left.id() == right.id());
 
-	//! Child types of the two structs
-	auto &left_children = StructType::GetChildTypes(left);
-	auto &right_children = StructType::GetChildTypes(right);
-
 	if (!CombineStructTypes(map_value_type, left)) {
 		return false;
 	}
