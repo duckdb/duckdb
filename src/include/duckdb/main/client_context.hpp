@@ -26,6 +26,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 class Appender;
@@ -165,7 +166,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result);
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -253,6 +254,10 @@ private:
 
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
+
+	shared_ptr<PreparedStatementData>
+	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	                                optional_ptr<case_insensitive_map_t<Value>> values);
 
 private:
 	//! Lock on using the ClientContext in parallel

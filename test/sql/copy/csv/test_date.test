@@ -15,3 +15,26 @@ SELECT cast(d as string) FROM date_test;
 ----
 2019-06-05
 
+query TT
+Select * from read_csv('data/csv/custom_date.csv', header=true, dateformat='%m/%d/%Y, %-I:%-M %p', types = ['BIGINT', 'DATE'] );
+----
+123	2023-01-02
+124	2023-12-02
+
+query TT
+Select * from read_csv('data/csv/custom_date.csv', header=true, dateformat='%m/%d/%Y, %-I:%-M %p');
+----
+123	2023-01-02
+124	2023-12-02
+
+query TT
+Select * from read_csv('data/csv/custom_date.csv', header=true, timestampformat='%m/%d/%Y, %-I:%-M %p', types = ['BIGINT', 'TIMESTAMP'] );
+----
+123	2023-01-02 12:33:00
+124	2023-12-02 11:57:00
+
+query TT
+Select * from read_csv('data/csv/custom_date.csv', header=true, timestampformat='%m/%d/%Y, %-I:%-M %p');
+----
+123	2023-01-02 12:33:00
+124	2023-12-02 11:57:00

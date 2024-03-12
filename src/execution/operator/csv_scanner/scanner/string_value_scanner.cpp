@@ -55,7 +55,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				parse_types[i] = {type.id(), true};
 				logical_types.emplace_back(type);
 			} else {
-				parse_types[i] = {LogicalTypeId::VARCHAR, type.id() == LogicalTypeId::VARCHAR};
+				parse_types[i] = {LogicalTypeId::VARCHAR, type.id() == LogicalTypeId::VARCHAR || type.IsNested()};
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
@@ -858,25 +858,37 @@ void StringValueScanner::ProcessOverbufferValue() {
 		}
 		j++;
 	}
-	string_t value;
-	if (result.quoted) {
-		value = string_t(overbuffer_string.c_str() + result.quoted_position,
-		                 UnsafeNumericCast<uint32_t>(overbuffer_string.size() - 1 - result.quoted_position));
-		if (result.escaped) {
-			const auto str_ptr = static_cast<const char *>(overbuffer_string.c_str() + result.quoted_position);
-			value =
-			    StringValueScanner::RemoveEscape(str_ptr, overbuffer_string.size() - 2,
-			                                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-			                                     result.parse_chunk.data[result.chunk_col_id]);
+	bool skip_value = false;
+	if (result.projecting_columns) {
+		if (!result.projected_columns[result.cur_col_id]) {
+			result.cur_col_id++;
+			skip_value = true;
+		}
+	}
+	if (!skip_value) {
+		string_t value;
+		if (result.quoted) {
+			value = string_t(overbuffer_string.c_str() + result.quoted_position,
+			                 UnsafeNumericCast<uint32_t>(overbuffer_string.size() - 1 - result.quoted_position));
+			if (result.escaped) {
+				const auto str_ptr = static_cast<const char *>(overbuffer_string.c_str() + result.quoted_position);
+				value = StringValueScanner::RemoveEscape(
+				    str_ptr, overbuffer_string.size() - 2,
+				    state_machine->dialect_options.state_machine_options.escape.GetValue(),
+				    result.parse_chunk.data[result.chunk_col_id]);
+			}
+		} else {
+			value = string_t(overbuffer_string.c_str(), UnsafeNumericCast<uint32_t>(overbuffer_string.size()));
+		}
+		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
+			result.EmptyLine(result, iterator.pos.buffer_pos);
+		} else if (!states.IsNotSet()) {
+			result.AddValueToVector(value.GetData(), value.GetSize(), true);
 		}
 	} else {
-		value = string_t(overbuffer_string.c_str(), UnsafeNumericCast<uint32_t>(overbuffer_string.size()));
-	}
-
-	if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
-		result.EmptyLine(result, iterator.pos.buffer_pos);
-	} else if (!states.IsNotSet()) {
-		result.AddValueToVector(value.GetData(), value.GetSize(), true);
+		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
+			result.EmptyLine(result, iterator.pos.buffer_pos);
+		}
 	}
 
 	if (states.NewRow() && !states.IsNotSet()) {

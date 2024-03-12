@@ -9,10 +9,22 @@ import pytz
 import pytest
 
 
+def replace_with_ndarray(obj):
+    if hasattr(obj, '__getitem__'):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                obj[key] = replace_with_ndarray(value)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                obj[i] = replace_with_ndarray(item)
+        return np.array(obj)
+    return obj
+
+
 # we need to write our own equality function that considers nan==nan for testing purposes
 def recursive_equality(o1, o2):
-    if o1 == o2:
-        return True
+    import math
+
     if type(o1) != type(o2):
         return False
     if type(o1) == float and math.isnan(o1) and math.isnan(o2):
@@ -27,7 +39,7 @@ def recursive_equality(o1, o2):
                 return False
         return True
     except:
-        return False
+        return o1 == o2
 
 
 # Regenerate the 'all_types' list using:
@@ -481,6 +493,7 @@ class TestAllTypes(object):
             ),
             'union': np.ma.array(['Frank', 5, None], mask=[0, 0, 1], dtype=object),
         }
+        correct_answer_map = replace_with_ndarray(correct_answer_map)
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():
