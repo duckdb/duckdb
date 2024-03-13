@@ -1,0 +1,38 @@
+# name: test/sql/collate/test_collate_orderby_column_number.test
+# description: Test collation on ORDER BY with column number
+# group: [collate]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 'a' AS c1 ORDER BY 1 COLLATE NOCASE;
+----
+a
+
+query I
+SELECT 'a' ORDER BY 1 COLLATE NOCASE;
+----
+a
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR)
+
+statement ok
+INSERT INTO collate_test VALUES ('ã'),('B'),('a'),('A');
+
+query I
+SELECT s FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+a
+A
+B
+ã
+
+query I
+SELECT s FROM collate_test ORDER BY s COLLATE NOCASE;
+----
+a
+A
+B
+ã
