@@ -427,7 +427,6 @@ class SQLLogicDatabase:
         path = context.get_extension_path(extension)
         # Serialize it as a POSIX compliant path
         query = f"LOAD '{path}'"
-        print(query)
         self.database.execute(query)
 
     def connect(self) -> SQLLogicConnectionPool:
@@ -1008,8 +1007,6 @@ class SQLLogicContext:
                 return RequireResult.PRESENT
             if param == 'exact_vector_size':
                 required_vector_size = int(statement.header.parameters[1])
-                vector_size = duckdb.__standard_vector_size__
-                print(vector_size)
                 return duckdb.__standard_vector_size__ == required_vector_size
             if param == 'skip_reload':
                 self.runner.skip_reload = True

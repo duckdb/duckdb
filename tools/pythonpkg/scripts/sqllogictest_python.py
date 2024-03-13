@@ -24,17 +24,6 @@ from sqllogictest.result import (
 
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
 
-### TODO
-# - Clean up the 'error_message', 'error_line', etc.. structure, probably move it into a class
-#   then we can streamline the parallel/non-parallel SQLLogicContext uses
-# - Properly register skipped tests / errored tests
-# - Clean up the exception handling
-#   'except:' and 'except as Exception:' are much too broad, these should be narrowed
-# - Split up the logic, ideally a good portion of this should be language-agnostic
-#   so we can reuse much of this to build a codegen solution for other languages
-# - Properly implement the rest of the 'require' statement
-#   currently we skip on every require that is not an extension
-
 
 # This is pretty much just a VM
 class SQLLogicTestExecutor(SQLLogicRunner):
@@ -44,16 +33,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             [
                 'test/sql/types/map/map_empty.test',
                 'test/extension/wrong_function_type.test',  # <-- JSON is always loaded
-                'test/sql/types/nested/list/test_list_slice_step.test',  # <-- skipping because it causes an InternalException currently
                 'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
                 'test/sql/cast/cast_error_location.test',  # <-- python exception doesn't contain error location yet
                 'test/sql/pragma/test_query_log.test',  # <-- query_log gets filled with NULL when con.query(...) is used
-                'test/sql/function/list/lambdas/transform_with_index.test',  # <-- same InternalException
-                'test/sql/function/list/lambdas/transform.test',  # <-- same InternalException
-                'test/sql/function/list/lambdas/filter.test',  # <-- same InternalException
-                'test/sql/function/list/lambdas/reduce.test',  # <-- same InternalException
-                'test/sql/function/list/list_resize.test',  # <-- same InternalException
-                'test/sql/function/list/aggregates/null_or_empty.test',  # <-- same InternalException
                 'test/sql/json/table/read_json_objects.test',  # <-- Python client is always loaded with JSON available
                 'test/sql/copy/csv/zstd_crash.test',  # <-- Python client is always loaded with Parquet available
                 'test/sql/error/extension_function_error.test',  # <-- Python client is always loaded with TPCH available
