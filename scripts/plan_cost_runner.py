@@ -64,13 +64,19 @@ class PlanCost:
         return self
 
     def __gt__(self, other):
-        if self.total > other.total:
-            # if the total intermediate cardinalities is greater, also inspect time.
-            # it's possible a plan reordering fixed other things as well
-            return self.time > other.time * 1.05
-        if self == other:
+        if self == other or self.total < other.total:
             return False
-        return self.time > other.time * 1.05
+        # if the total intermediate cardinalities is greater, also inspect time.
+        # it's possible a plan reordering increased cardinalities, but overall execution time
+        # was not greatly affected
+        total_card_increased = self.total > other.total
+        build_card_increased = self.build_side > other.build_side
+        if total_card_increased and build_card_increased:
+            return True
+        # we know the total cardinality is either the same or higher and the build side has not increased
+        # in this case fall back to the timing. It's possible that even if the probe side is higher
+        # since the tuples are in flight, the plan executes faster
+        return self.time > other.time * 1.03
 
     def __lt__(self, other):
         if self == other:
@@ -154,8 +160,8 @@ def print_diffs(diffs):
 
 def main():
     old, new, benchmark_dir = parse_args()
-    init_db(old, OLD_DB_NAME, benchmark_dir)
-    init_db(new, NEW_DB_NAME, benchmark_dir)
+    # init_db(old, OLD_DB_NAME, benchmark_dir)
+    # init_db(new, NEW_DB_NAME, benchmark_dir)
 
     improvements = []
     regressions = []
@@ -190,9 +196,9 @@ def main():
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
 
-    os.remove(OLD_DB_NAME)
-    os.remove(NEW_DB_NAME)
-    os.remove(PROFILE_FILENAME)
+    # os.remove(OLD_DB_NAME)
+    # os.remove(NEW_DB_NAME)
+    # os.remove(PROFILE_FILENAME)
 
     exit(exit_code)
 
