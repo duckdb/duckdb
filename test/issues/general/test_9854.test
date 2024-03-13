@@ -1,0 +1,337 @@
+# name: test/issues/general/test_9854.test
+# description: Issue 1091: Functions don't check or pass collation.
+# group: [general]
+
+statement ok
+create table tbl (a varchar, b varchar);
+
+statement ok
+insert into tbl values ('ö', '>>>>>ö<<<<<'), ('o', '>>>>>o<<<<<'), ('p', '>>>>>p<<<<<');
+
+######### !!! test concat()
+
+query I
+select a from tbl order by a;
+----
+o
+p
+ö
+
+query I
+select a from tbl order by a collate noaccent;
+----
+ö
+o
+p
+
+query I
+select a from tbl order by concat(a collate noaccent, a);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by concat(a, a collate noaccent);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by concat(a, a collate noaccent);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by concat(concat(a, a collate noaccent), a);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by concat(a collate noaccent, a collate noaccent);
+----
+ö
+o
+p
+
+statement error
+select a from tbl order by concat(a collate noaccent, a collate nocase);
+----
+
+query I
+select a from tbl order by a collate noaccent;
+----
+ö
+o
+p
+
+######### !!! test lower() and upper()
+
+query I
+select a from tbl order by lower(a);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by lower(a collate noaccent);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by upper(a);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by upper(a collate noaccent);
+----
+ö
+o
+p
+
+######### !!! test trim(), ltrim() and rtrim()
+
+query I
+select a from tbl order by trim(b);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by trim(b, '><');
+----
+o
+p
+ö
+
+query I
+select a from tbl order by trim(b collate noaccent);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by trim(b collate noaccent, '><');
+----
+ö
+o
+p
+
+query I
+select a from tbl order by trim(b, '><' collate noaccent);
+----
+ö
+o
+p
+
+statement error
+select a from tbl order by trim(b collate nocase, '><' collate noaccent);
+----
+
+query I
+select a from tbl order by ltrim(b);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by ltrim(b, '><');
+----
+o
+p
+ö
+
+query I
+select a from tbl order by ltrim(b collate noaccent);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by ltrim(b collate noaccent, '><');
+----
+ö
+o
+p
+
+query I
+select a from tbl order by ltrim(b, '><' collate noaccent);
+----
+ö
+o
+p
+
+statement error
+select a from tbl order by ltrim(b collate nocase, '><' collate noaccent);
+----
+
+query I
+select a from tbl order by rtrim(b);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by rtrim(b, '><');
+----
+o
+p
+ö
+
+query I
+select a from tbl order by rtrim(b collate noaccent);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by rtrim(b collate noaccent, '><');
+----
+ö
+o
+p
+
+query I
+select a from tbl order by rtrim(b, '><' collate noaccent);
+----
+ö
+o
+p
+
+statement error
+select a from tbl order by rtrim(b collate nocase, '><' collate noaccent);
+----
+
+query I
+select trim(b, '>o') from tbl;
+----
+ö<<<<<
+<<<<<
+p<<<<<
+
+query I
+select trim(b, '>o' collate noaccent) from tbl;
+----
+<<<<<
+<<<<<
+p<<<<<
+
+query I
+select ltrim(b, '>o') from tbl;
+----
+ö<<<<<
+<<<<<
+p<<<<<
+
+query I
+select ltrim(b, '>o' collate noaccent) from tbl;
+----
+<<<<<
+<<<<<
+p<<<<<
+
+query I
+select rtrim(b, '<o') from tbl;
+----
+>>>>>ö
+>>>>>
+>>>>>p
+
+query I
+select rtrim(b, '<o' collate noaccent) from tbl;
+----
+>>>>>
+>>>>>
+>>>>>p
+
+
+######### !!! test repeat()
+
+query I
+select a from tbl order by repeat(a, 10);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by repeat(a collate noaccent, 10);
+----
+ö
+o
+p
+
+######### !!! test left() and right()
+
+query I
+select a from tbl order by left(b, 6);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by left(b collate noaccent, 6);
+----
+ö
+o
+p
+
+query I
+select a from tbl order by right(b, 6);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by right(b collate noaccent, 6);
+----
+ö
+o
+p
+
+######### !!! test reverse()
+
+query I
+select a from tbl order by reverse(b);
+----
+o
+p
+ö
+
+query I
+select a from tbl order by reverse(b collate noaccent);
+----
+ö
+o
+p
+
+######### !!! test start_with()
+
+query I
+SELECT * FROM (SELECT 'A' COLLATE NOCASE) AS DERIVED(C1) WHERE c1 = 'a';
+----
+A
+
+query I
+SELECT * FROM (SELECT 'A' COLLATE NOCASE) AS DERIVED(C1) WHERE starts_with(c1, 'a');
+----
+A

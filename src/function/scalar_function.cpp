@@ -1,5 +1,8 @@
 #include "duckdb/function/scalar_function.hpp"
 
+#include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+
 namespace duckdb {
 
 FunctionLocalState::~FunctionLocalState() {
@@ -61,6 +64,43 @@ bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 1);
 	result.Reference(input.data[0]);
+}
+
+template <bool bind_args>
+static unique_ptr<FunctionData> FunctionCollationBinder(ClientContext &context, ScalarFunction &bound_function,
+                                                        vector<unique_ptr<Expression>> &arguments) {
+	LogicalType type = LogicalType::VARCHAR;
+	for (auto &arg : arguments) {
+		auto &arg_type = arg->return_type;
+		// Only works on VARCHAR type and calculate correct collation.
+		if (arg_type.id() == LogicalTypeId::VARCHAR) {
+			// TryBindComparison will never return false because input types are always VARCHAR.
+			BoundComparisonExpression::TryBindComparison(context, type, arg_type, type, ExpressionType::FUNCTION);
+		}
+	}
+
+	if (bind_args) {
+		for (auto &arg : arguments) {
+			// PushCollation will return directly if arg's return_type is not VARCHAR type.
+			ExpressionBinder::PushCollation(context, arg, type, true);
+		}
+	}
+
+	if (bound_function.return_type.id() == LogicalTypeId::VARCHAR) {
+		// Pass collation to VARCHAR return_type of this function.
+		bound_function.return_type = LogicalType::VARCHAR_COLLATION(StringType::GetCollation(type));
+	}
+	return nullptr;
+}
+
+unique_ptr<FunctionData> FunctionRetCollationBinder(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
+	return FunctionCollationBinder<false>(context, bound_function, arguments);
+}
+
+unique_ptr<FunctionData> FunctionAllCollationBinder(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
+	return FunctionCollationBinder<true>(context, bound_function, arguments);
 }
 
 } // namespace duckdb

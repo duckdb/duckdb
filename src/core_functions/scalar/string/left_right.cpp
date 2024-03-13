@@ -53,7 +53,7 @@ static void LeftFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 ScalarFunction LeftFun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                      LeftFunction<LeftRightUnicode>);
+	                      LeftFunction<LeftRightUnicode>, FunctionRetCollationBinder);
 }
 
 ScalarFunction LeftGraphemeFun::GetFunction() {
@@ -89,7 +89,7 @@ static void RightFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 ScalarFunction RightFun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                      RightFunction<LeftRightUnicode>);
+	                      RightFunction<LeftRightUnicode>, FunctionRetCollationBinder);
 }
 
 ScalarFunction RightGraphemeFun::GetFunction() {

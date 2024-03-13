@@ -38,7 +38,8 @@ struct StartsWithOperator {
 
 ScalarFunction StartsWithOperatorFun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, StartsWithOperator>);
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, StartsWithOperator>,
+	                      FunctionAllCollationBinder);
 }
 
 } // namespace duckdb

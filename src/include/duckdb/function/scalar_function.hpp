@@ -227,4 +227,17 @@ public:
 	}
 };
 
+//! FunctionRetCollationBinder and FunctionAllCollationBinder are used to calculate and assign collation to Function's
+//! return_type. With these binders, collation can be inherited by some functions. FunctionAllCollationBinder will
+//! invoke PushCollation for all arguments.
+
+//! Calculate collation with arguments' return_type and assign it to Function's return_type.
+unique_ptr<FunctionData> FunctionRetCollationBinder(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments);
+
+//! Calculate collation with arguments' return_type, invoke PushCollation to arguments and assign collation to
+//! Function's return_type.
+unique_ptr<FunctionData> FunctionAllCollationBinder(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments);
+
 } // namespace duckdb
