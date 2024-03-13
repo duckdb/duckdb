@@ -1,0 +1,18 @@
+name: InvokeCI
+on:
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+
+jobs:
+  osx:
+    uses: ./.github/workflows/OSX.yml
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
