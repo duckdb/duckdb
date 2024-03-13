@@ -30,10 +30,9 @@ unique_ptr<LogicalOperator> LimitPushdown::Optimize(unique_ptr<LogicalOperator> 
 		op->children[0] = std::move(projection->children[0]);
 		projection->children[0] = std::move(op);
 		swap(projection, op);
-	} else {
-		for (auto &child : op->children) {
-			child = Optimize(std::move(child));
-		}
+	}
+	for (auto &child : op->children) {
+		child = Optimize(std::move(child));
 	}
 	return op;
 }
