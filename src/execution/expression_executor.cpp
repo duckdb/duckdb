@@ -138,7 +138,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
-#ifdef DUCKDB_VERIFY_DICTIONARY_VECTOR
+#ifdef DUCKDB_VERIFY_DICTIONARY_EXPRESSION
 	Vector::DebugTransformToDictionary(vector, count);
 #endif
 }
