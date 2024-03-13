@@ -81,7 +81,7 @@ class PlanCost:
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
-def op_inspect(op):
+def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if op['name'] == "Query":
         cost.time = op['timing']
