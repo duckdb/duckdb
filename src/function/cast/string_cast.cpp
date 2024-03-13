@@ -311,7 +311,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 			idx = sel->get_index(i);
 		}
 		if (!source_mask.RowIsValid(idx)) {
-			result_mask.SetInvalid(idx);
+			result_mask.SetInvalid(i);
 			continue;
 		}
 
@@ -320,8 +320,8 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 		                                       varchar_key_vector, varchar_val_vector)) {
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type MAP";
-			FlatVector::SetNull(result, idx, true);
-			HandleVectorCastError::Operation<string_t>(text, result_mask, idx, vector_cast_data);
+			FlatVector::SetNull(result, i, true);
+			HandleVectorCastError::Operation<string_t>(text, result_mask, i, vector_cast_data);
 		}
 		list_data[i].length = total - list_data[i].offset;
 	}

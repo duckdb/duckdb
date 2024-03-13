@@ -94,6 +94,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
+	    {"partitioned_write_flush_threshold", {123}},
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
 	    {"profile_output", {"test"}},

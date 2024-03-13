@@ -190,7 +190,7 @@ valid	valid	valid
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
 ----
-Could not convert string
+Invalid unicode (byte sequence mismatch) detected.
 
 statement error
 SELECT * FROM read_csv('test/sql/copy/csv/data/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )

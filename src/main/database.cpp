@@ -56,6 +56,14 @@ DatabaseInstance::DatabaseInstance() {
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
 	GetDatabaseManager().ResetDatabases(scheduler);
+	// destroy child elements
+	connection_manager.reset();
+	object_cache.reset();
+	scheduler.reset();
+	db_manager.reset();
+	buffer_manager.reset();
+	// finally, flush allocations
+	Allocator::FlushAll();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -394,7 +402,7 @@ void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
 	}
 }
 
-bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
 	// check the session values
 	auto &db_config = DBConfig::GetConfig(*this);
 	const auto &global_config_map = db_config.options.set_variables;
@@ -402,10 +410,10 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	auto global_value = global_config_map.find(key);
 	bool found_global_value = global_value != global_config_map.end();
 	if (!found_global_value) {
-		return false;
+		return SettingLookupResult();
 	}
 	result = global_value->second;
-	return true;
+	return SettingLookupResult(SettingScope::GLOBAL);
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

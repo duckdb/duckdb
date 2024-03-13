@@ -6,8 +6,11 @@ from conftest import NumpyPandas, ArrowPandas
 import datetime
 
 # We only run this test if this env var is set
+# FIXME: we can add a custom command line argument to pytest to provide an extension directory
+# We can use that instead of checking this environment variable inside of conftest.py's 'require' method
 pytestmark = mark.skipif(
-    not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False), reason='httpfs extension not available'
+    not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False),
+    reason='DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED is not set',
 )
 
 
@@ -59,11 +62,11 @@ class TestHTTPFS(object):
     def test_http_exception(self, require):
         connection = require('httpfs')
 
+        # Read from a bogus HTTPS url, assert that it errors with a non-succesfull status code
         with raises(duckdb.HTTPException) as exc:
             connection.execute("SELECT * FROM PARQUET_SCAN('https://example.com/userdata1.parquet')")
 
         value = exc.value
-        assert value.status_code == 404
-        assert value.reason == 'Not Found'
+        assert value.status_code != 200
         assert value.body == ''
         assert 'Content-Length' in value.headers

@@ -150,6 +150,7 @@ protected:
 	//! Synchronization for upload threads
 	mutex uploads_in_progress_lock;
 	std::condition_variable uploads_in_progress_cv;
+	std::condition_variable final_flush_cv;
 	uint16_t uploads_in_progress;
 
 	//! Etags are stored for each part
@@ -178,12 +179,6 @@ class S3FileSystem : public HTTPFileSystem {
 public:
 	explicit S3FileSystem(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
-
-	// Global limits to write buffers
-	mutex buffers_available_lock;
-	std::condition_variable buffers_available_cv;
-	uint16_t buffers_in_use = 0;
-	uint16_t threads_waiting_for_memory = 0;
 
 	BufferManager &buffer_manager;
 	string GetName() const override;
@@ -239,6 +234,7 @@ public:
 	}
 
 protected:
+	static void NotifyUploadsInProgress(S3FileHandle &file_handle);
 	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
 	                                                FileCompressionType compression, FileOpener *opener) override;
 

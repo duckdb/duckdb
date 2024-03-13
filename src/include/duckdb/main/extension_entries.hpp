@@ -38,6 +38,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"excel_text", "excel", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"family", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_substrait", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -217,6 +218,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_account_name", "azure"},
+    {"azure_context_caching", "azure"},
     {"azure_credential_chain", "azure"},
     {"azure_endpoint", "azure"},
     {"azure_http_proxy", "azure"},
@@ -227,6 +229,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_read_transfer_chunk_size", "azure"},
     {"azure_read_transfer_concurrency", "azure"},
     {"azure_storage_connection_string", "azure"},
+    {"azure_transport_option_type", "azure"},
     {"binary_as_string", "parquet"},
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},

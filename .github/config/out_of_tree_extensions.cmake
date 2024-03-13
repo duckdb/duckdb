@@ -19,7 +19,7 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG 043890c2ad83c4a1375417e2d5d085a33f79a217
+            GIT_TAG f7b8729f1cce5ada5d4add70e1486de50763fb97
             )
 endif()
 
@@ -28,7 +28,7 @@ if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG 3ad0348334d2a263e5f19ef08fd02311bdae82f3
+            GIT_TAG 9e3e5b8addab5939b4ca4ac5f8997218a7228b8f
             )
 endif()
 
@@ -56,6 +56,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 883a8f1a8a487264855a5166f7df1f46ad386434
+            APPLY_PATCHES
             )
 endif()
 
