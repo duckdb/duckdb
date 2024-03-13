@@ -33,7 +33,7 @@ env:
 jobs:
 
   vector-verification:
-    name: Vector Verification Tests (${{ matrix.type }})
+    name: Vector Verification Tests (${{ matrix.vector_type }})
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -51,7 +51,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
-      VERIFY_VECTOR: ${{ matrix.type }}
+      VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
       - uses: actions/checkout@v3
