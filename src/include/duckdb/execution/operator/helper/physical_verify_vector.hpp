@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-//! The PhysicalVerifyVector operator is a streaming operator that emits the same data as it ingests - but in a different format
+//! The PhysicalVerifyVector operator is a streaming operator that emits the same data as it ingests - but in a
+//! different format
 // There are different configurations
 // * Dictionary: Transform every vector into a dictionary vector where the underlying vector has gaps and is reversed
 //       i.e. original: FLAT [1, 2, 3]

@@ -1606,11 +1606,11 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 }
 
 void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
-	switch(vector.GetType().id()) {
+	switch (vector.GetType().id()) {
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);
 		// recurse into child elements
-		for(auto &entry : entries) {
+		for (auto &entry : entries) {
 			Vector::DebugShuffleNestedVector(*entry, count);
 		}
 		break;
@@ -1640,7 +1640,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 			}
 			// move this list to the back
 			position -= list_entries[r].length;
-			for(idx_t k = 0; k < list_entries[r].length; k++) {
+			for (idx_t k = 0; k < list_entries[r].length; k++) {
 				child_sel.set_index(position + k, list_entries[r].offset + k);
 			}
 			// adjust the offset to this new position
