@@ -209,6 +209,12 @@ void Allocator::ThreadFlush(idx_t threshold) {
 #endif
 }
 
+void Allocator::FlushAll() {
+#ifdef USE_JEMALLOC
+	JemallocExtension::FlushAll();
+#endif
+}
+
 //===--------------------------------------------------------------------===//
 // Debug Info (extended)
 //===--------------------------------------------------------------------===//

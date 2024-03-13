@@ -56,6 +56,8 @@ DatabaseInstance::DatabaseInstance() {
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
 	GetDatabaseManager().ResetDatabases(scheduler);
+	// flush allocations
+	Allocator::FlushAll();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
