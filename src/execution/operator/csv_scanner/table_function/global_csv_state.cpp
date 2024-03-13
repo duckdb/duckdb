@@ -269,7 +269,7 @@ void CSVGlobalState::FillRejectsTable() {
 						// 3. Row Line
 						errors_appender.Append(row_line);
 						// 4. Byte Position of the row error
-						errors_appender.Append(error.row_byte_position);
+						errors_appender.Append(error.row_byte_position + 1);
 						// 5. Byte Position where error occurred
 						if (error.byte_position == -1) {
 							// This means this error comes from a flush, and we don't support this yet, so we give it

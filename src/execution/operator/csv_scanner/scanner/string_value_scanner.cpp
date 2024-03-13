@@ -1030,6 +1030,10 @@ bool StringValueScanner::MoveToNextBuffer() {
 				lines_read++;
 			} else if (states.IsQuotedCurrent()) {
 				// Unterminated quote
+				LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
+				                                   result.buffer_size};
+				result.current_line_position.begin = result.current_line_position.end;
+				result.current_line_position.end = current_line_start;
 				result.InvalidState(result);
 			} else {
 				result.AddRow(result, previous_buffer_handle->actual_size);
