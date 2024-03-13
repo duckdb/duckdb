@@ -352,12 +352,6 @@ class SQLLogicConnectionPool:
             con.execute("SET timezone='UTC'")
         except duckdb.Error:
             pass
-        # Check for alternative verify
-        # if DUCKDB_ALTERNATIVE_VERIFY:
-        #    con.query("SET pivot_filter_threshold=0")
-        # if enable_verification:
-        #    con.enable_query_verification()
-        # Set the local extension repo for autoinstalling extensions
         env_var = os.getenv("LOCAL_EXTENSION_REPO")
         if env_var:
             con.execute("SET autoload_known_extensions=True")
@@ -631,6 +625,7 @@ class SQLLogicRunner:
         self.hash_label_map: Dict[str, str] = {}
         self.result_label_map: Dict[str, Any] = {}
 
+        # FIXME: create a CLI argument for this
         self.required_requires: set = set()
         self.output_hash_mode = False
         self.output_result_mode = False
@@ -913,8 +908,8 @@ class SQLLogicContext:
         self.runner.hash_threshold = statement.threshold
 
     def execute_reconnect(self, statement: Reconnect):
-        # if self.is_parallel:
-        #   raise Error(...)
+        if self.is_parallel:
+            self.fail("reconnect can not be used inside a parallel loop")
         self.pool = None
         self.pool = self.runner.database.connect()
         con = self.pool.get_connection()
@@ -1118,11 +1113,10 @@ class SQLLogicContext:
             loop_context = SQLLogicContext(self.pool, self.runner, statements, self.keywords.copy(), update_value)
             loop_context.execute()
         else:
-            # parallel loop: launch threads
             contexts: Dict[Tuple[str, int], Any] = {}
             for val in range(loop.start, loop.end):
                 # FIXME: these connections are expected to have the same settings
-                # So we need to apply the settings to the
+                # So we need to apply the cached settings to them
                 contexts[(loop.name, val)] = SQLLogicContext(
                     self.runner.database.connect(),
                     self.runner,

@@ -2,7 +2,6 @@ import sys
 import os
 import glob
 from typing import Any, Generator, Optional
-import duckdb
 import shutil
 import gc
 
@@ -19,7 +18,6 @@ from sqllogictest.result import (
     SQLLogicDatabase,
     SQLLogicContext,
     ExecuteResult,
-    SkipException,
 )
 
 TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
