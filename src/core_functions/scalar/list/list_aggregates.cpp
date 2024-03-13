@@ -180,7 +180,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &result_validity = FlatVector::Validity(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
-		result_validity.SetInvalid(0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 

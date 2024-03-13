@@ -14,7 +14,7 @@ INSERT INTO all_types VALUES({'a': NULL, 'b': NULL}, -32768);
 statement ok
 INSERT INTO all_types VALUES({'a': [42, 999, NULL, NULL, -42], 'b': ['🦆🦆🦆🦆🦆🦆', 'goose', NULL, ]}, 32767);
 
-query I
+query I rowsort
 SELECT ref_2.struct_of_arrays AS c3 FROM main.all_types AS ref_0 RIGHT JOIN main.all_types AS ref_1 INNER JOIN main.all_types AS ref_2 ON (ref_1."smallint" = ref_2."smallint") ON (NULL)
 ----
 {'a': NULL, 'b': NULL}

@@ -411,7 +411,6 @@ jobs:
        shell: bash
        run: python3 scripts/test_zero_initialize.py
 
-
   no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
     runs-on: ubuntu-20.04
@@ -455,6 +454,49 @@ jobs:
       - name: Test
         shell: bash
         run: build/relassert/test/unittest
+
+
+  dictionary-vector-verification:
+    name: Dictionary Vector Verification Tests
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      VERIFY_DICTIONARY_VECTOR: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make reldebug
+
+      - name: Test
+        shell: bash
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources

@@ -162,6 +162,7 @@ void PhysicalInsert::ResolveDefaults(const TableCatalogEntry &table, DataChunk &
 }
 
 bool AllConflictsMeetCondition(DataChunk &result) {
+	result.Flatten();
 	auto data = FlatVector::GetData<bool>(result.data[0]);
 	for (idx_t i = 0; i < result.size(); i++) {
 		if (!data[i]) {
@@ -236,6 +237,7 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Table
 		ExpressionExecutor where_executor(context.client, *do_update_condition);
 		where_executor.Execute(chunk, do_update_filter_result);
 		do_update_filter_result.SetCardinality(chunk.size());
+		do_update_filter_result.Flatten();
 
 		ManagedSelection selection(chunk.size());
 
