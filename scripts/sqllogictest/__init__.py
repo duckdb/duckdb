@@ -24,7 +24,7 @@ from .statement import (
 )
 from .decorator import SkipIf, OnlyIf
 from .expected_result import ExpectedResult
-from .parser import SQLLogicParser, SQLLogicEncoder
+from .parser import SQLLogicParser
 
 all = [
     TokenType,

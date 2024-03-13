@@ -1,8 +1,6 @@
 import os
 
-from enum import Enum, auto
-from typing import List, Dict, Optional
-import json
+from typing import List, Optional
 
 from ..token import Token, TokenType
 
@@ -52,150 +50,6 @@ def create_formatted_list(items) -> str:
 
 def is_space(char: str):
     return char == ' ' or char == '\t' or char == '\n' or char == '\v' or char == '\f' or char == '\r'
-
-
-### -------- JSON ENCODER ----------
-
-
-class SQLLogicEncoder(json.JSONEncoder):
-    def encode_decorators(self, base: BaseStatement):
-        if base.decorators != []:
-            return {'decorators': base.decorators}
-        else:
-            return {}
-
-    def encode_base_decorator(self, base: BaseStatement):
-        return {'type': base.token.type.name, 'parameters': base.token.parameters}
-
-    def encode_base_statement(self, base: BaseStatement):
-        return {
-            'type': base.header.type.name,
-            'parameters': base.header.parameters,
-            'query_line': base.query_line,
-            **self.encode_decorators(base),
-        }
-
-    def encode_expected_lines(self, expected: ExpectedResult):
-        if expected.lines != None:
-            return {'lines': expected.lines}
-        else:
-            return {}
-
-    def default(self, obj):
-        # Decorators
-        if isinstance(obj, SkipIf):
-            assert obj.token.type == TokenType.SQLLOGIC_SKIP_IF, "Object is not an instance of SkipIf"
-            return {
-                **self.encode_base_decorator(obj),
-            }
-        if isinstance(obj, OnlyIf):
-            assert obj.token.type == TokenType.SQLLOGIC_ONLY_IF, "Object is not an instance of OnlyIf"
-            return {
-                **self.encode_base_decorator(obj),
-            }
-
-        if isinstance(obj, ExpectedResult):
-            return {'type': obj.type.name, **self.encode_expected_lines(obj)}
-        if isinstance(obj, SQLLogicTest):
-            return {'path': obj.path, 'statements': [x for x in obj.statements]}
-        if isinstance(obj, Statement):
-            assert obj.header.type == TokenType.SQLLOGIC_STATEMENT, "Object is not an instance of Statement"
-            return {
-                **self.encode_base_statement(obj),
-                'lines': obj.lines,
-                'expected_result': obj.expected_result,
-            }
-        elif isinstance(obj, Query):
-            assert obj.header.type == TokenType.SQLLOGIC_QUERY, "Object is not an instance of Query"
-            return {
-                **self.encode_base_statement(obj),
-                'lines': obj.lines,
-                'expected_result': obj.expected_result,
-            }
-        elif isinstance(obj, Require):
-            assert obj.header.type == TokenType.SQLLOGIC_REQUIRE, "Object is not an instance of Require"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, HashThreshold):
-            assert obj.header.type == TokenType.SQLLOGIC_HASH_THRESHOLD, "Object is not an instance of HashThreshold"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Halt):
-            assert obj.header.type == TokenType.SQLLOGIC_HALT, "Object is not an instance of Halt"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Mode):
-            assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Mode"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Skip):
-            assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Skip"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Unskip):
-            assert obj.header.type == TokenType.SQLLOGIC_MODE, "Object is not an instance of Unskip"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Set):
-            assert obj.header.type == TokenType.SQLLOGIC_SET, "Object is not an instance of Set"
-            return {**self.encode_base_statement(obj), 'error_messages': obj.error_messages}
-        elif isinstance(obj, Loop):
-            type = obj.header.type
-            assert (
-                type == TokenType.SQLLOGIC_LOOP or type == TokenType.SQLLOGIC_CONCURRENT_LOOP
-            ), "Object is not an instance of Loop"
-            return {
-                **self.encode_base_statement(obj),
-                'parallel': obj.parallel,
-                'name': obj.name,
-                'start': obj.start,
-                'end': obj.end,
-            }
-        elif isinstance(obj, Foreach):
-            type = obj.header.type
-            assert (
-                type == TokenType.SQLLOGIC_FOREACH or type == TokenType.SQLLOGIC_CONCURRENT_FOREACH
-            ), "Object is not an instance of Foreach"
-            return {**self.encode_base_statement(obj), 'parallel': obj.parallel, 'name': obj.name, 'values': obj.values}
-        elif isinstance(obj, Endloop):
-            assert obj.header.type == TokenType.SQLLOGIC_ENDLOOP, "Object is not an instance of Endloop"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, RequireEnv):
-            assert obj.header.type == TokenType.SQLLOGIC_REQUIRE_ENV, "Object is not an instance of RequireEnv"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Load):
-            assert obj.header.type == TokenType.SQLLOGIC_LOAD, "Object is not an instance of Load"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Restart):
-            assert obj.header.type == TokenType.SQLLOGIC_RESTART, "Object is not an instance of Restart"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Reconnect):
-            assert obj.header.type == TokenType.SQLLOGIC_RECONNECT, "Object is not an instance of Reconnect"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        elif isinstance(obj, Sleep):
-            assert obj.header.type == TokenType.SQLLOGIC_SLEEP, "Object is not an instance of Sleep"
-            return {
-                **self.encode_base_statement(obj),
-            }
-        else:
-            raise Exception(f"Invalid TokenType ({obj.header.type.name})")
-        return super().default(obj)
 
 
 ### -------- PARSER ----------
@@ -556,16 +410,19 @@ class SQLLogicParser:
         else:
             return self.empty_or_comment(self.lines[self.current_line + 1])
 
+    def eof(self):
+        return self.current_line >= len(self.lines)
+
     def next_statement(self):
         if self.seen_statement:
-            while self.current_line < len(self.lines) and not self.empty_or_comment(self.peek()):
+            while not self.eof() and not self.empty_or_comment(self.peek()):
                 self.consume()
         self.seen_statement = True
 
-        while self.current_line < len(self.lines) and self.empty_or_comment(self.peek()):
+        while not self.eof() and self.empty_or_comment(self.peek()):
             self.consume()
 
-        return self.current_line < len(self.lines)
+        return not self.eof()
 
     def next_line(self):
         self.consume()
@@ -573,8 +430,7 @@ class SQLLogicParser:
     def extract_statement(self):
         statement = []
 
-        res = self.peek_no_strip().strip('\n')
-        while self.current_line < len(self.lines) and not self.empty_or_comment(self.peek_no_strip()):
+        while not self.eof() and not self.empty_or_comment(self.peek_no_strip()):
             line = self.peek_no_strip()
             if line.strip('\n') == "----":
                 break
@@ -675,8 +531,6 @@ def main():
     out: Optional[SQLLogicTest] = parser.parse(filename)
     if not out:
         raise Exception(f"Test {filename} could not be parsed")
-    res = json.dumps(out, cls=SQLLogicEncoder, indent=4)
-    print(res)
 
 
 if __name__ == "__main__":

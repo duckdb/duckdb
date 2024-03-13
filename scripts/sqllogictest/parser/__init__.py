@@ -1,3 +1,3 @@
-from .parser import SQLLogicParser, SQLLogicEncoder, SQLLogicTest
+from .parser import SQLLogicParser, SQLLogicTest
 
-all = [SQLLogicParser, SQLLogicEncoder, SQLLogicTest]
+all = [SQLLogicParser, SQLLogicTest]

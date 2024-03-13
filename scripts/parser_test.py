@@ -1,7 +1,6 @@
-from sqllogictest import SQLLogicParser, SQLLogicEncoder, SQLLogicTest
+from sqllogictest import SQLLogicParser, SQLLogicTest
 
 from typing import Optional
-import json
 import argparse
 
 
@@ -16,8 +15,6 @@ def main():
     out: Optional[SQLLogicTest] = parser.parse(filename)
     if not out:
         raise Exception(f"Test {filename} could not be parsed")
-    res = json.dumps(out, cls=SQLLogicEncoder, indent=4)
-    print(res)
 
 
 if __name__ == "__main__":
