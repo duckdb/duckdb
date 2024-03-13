@@ -443,6 +443,7 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
+	./scripts/generate_micro_extended.sh
 
 bundle-library: release
 	cd build/release && \
