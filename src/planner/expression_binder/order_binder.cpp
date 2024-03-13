@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
+#include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -99,6 +100,24 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	}
 	case ExpressionClass::PARAMETER: {
 		throw ParameterNotAllowedException("Parameter not supported in ORDER BY clause");
+	}
+	case ExpressionClass::COLLATE: {
+		auto &collation = expr->Cast<CollateExpression>();
+		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
+			auto &constant = collation.child->Cast<ConstantExpression>();
+			auto index = (idx_t)constant.value.GetValue<int64_t>() - 1;
+			D_ASSERT(index < extra_list->size());
+			auto &sel_entry = extra_list->at(index);
+			if (!sel_entry->alias.empty()) {
+				vector<string> column_names = {sel_entry->alias};
+				auto colref = make_uniq<ColumnRefExpression>(std::move(column_names));
+				colref->query_location = sel_entry->query_location;
+				collation.child = std::move(colref);
+			} else { // constant with no ALIAS: ORDER BY 1 COLLATE NOCASE
+				collation.child = std::move(sel_entry->Copy());
+			}
+		}
+		break;
 	}
 	default:
 		break;
