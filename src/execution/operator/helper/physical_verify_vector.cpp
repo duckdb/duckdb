@@ -212,8 +212,9 @@ OperatorResultType PhysicalVerifyVector::Execute(ExecutionContext &context, Data
 	return VerifyEmitSequenceVector(input, chunk, state);
 #endif
 #ifdef DUCKDB_VERIFY_NESTED_SHUFFLE
-#endif
 	return VerifyEmitNestedShuffleVector(input, chunk, state);
+#endif
+	throw InternalException("PhysicalVerifyVector created but no verification code present");
 }
 
 } // namespace duckdb
