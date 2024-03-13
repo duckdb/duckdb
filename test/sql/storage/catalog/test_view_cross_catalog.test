@@ -1,0 +1,53 @@
+# name: test/sql/storage/catalog/test_view_cross_catalog.test
+# group: [catalog]
+
+statement ok
+attach ':memory:' as db2
+
+statement ok
+create table db2.tbl (a varchar);
+
+statement ok
+insert into db2.tbl VALUES ('1'), ('42');
+
+query I
+select * from db2.tbl
+----
+1
+42
+
+statement ok
+create view tbl_view as select * from db2.tbl
+
+query I
+select * from tbl_view
+----
+1
+42
+
+statement ok
+drop table db2.tbl
+
+statement error
+select * from tbl_view
+----
+Table with name tbl does not exist!
+
+query I
+select "type" from pragma_table_info('tbl_view')
+----
+VARCHAR
+
+statement ok
+create table db2.tbl (a INTEGER);
+
+query I
+select "type" from pragma_table_info('tbl_view')
+----
+VARCHAR
+
+statement error
+select * from tbl_view
+----
+Contents of view were altered: types don't match!
+
