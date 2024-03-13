@@ -227,7 +227,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	}
 
 	plan->estimated_cardinality = op.estimated_cardinality;
-#ifndef DUCKDB_VERIFY_VECTOR_OPERATOR
+#ifdef DUCKDB_VERIFY_VECTOR_OPERATOR
 	auto verify = make_uniq<PhysicalVerifyVector>(std::move(plan));
 	plan = std::move(verify);
 #endif
