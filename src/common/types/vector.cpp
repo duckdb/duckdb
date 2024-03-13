@@ -1677,7 +1677,6 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 		} else if (internal_type == PhysicalType::ARRAY) {
 			// set the child element in the array to null as well
 			auto &child = ArrayVector::GetEntry(vector);
-			D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
 			auto array_size = ArrayType::GetSize(type);
 			auto child_offset = idx * array_size;
 			for (idx_t i = 0; i < array_size; i++) {
@@ -1766,7 +1765,6 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	case PhysicalType::ARRAY: {
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
-
 		auto source_idx = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(source_idx)) {
 			// list is null: create null value
