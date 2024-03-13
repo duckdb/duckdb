@@ -214,27 +214,7 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 	}
 
 	Build(pin_state, chunk_state, 0, actual_append_count);
-
-#ifdef DEBUG
-	Vector heap_locations_copy(LogicalType::POINTER);
-	if (!layout.AllConstant()) {
-		VectorOperations::Copy(chunk_state.heap_locations, heap_locations_copy, actual_append_count, 0, 0);
-	}
-#endif
-
 	Scatter(chunk_state, new_chunk, append_sel, actual_append_count);
-
-#ifdef DEBUG
-	// Verify that the size of the data written to the heap is the same as the size we computed it would be
-	if (!layout.AllConstant()) {
-		const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
-		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-		const auto offset_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
-		for (idx_t i = 0; i < actual_append_count; i++) {
-			D_ASSERT(offset_heap_locations[i] == original_heap_locations[i] + heap_sizes[i]);
-		}
-	}
-#endif
 }
 
 static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector &vector, const idx_t count) {

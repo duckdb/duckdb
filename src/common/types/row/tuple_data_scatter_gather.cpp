@@ -27,6 +27,9 @@ static inline void TupleDataValueStore(const T &source, const data_ptr_t &row_lo
 template <>
 inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_location, const idx_t offset_in_row,
                                 data_ptr_t &heap_location) {
+#ifdef DEBUG
+	source.VerifyCharacters();
+#endif
 	if (source.IsInlined()) {
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
@@ -46,6 +49,9 @@ static inline void TupleDataWithinListValueStore(const T &source, const data_ptr
 template <>
 inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr_t &location,
                                           data_ptr_t &heap_location) {
+#ifdef DEBUG
+	source.VerifyCharacters();
+#endif
 	Store<uint32_t>(NumericCast<uint32_t>(source.GetSize()), location);
 	memcpy(heap_location, source.GetData(), source.GetSize());
 	heap_location += source.GetSize();
@@ -410,7 +416,8 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 
 	idx_t combined_list_offset = 0;
 	for (idx_t i = 0; i < append_count; i++) {
-		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto append_idx = append_sel.get_index(i);
+		const auto list_idx = list_sel.get_index(append_idx);
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child list
 		}
@@ -445,13 +452,15 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 		}
 
 		// Combine the child list entries into one
-		combined_list_entries[list_idx] = {combined_list_offset, child_list_size};
+		auto &combined_list_entry = combined_list_entries[append_idx];
+		combined_list_entry.offset = combined_list_offset;
+		combined_list_entry.length = child_list_size;
 		combined_list_offset += child_list_size;
 	}
 
 	// Create a combined child_list_data to be used as list_data in the recursion
 	auto &combined_child_list_data = combined_list_data.combined_data;
-	combined_child_list_data.sel = list_data.sel;
+	combined_child_list_data.sel = FlatVector::IncrementalSelectionVector();
 	combined_child_list_data.data = data_ptr_cast(combined_list_entries);
 	combined_child_list_data.validity = list_data.validity;
 
@@ -471,6 +480,13 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
+#ifdef DEBUG
+	Vector heap_locations_copy(LogicalType::POINTER);
+	if (!layout.AllConstant()) {
+		VectorOperations::Copy(chunk_state.heap_locations, heap_locations_copy, append_count, 0, 0);
+	}
+#endif
+
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
 	// Set the validity mask for each row before inserting data
@@ -492,6 +508,18 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 	for (const auto &col_idx : chunk_state.column_ids) {
 		Scatter(chunk_state, new_chunk.data[col_idx], col_idx, append_sel, append_count);
 	}
+
+#ifdef DEBUG
+	// Verify that the size of the data written to the heap is the same as the size we computed it would be
+	if (!layout.AllConstant()) {
+		const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
+		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+		const auto offset_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+		for (idx_t i = 0; i < append_count; i++) {
+			D_ASSERT(offset_heap_locations[i] == original_heap_locations[i] + heap_sizes[i]);
+		}
+	}
+#endif
 }
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const Vector &source, const column_t column_id,
@@ -1112,7 +1140,9 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 			source_heap_location += sizeof(uint64_t);
 
 			// Initialize list entry, and increment offset
-			target_list_entries[target_idx] = {target_list_offset, list_length};
+			auto &target_list_entry = target_list_entries[target_idx];
+			target_list_entry.offset = target_list_offset;
+			target_list_entry.length = list_length;
 			target_list_offset += list_length;
 		} else {
 			source_heap_validity.SetInvalid(source_idx);
