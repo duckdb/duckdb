@@ -216,17 +216,17 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		break;
 	}
 	default: {
-		// By default we add a string
+		// By default, we add a string
 		// We only evaluate if a string is utf8 valid, if it's actually a varchar
 		if (parse_types[chunk_col_id].second && !Utf8Proc::IsValid(value_ptr, UnsafeNumericCast<uint32_t>(size))) {
 			bool force_error = !state_machine.options.ignore_errors.GetValue() && sniffing;
+			LinePosition error_position {iterator.pos.buffer_idx, last_position, buffer_size};
 			// Invalid unicode, we must error
 			if (force_error) {
-				HandleUnicodeError(cur_col_id, force_error);
+				HandleUnicodeError(cur_col_id, error_position);
 			}
 			// If we got here, we are ingoring errors, hence we must ignore this line.
-			current_errors.push_back(
-			    {CSVErrorType::INVALID_UNICODE, cur_col_id, {iterator.pos.buffer_idx, last_position, buffer_size}});
+			current_errors.push_back({CSVErrorType::INVALID_UNICODE, cur_col_id, error_position});
 			break;
 		}
 		if (allocate) {
@@ -334,7 +334,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	result.last_position = buffer_pos + 1;
 }
 
-void StringValueResult::HandleUnicodeError(idx_t col_idx, bool force_error) {
+void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_position) {
 	bool first_nl;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 	// sanitize borked line
@@ -344,8 +344,8 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, bool force_error) {
 	borked_line = {char_array.begin(), char_array.end() - 1};
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	auto csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
-	                                       current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
-	error_handler.Error(csv_error, force_error);
+	                                       error_position.GetGlobalPosition(requested_size, first_nl));
+	error_handler.Error(csv_error, true);
 }
 
 bool StringValueResult::HandleError() {
@@ -381,7 +381,7 @@ bool StringValueResult::HandleError() {
 		case CSVErrorType::CAST_ERROR:
 			csv_error = CSVError::CastError(state_machine.options, names[cur_error.col_idx], cur_error.error_message,
 			                                cur_error.col_idx, borked_line, lines_per_batch,
-			                                current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
+			                                line_pos.GetGlobalPosition(requested_size, first_nl));
 			break;
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
@@ -498,9 +498,10 @@ bool StringValueResult::AddRowInternal() {
 			bool first_nl;
 			auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles);
 			LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
+			LinePosition error_position {iterator.pos.buffer_idx, last_position, buffer_size};
 			auto csv_error = CSVError::IncorrectColumnAmountError(
 			    state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
-			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl));
+			    error_position.GetGlobalPosition(requested_size, first_nl));
 			error_handler.Error(csv_error);
 			// If we are here we ignore_errors, so we delete this line
 			number_of_rows--;
@@ -545,7 +546,8 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	bool force_error = !result.state_machine.options.ignore_errors.GetValue() && result.sniffing;
 	// Invalid unicode, we must error
 	if (force_error) {
-		result.HandleUnicodeError(result.cur_col_id, force_error);
+		LinePosition error_position {result.iterator.pos.buffer_idx, result.last_position, result.buffer_size};
+		result.HandleUnicodeError(result.cur_col_id, error_position);
 	}
 	result.current_errors.push_back({CSVErrorType::INVALID_UNICODE,
 	                                 result.cur_col_id,
@@ -722,6 +724,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				bool first_nl;
 				auto borked_line =
 				    result.line_positions_per_row[line_error].ReconstructCurrentLine(first_nl, result.buffer_handles);
+				// TODO: We can't really nicely get the position where this error happened, this should be solved by
+				// TODO: adding more types to implicit casting instead of relying on this flush.
 				auto csv_error = CSVError::CastError(
 				    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
 				    lines_per_batch,
@@ -744,6 +748,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					bool first_nl;
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 					    first_nl, result.buffer_handles);
+					// TODO: We can't really nicely get the position where this error happened, this should be solved by
+					// TODO: adding more types to implicit casting instead of relying on this flush.
 					auto csv_error =
 					    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message,
 					                        col_idx, borked_line, lines_per_batch,

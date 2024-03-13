@@ -153,7 +153,8 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
-	void HandleUnicodeError(idx_t col_idx, bool force_error = false);
+	//! Force the throw of a unicode error
+	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	//! Certain errors should only be handled when adding the line, to ensure proper error propagation.
 	bool HandleError();
 
