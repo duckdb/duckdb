@@ -114,7 +114,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 				colref->query_location = sel_entry->query_location;
 				collation.child = std::move(colref);
 			} else { // constant with no ALIAS: ORDER BY 1 COLLATE NOCASE
-				collation.child = std::move(sel_entry->Copy());
+				collation.child = sel_entry->Copy();
 			}
 		}
 		break;
