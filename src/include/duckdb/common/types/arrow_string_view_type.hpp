@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/operator/numeric_cast.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
