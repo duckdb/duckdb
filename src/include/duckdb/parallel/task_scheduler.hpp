@@ -92,10 +92,8 @@ private:
 	vector<unique_ptr<atomic<bool>>> markers;
 	//! The threshold after which to flush the allocator after completing a task
 	atomic<idx_t> allocator_flush_threshold;
-	//! Requested thread count (set by the 'threads' setting)
-	atomic<int32_t> requested_thread_count;
-	//! The amount of threads currently running
-	atomic<int32_t> current_thread_count;
+	//! Requested thread count
+	atomic<int32_t> thread_count;
 };
 
 } // namespace duckdb
