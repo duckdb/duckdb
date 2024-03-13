@@ -188,6 +188,14 @@ OperatorResultType VerifyEmitSequenceVector(DataChunk &input, DataChunk &chunk, 
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
+OperatorResultType VerifyEmitNestedShuffleVector(DataChunk &input, DataChunk &chunk, OperatorState &state) {
+	chunk.Reference(input);
+	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+		Vector::DebugShuffleNestedVector(chunk.data[c], chunk.size());
+	}
+	return OperatorResultType::NEED_MORE_INPUT;
+}
+
 unique_ptr<OperatorState> PhysicalVerifyVector::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<VerifyVectorState>();
 }
@@ -201,10 +209,11 @@ OperatorResultType PhysicalVerifyVector::Execute(ExecutionContext &context, Data
 	return VerifyEmitDictionaryVectors(input, chunk, state);
 #endif
 #ifdef DUCKDB_VERIFY_SEQUENCE_OPERATOR
+	return VerifyEmitSequenceVector(input, chunk, state);
 #endif
 #ifdef DUCKDB_VERIFY_NESTED_SHUFFLE
 #endif
-	return VerifyEmitSequenceVector(input, chunk, state);
+	return VerifyEmitNestedShuffleVector(input, chunk, state);
 }
 
 } // namespace duckdb

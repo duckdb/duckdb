@@ -215,6 +215,8 @@ public:
 
 	// Transform vector to an equivalent dictionary vector
 	static void DebugTransformToDictionary(Vector &vector, idx_t count);
+	// Transform vector to an equivalent nested vector
+	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 private:
 	//! Returns the [index] element of the Vector as a Value.

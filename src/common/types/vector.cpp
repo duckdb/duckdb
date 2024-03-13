@@ -1605,6 +1605,60 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	vector.Verify(count);
 }
 
+void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
+	switch(vector.GetType().id()) {
+	case LogicalTypeId::STRUCT: {
+		auto &entries = StructVector::GetEntries(vector);
+		// recurse into child elements
+		for(auto &entry : entries) {
+			Vector::DebugShuffleNestedVector(*entry, count);
+		}
+		break;
+	}
+	case LogicalTypeId::LIST: {
+		if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			break;
+		}
+		auto list_entries = FlatVector::GetData<list_entry_t>(vector);
+		idx_t child_count = 0;
+		for (idx_t r = 0; r < count; r++) {
+			if (FlatVector::IsNull(vector, r)) {
+				continue;
+			}
+			child_count += list_entries[r].length;
+		}
+		if (child_count == 0) {
+			break;
+		}
+		auto &child_vector = ListVector::GetEntry(vector);
+		// reverse the order of all lists
+		SelectionVector child_sel(child_count);
+		idx_t position = child_count;
+		for (idx_t r = 0; r < count; r++) {
+			if (FlatVector::IsNull(vector, r)) {
+				continue;
+			}
+			// move this list to the back
+			position -= list_entries[r].length;
+			for(idx_t k = 0; k < list_entries[r].length; k++) {
+				child_sel.set_index(position + k, list_entries[r].offset + k);
+			}
+			// adjust the offset to this new position
+			list_entries[r].offset = position;
+		}
+		child_vector.Slice(child_sel, child_count);
+		child_vector.Flatten(child_count);
+		ListVector::SetListSize(vector, child_count);
+
+		// recurse into child elements
+		Vector::DebugShuffleNestedVector(child_vector, child_count);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // FlatVector
 //===--------------------------------------------------------------------===//
