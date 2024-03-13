@@ -64,16 +64,17 @@ public:
 
 class CurrentError {
 public:
-	CurrentError() : is_set(false) {};
-	CurrentError(CSVErrorType type, idx_t col_idx_p) : is_set(true), type(type), col_idx(col_idx_p) {};
-	void Reset() {
-		is_set = false;
-	}
-	bool is_set;
+	CurrentError(CSVErrorType type, idx_t col_idx_p, LinePosition error_position_p)
+	    : type(type), col_idx(col_idx_p), error_position(error_position_p) {};
+
 	CSVErrorType type;
 	idx_t col_idx;
+	string error_message;
+	//! Exact Position where the error happened
+	LinePosition error_position;
+
 	friend bool operator==(const CurrentError &error, CSVErrorType other) {
-		return error.is_set && error.type == other;
+		return error.type == other;
 	}
 };
 
@@ -81,8 +82,8 @@ class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator, idx_t result_size,
-	                  idx_t buffer_position, CSVErrorHandler &error_hander, CSVIterator &iterator, bool store_line_size,
-	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing);
+	                  idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
+	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing);
 
 	~StringValueResult();
 
@@ -120,7 +121,6 @@ public:
 
 	unsafe_unique_array<std::pair<LogicalTypeId, bool>> parse_types;
 	vector<string> names;
-	unordered_map<idx_t, string> cast_errors;
 
 	shared_ptr<CSVFileScan> csv_file_scan;
 	idx_t &lines_read;
@@ -135,8 +135,8 @@ public:
 	//! Requested size of buffers (i.e., either 32Mb or set by buffer_size parameter)
 	idx_t requested_size;
 
-	//! Current Error if any
-	CurrentError current_error;
+	//! Errors happening in the current line (if any)
+	vector<CurrentError> current_errors;
 
 	bool sniffing;
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
@@ -153,10 +153,8 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
-
-	void HandleOverLimitRows(idx_t col_idx);
 	void HandleUnicodeError(idx_t col_idx, bool force_error = false);
-	void HandleUnterminatedQuotes(idx_t col_idx, bool force_error = false);
+	//! Certain errors should only be handled when adding the line, to ensure proper error propagation.
 	bool HandleError();
 
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
