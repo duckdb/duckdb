@@ -95,7 +95,7 @@ def parse_assertions(stdout):
             space_before_num = line.rfind(' ', 0, pos - 2)
             return line[space_before_num + 2 : pos + 10]
 
-    return ""
+    return "ERROR"
 
 
 for test_number, test_case in enumerate(test_cases):
