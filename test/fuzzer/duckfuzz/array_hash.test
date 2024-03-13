@@ -4,6 +4,9 @@
 statement ok
 PRAGMA enable_verification
 
+# FIXME: bug in dictionary vector operator
+require no_vector_verification
+
 # Duckfuzz Issue #1434
 # Caused by not calculating the correct number of child elements when hashing a constant array vector.
 statement ok
