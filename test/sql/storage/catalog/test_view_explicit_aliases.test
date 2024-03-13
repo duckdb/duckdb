@@ -17,9 +17,11 @@ statement ok
 CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
 
 # check the view info
-query II nosort view_info
+query IIIIII
 PRAGMA table_info('test.v')
 ----
+0	b	INTEGER	false	NULL	false
+1	c	INTEGER	false	NULL	false
 
 statement ok
 SELECT * FROM test.v

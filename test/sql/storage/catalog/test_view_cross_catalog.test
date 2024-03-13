@@ -51,3 +51,13 @@ select * from tbl_view
 ----
 Contents of view were altered: types don't match!
 
+statement ok
+drop table db2.tbl;
+
+statement ok
+create table db2.tbl (b VARCHAR);
+
+statement error
+select * from tbl_view
+----
+Contents of view were altered: names don't match!
