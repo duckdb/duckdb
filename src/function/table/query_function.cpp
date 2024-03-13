@@ -1,5 +1,4 @@
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/function_set.hpp"
@@ -23,17 +22,18 @@ static void UnionTablesQuery(TableFunctionBindInput &input, string &query) {
 	                     ? "BY NAME "
 	                     : ""; // 'by_name' variable defaults to false
 	if (input.inputs[0].type().id() == LogicalTypeId::VARCHAR) {
-		query += "FROM " + input.inputs[0].ToString();
+		query += "FROM " + KeywordHelper::WriteOptionallyQuoted(input.inputs[0].ToString());
 	} else if (input.inputs[0].type() == LogicalType::LIST(LogicalType::VARCHAR)) {
 		string union_all_clause = " UNION ALL " + by_name + "FROM ";
 		const auto &children = ListValue::GetChildren(input.inputs[0]);
 		if (children.empty()) {
 			throw InvalidInputException("Input list is empty");
 		}
-		query += "FROM " + children[0].ToString();
+
+		query += "FROM " + KeywordHelper::WriteOptionallyQuoted(children[0].ToString());
 		for (size_t i = 1; i < children.size(); ++i) {
 			auto child = children[i].ToString();
-			query += union_all_clause + child;
+			query += union_all_clause + KeywordHelper::WriteOptionallyQuoted(child);
 		}
 	} else {
 		throw InvalidInputException("Expected a table or a list with tables as input");
