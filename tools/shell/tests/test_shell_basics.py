@@ -499,6 +499,15 @@ def test_jsonlines(shell):
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
 
+def test_nested_jsonlines(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT [1,2,3] AS a, {k: 42} as b, map {k: 42} as c, [1,2,3]::JSON as d;")
+    )
+    result = test.run()
+    result.check_stdout('{"a":[1, 2, 3],"b":{k: 42}')
+
 def test_separator(shell):
     test = (
         ShellTest(shell)

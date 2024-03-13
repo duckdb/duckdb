@@ -480,6 +480,9 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 		return SQLITE_NULL;
 	}
 	auto column_type = pStmt->result->types[iCol];
+    if (column_type.IsJSONType()) {
+        return 0;
+    }
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
