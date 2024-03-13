@@ -85,7 +85,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &transaction_manager = DuckTransactionManager::Get(db);
 	auto dummy_transaction = CatalogTransaction(db.GetDatabase(), transaction_manager.LowestActiveId(),
 	                                            transaction_manager.LowestActiveStart());
-	catalog_entries = dependency_manager.GetExportOrder(&dummy_transaction);
+	catalog_entries = dependency_manager.GetExportOrder(dummy_transaction);
 
 	// write the actual data into the database
 

@@ -93,7 +93,7 @@ public:
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
 	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first
-	catalog_entry_vector_t GetExportOrder(optional_ptr<CatalogTransaction> transaction = nullptr);
+	catalog_entry_vector_t GetExportOrder(CatalogTransaction &transaction);
 
 private:
 	DuckCatalog &catalog;

@@ -194,7 +194,7 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
 		auto transaction = catalog.GetCatalogTransaction(context.client);
-		catalog_entries = dependency_manager.GetExportOrder(&transaction);
+		catalog_entries = dependency_manager.GetExportOrder(transaction);
 	} else {
 		catalog_entries = GetNaiveExportOrder(context.client, catalog);
 	}

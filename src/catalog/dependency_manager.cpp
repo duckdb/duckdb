@@ -491,13 +491,11 @@ void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, const catal
 	}
 }
 
-catalog_entry_vector_t DependencyManager::GetExportOrder(optional_ptr<CatalogTransaction> transaction_p) {
-	auto all_entries = catalog.GetNonSystemEntries(*transaction_p);
+catalog_entry_vector_t DependencyManager::GetExportOrder(CatalogTransaction &transaction) {
+	auto all_entries = catalog.GetNonSystemEntries(transaction);
 	CatalogEntryOrdering ordering;
 	auto &entries = ordering.ordered_set;
 	auto &export_order = ordering.ordered_vector;
-
-	auto &transaction = *transaction_p;
 
 	stack<reference<CatalogEntry>> backlog;
 	for (auto &obj : all_entries) {

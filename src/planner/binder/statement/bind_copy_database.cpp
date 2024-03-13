@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(CopyDatabaseStatement
 		auto &duck_catalog = from_database.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
 		auto transaction = from_database.GetCatalogTransaction(context);
-		catalog_entries = dependency_manager.GetExportOrder(&transaction);
+		catalog_entries = dependency_manager.GetExportOrder(transaction);
 	} else {
 		catalog_entries = PhysicalExport::GetNaiveExportOrder(context, from_database);
 	}
