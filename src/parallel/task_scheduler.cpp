@@ -21,6 +21,10 @@ struct SchedulerThread {
 	explicit SchedulerThread(unique_ptr<thread> thread_p) : internal_thread(std::move(thread_p)) {
 	}
 
+	~SchedulerThread() {
+		Allocator::ThreadFlush(0);
+	}
+
 	unique_ptr<thread> internal_thread;
 #endif
 };
