@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
 
