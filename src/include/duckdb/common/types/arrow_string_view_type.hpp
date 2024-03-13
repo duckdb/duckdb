@@ -6,9 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/common/operator/numeric_cast.hpp"
-
 #pragma once
+
+#include "duckdb/common/operator/numeric_cast.hpp"
 
 namespace duckdb {
 
