@@ -12,7 +12,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-#include <regex>
 #include <limits>
 
 namespace duckdb {
@@ -86,9 +85,9 @@ void BaseCSVData::Finalize() {
 }
 
 string TransformNewLine(string new_line) {
-	new_line = regex_replace(new_line, std::regex("\\\\r"), "\r");
-	new_line = regex_replace(new_line, std::regex("\\\\n"), "\n");
-	return new_line;
+	new_line = StringUtil::Replace(new_line, "\\r", "\r");
+	return StringUtil::Replace(new_line, "\\n", "\n");
+	;
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctionBindInput &input,
