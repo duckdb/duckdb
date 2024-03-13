@@ -65,6 +65,63 @@ public:
 	static BoundOrderByNode Deserialize(Deserializer &deserializer);
 };
 
+enum class LimitNodeType : uint8_t {
+	UNSET = 0,
+	CONSTANT_VALUE = 1,
+	CONSTANT_PERCENTAGE = 2,
+	EXPRESSION_VALUE = 3,
+	EXPRESSION_PERCENTAGE = 4
+};
+
+struct BoundLimitNode {
+public:
+	BoundLimitNode();
+	BoundLimitNode(LimitNodeType type, idx_t constant_integer, double constant_percentage,
+	               unique_ptr<Expression> expression);
+
+public:
+	static BoundLimitNode ConstantValue(int64_t value);
+	static BoundLimitNode ConstantPercentage(double percentage);
+	static BoundLimitNode ExpressionValue(unique_ptr<Expression> expression);
+	static BoundLimitNode ExpressionPercentage(unique_ptr<Expression> expression);
+
+	LimitNodeType Type() const {
+		return type;
+	}
+
+	//! Returns the constant value, only valid if Type() == CONSTANT_VALUE
+	idx_t GetConstantValue() const;
+	//! Returns the constant percentage, only valid if Type() == CONSTANT_PERCENTAGE
+	double GetConstantPercentage() const;
+	//! Returns the constant percentage, only valid if Type() == EXPRESSION_VALUE
+	const Expression &GetValueExpression() const;
+	//! Returns the constant percentage, only valid if Type() == EXPRESSION_PERCENTAGE
+	const Expression &GetPercentageExpression() const;
+
+	//! Returns a pointer to the expression - should only be used for limit-agnostic optimizations.
+	//! Prefer using the methods above in other scenarios.
+	unique_ptr<Expression> &GetExpression() {
+		return expression;
+	}
+
+	void Serialize(Serializer &serializer) const;
+	static BoundLimitNode Deserialize(Deserializer &deserializer);
+
+private:
+	LimitNodeType type = LimitNodeType::UNSET;
+	//! Integer value, if value is a constant non-percentage
+	idx_t constant_integer = 0;
+	//! Percentage value, if value is a constant percentage
+	double constant_percentage = -1;
+	//! Expression in case node is not constant
+	unique_ptr<Expression> expression;
+
+private:
+	explicit BoundLimitNode(int64_t constant_value);
+	explicit BoundLimitNode(double percentage_value);
+	explicit BoundLimitNode(unique_ptr<Expression> expression, bool is_percentage);
+};
+
 class BoundLimitModifier : public BoundResultModifier {
 public:
 	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_MODIFIER;
@@ -73,13 +130,9 @@ public:
 	BoundLimitModifier();
 
 	//! LIMIT
-	int64_t limit_val = NumericLimits<int64_t>::Maximum();
+	BoundLimitNode limit_val;
 	//! OFFSET
-	int64_t offset_val = 0;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> limit;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> offset;
+	BoundLimitNode offset_val;
 };
 
 class BoundOrderModifier : public BoundResultModifier {
@@ -117,23 +170,6 @@ public:
 	DistinctType distinct_type;
 	//! list of distinct on targets
 	vector<unique_ptr<Expression>> target_distincts;
-};
-
-class BoundLimitPercentModifier : public BoundResultModifier {
-public:
-	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_PERCENT_MODIFIER;
-
-public:
-	BoundLimitPercentModifier();
-
-	//! LIMIT %
-	double limit_percent = 100.0;
-	//! OFFSET
-	int64_t offset_val = 0;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> limit;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> offset;
 };
 
 } // namespace duckdb

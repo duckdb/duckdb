@@ -55,11 +55,16 @@ ifeq (${STATIC_LIBCPP}, 1)
 	STATIC_LIBCPP=-DSTATIC_LIBCPP=TRUE
 endif
 
-CMAKE_VARS ?=
+COMMON_CMAKE_VARS ?=
 CMAKE_VARS_BUILD ?=
 CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
+ifdef OVERRIDE_GIT_DESCRIBE
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
+else
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE=""
+endif
 ifneq (${DUCKDB_EXTENSIONS}, )
 	BUILD_EXTENSIONS:=${DUCKDB_EXTENSIONS}
 endif
@@ -207,6 +212,9 @@ endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
+ifeq (${VERIFY_DICTIONARY_VECTOR}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DVERIFY_DICTIONARY_VECTOR=1
+endif
 ifeq (${DEBUG_MOVE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_MOVE=1
 endif
@@ -257,6 +265,8 @@ ifneq ("${CMAKE_LLVM_PATH}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
 endif
 
+CMAKE_VARS:=${CMAKE_VARS} ${COMMON_CMAKE_VARS}
+
 ifdef DUCKDB_PLATFORM
 	ifneq ("${DUCKDB_PLATFORM}", "")
 		CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXPLICIT_PLATFORM='${DUCKDB_PLATFORM}'
@@ -284,17 +294,17 @@ release: ${EXTENSION_CONFIG_STEP}
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" && \
+	emcmake cmake $(GENERATOR) ${COMMON_CMAKE_VARS} -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" && \
 	emmake make -j8 -Cbuild/wasm_mvp
 
 wasm_eh: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_eh && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" && \
+	emcmake cmake $(GENERATOR) ${COMMON_CMAKE_VARS} -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" && \
 	emmake make -j8 -Cbuild/wasm_eh
 
 wasm_threads: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_threads && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads" && \
+	emcmake cmake $(GENERATOR) ${COMMON_CMAKE_VARS} -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads" && \
 	emmake make -j8 -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
@@ -433,6 +443,7 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
+	./scripts/generate_micro_extended.sh
 
 bundle-library: release
 	cd build/release && \

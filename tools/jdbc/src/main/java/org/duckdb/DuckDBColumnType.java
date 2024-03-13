@@ -33,6 +33,7 @@ public enum DuckDBColumnType {
     UUID,
     JSON,
     MAP,
+    ARRAY,
     UNKNOWN,
     UNION;
 }

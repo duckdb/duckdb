@@ -27,6 +27,32 @@
 
 namespace duckdb {
 
+UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
+}
+
+UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept {
+	bool refers_to_self = other.sel == &other.owned_sel;
+	std::swap(sel, other.sel);
+	std::swap(data, other.data);
+	std::swap(validity, other.validity);
+	std::swap(owned_sel, other.owned_sel);
+	if (refers_to_self) {
+		sel = &owned_sel;
+	}
+}
+
+UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other) noexcept {
+	bool refers_to_self = other.sel == &other.owned_sel;
+	std::swap(sel, other.sel);
+	std::swap(data, other.data);
+	std::swap(validity, other.validity);
+	std::swap(owned_sel, other.owned_sel);
+	if (refers_to_self) {
+		sel = &owned_sel;
+	}
+	return *this;
+}
+
 Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
@@ -144,11 +170,22 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 }
 
 void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
+	D_ASSERT(end >= offset);
 	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		Reference(other);
 		return;
 	}
-	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR);
+	if (other.GetVectorType() != VectorType::FLAT_VECTOR) {
+		// we can slice the data directly only for flat vectors
+		// for non-flat vectors slice using a selection vector instead
+		idx_t count = end - offset;
+		SelectionVector sel(count);
+		for (idx_t i = 0; i < count; i++) {
+			sel.set_index(i, offset + i);
+		}
+		Slice(other, sel, count);
+		return;
+	}
 
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
@@ -831,7 +868,7 @@ void Vector::Flatten(idx_t count) {
 		}
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
-		if (is_null) {
+		if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
 			validity.SetAllInvalid(count);
@@ -889,15 +926,20 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto &child = ArrayVector::GetEntry(*this);
+			auto &original_child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
-
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 			auto &new_child = flattened_buffer->GetChild();
 
-			// Make sure to initialize a validity mask for the new child vector with the correct size
-			if (!child.validity.AllValid()) {
-				new_child.validity.Initialize(array_size * count);
+			// Fast path: The array is a constant null
+			if (is_null) {
+				// Invalidate the parent array
+				validity.SetAllInvalid(count);
+				// Also invalidate the new child array
+				new_child.validity.SetAllInvalid(count * array_size);
+				// Attach the flattened buffer and return
+				auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+				return;
 			}
 
 			// Now we need to "unpack" the child vector.
@@ -909,7 +951,8 @@ void Vector::Flatten(idx_t count) {
 			//                          | 2 |
 			// 							 ...
 
-			child.Flatten(count * array_size);
+			auto child_vec = make_uniq<Vector>(original_child);
+			child_vec->Flatten(count * array_size);
 
 			// Create a selection vector
 			SelectionVector sel(count * array_size);
@@ -917,7 +960,7 @@ void Vector::Flatten(idx_t count) {
 				for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
 					auto position = array_idx * array_size + elem_idx;
 					// Broadcast the validity
-					if (FlatVector::IsNull(child, elem_idx)) {
+					if (FlatVector::IsNull(*child_vec, elem_idx)) {
 						FlatVector::SetNull(new_child, position, true);
 					}
 					sel.set_index(position, elem_idx);
@@ -925,7 +968,7 @@ void Vector::Flatten(idx_t count) {
 			}
 
 			// Copy over the data to the new buffer
-			VectorOperations::Copy(child, new_child, sel, count * array_size, 0, 0);
+			VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
 
 		} break;
@@ -969,7 +1012,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		break;
 	case VectorType::FSST_VECTOR: {
 		// create a new flat vector of this type
-		Vector other(GetType());
+		Vector other(GetType(), count);
 		// copy the data of this vector to the other vector, removing compression and selection vector in the process
 		VectorOperations::Copy(*this, other, sel, count, 0, 0);
 		// create a reference to the data in the other vector
@@ -1067,6 +1110,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	auxiliary.reset();
 }
 
+// FIXME: This should ideally be const
 void Vector::Serialize(Serializer &serializer, idx_t count) {
 	auto &logical_type = GetType();
 
@@ -1137,9 +1181,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			Flatten(count);
-			auto &child = ArrayVector::GetEntry(*this);
-			auto array_size = ArrayType::GetSize(type);
+			Vector serialized_vector(*this);
+			serialized_vector.Flatten(count);
+
+			auto &child = ArrayVector::GetEntry(serialized_vector);
+			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
 			serializer.WriteObject(104, "child", [&](Serializer &object) { child.Serialize(object, child_size); });
@@ -1540,7 +1586,6 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 		} else if (internal_type == PhysicalType::ARRAY) {
 			// set the child element in the array to null as well
 			auto &child = ArrayVector::GetEntry(vector);
-			D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
 			auto array_size = ArrayType::GetSize(type);
 			auto child_offset = idx * array_size;
 			for (idx_t i = 0; i < array_size; i++) {
@@ -1629,8 +1674,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	case PhysicalType::ARRAY: {
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
-
-		if (!vdata.validity.RowIsValid(position)) {
+		auto source_idx = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(source_idx)) {
 			// list is null: create null value
 			Value null_value(source_type);
 			vector.Reference(null_value);
@@ -1646,7 +1691,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto array_size = ArrayType::GetSize(source_type);
 		SelectionVector sel(array_size);
 		for (idx_t i = 0; i < array_size; i++) {
-			sel.set_index(i, array_size * position + i);
+			sel.set_index(i, array_size * source_idx + i);
 		}
 		target_child.Slice(sel, array_size);
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much
@@ -1691,19 +1736,19 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 // StringVector
 //===--------------------------------------------------------------------===//
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddString(vector, string_t(data, len));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddStringOrBlob(Vector &vector, const char *data, idx_t len) {
-	return StringVector::AddStringOrBlob(vector, string_t(data, len));
+	return StringVector::AddStringOrBlob(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data) {
-	return StringVector::AddString(vector, string_t(data, strlen(data)));
+	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(strlen(data))));
 }
 
 string_t StringVector::AddString(Vector &vector, const string &data) {
-	return StringVector::AddString(vector, string_t(data.c_str(), data.size()));
+	return StringVector::AddString(vector, string_t(data.c_str(), UnsafeNumericCast<uint32_t>(data.size())));
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
@@ -1737,7 +1782,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (len <= string_t::INLINE_LENGTH) {
-		return string_t(len);
+		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
@@ -1784,7 +1829,7 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 // FSSTVector
 //===--------------------------------------------------------------------===//
 string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
-	return FSSTVector::AddCompressedString(vector, string_t(data, len));
+	return FSSTVector::AddCompressedString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }
 
 string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {

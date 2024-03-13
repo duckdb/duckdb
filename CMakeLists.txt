@@ -94,8 +94,6 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
-option("Enable address sanitizer." TRUE)
-
 set(M32_FLAG "")
 if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
@@ -124,7 +122,7 @@ endif()
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default." FALSE)
-option(ENABLE_EXTENSION_AUTOINSTAll "Enable extension auto-installing by default." FALSE)
+option(ENABLE_EXTENSION_AUTOINSTALL "Enable extension auto-installing by default." FALSE)
 option(EXTENSION_TESTS_ONLY "Only load the tests for extensions, don't actually build them; useful for testing loadable extensions" FALSE)
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
@@ -243,56 +241,75 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(SUN TRUE)
 endif()
 
-find_package(Git)
-if(Git_FOUND)
-  if (NOT DEFINED GIT_COMMIT_HASH)
-    execute_process(
+
+if (OVERRIDE_GIT_DESCRIBE)
+  if (OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g[a-f0-9]+$")
+    set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}")
+  elseif(OVERRIDE_GIT_DESCRIBE MATCHES "^v[0-9]+\.[0-9]+\.[0-9]+$")
+    find_package(Git)
+    if(Git_FOUND)
+      execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
+        set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g${GIT_COMMIT_HASH}")
+    else()
+      set(GIT_DESCRIBE "${OVERRIDE_GIT_DESCRIBE}-0-g0123456789")
+    endif()
+  else()
+    message(FATAL_ERROR "Provided OVERRIDE_GIT_DESCRIBE '${OVERRIDE_GIT_DESCRIBE}' do not match supported versions, either fully specified 'vX.Y.Z-N-gGITHASH123' or version only 'vX.Y.Z'")
   endif()
-  execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_LAST_TAG
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(
+else()
+  find_package(Git)
+  if(Git_FOUND)
+     if (NOT DEFINED GIT_COMMIT_HASH)
+     execute_process(
+            COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE GIT_RESULT
+            OUTPUT_VARIABLE GIT_COMMIT_HASH
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
+    execute_process(
           COMMAND ${GIT_EXECUTABLE} describe --tags --long
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_ITERATION
+          OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
-else()
-  message("Git NOT FOUND")
+  else()
+    message("Git NOT FOUND and EXTERNAL_GIT_DESCRIBE not provided, continuing with dummy version v0.0.1")
+    set(GIT_DESCRIBE "v0.0.1-0-g0123456789")
+  endif()
 endif()
 
-if(GIT_RESULT EQUAL "0")
-  string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
-  string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
+string(REGEX REPLACE "v([0-9]+)\.[0-9]+\.[0-9]+\-.*" "\\1" DUCKDB_MAJOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.([0-9]+)\.[0-9]+\-.*" "\\1" DUCKDB_MINOR_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.([0-9]+)\-.*" "\\1" DUCKDB_PATCH_VERSION "${GIT_DESCRIBE}")
+string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-([0-9]+)\-g.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_DESCRIBE}")
+if (NOT DEFINED GIT_COMMIT_HASH)
+  string(REGEX REPLACE "v[0-9]+\.[0-9]+\.[0-9]+\-[0-9]+\-g([a-f0-9]+)" "\\1" GIT_COMMIT_HASH "${GIT_DESCRIBE}")
+endif()
 
-  if(DUCKDB_DEV_ITERATION EQUAL 0)
-    # on a tag; directly use the version
-    set(DUCKDB_VERSION "${GIT_LAST_TAG}")
-  else()
-    # not on a tag, increment the patch version by one and add a -devX suffix
-    math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
-    set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
-  endif()
+string(LENGTH "${GIT_COMMIT_HASH}" LENGTH_GIT_COMMIT_HASH)
+if (NOT ${LENGTH_GIT_COMMIT_HASH} EQUAL 10)
+   message(STATUS "GIT_COMMIT_HASH has lenght ${LENGTH_GIT_COMMIT_HASH} different than the expected 10")
+endif()
+
+string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)
+
+if(DUCKDB_DEV_ITERATION EQUAL 0)
+  # on a tag; directly use the version
+  set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
 else()
-  # fallback for when building from tarball
-  set(DUCKDB_MAJOR_VERSION 0)
-  set(DUCKDB_MINOR_VERSION 0)
-  set(DUCKDB_PATCH_VERSION 1)
-  set(DUCKDB_DEV_ITERATION 0)
+  # not on a tag, increment the patch version by one and add a -devX suffix
+  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
 string(REGEX MATCH ".*dev.*" DUCKDB_EXTENSION_FOLDER_IS_VERSION "${DUCKDB_VERSION}")
 
-if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND DEFINED GIT_COMMIT_HASH)
+if(DUCKDB_EXTENSION_FOLDER_IS_VERSION AND NOT GIT_COMMIT_HASH STREQUAL "")
   set(DUCKDB_NORMALIZED_VERSION "${GIT_COMMIT_HASH}")
 else()
   set(DUCKDB_NORMALIZED_VERSION "${DUCKDB_VERSION}")
@@ -344,6 +361,7 @@ option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the
 option(DEBUG_ALLOCATION "Debug setting: keep track of outstanding allocations to detect memory leaks" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
+option(VERIFY_DICTIONARY_VECTOR "Debug setting: verify dictionary vectors" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(EXTENSION_CONFIG_BUILD "Produce extension configuration artifacts instead of building. (such as shared vcpkg.json, extensions.txt)" FALSE)
@@ -401,6 +419,7 @@ endif()
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
 endif()
+
 if(FORCE_ASYNC_SINK_SOURCE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ASYNC_SINK_SOURCE")
 endif()
@@ -427,6 +446,10 @@ endif()
 
 if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+endif()
+
+if(VERIFY_DICTIONARY_VECTOR)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_VERIFY_DICTIONARY_VECTOR")
 endif()
 
 if(CUSTOM_LINKER)
@@ -1118,9 +1141,9 @@ if(BUILD_PYTHON)
 	)
 
   if(PYTHON_EDITABLE_BUILD)
-    set(PIP_COMMAND ${PIP_COMMAND} pip install --editable .)
+    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install --editable .)
   else()
-    set(PIP_COMMAND ${PIP_COMMAND} pip install .)
+    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install .)
   endif()
 
   if(USER_SPACE)

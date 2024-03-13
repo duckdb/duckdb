@@ -266,7 +266,7 @@ void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
 }
 
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
-	auto df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	PandasDataFrame df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	if (date_as_object) {

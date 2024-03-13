@@ -168,7 +168,7 @@ public:
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		Store<uint32_t>(next_vector_byte_index_start, metadata_ptr);
-		next_vector_byte_index_start = UsedSpace();
+		next_vector_byte_index_start = NumericCast<uint32_t>(UsedSpace());
 
 		vectors_flushed++;
 		vector_idx = 0;
@@ -208,7 +208,7 @@ public:
 		}
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
-		Store<uint32_t>(total_segment_size, dataptr);
+		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 		dataptr += AlpRDConstants::METADATA_POINTER_SIZE;
 
 		// Store the right bw for the segment
@@ -261,7 +261,7 @@ public:
 					EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
 					bool is_null = !vdata.validity.RowIsValid(idx);
 					//! We resolve null values with a predicated comparison
-					vector_null_positions[nulls_idx] = vector_idx + i;
+					vector_null_positions[nulls_idx] = UnsafeNumericCast<uint16_t>(vector_idx + i);
 					nulls_idx += is_null;
 					input_vector[vector_idx + i] = value;
 				}

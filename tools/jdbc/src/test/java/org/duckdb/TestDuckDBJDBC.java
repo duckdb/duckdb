@@ -557,7 +557,7 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnCount(), 1);
             assertEquals(meta.getColumnName(1), "struct");
             assertEquals(meta.getColumnTypeName(1), "STRUCT(i INTEGER, j VARCHAR)");
-            assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+            assertEquals(meta.getColumnType(1), Types.STRUCT);
         }
     }
 
@@ -580,6 +580,22 @@ public class TestDuckDBJDBC {
             assertEquals(meta.getColumnName(1), "union");
             assertEquals(meta.getColumnTypeName(1), "UNION(str VARCHAR)");
             assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+        }
+    }
+
+    public static void test_native_duckdb_array() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT generate_series(1)::BIGINT[2] as \"array\"");
+             ResultSet rs = stmt.executeQuery()) {
+            ResultSetMetaData meta = rs.getMetaData();
+            assertEquals(meta.getColumnCount(), 1);
+            assertEquals(meta.getColumnName(1), "array");
+            assertEquals(meta.getColumnTypeName(1), "BIGINT[2]");
+            assertEquals(meta.getColumnType(1), Types.ARRAY);
+            assertEquals(meta.getColumnClassName(1), DuckDBArray.class.getName());
+
+            assertTrue(rs.next());
+            assertListsEqual(toJavaObject(rs.getObject(1)), asList(0L, 1L));
         }
     }
 
@@ -1682,7 +1698,7 @@ public class TestDuckDBJDBC {
         ResultSet rs = stmt.executeQuery("SELECT '5131-08-05 (BC)'::date d");
 
         assertTrue(rs.next());
-        assertNull(rs.getDate("d"));
+        assertEquals(rs.getDate("d"), Date.valueOf(LocalDate.of(-5130, 8, 5)));
 
         assertFalse(rs.next());
         rs.close();
@@ -1710,6 +1726,10 @@ public class TestDuckDBJDBC {
         Statement stmt = conn.createStatement();
         stmt.execute("CREATE TABLE a (i INTEGER)");
         stmt.execute("CREATE VIEW b AS SELECT i::STRING AS j FROM a");
+        stmt.execute("COMMENT ON TABLE a IS 'a table'");
+        stmt.execute("COMMENT ON COLUMN a.i IS 'a column'");
+        stmt.execute("COMMENT ON VIEW b IS 'a view'");
+        stmt.execute("COMMENT ON COLUMN b.j IS 'a column'");
 
         DatabaseMetaData md = conn.getMetaData();
         ResultSet rs;
@@ -1740,8 +1760,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1761,8 +1781,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "b");
         assertEquals(rs.getString("TABLE_TYPE"), "VIEW");
         assertEquals(rs.getString(4), "VIEW");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a view");
+        assertEquals(rs.getObject(5), "a view");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1787,8 +1807,8 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("TABLE_TYPE"), "BASE TABLE");
         assertEquals(rs.getString(4), "BASE TABLE");
-        assertNull(rs.getObject("REMARKS"));
-        assertNull(rs.getObject(5));
+        assertEquals(rs.getObject("REMARKS"), "a table");
+        assertEquals(rs.getObject(5), "a table");
         assertNull(rs.getObject("TYPE_CAT"));
         assertNull(rs.getObject(6));
         assertNull(rs.getObject("TYPE_SCHEM"));
@@ -1814,6 +1834,7 @@ public class TestDuckDBJDBC {
         assertEquals(rs.getString("TABLE_NAME"), "a");
         assertEquals(rs.getString(3), "a");
         assertEquals(rs.getString("COLUMN_NAME"), "i");
+        assertEquals(rs.getString("REMARKS"), "a column");
         assertEquals(rs.getString(4), "i");
         assertEquals(rs.getInt("DATA_TYPE"), Types.INTEGER);
         assertEquals(rs.getInt(5), Types.INTEGER);
@@ -1846,6 +1867,7 @@ public class TestDuckDBJDBC {
         assertNull(rs.getObject(7));
         assertNull(rs.getObject("BUFFER_LENGTH"));
         assertNull(rs.getObject(8));
+        assertEquals(rs.getString("REMARKS"), "a column");
 
         rs.close();
 
@@ -1892,7 +1914,7 @@ public class TestDuckDBJDBC {
                 rs.next();
 
                 assertEquals(rs.getString("TYPE_NAME"), "TIME WITH TIME ZONE");
-                assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
+                assertEquals(rs.getInt("DATA_TYPE"), Types.TIME_WITH_TIMEZONE);
             }
 
             s.execute(
@@ -3561,14 +3583,14 @@ public class TestDuckDBJDBC {
         return out;
     }
 
-    private static Object toJavaObject(Object t) {
+    private static <T> T toJavaObject(Object t) {
         try {
             if (t instanceof Array) {
                 t = arrayToList((Array) t);
             } else if (t instanceof Struct) {
                 t = structToMap((DuckDBStruct) t);
             }
-            return t;
+            return (T) t;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -3693,8 +3715,8 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("double_array",
                                trio(42.0, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null, -42.0));
         correct_answer_map.put(
-            "date_array", trio(LocalDate.parse("1970-01-01"), LocalDate.parse("999999999-12-31", FORMAT_DATE),
-                               LocalDate.parse("-999999999-01-01", FORMAT_DATE), null, LocalDate.parse("2022-05-12")));
+            "date_array", trio(LocalDate.parse("1970-01-01"), LocalDate.parse("5881580-07-11", FORMAT_DATE),
+                               LocalDate.parse("-5877641-06-24", FORMAT_DATE), null, LocalDate.parse("2022-05-12")));
         correct_answer_map.put("timestamp_array", trio(Timestamp.valueOf("1970-01-01 00:00:00.0"),
                                                        DuckDBTimestamp.toSqlTimestamp(9223372036854775807L),
                                                        DuckDBTimestamp.toSqlTimestamp(-9223372036854775807L), null,
@@ -3704,14 +3726,14 @@ public class TestDuckDBJDBC {
                                                          OffsetDateTime.parse("-290308-12-21T19:59:05.224193Z"), null,
                                                          OffsetDateTime.parse("2022-05-12T23:23:45Z")));
         correct_answer_map.put("varchar_array", trio("🦆🦆🦆🦆🦆🦆", "goose", null, ""));
-        correct_answer_map.put("nested_int_array", trio(emptyList(), asList(42, 999, null, null, -42), null,
-                                                        emptyList(), asList(42, 999, null, null, -42)));
-        correct_answer_map.put("struct_of_arrays", asList(mapOf("a", null, "b", null),
-                                                          mapOf("a", asList(42, 999, null, null, -42), "b",
-                                                                asList("🦆🦆🦆🦆🦆🦆", "goose", null, "")),
-                                                          null));
-        correct_answer_map.put("array_of_structs", trio(mapOf("a", null, "b", null),
-                                                        mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
+        List<Integer> numbers = asList(42, 999, null, null, -42);
+        correct_answer_map.put("nested_int_array", trio(emptyList(), numbers, null, emptyList(), numbers));
+        Map<Object, Object> abnull = mapOf("a", null, "b", null);
+        correct_answer_map.put(
+            "struct_of_arrays",
+            asList(abnull, mapOf("a", numbers, "b", asList("🦆🦆🦆🦆🦆🦆", "goose", null, "")), null));
+        Map<Object, Object> ducks = mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆");
+        correct_answer_map.put("array_of_structs", trio(abnull, ducks, null));
         correct_answer_map.put("bool", asList(false, true, null));
         correct_answer_map.put("tinyint", asList((byte) -128, (byte) 127, null));
         correct_answer_map.put("smallint", asList((short) -32768, (short) 32767, null));
@@ -3744,8 +3766,7 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("small_enum", asList("DUCK_DUCK_ENUM", "GOOSE", null));
         correct_answer_map.put("medium_enum", asList("enum_0", "enum_299", null));
         correct_answer_map.put("large_enum", asList("enum_0", "enum_69999", null));
-        correct_answer_map.put(
-            "struct", asList(mapOf("a", null, "b", null), mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
+        correct_answer_map.put("struct", asList(abnull, ducks, null));
         correct_answer_map.put("map",
                                asList(mapOf(), mapOf("key1", "🦆🦆🦆🦆🦆🦆", "key2", "goose"), null));
         correct_answer_map.put("union", asList("Frank", (short) 5, null));
@@ -3768,6 +3789,30 @@ public class TestDuckDBJDBC {
             "timestamp_tz",
             asList(OffsetDateTime.of(LocalDateTime.of(-290308, 12, 22, 0, 0, 0), ZoneOffset.UTC),
                    OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775806000), ZoneOffset.UTC), null));
+
+        List<Integer> int_array = asList(null, 2, 3);
+        List<String> varchar_array = asList("a", null, "c");
+        List<Integer> int_list = asList(4, 5, 6);
+        List<String> def = asList("d", "e", "f");
+
+        correct_answer_map.put("fixed_int_array", asList(int_array, int_list, null));
+        correct_answer_map.put("fixed_varchar_array", asList(varchar_array, def, null));
+        correct_answer_map.put("fixed_nested_int_array",
+                               asList(asList(int_array, null, int_array), asList(int_list, int_array, int_list), null));
+        correct_answer_map.put("fixed_nested_varchar_array", asList(asList(varchar_array, null, varchar_array),
+                                                                    asList(def, varchar_array, def), null));
+
+        correct_answer_map.put("fixed_struct_array",
+                               asList(asList(abnull, ducks, abnull), asList(ducks, abnull, ducks), null));
+
+        correct_answer_map.put("struct_of_fixed_array",
+                               asList(mapOf("a", int_array, "b", varchar_array), mapOf("a", int_list, "b", def), null));
+
+        correct_answer_map.put("fixed_array_of_int_list", asList(asList(emptyList(), numbers, emptyList()),
+                                                                 asList(numbers, emptyList(), numbers), null));
+
+        correct_answer_map.put("list_of_fixed_int_array", asList(asList(int_array, int_list, int_array),
+                                                                 asList(int_list, int_array, int_list), null));
     }
 
     public static void test_all_types() throws Exception {
@@ -4178,6 +4223,15 @@ public class TestDuckDBJDBC {
             }
 
             assertEquals(out, "YWJj");
+        }
+    }
+
+    public static void test_fractional_time() throws Exception {
+        try (Connection conn = DriverManager.getConnection(JDBC_URL);
+             PreparedStatement stmt = conn.prepareStatement("SELECT '01:02:03.123'::TIME");
+             ResultSet rs = stmt.executeQuery()) {
+            assertTrue(rs.next());
+            assertEquals(rs.getTime(1), Time.valueOf(LocalTime.of(1, 2, 3, 123)));
         }
     }
 

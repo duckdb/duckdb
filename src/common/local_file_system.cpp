@@ -403,6 +403,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		}
 		read_buffer += bytes_read;
 		nr_bytes -= bytes_read;
+		location += bytes_read;
 	}
 }
 
@@ -431,15 +432,23 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 		}
 		write_buffer += bytes_written;
 		nr_bytes -= bytes_written;
+		location += bytes_written;
 	}
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = write(fd, buffer, nr_bytes);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
-		                  strerror(errno));
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		nr_bytes -= current_bytes_written;
 	}
 	return bytes_written;
 }
@@ -835,9 +844,26 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 	return bytes_written;
 }
 
+static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
+	int64_t bytes_written = 0;
+	while (nr_bytes > 0) {
+		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
+		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
+		if (current_bytes_written <= 0) {
+			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
+			                  strerror(errno));
+		}
+		bytes_written += current_bytes_written;
+		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
+		location += current_bytes_written;
+		nr_bytes -= current_bytes_written;
+	}
+	return bytes_written;
+}
+
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
 		                  bytes_written);
@@ -847,7 +873,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto &pos = handle.Cast<WindowsFileHandle>().position;
-	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
+	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
 }

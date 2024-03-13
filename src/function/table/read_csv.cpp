@@ -268,6 +268,9 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
+	if (!global_state) {
+		return 0;
+	}
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	auto &data = global_state->Cast<CSVGlobalState>();
 	return data.GetProgress(bind_data);

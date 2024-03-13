@@ -128,7 +128,7 @@ vector<string> SplitQueryStringIntoStatements(const string &query) {
 	// Break sql string down into sql statements using the tokenizer
 	vector<string> query_statements;
 	auto tokens = Parser::Tokenize(query);
-	auto next_statement_start = 0;
+	idx_t next_statement_start = 0;
 	for (idx_t i = 1; i < tokens.size(); ++i) {
 		auto &t_prev = tokens[i - 1];
 		auto &t = tokens[i];

@@ -210,6 +210,29 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 	return Value::LIST(element_type, values);
 }
 
+Value TransformArrayValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
+	auto size = py::len(ele);
+
+	if (size == 0) {
+		return Value::EMPTYARRAY(LogicalType::SQLNULL, size);
+	}
+
+	vector<Value> values;
+	values.reserve(size);
+
+	bool array_target = target_type.id() == LogicalTypeId::ARRAY;
+	auto &child_type = array_target ? ArrayType::GetChildType(target_type) : LogicalType::UNKNOWN;
+
+	LogicalType element_type = LogicalType::SQLNULL;
+	for (idx_t i = 0; i < size; i++) {
+		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
+		element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
+		values.push_back(std::move(new_value));
+	}
+
+	return Value::ARRAY(element_type, std::move(values));
+}
+
 Value TransformDictionary(const PyDictionary &dict) {
 	//! DICT -> MAP FORMAT
 	// keys() = [key, value]
@@ -413,6 +436,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
+	} else if (ele.is(import_cache.numpy.ma.masked())) {
+		return PythonObjectType::None;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
@@ -518,7 +543,11 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		}
 	}
 	case PythonObjectType::List:
-		return TransformListValue(ele, target_type);
+		if (target_type.id() == LogicalTypeId::ARRAY) {
+			return TransformArrayValue(ele, target_type);
+		} else {
+			return TransformListValue(ele, target_type);
+		}
 	case PythonObjectType::Dict: {
 		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		switch (target_type.id()) {
@@ -537,6 +566,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		case LogicalTypeId::UNKNOWN:
 		case LogicalTypeId::LIST:
 			return TransformListValue(ele, target_type);
+		case LogicalTypeId::ARRAY:
+			return TransformArrayValue(ele, target_type);
 		default:
 			throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
 		}

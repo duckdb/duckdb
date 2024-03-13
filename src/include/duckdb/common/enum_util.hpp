@@ -154,6 +154,8 @@ enum class JoinType : uint8_t;
 
 enum class KeywordCategory : uint8_t;
 
+enum class LimitNodeType : uint8_t;
+
 enum class LoadType : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
@@ -241,6 +243,8 @@ enum class SetOperationType : uint8_t;
 enum class SetScope : uint8_t;
 
 enum class SetType : uint8_t;
+
+enum class SettingScope : uint8_t;
 
 enum class ShowType : uint8_t;
 
@@ -493,6 +497,9 @@ template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
 
 template<>
+const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
+
+template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
@@ -623,6 +630,9 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value);
 
 template<>
 const char* EnumUtil::ToChars<SetType>(SetType value);
+
+template<>
+const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
@@ -908,6 +918,9 @@ template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
 
 template<>
+LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
+
+template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
@@ -1038,6 +1051,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value);
 
 template<>
 SetType EnumUtil::FromString<SetType>(const char *value);
+
+template<>
+SettingScope EnumUtil::FromString<SettingScope>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);

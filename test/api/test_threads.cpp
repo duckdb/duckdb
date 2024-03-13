@@ -6,6 +6,55 @@
 using namespace duckdb;
 using namespace std;
 
+void run_query_multiple_times(duckdb::unique_ptr<string> query, duckdb::unique_ptr<Connection> con) {
+	for (int i = 0; i < 10; ++i) {
+		auto result = con->Query(*query);
+	}
+}
+
+void change_thread_counts(duckdb::DuckDB &db) {
+	auto con = Connection(db);
+	for (int i = 0; i < 10; ++i) {
+		con.Query("SET threads=10");
+		con.Query("SET threads=1");
+	}
+}
+
+// NumberOfThreads acquired the same lock as RelaunchThreads
+// NumberOfThreads is waiting for the lock
+// RelaunchThreads is waiting on the thread to finish, while holding the lock
+TEST_CASE("Test deadlock issue between NumberOfThreads and RelaunchThreads", "[api]") {
+	duckdb::DuckDB db(nullptr);
+
+	int thread_count = 10;
+	std::vector<std::thread> threads(thread_count);
+
+	// This query will hit NumberOfThreads because it uses the RadixPartitionedHashtable
+	for (int i = 0; i < thread_count; ++i) {
+		auto query = make_uniq<string>(R"(
+			WITH dataset AS (
+			  SELECT * FROM (VALUES
+				(1, 'Alice'),
+				(2, 'Bob'),
+				(3, 'Alice'),
+				(4, 'Carol')
+			  ) AS t(id, name)
+			)
+			SELECT DISTINCT name FROM dataset;
+		)");
+
+		threads[i] = std::thread(run_query_multiple_times, std::move(query), make_uniq<Connection>(db));
+	}
+
+	// Fire off queries that change the thread count,
+	// causing us to relaunch the worker threads on every subsequent query.
+	change_thread_counts(db);
+
+	for (int i = 0; i < thread_count; ++i) {
+		threads[i].join();
+	}
+}
+
 TEST_CASE("Test database maximum_threads argument", "[api]") {
 	// default is number of hw threads
 	// FIXME: not yet

@@ -21,8 +21,8 @@ public:
 	explicit ClientContextFileOpener(ClientContext &context_p) : context(context_p) {
 	}
 
-	bool TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) override;
-	bool TryGetCurrentSetting(const string &key, Value &result) override;
+	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) override;
+	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override;
 
 	ClientContext *TryGetClientContext() override {
 		return &context;

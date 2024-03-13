@@ -61,6 +61,9 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	// The nested types need to conform as well
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(GetJSONType(const_struct_names, ListType::GetChildType(type)));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(GetJSONType(const_struct_names, ArrayType::GetChildType(type)),
+		                          ArrayType::GetSize(type));
 	// Struct and MAP are treated as JSON values
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
@@ -435,6 +438,9 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 
 static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                               idx_t count) {
+
+	value_v.Flatten(count);
+
 	// Initialize array for the nested values
 	auto &child_v = ArrayVector::GetEntry(value_v);
 	auto array_size = ArrayType::GetSize(value_v.GetType());
