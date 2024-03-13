@@ -37,7 +37,17 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        vector_type: [ 'dictionary_expression', 'dictionary_operator', 'constant_operator', 'sequence_operator', 'nested_shuffle' ]
+        include:
+          - vector_type: "dictionary_expression"
+            test_parameter: '"*"'
+          - vector_type: "dictionary_operator"
+            test_parameter: '"*"'
+          - vector_type: "constant_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "sequence_operator"
+            test_parameter: '' # skip running all tests here because it is too slow
+          - vector_type: "nested_shuffle"
+            test_parameter: '"*"'
     env:
       CC: gcc-10
       CXX: g++-10
@@ -74,4 +84,4 @@ jobs:
 
       - name: Test
         shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest ${{ matrix.test_parameter }} --no-exit
