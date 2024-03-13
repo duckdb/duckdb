@@ -22,7 +22,7 @@ public:
 	void Append(DataChunk &chunk);
 
 	py::object ToArray(idx_t col_idx) {
-		return owned_data[col_idx].ToArray(count);
+		return owned_data[col_idx].ToArray();
 	}
 
 private:

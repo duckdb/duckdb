@@ -97,7 +97,8 @@ ProducerToken::~ProducerToken() {
 
 TaskScheduler::TaskScheduler(DatabaseInstance &db)
     : db(db), queue(make_uniq<ConcurrentQueue>()),
-      allocator_flush_threshold(db.config.options.allocator_flush_threshold), thread_count(0) {
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold), requested_thread_count(0),
+      current_thread_count(1) {
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -229,9 +230,7 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 #endif
 
 int32_t TaskScheduler::NumberOfThreads() {
-	lock_guard<mutex> t(thread_lock);
-	auto &config = DBConfig::GetConfig(db);
-	return NumericCast<int32_t>(threads.size() + config.options.external_threads);
+	return current_thread_count.load();
 }
 
 void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
@@ -248,7 +247,7 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 		    "DuckDB was compiled without threads! Setting total_threads != external_threads is not allowed.");
 	}
 #endif
-	thread_count = NumericCast<int32_t>(total_threads - external_threads);
+	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
 }
 
 void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
@@ -268,14 +267,16 @@ void TaskScheduler::YieldThread() {
 
 void TaskScheduler::RelaunchThreads() {
 	lock_guard<mutex> t(thread_lock);
-	auto n = thread_count.load();
+	auto n = requested_thread_count.load();
 	RelaunchThreadsInternal(n);
 }
 
 void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
+	auto &config = DBConfig::GetConfig(db);
 	idx_t new_thread_count = n;
 	if (threads.size() == new_thread_count) {
+		current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
 		return;
 	}
 	if (threads.size() > new_thread_count) {
@@ -305,6 +306,7 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 			markers.push_back(std::move(marker));
 		}
 	}
+	current_thread_count = NumericCast<int32_t>(threads.size() + config.options.external_threads);
 #endif
 }
 

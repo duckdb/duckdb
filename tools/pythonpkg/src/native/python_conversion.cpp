@@ -230,7 +230,7 @@ Value TransformArrayValue(py::handle ele, const LogicalType &target_type = Logic
 		values.push_back(std::move(new_value));
 	}
 
-	return Value::ARRAY(element_type, values);
+	return Value::ARRAY(element_type, std::move(values));
 }
 
 Value TransformDictionary(const PyDictionary &dict) {
@@ -436,6 +436,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
+	} else if (ele.is(import_cache.numpy.ma.masked())) {
+		return PythonObjectType::None;
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {

@@ -247,11 +247,19 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
 		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
 			if (bound_subquery.subquery->types != view_catalog_entry.types) {
-				throw BinderException("Contents of view were altered: types don't match!");
+				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
+				auto expected_types = StringUtil::ToString(view_catalog_entry.types, ", ");
+				throw BinderException(
+				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
+				    expected_types, actual_types);
 			}
 			if (bound_subquery.subquery->names.size() == view_catalog_entry.names.size() &&
 			    bound_subquery.subquery->names != view_catalog_entry.names) {
-				throw BinderException("Contents of view were altered: names don't match!");
+				auto actual_names = StringUtil::Join(bound_subquery.subquery->names, ", ");
+				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
+				throw BinderException(
+				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
+				    expected_names, actual_names);
 			}
 		}
 		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,

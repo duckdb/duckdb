@@ -172,7 +172,6 @@ libraries = []
 if 'DUCKDB_BINARY_DIR' in os.environ:
     existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
 if 'DUCKDB_COMPILE_FLAGS' in os.environ:
-    # FIXME: this is overwriting the previously set toolchain_args ?
     toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split()
 if 'DUCKDB_LIBS' in os.environ:
     libraries = os.environ['DUCKDB_LIBS'].split(' ')
@@ -194,9 +193,13 @@ for ext in extensions:
 
 define_macros.extend([('DUCKDB_EXTENSION_AUTOLOAD_DEFAULT', '1'), ('DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT', '1')])
 
-linker_args = toolchain_args
+linker_args = toolchain_args[:]
 if platform.system() == 'Windows':
-    linker_args.extend(['rstrtmgr.lib'])
+    linker_args.extend(['rstrtmgr.lib', 'bcrypt.lib'])
+
+short_paths = False
+if platform.system() == 'Windows':
+    short_paths = True
 
 extra_files = []
 header_files = []
@@ -237,7 +240,7 @@ if len(existing_duckdb_dir) == 0:
         import package_build
 
         (source_list, include_list, original_sources) = package_build.build_package(
-            os.path.join(script_path, "duckdb_build"), extensions, False, unity_build, "duckdb_build"
+            os.path.join(script_path, "duckdb_build"), extensions, False, unity_build, "duckdb_build", short_paths
         )
 
         duckdb_sources = [

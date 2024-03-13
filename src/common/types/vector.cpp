@@ -27,6 +27,32 @@
 
 namespace duckdb {
 
+UnifiedVectorFormat::UnifiedVectorFormat() : sel(nullptr), data(nullptr) {
+}
+
+UnifiedVectorFormat::UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept {
+	bool refers_to_self = other.sel == &other.owned_sel;
+	std::swap(sel, other.sel);
+	std::swap(data, other.data);
+	std::swap(validity, other.validity);
+	std::swap(owned_sel, other.owned_sel);
+	if (refers_to_self) {
+		sel = &owned_sel;
+	}
+}
+
+UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other) noexcept {
+	bool refers_to_self = other.sel == &other.owned_sel;
+	std::swap(sel, other.sel);
+	std::swap(data, other.data);
+	std::swap(validity, other.validity);
+	std::swap(owned_sel, other.owned_sel);
+	if (refers_to_self) {
+		sel = &owned_sel;
+	}
+	return *this;
+}
+
 Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
@@ -144,11 +170,22 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 }
 
 void Vector::Slice(const Vector &other, idx_t offset, idx_t end) {
+	D_ASSERT(end >= offset);
 	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		Reference(other);
 		return;
 	}
-	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR);
+	if (other.GetVectorType() != VectorType::FLAT_VECTOR) {
+		// we can slice the data directly only for flat vectors
+		// for non-flat vectors slice using a selection vector instead
+		idx_t count = end - offset;
+		SelectionVector sel(count);
+		for (idx_t i = 0; i < count; i++) {
+			sel.set_index(i, offset + i);
+		}
+		Slice(other, sel, count);
+		return;
+	}
 
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
@@ -831,7 +868,7 @@ void Vector::Flatten(idx_t count) {
 		}
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
-		if (is_null) {
+		if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
 			validity.SetAllInvalid(count);
@@ -891,13 +928,18 @@ void Vector::Flatten(idx_t count) {
 		case PhysicalType::ARRAY: {
 			auto &original_child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
-
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 			auto &new_child = flattened_buffer->GetChild();
 
-			// Make sure to initialize a validity mask for the new child vector with the correct size
-			if (!original_child.validity.AllValid()) {
-				new_child.validity.Initialize(array_size * count);
+			// Fast path: The array is a constant null
+			if (is_null) {
+				// Invalidate the parent array
+				validity.SetAllInvalid(count);
+				// Also invalidate the new child array
+				new_child.validity.SetAllInvalid(count * array_size);
+				// Attach the flattened buffer and return
+				auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+				return;
 			}
 
 			// Now we need to "unpack" the child vector.
@@ -970,7 +1012,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		break;
 	case VectorType::FSST_VECTOR: {
 		// create a new flat vector of this type
-		Vector other(GetType());
+		Vector other(GetType(), count);
 		// copy the data of this vector to the other vector, removing compression and selection vector in the process
 		VectorOperations::Copy(*this, other, sel, count, 0, 0);
 		// create a reference to the data in the other vector
@@ -1139,9 +1181,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			Flatten(count);
-			auto &child = ArrayVector::GetEntry(*this);
-			auto array_size = ArrayType::GetSize(type);
+			Vector serialized_vector(*this);
+			serialized_vector.Flatten(count);
+
+			auto &child = ArrayVector::GetEntry(serialized_vector);
+			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
 			serializer.WriteObject(104, "child", [&](Serializer &object) { child.Serialize(object, child_size); });

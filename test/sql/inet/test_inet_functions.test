@@ -25,11 +25,21 @@ SELECT host(a) from (values ('127.0.0.1/17')) t(a);
 ----
 No function matches
 
+query I
+SELECT family('127.0.0.1/17');
+----
+4
+
 # subtract
 query I
 SELECT INET '127.0.0.255' - 32;
 ----
 127.0.0.223
+
+query I
+SELECT INET '127.0.0.255' + 0;
+----
+127.0.0.255
 
 query I
 SELECT INET '127.0.0.31' - 32;
@@ -41,7 +51,12 @@ SELECT INET '127.0.0.31' - -32;
 ----
 127.0.0.63
 
-# underflow
 statement error
 SELECT INET '0.0.0.0' - 32;
 ----
+Out of Range Error: Overflow in subtraction
+
+statement error
+select INET '255.255.255.255' + 1
+----
+Out of Range Error: Cannot add 1

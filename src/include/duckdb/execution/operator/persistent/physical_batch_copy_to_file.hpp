@@ -61,6 +61,7 @@ public:
 	}
 
 private:
+	void AddLocalBatch(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &state) const;
 	void PrepareBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
 	                      unique_ptr<ColumnDataCollection> collection) const;
 	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;

@@ -1291,6 +1291,7 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 		if (check_nulls) {
 			const auto count = input_chunk.size();
 
+			payload_chunk.Flatten();
 			UnifiedVectorFormat vdata;
 			payload_chunk.data[0].ToUnifiedFormat(count, vdata);
 			if (!vdata.validity.AllValid()) {

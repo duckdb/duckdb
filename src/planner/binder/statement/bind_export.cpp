@@ -131,7 +131,7 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 	}
 	case LogicalTypeId::ARRAY: {
 		// Attempt to convert the array to a list
-		auto child = ArrayType::GetChildType(original);
+		auto &child = ArrayType::GetChildType(original);
 		return AlterLogicalType(LogicalType::LIST(child), type_check);
 	}
 	case LogicalTypeId::STRUCT: {
