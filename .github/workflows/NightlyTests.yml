@@ -36,6 +36,7 @@ jobs:
     name: Vector Verification Tests (${{ matrix.vector_type }})
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
         include:
           - vector_type: "dictionary_expression"
