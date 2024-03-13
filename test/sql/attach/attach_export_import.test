@@ -55,10 +55,6 @@ query I nosort q1
 SELECT * FROM integers ORDER BY i NULLS LAST
 ----
 
-# FIXME: this seems to be bugged
-# the view doesn't seem to get exported/imported correctly:
-
-# Catalog Error: Table with name integers_view does not exist!
 query I nosort q1
 SELECT * FROM integers_view order by i NULLS LAST;
 ----
