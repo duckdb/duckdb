@@ -106,10 +106,11 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             context.verify_statements()
             res = context.execute()
         except TestException as e:
-            print(str(e.message))
             res = e.handle_result()
             if res.type == ExecuteResult.Type.SKIPPED:
                 self.skip_log.append(str(e.message))
+            else:
+                print(str(e.message))
 
         self.database.reset()
 
@@ -135,7 +136,7 @@ def main():
     arg_parser.add_argument('--file-list', type=str, help='Path to the file containing a list of tests to run')
     arg_parser.add_argument('--start-offset', '-s', type=int, help='Start offset for the tests', default=0)
     arg_parser.add_argument(
-        '--build-dir', type=str, help='Path to the build directory, used for loading extensions', default=0
+        '--build-dir', type=str, help='Path to the build directory, used for loading extensions', default=None
     )
     args = arg_parser.parse_args()
 

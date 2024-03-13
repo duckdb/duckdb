@@ -1012,6 +1012,9 @@ class SQLLogicContext:
         if param in self.runner.extensions:
             return RequireResult.PRESENT
 
+        if self.runner.build_directory is None:
+            return RequireResult.MISSING
+
         connection = self.pool.get_connection()
         autoload_known_extensions = connection.execute(
             "select value::BOOLEAN from duckdb_settings() where name == 'autoload_known_extensions'"
