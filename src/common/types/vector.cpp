@@ -1767,8 +1767,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
 
-		auto array_index = vdata.sel->get_index(position);
-		if (!vdata.validity.RowIsValid(array_index)) {
+		auto source_idx = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(source_idx)) {
 			// list is null: create null value
 			Value null_value(source_type);
 			vector.Reference(null_value);
@@ -1784,7 +1784,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto array_size = ArrayType::GetSize(source_type);
 		SelectionVector sel(array_size);
 		for (idx_t i = 0; i < array_size; i++) {
-			sel.set_index(i, array_size * array_index + i);
+			sel.set_index(i, array_size * source_idx + i);
 		}
 		target_child.Slice(sel, array_size);
 		target_child.Flatten(array_size); // since its constant we only have to flatten this much
