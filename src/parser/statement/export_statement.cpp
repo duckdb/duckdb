@@ -7,7 +7,7 @@ ExportStatement::ExportStatement(unique_ptr<CopyInfo> info)
 }
 
 ExportStatement::ExportStatement(const ExportStatement &other)
-    : SQLStatement(other), database(other.database), info(other.info->Copy()) {
+    : SQLStatement(other), info(other.info->Copy()), database(other.database) {
 }
 
 unique_ptr<SQLStatement> ExportStatement::Copy() const {
