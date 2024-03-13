@@ -268,11 +268,19 @@ void CSVGlobalState::FillRejectsTable() {
 						errors_appender.Append(file_idx);
 						// 3. Row Line
 						errors_appender.Append(row_line);
-						// 4. Byte Position where error occurred
-						errors_appender.Append(error.byte_position);
-						// 5. Column Index
+						// 4. Byte Position of the row error
+						errors_appender.Append(error.row_byte_position);
+						// 5. Byte Position where error occurred
+						if (error.byte_position == -1) {
+							// This means this error comes from a flush, and we don't support this yet, so we give it
+							// a null
+							errors_appender.Append(Value());
+						} else {
+							errors_appender.Append(error.byte_position);
+						}
+						// 6. Column Index
 						errors_appender.Append(col_idx + 1);
-						// 6. Column Name (If Applicable)
+						// 7. Column Name (If Applicable)
 						switch (error.type) {
 						case CSVErrorType::TOO_MANY_COLUMNS:
 							errors_appender.Append(Value());
@@ -284,11 +292,11 @@ void CSVGlobalState::FillRejectsTable() {
 						default:
 							errors_appender.Append(string_t(bind_data.return_names[col_idx]));
 						}
-						// 7. Error Type
+						// 8. Error Type
 						errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
-						// 8. Original CSV Line
+						// 9. Original CSV Line
 						errors_appender.Append(string_t(error.csv_row));
-						// 9. Full Error Message
+						// 10. Full Error Message
 						errors_appender.Append(string_t(error.error_message));
 						errors_appender.EndRow();
 					}

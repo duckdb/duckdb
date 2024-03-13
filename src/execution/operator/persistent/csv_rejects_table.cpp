@@ -104,17 +104,19 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 		info->columns.AddColumn(ColumnDefinition("file_id", LogicalType::UBIGINT));
 		// 2. Row Line
 		info->columns.AddColumn(ColumnDefinition("line", LogicalType::UBIGINT));
-		// 3. Byte Position where error occurred
+		// 3. Byte Position of the start of the line
+		info->columns.AddColumn(ColumnDefinition("line_byte_position", LogicalType::UBIGINT));
+		// 4. Byte Position where error occurred
 		info->columns.AddColumn(ColumnDefinition("byte_position", LogicalType::UBIGINT));
-		// 4. Column Index (If Applicable)
+		// 5. Column Index (If Applicable)
 		info->columns.AddColumn(ColumnDefinition("column_idx", LogicalType::UBIGINT));
-		// 5. Column Name (If Applicable)
+		// 6. Column Name (If Applicable)
 		info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
-		// 6. Error Type
+		// 7. Error Type
 		info->columns.AddColumn(ColumnDefinition("error_type", enum_type));
-		// 7. Original CSV Line
+		// 8. Original CSV Line
 		info->columns.AddColumn(ColumnDefinition("csv_line", LogicalType::VARCHAR));
-		// 8. Full Error Message
+		// 9. Full Error Message
 		info->columns.AddColumn(ColumnDefinition("error_message", LogicalType::VARCHAR));
 		catalog.CreateTable(context, std::move(info));
 	}

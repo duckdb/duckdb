@@ -247,7 +247,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		error << "Could not convert string \"" << std::string(value_ptr, size) << "\" to \'"
 		      << LogicalTypeIdToString(parse_types[cur_col_id].first) << "\'";
 		current_errors.push_back(
-		    {CSVErrorType::INVALID_UNICODE, cur_col_id, {iterator.pos.buffer_idx, last_position, buffer_size}});
+		    {CSVErrorType::CAST_ERROR, cur_col_id, {iterator.pos.buffer_idx, last_position, buffer_size}});
 		current_errors.back().error_message = error.str();
 	}
 	cur_col_id++;
@@ -344,6 +344,7 @@ void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_po
 	borked_line = {char_array.begin(), char_array.end() - 1};
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	auto csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
+	                                       current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
 	                                       error_position.GetGlobalPosition(requested_size, first_nl));
 	error_handler.Error(csv_error, true);
 }
@@ -360,9 +361,10 @@ bool StringValueResult::HandleError() {
 
 		switch (cur_error.type) {
 		case CSVErrorType::TOO_MANY_COLUMNS:
-			csv_error =
-			    CSVError::IncorrectColumnAmountError(state_machine.options, col_idx, lines_per_batch, borked_line,
-			                                         line_pos.GetGlobalPosition(requested_size, first_nl));
+			csv_error = CSVError::IncorrectColumnAmountError(
+			    state_machine.options, col_idx, lines_per_batch, borked_line,
+			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
+			    line_pos.GetGlobalPosition(requested_size, first_nl));
 			break;
 		case CSVErrorType::INVALID_UNICODE: {
 			// We have to sanitize the CSV line
@@ -371,16 +373,20 @@ bool StringValueResult::HandleError() {
 			Utf8Proc::MakeValid(&char_array[0], char_array.size());
 			borked_line = {char_array.begin(), char_array.end() - 1};
 			csv_error = CSVError::InvalidUTF8(state_machine.options, col_idx, lines_per_batch, borked_line,
+			                                  current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
 			                                  line_pos.GetGlobalPosition(requested_size, first_nl));
 			break;
 		}
 		case CSVErrorType::UNTERMINATED_QUOTES:
-			csv_error = CSVError::UnterminatedQuotesError(state_machine.options, col_idx, lines_per_batch, borked_line,
-			                                              line_pos.GetGlobalPosition(requested_size, first_nl));
+			csv_error = CSVError::UnterminatedQuotesError(
+			    state_machine.options, col_idx, lines_per_batch, borked_line,
+			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
+			    line_pos.GetGlobalPosition(requested_size, first_nl));
 			break;
 		case CSVErrorType::CAST_ERROR:
 			csv_error = CSVError::CastError(state_machine.options, names[cur_error.col_idx], cur_error.error_message,
 			                                cur_error.col_idx, borked_line, lines_per_batch,
+			                                current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
 			                                line_pos.GetGlobalPosition(requested_size, first_nl));
 			break;
 		default:
@@ -404,7 +410,7 @@ void StringValueResult::QuotedNewLine(StringValueResult &result) {
 void StringValueResult::NullPaddingQuotedNewlineCheck() {
 	// We do some checks for null_padding correctness
 	if (state_machine.options.null_padding && iterator.IsBoundarySet() && quoted_new_line && iterator.done) {
-		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel and it's the
+		// If we have null_padding set, we found a quoted new line, we are scanning the file in parallel, and it's the
 		// last row of this thread.
 		LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch);
@@ -501,6 +507,7 @@ bool StringValueResult::AddRowInternal() {
 			LinePosition error_position {iterator.pos.buffer_idx, last_position, buffer_size};
 			auto csv_error = CSVError::IncorrectColumnAmountError(
 			    state_machine.options, cur_col_id - 1, lines_per_batch, borked_line,
+			    current_line_position.begin.GetGlobalPosition(requested_size, first_nl),
 			    error_position.GetGlobalPosition(requested_size, first_nl));
 			error_handler.Error(csv_error);
 			// If we are here we ignore_errors, so we delete this line
@@ -549,7 +556,7 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 		LinePosition error_position {result.iterator.pos.buffer_idx, result.last_position, result.buffer_size};
 		result.HandleUnicodeError(result.cur_col_id, error_position);
 	}
-	result.current_errors.push_back({CSVErrorType::INVALID_UNICODE,
+	result.current_errors.push_back({CSVErrorType::UNTERMINATED_QUOTES,
 	                                 result.cur_col_id,
 	                                 {result.iterator.pos.buffer_idx, result.last_position, result.buffer_size}});
 }
@@ -724,12 +731,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				bool first_nl;
 				auto borked_line =
 				    result.line_positions_per_row[line_error].ReconstructCurrentLine(first_nl, result.buffer_handles);
-				// TODO: We can't really nicely get the position where this error happened, this should be solved by
-				// TODO: adding more types to implicit casting instead of relying on this flush.
 				auto csv_error = CSVError::CastError(
 				    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
 				    lines_per_batch,
-				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl));
+				    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
+				    -1);
 				error_handler->Error(csv_error);
 			}
 			borked_lines.insert(line_error++);
@@ -748,13 +754,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					bool first_nl;
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 					    first_nl, result.buffer_handles);
-					// TODO: We can't really nicely get the position where this error happened, this should be solved by
-					// TODO: adding more types to implicit casting instead of relying on this flush.
-					auto csv_error =
-					    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_message,
-					                        col_idx, borked_line, lines_per_batch,
-					                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
-					                            result.result_size, first_nl));
+					auto csv_error = CSVError::CastError(
+					    state_machine->options, csv_file_scan->names[col_idx], error_message, col_idx, borked_line,
+					    lines_per_batch,
+					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
+					    -1);
 
 					error_handler->Error(csv_error);
 				}
@@ -1249,6 +1253,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		} else {
 			result.HandleError();
 		}
+		iterator.done = FinishedFile();
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.

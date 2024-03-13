@@ -82,9 +82,10 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary
 }
 
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx_p, string csv_row_p,
-                   LinesPerBoundary error_info_p, idx_t byte_position_p, const CSVReaderOptions &reader_options)
+                   LinesPerBoundary error_info_p, idx_t row_byte_position, int64_t byte_position_p,
+                   const CSVReaderOptions &reader_options)
     : error_message(std::move(error_message_p)), type(type_p), column_idx(column_idx_p), csv_row(std::move(csv_row_p)),
-      error_info(error_info_p), byte_position(byte_position_p) {
+      error_info(error_info_p), row_byte_position(row_byte_position), byte_position(byte_position_p) {
 	// What were the options
 	std::ostringstream error;
 	error << error_message << std::endl;
@@ -114,13 +115,15 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 }
 
 CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error, idx_t column_idx,
-                             string &csv_row, LinesPerBoundary error_info, idx_t byte_position) {
+                             string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
+                             int64_t byte_position) {
 	std::ostringstream error;
 	// Which column
 	error << "Error when converting column \"" << column_name << "\". ";
 	// What was the cast error
 	error << cast_error;
-	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, csv_row, error_info, byte_position, options);
+	return CSVError(error.str(), CSVErrorType::CAST_ERROR, column_idx, csv_row, error_info, row_byte_position,
+	                byte_position, options);
 }
 
 CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
@@ -128,7 +131,8 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 	std::ostringstream error;
 	error << "Maximum line size of " << options.maximum_line_size << " bytes exceeded. ";
 	error << "Actual Size:" << actual_size << " bytes.";
-	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE, 0, csv_row, error_info, byte_position, options);
+	return CSVError(error.str(), CSVErrorType::MAXIMUM_LINE_SIZE, 0, csv_row, error_info, byte_position, byte_position,
+	                options);
 }
 
 CSVError CSVError::SniffingError(string &file_path) {
@@ -150,34 +154,36 @@ CSVError CSVError::NullPaddingFail(const CSVReaderOptions &options, LinesPerBoun
 }
 
 CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
-                                           LinesPerBoundary error_info, string &csv_row, idx_t byte_position) {
+                                           LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
+                                           int64_t byte_position) {
 	std::ostringstream error;
 	error << "Value with unterminated quote found.";
-	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, current_column, csv_row, error_info, byte_position,
-	                options);
+	return CSVError(error.str(), CSVErrorType::UNTERMINATED_QUOTES, current_column, csv_row, error_info,
+	                row_byte_position, byte_position, options);
 }
 
 CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, idx_t actual_columns,
-                                              LinesPerBoundary error_info, string &csv_row, idx_t byte_position) {
+                                              LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
+                                              int64_t byte_position) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
-		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, byte_position,
-		                options);
+		return CSVError(error.str(), CSVErrorType::TOO_MANY_COLUMNS, actual_columns, csv_row, error_info,
+		                row_byte_position, byte_position, options);
 	} else {
-		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, byte_position,
-		                options);
+		return CSVError(error.str(), CSVErrorType::TOO_FEW_COLUMNS, actual_columns, csv_row, error_info,
+		                row_byte_position, byte_position, options);
 	}
 }
 
 CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
-                               string &csv_row, idx_t byte_position) {
+                               string &csv_row, idx_t row_byte_position, int64_t byte_position) {
 	std::ostringstream error;
 	// How many columns were expected and how many were found
 	error << "Invalid unicode (byte sequence mismatch) detected.";
-	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, current_column, csv_row, error_info, byte_position,
-	                options);
+	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, current_column, csv_row, error_info, row_byte_position,
+	                byte_position, options);
 }
 
 bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
