@@ -162,6 +162,8 @@ struct DBConfigOptions {
 	bool preserve_insertion_order = true;
 	//! Whether Arrow Arrays use Large or Regular buffers
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
+	//! Whether when producing arrow objects we produce string_views or regular strings
+	bool produce_arrow_string_views = false;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;

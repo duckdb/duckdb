@@ -551,6 +551,8 @@ const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value
 		return "NORMAL";
 	case ArrowVariableSizeType::SUPER_SIZE:
 		return "SUPER_SIZE";
+	case ArrowVariableSizeType::VIEW:
+		return "VIEW";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -566,6 +568,9 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 	}
 	if (StringUtil::Equals(value, "SUPER_SIZE")) {
 		return ArrowVariableSizeType::SUPER_SIZE;
+	}
+	if (StringUtil::Equals(value, "VIEW")) {
+		return ArrowVariableSizeType::VIEW;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

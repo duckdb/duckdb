@@ -106,7 +106,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"allocator_flush_threshold", {"4.0 GiB"}},
-	    {"arrow_large_buffer_size", {true}}};
+	    {"arrow_large_buffer_size", {true}},
+	    {"produce_arrow_string_view", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");
