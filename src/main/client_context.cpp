@@ -116,6 +116,18 @@ struct DebugClientContextState : public ClientContextState {
 		}
 		active_transaction = false;
 	}
+	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) override {
+		return RebindQueryInfo::ATTEMPT_TO_REBIND;
+	}
+	RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementMode mode) override {
+		if (mode == PreparedStatementMode::PREPARE_AND_EXECUTE) {
+			return RebindQueryInfo::ATTEMPT_TO_REBIND;
+		}
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement) override {
+		return RebindQueryInfo::ATTEMPT_TO_REBIND;
+	}
 };
 #endif
 
@@ -353,7 +365,7 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 
 shared_ptr<PreparedStatementData>
 ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                       optional_ptr<case_insensitive_map_t<Value>> values) {
+                                       optional_ptr<case_insensitive_map_t<Value>> values, PreparedStatementMode mode) {
 	// check if any client context state could request a rebind
 	bool can_request_rebind = false;
 	for (auto const &s : registered_state) {
@@ -363,13 +375,14 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 		}
 	}
 	if (can_request_rebind) {
+		bool rebind = false;
 		// if any registered state can request a rebind we do the binding on a copy first
+		shared_ptr<PreparedStatementData> result;
 		try {
-			return CreatePreparedStatementInternal(lock, query, statement->Copy(), values);
+			result = CreatePreparedStatementInternal(lock, query, statement->Copy(), values);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			// check if any registered client context state wants to try a rebind
-			bool rebind = false;
 			for (auto const &s : registered_state) {
 				auto info = s.second->OnPlanningError(*this, *statement, error);
 				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
@@ -380,7 +393,17 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 				throw;
 			}
 		}
+		for (auto const &s : registered_state) {
+			auto info = s.second->OnFinalizePrepare(*this, mode);
+			if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+				rebind = true;
+			}
+		}
+		if (!rebind) {
+			return result;
+		}
 	}
+
 	// an extension wants to do a rebind - do it once
 	return CreatePreparedStatementInternal(lock, query, std::move(statement), values);
 }
@@ -389,9 +412,35 @@ QueryProgress ClientContext::GetQueryProgress() {
 	return query_progress;
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
-                                                                       shared_ptr<PreparedStatementData> statement_p,
-                                                                       const PendingQueryParameters &parameters) {
+void BindPreparedStatementParameters(PreparedStatementData &statement, const PendingQueryParameters &parameters) {
+	case_insensitive_map_t<Value> owned_values;
+	if (parameters.parameters) {
+		auto &params = *parameters.parameters;
+		for (auto &val : params) {
+			owned_values.emplace(val);
+		}
+	}
+	statement.Bind(std::move(owned_values));
+}
+
+void ClientContext::RebindPreparedStatement(ClientContextLock &lock, const string &query,
+                                            shared_ptr<PreparedStatementData> &prepared,
+                                            const PendingQueryParameters &parameters) {
+	if (!prepared->unbound_statement) {
+		throw InternalException("ClientContext::RebindPreparedStatement called but PreparedStatementData did not have "
+		                        "an unbound statement so rebinding cannot be done");
+	}
+	// catalog was modified: rebind the statement before execution
+	auto new_prepared =
+	    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
+	D_ASSERT(new_prepared->properties.bound_all_parameters);
+	prepared = std::move(new_prepared);
+	prepared->properties.bound_all_parameters = false;
+}
+
+unique_ptr<PendingQueryResult>
+ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock, shared_ptr<PreparedStatementData> statement_p,
+                                                const PendingQueryParameters &parameters) {
 	D_ASSERT(active_query);
 	auto &statement = *statement_p;
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
@@ -412,15 +461,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		meta_transaction.ModifyDatabase(*entry);
 	}
 
-	// bind the bound values before execution
-	case_insensitive_map_t<Value> owned_values;
-	if (parameters.parameters) {
-		auto &params = *parameters.parameters;
-		for (auto &val : params) {
-			owned_values.emplace(val);
-		}
-	}
-	statement.Bind(std::move(owned_values));
+	BindPreparedStatementParameters(statement, parameters);
 
 	active_query->executor = make_uniq<Executor>(*this);
 	auto &executor = *active_query->executor;
@@ -456,6 +497,25 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	active_query->prepared = std::move(statement_p);
 	active_query->SetOpenResult(*pending_result);
 	return pending_result;
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock, const string &query,
+                                                                       shared_ptr<PreparedStatementData> prepared,
+                                                                       const PendingQueryParameters &parameters) {
+	bool require_rebind = false;
+	for (auto const &s : registered_state) {
+		auto rebind = s.second->OnExecutePrepared(*this, *prepared);
+		if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+			require_rebind = true;
+		}
+	}
+	if (!require_rebind) {
+		require_rebind = prepared->RequireRebind(*this, parameters.parameters);
+	}
+	if (require_rebind) {
+		RebindPreparedStatement(lock, query, prepared, parameters);
+	}
+	return PendingPreparedStatementInternal(lock, prepared, parameters);
 }
 
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
@@ -645,7 +705,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
-	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters);
+	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters,
+	                                        PreparedStatementMode::PREPARE_AND_EXECUTE);
 	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
 	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
@@ -656,7 +717,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 		return ErrorResult<PendingQueryResult>(ErrorData("Not all parameters were bound"), query);
 	}
 	// execute the prepared statement
-	return PendingPreparedStatement(lock, std::move(prepared), parameters);
+	return PendingPreparedStatementInternal(lock, std::move(prepared), parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
@@ -763,16 +824,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		if (statement) {
 			pending = PendingStatementInternal(lock, query, std::move(statement), parameters);
 		} else {
-			if (prepared->RequireRebind(*this, parameters.parameters)) {
-				// catalog was modified: rebind the statement before execution
-				auto new_prepared =
-				    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
-				D_ASSERT(new_prepared->properties.bound_all_parameters);
-				new_prepared->unbound_statement = std::move(prepared->unbound_statement);
-				prepared = std::move(new_prepared);
-				prepared->properties.bound_all_parameters = false;
-			}
-			pending = PendingPreparedStatement(lock, prepared, parameters);
+			pending = PendingPreparedStatement(lock, query, prepared, parameters);
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
