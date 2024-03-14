@@ -246,7 +246,7 @@ struct ICUStrptime : public ICUDateFunc {
 		TailPatch(name, db, types);
 	}
 
-	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	static bool VarcharToTimestampTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->clone());
@@ -280,15 +280,56 @@ struct ICUStrptime : public ICUDateFunc {
 		return true;
 	}
 
+	static bool VarcharToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr cal(info.calendar->clone());
+
+		UnaryExecutor::ExecuteWithNulls<string_t, dtime_tz_t>(
+		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
+			    dtime_tz_t result;
+			    const auto str = input.GetData();
+			    const auto len = input.GetSize();
+			    bool has_offset = false;
+			    idx_t pos = 0;
+			    if (!Time::TryConvertTimeTZ(str, len, pos, result, has_offset, false)) {
+				    auto msg = Time::ConversionError(string(str, len));
+				    HandleCastError::AssignError(msg, parameters);
+				    mask.SetInvalid(idx);
+			    } else if (!has_offset) {
+				    // Convert parts to a TZ (default or parsed) if no offset was provided
+				    auto calendar = cal.get();
+
+				    // Extract the offset from the calendar
+				    auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
+				    offset += ExtractField(calendar, UCAL_DST_OFFSET);
+				    offset /= Interval::MSECS_PER_SEC;
+
+				    // Apply it to the offset +00 time we parsed.
+				    result = dtime_tz_t(result.time(), offset);
+			    }
+
+			    return result;
+		    });
+		return true;
+	}
+
 	static BoundCastInfo BindCastFromVarchar(BindCastInput &input, const LogicalType &source,
 	                                         const LogicalType &target) {
 		if (!input.context) {
-			throw InternalException("Missing context for VARCHAR to TIMESTAMPTZ cast.");
+			throw InternalException("Missing context for VARCHAR to TIME/TIMESTAMPTZ cast.");
 		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
-		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
+		switch (target.id()) {
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return BoundCastInfo(VarcharToTimestampTZ, std::move(cast_data));
+		case LogicalTypeId::TIME_TZ:
+			return BoundCastInfo(VarcharToTimeTZ, std::move(cast_data));
+		default:
+			throw InternalException("Unsupported type for VARCHAR to TIME/TIMESTAMPTZ cast.");
+		}
 	}
 
 	static void AddCasts(DatabaseInstance &db) {
@@ -296,6 +337,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &casts = config.GetCastFunctions();
 
 		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
+		casts.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIME_TZ, BindCastFromVarchar);
 	}
 };
 

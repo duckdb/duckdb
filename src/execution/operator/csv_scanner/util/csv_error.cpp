@@ -163,6 +163,15 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, s
 	return CSVError(error.str(), CSVErrorType::INCORRECT_COLUMN_AMOUNT, error_info);
 }
 
+CSVError CSVError::InvalidUTF8(const CSVReaderOptions &options, LinesPerBoundary error_info) {
+	std::ostringstream error;
+	// How many columns were expected and how many were found
+	error << "Invalid unicode (byte sequence mismatch) detected." << std::endl;
+	// What were the options
+	error << options.ToString();
+	return CSVError(error.str(), CSVErrorType::INVALID_UNICODE, error_info);
+}
+
 bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
 	if (!print_line) {
 		return false;
@@ -173,6 +182,7 @@ bool CSVErrorHandler::PrintLineNumber(CSVError &error) {
 	case CSVErrorType::INCORRECT_COLUMN_AMOUNT:
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
 	case CSVErrorType::NULLPADDED_QUOTED_NEW_VALUE:
+	case CSVErrorType::INVALID_UNICODE:
 		return true;
 	default:
 		return false;

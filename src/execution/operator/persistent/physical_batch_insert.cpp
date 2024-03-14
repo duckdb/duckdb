@@ -507,11 +507,13 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 
 	memory_manager.UpdateMinBatchIndex(lstate.partition_info.min_batch_index.GetIndex());
 
-	if (lstate.current_collection && lstate.current_collection->GetTotalRows() > 0) {
+	if (lstate.current_collection) {
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-		                     std::move(lstate.current_collection));
+		if (lstate.current_collection->GetTotalRows() > 0) {
+			gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+			                     std::move(lstate.current_collection));
+		}
 	}
 	if (lstate.writer) {
 		lock_guard<mutex> l(gstate.lock);

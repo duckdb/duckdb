@@ -1,0 +1,21 @@
+# name: test/sql/function/operator/test_in_empty_table.test
+# description: Issue #11063 - IN operator throws a Conversion Error when checking INTEGER column for 5 or more VARCHAR elements
+# group: [operator]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE test (a INTEGER)
+
+query I
+SELECT * FROM test WHERE a IN ('a', 'b', 'c', 'd', 'e')
+----
+
+statement ok
+INSERT INTO test VALUES (42)
+
+statement error
+SELECT * FROM test WHERE a IN ('a', 'b', 'c', 'd', 'e')
+----
+Could not convert string

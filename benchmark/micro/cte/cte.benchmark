@@ -12,6 +12,6 @@ WITH RECURSIVE t(x) AS (
     UNION ALL
   SELECT x+1
   FROM   t
-  WHERE  x < 400000
+  WHERE  x < 200000
 )
 SELECT count(t1), count(t2) FROM t AS t1, t AS t2 WHERE t1.x=t2.x;
