@@ -42,5 +42,5 @@ python3 -m pip install awscli
 
 for var in "$@"
 do
-    aws s3 cp $var s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/ $DRY_RUN_PARAM
+    aws s3 cp $var s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/ $DRY_RUN_PARAM --region us-east-2
 done
