@@ -913,7 +913,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	                                         merge_rows, state.row_start);
 	checkpoint_state.ScheduleTask(std::move(vacuum_task));
 	// skip vacuuming by the row groups we have merged
-	state.next_vacuum_idx = segment_idx + merge_count;
+	state.next_vacuum_idx = next_idx;
 	state.row_start += merge_rows;
 	return true;
 }
