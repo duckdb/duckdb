@@ -105,7 +105,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		auto &collation = expr->Cast<CollateExpression>();
 		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
 			auto &constant = collation.child->Cast<ConstantExpression>();
-			auto index = (idx_t)constant.value.GetValue<int64_t>() - 1;
+			auto index = NumericCast<idx_t>(constant.value.GetValue<idx_t>()) - 1;
 			D_ASSERT(index < extra_list->size());
 			auto &sel_entry = extra_list->at(index);
 			if (!sel_entry->alias.empty()) {
@@ -113,7 +113,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 				auto colref = make_uniq<ColumnRefExpression>(std::move(column_names));
 				colref->query_location = sel_entry->query_location;
 				collation.child = std::move(colref);
-			} else { // constant with no ALIAS: ORDER BY 1 COLLATE NOCASE
+			} else { // constant with no ALIAS: SELECT 'a' ORDER BY 1 COLLATE NOCASE
 				collation.child = sel_entry->Copy();
 			}
 		}
