@@ -213,6 +213,11 @@ public:
 	// Setters
 	DUCKDB_API void SetVectorType(VectorType vector_type);
 
+	// Transform vector to an equivalent dictionary vector
+	static void DebugTransformToDictionary(Vector &vector, idx_t count);
+	// Transform vector to an equivalent nested vector
+	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
+
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
