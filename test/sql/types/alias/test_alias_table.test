@@ -69,7 +69,7 @@ Anne	happy
 Oogie Boogie	ok
 Mr. Fluffles McFluffingstein	NULL
 
-query TT
+query TT rowsort
 select person.name, pets.name from person inner join pets on  (person.current_alias = pets.current_alias)
 ----
 Moe	Anne

@@ -25,8 +25,8 @@ parser.add_argument('--list', action='store_true', help='Print the list of tests
 parser.add_argument(
     '--timeout',
     action='store',
-    help='Add an optional timeout for each test (in seconds)',
-    default=None,
+    help='Add a timeout for each test (in seconds, default: 3600s - i.e. one hour)',
+    default=3600,
     type=valid_timeout,
 )
 
@@ -95,7 +95,7 @@ def parse_assertions(stdout):
             space_before_num = line.rfind(' ', 0, pos - 2)
             return line[space_before_num + 2 : pos + 10]
 
-    return ""
+    return "ERROR"
 
 
 for test_number, test_case in enumerate(test_cases):
