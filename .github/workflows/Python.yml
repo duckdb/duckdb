@@ -403,4 +403,5 @@ jobs:
 
      - name: Cleanup Releases
        shell: bash
+       if: ${{ github.ref == 'refs/heads/main' && github.repository == 'duckdb/duckdb' }}
        run: python3 scripts/pypi_cleanup.py
