@@ -24,7 +24,7 @@ logical_opt	<REGEX>:.*PROJECTION.*PROJECTION.*LIMIT.*
 query II
 EXPLAIN SELECT i FROM integers OFFSET 4
 ----
-logical_opt	<REGEX>:.*PROJECTION.*LIMIT.*
+logical_opt	<REGEX>:.*LIMIT.*PROJECTION.*
 
 # limit and offset
 query II
