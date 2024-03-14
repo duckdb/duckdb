@@ -57,3 +57,35 @@ a
 A
 B
 ã
+
+query I
+SELECT CONCAT(s, s) FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+aa
+AA
+BB
+ãã
+
+query II
+SELECT CONCAT(s, s) AS concat, concat FROM collate_test ORDER BY 2 COLLATE NOCASE;
+----
+aa	aa
+AA	AA
+BB	BB
+ãã	ãã
+
+query I
+SELECT collate_test.s FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+a
+A
+B
+ã
+
+query I
+SELECT CASE WHEN s[1]='a' THEN s ELSE NULL END FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+a
+NULL
+NULL
+NULL
