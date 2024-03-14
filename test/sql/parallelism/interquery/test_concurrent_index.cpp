@@ -29,20 +29,22 @@ static void CheckConstraintViolation(const string &result_str) {
 	}
 }
 
-static void ReadFromIntegers(DuckDB *db, idx_t thread_idx) {
+static void ReadFromIntegers(DuckDB *db, idx_t thread_idx, atomic<bool> *success) {
 
 	Connection con(*db);
 	while (!concurrent_index_finished) {
 
 		auto expected_value = to_string(thread_idx * 10000);
 		auto result = con.Query("SELECT i FROM integers WHERE i = " + expected_value);
-		REQUIRE_NO_FAIL(*result);
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(thread_idx * 10000)}));
+		if (result->HasError()) {
+			*success = false;
+		} else if (!CHECK_COLUMN(result, 0, {Value::INTEGER(thread_idx * 10000)})) {
+			*success = false;
+		}
 	}
 }
 
 TEST_CASE("Concurrent reads during index creation", "[index][.]") {
-
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
@@ -50,10 +52,12 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	CreateIntegerTable(&con, 1000000);
 	concurrent_index_finished = false;
 
+	atomic<bool> success(true);
+
 	// launch many reading threads
 	thread threads[CONCURRENT_INDEX_THREAD_COUNT];
 	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
-		threads[i] = thread(ReadFromIntegers, &db, i);
+		threads[i] = thread(ReadFromIntegers, &db, i, &success);
 	}
 
 	// create the index
@@ -63,6 +67,8 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
 		threads[i].join();
 	}
+
+	REQUIRE(success);
 
 	// test that we can probe the index correctly
 	auto result = con.Query("SELECT COUNT(*) FROM integers WHERE i=500000");
