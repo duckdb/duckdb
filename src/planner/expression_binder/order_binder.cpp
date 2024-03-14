@@ -106,7 +106,9 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
 			auto &constant = collation.child->Cast<ConstantExpression>();
 			auto index = NumericCast<idx_t>(constant.value.GetValue<idx_t>()) - 1;
-			D_ASSERT(index < extra_list->size());
+			if (index >= extra_list->size()) {
+				throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
+			}
 			auto &sel_entry = extra_list->at(index);
 			if (!sel_entry->alias.empty()) {
 				vector<string> column_names = {sel_entry->alias};

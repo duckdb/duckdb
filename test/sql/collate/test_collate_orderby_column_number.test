@@ -28,6 +28,13 @@ statement error
 SELECT 999 FROM ORDER BY 1 COLLATE NOCASE;
 ----
 
+statement error
+SELECT 'a' FROM ORDER BY 0 COLLATE NOCASE;
+----
+
+statement error
+SELECT 'a' FROM ORDER BY -0 COLLATE NOCASE;
+----
 
 statement ok
 CREATE TABLE collate_test(s VARCHAR)
