@@ -30,11 +30,6 @@ else
   TARGET="$OVERRIDE_GIT_DESCRIBE"
 fi
 
-# upload versioned version
-if [[ $4 != 'true' ]]; then
-  DRY_RUN_PARAM="--dryrun"
-fi
-
 python3 -m pip install awscli
 
 for var in "$@"
