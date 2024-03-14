@@ -679,7 +679,7 @@ public:
 
 	//! For full/outer synchronization
 	idx_t full_outer_chunk_idx;
-	idx_t full_outer_chunk_count;
+	atomic<idx_t> full_outer_chunk_count;
 	atomic<idx_t> full_outer_chunk_done;
 	idx_t full_outer_chunks_per_thread;
 
