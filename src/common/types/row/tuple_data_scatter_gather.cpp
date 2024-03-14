@@ -630,7 +630,6 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 //------------------------------------------------------------------------------
 // List Scatter
 //------------------------------------------------------------------------------
-
 static void TupleDataListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                  const SelectionVector &append_sel, const idx_t append_count,
                                  const TupleDataLayout &layout, const Vector &row_locations, Vector &heap_locations,
@@ -679,7 +678,6 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 //------------------------------------------------------------------------------
 // Array Scatter
 //------------------------------------------------------------------------------
-
 static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                   const SelectionVector &append_sel, const idx_t append_count,
                                   const TupleDataLayout &layout, const Vector &row_locations, Vector &heap_locations,
@@ -989,7 +987,6 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 //-------------------------------------------------------------------------------
 // Gather
 //-------------------------------------------------------------------------------
-
 void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
                                  DataChunk &result, const SelectionVector &target_sel,
                                  vector<unique_ptr<Vector>> &cached_cast_vectors) const {
@@ -1111,7 +1108,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 
 	// Target
 	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
-	auto &target_validity = FlatVector::Validity(target);
+	auto &target_list_validity = FlatVector::Validity(target);
 
 	// Precompute mask indexes
 	idx_t entry_idx;
@@ -1121,7 +1118,6 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	// Load pointers to the data from the row
 	Vector heap_locations(LogicalType::POINTER);
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
-	auto &source_heap_validity = FlatVector::Validity(heap_locations);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	uint64_t target_list_offset = 0;
@@ -1145,8 +1141,7 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 			target_list_entry.length = list_length;
 			target_list_offset += list_length;
 		} else {
-			source_heap_validity.SetInvalid(source_idx);
-			target_validity.SetInvalid(target_idx);
+			target_list_validity.SetInvalid(target_idx);
 		}
 	}
 	auto list_size_before = ListVector::GetListSize(target);
@@ -1170,28 +1165,28 @@ static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layo
                                                      const SelectionVector &target_sel,
                                                      optional_ptr<Vector> list_vector,
                                                      const vector<TupleDataGatherFunction> &child_functions) {
+	// List parent
+	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto &list_validity = FlatVector::Validity(*list_vector);
+
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
-	auto &source_heap_validity = FlatVector::Validity(heap_locations);
 
 	// Target
 	auto target_data = FlatVector::GetData<T>(target);
 	auto &target_validity = FlatVector::Validity(target);
 
-	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
-
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
-		const auto source_idx = scan_sel.get_index(i);
-		if (!source_heap_validity.RowIsValid(source_idx)) {
+		const auto target_idx = target_sel.get_index(i);
+		if (!list_validity.RowIsValid(target_idx)) {
 			continue;
 		}
 
-		const auto &list_length = list_entries[target_sel.get_index(i)].length;
+		const auto &list_length = list_entries[target_idx].length;
 
 		// Initialize validity mask
-		auto &source_heap_location = source_heap_locations[source_idx];
+		auto &source_heap_location = source_heap_locations[scan_sel.get_index(i)];
 		ValidityBytes source_mask(source_heap_location);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -1217,27 +1212,27 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
                                                   const idx_t scan_count, Vector &target,
                                                   const SelectionVector &target_sel, optional_ptr<Vector> list_vector,
                                                   const vector<TupleDataGatherFunction> &child_functions) {
+	// List parent
+	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto &list_validity = FlatVector::Validity(*list_vector);
+
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
-	auto &source_heap_validity = FlatVector::Validity(heap_locations);
 
 	// Target
 	auto &target_validity = FlatVector::Validity(target);
 
-	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
-
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
-		const auto source_idx = scan_sel.get_index(i);
-		if (!source_heap_validity.RowIsValid(source_idx)) {
+		const auto target_idx = target_sel.get_index(i);
+		if (!list_validity.RowIsValid(target_idx)) {
 			continue;
 		}
 
-		const auto &list_length = list_entries[target_sel.get_index(i)].length;
+		const auto &list_length = list_entries[target_idx].length;
 
 		// Initialize validity mask and skip over it
-		auto &source_heap_location = source_heap_locations[source_idx];
+		auto &source_heap_location = source_heap_locations[scan_sel.get_index(i)];
 		ValidityBytes source_mask(source_heap_location);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -1266,34 +1261,35 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
                                                       const SelectionVector &target_sel,
                                                       optional_ptr<Vector> list_vector,
                                                       const vector<TupleDataGatherFunction> &child_functions) {
+	// List parent
+	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
+	const auto &list_validity = FlatVector::Validity(*list_vector);
+
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
-	auto &source_heap_validity = FlatVector::Validity(heap_locations);
 
 	// Target
 	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
 	auto &target_validity = FlatVector::Validity(target);
 	const auto child_list_size_before = ListVector::GetListSize(target);
 
-	// List parent
-	const auto list_entries = FlatVector::GetData<list_entry_t>(*list_vector);
-
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)
 	Vector combined_list_vector(LogicalType::HUGEINT);
+	FlatVector::SetValidity(combined_list_vector, list_validity); // Has same validity as list parent
 	auto combined_list_entries = FlatVector::GetData<list_entry_t>(combined_list_vector);
 
 	uint64_t target_offset = list_size_before;
 	uint64_t target_child_offset = child_list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
-		const auto source_idx = scan_sel.get_index(i);
-		if (!source_heap_validity.RowIsValid(source_idx)) {
+		const auto target_idx = target_sel.get_index(i);
+		if (!list_validity.RowIsValid(target_idx)) {
 			continue;
 		}
 
-		const auto &list_length = list_entries[target_sel.get_index(i)].length;
+		const auto &list_length = list_entries[target_idx].length;
 
 		// Initialize validity mask and skip over it
-		auto &source_heap_location = source_heap_locations[source_idx];
+		auto &source_heap_location = source_heap_locations[scan_sel.get_index(i)];
 		ValidityBytes source_mask(source_heap_location);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
