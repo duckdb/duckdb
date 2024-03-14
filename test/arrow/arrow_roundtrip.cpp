@@ -15,14 +15,6 @@ static void TestArrowRoundtrip(const string &query, bool export_large_buffer = f
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false));
 }
 
-static void TestArrowRoundtripStringView(const string &query) {
-	DuckDB db;
-	Connection con(db);
-	auto res = con.Query("SET produce_arrow_string_view=True");
-	REQUIRE(!res->HasError());
-	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false));
-}
-
 static void TestParquetRoundtrip(const string &path) {
 	DBConfig config;
 	// This needs to be set since this test will be triggered when testing autoloading
@@ -86,25 +78,6 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	                   "FROM test_all_types()");
 }
 
-TEST_CASE("Test Arrow String View", "[arrow][.]") {
-	// Test Small Strings
-	TestArrowRoundtripStringView("SELECT (i*10^i)::varchar str FROM range(5) tbl(i)");
-
-	// Test Small Strings + Nulls
-	TestArrowRoundtripStringView("SELECT (i*10^i)::varchar str FROM range(5) tbl(i) UNION SELECT NULL");
-
-	// Test Big Strings
-	TestArrowRoundtripStringView("SELECT 'Imaverybigstringmuchbiggerthanfourbytes' str FROM range(5) tbl(i)");
-
-	// Test Big Strings + Nulls
-	TestArrowRoundtripStringView("SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(5) "
-	                             "tbl(i) UNION SELECT NULL order by str");
-
-	// Test Mix of Small/Big/NULL Strings
-	TestArrowRoundtripStringView(
-	    "SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION "
-	    "SELECT NULL UNION SELECT (i*10^i)::varchar str FROM range(10000) tbl(i)");
-}
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
 	std::vector<std::string> data;
 	// data.emplace_back("data/parquet-testing/7-set.snappy.arrow2.parquet");

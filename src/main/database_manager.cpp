@@ -35,15 +35,15 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, const AttachInfo &info,
-                                                               const AttachOptions &options) {
+                                                               const string &db_type, AccessMode access_mode) {
 	if (AttachedDatabase::NameIsReserved(info.name)) {
 		throw BinderException("Attached database name \"%s\" cannot be used because it is a reserved name", info.name);
 	}
 	// now create the attached database
 	auto &db = DatabaseInstance::GetDatabase(context);
-	auto attached_db = db.CreateAttachedDatabase(context, info, options);
+	auto attached_db = db.CreateAttachedDatabase(context, info, db_type, access_mode);
 
-	if (options.db_type.empty()) {
+	if (db_type.empty()) {
 		InsertDatabasePath(context, info.path, attached_db->name);
 	}
 
@@ -133,40 +133,41 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	}
 }
 
-void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
-                                      AttachOptions &options) {
+void DatabaseManager::GetDatabaseType(ClientContext &context, string &db_type, AttachInfo &info, const DBConfig &config,
+                                      const string &unrecognized_option) {
 
-	// Test if the database is a DuckDB database file.
-	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
-		options.db_type = "";
+	// duckdb database file
+	if (StringUtil::CIEquals(db_type, "DUCKDB")) {
+		db_type = "";
 
-		// The DuckDB format does not allow unrecognized options.
-		if (!options.unrecognized_option.empty()) {
-			throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
+		// DUCKDB format does not allow unrecognized options
+		if (!unrecognized_option.empty()) {
+			throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
 		}
 		return;
 	}
 
-	// Try to extract the database type from the path.
-	if (options.db_type.empty()) {
+	// try to extract database type from path
+	if (db_type.empty()) {
 		CheckPathConflict(context, info.path);
-		DBPathAndType::CheckMagicBytes(info.path, options.db_type, config);
+
+		DBPathAndType::CheckMagicBytes(info.path, db_type, config);
 	}
 
-	// If we are loading a database type from an extension, then we need to check if that extension is loaded.
-	if (!options.db_type.empty()) {
-		if (!Catalog::TryAutoLoad(context, options.db_type)) {
+	// if we are loading a database type from an extension - check if that extension is loaded
+	if (!db_type.empty()) {
+		if (!Catalog::TryAutoLoad(context, db_type)) {
 			// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 			// so that either there will be success or a message to throw, and load will be
 			// attempted only once respecting the auto-loading options
-			ExtensionHelper::LoadExternalExtension(context, options.db_type);
+			ExtensionHelper::LoadExternalExtension(context, db_type);
 		}
 		return;
 	}
 
-	// The DUCKDB format does not allow unrecognized options.
-	if (!options.unrecognized_option.empty()) {
-		throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
+	// DUCKDB format does not allow unrecognized options
+	if (!unrecognized_option.empty()) {
+		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
 	}
 }
 

@@ -25,7 +25,6 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
-struct AttachOptions;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -58,7 +57,7 @@ public:
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
-	                                                    const AttachOptions &options);
+	                                                    const string &type, AccessMode access_mode);
 
 private:
 	void Initialize(const char *path, DBConfig *config);

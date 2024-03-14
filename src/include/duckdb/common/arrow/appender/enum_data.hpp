@@ -23,15 +23,14 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 
 	static void EnumAppendVector(ArrowAppendData &append_data, const Vector &input, idx_t size) {
 		D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
-		auto &main_buffer = append_data.GetMainBuffer();
-		auto &aux_buffer = append_data.GetAuxBuffer();
+
 		// resize the validity mask and set up the validity buffer for iteration
-		ResizeValidity(append_data.GetValidityBuffer(), append_data.row_count + size);
+		ResizeValidity(append_data.validity, append_data.row_count + size);
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
-		main_buffer.resize(main_buffer.size() + sizeof(int32_t) * (size + 1));
+		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(int32_t) * (size + 1));
 		auto data = FlatVector::GetData<string_t>(input);
-		auto offset_data = main_buffer.GetData<int32_t>();
+		auto offset_data = append_data.main_buffer.GetData<int32_t>();
 		if (append_data.row_count == 0) {
 			// first entry
 			offset_data[0] = 0;
@@ -49,8 +48,8 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 			offset_data[offset_idx] = UnsafeNumericCast<uint32_t>(current_offset);
 
 			// resize the string buffer if required, and write the string data
-			aux_buffer.resize(current_offset);
-			WriteData(aux_buffer.data() + last_offset, data[i]);
+			append_data.aux_buffer.resize(current_offset);
+			WriteData(append_data.aux_buffer.data() + last_offset, data[i]);
 
 			last_offset = UnsafeNumericCast<uint32_t>(current_offset);
 		}
@@ -58,7 +57,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 	}
 
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
-		result.GetMainBuffer().reserve(capacity * sizeof(TGT));
+		result.main_buffer.reserve(capacity * sizeof(TGT));
 		// construct the enum child data
 		auto enum_data = ArrowAppender::InitializeChild(LogicalType::VARCHAR, EnumType::GetSize(type), result.options);
 		EnumAppendVector(*enum_data, EnumType::GetValuesInsertOrder(type), EnumType::GetSize(type));
@@ -67,7 +66,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 2;
-		result->buffers[1] = append_data.GetMainBuffer().data();
+		result->buffers[1] = append_data.main_buffer.data();
 		// finalize the enum child data, and assign it to the dictionary
 		result->dictionary = &append_data.dictionary;
 		append_data.dictionary =
