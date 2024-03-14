@@ -115,7 +115,12 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 				auto colref = make_uniq<ColumnRefExpression>(std::move(column_names));
 				colref->query_location = sel_entry->query_location;
 				collation.child = std::move(colref);
-			} else { // constant with no ALIAS: SELECT 'a' ORDER BY 1 COLLATE NOCASE
+			} else { // no alias, e.g.: SELECT 'a' ORDER BY 1 COLLATE NOCASE
+				if (sel_entry->expression_class == ExpressionClass::SUBQUERY) {
+					throw BinderException(
+					    "OrderBy referenced a ColumnNumber in a SELECT clause - but the expression has a subquery."
+					    " This is not yet supported.");
+				}
 				collation.child = sel_entry->Copy();
 			}
 		}
