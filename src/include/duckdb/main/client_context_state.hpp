@@ -44,7 +44,8 @@ public:
 	virtual RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
-	virtual RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementMode mode) {
+	virtual RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementData &prepared_statement,
+	                                          PreparedStatementMode mode) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement) {

@@ -119,8 +119,8 @@ struct DebugClientContextState : public ClientContextState {
 	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
-#ifdef DUCKDB_DEBUG_REBIND
-	RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementMode mode) override {
+	RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementData &prepared,
+	                                  PreparedStatementMode mode) override {
 		if (mode == PreparedStatementMode::PREPARE_AND_EXECUTE) {
 			return RebindQueryInfo::ATTEMPT_TO_REBIND;
 		}
@@ -129,7 +129,6 @@ struct DebugClientContextState : public ClientContextState {
 	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
-#endif
 };
 #endif
 
@@ -395,10 +394,13 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 				throw;
 			}
 		}
-		for (auto const &s : registered_state) {
-			auto info = s.second->OnFinalizePrepare(*this, mode);
-			if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
-				rebind = true;
+		if (result) {
+			D_ASSERT(!rebind);
+			for (auto const &s : registered_state) {
+				auto info = s.second->OnFinalizePrepare(*this, *result, mode);
+				if (info == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+					rebind = true;
+				}
 			}
 		}
 		if (!rebind) {
