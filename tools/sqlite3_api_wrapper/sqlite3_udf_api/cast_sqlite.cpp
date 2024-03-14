@@ -53,7 +53,7 @@ VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &resul
 
 	// Casting input data to sqlite_value
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
-		auto input_data = vec_data[i];
+		auto &input_data = vec_data[i];
 		auto sqlite_values = CastSQLite::ToVector(data_chunk.data[i].GetType(), input_data, data_chunk.size(), result);
 		vec_sqlite_values[i] = std::move(sqlite_values);
 
