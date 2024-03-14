@@ -291,6 +291,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         run_tests: ${{ inputs.skip_tests == 'true' && 0 || 1 }}
-         run_autoload_tests: ${{ inputs.skip_tests == 'true' && 0 || 1 }}
+         run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+         run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe

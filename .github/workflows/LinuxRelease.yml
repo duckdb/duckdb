@@ -229,8 +229,8 @@ jobs:
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         treat_warn_as_error: 0
-        run_autoload_tests: ${{ inputs.skip_tests == 'true' && 0 || 1 }}
-        run_tests: ${{ inputs.skip_tests == 'true' && 0 || 1 }}
+        run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
+        run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
