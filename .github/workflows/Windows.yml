@@ -150,6 +150,7 @@ jobs:
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
     - name: Test Standard ODBC tests
+      if: ${{ inputs.skip_tests != 'true' }}
       shell: bash
       run: |
         tools/odbc/bin/Release/test_odbc.exe
@@ -164,6 +165,7 @@ jobs:
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB"
 
     - name: Test Connection ODBC tests
+      if: ${{ inputs.skip_tests != 'true' }}
       shell: bash
       run: |
         tools/odbc/bin/Release/test_connection_odbc.exe
