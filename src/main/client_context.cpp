@@ -119,6 +119,7 @@ struct DebugClientContextState : public ClientContextState {
 	RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
+#ifdef DUCKDB_DEBUG_REBIND
 	RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementMode mode) override {
 		if (mode == PreparedStatementMode::PREPARE_AND_EXECUTE) {
 			return RebindQueryInfo::ATTEMPT_TO_REBIND;
@@ -128,6 +129,7 @@ struct DebugClientContextState : public ClientContextState {
 	RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement) override {
 		return RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
+#endif
 };
 #endif
 
