@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar_function.hpp"
 
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
