@@ -82,6 +82,7 @@ jobs:
         ccache: 1
         odbc: 1
         python_alias: 1
+        aws-cli: 1
 
     - name: Install pytest
       run: |
@@ -119,6 +120,9 @@ jobs:
 
     - name: Deploy
       shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
@@ -180,6 +184,9 @@ jobs:
 
      - name: Deploy
        shell: bash
+       env:
+         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
          python3 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
