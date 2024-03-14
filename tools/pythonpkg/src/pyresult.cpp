@@ -317,7 +317,9 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 	}
 	ArrowSchema arrow_schema;
 	auto names = query_result.names;
-	QueryResult::DeduplicateColumns(names);
+	if (to_polars) {
+		QueryResult::DeduplicateColumns(names);
+	}
 	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
