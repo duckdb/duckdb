@@ -137,9 +137,9 @@ def print_diffs(diffs):
 
 def cardinality_is_higher(old_cost, new_cost):
     new_cardinality_higher = (
-            old_cost.total < new_cost.total
-            or old_cost.build_side < new_cost.build_side
-            or old_cost.probe_side < new_cost.probe_side
+        old_cost.total < new_cost.total
+        or old_cost.build_side < new_cost.build_side
+        or old_cost.probe_side < new_cost.probe_side
     )
     new_timing_higher = old_cost.time < new_cost.time
 
