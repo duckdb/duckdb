@@ -111,6 +111,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
 
+	// Source
 	const auto &source_vector_data = source_format.unified;
 	const auto &source_sel = *source_vector_data.sel;
 	const auto &source_validity = source_vector_data.validity;
@@ -247,16 +248,16 @@ void TupleDataCollection::StringWithinCollectionComputeHeapSizes(Vector &heap_si
                                                                  const SelectionVector &append_sel,
                                                                  const idx_t append_count,
                                                                  const UnifiedVectorFormat &list_data) {
+	// List data
+	const auto list_sel = *list_data.sel;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto &list_validity = list_data.validity;
+
 	// Source
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
 	const auto data = UnifiedVectorFormat::GetData<string_t>(source_data);
 	const auto &source_validity = source_data.validity;
-
-	// List data
-	const auto list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
-	const auto &list_validity = list_data.validity;
 
 	// Target
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
@@ -734,16 +735,16 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &source, cons
                                                       Vector &heap_locations, const idx_t col_idx,
                                                       const UnifiedVectorFormat &list_data,
                                                       const vector<TupleDataScatterFunction> &child_functions) {
+	// List data
+	const auto list_sel = *list_data.sel;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
+	const auto &list_validity = list_data.validity;
+
 	// Source
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
 	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
 	const auto &source_validity = source_data.validity;
-
-	// List data
-	const auto list_sel = *list_data.sel;
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
-	const auto &list_validity = list_data.validity;
 
 	// Target
 	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
