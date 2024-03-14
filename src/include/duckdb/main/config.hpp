@@ -193,7 +193,7 @@ struct DBConfigOptions {
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
-	//! FIXME: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
+	//! NOTE: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
 	idx_t default_block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
 
 	bool operator==(const DBConfigOptions &other) const;

@@ -35,13 +35,15 @@ private:
 ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<CatalogSearchPath>(context)) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 	profiler = make_shared<QueryProfiler>(context);
-	temporary_objects = make_shared<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
-	temporary_objects->oid = DatabaseManager::Get(db).ModifyCatalog();
+
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	client_file_system = make_uniq<ClientFileSystem>(context);
-	auto &config = DBConfig::GetConfig(context);
-	temporary_objects->Initialize(config.options.default_block_alloc_size);
+
+	// The temporary objects always use DEFAULT_BLOCK_ALLOC_SIZE, as they're always in memory
+	temporary_objects = make_shared<AttachedDatabase>(db, AttachedDatabaseType::TEMP_DATABASE);
+	temporary_objects->oid = DatabaseManager::Get(db).ModifyCatalog();
+	temporary_objects->Initialize(DEFAULT_BLOCK_ALLOC_SIZE);
 }
 ClientData::~ClientData() {
 }

@@ -291,7 +291,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const idx_
 		                            GetBlockAllocSize(), header.block_alloc_size);
 	}
 
-	// FIXME: remove this once we start supporting different block sizes.
+	// NOTE: remove this once we start supporting different block sizes.
 	if (Storage::BLOCK_ALLOC_SIZE != header.block_alloc_size) {
 		throw NotImplementedException("cannot initialize a database with a different block size than the default block "
 		                              "size: default block size: %llu, file block size: %llu",

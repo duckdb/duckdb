@@ -26,7 +26,7 @@ struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
-	//! FIXME: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
+	//! NOTE: this becomes the DEFAULT_BLOCK_ALLOC_SIZE once we support different block sizes.
 	idx_t block_alloc_size = Storage::BLOCK_ALLOC_SIZE;
 };
 
