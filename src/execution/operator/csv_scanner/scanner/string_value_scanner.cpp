@@ -1249,7 +1249,12 @@ void StringValueScanner::FinalizeChunkProcess() {
 		} else {
 			result.HandleError();
 		}
-		iterator.done = FinishedFile();
+		if (!iterator.done) {
+			if (iterator.pos.buffer_pos >= iterator.GetEndPos() || iterator.pos.buffer_idx > iterator.GetBufferIdx() ||
+			    FinishedFile()) {
+				iterator.done = true;
+			}
+		}
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.
