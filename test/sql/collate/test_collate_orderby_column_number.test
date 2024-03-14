@@ -15,6 +15,20 @@ SELECT 'a' ORDER BY 1 COLLATE NOCASE;
 ----
 a
 
+query II
+SELECT 'A', 'B' ORDER BY 2 COLLATE NOCASE;
+----
+A	B
+
+statement error
+SELECT 'a' FROM ORDER BY -1 COLLATE NOCASE;
+----
+
+statement error
+SELECT 999 FROM ORDER BY 1 COLLATE NOCASE;
+----
+
+
 statement ok
 CREATE TABLE collate_test(s VARCHAR)
 
