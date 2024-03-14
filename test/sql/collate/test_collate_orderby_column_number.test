@@ -89,3 +89,13 @@ a
 NULL
 NULL
 NULL
+
+
+statement error
+SELECT (SELECT s) FROM collate_test ORDER BY 1 COLLATE NOCASE;
+----
+
+statement error
+SELECT (SELECT s) AS c1 FROM collate_test ORDER BY c11 COLLATE NOCASE;
+----
+
